@@ -31,7 +31,7 @@ use {
         message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
-        signature::{Keypair, KeypairInsecureClone, Signer},
+        signature::{Keypair, Signer},
         stake::{
             config as stake_config, instruction as stake_instruction,
             state::{Authorized, Lockup},
@@ -54,7 +54,6 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
-        ops::Deref,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -203,8 +202,8 @@ impl LocalCluster {
                     if *in_genesis {
                         Some((
                             ValidatorVoteKeypairs {
-                                node_keypair: node_keypair.deref().clone(),
-                                vote_keypair: vote_keypair.deref().clone(),
+                                node_keypair: node_keypair.insecure_clone(),
+                                vote_keypair: vote_keypair.insecure_clone(),
                                 stake_keypair: Keypair::new(),
                             },
                             stake,
@@ -263,8 +262,8 @@ impl LocalCluster {
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
         leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         Self::sync_ledger_path_across_nested_config_fields(&mut leader_config, &leader_ledger_path);
-        let leader_keypair = Arc::new(leader_keypair.clone());
-        let leader_vote_keypair = Arc::new(leader_vote_keypair.clone());
+        let leader_keypair = Arc::new(leader_keypair.insecure_clone());
+        let leader_vote_keypair = Arc::new(leader_vote_keypair.insecure_clone());
 
         let leader_server = Validator::new(
             leader_node,
@@ -314,7 +313,7 @@ impl LocalCluster {
             .map(|keypairs| {
                 (
                     keypairs.node_keypair.pubkey(),
-                    Arc::new(keypairs.vote_keypair.clone()),
+                    Arc::new(keypairs.vote_keypair.insecure_clone()),
                 )
             })
             .collect();

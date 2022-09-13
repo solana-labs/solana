@@ -228,6 +228,9 @@ export class ComputeBudgetProgram {
     'ComputeBudget111111111111111111111111111111',
   );
 
+  /**
+   * @deprecated Instead, call {@link setComputeUnitLimit} and/or {@link setComputeUnitPrice}
+   */
   static requestUnits(params: RequestUnitsParams): TransactionInstruction {
     const type = COMPUTE_BUDGET_INSTRUCTION_LAYOUTS.RequestUnits;
     const data = encodeData(type, params);

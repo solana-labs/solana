@@ -112,7 +112,7 @@ use {
         feature,
         feature_set::{
             self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            use_default_units_in_fee_calculation, FeatureSet,
+            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1588,6 +1588,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -1604,6 +1605,7 @@ impl Bank {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            &Arc::default(),
         )
     }
 
@@ -1620,6 +1622,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1629,6 +1632,7 @@ impl Bank {
             shrink_ratio,
             accounts_db_config,
             accounts_update_notifier,
+            exit,
         );
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
@@ -3728,6 +3732,9 @@ impl Bank {
             &self.fee_structure,
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            !self
+                .feature_set
+                .is_active(&remove_deprecated_request_unit_ix::id()),
         ))
     }
 
@@ -3769,6 +3776,9 @@ impl Bank {
             &self.fee_structure,
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            !self
+                .feature_set
+                .is_active(&remove_deprecated_request_unit_ix::id()),
         )
     }
 
@@ -4570,30 +4580,34 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
-                    let compute_budget = if let Some(compute_budget) =
-                        self.runtime_config.compute_budget
-                    {
-                        compute_budget
-                    } else {
-                        let mut compute_budget =
-                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+                    let compute_budget =
+                        if let Some(compute_budget) = self.runtime_config.compute_budget {
+                            compute_budget
+                        } else {
+                            let mut compute_budget =
+                                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
 
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget
-                            .process_instructions(tx.message().program_instructions_iter(), true);
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
-                        }
-                        compute_budget
-                    };
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
+                                true,
+                                !self
+                                    .feature_set
+                                    .is_active(&remove_deprecated_request_unit_ix::id()),
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
+                            compute_budget
+                        };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4866,6 +4880,7 @@ impl Bank {
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
         use_default_units_per_instruction: bool,
+        support_request_units_deprecated: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4881,6 +4896,7 @@ impl Bank {
             .process_instructions(
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
+                support_request_units_deprecated,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4946,6 +4962,9 @@ impl Bank {
                     &self.fee_structure,
                     self.feature_set
                         .is_active(&use_default_units_in_fee_calculation::id()),
+                    !self
+                        .feature_set
+                        .is_active(&remove_deprecated_request_unit_ix::id()),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -6837,7 +6856,8 @@ impl Bank {
         ]);
 
         let epoch_accounts_hash = self.epoch_accounts_hash();
-        if self.should_include_epoch_accounts_hash() {
+        let should_include_epoch_accounts_hash = self.should_include_epoch_accounts_hash();
+        if should_include_epoch_accounts_hash {
             // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
             // for normal clusters, as the feature gating this `if` block is always false.
             // However, some tests enable all features, so this `if` block can be true.
@@ -6876,10 +6896,11 @@ impl Bank {
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
-            match epoch_accounts_hash {
-                None => "".to_string(),
-                Some(epoch_accounts_hash) => format!(", epoch_accounts_hash: {}", epoch_accounts_hash.as_ref()),
-            },
+            if should_include_epoch_accounts_hash {
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash)
+            } else {
+                "".to_string()
+            }
         );
 
         info!(
@@ -7149,6 +7170,7 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
+                true,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -7175,6 +7197,7 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
+                        true,
                     );
             }
 
@@ -10735,15 +10758,15 @@ pub(crate) mod tests {
         let bank = create_simple_test_bank(100);
 
         // Test new account
-        let key = Keypair::new();
-        let new_balance = bank.deposit(&key.pubkey(), 10).unwrap();
+        let key = solana_sdk::pubkey::new_rand();
+        let new_balance = bank.deposit(&key, 10).unwrap();
         assert_eq!(new_balance, 10);
-        assert_eq!(bank.get_balance(&key.pubkey()), 10);
+        assert_eq!(bank.get_balance(&key), 10);
 
         // Existing account
-        let new_balance = bank.deposit(&key.pubkey(), 3).unwrap();
+        let new_balance = bank.deposit(&key, 3).unwrap();
         assert_eq!(new_balance, 13);
-        assert_eq!(bank.get_balance(&key.pubkey()), 13);
+        assert_eq!(bank.get_balance(&key), 13);
     }
 
     #[test]
@@ -10751,24 +10774,24 @@ pub(crate) mod tests {
         let bank = create_simple_test_bank(100);
 
         // Test no account
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            bank.withdraw(&key.pubkey(), 10),
+            bank.withdraw(&key, 10),
             Err(TransactionError::AccountNotFound)
         );
 
-        bank.deposit(&key.pubkey(), 3).unwrap();
-        assert_eq!(bank.get_balance(&key.pubkey()), 3);
+        bank.deposit(&key, 3).unwrap();
+        assert_eq!(bank.get_balance(&key), 3);
 
         // Low balance
         assert_eq!(
-            bank.withdraw(&key.pubkey(), 10),
+            bank.withdraw(&key, 10),
             Err(TransactionError::InsufficientFundsForFee)
         );
 
         // Enough balance
-        assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.withdraw(&key, 2), Ok(()));
+        assert_eq!(bank.get_balance(&key), 1);
     }
 
     #[test]
@@ -10831,17 +10854,17 @@ pub(crate) mod tests {
 
         let capitalization = bank.capitalization();
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             arbitrary_transfer_amount,
             bank.last_blockhash(),
         );
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount);
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - expected_fee_paid
@@ -10877,14 +10900,13 @@ pub(crate) mod tests {
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        let mut tx =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, bank.last_blockhash());
+        let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
         // Create a bogus instruction to system_program to cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
         bank.process_transaction(&tx)
             .expect_err("instruction error");
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount); // no change
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - 2 * expected_fee_paid
@@ -10916,7 +10938,7 @@ pub(crate) mod tests {
     fn test_bank_tx_compute_unit_fee() {
         solana_logger::setup();
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let arbitrary_transfer_amount = 42;
         let mint = arbitrary_transfer_amount * 10_000_000;
         let leader = solana_sdk::pubkey::new_rand();
@@ -10935,6 +10957,7 @@ pub(crate) mod tests {
                 .lamports_per_signature,
             &FeeStructure::default(),
             true,
+            false,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10946,14 +10969,14 @@ pub(crate) mod tests {
 
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             arbitrary_transfer_amount,
             bank.last_blockhash(),
         );
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount);
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - expected_fee_paid
@@ -10989,14 +11012,13 @@ pub(crate) mod tests {
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        let mut tx =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, bank.last_blockhash());
+        let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
         // Create a bogus instruction to system_program to cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
         bank.process_transaction(&tx)
             .expect_err("instruction error");
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount); // no change
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - 2 * expected_fee_paid
@@ -11054,22 +11076,22 @@ pub(crate) mod tests {
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
         // Send a transfer using cheap_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             initial_mint_balance - 1 - cheap_lamports_per_signature
         );
 
         // Send a transfer using expensive_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             initial_mint_balance - 1 - expensive_lamports_per_signature
@@ -11106,16 +11128,17 @@ pub(crate) mod tests {
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
         // Send a transfer using cheap_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         let cheap_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
+            false,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11123,16 +11146,17 @@ pub(crate) mod tests {
         );
 
         // Send a transfer using expensive_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         let expensive_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
             &FeeStructure::default(),
             true,
+            false,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11151,16 +11175,16 @@ pub(crate) mod tests {
         genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             2,
             genesis_config.hash(),
         ));
         let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             5,
             genesis_config.hash(),
         ));
@@ -11202,16 +11226,16 @@ pub(crate) mod tests {
         genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             2,
             genesis_config.hash(),
         ));
         let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             5,
             genesis_config.hash(),
         ));
@@ -11248,6 +11272,7 @@ pub(crate) mod tests {
                                 .lamports_per_signature,
                             &FeeStructure::default(),
                             true,
+                            false,
                         ) * 2
                     )
                     .0
@@ -12211,10 +12236,10 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.fee_rate_governor.lamports_per_signature = 2;
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
 
         let mut transfer_instruction =
-            system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
+            system_instruction::transfer(&mint_keypair.pubkey(), &key, 0);
         transfer_instruction.accounts[0].is_signer = false;
         let message = Message::new(&[transfer_instruction], None);
         let tx = Transaction::new(&[&Keypair::new(); 0], message, bank.last_blockhash());
@@ -12223,7 +12248,7 @@ pub(crate) mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::SanitizeFailure)
         );
-        assert_eq!(bank.get_balance(&key.pubkey()), 0);
+        assert_eq!(bank.get_balance(&key), 0);
     }
 
     #[test]
@@ -17795,6 +17820,7 @@ pub(crate) mod tests {
                     ..FeeStructure::default()
                 },
                 true,
+                false,
             ),
             0
         );
@@ -17809,6 +17835,7 @@ pub(crate) mod tests {
                     ..FeeStructure::default()
                 },
                 true,
+                false,
             ),
             1
         );
@@ -17828,6 +17855,7 @@ pub(crate) mod tests {
                     ..FeeStructure::default()
                 },
                 true,
+                false,
             ),
             4
         );
@@ -17847,7 +17875,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
             max_fee + lamports_per_signature
         );
 
@@ -17859,7 +17887,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17892,7 +17920,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17930,7 +17958,10 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 2);
+        assert_eq!(
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            2
+        );
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -17939,7 +17970,10 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 11);
+        assert_eq!(
+            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            11
+        );
     }
 
     #[test]
@@ -19554,7 +19588,6 @@ pub(crate) mod tests {
     /// 2. The bank's accounts_data_size is unmodified
     #[test]
     fn test_cap_accounts_data_allocations_per_transaction() {
-        use solana_sdk::signature::KeypairInsecureClone;
         const NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION: usize =
             MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION as usize
                 / MAX_PERMITTED_DATA_LENGTH as usize;
@@ -19567,7 +19600,7 @@ pub(crate) mod tests {
         bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
 
         let mut instructions = Vec::new();
-        let mut keypairs = vec![mint_keypair.clone()];
+        let mut keypairs = vec![mint_keypair.insecure_clone()];
         for _ in 0..=NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION {
             let keypair = Keypair::new();
             let instruction = system_instruction::create_account(

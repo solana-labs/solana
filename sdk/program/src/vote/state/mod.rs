@@ -9,7 +9,6 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
-        short_vec,
         sysvar::clock::Clock,
         vote::{authorized_voters::AuthorizedVoters, error::VoteError},
     },
@@ -85,28 +84,6 @@ impl Lockout {
     }
 }
 
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
-pub struct CompactLockout<T: Sized> {
-    // Offset to the next vote, 0 if this is the last vote in the tower
-    pub offset: T,
-    // Confirmation count, guarenteed to be < 32
-    pub confirmation_count: u8,
-}
-
-impl<T> CompactLockout<T> {
-    pub fn new(offset: T) -> Self {
-        Self {
-            offset,
-            confirmation_count: 1,
-        }
-    }
-
-    // The number of slots for which this vote is locked
-    pub fn lockout(&self) -> u64 {
-        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count.into())
-    }
-}
-
 #[frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteStateUpdate {
@@ -150,205 +127,6 @@ impl VoteStateUpdate {
 
     pub fn slots(&self) -> Vec<Slot> {
         self.lockouts.iter().map(|lockout| lockout.slot).collect()
-    }
-
-    pub fn compact(self) -> Option<CompactVoteStateUpdate> {
-        CompactVoteStateUpdate::new(self.lockouts, self.root, self.hash, self.timestamp)
-    }
-}
-
-/// Ignoring overhead, in a full `VoteStateUpdate` the lockouts take up
-/// 31 * (64 + 32) = 2976 bits.
-///
-/// In this schema we separate the votes into 3 separate lockout structures
-/// and store offsets rather than slot number, allowing us to use smaller fields.
-///
-/// In a full `CompactVoteStateUpdate` the lockouts take up
-/// 64 + (32 + 8) * 16 + (16 + 8) * 8 + (8 + 8) * 6 = 992 bits
-/// allowing us to greatly reduce block size.
-#[frozen_abi(digest = "EeMnyxPUyd3hK7UQ8BcWDW8qrsdXA9F6ZUoAWAh1nDxX")]
-#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
-pub struct CompactVoteStateUpdate {
-    /// The proposed root, u64::MAX if there is no root
-    pub root: Slot,
-    /// The offset from the root (or 0 if no root) to the first vote
-    pub root_to_first_vote_offset: u64,
-    /// Part of the proposed tower, votes with confirmation_count > 15
-    #[serde(with = "short_vec")]
-    pub lockouts_32: Vec<CompactLockout<u32>>,
-    /// Part of the proposed tower, votes with 15 >= confirmation_count > 7
-    #[serde(with = "short_vec")]
-    pub lockouts_16: Vec<CompactLockout<u16>>,
-    /// Part of the proposed tower, votes with 7 >= confirmation_count
-    #[serde(with = "short_vec")]
-    pub lockouts_8: Vec<CompactLockout<u8>>,
-
-    /// Signature of the bank's state at the last slot
-    pub hash: Hash,
-    /// Processing timestamp of last slot
-    pub timestamp: Option<UnixTimestamp>,
-}
-
-impl From<Vec<(Slot, u32)>> for CompactVoteStateUpdate {
-    fn from(recent_slots: Vec<(Slot, u32)>) -> Self {
-        let lockouts: VecDeque<Lockout> = recent_slots
-            .into_iter()
-            .map(|(slot, confirmation_count)| Lockout {
-                slot,
-                confirmation_count,
-            })
-            .collect();
-        Self::new(lockouts, None, Hash::default(), None).unwrap()
-    }
-}
-
-impl CompactVoteStateUpdate {
-    pub fn new(
-        mut lockouts: VecDeque<Lockout>,
-        root: Option<Slot>,
-        hash: Hash,
-        timestamp: Option<UnixTimestamp>,
-    ) -> Option<Self> {
-        if lockouts.is_empty() {
-            return Some(Self::default());
-        }
-        let mut cur_slot = root.unwrap_or(0u64);
-        let mut cur_confirmation_count = 0;
-        let offset = lockouts
-            .pop_front()
-            .map(
-                |Lockout {
-                     slot,
-                     confirmation_count,
-                 }| {
-                    assert!(confirmation_count < 32);
-
-                    slot.checked_sub(cur_slot).map(|offset| {
-                        cur_slot = slot;
-                        cur_confirmation_count = confirmation_count;
-                        offset
-                    })
-                },
-            )
-            .expect("Tower should not be empty")?;
-        let mut lockouts_32 = Vec::new();
-        let mut lockouts_16 = Vec::new();
-        let mut lockouts_8 = Vec::new();
-
-        for Lockout {
-            slot,
-            confirmation_count,
-        } in lockouts
-        {
-            assert!(confirmation_count < 32);
-            let offset = slot.checked_sub(cur_slot)?;
-            if cur_confirmation_count > 15 {
-                lockouts_32.push(CompactLockout {
-                    offset: offset.try_into().unwrap(),
-                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
-                });
-            } else if cur_confirmation_count > 7 {
-                lockouts_16.push(CompactLockout {
-                    offset: offset.try_into().unwrap(),
-                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
-                });
-            } else {
-                lockouts_8.push(CompactLockout {
-                    offset: offset.try_into().unwrap(),
-                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
-                })
-            }
-
-            cur_slot = slot;
-            cur_confirmation_count = confirmation_count;
-        }
-        // Last vote should be at the top of tower, so we don't have to explicitly store it
-        assert!(cur_confirmation_count == 1);
-        Some(Self {
-            root: root.unwrap_or(u64::MAX),
-            root_to_first_vote_offset: offset,
-            lockouts_32,
-            lockouts_16,
-            lockouts_8,
-            hash,
-            timestamp,
-        })
-    }
-
-    pub fn root(&self) -> Option<Slot> {
-        if self.root == u64::MAX {
-            None
-        } else {
-            Some(self.root)
-        }
-    }
-
-    pub fn slots(&self) -> Vec<Slot> {
-        std::iter::once(self.root_to_first_vote_offset)
-            .chain(self.lockouts_32.iter().map(|lockout| lockout.offset.into()))
-            .chain(self.lockouts_16.iter().map(|lockout| lockout.offset.into()))
-            .chain(self.lockouts_8.iter().map(|lockout| lockout.offset.into()))
-            .scan(self.root().unwrap_or(0), |prev_slot, offset| {
-                prev_slot.checked_add(offset).map(|slot| {
-                    *prev_slot = slot;
-                    slot
-                })
-            })
-            .collect()
-    }
-
-    pub fn uncompact(self) -> Result<VoteStateUpdate, InstructionError> {
-        let first_slot = self
-            .root()
-            .unwrap_or(0)
-            .checked_add(self.root_to_first_vote_offset)
-            .ok_or(InstructionError::ArithmeticOverflow)?;
-        let mut arithmetic_overflow_occured = false;
-        let lockouts = self
-            .lockouts_32
-            .iter()
-            .map(|lockout| (lockout.offset.into(), lockout.confirmation_count))
-            .chain(
-                self.lockouts_16
-                    .iter()
-                    .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
-            )
-            .chain(
-                self.lockouts_8
-                    .iter()
-                    .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
-            )
-            .chain(
-                // To pick up the last element
-                std::iter::once((0, 1)),
-            )
-            .scan(
-                first_slot,
-                |slot, (offset, confirmation_count): (u64, u8)| {
-                    let cur_slot = *slot;
-                    if let Some(new_slot) = slot.checked_add(offset) {
-                        *slot = new_slot;
-                        Some(Lockout {
-                            slot: cur_slot,
-                            confirmation_count: confirmation_count.into(),
-                        })
-                    } else {
-                        arithmetic_overflow_occured = true;
-                        None
-                    }
-                },
-            )
-            .collect();
-        if arithmetic_overflow_occured {
-            Err(InstructionError::ArithmeticOverflow)
-        } else {
-            Ok(VoteStateUpdate {
-                lockouts,
-                root: self.root(),
-                hash: self.hash,
-                timestamp: self.timestamp,
-            })
-        }
     }
 }
 
@@ -789,9 +567,109 @@ impl VoteState {
     }
 }
 
+pub mod serde_compact_vote_state_update {
+    use {
+        super::*,
+        crate::{
+            clock::{Slot, UnixTimestamp},
+            serde_varint, short_vec,
+            vote::state::Lockout,
+        },
+        serde::{Deserialize, Deserializer, Serialize, Serializer},
+    };
+
+    #[derive(Deserialize, Serialize, AbiExample)]
+    struct LockoutOffset {
+        #[serde(with = "serde_varint")]
+        offset: Slot,
+        confirmation_count: u8,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct CompactVoteStateUpdate {
+        root: Slot,
+        #[serde(with = "short_vec")]
+        lockout_offsets: Vec<LockoutOffset>,
+        hash: Hash,
+        timestamp: Option<UnixTimestamp>,
+    }
+
+    pub fn serialize<S>(
+        vote_state_update: &VoteStateUpdate,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let lockout_offsets = vote_state_update.lockouts.iter().scan(
+            vote_state_update.root.unwrap_or_default(),
+            |slot, lockout| {
+                let offset = match lockout.slot.checked_sub(*slot) {
+                    None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
+                    Some(offset) => offset,
+                };
+                let confirmation_count = match u8::try_from(lockout.confirmation_count) {
+                    Ok(confirmation_count) => confirmation_count,
+                    Err(_) => {
+                        return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
+                    }
+                };
+                let lockout_offset = LockoutOffset {
+                    offset,
+                    confirmation_count,
+                };
+                *slot = lockout.slot;
+                Some(Ok(lockout_offset))
+            },
+        );
+        let compact_vote_state_update = CompactVoteStateUpdate {
+            root: vote_state_update.root.unwrap_or(Slot::MAX),
+            lockout_offsets: lockout_offsets.collect::<Result<_, _>>()?,
+            hash: vote_state_update.hash,
+            timestamp: vote_state_update.timestamp,
+        };
+        compact_vote_state_update.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<VoteStateUpdate, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let CompactVoteStateUpdate {
+            root,
+            lockout_offsets,
+            hash,
+            timestamp,
+        } = CompactVoteStateUpdate::deserialize(deserializer)?;
+        let root = (root != Slot::MAX).then_some(root);
+        let lockouts =
+            lockout_offsets
+                .iter()
+                .scan(root.unwrap_or_default(), |slot, lockout_offset| {
+                    *slot = match slot.checked_add(lockout_offset.offset) {
+                        None => {
+                            return Some(Err(serde::de::Error::custom("Invalid lockout offset")))
+                        }
+                        Some(slot) => slot,
+                    };
+                    let lockout = Lockout {
+                        slot: *slot,
+                        confirmation_count: u32::from(lockout_offset.confirmation_count),
+                    };
+                    Some(Ok(lockout))
+                });
+        Ok(VoteStateUpdate {
+            root,
+            lockouts: lockouts.collect::<Result<_, _>>()?,
+            hash,
+            timestamp,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, itertools::Itertools, rand::Rng};
 
     #[test]
     fn test_vote_serialize() {
@@ -1234,5 +1112,51 @@ mod tests {
         let minimum_balance = rent.minimum_balance(VoteState::size_of());
         // golden, may need updating when vote_state grows
         assert!(minimum_balance as f64 / 10f64.powf(9.0) < 0.04)
+    }
+
+    #[test]
+    fn test_serde_compact_vote_state_update() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..5000 {
+            run_serde_compact_vote_state_update(&mut rng);
+        }
+    }
+
+    #[allow(clippy::integer_arithmetic)]
+    fn run_serde_compact_vote_state_update<R: Rng>(rng: &mut R) {
+        let lockouts: VecDeque<_> = std::iter::repeat_with(|| Lockout {
+            slot: 149_303_885 + rng.gen_range(0, 10_000),
+            confirmation_count: rng.gen_range(0, 33),
+        })
+        .take(32)
+        .sorted_by_key(|lockout| lockout.slot)
+        .collect();
+        let root = rng
+            .gen_ratio(1, 2)
+            .then(|| lockouts[0].slot - rng.gen_range(0, 1_000));
+        let timestamp = rng.gen_ratio(1, 2).then(|| rng.gen());
+        let hash = Hash::from(rng.gen::<[u8; 32]>());
+        let vote_state_update = VoteStateUpdate {
+            lockouts,
+            root,
+            hash,
+            timestamp,
+        };
+        #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
+        enum VoteInstruction {
+            #[serde(with = "serde_compact_vote_state_update")]
+            UpdateVoteState(VoteStateUpdate),
+            UpdateVoteStateSwitch(
+                #[serde(with = "serde_compact_vote_state_update")] VoteStateUpdate,
+                Hash,
+            ),
+        }
+        let vote = VoteInstruction::UpdateVoteState(vote_state_update.clone());
+        let bytes = bincode::serialize(&vote).unwrap();
+        assert_eq!(vote, bincode::deserialize(&bytes).unwrap());
+        let hash = Hash::from(rng.gen::<[u8; 32]>());
+        let vote = VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash);
+        let bytes = bincode::serialize(&vote).unwrap();
+        assert_eq!(vote, bincode::deserialize(&bytes).unwrap());
     }
 }

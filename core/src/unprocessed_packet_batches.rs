@@ -135,6 +135,10 @@ impl UnprocessedPacketBatches {
         (num_dropped_packets, num_dropped_tracer_packets)
     }
 
+    /// Pushes a new `deserialized_packet` into the unprocessed packet batches if it does not already
+    /// exist.
+    ///
+    /// Returns and drops the lowest priority packet if the buffer is at capacity.
     pub fn push(&mut self, deserialized_packet: DeserializedPacket) -> Option<DeserializedPacket> {
         if self
             .message_hash_to_transaction

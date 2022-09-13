@@ -64,6 +64,21 @@ impl Keypair {
     pub fn secret(&self) -> &ed25519_dalek::SecretKey {
         &self.0.secret
     }
+
+    /// Allows Keypair cloning
+    ///
+    /// Note that the `Clone` trait is intentionally unimplemented because making a
+    /// second copy of sensitive secret keys in memory is usually a bad idea.
+    ///
+    /// Only use this in tests or when strictly required. Consider using Arc<Keypair>
+    /// instead.
+    pub fn insecure_clone(&self) -> Self {
+        Self(ed25519_dalek::Keypair {
+            // This will never error since self is a valid keypair
+            secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
+            public: self.0.public,
+        })
+    }
 }
 
 impl Signer for Keypair {
@@ -94,26 +109,6 @@ where
 {
     fn eq(&self, other: &T) -> bool {
         self.pubkey() == other.pubkey()
-    }
-}
-
-/// Allows Keypair cloning
-///
-/// Note that the `Clone` trait is intentionally unimplemented because making a
-/// second copy of sensitive secret keys in memory is usually a bad idea.
-///
-/// Only use this in tests or when strictly required.
-pub trait KeypairInsecureClone {
-    fn clone(&self) -> Self;
-}
-
-impl KeypairInsecureClone for Keypair {
-    fn clone(&self) -> Self {
-        Self(ed25519_dalek::Keypair {
-            // This will never error since self is a valid keypair
-            secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
-            public: self.0.public,
-        })
     }
 }
 
