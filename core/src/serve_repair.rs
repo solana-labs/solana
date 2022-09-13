@@ -838,7 +838,7 @@ impl ServeRepair {
         let mut pending_pings = Vec::default();
 
         // iter over the packets
-        for (i, packet) in packet_batch.iter().enumerate() {
+        for packet in packet_batch.iter() {
             let request: RepairProtocol = match packet.deserialize_slice(..) {
                 Ok(request) => request,
                 Err(_) => {
@@ -905,9 +905,8 @@ impl ServeRepair {
                 stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
             } else {
-                stats.dropped_requests += packet_batch.len() - i;
+                stats.dropped_requests += 1;
                 stats.total_dropped_response_packets += num_response_packets;
-                break;
             }
         }
 
