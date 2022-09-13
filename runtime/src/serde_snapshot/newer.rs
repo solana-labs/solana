@@ -4,8 +4,12 @@ use {
         utils::{serialize_iter_as_map, serialize_iter_as_seq},
         *,
     },
-    crate::{ancestors::AncestorsForSerialization, stakes::StakesCache},
+    crate::{
+        ancestors::AncestorsForSerialization, bank::BankIncrementalSnapshotPersistence,
+        stakes::StakesCache,
+    },
     solana_measure::measure::Measure,
+    solana_sdk::deserialize_utils::ignore_eof_error,
     std::{cell::RefCell, collections::HashSet, sync::RwLock},
 };
 
@@ -300,7 +304,7 @@ impl<'a> TypeContext<'a> for Context {
             deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
         let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
         // Process extra fields
-        let lamports_per_signature: u64 = match deserialize_from(stream) {
+        let lamports_per_signature: u64 = match deserialize_from(&mut stream) {
             Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(0),
             Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(0),
             result => result,
@@ -309,8 +313,8 @@ impl<'a> TypeContext<'a> for Context {
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
 
-        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
-        bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
+        let _incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence> =
+            ignore_eof_error(deserialize_from(stream))?;
 
         Ok((bank_fields, accounts_db_fields))
     }
