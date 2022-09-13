@@ -1440,7 +1440,7 @@ impl Scheduler {
         }).collect();
         let mut executing_thread_duration_pairs = executing_thread_duration_pairs?;
         executing_thread_duration_pairs.sort();
-        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_cpu_us.into_iter().unzip();
+        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_duration_pairs.into_iter().unzip();
 
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_duration_pairs = h.join().unwrap()?;
