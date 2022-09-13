@@ -4,7 +4,6 @@
   "private": true,
   "dependencies": {
     "@blockworks-foundation/mango-client": "^3.6.7",
-    "@bonfida/bot": "^0.5.3",
     "@bonfida/spl-name-service": "^0.1.30",
     "@cloudflare/stream-react": "^1.2.0",
     "@metamask/jazzicon": "^2.0.0",
