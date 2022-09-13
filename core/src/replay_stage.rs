@@ -2020,13 +2020,7 @@ impl ReplayStage {
             .is_active(&feature_set::compact_vote_state_updates::id());
         let vote = match (should_compact, vote) {
             (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
-                if let Some(compact_vote_state_update) = vote_state_update.compact() {
-                    VoteTransaction::from(compact_vote_state_update)
-                } else {
-                    // Compaction failed
-                    warn!("Compaction failed when generating vote tx for vote account {}. Unable to vote", vote_account_pubkey);
-                    return None;
-                }
+                VoteTransaction::CompactVoteStateUpdate(vote_state_update)
             }
             (_, vote) => vote,
         };
@@ -3527,7 +3521,7 @@ pub(crate) mod tests {
             hash::{hash, Hash},
             instruction::InstructionError,
             poh_config::PohConfig,
-            signature::{Keypair, KeypairInsecureClone, Signer},
+            signature::{Keypair, Signer},
             system_transaction,
             transaction::TransactionError,
         },
@@ -3607,7 +3601,7 @@ pub(crate) mod tests {
         let my_pubkey = my_keypairs.node_keypair.pubkey();
         let cluster_info = ClusterInfo::new(
             Node::new_localhost_with_pubkey(&my_pubkey).info,
-            Arc::new(my_keypairs.node_keypair.clone()),
+            Arc::new(my_keypairs.node_keypair.insecure_clone()),
             SocketAddrSpace::Unspecified,
         );
         assert_eq!(my_pubkey, cluster_info.id());

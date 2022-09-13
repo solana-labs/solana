@@ -40,7 +40,7 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc,
         },
         thread::Builder,
@@ -317,6 +317,7 @@ pub(crate) fn bank_from_streams<R>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -338,6 +339,7 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     )
 }
 
@@ -531,6 +533,7 @@ fn reconstruct_bank_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -547,6 +550,7 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
         bank_fields.epoch_accounts_hash,
     )?;
 
@@ -668,6 +672,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
     epoch_accounts_hash: Option<Hash>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
@@ -681,6 +686,7 @@ where
         shrink_ratio,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     );
     *accounts_db.epoch_accounts_hash.lock().unwrap() =
         epoch_accounts_hash.map(EpochAccountsHash::new);

@@ -4564,15 +4564,33 @@ describe('Connection', function () {
         );
         expect(parsedTransaction).to.not.be.null;
         expect(parsedTransaction?.version).to.eq(0);
-        expect(parsedTransaction?.meta?.loadedAddresses).to.eql({
-          readonly: [],
-          writable: [lookupTableAddresses[0]],
-        });
+        // loaded addresses are not returned for parsed transactions
+        expect(parsedTransaction?.meta?.loadedAddresses).to.be.undefined;
         expect(parsedTransaction?.meta?.computeUnitsConsumed).to.not.be
           .undefined;
         expect(
           parsedTransaction?.transaction.message.addressTableLookups,
         ).to.eql(addressTableLookups);
+        expect(parsedTransaction?.transaction.message.accountKeys).to.eql([
+          {
+            pubkey: payer.publicKey,
+            signer: true,
+            writable: true,
+            source: 'transaction',
+          },
+          {
+            pubkey: SystemProgram.programId,
+            signer: false,
+            writable: false,
+            source: 'transaction',
+          },
+          {
+            pubkey: lookupTableAddresses[0],
+            signer: false,
+            writable: true,
+            source: 'lookupTable',
+          },
+        ]);
       });
 
       it('getBlock (failure)', async () => {

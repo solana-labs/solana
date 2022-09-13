@@ -20,6 +20,7 @@ function CardLayout({
       if (sidebarItems[key]?.type?.toLowerCase() === "category") {
         for (let i = 0; i < sidebarItems[key]?.items?.length; i++)
           sidebarItems[key].items[i] = formatter(sidebarItems[key].items[i]);
+        sidebarItems[key].collapsed = true;
       } else sidebarItems[key] = formatter(sidebarItems[key]);
     });
   }
@@ -63,6 +64,7 @@ const formatter = (item) => {
       label: computeLabel(item) || item || "[unknown label]",
     };
   }
+
   // handle object style docs
   else if (item?.type?.toLowerCase() === "doc") {
     item.type = "link";
@@ -70,6 +72,16 @@ const formatter = (item) => {
     item.label = item.label || computeLabel(item.href) || "[unknown label]";
     delete item.id;
   }
+
+  // fix for local routing that does not specify starting at the site root
+  if (
+    !(
+      item?.href.startsWith("/") ||
+      item?.href.startsWith("http:") ||
+      item?.href.startsWith("https")
+    )
+  )
+    item.href = `/${item?.href}`;
 
   return item;
 };

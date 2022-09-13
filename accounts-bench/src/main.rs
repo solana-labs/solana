@@ -125,6 +125,7 @@ fn main() {
                 &ancestors,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+                true,
             );
             time.stop();
             let mut time_store = Measure::start("hash using store");
@@ -138,6 +139,7 @@ fn main() {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 false,
+                true,
             );
             time_store.stop();
             if results != results_store {

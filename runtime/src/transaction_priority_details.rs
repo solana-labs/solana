@@ -23,7 +23,8 @@ pub trait GetTransactionPriorityDetails {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
-                true, // use default units per instruction
+                true,  // use default units per instruction
+                false, // stop supporting prioritization by request_units_deprecated instruction
             )
             .ok()?;
         Some(TransactionPriorityDetails {

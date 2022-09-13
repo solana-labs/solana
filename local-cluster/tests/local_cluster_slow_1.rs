@@ -29,13 +29,12 @@ use {
         clock::{Slot, MAX_PROCESSING_AGE},
         hash::Hash,
         pubkey::Pubkey,
-        signature::{KeypairInsecureClone, Signer},
+        signature::Signer,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{vote_state::MAX_LOCKOUT_HISTORY, vote_transaction},
     std::{
         collections::{BTreeSet, HashSet},
-        ops::Deref,
         path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -464,7 +463,7 @@ fn test_duplicate_shreds_broadcast_leader() {
     let (gossip_service, _tcp_listener, cluster_info) = gossip_service::make_gossip_node(
         // Need to use our validator's keypair to gossip EpochSlots and votes for our
         // node later.
-        node_keypair.deref().clone(),
+        node_keypair.insecure_clone(),
         Some(&cluster.entry_point_info.gossip),
         &exit,
         None,
