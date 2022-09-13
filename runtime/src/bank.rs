@@ -1440,7 +1440,7 @@ impl Scheduler {
         }).collect();
         let mut executing_thread_cpu_us = executing_thread_cpu_us?;
         executing_thread_cpu_us.sort();
-        let (mut executing_thread_cpu_us, mut executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_cpu_us.into_iter().unzip();
+        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_cpu_us.into_iter().unzip();
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_cpu_us = h.join().unwrap()?.as_micros();
         let h = self.error_collector_thread_handle.take().unwrap();
