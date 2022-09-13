@@ -25,10 +25,7 @@ use {
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
-    solana_perf::{
-        data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PacketBatchRecycler},
-    },
+    solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
@@ -46,7 +43,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -168,6 +165,95 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+}
+
+struct RepairBudget {
+    last_update: Instant,
+    epoch_staked_nodes: Option<Arc<HashMap<Pubkey, u64>>>,
+    node_used: HashMap<Pubkey, /*bytes*/ u64>,
+    staked_remaining: u64,
+    unstaked_remaining: u64,
+    staked_request: u64,
+    unstaked_request: u64,
+}
+
+impl RepairBudget {
+    const INTERVAL_MS: u64 = 1_000;
+    const MAX_BYTES_PER_INTERVAL: u64 = 12_000_000;
+    const MAX_STAKED_BYTES_PER_INTERVAL: u64 = 10_000_000;
+    const MAX_NODE_BYTES_PER_INTERVAL: u64 = 1_000_000;
+
+    fn new(bank_forks: &RwLock<BankForks>) -> Self {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        let epoch_schedule = root_bank.epoch_schedule();
+        let epoch = epoch_schedule.get_epoch(root_bank.slot());
+        let staked_nodes = root_bank.epoch_staked_nodes(epoch);
+        Self {
+            last_update: Instant::now(),
+            epoch_staked_nodes: staked_nodes,
+            node_used: HashMap::default(),
+            staked_remaining: 0,
+            unstaked_remaining: Self::MAX_BYTES_PER_INTERVAL,
+            staked_request: 0,
+            unstaked_request: 0,
+        }
+    }
+
+    fn take(&mut self, id: &Pubkey, bytes: u64) -> bool {
+        // Enforce a per-node cap on bandwith usage. Return early if the cap is
+        // hit to prevent the node from skewing the stake/unstaked capacity
+        // adjustments.
+        let node_used = self.node_used.entry(*id).or_default();
+        let requested_node_usage = node_used.saturating_add(bytes);
+        if requested_node_usage > Self::MAX_NODE_BYTES_PER_INTERVAL {
+            return false;
+        }
+        *node_used = requested_node_usage;
+
+        let staked = self
+            .epoch_staked_nodes
+            .as_ref()
+            .map(|staked_nodes| staked_nodes.contains_key(id))
+            .unwrap_or_default();
+        if staked {
+            self.staked_request = self.staked_request.saturating_add(bytes);
+            // staked nodes can consume unstaked bandwidth
+            if self.staked_remaining >= bytes {
+                self.staked_remaining -= bytes;
+                true
+            } else if self.unstaked_remaining >= bytes {
+                self.unstaked_remaining -= bytes;
+                true
+            } else {
+                false
+            }
+        } else {
+            self.unstaked_request = self.unstaked_request.saturating_add(bytes);
+            if self.unstaked_remaining >= bytes {
+                self.unstaked_remaining -= bytes;
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    fn update(&mut self, bank_forks: &RwLock<BankForks>) {
+        if self.last_update.elapsed() > Duration::from_millis(Self::INTERVAL_MS) {
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            let epoch_schedule = root_bank.epoch_schedule();
+            let epoch = epoch_schedule.get_epoch(root_bank.slot());
+            let staked_nodes = root_bank.epoch_staked_nodes(epoch);
+            let staked_remaining = self.staked_request.min(Self::MAX_STAKED_BYTES_PER_INTERVAL);
+            self.epoch_staked_nodes = staked_nodes;
+            self.node_used = HashMap::default();
+            self.staked_remaining = staked_remaining;
+            self.unstaked_remaining = Self::MAX_BYTES_PER_INTERVAL - staked_remaining;
+            self.staked_request = 0;
+            self.unstaked_request = 0;
+            self.last_update = Instant::now();
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -469,7 +555,7 @@ impl ServeRepair {
         requests_receiver: &PacketBatchReceiver,
         response_sender: &PacketBatchSender,
         stats: &mut ServeRepairStats,
-        data_budget: &DataBudget,
+        repair_budget: &mut RepairBudget,
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
@@ -500,7 +586,7 @@ impl ServeRepair {
                 response_sender,
                 &root_bank,
                 stats,
-                data_budget,
+                repair_budget,
             );
         }
         Ok(())
@@ -559,10 +645,6 @@ impl ServeRepair {
         response_sender: PacketBatchSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-        const INTERVAL_MS: u64 = 1000;
-        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
-        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-
         let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
 
         let recycler = PacketBatchRecycler::default();
@@ -571,7 +653,8 @@ impl ServeRepair {
             .spawn(move || {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
-                let data_budget = DataBudget::default();
+                let mut repair_budget = RepairBudget::new(&self.bank_forks);
+
                 loop {
                     let result = self.run_listen(
                         &mut ping_cache,
@@ -580,7 +663,7 @@ impl ServeRepair {
                         &requests_receiver,
                         &response_sender,
                         &mut stats,
-                        &data_budget,
+                        &mut repair_budget,
                     );
                     match result {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
@@ -593,7 +676,7 @@ impl ServeRepair {
                         self.report_reset_stats(&mut stats);
                         last_print = Instant::now();
                     }
-                    data_budget.update(INTERVAL_MS, |_bytes| MAX_BYTES_PER_INTERVAL);
+                    repair_budget.update(&self.bank_forks);
                 }
             })
             .unwrap()
@@ -744,7 +827,7 @@ impl ServeRepair {
         response_sender: &PacketBatchSender,
         root_bank: &Bank,
         stats: &mut ServeRepairStats,
-        data_budget: &DataBudget,
+        repair_budget: &mut RepairBudget,
     ) {
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
         let check_ping_ancestor_request_epoch =
@@ -805,6 +888,8 @@ impl ServeRepair {
                 }
             }
 
+            let request_sender = *request.sender();
+
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -813,8 +898,10 @@ impl ServeRepair {
                 Some(rsp) => rsp,
             };
             let num_response_packets = rsp.len();
-            let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
-            if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
+            let num_response_bytes: usize = rsp.iter().map(|p| p.meta.size).sum();
+            if repair_budget.take(&request_sender, num_response_bytes as u64)
+                && response_sender.send(rsp).is_ok()
+            {
                 stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
             } else {
