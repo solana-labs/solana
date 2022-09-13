@@ -322,6 +322,10 @@ pub struct UiTransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
     pub inner_instructions: OptionSerializer<Vec<UiInnerInstructions>>,
     pub log_messages: Option<Vec<String>>,
     pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
@@ -372,11 +376,14 @@ impl UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
-            inner_instructions: OptionSerializer::or_default(meta.inner_instructions.map(|ixs| {
-                ixs.into_iter()
-                    .map(|ix| UiInnerInstructions::parse(ix, &account_keys))
-                    .collect()
-            })),
+            inner_instructions: meta
+                .inner_instructions
+                .map(|ixs| {
+                    ixs.into_iter()
+                        .map(|ix| UiInnerInstructions::parse(ix, &account_keys))
+                        .collect()
+                })
+                .into(),
             log_messages: meta.log_messages,
             pre_token_balances: meta
                 .pre_token_balances
@@ -400,10 +407,10 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
-            inner_instructions: OptionSerializer::or_default(
-                meta.inner_instructions
-                    .map(|ixs| ixs.into_iter().map(Into::into).collect()),
-            ),
+            inner_instructions: meta
+                .inner_instructions
+                .map(|ixs| ixs.into_iter().map(Into::into).collect())
+                .into(),
             log_messages: meta.log_messages,
             pre_token_balances: meta
                 .pre_token_balances

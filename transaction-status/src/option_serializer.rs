@@ -1,33 +1,23 @@
 use serde::{ser::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum OptionSerializer<T: Default> {
+pub enum OptionSerializer<T> {
     Some(T),
     None,
-    Default,
     Skip,
 }
 
-impl<T: Default> Default for OptionSerializer<T> {
-    fn default() -> Self {
+impl<T> OptionSerializer<T> {
+    pub fn none() -> Self {
         Self::None
     }
-}
 
-impl<T: Default> OptionSerializer<T> {
     pub fn skip() -> Self {
         Self::Skip
     }
 
     pub fn should_skip(&self) -> bool {
         matches!(self, Self::Skip)
-    }
-
-    pub fn or_default(option: Option<T>) -> Self {
-        match option {
-            Option::Some(item) => Self::Some(item),
-            Option::None => Self::Default,
-        }
     }
 
     pub fn or_skip(option: Option<T>) -> Self {
@@ -38,7 +28,7 @@ impl<T: Default> OptionSerializer<T> {
     }
 }
 
-impl<T: Default> From<Option<T>> for OptionSerializer<T> {
+impl<T> From<Option<T>> for OptionSerializer<T> {
     fn from(option: Option<T>) -> Self {
         match option {
             Option::Some(item) => Self::Some(item),
@@ -47,7 +37,7 @@ impl<T: Default> From<Option<T>> for OptionSerializer<T> {
     }
 }
 
-impl<T: Default> From<OptionSerializer<T>> for Option<T> {
+impl<T> From<OptionSerializer<T>> for Option<T> {
     fn from(option: OptionSerializer<T>) -> Self {
         match option {
             OptionSerializer::Some(item) => Self::Some(item),
@@ -56,7 +46,7 @@ impl<T: Default> From<OptionSerializer<T>> for Option<T> {
     }
 }
 
-impl<T: Default + Serialize> Serialize for OptionSerializer<T> {
+impl<T: Serialize> Serialize for OptionSerializer<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -64,27 +54,16 @@ impl<T: Default + Serialize> Serialize for OptionSerializer<T> {
         match self {
             Self::Some(item) => item.serialize(serializer),
             Self::None => serializer.serialize_none(),
-            Self::Default => T::default().serialize(serializer),
             Self::Skip => Err(Error::custom("Skip variants should not be serialized")),
         }
     }
 }
 
-impl<'de, T: Default + Deserialize<'de> + PartialEq> Deserialize<'de> for OptionSerializer<T> {
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for OptionSerializer<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let option: Option<T> = Deserialize::deserialize(deserializer)?;
-        Ok(match option {
-            Some(item) => {
-                if item == T::default() {
-                    Self::Default
-                } else {
-                    Self::Some(item)
-                }
-            }
-            None => Self::None,
-        })
+        Option::deserialize(deserializer).map(Into::into)
     }
 }
