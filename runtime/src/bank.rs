@@ -7107,6 +7107,7 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
+            true,
         )
     }
 
