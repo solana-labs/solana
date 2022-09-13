@@ -4132,7 +4132,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let new_scheduler = Scheduler::default();
         if maybe_last_error.is_err() {
-            info!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
+            warn!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
             new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
         }
         *self.scheduler.write().unwrap() = new_scheduler;
