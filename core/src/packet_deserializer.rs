@@ -13,8 +13,8 @@ use {
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
 
-/// Results from deserializing packet batches.
-pub struct ReceivePacketResults {
+/// Deserialized packets and associated metadata
+pub struct DeserializedPacketsInfo {
     /// Deserialized packets from all received packet batches
     pub deserialized_packets: Vec<ImmutableDeserializedPacket>,
     /// Aggregate tracer stats for all received packet batches
@@ -42,7 +42,7 @@ impl PacketDeserializer {
         &self,
         recv_timeout: Duration,
         capacity: usize,
-    ) -> Result<ReceivePacketResults, RecvTimeoutError> {
+    ) -> Result<DeserializedPacketsInfo, RecvTimeoutError> {
         let (packet_batches, sigverify_tracer_stats_option) =
             self.receive_until(recv_timeout, capacity)?;
         Ok(Self::deserialize_and_collect_packets(
@@ -55,7 +55,7 @@ impl PacketDeserializer {
     fn deserialize_and_collect_packets(
         packet_batches: &[PacketBatch],
         sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
-    ) -> ReceivePacketResults {
+    ) -> DeserializedPacketsInfo {
         let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
@@ -69,7 +69,7 @@ impl PacketDeserializer {
             deserialized_packets.extend(Self::deserialize_packets(packet_batch, &packet_indexes));
         }
 
-        ReceivePacketResults {
+        DeserializedPacketsInfo {
             deserialized_packets,
             new_tracer_stats_option: sigverify_tracer_stats_option,
             passed_sigverify_count: passed_sigverify_count as u64,
