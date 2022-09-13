@@ -107,9 +107,9 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v1.10 feature-gate backport
+  - name: v1.13 feature-gate backport
     conditions:
-      - label=v1.10
+      - label=v1.13
       - label=feature-gate
     actions:
       backport:
@@ -120,20 +120,20 @@ ubscribers')) }}"
         labels:
           - feature-gate
         branches:
-          - v1.10
-  - name: v1.10 non-feature-gate backport
+          - v1.13
+  - name: v1.13 non-feature-gate backport
     conditions:
-      - label=v1.10
+      - label=v1.13
       - label!=feature-gate
     actions:
       backport:
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
-          - v1.10
-  - name: v1.11 feature-gate backport
+          - v1.13
+  - name: v1.14 feature-gate backport
     conditions:
-      - label=v1.11
+      - label=v1.14
       - label=feature-gate
     actions:
       backport:
@@ -142,17 +142,17 @@ ubscribers')) }}"
         labels:
           - feature-gate
         branches:
-          - v1.11
-  - name: v1.11 non-feature-gate backport
+          - v1.14
+  - name: v1.14 non-feature-gate backport
     conditions:
-      - label=v1.11
+      - label=v1.14
       - label!=feature-gate
     actions:
       backport:
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
-          - v1.11
+          - v1.14
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
