@@ -418,7 +418,7 @@ describe('Transaction', () => {
     expect(partialTransaction).to.eql(transaction);
 
     invariant(partialTransaction.signatures[0].signature);
-    partialTransaction.signatures[0].signature[0] = 0;
+    partialTransaction.signatures[0].signature.fill(1);
     expect(() =>
       partialTransaction.serialize({requireAllSignatures: false}),
     ).to.throw();
