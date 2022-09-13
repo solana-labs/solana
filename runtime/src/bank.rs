@@ -1269,7 +1269,7 @@ impl Default for Scheduler {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
-                let mut process_message_time = Measure::start("process_message_time");
+                let mut (wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
                 let transaction_index = ee.task.transaction_index_in_entries_for_replay();
@@ -1327,8 +1327,8 @@ impl Default for Scheduler {
                 if send_metrics {
                     let sig = ee.task.tx.0.signature().to_string();
 
-                    process_message_time.stop();
-                    let duration_with_overhead = process_message_time.as_us();
+                    wall_time.stop();
+                    let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info!(
                         "individual_tx_stats",
@@ -1339,6 +1339,7 @@ impl Default for Scheduler {
                         ("account_locks_in_json", "{}", String),
                         ("status", status_str.unwrap(), String),
                         ("duration", duration_with_overhead, i64),
+                        ("cpu_duration", cpu_time.elapsed().as_us(), i64),
                         ("compute_units", ee.cu, i64),
                     );
                 }
