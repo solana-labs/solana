@@ -584,7 +584,6 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
             let buffer_key = *buffer.get_key();
-            let buffer_lamports = buffer.get_lamports();
             let buffer_data_offset = UpgradeableLoaderState::size_of_buffer_metadata();
             let buffer_data_len = buffer.get_data().len().saturating_sub(buffer_data_offset);
             let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
@@ -619,12 +618,11 @@ fn process_loader_upgradeable_instruction(
 
             // Drain the Buffer account to payer before paying for programdata account
             {
-                let mut payer =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-                payer.checked_add_lamports(buffer_lamports)?;
-                drop(payer);
                 let mut buffer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
+                let mut payer =
+                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+                payer.checked_add_lamports(buffer.get_lamports())?;
                 buffer.set_lamports(0)?;
             }
 
@@ -866,23 +864,18 @@ fn process_loader_upgradeable_instruction(
                 .fill(0);
 
             // Fund ProgramData to rent-exemption, spill the rest
-
-            let programdata_lamports = programdata.get_lamports();
-            programdata.set_lamports(programdata_balance_required)?;
-            drop(programdata);
-
             let mut buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-            buffer.set_lamports(0)?;
-            drop(buffer);
-
             let mut spill =
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             spill.checked_add_lamports(
-                programdata_lamports
+                programdata
+                    .get_lamports()
                     .saturating_add(buffer_lamports)
                     .saturating_sub(programdata_balance_required),
             )?;
+            buffer.set_lamports(0)?;
+            programdata.set_lamports(programdata_balance_required)?;
 
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
@@ -967,12 +960,10 @@ fn process_loader_upgradeable_instruction(
             let close_key = *close_account.get_key();
             match close_account.get_state()? {
                 UpgradeableLoaderState::Uninitialized => {
-                    let close_lamports = close_account.get_lamports();
-                    close_account.set_lamports(0)?;
-                    drop(close_account);
                     let mut recipient_account = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?;
-                    recipient_account.checked_add_lamports(close_lamports)?;
+                    recipient_account.checked_add_lamports(close_account.get_lamports())?;
+                    close_account.set_lamports(0)?;
 
                     ic_logger_msg!(log_collector, "Closed Uninitialized {}", close_key);
                 }
