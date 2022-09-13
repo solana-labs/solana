@@ -4155,6 +4155,9 @@ impl AccountsDb {
                 dropped_roots.push(slot);
             }
 
+            // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
+            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+
             self.shrink_ancient_stats
                 .shrink_stats
                 .index_read_elapsed
@@ -4242,11 +4245,13 @@ impl AccountsDb {
     }
 
     pub fn shrink_candidate_slots(&self) -> usize {
-        let shrink_candidates_slots =
-            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        if !shrink_candidates_slots.is_empty() {
+        if !self.shrink_candidate_slots.lock().unwrap().is_empty() {
+            // this can affect 'shrink_candidate_slots', so don't 'take' it until after this completes
             self.shrink_ancient_slots();
         }
+
+        let shrink_candidates_slots =
+            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
