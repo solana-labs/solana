@@ -17,6 +17,10 @@ export class VersionedTransaction {
   signatures: Array<Uint8Array>;
   message: VersionedMessage;
 
+  get version(): TransactionVersion {
+    return this.message.version;
+  }
+
   constructor(message: VersionedMessage, signatures?: Array<Uint8Array>) {
     if (signatures !== undefined) {
       assert(
