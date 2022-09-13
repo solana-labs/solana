@@ -118,6 +118,9 @@ impl SnapshotTestConfig {
             ..SnapshotConfig::default()
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
+        bank_forks
+            .root_bank()
+            .set_initial_blockstore_processing_complete();
         SnapshotTestConfig {
             accounts_dir,
             bank_snapshots_dir,
@@ -209,6 +212,9 @@ fn run_bank_forks_snapshot_n<F>(
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     bank_forks.root_bank().set_startup_verification_complete();
+    bank_forks
+        .root_bank()
+        .set_initial_blockstore_processing_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -676,6 +682,9 @@ fn test_bank_forks_incremental_snapshot(
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
     bank_forks.root_bank().set_startup_verification_complete();
+    bank_forks
+        .root_bank()
+        .set_initial_blockstore_processing_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();

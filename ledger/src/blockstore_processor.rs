@@ -874,6 +874,8 @@ pub fn process_blockstore_from_root(
     }
     time_cap.stop();
 
+    bank.set_initial_blockstore_processing_complete();
+
     datapoint_info!(
         "process_blockstore_from_root",
         ("total_time_us", processing_time.as_micros(), i64),

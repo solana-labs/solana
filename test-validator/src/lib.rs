@@ -606,6 +606,11 @@ impl TestValidator {
             .unwrap()
             .root_bank()
             .set_startup_verification_complete();
+        self.bank_forks()
+            .read()
+            .unwrap()
+            .root_bank()
+            .set_initial_blockstore_processing_complete();
     }
 
     /// Initialize the ledger directory
