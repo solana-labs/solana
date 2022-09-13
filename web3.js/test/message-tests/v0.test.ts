@@ -18,7 +18,7 @@ function createTestKeys(count: number): Array<PublicKey> {
 function createTestLookupTable(
   addresses: Array<PublicKey>,
 ): AddressLookupTableAccount {
-  const U64_MAX = 2n ** 64n - 1n;
+  const U64_MAX = 18446744073709551615n;
   return new AddressLookupTableAccount({
     key: PublicKey.unique(),
     state: {
