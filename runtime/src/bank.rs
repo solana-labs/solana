@@ -1444,7 +1444,7 @@ impl Scheduler {
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
 
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} cpu times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s).into()).unwrap_or_default("-"), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} cpu times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s).into).unwrap_or("-"), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
 
         Ok(())
     }
