@@ -1269,7 +1269,7 @@ impl Default for Scheduler {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
-                let (mut wall_time, mut cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
+                let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
                 let transaction_index = ee.task.transaction_index_in_entries_for_replay();
