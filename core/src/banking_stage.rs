@@ -10,7 +10,9 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::{DeserializedPacketsInfo, PacketDeserializer},
+        packet_deserializer::{
+            DeserializedPacketGetter, DeserializedPacketsInfo, PacketDeserializer,
+        },
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -486,6 +488,9 @@ impl BankingStage {
                             connection_cache,
                             &bank_forks,
                         );
+
+                        // banking is done, can join with the deserializer threads if they exist.
+                        packet_deserializer.join().unwrap();
                     })
                     .unwrap()
             })
@@ -1080,8 +1085,8 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_loop(
-        packet_deserializer: &mut PacketDeserializer,
+    fn process_loop<D>(
+        packet_deserializer: &mut D,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1095,7 +1100,9 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
-    ) {
+    ) where
+        D: DeserializedPacketGetter,
+    {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
@@ -1990,8 +1997,8 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
-    fn receive_and_buffer_packets(
-        packet_deserializer: &mut PacketDeserializer,
+    fn receive_and_buffer_packets<D>(
+        packet_deserializer: &mut D,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
@@ -1999,14 +2006,17 @@ impl BankingStage {
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) -> Result<(), RecvTimeoutError> {
+    ) -> Result<(), RecvTimeoutError>
+    where
+        D: DeserializedPacketGetter,
+    {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
         let DeserializedPacketsInfo {
             deserialized_packets,
             new_tracer_stats_option,
             passed_sigverify_count,
             failed_sigverify_count,
-        } = packet_deserializer.handle_received_packets(
+        } = packet_deserializer.get_deserialized_packets(
             recv_timeout,
             buffered_packet_batches.capacity() - buffered_packet_batches.len(),
         )?;

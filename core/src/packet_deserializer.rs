@@ -10,6 +10,23 @@ use {
     std::time::{Duration, Instant},
 };
 
+/// Provide an interface to get deserialized packet batches either by deserializing
+/// the packets from sigverify stage or by getting the deserialized packets from
+/// a separate deserializer thread.
+pub trait DeserializedPacketGetter {
+    /// Get the next batch of deserialized packets.
+    /// * `recv_timeout` - Timeout for receiving packets from sigverify or deserializer.
+    /// * `capacity` - Maximum number of packets to receive.
+    fn get_deserialized_packets(
+        &mut self,
+        recv_timeout: Duration,
+        capacity: usize,
+    ) -> Result<DeserializedPacketsInfo, RecvTimeoutError>;
+
+    /// Join the deserializer thread if it exists, otherwise do nothing.
+    fn join(self) -> std::thread::Result<()>;
+}
+
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
 
@@ -25,9 +42,25 @@ pub struct DeserializedPacketsInfo {
     pub failed_sigverify_count: u64,
 }
 
+// An inline implementation of `DeserializedPacketGetter` that deserializes packets in
+// the calling thread after receiving them from the sigverify stage.
 pub struct PacketDeserializer {
     /// Receiver for packet batches from sigverify stage
     packet_batch_receiver: BankingPacketReceiver,
+}
+
+impl DeserializedPacketGetter for PacketDeserializer {
+    fn get_deserialized_packets(
+        &mut self,
+        recv_timeout: Duration,
+        capacity: usize,
+    ) -> Result<DeserializedPacketsInfo, RecvTimeoutError> {
+        self.handle_received_packets(recv_timeout, capacity)
+    }
+
+    fn join(self) -> std::thread::Result<()> {
+        Ok(())
+    }
 }
 
 impl PacketDeserializer {
