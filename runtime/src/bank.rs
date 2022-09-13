@@ -1261,7 +1261,7 @@ impl Default for Scheduler {
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
-            let started = cpu_time::ThreadTime::now();
+            let started = (std::time::Instant::now(), cpu_time::ThreadTime::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
@@ -1349,7 +1349,7 @@ impl Default for Scheduler {
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
-            Ok(started.elapsed())
+            Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap()}).collect();
 
         let collected_errors = Arc::new(std::sync::Mutex::new(Vec::new()));
