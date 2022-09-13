@@ -30,8 +30,8 @@ use {
         blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
-            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
-            ShredStorageType,
+            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
+            LedgerColumnOptions, ShredStorageType,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -847,6 +847,23 @@ fn open_blockstore_with_temporary_primary_access(
     )
 }
 
+fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
+    // TODO: the following shred_storage_type inference must be updated once the
+    // rocksdb options can be constructed via load_options_file() as the
+    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
+    // could affect the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(
+        ledger_path,
+        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    ) {
+        Some(s) => s,
+        None => {
+            warn!("{}", warn_message);
+            ShredStorageType::RocksLevel
+        }
+    }
+}
+
 fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
@@ -1466,6 +1483,7 @@ fn main() {
     let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
+
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -2215,21 +2233,10 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let force_update_to_open = matches.is_present("force_update_to_open");
     let verbose_level = matches.occurrences_of("verbose");
-
-    // TODO: the following shred_storage_type inference must be updated once the
-    // rocksdb options can be constructed via load_options_file() as the
-    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
-    // could affect the persisted rocksdb options file.
-    let shred_storage_type = match ShredStorageType::from_ledger_path(
+    let shred_storage_type = get_shred_storage_type(
         &ledger_path,
-        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    ) {
-        Some(s) => s,
-        None => {
-            error!("Shred storage type cannot be inferred, the default RocksLevel will be used");
-            ShredStorageType::RocksLevel
-        }
-    };
+        "Shred storage type cannot be inferred, the default RocksLevel will be used",
+    );
 
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
         bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
@@ -2264,6 +2271,18 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
+                let target_shred_storage_type = get_shred_storage_type(
+                    &target_db,
+                    &format!(
+                        "Shred storage type of target_db cannot be inferred, \
+                     the default RocksLevel will be used. \
+                     If you want to use FIFO shred_storage_type on an empty target_db, \
+                     create {} foldar the specified target_db directory.",
+                        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+                            .blockstore_directory()
+                    ),
+                );
+
                 let source = open_blockstore(
                     &ledger_path,
                     AccessType::Secondary,
@@ -2275,10 +2294,9 @@ fn main() {
                     &target_db,
                     AccessType::Primary,
                     None,
-                    &shred_storage_type,
+                    &target_shred_storage_type,
                     force_update_to_open,
                 );
-
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
