@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::{PacketDeserializer, ReceivePacketResults},
+        packet_deserializer::{DeserializedPacketsInfo, PacketDeserializer},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -2001,7 +2001,7 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let ReceivePacketResults {
+        let DeserializedPacketsInfo {
             deserialized_packets,
             new_tracer_stats_option,
             passed_sigverify_count,
