@@ -1,6 +1,5 @@
 use serde::{Deserialize, Deserializer};
 
-
 /// This helper function enables successful deserialization of versioned structs; new structs may
 /// include additional fields if they impl Default and are added to the end of the struct. Right
 /// now, this function is targeted at `bincode` deserialization; the error match may need to be

@@ -206,7 +206,6 @@ impl<'a> TypeContext<'a> for Context {
             // Field that isn't part SerializableVersionedBank, but that we want to
             // be able to store / read back on restart
             lamports_per_signature,
-            // None::<BankIncrementalSnapshotPersistence>, this will be saved starting in 1.12
         )
             .serialize(serializer)
     }
