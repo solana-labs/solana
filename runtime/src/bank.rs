@@ -1328,7 +1328,7 @@ impl Default for Scheduler {
                     let sig = ee.task.tx.0.signature().to_string();
 
                     wall_time.stop();
-                    let duration_with_overhead = wall_time.as_us();
+                    let duration_with_overhead = wall_time.as_micros();
 
                     datapoint_info!(
                         "individual_tx_stats",
