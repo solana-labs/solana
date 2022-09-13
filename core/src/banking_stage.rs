@@ -1014,11 +1014,7 @@ impl BankingStage {
                 }
             });
 
-        if hold {
-            for deserialized_packet in buffered_packet_batches.iter_mut() {
-                deserialized_packet.forwarded = true;
-            }
-        } else {
+        if !hold {
             slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
                 filter_forwarding_result.total_forwardable_packets as u64,
             );
@@ -1110,13 +1106,21 @@ impl BankingStage {
                         }
                     }
 
-                    accepting_packets = Self::add_filtered_packets_to_forward_buffer(
-                        forward_buffer,
+                    let (still_accepting_packets, acceptabled_packet_indexes) =
+                        Self::add_filtered_packets_to_forward_buffer(
+                            forward_buffer,
+                            &packets_to_process,
+                            &sanitized_transactions,
+                            &transaction_to_packet_indexes,
+                            &forwardable_transaction_indexes,
+                            &mut dropped_tx_before_forwarding_count,
+                        );
+                    accepting_packets = still_accepting_packets;
+
+                    Self::mark_accepted_packets_as_forwarded(
+                        buffered_packet_batches,
                         &packets_to_process,
-                        &sanitized_transactions,
-                        &transaction_to_packet_indexes,
-                        &forwardable_transaction_indexes,
-                        &mut dropped_tx_before_forwarding_count,
+                        &acceptabled_packet_indexes,
                     );
 
                     Self::collect_retained_packets(
@@ -1237,6 +1241,24 @@ impl BankingStage {
             .collect_vec()
     }
 
+    fn mark_accepted_packets_as_forwarded(
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        accepted_packet_indexes: &[usize],
+    ) {
+        accepted_packet_indexes
+            .iter()
+            .for_each(|accepted_packet_index| {
+                let accepted_packet = packets_to_process[*accepted_packet_index].clone();
+                if let Some(deserialized_packet) = buffered_packet_batches
+                    .message_hash_to_transaction
+                    .get_mut(accepted_packet.message_hash())
+                {
+                    deserialized_packet.forwarded = true;
+                }
+            });
+    }
+
     fn collect_retained_packets(
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
@@ -1281,31 +1303,34 @@ impl BankingStage {
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
-        retained_transaction_indexes: &[usize],
+        forwardable_transaction_indexes: &[usize],
         dropped_tx_before_forwarding_count: &mut usize,
-    ) -> bool {
+    ) -> (bool, Vec<usize>) {
         let mut added_packets_count: usize = 0;
         let mut accepting_packets = true;
-        for retained_transaction_index in retained_transaction_indexes {
-            let sanitized_transaction = &transactions[*retained_transaction_index];
-            let immutable_deserialized_packet = packets_to_process
-                [transaction_to_packet_indexes[*retained_transaction_index]]
-                .clone();
+        let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
+        for forwardable_transaction_index in forwardable_transaction_indexes {
+            let sanitized_transaction = &transactions[*forwardable_transaction_index];
+            let forwardable_packet_index =
+                transaction_to_packet_indexes[*forwardable_transaction_index];
+            let immutable_deserialized_packet =
+                packets_to_process[forwardable_packet_index].clone();
             accepting_packets =
                 forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet);
             if !accepting_packets {
                 break;
             }
+            accepted_packet_indexes.push(forwardable_packet_index);
             saturating_add_assign!(added_packets_count, 1);
         }
 
         // count the packets not being forwarded in this batch
         saturating_add_assign!(
             *dropped_tx_before_forwarding_count,
-            retained_transaction_indexes.len() - added_packets_count
+            forwardable_transaction_indexes.len() - added_packets_count
         );
 
-        accepting_packets
+        (accepting_packets, accepted_packet_indexes)
     }
 
     #[allow(clippy::too_many_arguments)]
