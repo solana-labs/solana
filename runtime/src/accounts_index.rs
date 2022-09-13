@@ -278,12 +278,15 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         self.set_dirty(true);
     }
 
-    pub fn unref(&self) {
+    /// decrement the ref count
+    /// return true if the old refcount was already 0. This indicates an under refcounting error in the system.
+    pub fn unref(&self) -> bool {
         let previous = self.ref_count.fetch_sub(1, Ordering::Release);
+        self.set_dirty(true);
         if previous == 0 {
             inc_new_counter_info!("accounts_index-deref_from_0", 1);
         }
-        self.set_dirty(true);
+        previous == 0
     }
 
     pub fn dirty(&self) -> bool {
@@ -1378,7 +1381,9 @@ impl<T: IndexValue> AccountsIndex<T> {
                         };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
-                                locked_entry.unref();
+                                if locked_entry.unref() {
+                                    info!("scan: refcount of item already at 0: {pubkey}");
+                                }
                                 true
                             }
                             AccountsIndexScanResult::KeepInMemory => true,
@@ -4042,6 +4047,37 @@ pub mod tests {
                 UPSERT_POPULATE_RECLAIMS,
             );
             assert!(gc.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_unref() {
+        let value = true;
+        let key = solana_sdk::pubkey::new_rand();
+        let index = AccountsIndex::<bool>::default_for_tests();
+        let slot1 = 1;
+
+        index.upsert_simple_test(&key, slot1, value);
+
+        let map = index.get_bin(&key);
+        for expected in [false, true] {
+            assert!(map.get_internal(&key, |entry| {
+                // check refcount BEFORE the unref
+                assert_eq!(if expected { 0 } else { 1 }, entry.unwrap().ref_count());
+                // first time, ref count was at 1, we can unref once. Unref should return false.
+                // second time, ref count was at 0, it is an error to unref. Unref should return true
+                assert_eq!(expected, entry.unwrap().unref());
+                // check refcount AFTER the unref
+                assert_eq!(
+                    if expected {
+                        (0 as RefCount).wrapping_sub(1)
+                    } else {
+                        0
+                    },
+                    entry.unwrap().ref_count()
+                );
+                (false, true)
+            }));
         }
     }
 
