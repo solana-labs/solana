@@ -5070,6 +5070,9 @@ impl AccountsDb {
                         ret.get_path(),
                         old_id
                     );
+                    self.stats
+                        .recycle_store_count
+                        .fetch_add(1, Ordering::Relaxed);
                     return Some(ret);
                 }
             }
@@ -5117,17 +5120,12 @@ impl AccountsDb {
                     if store.try_available() {
                         let ret = store.clone();
                         drop(slot_stores);
-                        if create_extra {
-                            if self
+                        if create_extra
+                            && self
                                 .try_recycle_and_insert_store(slot, size as u64, std::u64::MAX)
                                 .is_none()
-                            {
-                                self.create_and_insert_store(slot, self.file_size, "store extra");
-                            } else {
-                                self.stats
-                                    .recycle_store_count
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
+                        {
+                            self.create_and_insert_store(slot, self.file_size, "store extra");
                         }
                         find_existing.stop();
                         self.stats
@@ -5148,9 +5146,6 @@ impl AccountsDb {
             .fetch_add(find_existing.as_us(), Ordering::Relaxed);
 
         let store = if let Some(store) = self.try_recycle_store(slot, size as u64, std::u64::MAX) {
-            self.stats
-                .recycle_store_count
-                .fetch_add(1, Ordering::Relaxed);
             store
         } else {
             self.create_store(slot, self.file_size, "store", &self.paths)
@@ -5779,10 +5774,6 @@ impl AccountsDb {
                         .is_none()
                     {
                         self.create_and_insert_store(slot, special_store_size, "large create");
-                    } else {
-                        self.stats
-                            .recycle_store_count
-                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 continue;
