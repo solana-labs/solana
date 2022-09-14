@@ -1261,7 +1261,7 @@ impl Default for Scheduler {
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
-            let started = (std::time::Instant::now(), cpu_time::ThreadTime::now());
+            let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
@@ -1356,7 +1356,7 @@ impl Default for Scheduler {
         let collected_errors_in_collector_thread = Arc::clone(&collected_errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
-            let started = (std::time::Instant::now(), cpu_time::ThreadTime::now());
+            let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
@@ -1378,7 +1378,7 @@ impl Default for Scheduler {
         let random_id = rand::thread_rng().gen::<u64>();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
-            let started = (std::time::Instant::now(), cpu_time::ThreadTime::now());
+            let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
@@ -1440,17 +1440,17 @@ impl Scheduler {
         }).collect();
         let mut executing_thread_duration_pairs = executing_thread_duration_pairs?;
         executing_thread_duration_pairs.sort();
-        let (executing_thread_wall_time_us, executing_thread_cpu_us): (Vec<_>, Vec<_>) = executing_thread_duration_pairs.into_iter().unzip();
+        let (executing_thread_cpu_us, executing_thread_wall_time_us): (Vec<_>, Vec<_>) = executing_thread_duration_pairs.into_iter().unzip();
 
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_duration_pairs = h.join().unwrap()?;
-        let (scheduler_thread_wall_time_us, scheduler_thread_cpu_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.0.as_micros());
+        let (scheduler_thread_cpu_us, scheduler_wall_time_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.0.as_micros());
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_duration_pairs = h.join().unwrap()?;
-        let (error_collector_thread_wall_time_us, error_collector_thread_cpu_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
+        let (error_collector_thread_cpu_us, error_collector_thread_wall_time_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
 
-        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} wall times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} cpu times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} wall times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
 
         Ok(())
     }

@@ -308,6 +308,7 @@ pub fn process_instruction(
     first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    unreachable!();
     process_instruction_common(first_instruction_account, invoke_context, false)
 }
 
@@ -323,6 +324,7 @@ fn process_instruction_common(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    assert!(use_jit);
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
