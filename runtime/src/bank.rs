@@ -5449,6 +5449,13 @@ impl Bank {
         }
     }
 
+    /// If we are skipping rewrites for bank hash, then we don't want to
+    ///  allow accounts hash calculation to rehash anything.
+    ///  We should use whatever hash found for each account as-is.
+    pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
+        true // this will be goverened by a feature later
+    }
+
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -7107,7 +7114,7 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
-            true,
+            self.bank_enable_rehashing_on_accounts_hash(),
         )
     }
 
@@ -7171,7 +7178,7 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
-                true,
+                self.bank_enable_rehashing_on_accounts_hash(),
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -7198,7 +7205,7 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
-                        true,
+                        self.bank_enable_rehashing_on_accounts_hash(),
                     );
             }
 
