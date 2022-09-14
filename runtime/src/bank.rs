@@ -1444,7 +1444,7 @@ impl Scheduler {
 
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_duration_pairs = h.join().unwrap()?;
-        let (scheduler_thread_cpu_us, scheduler_wall_time_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.0.as_micros());
+        let (scheduler_thread_cpu_us, scheduler_thread_wall_time_us) = (scheduler_thread_duration_pairs.0.as_micros(), scheduler_thread_duration_pairs.0.as_micros());
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_duration_pairs = h.join().unwrap()?;
         let (error_collector_thread_cpu_us, error_collector_thread_wall_time_us) = (error_collector_thread_duration_pairs.0.as_micros(), error_collector_thread_duration_pairs.1.as_micros());
