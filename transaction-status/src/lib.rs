@@ -252,10 +252,16 @@ pub struct UiTransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
     pub ui_token_amount: UiTokenAmount,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub program_id: Option<String>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub owner: OptionSerializer<String>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub program_id: OptionSerializer<String>,
 }
 
 impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
@@ -265,14 +271,14 @@ impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
             mint: token_balance.mint,
             ui_token_amount: token_balance.ui_token_amount,
             owner: if !token_balance.owner.is_empty() {
-                Some(token_balance.owner)
+                OptionSerializer::Some(token_balance.owner)
             } else {
-                None
+                OptionSerializer::Skip
             },
             program_id: if !token_balance.program_id.is_empty() {
-                Some(token_balance.program_id)
+                OptionSerializer::Some(token_balance.program_id)
             } else {
-                None
+                OptionSerializer::Skip
             },
         }
     }
@@ -332,8 +338,16 @@ pub struct UiTransactionStatusMeta {
         skip_serializing_if = "OptionSerializer::should_skip"
     )]
     pub log_messages: OptionSerializer<Vec<String>>,
-    pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub pre_token_balances: OptionSerializer<Vec<UiTransactionTokenBalance>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub post_token_balances: OptionSerializer<Vec<UiTransactionTokenBalance>>,
     #[serde(
         default = "OptionSerializer::none",
         skip_serializing_if = "OptionSerializer::should_skip"
@@ -395,10 +409,12 @@ impl UiTransactionStatusMeta {
             log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             post_token_balances: meta
                 .post_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             rewards: if show_rewards { meta.rewards } else { None }.into(),
             loaded_addresses: OptionSerializer::Skip,
             return_data: meta.return_data.map(|return_data| return_data.into()),
@@ -422,10 +438,12 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             post_token_balances: meta
                 .post_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             rewards: meta.rewards.into(),
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)).into(),
             return_data: meta.return_data.map(|return_data| return_data.into()),
