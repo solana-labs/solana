@@ -3081,6 +3081,36 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
         );
 
+        // Case: Buffer account and spill account alias
+        let (transaction_accounts, mut instruction_accounts) = get_accounts(
+            &buffer_address,
+            &upgrade_authority_address,
+            &upgrade_authority_address,
+            &elf_orig,
+            &elf_new,
+        );
+        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.get(2).unwrap().clone();
+        process_instruction(
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::AccountBorrowFailed),
+        );
+
+        // Case: Programdata account and spill account alias
+        let (transaction_accounts, mut instruction_accounts) = get_accounts(
+            &buffer_address,
+            &upgrade_authority_address,
+            &upgrade_authority_address,
+            &elf_orig,
+            &elf_new,
+        );
+        *instruction_accounts.get_mut(3).unwrap() = instruction_accounts.get(0).unwrap().clone();
+        process_instruction(
+            transaction_accounts,
+            instruction_accounts,
+            Err(InstructionError::AccountBorrowFailed),
+        );
+
         // Case: Program account not executable
         let (mut transaction_accounts, instruction_accounts) = get_accounts(
             &buffer_address,
@@ -3220,7 +3250,7 @@ mod tests {
             Err(InstructionError::AccountDataTooSmall),
         );
 
-        // Test small buffer account
+        // Case: Buffer account too small
         let (mut transaction_accounts, instruction_accounts) = get_accounts(
             &buffer_address,
             &upgrade_authority_address,
@@ -3257,7 +3287,7 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
         );
 
-        // Case: None buffer authority
+        // Case: No buffer authority
         let (mut transaction_accounts, instruction_accounts) = get_accounts(
             &buffer_address,
             &buffer_address,
@@ -3279,7 +3309,7 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
         );
 
-        // Case: None buffer and program authority
+        // Case: No buffer and program authority
         let (mut transaction_accounts, instruction_accounts) = get_accounts(
             &buffer_address,
             &buffer_address,
