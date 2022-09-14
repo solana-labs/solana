@@ -224,23 +224,12 @@ impl RpcSender for MockSender {
                             fee: 0,
                             pre_balances: vec![499999999999999950, 50, 1],
                             post_balances: vec![499999999999999950, 50, 1],
-<<<<<<< HEAD:client/src/mock_sender.rs
-                            inner_instructions: None,
-                            log_messages: None,
-                            pre_token_balances: None,
-                            post_token_balances: None,
-                            rewards: None,
-                            loaded_addresses: None,
-=======
                             inner_instructions: OptionSerializer::None,
                             log_messages: OptionSerializer::None,
                             pre_token_balances: OptionSerializer::None,
                             post_token_balances: OptionSerializer::None,
                             rewards: OptionSerializer::None,
                             loaded_addresses: OptionSerializer::Skip,
-                            return_data: OptionSerializer::Skip,
-                            compute_units_consumed: OptionSerializer::Skip,
->>>>>>> 360ca07a4 (Add serialization-control enum for RPC Options (#27676)):rpc-client/src/mock_sender.rs
                         }),
                 },
                 block_time: Some(1628633791),

@@ -322,15 +322,6 @@ pub struct UiTransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
-<<<<<<< HEAD
-    pub inner_instructions: Option<Vec<UiInnerInstructions>>,
-    pub log_messages: Option<Vec<String>>,
-    pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub rewards: Option<Rewards>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub loaded_addresses: Option<UiLoadedAddresses>,
-=======
     #[serde(
         default = "OptionSerializer::none",
         skip_serializing_if = "OptionSerializer::should_skip"
@@ -361,17 +352,6 @@ pub struct UiTransactionStatusMeta {
         skip_serializing_if = "OptionSerializer::should_skip"
     )]
     pub loaded_addresses: OptionSerializer<UiLoadedAddresses>,
-    #[serde(
-        default = "OptionSerializer::skip",
-        skip_serializing_if = "OptionSerializer::should_skip"
-    )]
-    pub return_data: OptionSerializer<UiTransactionReturnData>,
-    #[serde(
-        default = "OptionSerializer::skip",
-        skip_serializing_if = "OptionSerializer::should_skip"
-    )]
-    pub compute_units_consumed: OptionSerializer<u64>,
->>>>>>> 360ca07a4 (Add serialization-control enum for RPC Options (#27676))
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -423,20 +403,10 @@ impl UiTransactionStatusMeta {
                 .into(),
             post_token_balances: meta
                 .post_token_balances
-<<<<<<< HEAD
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: if show_rewards { meta.rewards } else { None },
-            loaded_addresses: None,
-=======
                 .map(|balance| balance.into_iter().map(Into::into).collect())
                 .into(),
             rewards: if show_rewards { meta.rewards } else { None }.into(),
             loaded_addresses: OptionSerializer::Skip,
-            return_data: OptionSerializer::or_skip(
-                meta.return_data.map(|return_data| return_data.into()),
-            ),
-            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
->>>>>>> 360ca07a4 (Add serialization-control enum for RPC Options (#27676))
         }
     }
 }
@@ -460,20 +430,10 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .into(),
             post_token_balances: meta
                 .post_token_balances
-<<<<<<< HEAD
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: meta.rewards,
-            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
-=======
                 .map(|balance| balance.into_iter().map(Into::into).collect())
                 .into(),
             rewards: meta.rewards.into(),
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)).into(),
-            return_data: OptionSerializer::or_skip(
-                meta.return_data.map(|return_data| return_data.into()),
-            ),
-            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
->>>>>>> 360ca07a4 (Add serialization-control enum for RPC Options (#27676))
         }
     }
 }
@@ -1097,43 +1057,6 @@ pub struct TransactionByAddrInfo {
     pub block_time: Option<UnixTimestamp>,
 }
 
-<<<<<<< HEAD
-=======
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct UiTransactionReturnData {
-    pub program_id: String,
-    pub data: (String, UiReturnDataEncoding),
-}
-
-impl Default for UiTransactionReturnData {
-    fn default() -> Self {
-        Self {
-            program_id: String::default(),
-            data: (String::default(), UiReturnDataEncoding::Base64),
-        }
-    }
-}
-
-impl From<TransactionReturnData> for UiTransactionReturnData {
-    fn from(return_data: TransactionReturnData) -> Self {
-        Self {
-            program_id: return_data.program_id.to_string(),
-            data: (
-                base64::encode(return_data.data),
-                UiReturnDataEncoding::Base64,
-            ),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum UiReturnDataEncoding {
-    Base64,
-}
-
->>>>>>> 360ca07a4 (Add serialization-control enum for RPC Options (#27676))
 #[cfg(test)]
 mod test {
     use {super::*, serde_json::json};
@@ -1305,8 +1228,6 @@ mod test {
                 writable: vec![],
                 readonly: vec![],
             },
-            return_data: None,
-            compute_units_consumed: None,
         };
         let expected_json_output_value: serde_json::Value = serde_json::from_str(
             "{\
