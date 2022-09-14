@@ -383,16 +383,24 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        if encoding == UiAccountEncoding::Base58 {
-            println!(" data: '{}'", bs58::encode(account.data()).into_string());
-            println!("  encoding: base58);
-        } else {
-            let account_data = UiAccount::encode(pubkey, account, encoding, None, None);
-            println!(
-                "  data: '{}'",
-                serde_json::to_string(&account_data.data).unwrap()
-            );
-        }
+        let account_data =
+            serde_json::to_string(&UiAccount::encode(pubkey, account, encoding, None, None).data)
+                .unwrap();
+        match encoding {
+            UiAccountEncoding::Base58 => {
+                println!(" data: '{}'", bs58::encode(account.data()).into_string());
+                println!(" encoding: base58");
+            }
+            UiAccountEncoding::JsonParsed => {
+                println!("  data: '{}'", account_data);
+                println!(" encoding: jsonParsed");
+            }
+            _ => {
+                let account_and_encoding: Vec<&str> = serde_json::from_str(&account_data).unwrap();
+                println!("  data: '{}'", account_and_encoding[0]);
+                println!("  encoding: {}", account_and_encoding[1]);
+            }
+        };
     }
 }
 
@@ -2014,6 +2022,13 @@ fn main() {
                 .long("no-account-data")
                 .takes_value(false)
                 .help("Do not print account data when printing account contents."),
+            ).arg(
+                Arg::with_name("encoding")
+                    .long("encoding")
+                    .takes_value(true)
+                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
+                    .default_value("base58")
+                    .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
