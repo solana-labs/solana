@@ -216,33 +216,6 @@ EOF
       "Stable-perf skipped as no relevant files were modified"
   fi
 
-  # Downstream backwards compatibility
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 30
-    agents:
-      - "queue=solana"
-EOF
-  else
-    annotate --style info \
-      "downstream-projects skipped as no relevant files were modified"
-  fi
-
   # Wasm support
   if affects \
              ^ci/test-wasm.sh \
