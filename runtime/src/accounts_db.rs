@@ -4588,6 +4588,7 @@ impl AccountsDb {
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
         self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
+            .filter(|(account, _)| !account.is_zero_lamport())
     }
 
     pub fn load_without_fixed_root(
@@ -13874,9 +13875,8 @@ pub mod tests {
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
             .load_with_fixed_root(&Ancestors::default(), &account_key)
-            .map(|(account, _)| account)
-            .unwrap();
-        assert_eq!(account.lamports(), 0);
+            .map(|(account, _)| account);
+        assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
