@@ -327,10 +327,18 @@ pub struct UiTransactionStatusMeta {
         skip_serializing_if = "OptionSerializer::should_skip"
     )]
     pub inner_instructions: OptionSerializer<Vec<UiInnerInstructions>>,
-    pub log_messages: Option<Vec<String>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub log_messages: OptionSerializer<Vec<String>>,
     pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
     pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub rewards: Option<Rewards>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub rewards: OptionSerializer<Rewards>,
     #[serde(
         default = "OptionSerializer::skip",
         skip_serializing_if = "OptionSerializer::should_skip"
@@ -384,14 +392,14 @@ impl UiTransactionStatusMeta {
                         .collect()
                 })
                 .into(),
-            log_messages: meta.log_messages,
+            log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             post_token_balances: meta
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: if show_rewards { meta.rewards } else { None },
+            rewards: if show_rewards { meta.rewards } else { None }.into(),
             loaded_addresses: OptionSerializer::Skip,
             return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
@@ -411,14 +419,14 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .inner_instructions
                 .map(|ixs| ixs.into_iter().map(Into::into).collect())
                 .into(),
-            log_messages: meta.log_messages,
+            log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             post_token_balances: meta
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: meta.rewards,
+            rewards: meta.rewards.into(),
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)).into(),
             return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
@@ -736,7 +744,7 @@ impl VersionedTransactionWithStatusMeta {
                 _ => {
                     let mut meta = UiTransactionStatusMeta::from(self.meta);
                     if !show_rewards {
-                        meta.rewards = None;
+                        meta.rewards = OptionSerializer::None;
                     }
                     meta
                 }
