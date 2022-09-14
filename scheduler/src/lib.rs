@@ -1548,8 +1548,10 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let mut selection = TaskSelection::OnlyFromContended(if from_disconnected && runnable_queue.has_no_task() { usize::max_value() } else { usize::max_value() /*2*/ });
-                while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
+                let runnable_finished = from_disconnected && runnable_queue.has_no_task();
+
+                let mut selection = TaskSelection::OnlyFromContended(if runnable_finished { usize::max_value() } else { usize::max_value() /*2*/ });
+                while contended_count > 0 && selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
@@ -1593,7 +1595,7 @@ impl ScheduleStage {
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
-                while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
+                while !runnable_finished && selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
