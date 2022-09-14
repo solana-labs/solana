@@ -103,6 +103,33 @@ export class MessageV0 {
     );
   }
 
+  isAccountSigner(index: number): boolean {
+    return index < this.header.numRequiredSignatures;
+  }
+
+  isAccountWritable(index: number): boolean {
+    const numSignedAccounts = this.header.numRequiredSignatures;
+    const numStaticAccountKeys = this.staticAccountKeys.length;
+    if (index >= numStaticAccountKeys) {
+      const lookupAccountKeysIndex = index - numStaticAccountKeys;
+      const numWritableLookupAccountKeys = this.addressTableLookups.reduce(
+        (count, lookup) => count + lookup.writableIndexes.length,
+        0,
+      );
+      return lookupAccountKeysIndex < numWritableLookupAccountKeys;
+    } else if (index >= this.header.numRequiredSignatures) {
+      const unsignedAccountIndex = index - numSignedAccounts;
+      const numUnsignedAccounts = numStaticAccountKeys - numSignedAccounts;
+      const numWritableUnsignedAccounts =
+        numUnsignedAccounts - this.header.numReadonlyUnsignedAccounts;
+      return unsignedAccountIndex < numWritableUnsignedAccounts;
+    } else {
+      const numWritableSignedAccounts =
+        numSignedAccounts - this.header.numReadonlySignedAccounts;
+      return index < numWritableSignedAccounts;
+    }
+  }
+
   resolveAddressTableLookups(
     addressLookupTableAccounts: AddressLookupTableAccount[],
   ): AccountKeysFromLookups {

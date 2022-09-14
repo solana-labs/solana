@@ -298,4 +298,87 @@ describe('MessageV0', () => {
       'Expected versioned message with version 0 but found version 1',
     );
   });
+
+  it('isAccountWritable', () => {
+    const staticAccountKeys = [
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+    ];
+
+    const recentBlockhash = bs58.encode(sha256('test'));
+    const message = new MessageV0({
+      header: {
+        numRequiredSignatures: 2,
+        numReadonlySignedAccounts: 1,
+        numReadonlyUnsignedAccounts: 1,
+      },
+      recentBlockhash,
+      staticAccountKeys,
+      compiledInstructions: [],
+      addressTableLookups: [
+        {
+          accountKey: PublicKey.unique(),
+          writableIndexes: [0],
+          readonlyIndexes: [1],
+        },
+        {
+          accountKey: PublicKey.unique(),
+          writableIndexes: [0],
+          readonlyIndexes: [1],
+        },
+      ],
+    });
+
+    expect(message.isAccountWritable(0)).to.be.true;
+    expect(message.isAccountWritable(1)).to.be.false;
+    expect(message.isAccountWritable(2)).to.be.true;
+    expect(message.isAccountWritable(3)).to.be.false;
+
+    expect(message.isAccountWritable(4)).to.be.true;
+    expect(message.isAccountWritable(5)).to.be.true;
+
+    expect(message.isAccountWritable(6)).to.be.false;
+    expect(message.isAccountWritable(7)).to.be.false;
+  });
+
+  it('isAccountSigner', () => {
+    const staticAccountKeys = [
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+    ];
+
+    const recentBlockhash = bs58.encode(sha256('test'));
+    const message = new MessageV0({
+      header: {
+        numRequiredSignatures: 2,
+        numReadonlySignedAccounts: 1,
+        numReadonlyUnsignedAccounts: 1,
+      },
+      recentBlockhash,
+      staticAccountKeys,
+      compiledInstructions: [],
+      addressTableLookups: [
+        {
+          accountKey: PublicKey.unique(),
+          writableIndexes: [0],
+          readonlyIndexes: [1],
+        },
+        {
+          accountKey: PublicKey.unique(),
+          writableIndexes: [0],
+          readonlyIndexes: [1],
+        },
+      ],
+    });
+
+    expect(message.isAccountSigner(0)).to.be.true;
+    expect(message.isAccountSigner(1)).to.be.true;
+    for (let i = 2; i < 8; i++) {
+      expect(message.isAccountSigner(i)).to.be.false;
+    }
+  });
 });
