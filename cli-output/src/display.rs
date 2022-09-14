@@ -263,10 +263,14 @@ fn write_transaction<W: io::Write>(
         write_status(w, &transaction_status.status, prefix)?;
         write_fees(w, transaction_status.fee, prefix)?;
         write_balances(w, transaction_status, prefix)?;
-        write_compute_units_consumed(w, transaction_status.compute_units_consumed, prefix)?;
-        write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
-        write_return_data(w, transaction_status.return_data.as_ref(), prefix)?;
-        write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
+        write_compute_units_consumed(
+            w,
+            transaction_status.compute_units_consumed.clone().into(),
+            prefix,
+        )?;
+        write_log_messages(w, transaction_status.log_messages.as_ref().into(), prefix)?;
+        write_return_data(w, transaction_status.return_data.as_ref().into(), prefix)?;
+        write_rewards(w, transaction_status.rewards.as_ref().into(), prefix)?;
     } else {
         writeln!(w, "{}Status: Unavailable", prefix)?;
     }
