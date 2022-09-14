@@ -26,6 +26,14 @@ impl<T> OptionSerializer<T> {
             Option::None => Self::Skip,
         }
     }
+
+    pub fn as_ref(&self) -> OptionSerializer<&T> {
+        match self {
+            OptionSerializer::Some(item) => OptionSerializer::Some(item),
+            OptionSerializer::None => OptionSerializer::None,
+            OptionSerializer::Skip => OptionSerializer::Skip,
+        }
+    }
 }
 
 impl<T> From<Option<T>> for OptionSerializer<T> {
