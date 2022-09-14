@@ -363,8 +363,11 @@ pub struct UiTransactionStatusMeta {
         skip_serializing_if = "OptionSerializer::should_skip"
     )]
     pub return_data: OptionSerializer<UiTransactionReturnData>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub compute_units_consumed: Option<u64>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub compute_units_consumed: OptionSerializer<u64>,
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -423,7 +426,7 @@ impl UiTransactionStatusMeta {
             return_data: OptionSerializer::or_skip(
                 meta.return_data.map(|return_data| return_data.into()),
             ),
-            compute_units_consumed: meta.compute_units_consumed,
+            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
         }
     }
 }
@@ -454,7 +457,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             return_data: OptionSerializer::or_skip(
                 meta.return_data.map(|return_data| return_data.into()),
             ),
-            compute_units_consumed: meta.compute_units_consumed,
+            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
         }
     }
 }
