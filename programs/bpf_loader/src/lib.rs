@@ -304,6 +304,7 @@ pub fn create_vm<'a, 'b>(
     Ok(vm)
 }
 
+/*
 pub fn process_instruction(
     first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
@@ -311,6 +312,7 @@ pub fn process_instruction(
     unreachable!();
     process_instruction_common(first_instruction_account, invoke_context, false)
 }
+*/
 
 pub fn process_instruction_jit(
     first_instruction_account: usize,
