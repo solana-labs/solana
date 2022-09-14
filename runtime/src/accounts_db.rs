@@ -5122,9 +5122,6 @@ impl AccountsDb {
                                 .try_recycle_and_insert_store(slot, size as u64, std::u64::MAX)
                                 .is_none()
                             {
-                                self.stats
-                                    .create_store_count
-                                    .fetch_add(1, Ordering::Relaxed);
                                 self.create_and_insert_store(slot, self.file_size, "store extra");
                             } else {
                                 self.stats
@@ -5156,9 +5153,6 @@ impl AccountsDb {
                 .fetch_add(1, Ordering::Relaxed);
             store
         } else {
-            self.stats
-                .create_store_count
-                .fetch_add(1, Ordering::Relaxed);
             self.create_store(slot, self.file_size, "store", &self.paths)
         };
 
@@ -5195,6 +5189,9 @@ impl AccountsDb {
         from: &str,
         paths: &[PathBuf],
     ) -> Arc<AccountStorageEntry> {
+        self.stats
+            .create_store_count
+            .fetch_add(1, Ordering::Relaxed);
         let path_index = thread_rng().gen_range(0, paths.len());
         let store = Arc::new(self.new_storage_entry(
             slot,
@@ -5781,9 +5778,6 @@ impl AccountsDb {
                         .try_recycle_and_insert_store(slot, special_store_size, std::u64::MAX)
                         .is_none()
                     {
-                        self.stats
-                            .create_store_count
-                            .fetch_add(1, Ordering::Relaxed);
                         self.create_and_insert_store(slot, special_store_size, "large create");
                     } else {
                         self.stats
