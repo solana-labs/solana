@@ -1211,4 +1211,76 @@ mod test {
         }";
         test_serde::<UiTransactionTokenBalance>(json_input, expected_json_output);
     }
+
+    #[test]
+    fn test_ui_transaction_status_meta_ctors_serialization() {
+        let meta = TransactionStatusMeta {
+            status: Ok(()),
+            fee: 1234,
+            pre_balances: vec![1, 2, 3],
+            post_balances: vec![4, 5, 6],
+            inner_instructions: None,
+            log_messages: None,
+            pre_token_balances: None,
+            post_token_balances: None,
+            rewards: None,
+            loaded_addresses: LoadedAddresses {
+                writable: vec![],
+                readonly: vec![],
+            },
+            return_data: None,
+            compute_units_consumed: None,
+        };
+        let expected_json_output_value: serde_json::Value = serde_json::from_str(
+            "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null,\
+            \"loadedAddresses\":{\
+                \"readonly\": [],\
+                \"writable\": []\
+            }\
+        }",
+        )
+        .unwrap();
+        let ui_meta_from: UiTransactionStatusMeta = meta.clone().into();
+        assert_eq!(
+            serde_json::to_value(&ui_meta_from).unwrap(),
+            expected_json_output_value
+        );
+
+        let expected_json_output_value: serde_json::Value = serde_json::from_str(
+            "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null\
+        }",
+        )
+        .unwrap();
+        let ui_meta_parse_with_rewards = UiTransactionStatusMeta::parse(meta.clone(), &[], true);
+        assert_eq!(
+            serde_json::to_value(&ui_meta_parse_with_rewards).unwrap(),
+            expected_json_output_value
+        );
+
+        let ui_meta_parse_no_rewards = UiTransactionStatusMeta::parse(meta, &[], false);
+        assert_eq!(
+            serde_json::to_value(&ui_meta_parse_no_rewards).unwrap(),
+            expected_json_output_value
+        );
+    }
 }
