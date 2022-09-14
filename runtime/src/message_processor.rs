@@ -135,7 +135,7 @@ impl MessageProcessor {
             } else {
                 let mut time = Measure::start("execute_instruction");
                 let mut compute_units_consumed = 0;
-                let result = invoke_context.process_instruction(
+                let result = invoke_context.process_instruction_jit(
                     &instruction.data,
                     &instruction_accounts,
                     program_indices,
