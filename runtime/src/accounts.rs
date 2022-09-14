@@ -799,6 +799,7 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        enable_rehashing: bool,
     ) -> u64 {
         let use_index = false;
         let is_startup = true;
@@ -816,7 +817,7 @@ impl Accounts {
                 epoch_schedule,
                 rent_collector,
                 is_startup,
-                true,
+                enable_rehashing,
             )
             .1
     }
