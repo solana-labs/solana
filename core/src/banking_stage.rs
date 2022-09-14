@@ -379,11 +379,11 @@ pub enum ForwardOption {
     ForwardTransaction,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FilterForwardingResults {
-    total_forwardable_packets: usize,
-    total_tracer_packets_in_buffer: usize,
-    total_forwardable_tracer_packets: usize,
+    pub(crate) total_forwardable_packets: usize,
+    pub(crate) total_tracer_packets_in_buffer: usize,
+    pub(crate) total_forwardable_tracer_packets: usize,
 }
 
 impl BankingStage {

@@ -139,8 +139,8 @@ pub(crate) fn weighted_random_order_by_stake<'a>(
 }
 
 pub struct VoteBatchInsertionMetrics {
-    num_dropped_gossip: usize,
-    num_dropped_tpu: usize,
+    pub(crate) num_dropped_gossip: usize,
+    pub(crate) num_dropped_tpu: usize,
 }
 
 #[derive(Debug, Default)]
@@ -275,6 +275,24 @@ impl LatestUnprocessedVotes {
                 false
             })
             .count()
+    }
+
+    /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
+    pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Rc<ImmutableDeserializedPacket>> {
+        let pubkeys_by_stake = weighted_random_order_by_stake(
+            &bank,
+            self.latest_votes_per_pubkey.read().unwrap().keys(),
+        )
+        .collect_vec();
+        pubkeys_by_stake
+            .into_iter()
+            .filter_map(|pubkey| {
+                self.get_entry(pubkey).and_then(|lock| {
+                    let mut latest_vote = lock.write().unwrap();
+                    latest_vote.take_vote()
+                })
+            })
+            .collect_vec()
     }
 
     /// Sometimes we forward and hold the packets, sometimes we forward and clear.
