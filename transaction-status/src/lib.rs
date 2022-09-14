@@ -1059,7 +1059,7 @@ pub enum UiReturnDataEncoding {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, serde_json::json};
 
     #[test]
     fn test_decode_invalid_transaction() {
@@ -1152,5 +1152,63 @@ mod test {
             confirmation_status: None,
         };
         assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+    }
+
+    #[test]
+    fn test_serde_empty_fields() {
+        fn test_serde<'de, T: serde::Serialize + serde::Deserialize<'de>>(
+            json_input: &'de str,
+            expected_json_output: &str,
+        ) {
+            let typed_meta: T = serde_json::from_str(json_input).unwrap();
+            let reserialized_value = json!(typed_meta);
+
+            let expected_json_output_value: serde_json::Value =
+                serde_json::from_str(expected_json_output).unwrap();
+            assert_eq!(reserialized_value, expected_json_output_value);
+        }
+
+        let json_input = "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6]\
+        }";
+        let expected_json_output = "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null\
+        }";
+        test_serde::<UiTransactionStatusMeta>(json_input, expected_json_output);
+
+        let json_input = "{\
+            \"accountIndex\":5,\
+            \"mint\":\"DXM2yVSouSg1twmQgHLKoSReqXhtUroehWxrTgPmmfWi\",\
+            \"uiTokenAmount\": {
+                \"amount\": \"1\",\
+                \"decimals\": 0,\
+                \"uiAmount\": 1.0,\
+                \"uiAmountString\": \"1\"\
+            }\
+        }";
+        let expected_json_output = "{\
+            \"accountIndex\":5,\
+            \"mint\":\"DXM2yVSouSg1twmQgHLKoSReqXhtUroehWxrTgPmmfWi\",\
+            \"uiTokenAmount\": {
+                \"amount\": \"1\",\
+                \"decimals\": 0,\
+                \"uiAmount\": 1.0,\
+                \"uiAmountString\": \"1\"\
+            }\
+        }";
+        test_serde::<UiTransactionTokenBalance>(json_input, expected_json_output);
     }
 }
