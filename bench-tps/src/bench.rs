@@ -2,6 +2,7 @@ use {
     crate::{
         bench_tps_client::*,
         cli::Config,
+        inline_instruction_padding_program::{self, create_padded_instruction},
         perf_utils::{sample_txs, SampleStats},
         send_batch::*,
     },
@@ -20,7 +21,7 @@ use {
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_instruction, system_transaction,
+        system_instruction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
@@ -94,6 +95,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
     use_randomized_compute_unit_price: bool,
+    pad_instruction_data: Option<u32>,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -106,6 +108,7 @@ where
         nonce_keypairs: Option<&'b Vec<Keypair>>,
         chunk_size: usize,
         use_randomized_compute_unit_price: bool,
+        pad_instruction_data: Option<u32>,
     ) -> Self {
         let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
         let nonce_chunks =
@@ -118,6 +121,7 @@ where
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
             use_randomized_compute_unit_price,
+            pad_instruction_data,
         }
     }
 
@@ -143,6 +147,7 @@ where
                 source_nonce_chunk,
                 dest_nonce_chunk,
                 self.reclaim_lamports_back_to_source_account,
+                self.pad_instruction_data,
             )
         } else {
             assert!(blockhash.is_some());
@@ -151,6 +156,7 @@ where
                 dest_chunk,
                 self.reclaim_lamports_back_to_source_account,
                 blockhash.unwrap(),
+                self.pad_instruction_data,
                 self.use_randomized_compute_unit_price,
             )
         };
@@ -345,6 +351,7 @@ where
         target_slots_per_epoch,
         use_randomized_compute_unit_price,
         use_durable_nonce,
+        pad_instruction_data,
         ..
     } = config;
 
@@ -355,6 +362,7 @@ where
         nonce_keypairs.as_ref(),
         tx_count,
         use_randomized_compute_unit_price,
+        pad_instruction_data,
     );
 
     let first_tx_count = loop {
@@ -479,6 +487,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
+    pad_instruction_data: Option<u32>,
     use_randomized_compute_unit_price: bool,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
@@ -500,12 +509,13 @@ fn generate_system_txs(
             .par_iter()
             .map(|((from, to), compute_unit_price)| {
                 (
-                    transfer_with_compute_unit_price(
+                    transfer_with_compute_unit_price_and_padding(
                         from,
                         &to.pubkey(),
                         1,
                         *blockhash,
-                        **compute_unit_price,
+                        pad_instruction_data,
+                        Some(**compute_unit_price),
                     ),
                     Some(timestamp()),
                 )
@@ -516,7 +526,14 @@ fn generate_system_txs(
             .par_iter()
             .map(|(from, to)| {
                 (
-                    system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
+                    transfer_with_compute_unit_price_and_padding(
+                        from,
+                        &to.pubkey(),
+                        1,
+                        *blockhash,
+                        pad_instruction_data,
+                        None,
+                    ),
                     Some(timestamp()),
                 )
             })
@@ -524,19 +541,34 @@ fn generate_system_txs(
     }
 }
 
-fn transfer_with_compute_unit_price(
+fn transfer_with_compute_unit_price_and_padding(
     from_keypair: &Keypair,
     to: &Pubkey,
     lamports: u64,
     recent_blockhash: Hash,
-    compute_unit_price: u64,
+    pad_instruction_data: Option<u32>,
+    compute_unit_price: Option<u64>,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let instructions = vec![
-        system_instruction::transfer(&from_pubkey, to, lamports),
-        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
-        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-    ];
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instruction = if let Some(pad_instruction_data) = pad_instruction_data {
+        create_padded_instruction(
+            inline_instruction_padding_program::id(),
+            transfer_instruction,
+            vec![],
+            pad_instruction_data,
+        )
+        .expect("Instruction too large")
+    } else {
+        transfer_instruction
+    };
+    let mut instructions = vec![instruction];
+    if let Some(compute_unit_price) = compute_unit_price {
+        instructions.extend_from_slice(&[
+            ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
+            ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+        ])
+    }
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
@@ -601,6 +633,37 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     blockhashes
 }
 
+fn nonced_transfer_with_padding(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    nonce_account: &Pubkey,
+    nonce_authority: &Keypair,
+    nonce_hash: Hash,
+    pad_instruction_data: Option<u32>,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+    let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
+    let instruction = if let Some(pad_instruction_data) = pad_instruction_data {
+        create_padded_instruction(
+            inline_instruction_padding_program::id(),
+            transfer_instruction,
+            vec![],
+            pad_instruction_data,
+        )
+        .expect("Instruction too large")
+    } else {
+        transfer_instruction
+    };
+    let message = Message::new_with_nonce(
+        vec![instruction],
+        Some(&from_pubkey),
+        nonce_account,
+        &nonce_authority.pubkey(),
+    );
+    Transaction::new(&[from_keypair, nonce_authority], message, nonce_hash)
+}
+
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     source: &[&Keypair],
@@ -608,6 +671,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
     source_nonce: &[&Keypair],
     dest_nonce: &VecDeque<&Keypair>,
     reclaim: bool,
+    pad_instruction_data: Option<u32>,
 ) -> Vec<TimestampedTransaction> {
     let length = source.len();
     let mut transactions: Vec<TimestampedTransaction> = Vec::with_capacity(length);
@@ -620,13 +684,14 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
         let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
         for i in 0..length {
             transactions.push((
-                system_transaction::nonced_transfer(
+                nonced_transfer_with_padding(
                     source[i],
                     &dest[i].pubkey(),
                     1,
                     &source_nonce[i].pubkey(),
                     source[i],
                     blockhashes[i],
+                    pad_instruction_data,
                 ),
                 None,
             ));
@@ -637,13 +702,14 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
 
         for i in 0..length {
             transactions.push((
-                system_transaction::nonced_transfer(
+                nonced_transfer_with_padding(
                     dest[i],
                     &source[i].pubkey(),
                     1,
                     &dest_nonce[i].pubkey(),
                     dest[i],
                     blockhashes[i],
+                    pad_instruction_data,
                 ),
                 None,
             ));

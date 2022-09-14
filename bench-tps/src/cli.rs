@@ -56,6 +56,7 @@ pub struct Config {
     pub tpu_connection_pool_size: usize,
     pub use_randomized_compute_unit_price: bool,
     pub use_durable_nonce: bool,
+    pub pad_instruction_data: Option<u32>,
 }
 
 impl Default for Config {
@@ -85,6 +86,7 @@ impl Default for Config {
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             use_randomized_compute_unit_price: false,
             use_durable_nonce: false,
+            pad_instruction_data: None,
         }
     }
 }
@@ -318,6 +320,12 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .long("use-durable-nonce")
                 .help("Use durable transaction nonce instead of recent blockhash"),
         )
+        .arg(
+            Arg::with_name("pad_instruction_data")
+                .long("pad-instruction-data")
+                .takes_value(true)
+                .help("If set, wraps all instructions with the instruction padding program with the given amount of padding in instruction data."),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -455,6 +463,12 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
     if matches.is_present("use_durable_nonce") {
         args.use_durable_nonce = true;
     }
+
+    args.pad_instruction_data = matches.value_of("pad_instruction_data").map(|s| {
+        s.to_string()
+            .parse()
+            .expect("can't parse padded instruction data size")
+    });
 
     args
 }

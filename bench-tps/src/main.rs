@@ -7,6 +7,7 @@ use {
         bench::{do_bench_tps, max_lamporots_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
+        inline_instruction_padding_program,
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
@@ -155,6 +156,7 @@ fn main() {
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
         use_durable_nonce,
+        pad_instruction_data,
         ..
     } = &cli_config;
 
@@ -223,6 +225,12 @@ fn main() {
         *num_nodes,
         *target_node,
     );
+    if pad_instruction_data.is_some() {
+        info!("Checking for existence of instruction padding program");
+        client
+            .get_account(&inline_instruction_padding_program::id())
+            .expect("Instruction padding program must be deployed to cluster");
+    }
     let keypairs = get_keypairs(
         client.clone(),
         id,
