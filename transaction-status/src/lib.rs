@@ -358,8 +358,11 @@ pub struct UiTransactionStatusMeta {
         skip_serializing_if = "OptionSerializer::should_skip"
     )]
     pub loaded_addresses: OptionSerializer<UiLoadedAddresses>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub return_data: Option<UiTransactionReturnData>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub return_data: OptionSerializer<UiTransactionReturnData>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compute_units_consumed: Option<u64>,
 }
@@ -417,7 +420,9 @@ impl UiTransactionStatusMeta {
                 .into(),
             rewards: if show_rewards { meta.rewards } else { None }.into(),
             loaded_addresses: OptionSerializer::Skip,
-            return_data: meta.return_data.map(|return_data| return_data.into()),
+            return_data: OptionSerializer::or_skip(
+                meta.return_data.map(|return_data| return_data.into()),
+            ),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
@@ -446,7 +451,9 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .into(),
             rewards: meta.rewards.into(),
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)).into(),
-            return_data: meta.return_data.map(|return_data| return_data.into()),
+            return_data: OptionSerializer::or_skip(
+                meta.return_data.map(|return_data| return_data.into()),
+            ),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
@@ -1076,6 +1083,15 @@ pub struct TransactionByAddrInfo {
 pub struct UiTransactionReturnData {
     pub program_id: String,
     pub data: (String, UiReturnDataEncoding),
+}
+
+impl Default for UiTransactionReturnData {
+    fn default() -> Self {
+        Self {
+            program_id: String::default(),
+            data: (String::default(), UiReturnDataEncoding::Base64),
+        }
+    }
 }
 
 impl From<TransactionReturnData> for UiTransactionReturnData {
