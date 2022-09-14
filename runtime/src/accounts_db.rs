@@ -706,6 +706,8 @@ struct CleanKeyTimings {
     delta_key_count: u64,
     dirty_pubkeys_count: u64,
     oldest_dirty_slot: Slot,
+    /// number of ancient append vecs that were scanned because they were dirty when clean started
+    dirty_ancient_stores: usize,
 }
 
 /// Persistent storage structure holding the accounts
@@ -2536,6 +2538,7 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
+        let dirty_ancient_stores = AtomicUsize::default();
         let mut dirty_store_routine = || {
             let chunk_size = 1.max(dirty_stores_len.saturating_div(rayon::current_num_threads()));
             let oldest_dirty_slots: Vec<u64> = dirty_stores
@@ -2543,6 +2546,9 @@ impl AccountsDb {
                 .map(|dirty_store_chunk| {
                     let mut oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
                     dirty_store_chunk.iter().for_each(|(slot, store)| {
+                        if is_ancient(&store.accounts) {
+                            dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
+                        }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
                         store.accounts.account_iter().for_each(|account| {
                             pubkeys.insert(account.meta.pubkey);
@@ -2573,6 +2579,7 @@ impl AccountsDb {
         timings.dirty_pubkeys_count = pubkeys.len() as u64;
         dirty_store_processing_time.stop();
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
+        timings.dirty_ancient_stores = dirty_ancient_stores.load(Ordering::Relaxed);
 
         let mut collect_delta_keys = Measure::start("key_create");
         let delta_keys =
@@ -2983,6 +2990,11 @@ impl AccountsDb {
             (
                 "pubkeys_removed_from_accounts_index",
                 pubkeys_removed_from_accounts_index.len(),
+                i64
+            ),
+            (
+                "dirty_ancient_stores",
+                key_timings.dirty_ancient_stores,
                 i64
             ),
             (
