@@ -1461,7 +1461,7 @@ impl ScheduleStage {
                         match a {
                             Flushable::Flush(pair) => {
                                 let (lock, cvar) = &*pair;
-                                let started = lock.lock().unwrap();
+                                let mut started = lock.lock().unwrap();
                                 while !*started {
                                     started = cvar.wait(started).unwrap();
                                 }
