@@ -1460,7 +1460,7 @@ impl ScheduleStage {
                     while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
                         match a {
                             Flushable::Flush(pair) => {
-                                let FlushContext(lock, cvar) = &*pair;
+                                let Checkpoint(lock, cvar) = &*pair;
                                 cvar.wait_while(lock.lock().unwrap(), |&mut remaining_threads| remaining_threads == 0).unwrap();
 
                                 continue;
@@ -1691,7 +1691,7 @@ impl ScheduleStage {
             assert!(!select_skipped || executing_queue_count > 0);
         }
         //drop(to_next_stage);
-        let pair = std::sync::Arc::new(FlushContext(std::sync::Mutex::new(10), std::sync::Condvar::new()));
+        let pair = std::sync::Arc::new(Checkpoint(std::sync::Mutex::new(10), std::sync::Condvar::new()));
         to_next_stage.send(ExaminablePayload(Flushable::Flush(pair))).unwrap();
         drop(ee_sender);
         drop(task_sender);
@@ -1743,15 +1743,18 @@ pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
-pub struct FlushContext(std::sync::Mutex<usize>, std::sync::Condvar);
+pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
-impl FlushContext {
-    fn wait() {
-        count -= 1;
+impl Checkpoint {
+    fn wait_for_restart(&self) {
+        let count = self.0.lock().unwrap();
+
+        *count -= 1;
+
         if count == 0 {
-            notify_all();
+            self.1.notify_all().unwrap();
         } else {
-            wait();
+            self.0.wait_while(lock.lock().unwrap(), |&mut remaining_threads| remaining_threads == 0).unwrap();
         }
     }
 }
@@ -1759,5 +1762,5 @@ impl FlushContext {
 
 pub enum Flushable<T> {
     Payload(T),
-    Flush(std::sync::Arc<FlushContext>),
+    Flush(std::sync::Arc<Checkpoint>),
 }
