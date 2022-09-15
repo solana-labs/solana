@@ -1745,6 +1745,17 @@ pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
 pub struct FlushContext(std::sync::Mutex<usize>, std::sync::Condvar);
 
+impl FlushContext {
+    fn wait() {
+        count -= 1;
+        if count == 0 {
+            notify_all();
+        } else {
+            wait();
+        }
+    }
+}
+
 
 pub enum Flushable<T> {
     Payload(T),
