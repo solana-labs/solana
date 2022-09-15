@@ -1207,8 +1207,17 @@ impl SchedulerPool {
         }
     }
 
+    fn create(&mut self) {
+        todo!();
+    }
+
     fn take_from_pool(&mut self) -> Arc<Scheduler> {
-        todo!()
+        if let Some(scheduler) = self.schedulers.pop() {
+            scheduler
+        } else {
+            self.create();
+            self.take_from_pool()
+        }
     }
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
