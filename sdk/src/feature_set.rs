@@ -419,21 +419,10 @@ pub mod check_ping_ancestor_requests {
     solana_sdk::declare_id!("AXLB87anNaUQtqBSsxkm4gvNzYY985aLtNtpJC94uWLJ");
 }
 
-<<<<<<< HEAD
-=======
-pub mod incremental_snapshot_only_incremental_hash_calculation {
-    solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
-}
-
-pub mod vote_state_update_root_fix {
-    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
-}
-
 pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
 
->>>>>>> 0dda25fa9 (don't return zero lamport accounts from 'load' with feature (backport #27793) (#27803))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -533,12 +522,7 @@ lazy_static! {
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
-<<<<<<< HEAD
-=======
-        (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
-        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
->>>>>>> 0dda25fa9 (don't return zero lamport accounts from 'load' with feature (backport #27793) (#27803))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

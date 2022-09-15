@@ -31,14 +31,10 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-<<<<<<< HEAD
-        feature_set::{self, add_set_compute_unit_price_ix, tx_wide_compute_cap, FeatureSet},
-=======
         feature_set::{
             self, add_set_compute_unit_price_ix, return_none_for_zero_lamport_accounts,
-            use_default_units_in_fee_calculation, FeatureSet,
+            tx_wide_compute_cap, FeatureSet,
         },
->>>>>>> 0dda25fa9 (don't return zero lamport accounts from 'load' with feature (backport #27793) (#27803))
         fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,

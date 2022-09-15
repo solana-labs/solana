@@ -123,15 +123,6 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
-<<<<<<< HEAD
-=======
-pub enum StoreReclaims {
-    /// normal reclaim mode
-    Default,
-    /// do not return reclaims from accounts index upsert
-    Ignore,
-}
-
 /// specifies how to return zero lamport accounts
 /// This will only be useful until a feature activation occurs.
 #[derive(Clone, Copy)]
@@ -143,12 +134,6 @@ pub enum LoadZeroLamports {
     SomeWithZeroLamportAccount,
 }
 
-// the current best way to add filler accounts is gradually.
-// In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
-// add filler accounts at the beginning, so that code path remains but won't execute at the moment.
-const ADD_FILLER_ACCOUNTS_GRADUALLY: bool = true;
-
->>>>>>> 0dda25fa9 (don't return zero lamport accounts from 'load' with feature (backport #27793) (#27803))
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
