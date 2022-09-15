@@ -1512,7 +1512,7 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
 
-        let checkpoint = None;
+        let mut checkpoint = None;
 
         loop {
             let mut select_skipped = false;
