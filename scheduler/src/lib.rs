@@ -1687,7 +1687,7 @@ impl ScheduleStage {
             }
             assert!(!select_skipped || executing_queue_count > 0);
         }
-        drop(to_next_stage);
+        //drop(to_next_stage);
         let pair = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
         to_next_stage.send(ExaminablePayload(Flushable::Flush(pair))).unwrap();
         drop(ee_sender);
@@ -1742,5 +1742,5 @@ pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
 pub enum Flushable<T> {
     Payload(T),
-    Flush(usize),
+    Flush(std::sync::Arc<(Mutex<bool>, Condvar)>),
 }
