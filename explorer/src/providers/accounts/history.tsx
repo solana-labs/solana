@@ -109,7 +109,9 @@ async function fetchParsedTransactions(
       0,
       MAX_TRANSACTION_BATCH_SIZE
     );
-    const fetched = await connection.getParsedTransactions(signatures);
+    const fetched = await connection.getParsedTransactions(signatures, {
+      maxSupportedTransactionVersion: 0,
+    });
     fetched.forEach(
       (
         transactionWithMeta: ParsedTransactionWithMeta | null,
