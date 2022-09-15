@@ -34,6 +34,7 @@ jobs:
         uses: tj-actions/changed-files@v19
         with:
           files: |
+            .github/workflows/docs.yml
             docs/**
 
       - name: Pre Build
