@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, LoadHint, LoadZeroLamports, LoadedAccount, ScanStorageResult,
+            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -35,8 +35,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-            self, remove_deprecated_request_unit_ix, return_none_for_zero_lamport_accounts,
-            use_default_units_in_fee_calculation, FeatureSet,
+            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
+            FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -258,13 +258,6 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
-        let load_zero_lamports =
-            if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
-                LoadZeroLamports::None
-            } else {
-                LoadZeroLamports::SomeWithZeroLamportAccount
-            };
-
         // Copy all the accounts
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
@@ -300,7 +293,7 @@ impl Accounts {
                             (account_override.clone(), 0)
                         } else {
                             self.accounts_db
-                                .load_with_fixed_root(ancestors, key, load_zero_lamports)
+                                .load_with_fixed_root(ancestors, key)
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
@@ -349,12 +342,9 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
-                                    if let Some((programdata_account, _)) =
-                                        self.accounts_db.load_with_fixed_root(
-                                            ancestors,
-                                            &programdata_address,
-                                            load_zero_lamports,
-                                        )
+                                    if let Some((programdata_account, _)) = self
+                                        .accounts_db
+                                        .load_with_fixed_root(ancestors, &programdata_address)
                                     {
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -398,7 +388,6 @@ impl Accounts {
                             &mut accounts,
                             instruction.program_id_index as IndexOfAccount,
                             error_counters,
-                            load_zero_lamports,
                         )
                     })
                     .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
@@ -470,7 +459,6 @@ impl Accounts {
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
-        load_zero_lamports: LoadZeroLamports,
     ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
         let mut program_id = match accounts.get(program_account_index as usize) {
@@ -488,11 +476,10 @@ impl Accounts {
             }
             depth += 1;
 
-            program_account_index = match self.accounts_db.load_with_fixed_root(
-                ancestors,
-                &program_id,
-                load_zero_lamports,
-            ) {
+            program_account_index = match self
+                .accounts_db
+                .load_with_fixed_root(ancestors, &program_id)
+            {
                 Some((program_account, _)) => {
                     let account_index = accounts.len() as IndexOfAccount;
                     accounts.push((program_id, program_account));
@@ -518,11 +505,10 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    let programdata_account_index = match self.accounts_db.load_with_fixed_root(
-                        ancestors,
-                        &programdata_address,
-                        load_zero_lamports,
-                    ) {
+                    let programdata_account_index = match self
+                        .accounts_db
+                        .load_with_fixed_root(ancestors, &programdata_address)
+                    {
                         Some((programdata_account, _)) => {
                             let account_index = accounts.len() as IndexOfAccount;
                             accounts.push((programdata_address, programdata_account));
@@ -620,15 +606,10 @@ impl Accounts {
         ancestors: &Ancestors,
         address_table_lookup: &MessageAddressTableLookup,
         slot_hashes: &SlotHashes,
-        load_zero_lamports: LoadZeroLamports,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
         let table_account = self
             .accounts_db
-            .load_with_fixed_root(
-                ancestors,
-                &address_table_lookup.account_key,
-                load_zero_lamports,
-            )
+            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
@@ -2097,7 +2078,6 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
-                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::LookupTableAccountNotFound),
         );
@@ -2115,8 +2095,7 @@ mod tests {
         );
 
         let invalid_table_key = Pubkey::new_unique();
-        let mut invalid_table_account = AccountSharedData::default();
-        invalid_table_account.set_lamports(1);
+        let invalid_table_account = AccountSharedData::default();
         accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
 
         let address_table_lookup = MessageAddressTableLookup {
@@ -2130,7 +2109,6 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
-                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::InvalidAccountOwner),
         );
@@ -2163,7 +2141,6 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
-                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::InvalidAccountData),
         );
@@ -2208,7 +2185,6 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
-                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Ok(LoadedAddresses {
                 writable: vec![table_addresses[0]],
@@ -2523,7 +2499,6 @@ mod tests {
                 &mut vec![(keypair.pubkey(), account)],
                 0,
                 &mut error_counters,
-                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
