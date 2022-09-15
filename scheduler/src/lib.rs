@@ -1462,7 +1462,7 @@ impl ScheduleStage {
                             Flush => {
                                 continue;
                             },
-                            Payload(a) => {
+                            Flushable::Payload(a) => {
                                 assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                                 //assert!(a.task.sequence_time() != usize::max_value());
                                 //let lock_attempts = std::mem::take(&mut a.lock_attempts);
