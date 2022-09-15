@@ -1487,7 +1487,7 @@ impl Scheduler {
         //drop(transaction_sender);
         let checkpoint = solana_scheduler::Checkpoint::new(3);
         transaction_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
-        checkpoint.wait_for_scheduler();
+        checkpoint.wait_for_restart();
         {
             let mut w = self.scheduler.write().unwrap();
             *w.bank.write().unwrap() = None;
