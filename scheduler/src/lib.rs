@@ -1742,5 +1742,5 @@ pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
 pub enum Flushable<T> {
     Payload(T),
-    Flush(std::sync::Arc<(Mutex<bool>, Condvar)>),
+    Flush(std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>),
 }
