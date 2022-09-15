@@ -1171,6 +1171,8 @@ pub struct AccountsDb {
     /// means we can remove the account from the index entirely.
     dirty_stores: DashMap<(Slot, AppendVecId), Arc<AccountStorageEntry>>,
 
+    dirty_pubkeys_from_ancient_append_vec_shrink: Mutex<Vec<Pubkey>>,
+
     /// Zero-lamport accounts that are *not* purged during clean because they need to stay alive
     /// for incremental snapshot support.
     zero_lamport_accounts_to_purge_after_full_snapshot: DashSet<(Slot, Pubkey)>,
@@ -1956,6 +1958,7 @@ impl AccountsDb {
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
         AccountsDb {
+            dirty_pubkeys_from_ancient_append_vec_shrink: Mutex::default(),
             verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
@@ -2608,6 +2611,16 @@ impl AccountsDb {
         });
         delta_insert.stop();
         timings.delta_insert_us += delta_insert.as_us();
+
+        let dirty_pubkeys = std::mem::take(
+            &mut *self
+                .dirty_pubkeys_from_ancient_append_vec_shrink
+                .lock()
+                .unwrap(),
+        );
+        dirty_pubkeys.into_iter().for_each(|k| {
+            pubkeys.insert(k);
+        });
 
         timings.delta_key_count = pubkeys.len() as u64;
 
@@ -3547,9 +3560,24 @@ impl AccountsDb {
 
             // Purge old, overwritten storage entries
             let mut start = Measure::start("write_storage_elapsed");
-            let remaining_stores = self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-                !store_ids.contains(&store.append_vec_id())
-            });
+            let remaining_stores = self.mark_dirty_dead_stores(
+                slot,
+                &mut dead_storages,
+                |store| !store_ids.contains(&store.append_vec_id()),
+                false,
+            );
+            {
+                // for all dead pubkeys we just shrunk away, give those to clean to see if we can get rid of some stuff next time
+                let mut dirty_pubkeys_from_ancient_append_vec_shrink = self
+                    .dirty_pubkeys_from_ancient_append_vec_shrink
+                    .lock()
+                    .unwrap();
+
+                unrefed_pubkeys.into_iter().for_each(|k| {
+                    dirty_pubkeys_from_ancient_append_vec_shrink.push(*k);
+                })
+            }
+
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
                 info!(
@@ -3620,13 +3648,16 @@ impl AccountsDb {
         slot: Slot,
         dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
         should_retain: impl Fn(&AccountStorageEntry) -> bool,
+        add_to_dirty_stores: bool,
     ) -> usize {
         if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             let mut list = slot_stores.write().unwrap();
             list.retain(|_key, store| {
                 if !should_retain(store) {
-                    self.dirty_stores
-                        .insert((slot, store.append_vec_id()), store.clone());
+                    if add_to_dirty_stores {
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
+                    }
                     dead_storages.push(store.clone());
                     false
                 } else {
@@ -4051,6 +4082,7 @@ impl AccountsDb {
 
             let len = stored_accounts.len();
             let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
+            let unrefed_collect = Mutex::new(Vec::default());
             self.shrink_stats
                 .accounts_loaded
                 .fetch_add(len as u64, Ordering::Relaxed);
@@ -4062,12 +4094,15 @@ impl AccountsDb {
                     let skip = chunk * chunk_size;
 
                     let mut alive_accounts = Vec::with_capacity(chunk_size);
+                    let mut unrefed = Vec::with_capacity(chunk_size);
                     let alive_total = self.load_accounts_index_for_shrink(
                         &stored_accounts[skip..],
                         chunk_size,
                         &mut alive_accounts,
-                        None,
+                        Some(&mut unrefed),
                     );
+
+                    unrefed_collect.lock().unwrap().push(unrefed);
 
                     // collect
                     alive_accounts_collect
@@ -4166,9 +4201,12 @@ impl AccountsDb {
             let mut start = Measure::start("write_storage_elapsed");
             // Purge old, overwritten storage entries
             let mut dead_storages = vec![];
-            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-                ids.contains(&store.append_vec_id())
-            });
+            self.mark_dirty_dead_stores(
+                slot,
+                &mut dead_storages,
+                |store| ids.contains(&store.append_vec_id()),
+                false,
+            );
             start.stop();
             let write_storage_elapsed = start.as_us();
 
@@ -4176,6 +4214,21 @@ impl AccountsDb {
 
             if drop_root {
                 dropped_roots.push(slot);
+            }
+
+            {
+                // for all dead pubkeys we just shrunk away, give those to clean to see if we can get rid of some stuff next time
+                let unrefed_collect = unrefed_collect.into_inner().unwrap();
+                let mut dirty_pubkeys_from_ancient_append_vec_shrink = self
+                    .dirty_pubkeys_from_ancient_append_vec_shrink
+                    .lock()
+                    .unwrap();
+
+                unrefed_collect.into_iter().for_each(|unrefed| {
+                    unrefed.into_iter().for_each(|k| {
+                        dirty_pubkeys_from_ancient_append_vec_shrink.push(*k);
+                    })
+                });
             }
 
             // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
