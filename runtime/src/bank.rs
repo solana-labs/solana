@@ -6566,7 +6566,7 @@ impl Bank {
                 drop(r);
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
-                let mut w = self.scheduler.write().unwrap();
+                let mut w = self.scheduler.write().unwrap().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot = Some(bank.slot);
                 drop(w);
