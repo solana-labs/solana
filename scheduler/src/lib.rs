@@ -1512,7 +1512,7 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
 
-        let mut checkpoint = None;
+        let mut maybe_checkpoint = None;
 
         loop {
             let mut select_skipped = false;
@@ -1539,18 +1539,18 @@ impl ScheduleStage {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                            },
-                           Ok(SchedulablePayload(Flushable::Flush(checkpoint_in_payload))) => {
+                           Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               checkpoint = Some(checkpoint_in_payload);
+                               maybe_checkpoint = Some(checkpoint);
                            },
                            Err(_) => {
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
-                               assert!(checkpoint.is_none());
+                               assert!(maybe_checkpoint.is_none());
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
@@ -1698,13 +1698,13 @@ impl ScheduleStage {
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
                         match schedulable {
-                            Flushable::Flush(checkpoint_in_payload) => {
+                            Flushable::Flush(checkpoint) => {
                                assert!(empty_from);
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
                                from_disconnected = true;
                                from_prev = never;
-                               checkpoint = Some(checkpoint_in_payload);
+                               maybe_checkpoint = Some(checkpoint);
                             },
                             Flushable::Payload(task) => {
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
@@ -1719,6 +1719,7 @@ impl ScheduleStage {
         drop(ee_sender);
         drop(task_sender);
         drop(task_receiver);
+
         if let Some(h) = maybe_reaper_thread_handle {
             h.join().unwrap().unwrap();
         }
@@ -1730,6 +1731,7 @@ impl ScheduleStage {
         let elapsed = start_time.elapsed();
         let elapsed2 = elapsed.as_micros();
         info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps!", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), 1_000_000_u128*(processed_count as u128)/elapsed2);
+        maybe_checkpoint
     }
 
     pub fn run(
