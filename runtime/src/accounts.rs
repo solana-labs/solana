@@ -35,12 +35,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-<<<<<<< HEAD
-            self, add_set_compute_unit_price_ix, use_default_units_in_fee_calculation, FeatureSet,
-=======
-            self, remove_deprecated_request_unit_ix, return_none_for_zero_lamport_accounts,
+            self, add_set_compute_unit_price_ix, return_none_for_zero_lamport_accounts,
             use_default_units_in_fee_calculation, FeatureSet,
->>>>>>> 138d5ed5b (don't return zero lamport accounts from 'load' with feature (#27793))
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -470,12 +466,8 @@ impl Accounts {
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: usize,
         error_counters: &mut TransactionErrorMetrics,
-<<<<<<< HEAD
-    ) -> Result<Vec<usize>> {
-=======
         load_zero_lamports: LoadZeroLamports,
-    ) -> Result<Vec<IndexOfAccount>> {
->>>>>>> 138d5ed5b (don't return zero lamport accounts from 'load' with feature (#27793))
+    ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
         let mut program_id = match accounts.get(program_account_index) {
             Some(program_account) => program_account.0,
