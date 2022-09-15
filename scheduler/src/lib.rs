@@ -1537,7 +1537,7 @@ impl ScheduleStage {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                            },
-                           Ok(SchedulablePayload(Flushable::Flush(checkpoint_in_payload)) => {
+                           Ok(SchedulablePayload(Flushable::Flush(checkpoint_in_payload))) => {
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
                                from_disconnected = true;
