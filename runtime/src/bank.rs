@@ -1216,7 +1216,7 @@ impl SchedulerPool {
     }
 }
 
-const SCHEDULER_POOL: Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
+const SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
 
 #[derive(Debug)]
 struct Scheduler {
