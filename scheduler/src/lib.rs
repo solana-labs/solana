@@ -1754,7 +1754,7 @@ impl Checkpoint {
         if count == 0 {
             self.1.notify_all().unwrap();
         } else {
-            self.0.wait_while(lock.lock().unwrap(), |&mut remaining_threads| remaining_threads == 0).unwrap();
+            self.0.wait_while(count, |&mut remaining_threads| remaining_threads == 0).unwrap();
         }
     }
 }
