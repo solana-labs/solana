@@ -45,8 +45,7 @@ use {
         snapshot_hash::StartingSnapshotHashes,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
+            SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
     solana_sdk::{
@@ -1056,8 +1055,9 @@ fn main() {
         .default_value(SnapshotVersion::default().into())
         .help("Output snapshot version");
 
-    let default_max_full_snapshot_archives_to_retain =
-        &DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    // Use std::usize::MAX for maximum_*_snapshots_to_retain such that
+    // ledger-tool commands will not remove any snapshots by default
+    let default_max_full_snapshot_archives_to_retain = &std::usize::MAX.to_string();
     let maximum_full_snapshot_archives_to_retain = Arg::with_name(
         "maximum_full_snapshots_to_retain",
     )
@@ -1070,8 +1070,7 @@ fn main() {
         "The maximum number of full snapshot archives to hold on to when purging older snapshots.",
     );
 
-    let default_max_incremental_snapshot_archives_to_retain =
-        &DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN.to_string();
+    let default_max_incremental_snapshot_archives_to_retain = &std::usize::MAX.to_string();
     let maximum_incremental_snapshot_archives_to_retain = Arg::with_name(
         "maximum_incremental_snapshots_to_retain",
     )
