@@ -1263,7 +1263,7 @@ impl Scheduler {
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         let uw = usize::max_value() - index;
         let t = solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks));
-        self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
+        self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Payload(t))).unwrap();
     }
 }
 
