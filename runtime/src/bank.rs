@@ -1222,6 +1222,7 @@ impl SchedulerPool {
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
         assert_eq!(1, Arc::strong_count(&scheduler));
+        assert!(scheduler.collected_errors.lock().unwrap().is_empty());
         self.schedulers.push(scheduler);
     }
 }
