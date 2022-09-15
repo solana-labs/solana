@@ -8244,10 +8244,11 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
-        let s = self.scheduler.write().unwrap();
+        let s = self.scheduler.write().take();
         let mut scheduler = s.as_ref().unwrap();
         scheduler.gracefully_stop()?;
-        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))
+        let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
+        e
     }
 }
 
