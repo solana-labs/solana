@@ -1524,9 +1524,10 @@ impl Scheduler {
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
-        info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
-        self.gracefully_stop().unwrap();
-        info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
+        todo!();
+        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
+        //self.gracefully_stop().unwrap();
+        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
     }
 }
 
