@@ -1685,6 +1685,7 @@ impl ScheduleStage {
                             Flushable::Flush(checkpoint) => {
                             },
                             Flushable::Payload(task) => {
+                                let u: usize = task;
                                 from_len = from_len.checked_sub(1).unwrap();
                                 empty_from = from_len == 0;
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
