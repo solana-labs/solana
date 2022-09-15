@@ -6973,6 +6973,7 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
+        let enable_rehashing = self.bank_enable_rehashing_on_accounts_hash();
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6996,6 +6997,7 @@ impl Bank {
                             config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
+                            enable_rehashing,
                         );
                         accounts_
                             .accounts_db
@@ -7017,6 +7019,7 @@ impl Bank {
                 config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
+                enable_rehashing,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
