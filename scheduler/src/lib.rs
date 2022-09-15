@@ -1459,7 +1459,8 @@ impl ScheduleStage {
 
                     while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
                         match a {
-                            Flushable::Flush((lock, cvar)) => {
+                            Flushable::Flush(pair) => {
+                                let (lock, cvar) = &*pair;
                                 let started = lock.lock().unwrap();
                                 while !*started {
                                     started = cvar.wait(started).unwrap();
