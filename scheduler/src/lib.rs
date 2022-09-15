@@ -1512,6 +1512,8 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
 
+        let checkpoint = None;
+
         loop {
             let mut select_skipped = false;
 
@@ -1543,7 +1545,7 @@ impl ScheduleStage {
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               checkpoint = checkpoint_in_payload;
+                               checkpoint = Some(checkpoint_in_payload);
                            },
                            Err(_) => {
                                assert_eq!(from_prev.len(), 0);
