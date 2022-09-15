@@ -1208,7 +1208,7 @@ impl SchedulerPool {
     }
 
     fn create(&mut self) {
-        todo!();
+        self.schedulers.push(Default::default());
     }
 
     fn take_from_pool(&mut self) -> Arc<Scheduler> {
