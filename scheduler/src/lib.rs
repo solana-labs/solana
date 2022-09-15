@@ -1449,6 +1449,7 @@ impl ScheduleStage {
         let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
         } else {
+            todo!();
             let h = std::thread::Builder::new()
                 .name("solScReaper".to_string())
                 .spawn(move || {
