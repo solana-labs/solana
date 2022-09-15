@@ -1743,7 +1743,10 @@ pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
+pub struct FlushContext(std::sync::Mutex<usize>, std::sync::Condvar);
+
+
 pub enum Flushable<T> {
     Payload(T),
-    Flush(std::sync::Arc<(std::sync::Mutex<usize>, std::sync::Condvar)>),
+    Flush(std::sync::Arc<FlushContext>),
 }
