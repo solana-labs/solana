@@ -42,6 +42,7 @@ jobs:
         run: |
           echo "tag: ${{ steps.check.outputs.tag }}"
           echo "channel: ${{ steps.check.outputs.channel }}"
+          echo "any changes: ${{ steps.changed-files-specific.outputs.any_change }}"
           echo "::set-output name=need_to_build::${{
             steps.check.outputs.tag != ''
             ||
