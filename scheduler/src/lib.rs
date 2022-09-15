@@ -1550,6 +1550,7 @@ impl ScheduleStage {
                            Err(_) => {
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
+                               assert!(checkpoint.is_none());
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
