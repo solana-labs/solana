@@ -7169,14 +7169,6 @@ impl Bank {
         &self.rc.accounts.accounts_db.thread_pool_clean
     }
 
-    pub fn load_account_into_read_cache(&self, key: &Pubkey) {
-        self.rc.accounts.accounts_db.load_account_into_read_cache(
-            &self.ancestors,
-            key,
-            self.return_none_for_zero_lamport_accounts(),
-        );
-    }
-
     pub fn update_accounts_hash_with_index_option(
         &self,
         use_index: bool,

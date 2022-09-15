@@ -4674,22 +4674,6 @@ impl AccountsDb {
         )
     }
 
-    pub fn load_account_into_read_cache(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
-        return_none_for_zero_lamport_accounts: bool,
-    ) {
-        self.do_load_with_populate_read_cache(
-            ancestors,
-            pubkey,
-            None,
-            LoadHint::Unspecified,
-            true,
-            return_none_for_zero_lamport_accounts,
-        );
-    }
-
     pub fn load_with_fixed_root(
         &self,
         ancestors: &Ancestors,
