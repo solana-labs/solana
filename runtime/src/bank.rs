@@ -1206,9 +1206,17 @@ impl SchedulerPool {
             schedulers: Vec::new(),
         }
     }
+
+    fn take_from_pool(&mut self) -> Scheduler {
+        todo!()
+    }
+
+    fn return_to_pool(&mut self, Scheduler) {
+        todo!()
+    }
 }
 
-const SCHEDULER_POOL: RwLock<SchedulerPool> = RwLock::new(SchedulerPool::new());
+const SCHEDULER_POOL: RwLock<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
 
 #[derive(Debug)]
 struct Scheduler {
