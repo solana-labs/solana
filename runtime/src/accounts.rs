@@ -29,14 +29,15 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
-            FeatureSet,
+            self, cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -258,6 +259,16 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
+        let mut accumulated_accounts_data_size = 0u64;
+        let requested_accounts_data_size_limit =
+            if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+                let requested_accounts_data_size =
+                    Self::get_requested_accounts_data_size_limit(tx, feature_set)?;
+                Some(requested_accounts_data_size)
+            } else {
+                None
+            };
+
         // Copy all the accounts
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
@@ -343,6 +354,11 @@ impl Accounts {
                                         .accounts_db
                                         .load_with_fixed_root(ancestors, &programdata_address)
                                     {
+                                        Self::accumulate_and_check_transaction_accounts_data_size(
+                                            &mut accumulated_accounts_data_size,
+                                            programdata_account.data().len(),
+                                            requested_accounts_data_size_limit,
+                                        )?;
                                         account_deps
                                             .push((programdata_address, programdata_account));
                                     } else {
@@ -365,6 +381,12 @@ impl Accounts {
                         account
                     }
                 };
+
+                Self::accumulate_and_check_transaction_accounts_data_size(
+                    &mut accumulated_accounts_data_size,
+                    account.data().len(),
+                    requested_accounts_data_size_limit,
+                )?;
                 accounts.push((*key, account));
             }
             debug_assert_eq!(accounts.len(), account_keys.len());
@@ -399,6 +421,39 @@ impl Accounts {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
             }
+        }
+    }
+
+    fn get_requested_accounts_data_size_limit(
+        tx: &SanitizedTransaction,
+        feature_set: &FeatureSet,
+    ) -> Result<u64> {
+        let mut compute_budget = ComputeBudget::default();
+        let _prioritization_fee_details = compute_budget.process_instructions(
+            tx.message().program_instructions_iter(),
+            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+            Bank::get_loaded_accounts_data_limit_type(feature_set),
+        )?;
+        Ok(compute_budget.accounts_data_size_limit)
+    }
+
+    fn accumulate_and_check_transaction_accounts_data_size(
+        accumulated_accounts_data_size: &mut u64,
+        account_data_size: usize,
+        requested_accounts_data_size: Option<u64>,
+    ) -> Result<()> {
+        if let Some(requested_accounts_data_size) = requested_accounts_data_size {
+            *accumulated_accounts_data_size =
+                accumulated_accounts_data_size.saturating_add(account_data_size as u64);
+            if *accumulated_accounts_data_size > requested_accounts_data_size {
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
         }
     }
 
@@ -558,6 +613,8 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+                            Bank::get_loaded_accounts_data_limit_type(feature_set),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1401,7 +1458,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::{compute_budget, executor_cache::TransactionExecutorCache},
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1659,6 +1716,8 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(fee, lamports_per_signature);
 

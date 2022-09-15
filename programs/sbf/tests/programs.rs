@@ -10,7 +10,10 @@ use {
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::{self, ComputeBudget},
+        timings::ExecuteTimings,
+    },
     solana_runtime::{
         bank::{
             DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
@@ -3815,6 +3818,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        compute_budget::LoadedAccountsDataLimitType::V0,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3837,6 +3841,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        compute_budget::LoadedAccountsDataLimitType::V0,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 
