@@ -2114,6 +2114,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                true, // return_none_for_zero_lamport_accounts
             ),
             Err(AddressLookupError::LookupTableAccountNotFound),
         );
@@ -2145,6 +2146,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                true, // return_none_for_zero_lamport_accounts
             ),
             Err(AddressLookupError::InvalidAccountOwner),
         );
@@ -2177,6 +2179,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                true, // return_none_for_zero_lamport_accounts
             ),
             Err(AddressLookupError::InvalidAccountData),
         );
@@ -2221,6 +2224,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                true, // return_none_for_zero_lamport_accounts
             ),
             Ok(LoadedAddresses {
                 writable: vec![table_addresses[0]],
@@ -2535,6 +2539,7 @@ mod tests {
                 &mut vec![(keypair.pubkey(), account)],
                 0,
                 &mut error_counters,
+                true, // return_none_for_zero_lamport_accounts
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
