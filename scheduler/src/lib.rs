@@ -1680,7 +1680,7 @@ impl ScheduleStage {
                         to_next_stage.send(ExaminablePayload(Flushable::Payload(processed_execution_environment))).unwrap();
                     }
                     if !empty_from {
-                        let schedulable = from_prev.recv().unwrap();
+                        let SchedulablePayload(schedulable) = from_prev.recv().unwrap();
                         match schedulable {
                             Flushable::Payload(task) => {
                                 from_len = from_len.checked_sub(1).unwrap();
