@@ -51,9 +51,10 @@ fn test_multi_fec_block_coding() {
     let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
         &keypair,
         &entries,
-        true, // is_last_in_slot
-        0,    // next_shred_index
-        0,    // next_code_index
+        true,  // is_last_in_slot
+        0,     // next_shred_index
+        0,     // next_code_index
+        false, // merkle_variant
         &mut ProcessShredsStats::default(),
     );
     let next_index = data_shreds.last().unwrap().index() + 1;
@@ -226,6 +227,7 @@ fn setup_different_sized_fec_blocks(
             is_last,
             next_shred_index,
             next_code_index,
+            false, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         for shred in &data_shreds {

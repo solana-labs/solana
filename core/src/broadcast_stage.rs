@@ -481,6 +481,7 @@ pub mod test {
             true, // is_last_in_slot
             0,    // next_shred_index,
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         (

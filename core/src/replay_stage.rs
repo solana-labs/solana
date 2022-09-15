@@ -3705,7 +3705,12 @@ pub(crate) mod tests {
 
         // Insert shreds for slot NUM_CONSECUTIVE_LEADER_SLOTS,
         // chaining to slot 1
-        let (shreds, _) = make_slot_entries(NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
+        let (shreds, _) = make_slot_entries(
+            NUM_CONSECUTIVE_LEADER_SLOTS, // slot
+            1,                            // parent_slot
+            8,                            // num_entries
+            true,                         // merkle_variant
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
         assert!(bank_forks
             .read()
@@ -3729,7 +3734,12 @@ pub(crate) mod tests {
 
         // Insert shreds for slot 2 * NUM_CONSECUTIVE_LEADER_SLOTS,
         // chaining to slot 1
-        let (shreds, _) = make_slot_entries(2 * NUM_CONSECUTIVE_LEADER_SLOTS, 1, 8);
+        let (shreds, _) = make_slot_entries(
+            2 * NUM_CONSECUTIVE_LEADER_SLOTS,
+            1,
+            8,
+            true, // merkle_variant
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
         assert!(bank_forks
             .read()
@@ -3945,7 +3955,14 @@ pub(crate) mod tests {
                     ), // should cause AccountNotFound error
                 ],
             );
-            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(
+                &[entry],
+                slot,
+                slot.saturating_sub(1), // parent_slot
+                false,                  // is_full_slot
+                0,                      // version
+                true,                   // merkle_variant
+            )
         });
 
         assert_matches!(
@@ -3975,7 +3992,14 @@ pub(crate) mod tests {
                     blockhash,
                 )],
             );
-            entries_to_test_shreds(&[entry], slot, slot.saturating_sub(1), false, 0)
+            entries_to_test_shreds(
+                &[entry],
+                slot,
+                slot.saturating_sub(1), // parent_slot
+                false,                  // is_full_slot
+                0,                      // version
+                true,                   // merkle_variant
+            )
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
@@ -4000,6 +4024,7 @@ pub(crate) mod tests {
                 slot.saturating_sub(1),
                 false,
                 0,
+                true, // merkle_variant
             )
         });
 
@@ -4024,6 +4049,7 @@ pub(crate) mod tests {
                 slot.saturating_sub(1),
                 false,
                 0,
+                true, // merkle_variant
             )
         });
 
@@ -4044,6 +4070,7 @@ pub(crate) mod tests {
                 slot.saturating_sub(1),
                 true,
                 0,
+                true, // merkle_variant
             )
         });
 
@@ -4066,6 +4093,7 @@ pub(crate) mod tests {
                 slot.saturating_sub(1),
                 false,
                 0,
+                true, // merkle_variant
             )
         });
 
@@ -4089,7 +4117,14 @@ pub(crate) mod tests {
             let tx = system_transaction::transfer(funded_keypair, &keypair.pubkey(), 2, blockhash);
             let trailing_entry = entry::next_entry(&last_entry_hash, 1, vec![tx]);
             entries.push(trailing_entry);
-            entries_to_test_shreds(&entries, slot, slot.saturating_sub(1), true, 0)
+            entries_to_test_shreds(
+                &entries,
+                slot,
+                slot.saturating_sub(1), // parent_slot
+                true,                   // is_full_slot
+                0,                      // version
+                true,                   // merkle_variant
+            )
         });
 
         if let Err(BlockstoreProcessorError::InvalidBlock(block_error)) = res {
