@@ -1196,6 +1196,11 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
+struct SchedulerPool {
+}
+
+const SCHEDULER_POOL = RwLock::new(SchedulerPool::new());
+
 #[derive(Debug)]
 struct Scheduler {
     random_id: u64,
@@ -6531,6 +6536,7 @@ impl Bank {
 
     /// Process a batch of transactions.
     #[must_use]
+    #[inline(never)]
     pub fn load_execute_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
