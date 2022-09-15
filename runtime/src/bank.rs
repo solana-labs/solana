@@ -1199,6 +1199,12 @@ impl AbiExample for BuiltinPrograms {
 struct SchedulerPool {
 }
 
+impl SchedulerPool {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
 const SCHEDULER_POOL = RwLock::new(SchedulerPool::new());
 
 #[derive(Debug)]
