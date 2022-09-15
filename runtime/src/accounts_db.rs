@@ -2173,8 +2173,11 @@ impl AccountsDb {
             .filter_map(|pubkeys: &[Pubkey]| {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
-                    let removed_from_index = self.accounts_index
-                        .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
+                    let removed_from_index = self.accounts_index.clean_rooted_entries(
+                        pubkey,
+                        &mut reclaims,
+                        max_clean_root,
+                    );
 
                     if removed_from_index {
                         pubkeys_removed_from_accounts_index
@@ -2674,11 +2677,12 @@ impl AccountsDb {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let ((purged_account_slots, removed_accounts), mut pubkeys_removed_from_accounts_index) = self.clean_accounts_older_than_root(
-            purges_old_accounts,
-            max_clean_root,
-            &ancient_account_cleans,
-        );
+        let ((purged_account_slots, removed_accounts), mut pubkeys_removed_from_accounts_index) =
+            self.clean_accounts_older_than_root(
+                purges_old_accounts,
+                max_clean_root,
+                &ancient_account_cleans,
+            );
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -7556,9 +7560,9 @@ impl AccountsDb {
                                 // filter out pubkeys that have already been removed from the accounts index in a previous step
                                 let already_removed =
                                     pubkeys_removed_from_accounts_index.contains(pubkey);
-                                (!already_removed).then_some(pubkey)
+                                (!already_removed).then(|| pubkey)
                             }),
-                            |_pubkey, _slots_refs| AccountsIndexScanResult::Unref,
+                        |_pubkey, _slots_refs| AccountsIndexScanResult::Unref,
                     )
                 })
             });
