@@ -1743,7 +1743,7 @@ pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 pub struct Checkpoint(pub std::sync::Mutex<usize>, pub std::sync::Condvar);
 
 impl Checkpoint {
-    fn wait_for_restart(&self) {
+    pub fn wait_for_restart(&self) {
         let mut remaining_threads_guard = self.0.lock().unwrap();
 
         *remaining_threads_guard -= 1;
