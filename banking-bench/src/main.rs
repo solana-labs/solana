@@ -6,7 +6,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::{banking_stage::BankingStage, packet_deserializer_stage::PacketDeserializer},
+    solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -388,12 +388,9 @@ fn main() {
                     packet_batch_index,
                     timestamp(),
                 );
-                let deserialized_packets = PacketDeserializer::deserialize_and_collect_packets(
-                    &[packet_batch.clone()],
-                    None,
-                )
-                .deserialized_packets;
-                verified_sender.send(deserialized_packets).unwrap();
+                verified_sender
+                    .send((vec![packet_batch.clone()], None))
+                    .unwrap();
             }
 
             for tx in &packets_for_this_iteration.transactions {

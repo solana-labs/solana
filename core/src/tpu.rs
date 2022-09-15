@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        banking_stage::{self, BankingStage},
+        banking_stage::BankingStage,
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -11,7 +11,6 @@ use {
         },
         fetch_stage::FetchStage,
         find_packet_sender_stake_stage::FindPacketSenderStakeStage,
-        packet_deserializer_stage::{PacketDeserializationGroup, PacketDeserializerStage},
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
         staked_nodes_updater_service::StakedNodesUpdaterService,
@@ -61,7 +60,6 @@ pub struct Tpu {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     vote_sigverify_stage: SigVerifyStage,
-    deserializer_stage: PacketDeserializerStage,
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
@@ -223,45 +221,12 @@ impl Tpu {
             cluster_confirmed_slot_sender,
         );
 
-        let (non_vote_deserialized_packet_sender, non_vote_deserialized_packet_receiver) =
-            unbounded();
-        let (tpu_vote_deserialized_packet_sender, tpu_vote_deserialized_packet_receiver) =
-            unbounded();
-        let (gossip_vote_deserialized_packet_sender, gossip_vote_deserialized_packet_receiver) =
-            unbounded();
-
-        let deserializer_stage = PacketDeserializerStage::new(&[
-            // Non-vote
-            PacketDeserializationGroup {
-                group_name: "solPktDesNV",
-                receiver: verified_receiver,
-                sender: non_vote_deserialized_packet_sender,
-                thread_count: (BankingStage::num_threads()
-                    - banking_stage::NUM_VOTE_PROCESSING_THREADS)
-                    as usize,
-            },
-            // TPU Vote
-            PacketDeserializationGroup {
-                group_name: "solPktDesTPU",
-                receiver: verified_tpu_vote_packets_receiver,
-                sender: tpu_vote_deserialized_packet_sender,
-                thread_count: 1,
-            },
-            // Gossip
-            PacketDeserializationGroup {
-                group_name: "solPktDesG",
-                receiver: verified_gossip_vote_packets_receiver,
-                sender: gossip_vote_deserialized_packet_sender,
-                thread_count: 1,
-            },
-        ]);
-
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
-            non_vote_deserialized_packet_receiver,
-            tpu_vote_deserialized_packet_receiver,
-            gossip_vote_deserialized_packet_receiver,
+            verified_receiver,
+            verified_tpu_vote_packets_receiver,
+            verified_gossip_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
@@ -285,7 +250,6 @@ impl Tpu {
             fetch_stage,
             sigverify_stage,
             vote_sigverify_stage,
-            deserializer_stage,
             banking_stage,
             cluster_info_vote_listener,
             broadcast_stage,
@@ -303,7 +267,6 @@ impl Tpu {
             self.sigverify_stage.join(),
             self.vote_sigverify_stage.join(),
             self.cluster_info_vote_listener.join(),
-            self.deserializer_stage.join(),
             self.banking_stage.join(),
             self.find_packet_sender_stake_stage.join(),
             self.vote_find_packet_sender_stake_stage.join(),

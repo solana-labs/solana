@@ -9,142 +9,72 @@ use {
         Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
     },
     solana_perf::packet::PacketBatch,
-    solana_sdk::saturating_add_assign,
     std::{
-        thread::Builder,
+        thread::JoinHandle,
         time::{Duration, Instant},
     },
 };
 
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
+pub type DeserializedPacketBatch = Vec<ImmutableDeserializedPacket>;
+pub type DeserializedPacketBatchReceiver = CrossbeamReceiver<DeserializedPacketBatch>;
 
-/// Results from deserializing packet batches.
-pub struct ReceivePacketResults {
-    /// Deserialized packets from all received packet batches
-    pub deserialized_packets: Vec<ImmutableDeserializedPacket>,
-    /// Aggregate tracer stats for all received packet batches
-    pub new_tracer_stats_option: Option<SigverifyTracerPacketStats>,
-    /// Number of packets passing sigverify
-    pub passed_sigverify_count: u64,
-    /// Number of packets failing sigverify
-    pub failed_sigverify_count: u64,
+/// Defines an interface for getting deserialized packet batches,
+/// either from the sigverify stage with inline deserialization,
+/// or from a separate deserialization thread.
+/// This is used by the banking stage to get packets to process.
+pub trait DeserializedPacketBatchGetter {
+    /// Get packet batches to process. Returns timeout error so the caller can
+    /// decide what to do if no packets are available, e.g. continue or exit.
+    fn get_deserialized_packets(
+        &mut self,
+        timeout: Duration,
+        packet_limit: usize,
+    ) -> Result<DeserializedPacketBatch, RecvTimeoutError>;
+
+    /// Joins the deserialization thread if it exists.
+    fn join(self) -> std::thread::Result<()>;
 }
 
-pub type DeserializedPacketSender = CrossbeamSender<Vec<ImmutableDeserializedPacket>>;
-
-/// Wrapper for arguments to create a group of packet deserializer threads.
-pub struct PacketDeserializationGroup {
-    pub group_name: &'static str,
-    pub receiver: BankingPacketReceiver,
-    pub sender: DeserializedPacketSender,
-    pub thread_count: usize,
-}
-
-/// Receive packets from sigverify stage, deserialize them, and send to banking stage.
-pub struct PacketDeserializerStage {
-    /// Packet deserialization threads
-    pub thread_handles: Vec<std::thread::JoinHandle<()>>,
-}
-
-impl PacketDeserializerStage {
-    pub(crate) fn new(deserialization_groups: &[PacketDeserializationGroup]) -> Self {
-        let mut thread_handles = Vec::with_capacity(
-            deserialization_groups
-                .iter()
-                .map(|group| group.thread_count)
-                .sum(),
-        );
-
-        let mut id: u32 = 0;
-        for group in deserialization_groups {
-            for thread_index in 0..group.thread_count {
-                let receiver = group.receiver.clone();
-                let sender = group.sender.clone();
-                let packet_deserializer = PacketDeserializer::new(receiver);
-                const RECV_TIMEOUT: Duration = Duration::from_millis(10);
-
-                // TODO: Fix this up, it's a bit of a mess. Just want these id's to be consistent with banking stage
-                let mut sigverify_tracer_stats = IntervalSigverifyTracerPacketStats::new(id);
-                saturating_add_assign!(id, 1);
-
-                thread_handles.push(
-                    Builder::new()
-                        .name(format!("{}{:02}", group.group_name, thread_index))
-                        .spawn(move || {
-                            // Loop while receiving from sigverify
-                            loop {
-                                match packet_deserializer.handle_received_packets(RECV_TIMEOUT) {
-                                    Ok(deserialized_packet_results) => {
-                                        // Send deserialized packets to banking stage, exit on error (if banking threads stopped)
-                                        if sender
-                                            .send(deserialized_packet_results.deserialized_packets)
-                                            .is_err()
-                                        {
-                                            break;
-                                        }
-
-                                        // Update sigverify stats
-                                        if let Some(new_tracer_stats) =
-                                            deserialized_packet_results.new_tracer_stats_option
-                                        {
-                                            sigverify_tracer_stats
-                                                .aggregate_sigverify_tracer_packet_stats(
-                                                    &new_tracer_stats,
-                                                );
-                                        }
-
-                                        sigverify_tracer_stats.aggregate_new_valid_packets(
-                                            deserialized_packet_results.passed_sigverify_count,
-                                        );
-                                        sigverify_tracer_stats
-                                            .aggregate_newly_failed_sigverify_count(
-                                                deserialized_packet_results.failed_sigverify_count,
-                                            );
-
-                                        // Potentially report sigverify stats
-                                        sigverify_tracer_stats.report(1000);
-                                    }
-                                    Err(err) => match err {
-                                        RecvTimeoutError::Disconnected => break,
-                                        RecvTimeoutError::Timeout => {}
-                                    },
-                                }
-                            }
-                        })
-                        .unwrap(),
-                );
-            }
-        }
-
-        Self { thread_handles }
-    }
-
-    pub(crate) fn join(self) -> std::thread::Result<()> {
-        self.thread_handles
-            .into_iter()
-            .try_for_each(std::thread::JoinHandle::join)
-    }
-}
-
-pub struct PacketDeserializer {
-    /// Receiver for packet batches from sigverify stage
+/// An inline deserialization implementation of the DeserializedPacketBatchGetter.
+pub struct InlinePacketDeserializer {
     packet_batch_receiver: BankingPacketReceiver,
+    sigverify_tracer_stats: IntervalSigverifyTracerPacketStats,
 }
 
-impl PacketDeserializer {
-    pub fn new(packet_batch_receiver: BankingPacketReceiver) -> Self {
+impl DeserializedPacketBatchGetter for InlinePacketDeserializer {
+    fn get_deserialized_packets(
+        &mut self,
+        timeout: Duration,
+        packet_limit: usize,
+    ) -> Result<DeserializedPacketBatch, RecvTimeoutError> {
+        let deserialized_packet_results = self.handle_received_packets(timeout, packet_limit)?;
+        self.update_tracer_packet_stats(&deserialized_packet_results);
+        Ok(deserialized_packet_results.deserialized_packets)
+    }
+
+    fn join(self) -> std::thread::Result<()> {
+        Ok(())
+    }
+}
+
+impl InlinePacketDeserializer {
+    pub fn new(packet_batch_receiver: BankingPacketReceiver, id: u32) -> Self {
         Self {
             packet_batch_receiver,
+            sigverify_tracer_stats: IntervalSigverifyTracerPacketStats::new(id),
         }
     }
 
     /// Handles receiving packet batches from sigverify and returns a vector of deserialized packets
-    pub fn handle_received_packets(
+    fn handle_received_packets(
         &self,
         recv_timeout: Duration,
+        packet_limit: usize,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
-        let (packet_batches, sigverify_tracer_stats_option) = self.receive_until(recv_timeout)?;
+        let (packet_batches, sigverify_tracer_stats_option) =
+            self.receive_until(recv_timeout, packet_limit)?;
         Ok(Self::deserialize_and_collect_packets(
             &packet_batches,
             sigverify_tracer_stats_option,
@@ -152,7 +82,7 @@ impl PacketDeserializer {
     }
 
     /// Deserialize packet batches and collect them into ReceivePacketResults
-    pub fn deserialize_and_collect_packets(
+    fn deserialize_and_collect_packets(
         packet_batches: &[PacketBatch],
         sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
     ) -> ReceivePacketResults {
@@ -177,38 +107,65 @@ impl PacketDeserializer {
         }
     }
 
+    /// Update tracer packet stats
+    fn update_tracer_packet_stats(&mut self, deserialized_packet_results: &ReceivePacketResults) {
+        // Update sigverify stats
+        if let Some(new_tracer_stats) = &deserialized_packet_results.new_tracer_stats_option {
+            self.sigverify_tracer_stats
+                .aggregate_sigverify_tracer_packet_stats(new_tracer_stats);
+        }
+
+        self.sigverify_tracer_stats
+            .aggregate_new_valid_packets(deserialized_packet_results.passed_sigverify_count);
+        self.sigverify_tracer_stats
+            .aggregate_newly_failed_sigverify_count(
+                deserialized_packet_results.failed_sigverify_count,
+            );
+
+        // Potentially report sigverify stats
+        self.sigverify_tracer_stats.report(1000);
+    }
+
     /// Receives packet batches from sigverify stage with a timeout, and aggregates tracer packet stats
     fn receive_until(
         &self,
         recv_timeout: Duration,
+        packet_limit: usize,
     ) -> Result<(Vec<PacketBatch>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
         let start = Instant::now();
         let (mut packet_batches, mut aggregated_tracer_packet_stats_option) =
             self.packet_batch_receiver.recv_timeout(recv_timeout)?;
 
         let mut num_packets_received: usize = packet_batches.iter().map(|batch| batch.len()).sum();
-        while let Ok((packet_batch, tracer_packet_stats_option)) =
-            self.packet_batch_receiver.try_recv()
+        let mut packet_count_overflow = false;
+
+        while start.elapsed() < recv_timeout
+            && num_packets_received < packet_limit
+            && !packet_count_overflow
         {
-            trace!("got more packet batches in packet deserializer");
-            let (packets_received, packet_count_overflowed) = num_packets_received
-                .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
-            packet_batches.extend(packet_batch);
+            if let Ok((packet_batch, tracer_packet_stats_option)) =
+                self.packet_batch_receiver.try_recv()
+            {
+                trace!("got more packet batches in packet deserializer");
+                let (packets_received, new_packet_count_overflowed) = num_packets_received
+                    .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
+                packet_batches.extend(packet_batch);
 
-            if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
-                if let Some(aggregated_tracer_packet_stats) =
-                    &mut aggregated_tracer_packet_stats_option
-                {
-                    aggregated_tracer_packet_stats.aggregate(tracer_packet_stats);
-                } else {
-                    aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
+                if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
+                    if let Some(aggregated_tracer_packet_stats) =
+                        &mut aggregated_tracer_packet_stats_option
+                    {
+                        aggregated_tracer_packet_stats.aggregate(tracer_packet_stats);
+                    } else {
+                        aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
+                    }
                 }
-            }
 
-            if start.elapsed() >= recv_timeout || packet_count_overflowed {
+                packet_count_overflow = new_packet_count_overflowed;
+                num_packets_received = packets_received;
+            } else {
                 break;
             }
-            num_packets_received = packets_received;
         }
 
         Ok((packet_batches, aggregated_tracer_packet_stats_option))
@@ -233,6 +190,62 @@ impl PacketDeserializer {
     }
 }
 
+/// Packet deserializer that deserializes packets in a separate thread
+pub struct PacketDeserializerHandle {
+    deserialized_packets_receiver: DeserializedPacketBatchReceiver,
+    thread_hdl: JoinHandle<()>,
+}
+
+impl DeserializedPacketBatchGetter for PacketDeserializerHandle {
+    fn get_deserialized_packets(
+        &mut self,
+        timeout: Duration,
+        packet_limit: usize,
+    ) -> Result<DeserializedPacketBatch, RecvTimeoutError> {
+        let start = Instant::now();
+        let mut deserialized_packets = self.deserialized_packets_receiver.recv_timeout(timeout)?;
+
+        let mut num_packets_received: usize = deserialized_packets.len();
+        let mut packet_count_overflow = false;
+        while start.elapsed() < timeout
+            && num_packets_received < packet_limit
+            && !packet_count_overflow
+        {
+            if let Ok(new_deserialized_packets) = self.deserialized_packets_receiver.try_recv() {
+                let (packets_received, new_packet_count_overflowed) =
+                    num_packets_received.overflowing_add(new_deserialized_packets.len());
+                deserialized_packets.extend(new_deserialized_packets);
+                packet_count_overflow = new_packet_count_overflowed;
+                num_packets_received = packets_received;
+            } else {
+                break;
+            }
+        }
+
+        Ok(deserialized_packets)
+    }
+
+    fn join(self) -> std::thread::Result<()> {
+        self.thread_hdl.join()
+    }
+}
+
+impl PacketDeserializerHandle {}
+
+/// Results from deserializing packet batches.
+pub struct ReceivePacketResults {
+    /// Deserialized packets from all received packet batches
+    pub deserialized_packets: Vec<ImmutableDeserializedPacket>,
+    /// Aggregate tracer stats for all received packet batches
+    pub new_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+    /// Number of packets passing sigverify
+    pub passed_sigverify_count: u64,
+    /// Number of packets failing sigverify
+    pub failed_sigverify_count: u64,
+}
+
+pub type DeserializedPacketSender = CrossbeamSender<Vec<ImmutableDeserializedPacket>>;
+
 #[cfg(test)]
 mod tests {
     use {
@@ -250,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_and_collect_packets_empty() {
-        let results = PacketDeserializer::deserialize_and_collect_packets(&[], None);
+        let results = InlinePacketDeserializer::deserialize_and_collect_packets(&[], None);
         assert_eq!(results.deserialized_packets.len(), 0);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 0);
@@ -263,7 +276,8 @@ mod tests {
         let packet_batches = to_packet_batches(&transactions, 1);
         assert_eq!(packet_batches.len(), 2);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let results =
+            InlinePacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
         assert_eq!(results.deserialized_packets.len(), 2);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 2);
@@ -277,7 +291,8 @@ mod tests {
         assert_eq!(packet_batches.len(), 2);
         packet_batches[0][0].meta.set_discard(true);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let results =
+            InlinePacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
         assert_eq!(results.deserialized_packets.len(), 1);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 1);
