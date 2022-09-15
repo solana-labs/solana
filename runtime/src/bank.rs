@@ -1487,7 +1487,15 @@ impl Scheduler {
         //drop(transaction_sender);
         let checkpoint = solana_scheduler::Checkpoint::new(3);
         transaction_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
+        checkpoint.wait_for_scheduler();
+        {
+            let mut w = self.scheduler.write().unwrap();
+            *w.bank.write().unwrap() = None;
+            w.slot = None;
+            drop(w);
+        }
 
+        /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
             executing_thread_handle.join().unwrap().map(|u| (u.0.as_micros(), u.1.as_micros()))
         }).collect();
@@ -1504,6 +1512,7 @@ impl Scheduler {
 
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 1/2 (cpu ): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
+        */
 
         Ok(())
     }
