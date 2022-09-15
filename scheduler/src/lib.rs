@@ -1751,6 +1751,7 @@ impl Checkpoint {
         *count -= 1;
 
         if *count == 0 {
+            drop(count);
             self.1.notify_all();
         } else {
             self.1.wait_while(count, |&mut remaining_threads| remaining_threads == 0).unwrap();
