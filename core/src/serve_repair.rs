@@ -167,49 +167,51 @@ struct ServeRepairStats {
     err_id_mismatch: usize,
 }
 
+/// `RepairBudget` manages outgoing bandwidth usage for repair requests.
+/// - `MAX_BYTES_PER_INTERVAL` defines a cap on the total number of repair response bytes sent per interval.
+/// - `MAX_STAKED_BYTES_PER_INTERVAL` defines a cap on the number of bytes reserved exclusively for staked nodes
+///   allowing remaining bandwith which can be consumed by unstaked nodes.
+/// - `MAX_NODE_BYTES_PER_INTERVAL` defines a cap on the number of bytes a particular staked node may consume from
+///   `staked_budget` (does not preclude using `shared_budget`)
+/// - Staked nodes will consume bandwith first from `staked_budget` falling back to use `shared_budget`.
+/// - Unstaked nodes will consume bandwith from `shared_budget`.
+///
+/// When a new interval begins `staked_budget` and `unstaked_budget` will be adjusted as follows:
+/// - `staked_budget` will be set to the number of bytes _requested_ by staked nodes in the previous iteration
+///   capped by `MAX_STAKED_BYTES_PER_INTERVAL`: `min(staked_request, MAX_STAKED_BYTES_PER_INTERVAL)`
+/// - `unstaked_budget` will be set to `MAX_STAKED_BYTES_PER_INTERVAL - staked_budget`
 struct RepairBudget {
     last_update: Instant,
     epoch_staked_nodes: Option<Arc<HashMap<Pubkey, u64>>>,
-    node_used: HashMap<Pubkey, /*bytes*/ u64>,
-    staked_remaining: u64,
-    unstaked_remaining: u64,
-    staked_request: u64,
-    unstaked_request: u64,
+    staked_node_used: HashMap<Pubkey, /*bytes*/ u64>, // max entries capped to number of `epoch_staked_nodes`
+    staked_budget: u64,                               // num bytes budget reserved for staked nodes
+    shared_budget: u64, // num bytes budget for unstaked nodes or overflow for staked nodes
+    staked_request: u64, // num bytes requested by staked nodes
 }
 
 impl RepairBudget {
-    const INTERVAL_MS: u64 = 1_000;
+    const INTERVAL: Duration = Duration::from_millis(1_000);
     const MAX_BYTES_PER_INTERVAL: u64 = 12_000_000;
     const MAX_STAKED_BYTES_PER_INTERVAL: u64 = 10_000_000;
-    const MAX_NODE_BYTES_PER_INTERVAL: u64 = 1_000_000;
+
+    // Maximum repair response bandwidth that a node should request is ~8MB/s.
+    // This should be distributed across nodes so this should be a reasonable cap.
+    const MAX_STAKED_NODE_BYTES_PER_INTERVAL: u64 = 2_000_000;
 
     fn new(bank_forks: &RwLock<BankForks>) -> Self {
         let root_bank = bank_forks.read().unwrap().root_bank();
-        let epoch_schedule = root_bank.epoch_schedule();
-        let epoch = epoch_schedule.get_epoch(root_bank.slot());
-        let staked_nodes = root_bank.epoch_staked_nodes(epoch);
+        let staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         Self {
             last_update: Instant::now(),
             epoch_staked_nodes: staked_nodes,
-            node_used: HashMap::default(),
-            staked_remaining: 0,
-            unstaked_remaining: Self::MAX_BYTES_PER_INTERVAL,
+            staked_node_used: HashMap::default(),
+            staked_budget: Self::MAX_STAKED_BYTES_PER_INTERVAL,
+            shared_budget: Self::MAX_BYTES_PER_INTERVAL - Self::MAX_STAKED_BYTES_PER_INTERVAL,
             staked_request: 0,
-            unstaked_request: 0,
         }
     }
 
     fn take(&mut self, id: &Pubkey, bytes: u64) -> bool {
-        // Enforce a per-node cap on bandwith usage. Return early if the cap is
-        // hit to prevent the node from skewing the stake/unstaked capacity
-        // adjustments.
-        let node_used = self.node_used.entry(*id).or_default();
-        let requested_node_usage = node_used.saturating_add(bytes);
-        if requested_node_usage > Self::MAX_NODE_BYTES_PER_INTERVAL {
-            return false;
-        }
-        *node_used = requested_node_usage;
-
         let staked = self
             .epoch_staked_nodes
             .as_ref()
@@ -217,40 +219,36 @@ impl RepairBudget {
             .unwrap_or_default();
         if staked {
             self.staked_request = self.staked_request.saturating_add(bytes);
-            // staked nodes can consume unstaked bandwidth
-            if self.staked_remaining >= bytes {
-                self.staked_remaining -= bytes;
-                true
-            } else if self.unstaked_remaining >= bytes {
-                self.unstaked_remaining -= bytes;
-                true
-            } else {
-                false
+            let node_used = self.staked_node_used.entry(*id).or_default();
+            let requested_node_usage = node_used.saturating_add(bytes);
+            if requested_node_usage <= Self::MAX_STAKED_NODE_BYTES_PER_INTERVAL
+                && bytes <= self.staked_budget
+            {
+                *node_used = requested_node_usage;
+                self.staked_budget -= bytes;
+                return true;
             }
-        } else {
-            self.unstaked_request = self.unstaked_request.saturating_add(bytes);
-            if self.unstaked_remaining >= bytes {
-                self.unstaked_remaining -= bytes;
-                true
-            } else {
-                false
-            }
+            // fall through to try shared budget
         }
+        if bytes <= self.shared_budget {
+            self.shared_budget -= bytes;
+            return true;
+        }
+        false
     }
 
     fn update(&mut self, bank_forks: &RwLock<BankForks>) {
-        if self.last_update.elapsed() > Duration::from_millis(Self::INTERVAL_MS) {
+        if self.last_update.elapsed() > Self::INTERVAL {
             let root_bank = bank_forks.read().unwrap().root_bank();
-            let epoch_schedule = root_bank.epoch_schedule();
-            let epoch = epoch_schedule.get_epoch(root_bank.slot());
-            let staked_nodes = root_bank.epoch_staked_nodes(epoch);
-            let staked_remaining = self.staked_request.min(Self::MAX_STAKED_BYTES_PER_INTERVAL);
+            let staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
+            // Set new `staked_budget` to the requested bytes by staked nodes in the previous interval, capped by
+            // `MAX_STAKED_BYTES_PER_INTERVAL` to reserve budget for unstaked nodes.
+            let staked_budget = self.staked_request.min(Self::MAX_STAKED_BYTES_PER_INTERVAL);
             self.epoch_staked_nodes = staked_nodes;
-            self.node_used = HashMap::default();
-            self.staked_remaining = staked_remaining;
-            self.unstaked_remaining = Self::MAX_BYTES_PER_INTERVAL - staked_remaining;
+            self.staked_node_used = HashMap::default();
+            self.staked_budget = staked_budget;
+            self.shared_budget = Self::MAX_BYTES_PER_INTERVAL - staked_budget;
             self.staked_request = 0;
-            self.unstaked_request = 0;
             self.last_update = Instant::now();
         }
     }
@@ -890,6 +888,20 @@ impl ServeRepair {
 
             let request_sender = *request.sender();
 
+            // Charge a minimum to process request.
+            // This will prevent processing if the budget has been exhausted.
+            const GOOD_FAITH_CHARGE: u64 = 10;
+            let precharge = if matches!(&request, RepairProtocol::Pong(_)) {
+                // Pong is exempt as it does not generate a response
+                0
+            } else {
+                if !repair_budget.take(&request_sender, GOOD_FAITH_CHARGE) {
+                    stats.dropped_requests += 1;
+                    continue;
+                }
+                GOOD_FAITH_CHARGE
+            };
+
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -899,8 +911,10 @@ impl ServeRepair {
             };
             let num_response_packets = rsp.len();
             let num_response_bytes: usize = rsp.iter().map(|p| p.meta.size).sum();
-            if repair_budget.take(&request_sender, num_response_bytes as u64)
-                && response_sender.send(rsp).is_ok()
+            if repair_budget.take(
+                &request_sender,
+                (num_response_bytes as u64).saturating_sub(precharge),
+            ) && response_sender.send(rsp).is_ok()
             {
                 stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
@@ -910,6 +924,7 @@ impl ServeRepair {
             }
         }
 
+        // Pings are currently exempted from `RepairBudget`.
         if !pending_pings.is_empty() {
             let batch = PacketBatch::new(pending_pings);
             let _ignore = response_sender.send(batch);
