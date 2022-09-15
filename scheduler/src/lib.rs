@@ -1736,7 +1736,7 @@ impl ScheduleStage {
 pub struct SchedulablePayload(pub TaskInQueue);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
+pub struct Flushable<ExaminablePayload(pub Box<ExecutionEnvironment>)>;
 
 enum Flushable<T> {
     Payload(T),
