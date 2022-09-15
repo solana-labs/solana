@@ -1222,7 +1222,7 @@ impl SchedulerPool {
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
         assert_eq!(1, Arc::strong_count(&scheduler));
-        todo!()
+        self.schedulers.push(scheduler);
     }
 }
 
