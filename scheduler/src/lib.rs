@@ -1689,7 +1689,7 @@ impl ScheduleStage {
         }
         drop(to_next_stage);
         let pair = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
-        to_next_stage.send(ExecutablePayload(Flushable::Flush(pair))).unwrap();
+        to_next_stage.send(ExaminablePayload(Flushable::Flush(pair))).unwrap();
         drop(ee_sender);
         drop(task_sender);
         drop(task_receiver);
