@@ -1732,6 +1732,6 @@ pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
 
 enum Flushable {
-    Payload<T>,
+    Payload(T),
     Flush,
 };
