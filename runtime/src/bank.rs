@@ -1393,16 +1393,23 @@ impl Default for Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
-                if ee.is_aborted() {
-                    warn!(
-                        "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
-                        ee.execution_result, ee.task.tx.0
-                    );
-                    collected_errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
+            while let Ok(solana_scheduler::ExaminablePayload(a)) = retired_ee_receiver.recv() {
+                match a {
+                    solana_scheduler::Flushable::Flush(checkpoint) => {
+                        checkpoint.wait_for_restart();
+                        continue;
+                    },
+                    solana_scheduler::Flushable::Payload(mut ee) => {
+                        if ee.is_aborted() {
+                            warn!(
+                                "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                                ee.execution_result, ee.task.tx.0
+                            );
+                            collected_errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
+                        }
+                        drop(ee);
+                    },
                 }
-
-                drop(ee);
             }
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
