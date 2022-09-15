@@ -1,40 +1,31 @@
+#![allow(deprecated)]
 #![deny(clippy::integer_arithmetic)]
 #![deny(clippy::indexing_slicing)]
-
-pub mod alloc;
-pub mod allocator_bump;
-pub mod deprecated;
-pub mod serialization;
-pub mod syscalls;
-pub mod upgradeable;
-pub mod upgradeable_with_jit;
-pub mod with_jit;
-
-#[macro_use]
-extern crate solana_metrics;
 
 use {
     crate::{
         serialization::{deserialize_parameters, serialize_parameters},
-        syscalls::SyscallError,
+        syscalls::{self, SyscallError},
+        BpfError, ThisInstructionMeter,
     },
     log::{log_enabled, trace, Level::Trace},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, Executor, InvokeContext},
+        invoke_context::{Executor, InvokeContext},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::HOST_ALIGN,
+        ebpf::{HOST_ALIGN, MM_INPUT_START},
         elf::Executable,
-        error::{EbpfError, UserDefinedError},
+        error::EbpfError,
+        memory_region::MemoryRegion,
         static_analysis::Analysis,
-        verifier::{self, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter},
+        verifier::RequisiteVerifier,
+        vm::{Config, EbpfVm, VerifiedExecutable},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -43,9 +34,10 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, disable_deprecated_loader,
-            do_support_realloc, reduce_required_deploy_balance, requestable_heap_size,
+            cap_accounts_data_len, cap_bpf_program_instruction_accounts,
+            disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
+            disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
+            reduce_required_deploy_balance, requestable_heap_size,
         },
         instruction::{AccountMeta, InstructionError},
         keyed_account::{keyed_account_at_index, KeyedAccount},
@@ -57,25 +49,8 @@ use {
         saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
     },
-    std::{cell::RefCell, fmt::Debug, pin::Pin, rc::Rc, sync::Arc},
-    thiserror::Error,
+    std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
 };
-
-solana_sdk::declare_builtin!(
-    solana_sdk::bpf_loader::ID,
-    solana_bpf_loader_program,
-    solana_bpf_loader_program::process_instruction
-);
-
-/// Errors returned by functions the BPF Loader registers with the VM
-#[derive(Debug, Error, PartialEq)]
-pub enum BpfError {
-    #[error("{0}")]
-    VerifierError(#[from] VerifierError),
-    #[error("{0}")]
-    SyscallError(#[from] SyscallError),
-}
-impl UserDefinedError for BpfError {}
 
 fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError<BpfError>) -> InstructionError {
     ic_msg!(invoke_context, "{}", e);
@@ -110,9 +85,11 @@ pub fn create_executor(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
+    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
-    let register_syscall_result = syscalls::register_syscalls(invoke_context);
+    let register_syscall_result =
+        syscalls::register_syscalls(invoke_context, disable_deploy_of_alloc_free_syscall);
     register_syscalls_time.stop();
     invoke_context.timings.create_executor_register_syscalls_us = invoke_context
         .timings
@@ -138,7 +115,7 @@ pub fn create_executor(
         ..Config::default()
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-    let mut executable = {
+    let executable = {
         let keyed_accounts = invoke_context.get_keyed_accounts()?;
         let programdata = keyed_account_at_index(keyed_accounts, programdata_account_index)?;
         create_executor_metrics.program_id = programdata.unsigned_key().to_string();
@@ -149,7 +126,6 @@ pub fn create_executor(
                 .data()
                 .get(programdata_offset..)
                 .ok_or(InstructionError::AccountDataTooSmall)?,
-            None,
             config,
             syscall_registry,
         );
@@ -162,10 +138,12 @@ pub fn create_executor(
         executable
     }
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
-    let text_bytes = executable.get_text_bytes().1;
     let mut verify_code_time = Measure::start("verify_code_time");
-    verifier::check(text_bytes, &config)
-        .map_err(|e| map_ebpf_error(invoke_context, EbpfError::UserError(e.into())))?;
+    let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
+            executable,
+        )
+        .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
@@ -174,8 +152,7 @@ pub fn create_executor(
         .saturating_add(create_executor_metrics.verify_code_us);
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
-        let jit_compile_result =
-            Executable::<BpfError, ThisInstructionMeter>::jit_compile(&mut executable);
+        let jit_compile_result = verified_executable.jit_compile();
         jit_compile_time.stop();
         create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
         invoke_context.timings.create_executor_jit_compile_us = invoke_context
@@ -189,7 +166,7 @@ pub fn create_executor(
     }
     create_executor_metrics.submit_datapoint();
     Ok(Arc::new(BpfExecutor {
-        executable,
+        verified_executable,
         use_jit,
     }))
 }
@@ -228,11 +205,11 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the BPF virtual machine
 pub fn create_vm<'a, 'b>(
-    program: &'a Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    program: &'a VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     invoke_context: &'a mut InvokeContext<'b>,
-    orig_data_lens: &'a [usize],
-) -> Result<EbpfVm<'a, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
+    orig_account_lengths: Vec<usize>,
+) -> Result<EbpfVm<'a, RequisiteVerifier, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     if invoke_context
@@ -247,47 +224,35 @@ pub fn create_vm<'a, 'b>(
     }
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
-    let mut vm = EbpfVm::new(program, heap.as_slice_mut(), parameter_bytes)?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_data_lens)?;
+    let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
+    let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
+    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;
     Ok(vm)
 }
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        first_instruction_account,
-        instruction_data,
-        invoke_context,
-        false,
-    )
+    process_instruction_common(first_instruction_account, invoke_context, false)
 }
 
 pub fn process_instruction_jit(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
-    process_instruction_common(
-        first_instruction_account,
-        instruction_data,
-        invoke_context,
-        true,
-    )
+    process_instruction_common(first_instruction_account, invoke_context, true)
 }
 
 fn process_instruction_common(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
 
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let first_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -365,11 +330,12 @@ fn process_instruction_common(
                     program_data_offset,
                     invoke_context,
                     use_jit,
-                    false,
+                    false, /* reject_deployment_of_broken_elfs */
+                    false, /* disable_sol_alloc_free_syscall */
                 )?;
                 let transaction_context = &invoke_context.transaction_context;
                 let instruction_context = transaction_context.get_current_instruction_context()?;
-                let program_id = instruction_context.get_program_key(transaction_context)?;
+                let program_id = instruction_context.get_last_program_key(transaction_context)?;
                 invoke_context.add_executor(program_id, executor.clone());
                 executor
             }
@@ -380,11 +346,7 @@ fn process_instruction_common(
             get_or_create_executor_time.as_us()
         );
 
-        executor.execute(
-            next_first_instruction_account,
-            instruction_data,
-            invoke_context,
-        )
+        executor.execute(next_first_instruction_account, invoke_context)
     } else {
         debug_assert_eq!(first_instruction_account, 1);
 
@@ -394,19 +356,13 @@ fn process_instruction_common(
         if bpf_loader_upgradeable::check_id(program_id) {
             process_loader_upgradeable_instruction(
                 first_instruction_account,
-                instruction_data,
                 invoke_context,
                 use_jit,
             )
         } else if bpf_loader::check_id(program_id)
             || (!disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id))
         {
-            process_loader_instruction(
-                first_instruction_account,
-                instruction_data,
-                invoke_context,
-                use_jit,
-            )
+            process_loader_instruction(first_instruction_account, invoke_context, use_jit)
         } else if disable_deprecated_loader && bpf_loader_deprecated::check_id(program_id) {
             ic_logger_msg!(log_collector, "Deprecated loader is no longer supported");
             Err(InstructionError::UnsupportedProgramId)
@@ -419,14 +375,14 @@ fn process_instruction_common(
 
 fn process_loader_upgradeable_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let instruction_data = instruction_context.get_instruction_data();
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
 
     match limited_deserialize(instruction_data)? {
@@ -492,20 +448,9 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(3),
             )?;
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(4),
-                )?,
-                invoke_context,
-            )?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(5),
-                )?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(7),
@@ -604,7 +549,8 @@ fn process_loader_upgradeable_instruction(
 
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
-            let caller_program_id = instruction_context.get_program_key(transaction_context)?;
+            let caller_program_id =
+                instruction_context.get_last_program_key(transaction_context)?;
             let signers = [&[new_program_id.as_ref(), &[bump_seed]]]
                 .iter()
                 .map(|seeds| Pubkey::create_program_address(*seeds, caller_program_id))
@@ -618,6 +564,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -683,20 +632,9 @@ fn process_loader_upgradeable_instruction(
                 keyed_accounts,
                 first_instruction_account.saturating_add(2),
             )?;
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(4),
-                )?,
-                invoke_context,
-            )?;
-            let clock = get_sysvar_with_account_check::clock(
-                keyed_account_at_index(
-                    keyed_accounts,
-                    first_instruction_account.saturating_add(5),
-                )?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 4)?;
+            let clock =
+                get_sysvar_with_account_check::clock(invoke_context, instruction_context, 5)?;
             let authority = keyed_account_at_index(
                 keyed_accounts,
                 first_instruction_account.saturating_add(6),
@@ -803,6 +741,9 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context.update_executor(&new_program_id, executor);
 
@@ -1033,6 +974,11 @@ fn process_loader_upgradeable_instruction(
                 }
             }
         }
+        UpgradeableLoaderInstruction::ExtendProgramData {
+            additional_bytes: _,
+        } => {
+            return Err(InstructionError::InvalidInstructionData);
+        }
     }
 
     Ok(())
@@ -1068,13 +1014,13 @@ fn common_close_account(
 
 fn process_loader_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let instruction_data = instruction_context.get_instruction_data();
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
     if program.owner()? != *program_id {
@@ -1103,8 +1049,16 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
 
-            let executor =
-                create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
+            let executor = create_executor(
+                first_instruction_account,
+                0,
+                invoke_context,
+                use_jit,
+                true,
+                invoke_context
+                    .feature_set
+                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
+            )?;
             let keyed_accounts = invoke_context.get_keyed_accounts()?;
             let program = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             invoke_context.update_executor(program.unsigned_key(), executor);
@@ -1120,29 +1074,9 @@ fn process_loader_instruction(
     Ok(())
 }
 
-/// Passed to the VM to enforce the compute budget
-pub struct ThisInstructionMeter {
-    pub compute_meter: Rc<RefCell<ComputeMeter>>,
-}
-impl ThisInstructionMeter {
-    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
-        Self { compute_meter }
-    }
-}
-impl InstructionMeter for ThisInstructionMeter {
-    fn consume(&mut self, amount: u64) {
-        // 1 to 1 instruction to compute unit mapping
-        // ignore error, Ebpf will bail if exceeded
-        let _ = self.compute_meter.borrow_mut().consume(amount);
-    }
-    fn get_remaining(&self) -> u64 {
-        self.compute_meter.borrow().get_remaining()
-    }
-}
-
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    executable: Pin<Box<Executable<BpfError, ThisInstructionMeter>>>,
+    verified_executable: VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
     use_jit: bool,
 }
 
@@ -1154,31 +1088,35 @@ impl Debug for BpfExecutor {
 }
 
 impl Executor for BpfExecutor {
-    fn execute<'a, 'b>(
+    fn execute(
         &self,
         _first_instruction_account: usize,
-        _instruction_data: &[u8],
-        invoke_context: &'a mut InvokeContext<'b>,
+        invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
         let stack_height = invoke_context.get_stack_height();
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
-        let program_id = *instruction_context.get_program_key(transaction_context)?;
+        let program_id = *instruction_context.get_last_program_key(transaction_context)?;
 
         let mut serialize_time = Measure::start("serialize");
-        let (mut parameter_bytes, account_lengths) =
-            serialize_parameters(invoke_context.transaction_context, instruction_context)?;
+        let (mut parameter_bytes, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            instruction_context,
+            invoke_context
+                .feature_set
+                .is_active(&cap_bpf_program_instruction_accounts::ID),
+        )?;
         serialize_time.stop();
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
             let mut vm = match create_vm(
-                &self.executable,
+                &self.verified_executable,
                 parameter_bytes.as_slice_mut(),
                 invoke_context,
-                &account_lengths,
+                account_lengths,
             ) {
                 Ok(info) => info,
                 Err(e) => {
@@ -1207,7 +1145,8 @@ impl Executor for BpfExecutor {
             );
             if log_enabled!(Trace) {
                 let mut trace_buffer = Vec::<u8>::new();
-                let analysis = Analysis::from_executable(&self.executable);
+                let analysis =
+                    Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
                 vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
@@ -1260,10 +1199,7 @@ impl Executor for BpfExecutor {
                     .transaction_context
                     .get_current_instruction_context()?,
                 parameter_bytes.as_slice(),
-                &account_lengths,
-                invoke_context
-                    .feature_set
-                    .is_active(&do_support_realloc::id()),
+                invoke_context.get_orig_account_lengths()?,
             )
         });
         deserialize_time.stop();
@@ -1290,7 +1226,10 @@ mod tests {
         super::*,
         rand::Rng,
         solana_program_runtime::invoke_context::mock_process_instruction,
-        solana_rbpf::vm::SyscallRegistry,
+        solana_rbpf::{
+            verifier::{Verifier, VerifierError},
+            vm::{InstructionMeter, SyscallRegistry},
+        },
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             account::{
@@ -1339,6 +1278,8 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
+            None,
             expected_result,
             super::process_instruction,
         )
@@ -1356,6 +1297,13 @@ mod tests {
         program_account
     }
 
+    struct TautologyVerifier {}
+    impl Verifier for TautologyVerifier {
+        fn verify(_prog: &[u8], _config: &Config) -> std::result::Result<(), VerifierError> {
+            Ok(())
+        }
+    }
+
     #[test]
     #[should_panic(expected = "ExceededMaxInstructions(31, 10)")]
     fn test_bpf_loader_non_terminating_program() {
@@ -1365,20 +1313,33 @@ mod tests {
             0x05, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x00, // goto -2
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
-        let input = &mut [0x00];
+        let mut input_mem = [0x00];
+        let config = Config::default();
+        let syscall_registry = SyscallRegistry::default();
         let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        solana_rbpf::elf::register_bpf_function(&mut bpf_functions, 0, "entrypoint", false)
-            .unwrap();
-        let program = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
+        solana_rbpf::elf::register_bpf_function(
+            &config,
+            &mut bpf_functions,
+            &syscall_registry,
+            0,
+            "entrypoint",
+        )
+        .unwrap();
+        let executable = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
             program,
-            None,
-            Config::default(),
-            SyscallRegistry::default(),
+            config,
+            syscall_registry,
             bpf_functions,
         )
         .unwrap();
-        let mut vm =
-            EbpfVm::<BpfError, TestInstructionMeter>::new(&program, &mut [], input).unwrap();
+        let verified_executable = VerifiedExecutable::<
+            TautologyVerifier,
+            BpfError,
+            TestInstructionMeter,
+        >::from_executable(executable)
+        .unwrap();
+        let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
+        let mut vm = EbpfVm::new(&verified_executable, &mut [], vec![input_region]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
@@ -1390,7 +1351,7 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        verifier::check(prog, &Config::default()).unwrap();
+        RequisiteVerifier::verify(prog, &Config::default()).unwrap();
     }
 
     #[test]
@@ -1465,7 +1426,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let mut program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         program_account.set_executable(false);
         let instruction_data = bincode::serialize(&LoaderInstruction::Finalize).unwrap();
 
@@ -1529,7 +1490,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let mut program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -1591,19 +1552,15 @@ mod tests {
             &[],
             vec![(program_id, program_account.clone())],
             Vec::new(),
+            None,
+            None,
             Err(InstructionError::ProgramFailedToComplete),
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context
                     .get_compute_meter()
                     .borrow_mut()
                     .mock_set_remaining(0);
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
 
@@ -1624,7 +1581,7 @@ mod tests {
         let loader_id = bpf_loader_deprecated::id();
         let program_id = Pubkey::new_unique();
         let program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_unaligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_unaligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -1665,7 +1622,7 @@ mod tests {
         let loader_id = bpf_loader::id();
         let program_id = Pubkey::new_unique();
         let program_account =
-            load_program_account_from_elf(&loader_id, "test_elfs/noop_aligned.so");
+            load_program_account_from_elf(&loader_id, "test_elfs/out/noop_aligned.so");
         let parameter_id = Pubkey::new_unique();
         let parameter_account = AccountSharedData::new(1, 0, &loader_id);
         let parameter_meta = AccountMeta {
@@ -2043,7 +2000,7 @@ mod tests {
         let upgrade_authority_keypair = Keypair::new();
 
         // Load program file
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
@@ -2378,7 +2335,7 @@ mod tests {
             &program_keypair.pubkey(),
             min_program_balance,
             (UpgradeableLoaderState::program_len().unwrap() as u64).saturating_add(1),
-            &id(),
+            &bpf_loader::id(),
         );
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
         assert_eq!(
@@ -2411,7 +2368,7 @@ mod tests {
             &program_keypair.pubkey(),
             min_program_balance,
             (UpgradeableLoaderState::program_len().unwrap() as u64).saturating_sub(1),
-            &id(),
+            &bpf_loader::id(),
         );
         let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
         assert_eq!(
@@ -2726,10 +2683,10 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_upgradeable_upgrade() {
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf_orig = Vec::new();
         file.read_to_end(&mut elf_orig).unwrap();
-        let mut file = File::open("test_elfs/noop_unaligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_unaligned.so").expect("file open failed");
         let mut elf_new = Vec::new();
         file.read_to_end(&mut elf_new).unwrap();
         assert_ne!(elf_orig.len(), elf_new.len());
@@ -2861,6 +2818,8 @@ mod tests {
                 &instruction_data,
                 transaction_accounts,
                 instruction_accounts,
+                None,
+                None,
                 expected_result,
                 super::process_instruction,
             )
@@ -3759,7 +3718,7 @@ mod tests {
         let program_id = Pubkey::new_unique();
 
         // Create program account
-        let mut file = File::open("test_elfs/noop_aligned.so").expect("file open failed");
+        let mut file = File::open("test_elfs/out/noop_aligned.so").expect("file open failed");
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 

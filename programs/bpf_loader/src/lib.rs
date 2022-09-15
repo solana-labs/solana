@@ -6,6 +6,7 @@ pub mod deprecated;
 pub mod serialization;
 pub mod syscalls;
 pub mod upgradeable;
+pub mod upgradeable_deprecated;
 pub mod upgradeable_with_jit;
 pub mod with_jit;
 

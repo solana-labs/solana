@@ -1,5 +1,6 @@
+#![allow(deprecated)]
 use {
-    crate::nonce_keyed_account::{
+    crate::nonce_keyed_account_deprecated::{
         advance_nonce_account, authorize_nonce_account, initialize_nonce_account,
         withdraw_nonce_account,
     },
@@ -9,7 +10,6 @@ use {
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
-        account_utils::StateMut,
         feature_set,
         instruction::InstructionError,
         keyed_account::{get_signers, keyed_account_at_index, KeyedAccount},
@@ -265,9 +265,11 @@ fn transfer_with_seed(
 
 pub fn process_instruction(
     first_instruction_account: usize,
-    instruction_data: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+    let instruction_data = instruction_context.get_instruction_data();
     let keyed_accounts = invoke_context.get_keyed_accounts()?;
     let instruction = limited_deserialize(instruction_data)?;
 
@@ -354,8 +356,9 @@ pub fn process_instruction(
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
+                instruction_context,
+                1,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -371,21 +374,20 @@ pub fn process_instruction(
             let to = &mut keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?;
             #[allow(deprecated)]
             let _recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
                 invoke_context,
+                instruction_context,
+                2,
             )?;
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 3)?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
             withdraw_nonce_account(me, lamports, to, &rent, &signers, invoke_context)
         }
         SystemInstruction::InitializeNonceAccount(authorized) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             #[allow(deprecated)]
             let recent_blockhashes = get_sysvar_with_account_check::recent_blockhashes(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 1)?,
                 invoke_context,
+                instruction_context,
+                1,
             )?;
             if recent_blockhashes.is_empty() {
                 ic_msg!(
@@ -394,15 +396,27 @@ pub fn process_instruction(
                 );
                 return Err(NonceError::NoRecentBlockhashes.into());
             }
-            let rent = get_sysvar_with_account_check::rent(
-                keyed_account_at_index(keyed_accounts, first_instruction_account + 2)?,
-                invoke_context,
-            )?;
+            let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 2)?;
             initialize_nonce_account(me, &authorized, &rent, invoke_context)
         }
         SystemInstruction::AuthorizeNonceAccount(nonce_authority) => {
             let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
             authorize_nonce_account(me, &nonce_authority, &signers, invoke_context)
+        }
+        SystemInstruction::UpgradeNonceAccount => {
+            use solana_sdk::account_utils::State as AccountUtilsState;
+            let me = &mut keyed_account_at_index(keyed_accounts, first_instruction_account)?;
+            if !system_program::check_id(&me.owner()?) {
+                return Err(InstructionError::InvalidAccountOwner);
+            }
+            if !me.is_writable() {
+                return Err(InstructionError::InvalidArgument);
+            }
+            let nonce_versions: nonce::state::Versions = me.state()?;
+            match nonce_versions.upgrade() {
+                None => Err(InstructionError::InvalidArgument),
+                Some(nonce_versions) => me.set_state(&nonce_versions),
+            }
         }
         SystemInstruction::Allocate { space } => {
             let keyed_account = keyed_account_at_index(keyed_accounts, first_instruction_account)?;
@@ -445,36 +459,12 @@ pub fn process_instruction(
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SystemAccountKind {
-    System,
-    Nonce,
-}
-
-pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
-    if system_program::check_id(account.owner()) {
-        if account.data().is_empty() {
-            Some(SystemAccountKind::System)
-        } else if account.data().len() == nonce::State::size() {
-            match account.state().ok()? {
-                nonce::state::Versions::Current(state) => match *state {
-                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-                    _ => None,
-                },
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[allow(deprecated)]
     use solana_sdk::{
         account::{self, Account, AccountSharedData},
+        account_utils::StateMut,
         client::SyncClient,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
@@ -496,6 +486,30 @@ mod tests {
         },
         std::sync::Arc,
     };
+
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub enum SystemAccountKind {
+        System,
+        Nonce,
+    }
+
+    pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAccountKind> {
+        if system_program::check_id(account.owner()) {
+            if account.data().is_empty() {
+                Some(SystemAccountKind::System)
+            } else if account.data().len() == nonce::State::size() {
+                let nonce_versions: nonce::state::Versions = account.state().ok()?;
+                match nonce_versions.state() {
+                    nonce::State::Uninitialized => None,
+                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 
     impl From<Pubkey> for Address {
         fn from(address: Pubkey) -> Self {
@@ -519,6 +533,8 @@ mod tests {
             instruction_data,
             transaction_accounts,
             instruction_accounts,
+            None,
+            None,
             expected_result,
             process_instruction,
         )
@@ -664,7 +680,7 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context = TransactionContext::new(Vec::new(), None, 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
@@ -1096,9 +1112,7 @@ mod tests {
         let nonce = Pubkey::new_unique();
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -1387,7 +1401,7 @@ mod tests {
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_data(
             100,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data {
                 authority: from,
                 ..nonce::state::Data::default()
             })),
@@ -1725,15 +1739,9 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
     }
@@ -1956,9 +1964,7 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -1987,9 +1993,7 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_data_fail() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &Pubkey::new_unique(),
         )
         .unwrap();
@@ -2093,15 +2097,9 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: usize,
-             instruction_data: &[u8],
-             invoke_context: &mut InvokeContext| {
+            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
-                super::process_instruction(
-                    first_instruction_account,
-                    instruction_data,
-                    invoke_context,
-                )
+                super::process_instruction(first_instruction_account, invoke_context)
             },
         );
     }
