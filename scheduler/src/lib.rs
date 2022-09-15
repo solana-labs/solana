@@ -1688,6 +1688,8 @@ impl ScheduleStage {
             assert!(!select_skipped || executing_queue_count > 0);
         }
         drop(to_next_stage);
+        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        to_next_stage.send(ExecutablePayload(Flushable::Flush(pair))).unwrap();
         drop(ee_sender);
         drop(task_sender);
         drop(task_receiver);
