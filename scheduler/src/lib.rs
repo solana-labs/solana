@@ -1747,7 +1747,7 @@ pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
 impl Checkpoint {
     fn wait_for_restart(&self) {
-        let count = self.0.lock().unwrap();
+        let mut count = self.0.lock().unwrap();
 
         *count -= 1;
 
