@@ -1491,7 +1491,6 @@ impl Scheduler {
         {
             *self.bank.write().unwrap() = None;
             self.slot = None;
-            drop(w);
         }
 
         /*
