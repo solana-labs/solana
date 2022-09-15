@@ -31,21 +31,25 @@ jobs:
 
       - name: Get specific changed files
         id: changed-files-specific
-        uses: tj-actions/changed-files@v19
+        uses: tj-actions/changed-files@v29.0.7
         with:
           files: |
+            .github/workflows/docs.yml
             docs/**
 
       - name: Pre Build
         id: prebuild
         run: |
+          echo "tag: ${{ steps.check.outputs.tag }}"
+          echo "channel: ${{ steps.check.outputs.channel }}"
+          echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
           echo "::set-output name=need_to_build::${{
             steps.check.outputs.tag != ''
             ||
             (
               (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
               &&
-              steps.changed-files-specific.outputs.any_change != ''
+              steps.changed-files-specific.outputs.any_changed != ''
             )
           }}"
         shell: bash
