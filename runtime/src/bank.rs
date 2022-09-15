@@ -1492,7 +1492,7 @@ impl Scheduler {
         checkpoint.wait_for_restart();
         {
             *self.bank.write().unwrap() = None;
-            self.slot.unwrap().store(0, std::sync::atomic::Ordering::SeqCst);
+            self.slot.as_ref().unwrap().store(0, std::sync::atomic::Ordering::SeqCst);
         }
 
         /*
