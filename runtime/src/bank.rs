@@ -6562,10 +6562,10 @@ impl Bank {
     ) {
         assert_eq!(bank.slot(), batch.bank().slot());
 
-        let scheduler = {
-            let r = self.scheduler.read().unwrap().unwrap();
+        let s = {
+            let r = self.scheduler.read().unwrap()
 
-            if r.bank.read().unwrap().is_none() {
+            if r.as_ref().unwrap().bank.read().unwrap().is_none() {
                 drop(r);
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
@@ -6573,12 +6573,13 @@ impl Bank {
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot = Some(bank.slot);
                 drop(w);
-                self.scheduler.read().unwrap().unwrap()
+                self.scheduler.read().unwrap()
             } else {
-                assert_eq!(bank.slot(), r.slot.unwrap());
+                assert_eq!(bank.slot(), r.as_ref().unwrap().slot.unwrap());
                 r
             }
         };
+        let scheduler = s.as_ref().unwrap();
 
         for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
