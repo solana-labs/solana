@@ -13,6 +13,7 @@ use {
         },
         packet_deserializer_stage::{
             DeserializedPacketBatch, DeserializedPacketBatchGetter, InlinePacketDeserializer,
+            PacketDeserializerHandle,
         },
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
@@ -459,7 +460,7 @@ impl BankingStage {
             gossip_vote_sender.clone(),
             data_budget.clone(),
             cost_model.clone(),
-            log_messages_bytes_limit.clone(),
+            log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
         ));
@@ -477,7 +478,7 @@ impl BankingStage {
             gossip_vote_sender.clone(),
             data_budget.clone(),
             cost_model.clone(),
-            log_messages_bytes_limit.clone(),
+            log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
         ));
@@ -486,7 +487,7 @@ impl BankingStage {
             Self::spawn_banking_stage_thread(
                 id,
                 ForwardOption::ForwardTransaction,
-                InlinePacketDeserializer::new(verified_receiver.clone(), id),
+                PacketDeserializerHandle::new(verified_receiver.clone(), id),
                 cluster_info.clone(),
                 poh_recorder.clone(),
                 batch_limit,
@@ -494,7 +495,7 @@ impl BankingStage {
                 gossip_vote_sender.clone(),
                 data_budget.clone(),
                 cost_model.clone(),
-                log_messages_bytes_limit.clone(),
+                log_messages_bytes_limit,
                 connection_cache.clone(),
                 bank_forks.clone(),
             )
@@ -504,6 +505,7 @@ impl BankingStage {
     }
 
     /// Spawn a banking stage thread
+    #[allow(clippy::too_many_arguments)]
     fn spawn_banking_stage_thread<D>(
         id: u32,
         forward_option: ForwardOption,

@@ -6,11 +6,11 @@ use {
         sigverify::{IntervalSigverifyTracerPacketStats, SigverifyTracerPacketStats},
     },
     crossbeam_channel::{
-        Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+        unbounded, Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
     },
     solana_perf::packet::PacketBatch,
     std::{
-        thread::JoinHandle,
+        thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
 };
@@ -230,7 +230,41 @@ impl DeserializedPacketBatchGetter for PacketDeserializerHandle {
     }
 }
 
-impl PacketDeserializerHandle {}
+impl PacketDeserializerHandle {
+    pub fn new(packet_batch_receiver: BankingPacketReceiver, id: u32) -> Self {
+        let mut packet_deserializer = InlinePacketDeserializer::new(packet_batch_receiver, id);
+        let (deserialized_packets_sender, deserialized_packets_receiver) = unbounded();
+        let thread_hdl = Builder::new()
+            .name(format!("solPktDesr{id:02}"))
+            .spawn(move || {
+                const RECV_TIMEOUT: Duration = Duration::from_millis(10);
+                const PACKET_BATCHES_SIZE_LIMIT: usize = 1024 * 1024;
+                loop {
+                    match packet_deserializer
+                        .get_deserialized_packets(RECV_TIMEOUT, PACKET_BATCHES_SIZE_LIMIT)
+                    {
+                        Ok(deserialized_packets) => {
+                            if deserialized_packets_sender
+                                .send(deserialized_packets)
+                                .is_err()
+                            {
+                                // break if the receiver is dropped
+                                break;
+                            }
+                        }
+                        Err(RecvTimeoutError::Disconnected) => break, // break if sender is dropped
+                        Err(RecvTimeoutError::Timeout) => {}          // do nothing
+                    }
+                }
+            })
+            .unwrap();
+
+        Self {
+            deserialized_packets_receiver,
+            thread_hdl,
+        }
+    }
+}
 
 /// Results from deserializing packet batches.
 pub struct ReceivePacketResults {
