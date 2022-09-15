@@ -1423,22 +1423,31 @@ impl Default for Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            let mut runnable_queue = solana_scheduler::TaskQueue::default();
             let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
                 .unwrap_or(format!("{}", 1))
                 .parse::<usize>()
                 .unwrap();
 
-            solana_scheduler::ScheduleStage::run(
-                random_id,
-                max_executing_queue_count,
-                &mut runnable_queue,
-                &mut address_book,
-                &transaction_receiver,
-                &scheduled_ee_sender,
-                &processed_ee_receiver,
-                Some(&retired_ee_sender),
-            );
+            loop {
+                let mut runnable_queue = solana_scheduler::TaskQueue::default();
+                let checkpoint = solana_scheduler::ScheduleStage::run(
+                    random_id,
+                    max_executing_queue_count,
+                    &mut runnable_queue,
+                    &mut address_book,
+                    &transaction_receiver,
+                    &scheduled_ee_sender,
+                    &processed_ee_receiver,
+                    Some(&retired_ee_sender),
+                );
+
+                if let Some(checkpoint) = maybe_checkpoint {
+                    checkpoint.wait_for_restart();
+                } else {
+                    break;
+                }
+            }
+
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
