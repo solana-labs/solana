@@ -1746,15 +1746,15 @@ pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
 impl Checkpoint {
     fn wait_for_restart(&self) {
-        let mut remaining_threads = self.0.lock().unwrap();
+        let mut remaining_threads_guard = self.0.lock().unwrap();
 
-        *remaining_threads -= 1;
+        *remaining_threads_guard -= 1;
 
-        if *remaining_threads == 0 {
-            drop(remaining_threads);
+        if *remaining_threads_guard == 0 {
+            drop(remaining_threads_guard);
             self.1.notify_all();
         } else {
-            self.1.wait_while(remaining_threads, |&mut remaining_threads| remaining_threads == 0).unwrap();
+            self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads == 0).unwrap();
         }
     }
 }
