@@ -1477,7 +1477,7 @@ impl Scheduler {
 
         //drop(transaction_sender);
         let checkpoint = solana_scheduler::Checkpoint::new(3);
-        transaction_sender.send(solana_scheduler::RunnablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
+        transaction_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
 
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
             executing_thread_handle.join().unwrap().map(|u| (u.0.as_micros(), u.1.as_micros()))
