@@ -1470,6 +1470,7 @@ impl CleanAccountsStats {
 #[derive(Debug, Default)]
 struct ShrinkAncientStats {
     shrink_stats: ShrinkStats,
+    ancient_append_vecs_shrunk: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -1724,6 +1725,11 @@ impl ShrinkAncientStats {
                 (
                     "accounts_loaded",
                     self.shrink_stats.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "ancient_append_vecs_shrunk",
+                    self.ancient_append_vecs_shrunk.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -3979,6 +3985,9 @@ impl AccountsDb {
                 // we are full, but we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate some contents
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
+                self.shrink_ancient_stats
+                    .ancient_append_vecs_shrunk
+                    .fetch_add(1, Ordering::Relaxed);
                 return true;
             }
             // since we skipped an ancient append vec, we don't want to append to whatever append vec USED to be the current one
@@ -4051,7 +4060,8 @@ impl AccountsDb {
 
             let len = stored_accounts.len();
             let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
-            self.shrink_stats
+            self.shrink_ancient_stats
+                .shrink_stats
                 .accounts_loaded
                 .fetch_add(len as u64, Ordering::Relaxed);
 
