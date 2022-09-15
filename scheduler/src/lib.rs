@@ -1755,6 +1755,10 @@ impl Checkpoint {
             self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads == 0).unwrap();
         }
     }
+
+    fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(solana_scheduler::Checkpoint(std::sync::Mutex::new(remaining_threads), std::sync::Condvar::new()))
+    }
 }
 
 
