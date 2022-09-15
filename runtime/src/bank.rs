@@ -6575,7 +6575,7 @@ impl Bank {
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
-                assert_eq!(bank.slot(), r.as_ref().unwrap().slot.unwrap().load(std::sync::atomic::Ordering::SeqCst));
+                assert_eq!(bank.slot(), r.as_ref().unwrap().slot.as_ref().unwrap().load(std::sync::atomic::Ordering::SeqCst));
                 r
             }
         };
