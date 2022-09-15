@@ -1680,10 +1680,14 @@ impl ScheduleStage {
                         to_next_stage.send(ExaminablePayload(Flushable::Payload(processed_execution_environment))).unwrap();
                     }
                     if !empty_from {
-                        let task = from_prev.recv().unwrap().0;
-                        from_len = from_len.checked_sub(1).unwrap();
-                        empty_from = from_len == 0;
-                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                        let schedulable = from_prev.recv().unwrap();
+                        match schedulable {
+                            Flushable::Payload(task) => {
+                                from_len = from_len.checked_sub(1).unwrap();
+                                empty_from = from_len == 0;
+                                Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                            },
+                        }
                     }
                 }
             }
