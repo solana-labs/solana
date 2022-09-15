@@ -12,8 +12,6 @@ extern "C" {
 #endif
 
 /**
-<<<<<<< HEAD
-=======
  * Maximum CPI instruction data size. 10 KiB was chosen to ensure that CPI
  * instructions are not more limited than transaction instructions if the size
  * of transactions is doubled in the future.
@@ -36,7 +34,6 @@ static const uint8_t MAX_CPI_INSTRUCTION_ACCOUNTS = 255;
 static const uint16_t MAX_CPI_ACCOUNT_INFOS = 128;
 
 /**
->>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
  * Account Meta
  */
 typedef struct {
@@ -59,12 +56,12 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
-uint64_t sol_invoke_signed_c(
-  const SolInstruction *instruction,
-  const SolAccountInfo *account_infos,
-  int account_infos_len,
-  const SolSignerSeeds *signers_seeds,
-  int signers_seeds_len
+@SYSCALL uint64_t sol_invoke_signed_c(
+  const SolInstruction *,
+  const SolAccountInfo *,
+  int,
+  const SolSignerSeeds *,
+  int
 );
 
 /**

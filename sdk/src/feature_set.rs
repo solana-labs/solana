@@ -423,6 +423,21 @@ pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
 
+<<<<<<< HEAD
+=======
+pub mod epoch_accounts_hash {
+    solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
+}
+
+pub mod remove_deprecated_request_unit_ix {
+    solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
+}
+
+pub mod increase_tx_account_lock_limit {
+    solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
+}
+
+>>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -523,6 +538,12 @@ lazy_static! {
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
+<<<<<<< HEAD
+=======
+        (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
+        (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
+        (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
+>>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
