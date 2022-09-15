@@ -1430,7 +1430,7 @@ impl Default for Scheduler {
 
             loop {
                 let mut runnable_queue = solana_scheduler::TaskQueue::default();
-                let checkpoint = solana_scheduler::ScheduleStage::run(
+                let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
                     random_id,
                     max_executing_queue_count,
                     &mut runnable_queue,
