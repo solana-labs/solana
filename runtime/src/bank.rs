@@ -1435,7 +1435,7 @@ impl Default for Scheduler {
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
             let checkpoint = std::sync::Arc::new(solana_scheduler::Checkpoint(std::sync::Mutex::new(10), std::sync::Condvar::new()));
-            retired_ee_sender.send(ExaminablePayload(Flushable::Flush(checkpoint))).unwrap();
+            retired_ee_sender.send(ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
 
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
