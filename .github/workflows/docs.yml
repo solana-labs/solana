@@ -41,6 +41,7 @@ jobs:
         id: prebuild
         run: |
           echo "tag: ${{ steps.check.outputs.tag }}"
+          echo "channel: ${{ steps.check.outputs.channel }}"
           echo "::set-output name=need_to_build::${{
             steps.check.outputs.tag != ''
             ||
