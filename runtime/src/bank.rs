@@ -1200,7 +1200,7 @@ struct SchedulerPool {
 }
 
 impl SchedulerPool {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self {}
     }
 }
