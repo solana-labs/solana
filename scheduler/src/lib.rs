@@ -1734,4 +1734,4 @@ pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
 enum Flushable<T> {
     Payload(T),
     Flush,
-};
+}
