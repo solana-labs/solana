@@ -73,6 +73,11 @@ pub trait EncodableWithMeta {
     fn json_encode(&self) -> Self::Encoded;
 }
 
+trait JsonAccounts {
+    type Encoded;
+    fn build_json_accounts(&self) -> Self::Encoded;
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionBinaryEncoding {
@@ -114,6 +119,7 @@ pub enum TransactionDetails {
     Full,
     Signatures,
     None,
+    Accounts,
 }
 
 impl Default for TransactionDetails {
@@ -409,6 +415,32 @@ impl UiTransactionStatusMeta {
             loaded_addresses: OptionSerializer::Skip,
         }
     }
+
+    fn build_simple(meta: TransactionStatusMeta, show_rewards: bool) -> Self {
+        Self {
+            err: meta.status.clone().err(),
+            status: meta.status,
+            fee: meta.fee,
+            pre_balances: meta.pre_balances,
+            post_balances: meta.post_balances,
+            inner_instructions: OptionSerializer::Skip,
+            log_messages: OptionSerializer::Skip,
+            pre_token_balances: meta
+                .pre_token_balances
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            post_token_balances: meta
+                .post_token_balances
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            rewards: if show_rewards {
+                meta.rewards.into()
+            } else {
+                OptionSerializer::Skip
+            },
+            loaded_addresses: OptionSerializer::Skip,
+        }
+    }
 }
 
 impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
@@ -586,6 +618,20 @@ impl ConfirmedBlock {
                 ),
             ),
             TransactionDetails::None => (None, None),
+            TransactionDetails::Accounts => (
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx_with_meta| {
+                            tx_with_meta.build_json_accounts(
+                                options.max_supported_transaction_version,
+                                options.show_rewards,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                None,
+            ),
         };
         Ok(UiConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
@@ -709,16 +755,31 @@ impl TransactionWithStatusMeta {
             Self::Complete(tx_with_meta) => tx_with_meta.account_keys(),
         }
     }
-}
 
-impl VersionedTransactionWithStatusMeta {
-    pub fn encode(
+    fn build_json_accounts(
         self,
-        encoding: UiTransactionEncoding,
         max_supported_transaction_version: Option<u8>,
         show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
-        let version = match (
+        match self {
+            Self::MissingMetadata(ref transaction) => Ok(EncodedTransactionWithStatusMeta {
+                version: None,
+                transaction: transaction.build_json_accounts(),
+                meta: None,
+            }),
+            Self::Complete(tx_with_meta) => {
+                tx_with_meta.build_json_accounts(max_supported_transaction_version, show_rewards)
+            }
+        }
+    }
+}
+
+impl VersionedTransactionWithStatusMeta {
+    fn validate_version(
+        &self,
+        max_supported_transaction_version: Option<u8>,
+    ) -> Result<Option<TransactionVersion>, EncodeError> {
+        match (
             max_supported_transaction_version,
             self.transaction.version(),
         ) {
@@ -735,7 +796,16 @@ impl VersionedTransactionWithStatusMeta {
                     Err(EncodeError::UnsupportedTransactionVersion(version))
                 }
             }
-        }?;
+        }
+    }
+
+    pub fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        let version = self.validate_version(max_supported_transaction_version)?;
 
         Ok(EncodedTransactionWithStatusMeta {
             transaction: self.transaction.encode_with_meta(encoding, &self.meta),
@@ -762,6 +832,40 @@ impl VersionedTransactionWithStatusMeta {
             self.transaction.message.static_account_keys(),
             Some(&self.meta.loaded_addresses),
         )
+    }
+
+    fn build_json_accounts(
+        self,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        let version = self.validate_version(max_supported_transaction_version)?;
+
+        let account_keys = match &self.transaction.message {
+            VersionedMessage::Legacy(message) => parse_legacy_message_accounts(message),
+            VersionedMessage::V0(message) => {
+                let loaded_message =
+                    LoadedMessage::new_borrowed(message, &self.meta.loaded_addresses);
+                parse_v0_message_accounts(&loaded_message)
+            }
+        };
+
+        Ok(EncodedTransactionWithStatusMeta {
+            transaction: EncodedTransaction::Accounts(UiAccountsList {
+                signatures: self
+                    .transaction
+                    .signatures
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                account_keys,
+            }),
+            meta: Some(UiTransactionStatusMeta::build_simple(
+                self.meta,
+                show_rewards,
+            )),
+            version,
+        })
     }
 }
 
@@ -825,6 +929,7 @@ pub enum EncodedTransaction {
     LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
     Binary(String, TransactionBinaryEncoding),
     Json(UiTransaction),
+    Accounts(UiAccountsList),
 }
 
 impl EncodableWithMeta for VersionedTransaction {
@@ -896,10 +1001,20 @@ impl Encodable for Transaction {
     }
 }
 
+impl JsonAccounts for Transaction {
+    type Encoded = EncodedTransaction;
+    fn build_json_accounts(&self) -> Self::Encoded {
+        EncodedTransaction::Accounts(UiAccountsList {
+            signatures: self.signatures.iter().map(ToString::to_string).collect(),
+            account_keys: parse_legacy_message_accounts(&self.message),
+        })
+    }
+}
+
 impl EncodedTransaction {
     pub fn decode(&self) -> Option<VersionedTransaction> {
         let (blob, encoding) = match self {
-            Self::Json(_) => return None,
+            Self::Json(_) | Self::Accounts(_) => return None,
             Self::LegacyBinary(blob) => (blob, TransactionBinaryEncoding::Base58),
             Self::Binary(blob, encoding) => (blob, *encoding),
         };
@@ -1015,6 +1130,13 @@ pub struct UiRawMessage {
     pub instructions: Vec<UiCompiledInstruction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiAccountsList {
+    pub signatures: Vec<String>,
+    pub account_keys: Vec<ParsedAccount>,
 }
 
 /// A duplicate representation of a MessageAddressTableLookup, in raw format, for pretty JSON serialization
