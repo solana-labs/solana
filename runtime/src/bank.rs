@@ -1203,7 +1203,7 @@ struct SchedulerPool {
 impl SchedulerPool {
     const fn new() -> Self {
         Self {
-            schedulers: Vec<Scheduler>,
+            schedulers: Vec::new(),
         }
     }
 }
