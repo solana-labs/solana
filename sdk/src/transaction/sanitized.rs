@@ -210,13 +210,11 @@ impl SanitizedTransaction {
     /// Validate and return the account keys locked by this transaction
     pub fn get_account_locks(
         &self,
-        feature_set: &feature_set::FeatureSet,
+        tx_account_lock_limit: usize,
     ) -> Result<TransactionAccountLocks> {
         if self.message.has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
-        } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
-            && self.message.account_keys().len() > MAX_TX_ACCOUNT_LOCKS
-        {
+        } else if self.message.account_keys().len() > tx_account_lock_limit {
             Err(TransactionError::TooManyAccountLocks)
         } else {
             Ok(self.get_account_locks_unchecked())
