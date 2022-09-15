@@ -3,7 +3,7 @@ use solana_frozen_abi::abi_example::AbiExample;
 use {
     indexmap::{map::Entry, IndexMap},
     log::*,
-    rand::Rng,
+    rand::prelude::IteratorRandom,
     solana_program_runtime::invoke_context::Executor,
     solana_sdk::{
         clock::{Epoch, Slot},
@@ -12,7 +12,6 @@ use {
     },
     std::{
         collections::HashMap,
-        iter::repeat_with,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc,
@@ -82,7 +81,7 @@ pub(crate) const MAX_CACHED_EXECUTORS: usize = 256;
 // The LFU entry in a random sample of below size is evicted from the cache.
 const RANDOM_SAMPLE_SIZE: usize = 2;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct CachedExecutorsEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
@@ -117,6 +116,16 @@ impl Default for CachedExecutors {
             executors: IndexMap::new(),
             entries: IndexMap::new(),
             stats: executor_cache::Stats::default(),
+        }
+    }
+}
+
+impl Default for CachedExecutorsEntry {
+    fn default() -> Self {
+        Self {
+            prev_epoch_count: 0,
+            epoch_count: AtomicU64::new(0),
+            hit_count: AtomicU64::new(1),
         }
     }
 }
@@ -200,6 +209,79 @@ impl CachedExecutors {
     }
 
     pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
+        // We seem to look exclude elements already in the cache, but we don't de-dup
+        // executors...
+        let new_executors: Vec<_> = executors
+            .iter()
+            .filter_map(|(key, executor)| {
+                if let Some(mut entry) = self.executors.remove(key) {
+                    self.stats.replacements.fetch_add(1, Relaxed);
+
+                    //todo: de-duplicate this code
+                    let maybe_entry = self.entries.get(key);
+                    if let Some(entry) = maybe_entry {
+                        if entry.hit_count.load(Relaxed) == 1 {
+                            self.stats.one_hit_wonders.fetch_add(1, Relaxed);
+                        }
+                    }
+
+                    entry = executor.clone();
+                    let _ = self.executors.insert(*key, entry);
+                    None
+                } else {
+                    self.stats.insertions.fetch_add(1, Relaxed);
+                    Some((*key, executor))
+                }
+            })
+            .take(self.capacity)
+            .collect();
+
+        let mut rng = rand::thread_rng();
+        // Evict the key with the lowest hits in a random sample of entries.
+        while self.executors.len() + new_executors.len() > self.capacity {
+            let size = self.executors.len();
+
+            if let Some(index) = (0..size)
+                .choose_multiple(&mut rng, RANDOM_SAMPLE_SIZE)
+                .into_iter()
+                .min_by_key(|&index| {
+                    let (key, _) = self.executors.get_index(index).unwrap();
+                    self.entries[key].num_hits()
+                })
+            {
+                let (key, _) = self.executors.swap_remove_index(index).unwrap();
+                let count = self.stats.evictions.entry(key).or_default();
+
+                let maybe_entry = self.entries.get(&key);
+                if let Some(entry) = maybe_entry {
+                    if entry.hit_count.load(Relaxed) == 1 {
+                        self.stats.one_hit_wonders.fetch_add(1, Relaxed);
+                    }
+                }
+
+                saturating_add_assign!(*count, 1)
+            }
+        }
+
+        while self.entries.len() + new_executors.len() > self.capacity.saturating_mul(20) {
+            let size = self.entries.len();
+
+            if let Some(index) = (0..size)
+                .filter(|&index| {
+                    let (key, _) = self.entries.get_index(index).unwrap();
+                    !self.executors.contains_key(key)
+                })
+                .choose_multiple(&mut rng, RANDOM_SAMPLE_SIZE)
+                .into_iter()
+                .min_by_key(|&index| {
+                    let (key, _) = self.executors.get_index(index).unwrap();
+                    self.entries[key].num_hits()
+                })
+            {
+                self.entries.swap_remove_index(index);
+            }
+        }
+
         // Note: always add elements to self.entries before self.executors and
         // remove entries from self.executors before self.entries, because in CachedExecutors::get
         // we require that if there's an extry in self.executors for the given pubkey, there will
@@ -211,52 +293,17 @@ impl CachedExecutors {
         // right order as long as it's the right order in the code)
         // as long as IndexMap internally uses a lock or some other synchronizing operation;
         // this will almost certainly be the case but you know where to look if this suddenly starts failing :)
-        for (pubkey, executor) in executors {
-            self.entries
-                .entry(pubkey)
-                .or_default()
-                .hit_count
-                .fetch_add(1, Relaxed);
+        for (pubkey, executor) in new_executors {
+            self.entries.entry(pubkey).or_default();
 
             match self.executors.entry(pubkey) {
                 Entry::Vacant(entry) => {
-                    self.stats.insertions.fetch_add(1, Relaxed);
-                    entry.insert(executor);
+                    entry.insert(executor.clone());
                 }
                 Entry::Occupied(mut entry) => {
-                    self.stats.replacements.fetch_add(1, Relaxed);
-                    *entry.get_mut() = executor;
+                    *entry.get_mut() = executor.clone();
                 }
             }
-        }
-
-        let mut rng = rand::thread_rng();
-        // Evict the key with the lowest hits in a random sample of entries.
-        while self.executors.len() > self.capacity {
-            let size = self.executors.len();
-            let index = repeat_with(|| rng.gen_range(0, size))
-                .take(RANDOM_SAMPLE_SIZE)
-                .min_by_key(|&index| {
-                    let (key, _) = self.executors.get_index(index).unwrap();
-                    self.entries[key].num_hits()
-                })
-                .unwrap();
-            let (key, _) = self.executors.swap_remove_index(index).unwrap();
-            let count = self.stats.evictions.entry(key).or_default();
-            saturating_add_assign!(*count, 1)
-        }
-
-        while self.entries.len() > self.capacity.saturating_mul(20) {
-            let size = self.entries.len();
-            let index = repeat_with(|| rng.gen_range(0, size))
-                .filter(|&index| {
-                    let (key, _) = self.entries.get_index(index).unwrap();
-                    !self.executors.contains_key(key)
-                })
-                .take(RANDOM_SAMPLE_SIZE)
-                .min_by_key(|&index| self.entries[index].num_hits())
-                .unwrap();
-            self.entries.swap_remove_index(index);
         }
     }
 
