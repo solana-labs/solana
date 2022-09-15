@@ -6570,7 +6570,7 @@ impl Bank {
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot = Some(bank.slot);
                 drop(w);
-                self.scheduler.read().unwrap()
+                self.scheduler.read().unwrap().unwrap()
             } else {
                 assert_eq!(bank.slot(), r.slot.unwrap());
                 r
