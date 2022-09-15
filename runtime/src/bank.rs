@@ -1411,6 +1411,7 @@ impl Default for Scheduler {
                     },
                 }
             }
+
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
 
@@ -1441,8 +1442,6 @@ impl Default for Scheduler {
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
-            //let checkpoint = solana_scheduler::Checkpoint::new(3);
-            //retired_ee_sender.send(solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
 
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
@@ -1475,7 +1474,11 @@ impl Scheduler {
 
         info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
         let transaction_sender = self.transaction_sender.take().unwrap();
-        drop(transaction_sender);
+
+        //drop(transaction_sender);
+        let checkpoint = solana_scheduler::Checkpoint::new(3);
+        transaction_sender.send(solana_scheduler::RunnablePayload(solana_scheduler::Flushable::Flush(checkpoint))).unwrap();
+
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
             executing_thread_handle.join().unwrap().map(|u| (u.0.as_micros(), u.1.as_micros()))
         }).collect();
