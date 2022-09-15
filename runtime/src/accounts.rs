@@ -2146,7 +2146,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             ),
             Err(AddressLookupError::InvalidAccountOwner),
         );

@@ -10271,7 +10271,7 @@ pub mod tests {
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
             &db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             )
             .unwrap()
             .0,
@@ -10281,7 +10281,7 @@ pub mod tests {
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         assert_eq!(
             &db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             )
             .unwrap()
             .0,
@@ -10315,7 +10315,7 @@ pub mod tests {
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
             &db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             )
             .unwrap()
             .0,
@@ -10325,7 +10325,7 @@ pub mod tests {
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         assert_eq!(
             &db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             )
             .unwrap()
             .0,
@@ -10363,7 +10363,7 @@ pub mod tests {
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(
             &db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             )
             .unwrap()
             .0,
@@ -10386,7 +10386,7 @@ pub mod tests {
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
             db.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             ),
             Some((account1, 1))
         );
@@ -10530,7 +10530,7 @@ pub mod tests {
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(
             db0.load_without_fixed_root(
-                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ true
+                &ancestors, &key, /*return_none_for_zero_lamport_accounts:*/ false
             ),
             Some((account1, 1))
         );
@@ -11565,7 +11565,7 @@ pub mod tests {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         let (account, slot) = accounts
             .load_without_fixed_root(
-                &ancestors, &pubkey, /*return_none_for_zero_lamport_accounts:*/ true,
+                &ancestors, &pubkey, /*return_none_for_zero_lamport_accounts:*/ false,
             )
             .unwrap();
         assert_eq!((account.lamports(), slot), (expected_lamports, slot));
@@ -13823,7 +13823,7 @@ pub mod tests {
             db.load_without_fixed_root(
                 &Ancestors::default(),
                 &account_key,
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             ),
             Some((zero_lamport_account, 1))
         );
@@ -14111,7 +14111,7 @@ pub mod tests {
             .load_with_fixed_root(
                 &Ancestors::default(),
                 &account_key,
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             )
             .map(|(account, _)| account)
             .unwrap();
@@ -14148,7 +14148,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -14250,7 +14250,7 @@ pub mod tests {
                 &zero_lamport_account_key,
                 max_root,
                 load_hint,
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             )
             .unwrap()
             .0
@@ -14379,7 +14379,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
-                true, // return_none_for_zero_lamport_accounts
+                false, // return_none_for_zero_lamport_accounts
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
