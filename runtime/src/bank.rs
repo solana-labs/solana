@@ -1205,7 +1205,7 @@ impl SchedulerPool {
     }
 }
 
-const SCHEDULER_POOL = RwLock::new(SchedulerPool::new());
+const SCHEDULER_POOL: std::sync::RwLock<SchedulerPool> = RwLock::new(SchedulerPool::new());
 
 #[derive(Debug)]
 struct Scheduler {
