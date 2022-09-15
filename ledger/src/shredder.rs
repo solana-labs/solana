@@ -1,6 +1,6 @@
 use {
     crate::shred::{
-        Error, ProcessShredsStats, Shred, ShredData, ShredFlags, DATA_SHREDS_PER_FEC_BLOCK,
+        self, Error, ProcessShredsStats, Shred, ShredData, ShredFlags, DATA_SHREDS_PER_FEC_BLOCK,
     },
     itertools::Itertools,
     lazy_static::lazy_static,
@@ -74,6 +74,24 @@ impl Shredder {
         Vec<Shred>, // data shreds
         Vec<Shred>, // coding shreds
     ) {
+        if false {
+            return shred::make_merkle_shreds_from_entries(
+                &PAR_THREAD_POOL,
+                keypair,
+                entries,
+                self.slot,
+                self.parent_slot,
+                self.version,
+                self.reference_tick,
+                is_last_in_slot,
+                next_shred_index,
+                next_code_index,
+                stats,
+            )
+            .unwrap()
+            .into_iter()
+            .partition(Shred::is_data);
+        }
         let data_shreds =
             self.entries_to_data_shreds(keypair, entries, is_last_in_slot, next_shred_index, stats);
         let coding_shreds =
@@ -347,7 +365,7 @@ impl Shredder {
 }
 
 /// Maps number of data shreds in each batch to the erasure batch size.
-fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
+pub(crate) fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
     ERASURE_BATCH_SIZE
         .get(num_data_shreds)
         .copied()
