@@ -1197,6 +1197,7 @@ impl AbiExample for BuiltinPrograms {
 }
 
 struct SchedulerPool {
+    schedulers: Vec<Scheduler>,
 }
 
 impl SchedulerPool {
