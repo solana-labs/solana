@@ -47,8 +47,8 @@
 //! ```
 //! use anyhow::Result;
 //! use solana_sdk::commitment_config::CommitmentConfig;
-//! use solana_client::pubsub_client::PubsubClient;
-//! use solana_client::rpc_config::RpcAccountInfoConfig;
+//! use solana_pubsub_client::pubsub_client::PubsubClient;
+//! use solana_rpc_client_api::config::RpcAccountInfoConfig;
 //! use solana_sdk::pubkey::Pubkey;
 //! use std::thread;
 //!

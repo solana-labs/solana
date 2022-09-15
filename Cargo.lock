@@ -5892,6 +5892,7 @@ dependencies = [
 name = "solana-pubsub-client"
 version = "1.15.0"
 dependencies = [
+ "anyhow",
  "crossbeam-channel",
  "futures-util",
  "log",
