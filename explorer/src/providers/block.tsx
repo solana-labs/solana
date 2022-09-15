@@ -76,12 +76,7 @@ export async function fetchBlock(
 
   try {
     const connection = new Connection(url, "confirmed");
-    const block = await connection.getBlock(slot, {
-      maxSupportedTransactionVersion: process.env
-        .REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION
-        ? parseInt(process.env.REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION, 10)
-        : 0,
-    });
+    const block = await connection.getBlock(slot);
     if (block === null) {
       data = {};
       status = FetchStatus.Fetched;
