@@ -1952,8 +1952,6 @@ mod tests {
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
     }
-<<<<<<< HEAD
-=======
 
     #[test]
     fn test_remove_if_slot_list_empty_entry() {
@@ -2002,42 +2000,4 @@ mod tests {
             assert!(matches!(entry, Entry::Occupied(_)));
         }
     }
-
-    #[test]
-    fn test_lock_and_update_slot_list() {
-        let test = AccountMapEntryInner::<u64>::default();
-        let info = 65;
-        let mut reclaims = Vec::default();
-        // first upsert, should increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
-            &test,
-            (1, info),
-            None,
-            &mut reclaims,
-            UpsertReclaim::IgnoreReclaims,
-        );
-        assert_eq!(test.slot_list.read().unwrap().len(), len);
-        assert_eq!(len, 1);
-        // update to different slot, should increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
-            &test,
-            (2, info),
-            None,
-            &mut reclaims,
-            UpsertReclaim::IgnoreReclaims,
-        );
-        assert_eq!(test.slot_list.read().unwrap().len(), len);
-        assert_eq!(len, 2);
-        // update to same slot, should not increase
-        let len = InMemAccountsIndex::lock_and_update_slot_list(
-            &test,
-            (2, info),
-            None,
-            &mut reclaims,
-            UpsertReclaim::IgnoreReclaims,
-        );
-        assert_eq!(test.slot_list.read().unwrap().len(), len);
-        assert_eq!(len, 2);
-    }
->>>>>>> 1811d684b (clean race condition with extra unref (#27682))
 }

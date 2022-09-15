@@ -1724,25 +1724,15 @@ impl<T: IndexValue> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
-<<<<<<< HEAD
         max_clean_root: Option<Slot>,
-    ) {
-        let mut is_slot_list_empty = false;
-        self.slot_list_mut(pubkey, |slot_list| {
-            self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
-            is_slot_list_empty = slot_list.is_empty();
-        });
-=======
-        max_clean_root_inclusive: Option<Slot>,
     ) -> bool {
         let mut is_slot_list_empty = false;
         let missing_in_accounts_index = self
             .slot_list_mut(pubkey, |slot_list| {
-                self.purge_older_root_entries(slot_list, reclaims, max_clean_root_inclusive);
+                self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
                 is_slot_list_empty = slot_list.is_empty();
             })
             .is_none();
->>>>>>> 1811d684b (clean race condition with extra unref (#27682))
 
         let mut removed = false;
         // If the slot list is empty, remove the pubkey from `account_maps`. Make sure to grab the
@@ -1750,13 +1740,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-<<<<<<< HEAD
             let w_maps = self.get_account_maps_read_lock(pubkey);
-            w_maps.remove_if_slot_list_empty(*pubkey);
-=======
-            let w_maps = self.get_bin(pubkey);
             removed = w_maps.remove_if_slot_list_empty(*pubkey);
->>>>>>> 1811d684b (clean race condition with extra unref (#27682))
         }
         removed || missing_in_accounts_index
     }
