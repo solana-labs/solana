@@ -6571,7 +6571,7 @@ impl Bank {
                 // safe.
                 let mut w = self.scheduler.write().unwrap().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
-                w.slot = Some(AtomicU64::new(bank.slot));
+                w.slot.unwrap.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
