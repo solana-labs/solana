@@ -134,7 +134,7 @@ use {
         timing::years_as_slots,
         transaction::{
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
-            TransactionVerificationMode, VersionedTransaction,
+            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{InstructionTrace, TransactionAccount, TransactionContext},
     },
@@ -3507,26 +3507,12 @@ impl Bank {
     }
 
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
-<<<<<<< HEAD
         tick_height % self.ticks_per_slot == 0
-=======
-        if self
-            .feature_set
-            .is_active(&feature_set::fix_recent_blockhashes::id())
-        {
-            tick_height == self.max_tick_height
-        } else {
-            tick_height % self.ticks_per_slot == 0
-        }
     }
 
     /// Get the max number of accounts that a transaction may lock in this block
     pub fn get_transaction_account_lock_limit(&self) -> usize {
-        if let Some(transaction_account_lock_limit) =
-            self.runtime_config.transaction_account_lock_limit
-        {
-            transaction_account_lock_limit
-        } else if self
+        if self
             .feature_set
             .is_active(&feature_set::increase_tx_account_lock_limit::id())
         {
@@ -3534,7 +3520,6 @@ impl Bank {
         } else {
             64
         }
->>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
@@ -3543,10 +3528,10 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(
+            sanitized_txs.iter(),
+            self.get_transaction_account_lock_limit(),
+        );
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3566,10 +3551,10 @@ impl Bank {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(
+            sanitized_txs.iter(),
+            self.get_transaction_account_lock_limit(),
+        );
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3585,7 +3570,7 @@ impl Bank {
         let lock_results = self
             .rc
             .accounts
-            .lock_accounts(txs.iter(), &self.feature_set);
+            .lock_accounts(txs.iter(), self.get_transaction_account_lock_limit());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3600,7 +3585,7 @@ impl Bank {
         let lock_results = self.rc.accounts.lock_accounts_with_results(
             transactions.iter(),
             transaction_results,
-            &self.feature_set,
+            self.get_transaction_account_lock_limit(),
         );
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
@@ -3610,7 +3595,9 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
+        let lock_result = transaction
+            .get_account_locks(self.get_transaction_account_lock_limit())
+            .map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.set_needs_unlock(false);
@@ -7034,12 +7021,7 @@ pub(crate) mod tests {
             system_program,
             sysvar::rewards::Rewards,
             timing::duration_as_s,
-<<<<<<< HEAD
-            transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
-=======
-            transaction_context::IndexOfAccount,
->>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
         },
         solana_vote_program::{
             vote_instruction,

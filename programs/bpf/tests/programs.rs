@@ -1072,31 +1072,6 @@ fn test_program_bpf_invoke_sanity() {
             TEST_INSTRUCTION_META_TOO_LARGE,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
-<<<<<<< HEAD
-=======
-            Some(vec![
-                format!("Program {invoke_program_id} invoke [1]"),
-                format!("Program log: invoke {program_lang} program"),
-                "Program log: Test max instruction accounts exceeded".into(),
-                "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many accounts (256 > 255)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
-            ]),
-        );
-
-        do_invoke_failure_test_local(
-            TEST_MAX_ACCOUNT_INFOS_EXCEEDED,
-            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
-            &[],
-            Some(vec![
-                format!("Program {invoke_program_id} invoke [1]"),
-                format!("Program log: invoke {program_lang} program"),
-                "Program log: Test max account infos exceeded".into(),
-                "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many account info's (129 > 128)".into(),
-                format!("Program {invoke_program_id} failed: Program failed to complete"),
-            ]),
->>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
         );
 
         do_invoke_failure_test_local(
