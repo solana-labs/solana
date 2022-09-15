@@ -3822,10 +3822,10 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
     // from block 0, which is true iff:
     // 1) The block with index prev_block_index is itself part of the trunk of consecutive blocks
     // starting from block 0,
-        // AND either:
-        // 1) The slot didn't exist in the database before, and now we have a consecutive
-        // block for that slot
-        (slot_meta_backup.is_none() && slot_meta.consumed != 0) ||
+    // AND either:
+    // 1) The slot didn't exist in the database before, and now we have a consecutive
+    // block for that slot
+    (slot_meta_backup.is_none() && slot_meta.consumed != 0) ||
         // OR
         // 2) The slot did exist, but now we have a new consecutive block for that slot
         (slot_meta_backup.is_some() && slot_meta_backup.as_ref().unwrap().consumed != slot_meta.consumed)
