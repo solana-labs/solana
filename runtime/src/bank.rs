@@ -8247,7 +8247,7 @@ impl Bank {
         let scheduler = self.scheduler.write().unwrap().take().unwrap();
         scheduler.gracefully_stop().unwrap();
         let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
-        SCHEDULER_POOL.return_to_pool(scheduler);
+        SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
         e
     }
 }
