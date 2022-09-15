@@ -6588,7 +6588,8 @@ impl Bank {
     pub fn handle_aborted_transactions(
         &self,
     ) -> Vec<Result<()>> {
-        let scheduler = self.scheduler.read().unwrap().unwrap();
+        let s = self.scheduler.read().unwrap();
+        let scheduler = s.as_ref().unwrap();
         scheduler.handle_aborted_executions()
     }
 
