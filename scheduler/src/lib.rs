@@ -1745,7 +1745,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
-    ) -> Option<std::sync::Arc<Checkpoint> {
+    ) -> Option<std::sync::Arc<Checkpoint>> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
