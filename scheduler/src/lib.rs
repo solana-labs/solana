@@ -1459,10 +1459,8 @@ impl ScheduleStage {
 
                     while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
                         match a {
-                            Flushable::Flush(pair) => {
-                                let Checkpoint(lock, cvar) = &*pair;
-                                cvar.wait_while(lock.lock().unwrap(), |&mut remaining_threads| remaining_threads == 0).unwrap();
-
+                            Flushable::Flush(checkpoint) => {
+                                checkpoint.wait_for_restart();
                                 continue;
                             },
                             Flushable::Payload(a) => {
