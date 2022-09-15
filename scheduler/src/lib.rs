@@ -1682,6 +1682,8 @@ impl ScheduleStage {
                     if !empty_from {
                         let SchedulablePayload(schedulable) = from_prev.recv().unwrap();
                         match schedulable {
+                            Flushable::Flush(checkpoint) => {
+                            },
                             Flushable::Payload(task) => {
                                 from_len = from_len.checked_sub(1).unwrap();
                                 empty_from = from_len == 0;
