@@ -1740,7 +1740,7 @@ pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
-pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
+pub struct Checkpoint(pub std::sync::Mutex<usize>, pub std::sync::Condvar);
 
 impl Checkpoint {
     fn wait_for_restart(&self) {
