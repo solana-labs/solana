@@ -60,6 +60,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
 
@@ -79,6 +80,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
 

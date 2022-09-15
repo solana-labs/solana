@@ -76,6 +76,7 @@ impl StandardBroadcastRun {
                     true, // is_last_in_slot,
                     state.next_shred_index,
                     state.next_code_index,
+                    false, // merkle_variant
                     stats,
                 );
                 self.report_and_reset_stats(true);
@@ -124,6 +125,7 @@ impl StandardBroadcastRun {
             is_slot_end,
             next_shred_index,
             next_code_index,
+            false, // merkle_variant
             process_stats,
         );
         let next_shred_index = match data_shreds.iter().map(Shred::index).max() {

@@ -506,6 +506,7 @@ mod test {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         data_shreds
@@ -539,8 +540,11 @@ mod test {
         blockstore
             .insert_shreds(shreds.clone(), None, false)
             .unwrap();
-        let mut duplicate_shred = shreds[1].clone();
-        duplicate_shred.set_slot(shreds[0].slot());
+        let duplicate_shred = {
+            let (mut shreds, _) = make_many_slot_entries(5, 1, 10);
+            shreds.swap_remove(0)
+        };
+        assert_eq!(duplicate_shred.slot(), shreds[0].slot());
         let duplicate_shred_slot = duplicate_shred.slot();
         sender.send(duplicate_shred).unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(duplicate_shred_slot));

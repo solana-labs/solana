@@ -2848,11 +2848,11 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42);
+            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
@@ -2886,11 +2886,11 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42);
+            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&3)).unwrap();
             assert!(!blockstore.is_root(0));
@@ -2917,9 +2917,9 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));

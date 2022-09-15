@@ -3673,7 +3673,14 @@ mod tests {
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
 
-            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                bank.slot(),
+                0,    // parent_slot
+                true, // is_full_slot
+                0,    // version
+                true, // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 
@@ -3835,7 +3842,14 @@ mod tests {
 
             poh_recorder.write().unwrap().set_bank(&bank, false);
 
-            let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                bank.slot(),
+                0,    // parent_slot
+                true, // is_full_slot
+                0,    // version
+                true, // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
 
