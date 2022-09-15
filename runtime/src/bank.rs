@@ -1474,19 +1474,21 @@ impl Scheduler {
 }
 
 impl Scheduler {
-    fn gracefully_stop(&mut self) -> Result<()> {
+    fn gracefully_stop(&self) -> Result<()> {
+        /*
         if self.graceful_stop_initiated {
             info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
             return Ok(());
         }
         self.graceful_stop_initiated = true;
+        */
 
         info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
-        let transaction_sender = self.transaction_sender.take().unwrap();
+        //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
         let checkpoint = solana_scheduler::Checkpoint::new(3);
-        transaction_sender.send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)))).unwrap();
+        self.transaction_sender.unwrap().send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)))).unwrap();
         checkpoint.wait_for_restart();
         {
             *self.bank.write().unwrap() = None;
