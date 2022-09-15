@@ -5227,9 +5227,9 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
- "solana-frozen-abi-macro 1.12.0",
- "solana-logger 1.12.0",
+ "sha2 0.10.5",
+ "solana-frozen-abi-macro 1.15.0",
+ "solana-logger 1.15.0",
  "subtle",
  "thiserror",
 ]
