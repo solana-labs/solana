@@ -1457,12 +1457,12 @@ impl ScheduleStage {
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                     let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(flushable_payload) = ee_receiver.recv() {
-                        match flushable_payload {
+                    while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
+                        match a {
                             Flashable::Flush => {
                                 continue;
                             }
-                            Flashable::Payload(ExaminablePayload(a)) => {
+                            Flashable::Payload() => {
                                 assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                                 //assert!(a.task.sequence_time() != usize::max_value());
                                 //let lock_attempts = std::mem::take(&mut a.lock_attempts);
@@ -1736,7 +1736,7 @@ impl ScheduleStage {
 pub struct SchedulablePayload(pub TaskInQueue);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub Flushable<struct ExaminablePayload(pub Box<ExecutionEnvironment>)>;
+pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
 
 enum Flushable<T> {
     Payload(T),
