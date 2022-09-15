@@ -4597,12 +4597,12 @@ impl AccountsDb {
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
-        ignore_zero_lamports: LoadZeroLamports,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
             .filter(|(account, _)| {
                 matches!(
-                    ignore_zero_lamports,
+                    load_zero_lamports,
                     LoadZeroLamports::SomeWithZeroLamportAccount
                 ) || !account.is_zero_lamport()
             })
