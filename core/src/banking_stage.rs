@@ -444,58 +444,108 @@ impl BankingStage {
         let batch_limit =
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Many banks that process transactions in parallel.
-        let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
-            .map(|i| {
-                let (verified_receiver, forward_option) = match i {
-                    0 => {
-                        // Disable forwarding of vote transactions
-                        // from gossip. Note - votes can also arrive from tpu
-                        (verified_vote_receiver.clone(), ForwardOption::NotForward)
-                    }
-                    1 => (
-                        tpu_verified_vote_receiver.clone(),
-                        ForwardOption::ForwardTpuVote,
-                    ),
-                    _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
-                };
+        let mut bank_thread_hdls = Vec::with_capacity(num_threads as usize);
 
-                let mut deserialized_packet_batch_getter =
-                    InlinePacketDeserializer::new(verified_receiver, i);
-                let poh_recorder = poh_recorder.clone();
-                let cluster_info = cluster_info.clone();
-                let mut recv_start = Instant::now();
-                let transaction_status_sender = transaction_status_sender.clone();
-                let gossip_vote_sender = gossip_vote_sender.clone();
-                let data_budget = data_budget.clone();
-                let cost_model = cost_model.clone();
-                let connection_cache = connection_cache.clone();
-                let bank_forks = bank_forks.clone();
-                Builder::new()
-                    .name(format!("solBanknStgTx{:02}", i))
-                    .spawn(move || {
-                        Self::process_loop(
-                            &mut deserialized_packet_batch_getter,
-                            &poh_recorder,
-                            &cluster_info,
-                            &mut recv_start,
-                            forward_option,
-                            i,
-                            batch_limit,
-                            transaction_status_sender,
-                            gossip_vote_sender,
-                            &data_budget,
-                            cost_model,
-                            log_messages_bytes_limit,
-                            connection_cache,
-                            &bank_forks,
-                        );
+        // Thread for processing gossip votes
+        let id = 0;
+        bank_thread_hdls.push(Self::spawn_banking_stage_thread(
+            id,
+            ForwardOption::NotForward,
+            InlinePacketDeserializer::new(verified_vote_receiver, id),
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            batch_limit,
+            transaction_status_sender.clone(),
+            gossip_vote_sender.clone(),
+            data_budget.clone(),
+            cost_model.clone(),
+            log_messages_bytes_limit.clone(),
+            connection_cache.clone(),
+            bank_forks.clone(),
+        ));
 
-                        deserialized_packet_batch_getter.join().unwrap();
-                    })
-                    .unwrap()
-            })
-            .collect();
+        // Thread for processing tpu votes
+        let id = 1;
+        bank_thread_hdls.push(Self::spawn_banking_stage_thread(
+            id,
+            ForwardOption::ForwardTpuVote,
+            InlinePacketDeserializer::new(tpu_verified_vote_receiver, id),
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            batch_limit,
+            transaction_status_sender.clone(),
+            gossip_vote_sender.clone(),
+            data_budget.clone(),
+            cost_model.clone(),
+            log_messages_bytes_limit.clone(),
+            connection_cache.clone(),
+            bank_forks.clone(),
+        ));
+
+        bank_thread_hdls.extend((2..num_threads).map(|id| {
+            Self::spawn_banking_stage_thread(
+                id,
+                ForwardOption::ForwardTransaction,
+                InlinePacketDeserializer::new(verified_receiver.clone(), id),
+                cluster_info.clone(),
+                poh_recorder.clone(),
+                batch_limit,
+                transaction_status_sender.clone(),
+                gossip_vote_sender.clone(),
+                data_budget.clone(),
+                cost_model.clone(),
+                log_messages_bytes_limit.clone(),
+                connection_cache.clone(),
+                bank_forks.clone(),
+            )
+        }));
+
         Self { bank_thread_hdls }
+    }
+
+    /// Spawn a banking stage thread
+    fn spawn_banking_stage_thread<D>(
+        id: u32,
+        forward_option: ForwardOption,
+        mut deserialized_packet_batch_getter: D,
+        cluster_info: Arc<ClusterInfo>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
+        batch_limit: usize,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: ReplayVoteSender,
+        data_budget: Arc<DataBudget>,
+        cost_model: Arc<RwLock<CostModel>>,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: Arc<ConnectionCache>,
+        bank_forks: Arc<RwLock<BankForks>>,
+    ) -> JoinHandle<()>
+    where
+        D: DeserializedPacketBatchGetter + std::marker::Send + 'static,
+    {
+        Builder::new()
+            .name(format!("solBanknStgTx{:02}", id))
+            .spawn(move || {
+                let mut recv_start = Instant::now();
+                Self::process_loop(
+                    &mut deserialized_packet_batch_getter,
+                    &poh_recorder,
+                    &cluster_info,
+                    &mut recv_start,
+                    forward_option,
+                    id,
+                    batch_limit,
+                    transaction_status_sender,
+                    gossip_vote_sender,
+                    &data_budget,
+                    cost_model,
+                    log_messages_bytes_limit,
+                    connection_cache,
+                    &bank_forks,
+                );
+
+                deserialized_packet_batch_getter.join().unwrap();
+            })
+            .unwrap()
     }
 
     // filter forwardable Rc<immutable_deserialized_packet>s that:
