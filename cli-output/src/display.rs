@@ -261,8 +261,8 @@ fn write_transaction<W: io::Write>(
         write_status(w, &transaction_status.status, prefix)?;
         write_fees(w, transaction_status.fee, prefix)?;
         write_balances(w, transaction_status, prefix)?;
-        write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
-        write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
+        write_log_messages(w, transaction_status.log_messages.as_ref().into(), prefix)?;
+        write_rewards(w, transaction_status.rewards.as_ref().into(), prefix)?;
     } else {
         writeln!(w, "{}Status: Unavailable", prefix)?;
     }
