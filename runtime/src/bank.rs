@@ -6560,7 +6560,7 @@ impl Bank {
         assert_eq!(bank.slot(), batch.bank().slot());
 
         let scheduler = {
-            let r = self.scheduler.read().unwrap();
+            let r = self.scheduler.read().unwrap().unwrap();
 
             if r.bank.read().unwrap().is_none() {
                 drop(r);
