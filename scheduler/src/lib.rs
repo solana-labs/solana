@@ -1415,6 +1415,7 @@ impl ScheduleStage {
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
+    #[must_use]
     fn _run<'a, AST: AtScheduleThread>(
         ast: AST,
         random_id: u64,
@@ -1426,7 +1427,7 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
-    ) {
+    ) -> Option<std::sync::Arc<Checkpoint>> {
         let start_time = std::time::Instant::now();
         let (mut last_time, mut last_processed_count) = (start_time.clone(), 0_usize);
         info!("schedule_once:initial id_{:016x}", random_id);
