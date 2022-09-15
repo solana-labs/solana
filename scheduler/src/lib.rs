@@ -1691,7 +1691,7 @@ impl ScheduleStage {
             assert!(!select_skipped || executing_queue_count > 0);
         }
         //drop(to_next_stage);
-        let pair = std::sync::Arc::new(FlushContext((std::sync::Mutex::new(10), std::sync::Condvar::new())));
+        let pair = std::sync::Arc::new(FlushContext(std::sync::Mutex::new(10), std::sync::Condvar::new()));
         to_next_stage.send(ExaminablePayload(Flushable::Flush(pair))).unwrap();
         drop(ee_sender);
         drop(task_sender);
