@@ -1211,7 +1211,7 @@ impl SchedulerPool {
         todo!()
     }
 
-    fn return_to_pool(&mut self, Scheduler) {
+    fn return_to_pool(&mut self, _: Scheduler) {
         todo!()
     }
 }
