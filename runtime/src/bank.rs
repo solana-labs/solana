@@ -17308,7 +17308,7 @@ pub(crate) mod tests {
             let instruction_context = transaction_context.get_current_instruction_context()?;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 1)?
-                .set_data(&[0; 40])?;
+                .set_data(vec![0; 40])?;
             Ok(())
         }
 

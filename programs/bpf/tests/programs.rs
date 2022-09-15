@@ -3458,7 +3458,7 @@ fn test_program_bpf_realloc_invoke() {
     let pre_len = 100;
     let new_len = pre_len * 2;
     let mut invoke_account = AccountSharedData::new(START_BALANCE, pre_len, &realloc_program_id);
-    invoke_account.set_data_from_slice(&vec![1; pre_len]);
+    invoke_account.set_data(vec![1; pre_len]);
     bank.store_account(&invoke_pubkey, &invoke_account);
     let mut instruction_data = vec![];
     instruction_data.extend_from_slice(&[INVOKE_DEALLOC_AND_ASSIGN, 1]);

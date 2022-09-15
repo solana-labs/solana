@@ -828,22 +828,20 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Overwrites the account data and size (transaction wide)
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
-        if data.len() == self.account.data().len() {
-            self.account.data_as_mut_slice().copy_from_slice(data);
-        } else {
-            let mut accounts_resize_delta = self
-                .transaction_context
-                .accounts_resize_delta
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::GenericError)?;
-            *accounts_resize_delta = accounts_resize_delta
-                .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
-            self.account.set_data_from_slice(data);
-        }
+
+        let mut accounts_resize_delta = self
+            .transaction_context
+            .accounts_resize_delta
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::GenericError)?;
+        *accounts_resize_delta = accounts_resize_delta
+            .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
+        self.account.set_data(data);
+
         Ok(())
     }
 
@@ -878,6 +876,18 @@ impl<'a> BorrowedAccount<'a> {
             value: new_length as u64,
             _marker: std::marker::PhantomData::default(),
         }
+    }
+
+    /// Appends all elements in a slice to the account
+    #[cfg(not(target_os = "solana"))]
+    pub fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        let new_len = self.get_data().len() + data.len();
+        self.can_data_be_resized(new_len)?;
+        self.can_data_be_changed()?;
+        self.touch()?;
+
+        self.account.data_mut().extend_from_slice(data);
+        Ok(())
     }
 
     /// Deserializes the account data into a state
