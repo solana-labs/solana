@@ -3507,7 +3507,34 @@ impl Bank {
     }
 
     pub fn is_block_boundary(&self, tick_height: u64) -> bool {
+<<<<<<< HEAD
         tick_height % self.ticks_per_slot == 0
+=======
+        if self
+            .feature_set
+            .is_active(&feature_set::fix_recent_blockhashes::id())
+        {
+            tick_height == self.max_tick_height
+        } else {
+            tick_height % self.ticks_per_slot == 0
+        }
+    }
+
+    /// Get the max number of accounts that a transaction may lock in this block
+    pub fn get_transaction_account_lock_limit(&self) -> usize {
+        if let Some(transaction_account_lock_limit) =
+            self.runtime_config.transaction_account_lock_limit
+        {
+            transaction_account_lock_limit
+        } else if self
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
+            MAX_TX_ACCOUNT_LOCKS
+        } else {
+            64
+        }
+>>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
     }
 
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
@@ -7007,8 +7034,12 @@ pub(crate) mod tests {
             system_program,
             sysvar::rewards::Rewards,
             timing::duration_as_s,
+<<<<<<< HEAD
             transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
+=======
+            transaction_context::IndexOfAccount,
+>>>>>>> b9700244b5 (Increase transaction account lock limit from 64 to 128 (#27242))
         },
         solana_vote_program::{
             vote_instruction,
@@ -13060,7 +13091,8 @@ pub(crate) mod tests {
             bank.last_blockhash(),
         );
 
-        while tx.message.account_keys.len() <= MAX_TX_ACCOUNT_LOCKS {
+        let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
+        while tx.message.account_keys.len() <= transaction_account_lock_limit {
             tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
         }
 
