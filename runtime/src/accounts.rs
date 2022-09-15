@@ -274,6 +274,8 @@ impl Accounts {
             let mut rent_debits = RentDebits::default();
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
+            let return_none_for_zero_lamport_accounts =
+                feature_set.is_active(&feature_set::return_none_for_zero_lamport_accounts::id());
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -293,7 +295,11 @@ impl Accounts {
                             (account_override.clone(), 0)
                         } else {
                             self.accounts_db
-                                .load_with_fixed_root(ancestors, key)
+                                .load_with_fixed_root(
+                                    ancestors,
+                                    key,
+                                    return_none_for_zero_lamport_accounts,
+                                )
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
@@ -342,9 +348,12 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
-                                    if let Some((programdata_account, _)) = self
-                                        .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                    if let Some((programdata_account, _)) =
+                                        self.accounts_db.load_with_fixed_root(
+                                            ancestors,
+                                            &programdata_address,
+                                            return_none_for_zero_lamport_accounts,
+                                        )
                                     {
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -388,6 +397,7 @@ impl Accounts {
                             &mut accounts,
                             instruction.program_id_index as IndexOfAccount,
                             error_counters,
+                            return_none_for_zero_lamport_accounts,
                         )
                     })
                     .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
@@ -459,6 +469,7 @@ impl Accounts {
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
+        return_none_for_zero_lamport_accounts: bool,
     ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
         let mut program_id = match accounts.get(program_account_index as usize) {
@@ -476,10 +487,11 @@ impl Accounts {
             }
             depth += 1;
 
-            program_account_index = match self
-                .accounts_db
-                .load_with_fixed_root(ancestors, &program_id)
-            {
+            program_account_index = match self.accounts_db.load_with_fixed_root(
+                ancestors,
+                &program_id,
+                return_none_for_zero_lamport_accounts,
+            ) {
                 Some((program_account, _)) => {
                     let account_index = accounts.len() as IndexOfAccount;
                     accounts.push((program_id, program_account));
@@ -505,10 +517,11 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    let programdata_account_index = match self
-                        .accounts_db
-                        .load_with_fixed_root(ancestors, &programdata_address)
-                    {
+                    let programdata_account_index = match self.accounts_db.load_with_fixed_root(
+                        ancestors,
+                        &programdata_address,
+                        return_none_for_zero_lamport_accounts,
+                    ) {
                         Some((programdata_account, _)) => {
                             let account_index = accounts.len() as IndexOfAccount;
                             accounts.push((programdata_address, programdata_account));
@@ -606,10 +619,15 @@ impl Accounts {
         ancestors: &Ancestors,
         address_table_lookup: &MessageAddressTableLookup,
         slot_hashes: &SlotHashes,
+        return_none_for_zero_lamport_accounts: bool,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
         let table_account = self
             .accounts_db
-            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .load_with_fixed_root(
+                ancestors,
+                &address_table_lookup.account_key,
+                return_none_for_zero_lamport_accounts,
+            )
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
@@ -652,8 +670,14 @@ impl Accounts {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
+        return_none_for_zero_lamport_accounts: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint)?;
+        let (account, slot) = self.accounts_db.load(
+            ancestors,
+            pubkey,
+            load_hint,
+            return_none_for_zero_lamport_accounts,
+        )?;
         Self::filter_zero_lamport_account(account, slot)
     }
 
@@ -661,16 +685,28 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        return_none_for_zero_lamport_accounts: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load_slow(ancestors, pubkey, LoadHint::FixedMaxRoot)
+        self.load_slow(
+            ancestors,
+            pubkey,
+            LoadHint::FixedMaxRoot,
+            return_none_for_zero_lamport_accounts,
+        )
     }
 
     pub fn load_without_fixed_root(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        return_none_for_zero_lamport_accounts: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load_slow(ancestors, pubkey, LoadHint::Unspecified)
+        self.load_slow(
+            ancestors,
+            pubkey,
+            LoadHint::Unspecified,
+            return_none_for_zero_lamport_accounts,
+        )
     }
 
     /// scans underlying accounts_db for this delta (slot) with a map function

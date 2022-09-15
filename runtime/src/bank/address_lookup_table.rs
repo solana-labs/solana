@@ -30,6 +30,7 @@ impl AddressLoader for &Bank {
                     &self.ancestors,
                     address_table_lookup,
                     &slot_hashes,
+                    self.return_none_for_zero_lamport_accounts(),
                 )
             })
             .collect::<Result<_, AddressLookupError>>()?)

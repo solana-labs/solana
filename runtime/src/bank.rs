@@ -2153,7 +2153,9 @@ impl Bank {
         // accounts-db. Note that it is crucial that these accounts are loaded
         // at the right slot and match precisely with serialized Delegations.
         let stakes = Stakes::new(&fields.stakes, |pubkey| {
-            let (account, _slot) = bank_rc.accounts.load_with_fixed_root(&ancestors, pubkey)?;
+            let (account, _slot) = bank_rc.accounts.load_with_fixed_root(
+                &ancestors, pubkey, true, // return_none_for_zero_lamport_accounts
+            )?;
             Some(account)
         })
         .expect(
@@ -6657,7 +6659,11 @@ impl Bank {
         // get_account (= primary this fn caller) may be called from on-chain Bank code even if we
         // try hard to use get_account_with_fixed_root for that purpose...
         // so pass safer LoadHint:Unspecified here as a fallback
-        self.rc.accounts.load_without_fixed_root(ancestors, pubkey)
+        self.rc.accounts.load_without_fixed_root(
+            ancestors,
+            pubkey,
+            self.return_none_for_zero_lamport_accounts(),
+        )
     }
 
     fn load_slow_with_fixed_root(
@@ -6665,7 +6671,11 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
+        match self.rc.accounts.load_with_fixed_root(
+            ancestors,
+            pubkey,
+            self.return_none_for_zero_lamport_accounts(),
+        ) {
             Some((mut account, storage_slot)) => {
                 ExpectedRentCollection::maybe_update_rent_epoch_on_load(
                     &mut account,
@@ -7160,10 +7170,11 @@ impl Bank {
     }
 
     pub fn load_account_into_read_cache(&self, key: &Pubkey) {
-        self.rc
-            .accounts
-            .accounts_db
-            .load_account_into_read_cache(&self.ancestors, key);
+        self.rc.accounts.accounts_db.load_account_into_read_cache(
+            &self.ancestors,
+            key,
+            self.return_none_for_zero_lamport_accounts(),
+        );
     }
 
     pub fn update_accounts_hash_with_index_option(
@@ -7620,6 +7631,11 @@ impl Bank {
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::send_to_tpu_vote_port::id())
+    }
+
+    pub fn return_none_for_zero_lamport_accounts(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::return_none_for_zero_lamport_accounts::id())
     }
 
     fn preserve_rent_epoch_for_rent_exempt_accounts(&self) -> bool {
