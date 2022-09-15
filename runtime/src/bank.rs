@@ -4197,12 +4197,13 @@ impl Bank {
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        let new_scheduler = Scheduler::default();
+        //let new_scheduler = Scheduler::default();
         if maybe_last_error.is_err() {
             warn!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
-            new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
+            //new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
+            *self.scheduler.write().unwrap().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
         }
-        *self.scheduler.write().unwrap() = new_scheduler;
+        //*self.scheduler.write().unwrap() = new_scheduler;
 
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: end", self.slot());
 
