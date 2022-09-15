@@ -1533,14 +1533,25 @@ impl ScheduleStage {
                        }
                    }
                    recv(from_prev) -> maybe_from => {
-                       if let Ok(SchedulablePayload(task)) = maybe_from {
-                           Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                       } else {
-                           assert_eq!(from_prev.len(), 0);
-                           assert!(!from_disconnected);
-                           from_disconnected = true;
-                           from_prev = never;
-                           trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                       match maybe_from {
+                           Ok(SchedulablePayload(Flushable::Payload(task))) => {
+                                Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                           },
+                           Ok(SchedulablePayload(Flushable::Flush(checkpoint_in_payload)) => {
+                               assert_eq!(from_prev.len(), 0);
+                               assert!(!from_disconnected);
+                               from_disconnected = true;
+                               from_prev = never;
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               checkpoint = checkpoint_in_payload;
+                           },
+                           Err(_) {
+                               assert_eq!(from_prev.len(), 0);
+                               assert!(!from_disconnected);
+                               from_disconnected = true;
+                               from_prev = never;
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                           },
                        }
                    }
                 }
