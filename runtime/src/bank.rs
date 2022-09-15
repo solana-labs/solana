@@ -3913,8 +3913,13 @@ impl Bank {
             self.runtime_config.transaction_account_lock_limit
         {
             transaction_account_lock_limit
-        } else {
+        } else if self
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
             MAX_TX_ACCOUNT_LOCKS
+        } else {
+            64
         }
     }
 
@@ -8135,7 +8140,6 @@ pub(crate) mod tests {
             },
             system_program,
             timing::duration_as_s,
-            transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::IndexOfAccount,
         },
         solana_vote_program::{
@@ -14361,7 +14365,8 @@ pub(crate) mod tests {
             bank.last_blockhash(),
         );
 
-        while tx.message.account_keys.len() <= MAX_TX_ACCOUNT_LOCKS {
+        let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
+        while tx.message.account_keys.len() <= transaction_account_lock_limit {
             tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
         }
 

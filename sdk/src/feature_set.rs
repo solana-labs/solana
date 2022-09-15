@@ -526,6 +526,10 @@ pub mod remove_deprecated_request_unit_ix {
     solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
 }
 
+pub mod increase_tx_account_lock_limit {
+    solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -652,6 +656,7 @@ lazy_static! {
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
+        (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -1288,7 +1288,7 @@ fn test_program_bpf_invoke_sanity() {
                 format!("Program log: invoke {program_lang} program"),
                 "Program log: Test max account infos exceeded".into(),
                 "skip".into(), // don't compare compute consumption logs
-                "Program failed to complete: Invoked an instruction with too many account info's (65 > 64)".into(),
+                "Program failed to complete: Invoked an instruction with too many account info's (129 > 128)".into(),
                 format!("Program {invoke_program_id} failed: Program failed to complete"),
             ]),
         );
