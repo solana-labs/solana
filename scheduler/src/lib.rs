@@ -1735,6 +1735,7 @@ impl ScheduleStage {
         maybe_checkpoint
     }
 
+    #[must_use]
     pub fn run(
         random_id: u64,
         max_executing_queue_count: usize,
@@ -1744,7 +1745,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
-    ) {
+    ) -> Option<std::sync::Arc<Checkpoint> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
