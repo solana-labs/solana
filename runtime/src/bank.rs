@@ -1207,11 +1207,12 @@ impl SchedulerPool {
         }
     }
 
-    fn take_from_pool(&mut self) -> Scheduler {
+    fn take_from_pool(&mut self) -> Arc<Scheduler> {
         todo!()
     }
 
-    fn return_to_pool(&mut self, _: Scheduler) {
+    fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
+        assert_eq!(1, Arc::strong_count(&scheduler));
         todo!()
     }
 }
