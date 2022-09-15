@@ -1457,12 +1457,19 @@ impl ScheduleStage {
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                     let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
-                        assert!(a.task.lock_attempts_not_mut(nast).is_empty());
-                        //assert!(a.task.sequence_time() != usize::max_value());
-                        //let lock_attempts = std::mem::take(&mut a.lock_attempts);
-                        //drop(lock_attempts);
-                        //TaskInQueue::get_mut(&mut a.task).unwrap();
+                    while let Ok(flushable_payload) = ee_receiver.recv() {
+                        match flushable_payload {
+                            Flush => {
+                                continue;
+                            }
+                            Payload(ExaminablePayload(a)) => {
+                                assert!(a.task.lock_attempts_not_mut(nast).is_empty());
+                                //assert!(a.task.sequence_time() != usize::max_value());
+                                //let lock_attempts = std::mem::take(&mut a.lock_attempts);
+                                //drop(lock_attempts);
+                                //TaskInQueue::get_mut(&mut a.task).unwrap();
+                            }
+                        }
                     }
                     assert_eq!(ee_receiver.len(), 0);
                     Ok::<(), ()>(())
