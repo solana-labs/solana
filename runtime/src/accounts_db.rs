@@ -123,6 +123,17 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+/// specifies how to return zero lamport accounts
+/// This will only be useful until a feature activation occurs.
+#[derive(Clone, Copy)]
+pub enum LoadZeroLamports {
+    /// return None if loaded account has zero lamports
+    None,
+    /// return Some(account with zero lamports) if loaded account has zero lamports
+    /// Today this is the default. With feature activation, this will no longer be possible.
+    SomeWithZeroLamportAccount,
+}
+
 pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
@@ -3349,8 +3360,15 @@ impl AccountsDb {
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
+            .filter(|(account, _)| {
+                matches!(
+                    load_zero_lamports,
+                    LoadZeroLamports::SomeWithZeroLamportAccount
+                ) || !account.is_zero_lamport()
+            })
     }
 
     pub fn load_without_fixed_root(
@@ -11691,13 +11709,13 @@ pub mod tests {
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
@@ -11705,10 +11723,9 @@ pub mod tests {
         db.store_cached(2, &[(&account_key, &zero_lamport_account)]);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
-            .map(|(account, _)| account)
-            .unwrap();
-        assert_eq!(account.lamports(), 0);
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
+            .map(|(account, _)| account);
+        assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
