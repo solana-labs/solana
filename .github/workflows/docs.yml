@@ -42,14 +42,14 @@ jobs:
         run: |
           echo "tag: ${{ steps.check.outputs.tag }}"
           echo "channel: ${{ steps.check.outputs.channel }}"
-          echo "any changes: ${{ steps.changed-files-specific.outputs.any_change }}"
+          echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
           echo "::set-output name=need_to_build::${{
             steps.check.outputs.tag != ''
             ||
             (
               (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
               &&
-              steps.changed-files-specific.outputs.any_change != ''
+              steps.changed-files-specific.outputs.any_changed != ''
             )
           }}"
         shell: bash
