@@ -1675,7 +1675,7 @@ impl ScheduleStage {
                             &mut commit_clock,
                             &mut provisioning_tracker_count,
                         );
-                        to_next_stage.send(ExaminablePayload(processed_execution_environment)).unwrap();
+                        to_next_stage.send(ExaminablePayload(Flushable::Payload(processed_execution_environment))).unwrap();
                     }
                     if !empty_from {
                         let task = from_prev.recv().unwrap().0;
