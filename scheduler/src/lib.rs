@@ -1698,12 +1698,13 @@ impl ScheduleStage {
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
                         match schedulable {
-                            Flushable::Flush(checkpoint) => {
+                            Flushable::Flush(checkpoint_in_payload) => {
                                assert!(empty_from);
                                assert_eq!(from_prev.len(), 0);
                                assert!(!from_disconnected);
                                from_disconnected = true;
                                from_prev = never;
+                               checkpoint = Some(checkpoint_in_payload);
                             },
                             Flushable::Payload(task) => {
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
