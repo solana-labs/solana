@@ -2223,7 +2223,14 @@ mod tests {
             info!("creating shreds");
             let mut last_print = Instant::now();
             for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(&entries, i, i - 1, true, 1);
+                let shreds = blockstore::entries_to_test_shreds(
+                    &entries,
+                    i,     // slot
+                    i - 1, // parent_slot
+                    true,  // is_full_slot
+                    1,     // version
+                    true,  // merkle_variant
+                );
                 blockstore.insert_shreds(shreds, None, true).unwrap();
                 if last_print.elapsed().as_millis() > 5000 {
                     info!("inserted {}", i);

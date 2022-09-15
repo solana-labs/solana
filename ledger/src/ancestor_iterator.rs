@@ -124,11 +124,11 @@ mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let (shreds, _) = make_slot_entries(0, 0, 42);
+        let (shreds, _) = make_slot_entries(0, 0, 42, /*merkle_variant:*/ true);
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        let (shreds, _) = make_slot_entries(1, 0, 42);
+        let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        let (shreds, _) = make_slot_entries(2, 1, 42);
+        let (shreds, _) = make_slot_entries(2, 1, 42, /*merkle_variant:*/ true);
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         assert_eq!(
