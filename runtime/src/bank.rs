@@ -1471,7 +1471,7 @@ impl Scheduler {
 
 impl Scheduler {
     fn gracefully_stop(&self) -> Result<()> {
-        if self.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst); {
+        if self.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst) {
             info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
             return Ok(());
         }
