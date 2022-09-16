@@ -14,7 +14,7 @@ use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
-    std::{rc::Rc, sync::Arc},
+    std::sync::Arc,
 };
 
 const MAX_STAKED_VALIDATORS: usize = 10_000;
@@ -203,7 +203,7 @@ impl UnprocessedTransactionStorage {
         batch_size: usize,
         processing_function: F,
     ) where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         match (self, bank) {
             (Self::LocalTransactionStorage(transaction_storage), _) => {
@@ -273,7 +273,7 @@ impl VoteStorage {
 
     fn process_packets<F>(&mut self, bank: Arc<Bank>, batch_size: usize, mut processing_function: F)
     where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         if matches!(self.vote_source, VoteSource::Gossip) {
             panic!("Gossip vote thread should not be processing transactions");
@@ -370,7 +370,7 @@ impl ThreadLocalUnprocessedPackets {
 
     fn process_packets<F>(&mut self, batch_size: usize, mut processing_function: F)
     where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         let mut retryable_packets = {
             let capacity = self.unprocessed_packet_batches.capacity();
@@ -379,7 +379,7 @@ impl ThreadLocalUnprocessedPackets {
                 MinMaxHeap::with_capacity(capacity),
             )
         };
-        let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+        let retryable_packets: MinMaxHeap<Arc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
             .chunks(batch_size)
             .into_iter()
