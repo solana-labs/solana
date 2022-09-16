@@ -8268,6 +8268,7 @@ impl Bank {
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let s: Option<Arc<Scheduler>> = self.scheduler2.write().unwrap().take();
+
         if let Some(scheduler) = s {
             scheduler.gracefully_stop().unwrap();
             let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
