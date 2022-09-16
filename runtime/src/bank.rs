@@ -8248,7 +8248,7 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
-        let scheduler = self.scheduler.write().unwrap().take().unwrap();
+        let scheduler = self.scheduler2.write().unwrap().take().unwrap();
         scheduler.gracefully_stop().unwrap();
         let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
         SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
