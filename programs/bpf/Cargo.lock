@@ -5828,7 +5828,6 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-sdk 1.15.0",
- "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
