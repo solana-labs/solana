@@ -6596,6 +6596,7 @@ impl Bank {
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
+                drop(ss);
                 info!("reconfiguring is done");
                 self.scheduler2.read().unwrap()
             } else {
