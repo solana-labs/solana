@@ -22,8 +22,8 @@ use {
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         transaction_scheduler::{
-            BankingProcessingInstruction, ProcessedPacketBatch, ScheduledPacketBatch,
-            TransactionSchedulerBankingHandle,
+            priority_queue_scheduler::PriorityQueueScheduler, BankingProcessingInstruction,
+            ProcessedPacketBatch, ScheduledPacketBatch, TransactionSchedulerBankingHandle,
         },
         unprocessed_packet_batches::{self, *},
     },
@@ -533,25 +533,48 @@ impl BankingStage {
             .name(format!("solBanknStgTx{:02}", id))
             .spawn(move || {
                 let mut recv_start = Instant::now();
-                Self::process_loop(
-                    &mut deserialized_packet_batch_getter,
-                    &poh_recorder,
-                    &banking_decision_maker,
-                    &cluster_info,
-                    &mut recv_start,
-                    forward_option,
-                    id,
+                let mut transaction_scheduler_handle = PriorityQueueScheduler::new(
+                    deserialized_packet_batch_getter,
+                    banking_decision_maker,
+                    bank_forks.clone(),
                     batch_limit,
+                );
+                Self::new_process_loop(
+                    id,
+                    &mut transaction_scheduler_handle,
+                    &poh_recorder,
+                    &cluster_info,
+                    &forward_option,
                     transaction_status_sender,
-                    gossip_vote_sender,
+                    &gossip_vote_sender,
                     &data_budget,
                     cost_model,
                     log_messages_bytes_limit,
-                    connection_cache,
+                    &connection_cache,
                     &bank_forks,
                 );
 
-                deserialized_packet_batch_getter.join().unwrap();
+                transaction_scheduler_handle.join().unwrap();
+                // Self::new_process_loop(transaction_scheduler_handle, my_pubkey, socket, poh_recorder, banking_decision_maker, cluster_info, buffered_packet_batches, forward_option, transaction_status_sender, gossip_vote_sender, banking_stage_stats, recorder, data_budget, qos_service, slot_metrics_tracker, log_messages_bytes_limit, connection_cache, banking_tracer_packet_stats, bank_forks)
+                // Self::process_loop(
+                //     &mut deserialized_packet_batch_getter,
+                //     &poh_recorder,
+                //     &banking_decision_maker,
+                //     &cluster_info,
+                //     &mut recv_start,
+                //     forward_option,
+                //     id,
+                //     batch_limit,
+                //     transaction_status_sender,
+                //     gossip_vote_sender,
+                //     &data_budget,
+                //     cost_model,
+                //     log_messages_bytes_limit,
+                //     connection_cache,
+                //     &bank_forks,
+                // );
+
+                // deserialized_packet_batch_getter.join().unwrap();
             })
             .unwrap()
     }
@@ -1184,9 +1207,7 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        banking_decision_maker: &BankingDecisionMaker,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_option: &ForwardOption,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -1235,51 +1256,52 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn new_process_loop<S>(
+        id: u32,
         transaction_scheduler_handle: &mut S,
-        my_pubkey: &Pubkey,
-        socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        banking_decision_maker: &BankingDecisionMaker,
         cluster_info: &ClusterInfo,
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_option: &ForwardOption,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
-        banking_stage_stats: &BankingStageStats,
-        recorder: &TransactionRecorder,
         data_budget: &DataBudget,
-        qos_service: &QosService,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        cost_model: Arc<RwLock<CostModel>>,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &ConnectionCache,
-        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) where
         S: TransactionSchedulerBankingHandle,
     {
+        let recorder = poh_recorder.read().unwrap().recorder();
+        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut banking_stage_stats = BankingStageStats::new(id);
+        let mut banking_tracer_packet_stats = IntervalBankingStageTracerPacketStats::new(id);
+        let qos_service = QosService::new(cost_model, id);
+
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
+        let mut last_metrics_update = Instant::now();
+        let my_pubkey = cluster_info.id();
+
         const RECV_TIMEOUT: Duration = Duration::from_millis(10);
         loop {
             match transaction_scheduler_handle.get_next_transaction_batch(RECV_TIMEOUT) {
                 Ok(scheduled_packet_batch) => {
                     let processed_packet_batch = Self::process_scheduled_packet_batch(
                         &scheduled_packet_batch,
-                        my_pubkey,
-                        socket,
+                        &my_pubkey,
+                        &socket,
                         poh_recorder,
-                        banking_decision_maker,
                         cluster_info,
-                        buffered_packet_batches,
                         forward_option,
                         &transaction_status_sender,
                         gossip_vote_sender,
-                        banking_stage_stats,
-                        recorder,
+                        &banking_stage_stats,
+                        &recorder,
                         data_budget,
-                        qos_service,
-                        slot_metrics_tracker,
+                        &qos_service,
+                        &mut slot_metrics_tracker,
                         log_messages_bytes_limit,
                         connection_cache,
-                        banking_tracer_packet_stats,
+                        &mut banking_tracer_packet_stats,
                         bank_forks,
                     );
                     transaction_scheduler_handle.complete_batch(processed_packet_batch);

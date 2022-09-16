@@ -21,6 +21,9 @@ pub trait TransactionSchedulerBankingHandle {
 
     /// Signal that the current batch of transactions has been processed.
     fn complete_batch(&mut self, batch: ProcessedPacketBatch);
+
+    /// Join thread(s) for scheduler if they exist
+    fn join(self) -> std::thread::Result<()>;
 }
 
 /// Message: [Scheduler -> BankingStage]

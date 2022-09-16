@@ -37,7 +37,7 @@ pub struct PriorityQueueScheduler<D: DeserializedPacketBatchGetter> {
     /// Forward packet filter
     forward_filter: Option<ForwardPacketBatchesByAccounts>,
     /// Determines how the scheduler should handle packets currently.
-    banking_descision_maker: BankingDecisionMaker,
+    banking_decision_maker: Arc<BankingDecisionMaker>,
     /// Scheduled batch currently being processed.
     current_batch: Option<(Rc<ScheduledPacketBatch>, BankPacketProcessingDecision)>,
     /// Generator for unique batch identifiers.
@@ -59,7 +59,7 @@ where
             self.receive_and_buffer_packets(timeout)?;
         }
 
-        let decision = self.banking_descision_maker.make_decision();
+        let decision = self.banking_decision_maker.make_decision();
         // If we're consuming, we should move held packets back into the queue.
         if matches!(decision, BankPacketProcessingDecision::Consume(_)) {}
         match decision {
@@ -206,6 +206,10 @@ where
             }
         }
     }
+
+    fn join(self) -> std::thread::Result<()> {
+        self.deserialized_packet_batch_getter.join()
+    }
 }
 
 impl<D> PriorityQueueScheduler<D>
@@ -214,7 +218,7 @@ where
 {
     pub fn new(
         deserialized_packet_batch_getter: D,
-        banking_descision_maker: BankingDecisionMaker,
+        banking_decision_maker: Arc<BankingDecisionMaker>,
         bank_forks: Arc<RwLock<BankForks>>,
         capacity: usize,
     ) -> Self {
@@ -222,7 +226,7 @@ where
             deserialized_packet_batch_getter,
             unprocessed_packets: UnprocessedPacketBatches::with_capacity(capacity),
             held_packets: Vec::default(),
-            banking_descision_maker,
+            banking_decision_maker,
             current_batch: None,
             batch_id_generator: ScheduledPacketBatchIdGenerator::default(),
             bank_forks,
