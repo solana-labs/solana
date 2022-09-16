@@ -6566,7 +6566,7 @@ impl Bank {
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
                 let ss = self.scheduler.write().unwrap();
-                let mut w = ss.as_ref().unwrap();
+                let w = ss.as_ref().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
