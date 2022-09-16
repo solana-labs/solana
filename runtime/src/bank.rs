@@ -8410,7 +8410,7 @@ pub struct TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        let r = self.wait_for_scheduler(true).unwrap();
+        let r = self.wait_for_scheduler(true);
         if let Err(err) = r {
             warn!("Bank::drop(): discarding error from scheduler: {:?}", err);
         }
