@@ -1780,7 +1780,7 @@ impl Checkpoint {
             info!("Checkpoint::wait_for_restart: {} notified all others...", current_thread_name);
         } else {
             info!("Checkpoint::wait_for_restart: {} is paused...", current_thread_name);
-            let _ = *self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads == 0).unwrap();
+            let _ = *self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads > 0).unwrap();
             info!("Checkpoint::wait_for_restart: {} is started...", current_thread_name);
         }
     }
