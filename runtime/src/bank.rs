@@ -3768,7 +3768,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            assert!(self.scheduler2.read().unwrap().as_ref().unwrap().is_none());
+            assert!(self.scheduler2.read().unwrap().is_none());
             // finish up any deferred changes to account state
             self.collect_rent_eagerly(false);
             self.collect_fees();
