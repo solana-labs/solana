@@ -623,11 +623,7 @@ pub mod layout {
                 merkle::ShredData::get_signed_message_range(proof_size)?
             }
         };
-<<<<<<< HEAD
-        (shred.len() <= range.end).then(|| range)
-=======
-        (range.end <= shred.len()).then_some(range)
->>>>>>> b183e00dc (patches range check in shred::layout::get_signed_message_range (#27822))
+        (range.end <= shred.len()).then(|| range)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
