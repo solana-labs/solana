@@ -1251,7 +1251,7 @@ struct Scheduler {
 
 impl Scheduler {
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
-        info!("Scheduler::schedule()");
+        trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
@@ -6583,14 +6583,14 @@ impl Bank {
         transaction_indexes: &Vec<usize>,
     ) {
         assert_eq!(bank.slot(), batch.bank().slot());
-        info!("schedule_and_commit_transactions()");
+        trace!("schedule_and_commit_transactions(): [{:?}; {}]", transaction_indexes.iter().next(), transaction_indexes.len());
 
         let s = {
             let r = self.scheduler2.read().unwrap();
 
             if r.as_ref().unwrap().bank.read().unwrap().is_none() {
                 drop(r);
-                info!("reconfiguring scheduler with new bank...");
+                //info!("reconfiguring scheduler with new bank...");
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
                 let ss = self.scheduler2.write().unwrap();
@@ -6599,8 +6599,10 @@ impl Bank {
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 drop(ss);
-                info!("reconfiguring is done");
-                self.scheduler2.read().unwrap()
+
+                let s = self.scheduler2.read().unwrap();
+                info!("reconfigured scheduler to the bank slot: {}", self.slot());
+                s
             } else {
                 assert_eq!(bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
                 r
