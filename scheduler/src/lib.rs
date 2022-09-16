@@ -1768,7 +1768,7 @@ impl ScheduleStage {
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub struct ExaminablePayload(pub Flushable<Box<ExecutionEnvironment>>);
+pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
 
 pub struct Checkpoint(pub std::sync::Mutex<usize>, pub std::sync::Condvar);
 
