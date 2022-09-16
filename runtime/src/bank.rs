@@ -1251,6 +1251,7 @@ struct Scheduler {
 
 impl Scheduler {
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
+        info!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
@@ -1524,6 +1525,7 @@ impl Drop for Scheduler {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("Scheduler::drop() by {}...", current_thread_name);
+        todo!();
         //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
         //self.gracefully_stop().unwrap();
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
@@ -1534,6 +1536,7 @@ impl Drop for SchedulerPool {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("SchedulerPool::drop() by {}...", current_thread_name);
+        todo!();
         //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
         //self.gracefully_stop().unwrap();
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
@@ -6574,6 +6577,7 @@ impl Bank {
         transaction_indexes: &Vec<usize>,
     ) {
         assert_eq!(bank.slot(), batch.bank().slot());
+        info!("schedule_and_commit_transactions()");
 
         let s = {
             let r = self.scheduler2.read().unwrap();
