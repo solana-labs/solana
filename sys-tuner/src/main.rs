@@ -67,18 +67,33 @@ fn tune_poh_service_priority(uid: u32) {
 
 #[cfg(target_os = "linux")]
 fn tune_kernel_udp_buffers_and_vmmap() {
-    use sysctl::{CtlValue::String, Sysctl};
-    fn sysctl_write(name: &str, value: &str) {
+    use sysctl::{CtlValue::String, Sysctl, SysctlError};
+    fn sysctl_increase_to(name: &str, value: i64) {
         if let Ok(ctl) = sysctl::Ctl::new(name) {
-            info!("Old {} value {:?}", name, ctl.value());
-            let ctl_value = String(value.to_string());
-            match ctl.set_value(String(value.to_string())) {
-                Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
-                Ok(v) => info!(
-                    "Update returned success but {} was set to {:?}, instead of {:?}",
-                    name, v, ctl_value
-                ),
-                Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
+            if let Ok(old_value) = ctl.value().and_then(|v| {
+                v.to_string()
+                    .parse::<i64>()
+                    .map_err(|_| SysctlError::ParseError)
+            }) {
+                if old_value < value {
+                    info!("Old {} value {}", name, old_value);
+                    let ctl_value = String(value.to_string());
+                    match ctl.set_value(String(value.to_string())) {
+                        Ok(v) if v == ctl_value => info!("Updated {} to {:?}", name, ctl_value),
+                        Ok(v) => info!(
+                            "Update returned success but {} was set to {:?}, instead of {:?}",
+                            name, v, ctl_value
+                        ),
+                        Err(e) => error!("Failed to set {} to {:?}. Err {:?}", name, ctl_value, e),
+                    }
+                } else {
+                    info!(
+                        "Current {} value ({}) >= new value ({}), not changing",
+                        name, old_value, value
+                    );
+                }
+            } else {
+                error!("Failed to read current value of sysctl {} as i64", name);
             }
         } else {
             error!("Failed to find sysctl {}", name);
@@ -86,13 +101,13 @@ fn tune_kernel_udp_buffers_and_vmmap() {
     }
 
     // Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
-    sysctl_write("net.core.rmem_max", "134217728");
-    sysctl_write("net.core.rmem_default", "134217728");
-    sysctl_write("net.core.wmem_max", "134217728");
-    sysctl_write("net.core.wmem_default", "134217728");
+    sysctl_increase_to("net.core.rmem_max", 134217728);
+    sysctl_increase_to("net.core.rmem_default", 134217728);
+    sysctl_increase_to("net.core.wmem_max", 134217728);
+    sysctl_increase_to("net.core.wmem_default", 134217728);
 
     // increase mmap counts for many append_vecs
-    sysctl_write("vm.max_map_count", "1000000");
+    sysctl_increase_to("vm.max_map_count", 1000000);
 }
 
 #[cfg(unix)]
