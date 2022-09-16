@@ -8257,6 +8257,9 @@ impl Bank {
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
+            let current_thread_name = std::thread::current().name().unwrap().to_string();
+            warn!("Bank::wait_for_scheduler() skipped by {} ...", current_thread_name);
+
             Ok(())
         }
     }
