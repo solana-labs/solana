@@ -1225,7 +1225,7 @@ impl SchedulerPool {
         info!("SchedulerPool: id_{:016x} is returned... len: {} => {}", scheduler.random_id, self.schedulers.len(), self.schedulers.len() + 1);
         assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_errors.lock().unwrap().is_empty());
-        assert!(scheduler.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(scheduler.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst));
 
         scheduler.graceful_stop_initiated.store(false, std::sync::atomic::Ordering::SeqCst);
 
