@@ -252,7 +252,9 @@ where
     fn move_held_packets(&mut self) {
         // Push elements until we hit capacity
         let remaining_capacity = self.get_remaining_capacity();
-        let held_packets = self.held_packets.drain(..remaining_capacity);
+        let held_packets = self
+            .held_packets
+            .drain(..remaining_capacity.min(self.held_packets.len()));
         for packet in held_packets.take(remaining_capacity) {
             self.unprocessed_packets.packet_priority_queue.push(packet);
         }
