@@ -14,7 +14,7 @@ use {
     solana_account_decoder::parse_token::spl_token_ids,
     solana_sdk::{
         instruction::CompiledInstruction, message::AccountKeys, pubkey::Pubkey, stake,
-        system_program,
+        system_program, vote,
     },
     std::{
         collections::HashMap,
@@ -32,7 +32,7 @@ lazy_static! {
     static ref MEMO_V3_PROGRAM_ID: Pubkey = spl_memo_id_v3();
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
-    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
+    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
         m.insert(
