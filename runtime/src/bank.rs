@@ -1516,6 +1516,10 @@ impl Scheduler {
     }
 }
 
+impl !Default for Scheduler {
+}
+
+
 impl Drop for Scheduler {
     fn drop(&mut self) {
         todo!();
