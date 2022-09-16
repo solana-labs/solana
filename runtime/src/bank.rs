@@ -1389,6 +1389,8 @@ impl Scheduler {
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
+            todo!();
+
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap()}).collect();
 
@@ -1411,6 +1413,7 @@ impl Scheduler {
                         }
                         drop(ee);
             }
+            todo!();
 
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
@@ -1453,6 +1456,7 @@ impl Scheduler {
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
 
+            todo!();
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap();
 
@@ -6592,6 +6596,7 @@ impl Bank {
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
+                info!("reconfiguring is done");
                 self.scheduler2.read().unwrap()
             } else {
                 assert_eq!(bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
