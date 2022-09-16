@@ -1516,10 +1516,6 @@ impl Scheduler {
     }
 }
 
-impl !Default for (Option<Scheduler>, usize) {
-}
-
-
 impl Drop for Scheduler {
     fn drop(&mut self) {
         todo!();
@@ -1713,7 +1709,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler: RwLock<Option<Arc<Scheduler>>>,
+    scheduler2: RwLock<Option<Arc<Scheduler>>>,
 }
 
 struct VoteWithStakeDelegations {
