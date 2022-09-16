@@ -74,6 +74,11 @@ const BufferFromRawAccountData = coerce(
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
 /**
+ *  Number of times a websocket can fail before subscription is dropped.
+ */
+export const SUBSCRIPTION_ERROR_RETRY_LIMIT = 3;
+
+/**
  * HACK.
  * Copied from rpc-websockets/dist/lib/client.
  * Otherwise, `yarn build` fails with:
@@ -132,6 +137,10 @@ type StatefulSubscription = Readonly<
   | {
       serverSubscriptionId: ServerSubscriptionId;
       state: 'unsubscribed';
+    }
+  | {
+      retryCount: number;
+      state: 'error';
     }
 >;
 /**
@@ -5031,6 +5040,11 @@ export class Connection {
     const isCurrentConnectionStillActive = () => {
       return activeWebSocketGeneration === this._rpcWebSocketGeneration;
     };
+    const isErrorStatefulSubscription = (
+      s: Subscription,
+    ): s is Subscription & {retryCount: number} => {
+      return typeof (s as any).retryCount === 'number';
+    };
 
     await Promise.all(
       // Don't be tempted to change this to `Object.entries`. We call
@@ -5046,6 +5060,7 @@ export class Connection {
         switch (subscription.state) {
           case 'pending':
           case 'unsubscribed':
+          case 'error':
             if (subscription.callbacks.size === 0) {
               /**
                * You can end up here when:
@@ -5098,11 +5113,28 @@ export class Connection {
                 if (!isCurrentConnectionStillActive()) {
                   return;
                 }
-                // TODO: Maybe add an 'errored' state or a retry limit?
-                this._subscriptionsByHash[hash] = {
-                  ...subscription,
-                  state: 'pending',
-                };
+
+                const isErrorSubscription =
+                  isErrorStatefulSubscription(subscription);
+
+                if (isErrorSubscription && subscription.retryCount + 1 > 3) {
+                  console.error(
+                    `${method} error, max retries reached`,
+                    args,
+                    e instanceof Error ? e.message : `${e}`,
+                  );
+
+                  delete this._subscriptionsByHash[hash];
+                } else {
+                  this._subscriptionsByHash[hash] = {
+                    ...subscription,
+                    retryCount: isErrorSubscription
+                      ? subscription.retryCount + 1
+                      : 0,
+                    state: 'error',
+                  };
+                }
+
                 await this._updateSubscriptions();
               }
             })();
