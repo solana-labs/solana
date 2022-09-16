@@ -1516,7 +1516,7 @@ impl Scheduler {
     }
 }
 
-impl !Default for Option<Scheduler> {
+impl !Default for (Option<Scheduler>) {
 }
 
 
