@@ -35,7 +35,7 @@ pub(crate) mod executor_cache {
     impl Stats {
         pub fn submit(&self, slot: Slot) {
             let hits = self.hits.load(Relaxed);
-            let misses = self.misses.load(Relaxed) - hits;
+            let misses = self.misses.load(Relaxed);
             let insertions = self.insertions.load(Relaxed);
             let replacements = self.replacements.load(Relaxed);
             let one_hit_wonders = self.one_hit_wonders.load(Relaxed);
