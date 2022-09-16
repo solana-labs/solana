@@ -140,7 +140,7 @@ use {
         timing::years_as_slots,
         transaction::{
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
-            TransactionVerificationMode, VersionedTransaction,
+            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
             ExecutionRecord, InstructionTrace, TransactionAccount, TransactionContext,
@@ -3880,13 +3880,28 @@ impl Bank {
         }
     }
 
+    /// Get the max number of accounts that a transaction may lock in this block
+    pub fn get_transaction_account_lock_limit(&self) -> usize {
+        if self
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
+            MAX_TX_ACCOUNT_LOCKS
+        } else {
+            64
+        }
+    }
+
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
     pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
         let sanitized_txs = txs
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self.rc.accounts.lock_accounts(
+            sanitized_txs.iter(),
+            self.get_transaction_account_lock_limit(),
+        );
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3906,7 +3921,10 @@ impl Bank {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
+        let lock_results = self.rc.accounts.lock_accounts(
+            sanitized_txs.iter(),
+            self.get_transaction_account_lock_limit(),
+        );
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3919,7 +3937,10 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(txs.iter(), self.get_transaction_account_lock_limit());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3931,10 +3952,11 @@ impl Bank {
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts_with_results(transactions.iter(), transaction_results);
+        let lock_results = self.rc.accounts.lock_accounts_with_results(
+            transactions.iter(),
+            transaction_results,
+            self.get_transaction_account_lock_limit(),
+        );
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3943,7 +3965,9 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let lock_result = transaction.get_account_locks().map(|_| ());
+        let lock_result = transaction
+            .get_account_locks(self.get_transaction_account_lock_limit())
+            .map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.set_needs_unlock(false);
@@ -8065,7 +8089,6 @@ pub(crate) mod tests {
             system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
             system_program,
             timing::duration_as_s,
-            transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::InstructionContext,
         },
         solana_vote_program::{
@@ -14287,7 +14310,8 @@ pub(crate) mod tests {
             bank.last_blockhash(),
         );
 
-        while tx.message.account_keys.len() <= MAX_TX_ACCOUNT_LOCKS {
+        let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
+        while tx.message.account_keys.len() <= transaction_account_lock_limit {
             tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
         }
 
