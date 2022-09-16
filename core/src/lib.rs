@@ -72,6 +72,7 @@ pub mod system_monitor_service;
 mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;
+pub mod transaction_scheduler;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
