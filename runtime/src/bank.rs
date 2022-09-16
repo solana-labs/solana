@@ -6568,7 +6568,7 @@ impl Bank {
                 let ss = self.scheduler.write().unwrap();
                 let mut w = ss.as_ref().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
-                w.slot.as_ref().unwrap().store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
+                w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
