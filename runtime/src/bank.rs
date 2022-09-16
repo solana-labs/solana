@@ -1438,6 +1438,7 @@ impl Scheduler {
 
                 if let Some(checkpoint) = maybe_checkpoint {
                     checkpoint.wait_for_restart();
+                    continue;
                 } else {
                     break;
                 }
@@ -1482,7 +1483,7 @@ impl Scheduler {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(3);
+        let checkpoint = solana_scheduler::Checkpoint::new(2);
         self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)))).unwrap();
         checkpoint.wait_for_restart();
         {
