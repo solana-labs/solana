@@ -74,7 +74,7 @@ const BufferFromRawAccountData = coerce(
 export const BLOCKHASH_CACHE_TIMEOUT_MS = 30 * 1000;
 
 /**
- *  Number of times a websocket can fail before subscription is dropped.
+ *  Number of times a subscription update can fail before subscription is dropped.
  */
 export const SUBSCRIPTION_ERROR_RETRY_LIMIT = 3;
 
