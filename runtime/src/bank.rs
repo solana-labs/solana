@@ -1397,7 +1397,6 @@ impl Scheduler {
             }
 
             while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
-                    solana_scheduler::Flushable::Payload(mut ee) => {
                         if ee.is_aborted() {
                             warn!(
                                 "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
@@ -1406,7 +1405,6 @@ impl Scheduler {
                             collected_errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
                         }
                         drop(ee);
-                    },
             }
 
             Ok((started.0.elapsed(), started.1.elapsed()))
