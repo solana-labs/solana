@@ -1762,7 +1762,7 @@ pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
 
-pub struct Checkpoint(pub std::sync::Mutex<usize>, pub std::sync::Condvar);
+pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
 impl Checkpoint {
     pub fn wait_for_restart(&self) {
@@ -1775,7 +1775,7 @@ impl Checkpoint {
         if *remaining_threads_guard == 0 {
             drop(remaining_threads_guard);
             self.1.notify_all();
-            info!("Checkpoint::wait_for_restart: {} is notified all others...", current_thread_name);
+            info!("Checkpoint::wait_for_restart: {} notified all others...", current_thread_name);
         } else {
             info!("Checkpoint::wait_for_restart: {} is paused...", current_thread_name);
             let _ = *self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads == 0).unwrap();
