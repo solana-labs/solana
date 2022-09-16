@@ -3766,7 +3766,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            assert!(self.scheduler.read().unwrap().as_ref().unwrap().graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst));
+            assert!(self.scheduler2.read().unwrap().as_ref().unwrap().graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst));
             // finish up any deferred changes to account state
             self.collect_rent_eagerly(false);
             self.collect_fees();
@@ -4207,7 +4207,7 @@ impl Bank {
         if maybe_last_error.is_err() {
             warn!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
             //new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
-            self.scheduler.write().unwrap().as_ref().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
+            self.scheduler2.write().unwrap().as_ref().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
         }
         //*self.scheduler.write().unwrap() = new_scheduler;
 
@@ -6567,18 +6567,18 @@ impl Bank {
         assert_eq!(bank.slot(), batch.bank().slot());
 
         let s = {
-            let r = self.scheduler.read().unwrap();
+            let r = self.scheduler2.read().unwrap();
 
             if r.as_ref().unwrap().bank.read().unwrap().is_none() {
                 drop(r);
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
-                let ss = self.scheduler.write().unwrap();
+                let ss = self.scheduler2.write().unwrap();
                 let w = ss.as_ref().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
-                self.scheduler.read().unwrap()
+                self.scheduler2.read().unwrap()
             } else {
                 assert_eq!(bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
                 r
@@ -6594,7 +6594,7 @@ impl Bank {
     pub fn handle_aborted_transactions(
         &self,
     ) -> Vec<Result<()>> {
-        let s = self.scheduler.read().unwrap();
+        let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.handle_aborted_executions()
     }
