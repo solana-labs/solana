@@ -826,15 +826,19 @@ impl<'a> BorrowedAccount<'a> {
         Ok(self.account.data_as_mut_slice())
     }
 
-    /// Overwrites the account data and size (transaction wide)
+    /// Overwrites the account data and size (transaction wide).
+    ///
+    /// Call this when you have an owned buffer and want to replace the account
+    /// data with it.
+    ///
+    /// If you have a slice, use set_data_from_slice().
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+    pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
-        if data.len() == self.account.data().len() {
-            self.account.data_as_mut_slice().copy_from_slice(data);
-        } else {
+
+        if data.len() != self.account.data().len() {
             let mut accounts_resize_delta = self
                 .transaction_context
                 .accounts_resize_delta
@@ -842,8 +846,35 @@ impl<'a> BorrowedAccount<'a> {
                 .map_err(|_| InstructionError::GenericError)?;
             *accounts_resize_delta = accounts_resize_delta
                 .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
-            self.account.set_data_from_slice(data);
         }
+        self.account.set_data(data);
+
+        Ok(())
+    }
+
+    /// Overwrites the account data and size (transaction wide).
+    ///
+    /// Call this when you have a slice of data you do not own and want to
+    /// replace the account data with it.
+    ///
+    /// If you have an owned buffer (eg Vec<u8>), use set_data().
+    #[cfg(not(target_os = "solana"))]
+    pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        self.can_data_be_resized(data.len())?;
+        self.can_data_be_changed()?;
+        self.touch()?;
+
+        if data.len() != self.account.data().len() {
+            let mut accounts_resize_delta = self
+                .transaction_context
+                .accounts_resize_delta
+                .try_borrow_mut()
+                .map_err(|_| InstructionError::GenericError)?;
+            *accounts_resize_delta = accounts_resize_delta
+                .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
+        }
+        self.account.set_data_from_slice(data);
+
         Ok(())
     }
 
