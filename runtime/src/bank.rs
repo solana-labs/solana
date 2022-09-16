@@ -1213,7 +1213,7 @@ impl SchedulerPool {
 
     fn take_from_pool(&mut self) -> Arc<Scheduler> {
         if let Some(scheduler) = self.schedulers.pop() {
-            info!("SchedulerPool: id_{:016x} is taken...", scheduler.random_id);
+            info!("SchedulerPool: id_{:016x} is taken... len: {} => {}", scheduler.random_id, self.schedulers.len() + 1, self.schedulers.len());
             scheduler
         } else {
             self.create();
@@ -1222,9 +1222,13 @@ impl SchedulerPool {
     }
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
-        info!("SchedulerPool: id_{:016x} is returned...", scheduler.random_id);
+        info!("SchedulerPool: id_{:016x} is returned... len: {} => {}", scheduler.random_id, self.schedulers.len(), self.schedulers.len() + 1);
         assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_errors.lock().unwrap().is_empty());
+        assert!(scheduler.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst);
+
+        scheduler.graceful_stop_initiated.store(false, std::sync::atomic::Ordering::SeqCst);
+
         self.schedulers.push(scheduler);
     }
 }
