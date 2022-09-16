@@ -1242,7 +1242,7 @@ struct Scheduler {
     graceful_stop_initiated: bool,
     collected_errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
-    slot: Option<AtomicU64>,
+    slot: AtomicU64,
 }
 
 impl Scheduler {
