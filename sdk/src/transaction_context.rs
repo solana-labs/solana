@@ -893,6 +893,24 @@ impl<'a> BorrowedAccount<'a> {
         }
     }
 
+    /// Appends all elements in a slice to the account
+    #[cfg(not(target_os = "solana"))]
+    pub fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        let new_len = self.get_data().len().saturating_add(data.len());
+        self.can_data_be_resized(new_len)?;
+        self.can_data_be_changed()?;
+
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        self.touch()?;
+        self.update_accounts_resize_delta(new_len)?;
+
+        self.account.data_mut().extend_from_slice(data);
+        Ok(())
+    }
+
     /// Deserializes the account data into a state
     #[cfg(not(target_os = "solana"))]
     pub fn get_state<T: serde::de::DeserializeOwned>(&self) -> Result<T, InstructionError> {
