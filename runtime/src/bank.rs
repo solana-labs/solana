@@ -1239,7 +1239,7 @@ struct Scheduler {
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
-    graceful_stop_initiated: bool,
+    graceful_stop_initiated: AtomicBool,
     collected_errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
@@ -1471,11 +1471,11 @@ impl Scheduler {
 
 impl Scheduler {
     fn gracefully_stop(&self) -> Result<()> {
-        if self.graceful_stop_initiated {
+        if self.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst); {
             info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
             return Ok(());
         }
-        self.graceful_stop_initiated = true;
+        self.graceful_stop_initiated.store(true, std::sync::atomic::Ordering::SeqCst);
 
         info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
         //let transaction_sender = self.transaction_sender.take().unwrap();
@@ -3766,7 +3766,7 @@ impl Bank {
         // committed before this write lock can be obtained here.
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
-            assert!(self.scheduler.read().unwrap().as_ref().unwrap().graceful_stop_initiated);
+            assert!(self.scheduler.read().unwrap().as_ref().unwrap().graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst);
             // finish up any deferred changes to account state
             self.collect_rent_eagerly(false);
             self.collect_fees();
