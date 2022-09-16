@@ -1229,7 +1229,7 @@ impl SchedulerPool {
     }
 }
 
-const SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
+const SCHEDULER_POOL: std::sync::Arc<std::sync::Mutex<SchedulerPool>> = std::sync::Arc::new(std::sync::Mutex::new(SchedulerPool::new()));
 
 #[derive(Debug)]
 struct Scheduler {
@@ -8257,7 +8257,7 @@ impl Bank {
         if let Some(scheduler) = s {
             scheduler.gracefully_stop().unwrap();
             let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
-            SCHEDULER_POOL.lock().unwrap().as_ref().return_to_pool(scheduler);
+            SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
