@@ -1229,7 +1229,7 @@ impl SchedulerPool {
     }
 }
 
-static SCHEDULER_POOL: std::sync::Arc<std::sync::Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
+static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
 
 #[derive(Debug)]
 struct Scheduler {
