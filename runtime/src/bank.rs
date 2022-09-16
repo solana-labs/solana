@@ -1114,7 +1114,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
-            scheduler: _,
+            scheduler2: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1900,7 +1900,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
+            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -2140,7 +2140,7 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let scheduler = Default::default();
+        let scheduler = RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())); // Default::default();
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
@@ -2221,7 +2221,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            scheduler
+            scheduler2: scheduler,
         };
 
         let (_, ancestors_time) = measure!(
@@ -2566,7 +2566,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler: Default::default(),
+            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())); // Default::default();Default::default(),
         };
         bank.finish_init(
             genesis_config,
