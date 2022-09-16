@@ -1518,7 +1518,8 @@ impl Scheduler {
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
-        todo!();
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        warn!("Scheduler::drop() by {}...", current_thread_name);
         //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
         //self.gracefully_stop().unwrap();
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
@@ -1527,7 +1528,8 @@ impl Drop for Scheduler {
 
 impl Drop for SchedulerPool {
     fn drop(&mut self) {
-        todo!();
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
+        warn!("SchedulerPool::drop() by {}...", current_thread_name);
         //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
         //self.gracefully_stop().unwrap();
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
