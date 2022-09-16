@@ -1538,6 +1538,7 @@ impl ScheduleStage {
                                from_disconnected = true;
                                from_prev = never;
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               assert!(maybe_checkpoint.is_none());
                                maybe_checkpoint = Some(checkpoint);
                            },
                            Err(_) => {
@@ -1697,6 +1698,7 @@ impl ScheduleStage {
                                assert!(!from_disconnected);
                                from_disconnected = true;
                                from_prev = never;
+                               assert!(maybe_checkpoint.is_none());
                                maybe_checkpoint = Some(checkpoint);
                             },
                             Flushable::Payload(task) => {
