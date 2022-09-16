@@ -1471,13 +1471,11 @@ impl Scheduler {
 
 impl Scheduler {
     fn gracefully_stop(&self) -> Result<()> {
-        /*
         if self.graceful_stop_initiated {
             info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
             return Ok(());
         }
         self.graceful_stop_initiated = true;
-        */
 
         info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
         //let transaction_sender = self.transaction_sender.take().unwrap();
