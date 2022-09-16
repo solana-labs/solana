@@ -386,6 +386,11 @@ impl Rocks {
         Ok(opt)
     }
 
+    fn get_pinned_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
+        let opt = self.db.get_pinned_cf(cf, key)?;
+        Ok(opt)
+    }
+
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.db.put_cf(cf, key, value)?;
         Ok(())
@@ -1017,9 +1022,11 @@ impl Database {
     where
         C: TypedColumn + ColumnName,
     {
-        if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self
+            .backend
+            .get_pinned_cf(self.cf_handle::<C>(), &C::key(key))?
+        {
+            let value = deserialize(pinnable_slice.as_ref())?;
             Ok(Some(value))
         } else {
             Ok(None)
@@ -1287,9 +1294,8 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), &C::key(key))? {
+            let value = deserialize(pinnable_slice.as_ref())?;
             result = Ok(Some(value))
         }
 
@@ -1356,7 +1362,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1366,10 +1372,10 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            let value = match C::Type::decode(&serialized_value[..]) {
+        if let Some(pinnable_slice) = result? {
+            let value = match C::Type::decode(pinnable_slice.as_ref()) {
                 Ok(value) => value,
-                Err(_) => deserialize::<T>(&serialized_value)?.into(),
+                Err(_) => deserialize::<T>(pinnable_slice.as_ref())?.into(),
             };
             Ok(Some(value))
         } else {
@@ -1382,7 +1388,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1392,8 +1398,8 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            Ok(Some(C::Type::decode(&serialized_value[..])?))
+        if let Some(pinnable_slice) = result? {
+            Ok(Some(C::Type::decode(pinnable_slice.as_ref())?))
         } else {
             Ok(None)
         }
