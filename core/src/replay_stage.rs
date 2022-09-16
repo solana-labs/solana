@@ -2472,7 +2472,7 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
-                let r = bank.wait_for_scheduler();
+                let r = bank.wait_for_scheduler(false);
                 if let Err(err) = r {
                     // Error means the slot needs to be marked as dead
                     Self::mark_dead_slot(
