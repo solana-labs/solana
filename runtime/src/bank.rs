@@ -1,3 +1,5 @@
+#![feature(negative_impls)]
+
 //! The `bank` module tracks client accounts and the progress of on-chain
 //! programs.
 //!
