@@ -4,8 +4,9 @@ use {
     },
     bincode::deserialize,
     serde_json::json,
-    solana_sdk::{instruction::CompiledInstruction, message::AccountKeys},
-    solana_vote_program::vote_instruction::VoteInstruction,
+    solana_sdk::{
+        instruction::CompiledInstruction, message::AccountKeys, vote::instruction::VoteInstruction,
+    },
 };
 
 pub fn parse_vote(
@@ -216,10 +217,22 @@ fn check_num_vote_accounts(accounts: &[u8], num: usize) -> Result<(), ParseInstr
 mod test {
     use {
         super::*,
+<<<<<<< HEAD
         solana_sdk::{hash::Hash, message::Message, pubkey::Pubkey, sysvar},
         solana_vote_program::{
             vote_instruction,
             vote_state::{Vote, VoteAuthorize, VoteInit},
+=======
+        solana_sdk::{
+            hash::Hash,
+            message::Message,
+            pubkey::Pubkey,
+            sysvar,
+            vote::{
+                instruction as vote_instruction,
+                state::{Vote, VoteAuthorize, VoteInit, VoteStateUpdate},
+            },
+>>>>>>> 8c41cf933 (remove solana-vote-program dep from solana-transaction-status (#27845))
         },
     };
 

@@ -5661,8 +5661,12 @@ dependencies = [
  "solana-account-decoder",
  "solana-measure",
  "solana-metrics",
+<<<<<<< HEAD
  "solana-sdk 1.13.1",
  "solana-vote-program",
+=======
+ "solana-sdk 1.15.0",
+>>>>>>> 8c41cf933 (remove solana-vote-program dep from solana-transaction-status (#27845))
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
