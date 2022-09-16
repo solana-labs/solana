@@ -1525,6 +1525,7 @@ impl Scheduler {
     }
 }
 
+/*
 impl Drop for Scheduler {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
@@ -1535,6 +1536,7 @@ impl Drop for Scheduler {
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
     }
 }
+*/
 
 impl Drop for SchedulerPool {
     fn drop(&mut self) {
@@ -4210,7 +4212,7 @@ impl Bank {
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
 
-        let maybe_last_error = self.wait_for_scheduler();
+        let maybe_last_error = self.wait_for_scheduler(false);
         let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
         let mut s2 = self.scheduler2.write().unwrap();
         *s2 = Some(scheduler);
@@ -8267,7 +8269,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn wait_for_scheduler(&self) -> Result<()> {
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<()> {
         let s: Option<Arc<Scheduler>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
@@ -8277,7 +8279,7 @@ impl Bank {
             e
         } else {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
-            warn!("Bank::wait_for_scheduler() skipped by {} ...", current_thread_name);
+            warn!("Bank::wait_for_scheduler(via_drop: {}) skipped by {} ...", via_drop, current_thread_name);
 
             Ok(())
         }
@@ -8408,6 +8410,11 @@ pub struct TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
+        let r = self.wait_for_scheduler(true).unwrap();
+        if let Err(err) = r {
+            warn!("Bank::drop(): discarding error from scheduler: {:?}", err);
+        }
+
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
             drop_callback.callback(self);
         } else {
