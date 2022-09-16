@@ -2566,7 +2566,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())); // Default::default();Default::default(),
+            scheduler2: RwLock::new(Some(SCHEDULER_POOL.lock().unwrap().take_from_pool())), // Default::default();Default::default(),
         };
         bank.finish_init(
             genesis_config,
