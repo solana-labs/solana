@@ -1768,16 +1768,18 @@ impl Checkpoint {
     pub fn wait_for_restart(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut remaining_threads_guard = self.0.lock().unwrap();
-        info!("Checkpoint::wait_for_restart: {} is entering at {}", current_thread_name, *remaining_threads_guard);
-
+        info!("Checkpoint::wait_for_restart: {} is entering at {} -> {}", current_thread_name, *remaining_threads_guard, *remaining_threads_guard - 1);
 
         *remaining_threads_guard -= 1;
 
         if *remaining_threads_guard == 0 {
             drop(remaining_threads_guard);
             self.1.notify_all();
+            info!("Checkpoint::wait_for_restart: {} is notified all others...", current_thread_name);
         } else {
+            info!("Checkpoint::wait_for_restart: {} is paused...", current_thread_name);
             let _ = *self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads == 0).unwrap();
+            info!("Checkpoint::wait_for_restart: {} is started...", current_thread_name);
         }
     }
 
