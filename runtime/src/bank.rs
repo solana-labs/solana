@@ -1396,12 +1396,7 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            while let Ok(solana_scheduler::ExaminablePayload(a)) = retired_ee_receiver.recv() {
-                match a {
-                    solana_scheduler::Flushable::Flush(checkpoint) => {
-                        checkpoint.wait_for_restart();
-                        continue;
-                    },
+            while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
                     solana_scheduler::Flushable::Payload(mut ee) => {
                         if ee.is_aborted() {
                             warn!(
@@ -1412,7 +1407,6 @@ impl Scheduler {
                         }
                         drop(ee);
                     },
-                }
             }
 
             Ok((started.0.elapsed(), started.1.elapsed()))
