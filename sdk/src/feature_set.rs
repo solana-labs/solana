@@ -423,6 +423,10 @@ pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
 
+pub mod increase_tx_account_lock_limit {
+    solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -523,6 +527,7 @@ lazy_static! {
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
+        (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
