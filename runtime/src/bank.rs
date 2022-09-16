@@ -4201,7 +4201,7 @@ impl Bank {
 
         let maybe_last_error = self.wait_for_scheduler();
         let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
-        let s2 = self.scheduler2.write().unwrap();
+        let mut s2 = self.scheduler2.write().unwrap();
         *s2 = Some(scheduler);
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
