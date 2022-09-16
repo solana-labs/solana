@@ -21,6 +21,10 @@ use {
         },
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
+        transaction_scheduler::{
+            BankingProcessingInstruction, ProcessedPacketBatch, ScheduledPacketBatch,
+            TransactionSchedulerBankingHandle,
+        },
         unprocessed_packet_batches::{self, *},
     },
     core::iter::repeat,
@@ -1078,6 +1082,213 @@ impl BankingStage {
                 filter_forwarding_result.total_tracer_packets_in_buffer,
             );
             buffered_packet_batches.clear();
+        }
+    }
+
+    fn consume_scheduled_packet_batch(
+        scheduled_packet_batch: &ScheduledPacketBatch,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
+        recorder: &TransactionRecorder,
+        qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        log_messages_bytes_limit: Option<usize>,
+    ) -> Vec<bool> {
+        let bank_start = poh_recorder.read().unwrap().bank_start();
+        if let Some(BankStart {
+            working_bank,
+            bank_creation_time,
+        }) = bank_start
+        {
+            let process_transactions_summary = Self::process_packets_transactions(
+                &working_bank,
+                &bank_creation_time,
+                recorder,
+                scheduled_packet_batch
+                    .deserialized_packets
+                    .iter()
+                    .map(|packet| packet.as_ref()),
+                transaction_status_sender.clone(),
+                gossip_vote_sender,
+                banking_stage_stats,
+                qos_service,
+                slot_metrics_tracker,
+                log_messages_bytes_limit,
+            );
+
+            let ProcessTransactionsSummary {
+                reached_max_poh_height,
+                retryable_transaction_indexes,
+                ..
+            } = process_transactions_summary;
+
+            // let _reached_end_of_slot = reached_max_poh_height
+            //     || !Bank::should_bank_still_be_processing_txs(
+            //         &bank_creation_time,
+            //         max_tx_ingestion_ns,
+            //     );
+            let mut retryable_packets =
+                vec![false; scheduled_packet_batch.deserialized_packets.len()];
+            for retryable_transaction_index in retryable_transaction_indexes {
+                retryable_packets[retryable_transaction_index] = true;
+            }
+
+            retryable_packets
+        } else {
+            // If we don't have a bank, we can't process the packets. Just mark them all as retryable
+            // so they get put back into the scheduler.
+            vec![true; scheduled_packet_batch.deserialized_packets.len()]
+        }
+    }
+
+    fn forward_scheduled_packet_batch(
+        scheduled_packet_batch: &ScheduledPacketBatch,
+        forward_option: &ForwardOption,
+        cluster_info: &ClusterInfo,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        socket: &UdpSocket,
+        data_budget: &DataBudget,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        banking_stage_stats: &BankingStageStats,
+        connection_cache: &ConnectionCache,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> Vec<bool> {
+        match forward_option {
+            ForwardOption::NotForward => {}
+            _ => {
+                let _ = Self::forward_buffered_packets(
+                    connection_cache,
+                    forward_option,
+                    cluster_info,
+                    poh_recorder,
+                    socket,
+                    scheduled_packet_batch
+                        .deserialized_packets
+                        .iter()
+                        .map(|packet| packet.original_packet()),
+                    data_budget,
+                    banking_stage_stats,
+                );
+            }
+        }
+
+        vec![false; scheduled_packet_batch.deserialized_packets.len()]
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn process_scheduled_packet_batch(
+        scheduled_packet_batch: &ScheduledPacketBatch,
+        my_pubkey: &Pubkey,
+        socket: &UdpSocket,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        banking_decision_maker: &BankingDecisionMaker,
+        cluster_info: &ClusterInfo,
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        forward_option: &ForwardOption,
+        transaction_status_sender: &Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
+        recorder: &TransactionRecorder,
+        data_budget: &DataBudget,
+        qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: &ConnectionCache,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) -> ProcessedPacketBatch {
+        let retryable_packets = match scheduled_packet_batch.processing_instruction {
+            BankingProcessingInstruction::Consume => Self::consume_scheduled_packet_batch(
+                scheduled_packet_batch,
+                poh_recorder,
+                transaction_status_sender,
+                gossip_vote_sender,
+                banking_stage_stats,
+                recorder,
+                qos_service,
+                slot_metrics_tracker,
+                log_messages_bytes_limit,
+            ),
+            BankingProcessingInstruction::Forward => Self::forward_scheduled_packet_batch(
+                scheduled_packet_batch,
+                forward_option,
+                cluster_info,
+                poh_recorder,
+                socket,
+                data_budget,
+                slot_metrics_tracker,
+                banking_stage_stats,
+                connection_cache,
+                banking_tracer_packet_stats,
+                bank_forks,
+            ),
+        };
+
+        ProcessedPacketBatch {
+            id: scheduled_packet_batch.id,
+            retryable_packets,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_process_loop<S>(
+        transaction_scheduler_handle: &mut S,
+        my_pubkey: &Pubkey,
+        socket: &UdpSocket,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        banking_decision_maker: &BankingDecisionMaker,
+        cluster_info: &ClusterInfo,
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        forward_option: &ForwardOption,
+        transaction_status_sender: Option<TransactionStatusSender>,
+        gossip_vote_sender: &ReplayVoteSender,
+        banking_stage_stats: &BankingStageStats,
+        recorder: &TransactionRecorder,
+        data_budget: &DataBudget,
+        qos_service: &QosService,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        log_messages_bytes_limit: Option<usize>,
+        connection_cache: &ConnectionCache,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
+        bank_forks: &Arc<RwLock<BankForks>>,
+    ) where
+        S: TransactionSchedulerBankingHandle,
+    {
+        const RECV_TIMEOUT: Duration = Duration::from_millis(10);
+        loop {
+            match transaction_scheduler_handle.get_next_transaction_batch(RECV_TIMEOUT) {
+                Ok(scheduled_packet_batch) => {
+                    let processed_packet_batch = Self::process_scheduled_packet_batch(
+                        &scheduled_packet_batch,
+                        my_pubkey,
+                        socket,
+                        poh_recorder,
+                        banking_decision_maker,
+                        cluster_info,
+                        buffered_packet_batches,
+                        forward_option,
+                        &transaction_status_sender,
+                        gossip_vote_sender,
+                        banking_stage_stats,
+                        recorder,
+                        data_budget,
+                        qos_service,
+                        slot_metrics_tracker,
+                        log_messages_bytes_limit,
+                        connection_cache,
+                        banking_tracer_packet_stats,
+                        bank_forks,
+                    );
+                    transaction_scheduler_handle.complete_batch(processed_packet_batch);
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    break;
+                }
+            }
         }
     }
 

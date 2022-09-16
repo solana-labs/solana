@@ -9,12 +9,18 @@ use {
     },
     crate::{
         bank_process_decision::{BankPacketProcessingDecision, BankingDecisionMaker},
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         packet_deserializer_stage::DeserializedPacketBatchGetter,
         unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
     },
     crossbeam_channel::RecvTimeoutError,
-    std::{rc::Rc, time::Duration},
+    solana_runtime::bank_forks::BankForks,
+    std::{
+        rc::Rc,
+        sync::{Arc, RwLock},
+        time::Duration,
+    },
 };
 
 const MAX_BATCH_SIZE: usize = 128;
@@ -26,6 +32,10 @@ pub struct PriorityQueueScheduler<D: DeserializedPacketBatchGetter> {
     unprocessed_packets: UnprocessedPacketBatches,
     /// Packets to be held after forwarding.
     held_packets: Vec<Rc<ImmutableDeserializedPacket>>,
+    /// Bank forks to be used to create the forward filter
+    bank_forks: Arc<RwLock<BankForks>>,
+    /// Forward packet filter
+    forward_filter: Option<ForwardPacketBatchesByAccounts>,
     /// Determines how the scheduler should handle packets currently.
     banking_descision_maker: BankingDecisionMaker,
     /// Scheduled batch currently being processed.
@@ -51,25 +61,83 @@ where
 
         let decision = self.banking_descision_maker.make_decision();
         // If we're consuming, we should move held packets back into the queue.
-        if matches!(decision, BankPacketProcessingDecision::Consume(_)) {
-            self.move_held_packets();
-        }
+        if matches!(decision, BankPacketProcessingDecision::Consume(_)) {}
         match decision {
-            BankPacketProcessingDecision::Hold => Err(RecvTimeoutError::Timeout), // TODO: this isn't really true...
-            _ => {
-                // Pop max priority packets off the queue and insert into the batch
-                let deserialized_packets = self
-                    .unprocessed_packets
-                    .packet_priority_queue
-                    .drain_desc()
-                    .take(MAX_BATCH_SIZE)
-                    .collect();
-
+            BankPacketProcessingDecision::Hold => {
+                self.forward_filter = None;
+                // TODO: this isn't really true...
+                Err(RecvTimeoutError::Timeout)
+            }
+            BankPacketProcessingDecision::Consume(_) => {
+                // Clear the forwarding filter
+                self.forward_filter = None;
+                // Move held packets back into the queue if they exist.
+                self.move_held_packets();
+                // Pop the next batch of packets off the queue
+                let mut deserialized_packets =
+                    Vec::with_capacity(self.unprocessed_packets.len().min(MAX_BATCH_SIZE));
+                for _ in 0..deserialized_packets.capacity() {
+                    deserialized_packets.push(
+                        self.unprocessed_packets
+                            .packet_priority_queue
+                            .pop_max()
+                            .unwrap(),
+                    );
+                }
                 self.current_batch = Some((
                     Rc::new(ScheduledPacketBatch {
                         id: self.batch_id_generator.generate_id(),
                         processing_instruction: decision.clone().into(),
                         deserialized_packets,
+                    }),
+                    decision,
+                ));
+
+                Ok(self.current_batch.as_ref().unwrap().0.clone())
+            }
+            BankPacketProcessingDecision::Forward
+            | BankPacketProcessingDecision::ForwardAndHold => {
+                // Take the forwarding filter (will replace at the end of the function)
+                let current_bank = self.bank_forks.read().unwrap().root_bank();
+                let mut forward_filter = match self.forward_filter.take() {
+                    Some(mut forward_filter) => {
+                        forward_filter.current_bank = current_bank;
+                        forward_filter
+                    }
+                    None => {
+                        ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank)
+                    }
+                };
+
+                // Use the forward filter to determine which packets should be filtered vs not.
+                let mut forwardable_packets =
+                    Vec::with_capacity(self.unprocessed_packets.len().min(MAX_BATCH_SIZE));
+                while forwardable_packets.len() < MAX_BATCH_SIZE {
+                    match self.unprocessed_packets.packet_priority_queue.pop_max() {
+                        Some(packet) => {
+                            if forward_filter.add_packet(packet.clone()) {
+                                forwardable_packets.push(packet);
+                            } else {
+                                // remove the packet since we won't forward it.
+                                // TODO: should we hold it if the option is ForwardAndHold?
+                                self.unprocessed_packets
+                                    .message_hash_to_transaction
+                                    .remove(packet.message_hash())
+                                    .expect("Message hash should exist in the map");
+                            }
+                        }
+                        None => break,
+                    }
+                }
+
+                // Move the forward filter back into the scheduler for the next iteration
+                self.forward_filter = Some(forward_filter);
+
+                self.current_batch = Some((
+                    Rc::new(ScheduledPacketBatch {
+                        id: self.batch_id_generator.generate_id(),
+                        processing_instruction: decision.clone().into(),
+                        deserialized_packets: forwardable_packets,
                     }),
                     decision,
                 ));
@@ -147,6 +215,7 @@ where
     pub fn new(
         deserialized_packet_batch_getter: D,
         banking_descision_maker: BankingDecisionMaker,
+        bank_forks: Arc<RwLock<BankForks>>,
         capacity: usize,
     ) -> Self {
         Self {
@@ -156,6 +225,8 @@ where
             banking_descision_maker,
             current_batch: None,
             batch_id_generator: ScheduledPacketBatchIdGenerator::default(),
+            bank_forks,
+            forward_filter: None,
         }
     }
 
