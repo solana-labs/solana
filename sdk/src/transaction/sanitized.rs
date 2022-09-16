@@ -20,9 +20,9 @@ use {
 };
 
 /// Maximum number of accounts that a transaction may lock.
-/// 64 was chosen because it is roughly twice the previous
-/// number of account keys that could fit in a legacy tx.
-pub const MAX_TX_ACCOUNT_LOCKS: usize = 64;
+/// 128 was chosen because it is the minimum number of accounts
+/// needed for the Neon EVM implementation.
+pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
@@ -210,13 +210,11 @@ impl SanitizedTransaction {
     /// Validate and return the account keys locked by this transaction
     pub fn get_account_locks(
         &self,
-        feature_set: &feature_set::FeatureSet,
+        tx_account_lock_limit: usize,
     ) -> Result<TransactionAccountLocks> {
         if self.message.has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
-        } else if feature_set.is_active(&feature_set::max_tx_account_locks::id())
-            && self.message.account_keys().len() > MAX_TX_ACCOUNT_LOCKS
-        {
+        } else if self.message.account_keys().len() > tx_account_lock_limit {
             Err(TransactionError::TooManyAccountLocks)
         } else {
             Ok(self.get_account_locks_unchecked())
