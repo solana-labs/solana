@@ -6584,6 +6584,7 @@ impl Bank {
 
             if r.as_ref().unwrap().bank.read().unwrap().is_none() {
                 drop(r);
+                info!("reconfiguring scheduler with new bank...");
                 // this relocking (r=>w) is racy here; we want parking_lot's upgrade; but overwriting should be
                 // safe.
                 let ss = self.scheduler2.write().unwrap();
