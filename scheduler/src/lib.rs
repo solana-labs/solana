@@ -1766,7 +1766,10 @@ pub struct Checkpoint(pub std::sync::Mutex<usize>, pub std::sync::Condvar);
 
 impl Checkpoint {
     pub fn wait_for_restart(&self) {
+        let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut remaining_threads_guard = self.0.lock().unwrap();
+        info!("Checkpoint::wait_for_restart: {} is entering at {}", current_thread_name, *remaining_threads_guard);
+
 
         *remaining_threads_guard -= 1;
 
