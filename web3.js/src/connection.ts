@@ -5117,7 +5117,10 @@ export class Connection {
                 const isErrorSubscription =
                   isErrorStatefulSubscription(subscription);
 
-                if (isErrorSubscription && subscription.retryCount + 1 > 3) {
+                if (
+                  isErrorSubscription &&
+                  subscription.retryCount + 1 > SUBSCRIPTION_ERROR_RETRY_LIMIT
+                ) {
                   console.error(
                     `${method} error, max retries reached`,
                     args,
