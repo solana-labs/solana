@@ -1527,6 +1527,15 @@ impl Drop for Scheduler {
     }
 }
 
+impl Drop for SchedulerPool {
+    fn drop(&mut self) {
+        todo!();
+        //info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
+        //self.gracefully_stop().unwrap();
+        //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
+    }
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 /// AbiExample is needed even without Serialize/Deserialize; actual (de-)serialization
 /// are implemented elsewhere for versioning
