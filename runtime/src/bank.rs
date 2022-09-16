@@ -4200,6 +4200,9 @@ impl Bank {
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
 
         let maybe_last_error = self.wait_for_scheduler();
+        let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
+        let s2 = self.scheduler2.write().unwrap();
+        *s2 = Some(scheduler);
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
@@ -4209,7 +4212,7 @@ impl Bank {
         if maybe_last_error.is_err() {
             warn!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
             //new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
-            self.scheduler2.write().unwrap().as_ref().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
+            s2.as_ref().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
         }
         //*self.scheduler.write().unwrap() = new_scheduler;
 
