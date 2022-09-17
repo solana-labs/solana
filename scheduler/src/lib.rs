@@ -19,7 +19,7 @@ type PageRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type PageRcInner = triomphe::Arc<(std::cell::RefCell<Page>, TaskIds)>;
+type PageRcInner = triomphe::Arc<(std::cell::RefCell<Page>, TaskIds, AtomicUsize)>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(PageRcInner);
@@ -52,7 +52,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
+    fn reindex_with_address_book(&mut self) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
@@ -104,8 +104,7 @@ impl ExecutionEnvironment {
                 });
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                let mut page = lock_attempt.target.page_mut(ast);
-                page.contended_write_task_count = page.contended_write_task_count.checked_sub(1).unwrap();
+                lock_attempt.target_contended_write_task_count().fetch_sub(1, std::sync::atomic::Ordering::SeqCst););
             }
         }
     }
@@ -172,6 +171,10 @@ impl LockAttempt {
 
     pub fn target_contended_unique_weights(&self) -> &TaskIds {
         &self.target.0.1
+    }
+
+    pub fn target_contended_write_task_count(&self) -> &AtomicUsize {
+        &self.target.0.2
     }
 }
 
@@ -243,7 +246,6 @@ pub struct Page {
     next_usage: Usage,
     provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
     cu: CU,
-    contended_write_task_count: usize,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -257,7 +259,6 @@ impl Page {
             next_usage: Usage::Unused,
             provisional_task_ids: Default::default(),
             cu: Default::default(),
-            contended_write_task_count: Default::default(),
         }
     }
 
@@ -331,7 +332,7 @@ impl AddressBook {
             true
         } else if attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight {
             true
-        } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target.page_mut(ast).contended_write_task_count == 0 {
+        } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target_contended_write_task_count().load(std::sync::atomic::Ordering::SeqCst) == 0 {
             true
         } else {
             false
@@ -746,8 +747,7 @@ impl Task {
             lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                let mut page = lock_attempt.target.page_mut(ast);
-                page.contended_write_task_count = page.contended_write_task_count.checked_add(1).unwrap();
+                lock_attempt.target_contended_write_task_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
             }
         }
         //let a = Task::clone_in_queue(this);
@@ -1340,7 +1340,7 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        ee.reindex_with_address_book(ast);
+        //ee.reindex_with_address_book(ast);
         assert!(ee.is_reindexed());
 
         ee.task.record_commit_time(*commit_clock);
