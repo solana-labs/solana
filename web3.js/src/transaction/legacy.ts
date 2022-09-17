@@ -668,7 +668,7 @@ export class Transaction {
    * must correspond to either the fee payer or a signer account in the transaction
    * instructions.
    */
-  addSignature(pubkey: PublicKey, signature: Buffer) {
+  addSignature(pubkey: PublicKey, signature: Uint8Array) {
     this._compile(); // Ensure signatures array is populated
     this._addSignature(pubkey, signature);
   }
@@ -676,7 +676,7 @@ export class Transaction {
   /**
    * @internal
    */
-  _addSignature(pubkey: PublicKey, signature: Buffer) {
+  _addSignature(pubkey: PublicKey, signature: Uint8Array) {
     invariant(signature.length === 64);
 
     const index = this.signatures.findIndex(sigpair =>
@@ -796,7 +796,7 @@ export class Transaction {
   /**
    * Parse a wire transaction into a Transaction object.
    */
-  static from(buffer: Buffer | Uint8Array | Array<number>): Transaction {
+  static from(buffer: Uint8Array | Array<number>): Transaction {
     // Slice up wire data
     let byteArray = [...buffer];
 
@@ -805,7 +805,7 @@ export class Transaction {
     for (let i = 0; i < signatureCount; i++) {
       const signature = byteArray.slice(0, SIGNATURE_LENGTH_IN_BYTES);
       byteArray = byteArray.slice(SIGNATURE_LENGTH_IN_BYTES);
-      signatures.push(bs58.encode(Buffer.from(signature)));
+      signatures.push(bs58.encode(Uint8Array.from(signature)));
     }
 
     return Transaction.populate(Message.from(byteArray), signatures);
