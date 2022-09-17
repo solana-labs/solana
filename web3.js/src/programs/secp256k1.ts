@@ -17,9 +17,9 @@ const SIGNATURE_OFFSETS_SERIALIZED_SIZE = 11;
  * Params for creating an secp256k1 instruction using a public key
  */
 export type CreateSecp256k1InstructionWithPublicKeyParams = {
-  publicKey: Buffer | Uint8Array | Array<number>;
-  message: Buffer | Uint8Array | Array<number>;
-  signature: Buffer | Uint8Array | Array<number>;
+  publicKey: Uint8Array | Array<number>;
+  message: Uint8Array | Array<number>;
+  signature: Uint8Array | Array<number>;
   recoveryId: number;
   instructionIndex?: number;
 };
@@ -28,9 +28,9 @@ export type CreateSecp256k1InstructionWithPublicKeyParams = {
  * Params for creating an secp256k1 instruction using an Ethereum address
  */
 export type CreateSecp256k1InstructionWithEthAddressParams = {
-  ethAddress: Buffer | Uint8Array | Array<number> | string;
-  message: Buffer | Uint8Array | Array<number>;
-  signature: Buffer | Uint8Array | Array<number>;
+  ethAddress: Uint8Array | Array<number> | string;
+  message: Uint8Array | Array<number>;
+  signature: Uint8Array | Array<number>;
   recoveryId: number;
   instructionIndex?: number;
 };
@@ -39,8 +39,8 @@ export type CreateSecp256k1InstructionWithEthAddressParams = {
  * Params for creating an secp256k1 instruction using a private key
  */
 export type CreateSecp256k1InstructionWithPrivateKeyParams = {
-  privateKey: Buffer | Uint8Array | Array<number>;
-  message: Buffer | Uint8Array | Array<number>;
+  privateKey: Uint8Array | Array<number>;
+  message: Uint8Array | Array<number>;
   instructionIndex?: number;
 };
 
@@ -89,9 +89,7 @@ export class Secp256k1Program {
    * Construct an Ethereum address from a secp256k1 public key buffer.
    * @param {Buffer} publicKey a 64 byte secp256k1 public key buffer
    */
-  static publicKeyToEthAddress(
-    publicKey: Buffer | Uint8Array | Array<number>,
-  ): Buffer {
+  static publicKeyToEthAddress(publicKey: Uint8Array | Array<number>): Buffer {
     assert(
       publicKey.length === PUBLIC_KEY_BYTES,
       `Public key must be ${PUBLIC_KEY_BYTES} bytes but received ${publicKey.length} bytes`,
