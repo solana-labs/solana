@@ -4487,12 +4487,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-config-program",
-<<<<<<< HEAD
  "solana-sdk 1.14.3",
- "solana-vote-program",
-=======
- "solana-sdk 1.15.0",
->>>>>>> 742ee7113 (remove vote-program dep from account-decoder)
  "spl-token",
  "spl-token-2022",
  "thiserror",
