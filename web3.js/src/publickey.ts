@@ -161,7 +161,7 @@ export class PublicKey extends Struct {
    */
   /* eslint-disable require-await */
   static createProgramAddressSync(
-    seeds: Array<Buffer | Uint8Array>,
+    seeds: Array<Uint8Array>,
     programId: PublicKey,
   ): PublicKey {
     let buffer = Buffer.alloc(0);
@@ -189,7 +189,7 @@ export class PublicKey extends Struct {
    */
   /* eslint-disable require-await */
   static async createProgramAddress(
-    seeds: Array<Buffer | Uint8Array>,
+    seeds: Array<Uint8Array>,
     programId: PublicKey,
   ): Promise<PublicKey> {
     return this.createProgramAddressSync(seeds, programId);
