@@ -748,7 +748,7 @@ impl Task {
             lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_contended_write_task_count().fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                lock_attempt.target_contended_write_task_count().fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
         //let a = Task::clone_in_queue(this);
