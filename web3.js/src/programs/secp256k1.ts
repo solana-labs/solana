@@ -91,16 +91,14 @@ export class Secp256k1Program {
    */
   static publicKeyToEthAddress(
     publicKey: Buffer | Uint8Array | Array<number>,
-  ): Buffer {
+  ): Uint8Array {
     assert(
       publicKey.length === PUBLIC_KEY_BYTES,
       `Public key must be ${PUBLIC_KEY_BYTES} bytes but received ${publicKey.length} bytes`,
     );
 
     try {
-      return Buffer.from(keccak_256(toBuffer(publicKey))).slice(
-        -ETHEREUM_ADDRESS_BYTES,
-      );
+      return keccak_256(toBuffer(publicKey)).slice(-ETHEREUM_ADDRESS_BYTES);
     } catch (error) {
       throw new Error(`Error constructing Ethereum address: ${error}`);
     }
