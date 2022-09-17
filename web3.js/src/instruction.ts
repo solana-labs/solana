@@ -39,7 +39,7 @@ export function encodeData<TInputData extends IInstructionInputData>(
  */
 export function decodeData<TInputData extends IInstructionInputData>(
   type: InstructionType<TInputData>,
-  buffer: Buffer,
+  buffer: Uint8Array,
 ): TInputData {
   let data: TInputData;
   try {

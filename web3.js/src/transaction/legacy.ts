@@ -91,7 +91,7 @@ export class TransactionInstruction {
   /**
    * Program input
    */
-  data: Buffer = Buffer.alloc(0);
+  data: Uint8Array = new Uint8Array(0);
 
   constructor(opts: TransactionInstructionCtorFields) {
     this.programId = opts.programId;
@@ -788,7 +788,7 @@ export class Transaction {
    * Deprecated method
    * @internal
    */
-  get data(): Buffer {
+  get data(): Uint8Array {
     invariant(this.instructions.length === 1);
     return this.instructions[0].data;
   }
