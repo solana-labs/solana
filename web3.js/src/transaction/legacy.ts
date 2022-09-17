@@ -121,7 +121,7 @@ export class TransactionInstruction {
  * Pair of signature and corresponding public key
  */
 export type SignaturePubkeyPair = {
-  signature: Buffer | null;
+  signature: Uint8Array | null;
   publicKey: PublicKey;
 };
 
@@ -195,7 +195,7 @@ export class Transaction {
   /**
    * The first (payer) Transaction signature
    */
-  get signature(): Buffer | null {
+  get signature(): Uint8Array | null {
     if (this.signatures.length > 0) {
       return this.signatures[0].signature;
     }
@@ -686,7 +686,7 @@ export class Transaction {
       throw new Error(`unknown signer: ${pubkey.toString()}`);
     }
 
-    this.signatures[index].signature = Buffer.from(signature);
+    this.signatures[index].signature = Uint8Array.from(signature);
   }
 
   /**

@@ -4736,7 +4736,7 @@ export class Connection {
           throw new Error('!signature'); // should never happen
         }
 
-        const signature = transaction.signature.toString('base64');
+        const signature = Buffer.from(transaction.signature).toString('base64');
         if (
           !this._blockhashInfo.simulatedSignatures.includes(signature) &&
           !this._blockhashInfo.transactionSignatures.includes(signature)
@@ -4861,7 +4861,7 @@ export class Connection {
           throw new Error('!signature'); // should never happen
         }
 
-        const signature = transaction.signature.toString('base64');
+        const signature = Buffer.from(transaction.signature).toString('base64');
         if (!this._blockhashInfo.transactionSignatures.includes(signature)) {
           // The signature of this transaction has not been seen before with the
           // current recentBlockhash, all done. Let's break
