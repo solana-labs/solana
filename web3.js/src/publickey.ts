@@ -112,21 +112,21 @@ export class PublicKey extends Struct {
    * Return the byte array representation of the public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
+    const b = Uint8Array.from(this._bn.toArray());
+    if (b.length === PUBLIC_KEY_LENGTH) {
+      return b;
+    }
+
+    const zeroPad = new Uint8Array(PUBLIC_KEY_LENGTH);
+    zeroPad.set(b, PUBLIC_KEY_LENGTH - b.length);
+    return zeroPad;
   }
 
   /**
    * Return the Buffer representation of the public key
    */
   toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === PUBLIC_KEY_LENGTH) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(32);
-    b.copy(zeroPad, 32 - b.length);
-    return zeroPad;
+    return Buffer.from(this.toBytes());
   }
 
   /**
