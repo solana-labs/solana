@@ -1386,7 +1386,7 @@ impl Scheduler {
 
                 ee.execution_result = Some(tx_result);
 
-                ee.reindex_with_address_book();
+                //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             todo!();
