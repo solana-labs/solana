@@ -1525,7 +1525,6 @@ impl Scheduler {
     }
 }
 
-/*
 impl Drop for Scheduler {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
@@ -1536,7 +1535,6 @@ impl Drop for Scheduler {
         //info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
     }
 }
-*/
 
 impl Drop for SchedulerPool {
     fn drop(&mut self) {
