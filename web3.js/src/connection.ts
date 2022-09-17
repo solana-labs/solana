@@ -4758,7 +4758,7 @@ export class Connection {
     const message = transaction._compile();
     const signData = message.serialize();
     const wireTransaction = transaction._serialize(signData);
-    const encodedTransaction = wireTransaction.toString('base64');
+    const encodedTransaction = Buffer.from(wireTransaction).toString('base64');
     const config: any = {
       encoding: 'base64',
       commitment: this.commitment,

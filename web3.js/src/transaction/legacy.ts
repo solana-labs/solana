@@ -717,7 +717,7 @@ export class Transaction {
   /**
    * Serialize the Transaction in the wire format.
    */
-  serialize(config?: SerializeConfig): Buffer {
+  serialize(config?: SerializeConfig): Uint8Array {
     const {requireAllSignatures, verifySignatures} = Object.assign(
       {requireAllSignatures: true, verifySignatures: true},
       config,
@@ -737,15 +737,15 @@ export class Transaction {
   /**
    * @internal
    */
-  _serialize(signData: Buffer): Buffer {
+  _serialize(signData: Uint8Array): Uint8Array {
     const {signatures} = this;
     const signatureCount: number[] = [];
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
       signatureCount.length + signatures.length * 64 + signData.length;
-    const wireTransaction = Buffer.alloc(transactionLength);
+    const wireTransaction = new Uint8Array(transactionLength);
     invariant(signatures.length < 256);
-    Buffer.from(signatureCount).copy(wireTransaction, 0);
+    wireTransaction.set(signatureCount, 0);
     signatures.forEach(({signature}, index) => {
       if (signature !== null) {
         invariant(signature.length === 64, `signature has invalid length`);
@@ -755,8 +755,8 @@ export class Transaction {
         );
       }
     });
-    signData.copy(
-      wireTransaction,
+    wireTransaction.set(
+      signData,
       signatureCount.length + signatures.length * 64,
     );
     invariant(
