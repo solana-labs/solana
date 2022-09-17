@@ -1,5 +1,4 @@
 import * as BufferLayout from '@solana/buffer-layout';
-import {Buffer} from 'buffer';
 
 import type {Blockhash} from './blockhash';
 import * as Layout from './layout';
@@ -65,9 +64,7 @@ export class NonceAccount {
    * @param buffer account data
    * @return NonceAccount
    */
-  static fromAccountData(
-    buffer: Buffer | Uint8Array | Array<number>,
-  ): NonceAccount {
+  static fromAccountData(buffer: Uint8Array | Array<number>): NonceAccount {
     const nonceAccount = NonceAccountLayout.decode(toBuffer(buffer), 0);
     return new NonceAccount({
       authorizedPubkey: new PublicKey(nonceAccount.authorizedPubkey),
