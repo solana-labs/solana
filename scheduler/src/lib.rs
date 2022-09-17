@@ -1711,7 +1711,7 @@ impl ScheduleStage {
                     }
                 }
             }
-            assert!(!select_skipped || executing_queue_count > 0);
+            //assert!(!select_skipped || executing_queue_count > 0);
         }
         drop(to_next_stage);
         drop(ee_sender);
