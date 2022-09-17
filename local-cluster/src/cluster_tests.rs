@@ -159,18 +159,14 @@ pub fn verify_ledger_ticks(ledger_path: &Path, ticks_per_slot: usize) {
     let ledger = Blockstore::open(ledger_path).unwrap();
     let zeroth_slot = ledger.get_slot_entries(0, 0).unwrap();
     let last_id = zeroth_slot.last().unwrap().hash;
-    let next_slots = ledger.get_slots_since(&[0]).unwrap().remove(&0).unwrap();
+    let (_, next_slots) = ledger.get_slots_since(&[0]).unwrap().pop().unwrap();
     let mut pending_slots: Vec<_> = next_slots
         .into_iter()
         .map(|slot| (slot, 0, last_id))
         .collect();
     while !pending_slots.is_empty() {
         let (slot, parent_slot, last_id) = pending_slots.pop().unwrap();
-        let next_slots = ledger
-            .get_slots_since(&[slot])
-            .unwrap()
-            .remove(&slot)
-            .unwrap();
+        let (_, next_slots) = ledger.get_slots_since(&[slot]).unwrap().pop().unwrap();
 
         // If you're not the last slot, you should have a full set of ticks
         let should_verify_ticks = if !next_slots.is_empty() {

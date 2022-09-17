@@ -3367,15 +3367,11 @@ impl ReplayStage {
             Measure::start("generate_new_bank_forks_get_slots_since");
         let next_slots = blockstore
             .get_slots_since(&frozen_bank_slots)
-            .expect("Db error");
+            .expect("Expected Blockstore::get_slots_since() to succeed");
         generate_new_bank_forks_get_slots_since.stop();
 
         // Filter out what we've already seen
-        trace!("generate new forks {:?}", {
-            let mut next_slots = next_slots.iter().collect::<Vec<_>>();
-            next_slots.sort();
-            next_slots
-        });
+        trace!("generate new forks {:?}", next_slots.clone().sort());
         let mut generate_new_bank_forks_loop = Measure::start("generate_new_bank_forks_loop");
         let mut new_banks = HashMap::new();
         for (parent_slot, children) in next_slots {

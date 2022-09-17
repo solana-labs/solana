@@ -2971,7 +2971,7 @@ impl Blockstore {
     }
 
     // Returns slots connecting to any element of the list `slots`.
-    pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
+    pub fn get_slots_since(&self, slots: &[u64]) -> Result<Vec<(u64, Vec<u64>)>> {
         let slot_metas: Vec<_> = self
             .meta_cf
             .multi_get(slots.to_vec())
@@ -2979,13 +2979,11 @@ impl Blockstore {
             .map(|meta| meta.unwrap())
             .collect();
 
-        let result: HashMap<u64, Vec<u64>> = slots
+        Ok(slots
             .iter()
             .zip(slot_metas)
             .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots.to_vec())))
-            .collect();
-
-        Ok(result)
+            .collect())
     }
 
     pub fn is_root(&self, slot: Slot) -> bool {
@@ -5609,26 +5607,25 @@ pub mod tests {
         // Slot doesn't exist
         assert!(blockstore.get_slots_since(&[0]).unwrap().is_empty());
 
+        // Insert a slot that exists but chains to nothing
         let mut meta0 = SlotMeta::new(0, Some(0));
         blockstore.meta_cf.put(0, &meta0).unwrap();
-
-        // Slot exists, chains to nothing
-        let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![])].into_iter().collect();
+        let expected = vec![(0, vec![])];
         assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
+
+        // Update slot to chain to some other slots
         meta0.next_slots = vec![1, 2];
         blockstore.meta_cf.put(0, &meta0).unwrap();
-
-        // Slot exists, chains to some other slots
-        let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![1, 2])].into_iter().collect();
+        let expected = vec![(0, vec![1, 2])];
         assert_eq!(blockstore.get_slots_since(&[0]).unwrap(), expected);
+        // Same result given that slot 1 doesn't exist
         assert_eq!(blockstore.get_slots_since(&[0, 1]).unwrap(), expected);
 
+        // Insert an additional slot chains to some other slots
         let mut meta3 = SlotMeta::new(3, Some(1));
         meta3.next_slots = vec![10, 5];
         blockstore.meta_cf.put(3, &meta3).unwrap();
-        let expected: HashMap<u64, Vec<u64>> = vec![(0, vec![1, 2]), (3, vec![10, 5])]
-            .into_iter()
-            .collect();
+        let expected = vec![(0, vec![1, 2]), (3, vec![10, 5])];
         assert_eq!(blockstore.get_slots_since(&[0, 1, 3]).unwrap(), expected);
     }
 
