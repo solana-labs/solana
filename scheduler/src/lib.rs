@@ -1573,7 +1573,7 @@ impl ScheduleStage {
                 let runnable_finished = from_disconnected && runnable_queue.has_no_task();
 
                 let mut selection = TaskSelection::OnlyFromContended(if runnable_finished { usize::max_value() } else { usize::max_value() /*2*/ });
-                while !address_book.uncontended_task_ids.is_empty() && selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
+                while !address_book.uncontended_task_ids.is_empty() && selection.should_proceed() {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
