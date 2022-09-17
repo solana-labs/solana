@@ -13,7 +13,7 @@ use {
     regex::Regex,
     serde::Serialize,
     serde_json::json,
-    solana_account_decoder::{UiAccount, UiAccountEncoding},
+    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -383,24 +383,26 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        let account_data =
-            serde_json::to_string(&UiAccount::encode(pubkey, account, encoding, None, None).data)
-                .unwrap();
-        match encoding {
-            UiAccountEncoding::Base58 => {
-                println!(" data: '{}'", bs58::encode(account.data()).into_string());
-                println!(" encoding: base58");
-            }
-            UiAccountEncoding::JsonParsed => {
-                println!("  data: '{}'", account_data);
-                println!(" encoding: jsonParsed");
-            }
-            _ => {
-                let account_and_encoding: Vec<&str> = serde_json::from_str(&account_data).unwrap();
-                println!("  data: '{}'", account_and_encoding[0]);
-                println!("  encoding: {}", account_and_encoding[1]);
-            }
-        };
+        if encoding == UiAccountEncoding::Base58 {
+            println!(" data: '{}'", bs58::encode(account.data()).into_string());
+            println!(" encoding: base58");
+        } else {
+            let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+            match account_data {
+                UiAccountData::Binary(data, data_encoding_str) => {
+                    println!("  data: '{}'", data);
+                    println!("  encoding: {:?}", data_encoding_str);
+                }
+                UiAccountData::Json(account_data) => {
+                    println!(
+                        "  data: '{}'",
+                        serde_json::to_string(&account_data).unwrap()
+                    );
+                    println!("  encoding: jsonParsed");
+                }
+                UiAccountData::LegacyBinary(_) => {}
+            };
+        }
     }
 }
 
