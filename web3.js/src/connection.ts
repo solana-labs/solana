@@ -42,7 +42,7 @@ import {Message, MessageHeader, MessageV0, VersionedMessage} from './message';
 import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
 import assert from './utils/assert';
 import {sleep} from './utils/sleep';
-import {toBuffer} from './utils/to-buffer';
+import {toBase64} from './utils/to-buffer';
 import {
   TransactionExpiredBlockheightExceededError,
   TransactionExpiredTimeoutError,
@@ -4886,10 +4886,10 @@ export class Connection {
    * wire format
    */
   async sendRawTransaction(
-    rawTransaction: Buffer | Uint8Array | Array<number>,
+    rawTransaction: Uint8Array | Iterable<number>,
     options?: SendOptions,
   ): Promise<TransactionSignature> {
-    const encodedTransaction = toBuffer(rawTransaction).toString('base64');
+    const encodedTransaction = toBase64(rawTransaction);
     const result = await this.sendEncodedTransaction(
       encodedTransaction,
       options,
