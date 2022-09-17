@@ -264,7 +264,7 @@ export class Message {
   /**
    * Decode a compiled message into a Message object.
    */
-  static from(buffer: Buffer | Uint8Array | Array<number>): Message {
+  static from(buffer: Uint8Array | Array<number>): Message {
     // Slice up wire data
     let byteArray = [...buffer];
 
