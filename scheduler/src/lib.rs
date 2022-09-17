@@ -328,7 +328,7 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
-        let tcuw = attempt.target_contended_unique_weights().task_ids.back().map(|j| j.key()).copied();
+        let tcuw = attempt.target_contended_unique_weights().task_ids.back().map(|j| *j.key());
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
             true
