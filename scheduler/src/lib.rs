@@ -173,7 +173,7 @@ impl LockAttempt {
         &self.target.0.1
     }
 
-    pub fn target_contended_write_task_count(&self) -> &AtomicUsize {
+    pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
         &self.target.0.2
     }
 }
