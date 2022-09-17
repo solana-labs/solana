@@ -2,11 +2,11 @@ name: Web3
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
     paths:
       - "web3.js/**"
   pull_request:
-    branches: [ master ]
+    branches: [master]
     paths:
       - "web3.js/**"
 
@@ -30,16 +30,16 @@ jobs:
         working-directory: web3.js
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           # maybe needed for base sha below
           fetch-depth: 0
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v3
         with:
-          node-version: '16'
-          cache: 'npm'
-          cache-dependency-path: web3.js/package-lock.json
-      - run: npm ci
+          node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: web3.js/yarn.lock
+      - run: yarn ci
       - name: commit-lint
         if: ${{ github.event_name == 'pull_request' }}
         run: bash commitlint.sh
@@ -55,17 +55,17 @@ jobs:
 
     strategy:
       matrix:
-        node: [ '12', '14', '16' ]
+        node: ["12", "14", "16"]
 
     name: Node ${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node }}
-          cache: 'npm'
-          cache-dependency-path: web3.js/package-lock.json
+          cache: "yarn"
+          cache-dependency-path: web3.js/yarn.lock
       - run: |
           source .travis/before_install.sh
-          npm install
+          yarn install
           source .travis/script.sh
