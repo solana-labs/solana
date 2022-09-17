@@ -142,7 +142,7 @@ Operate a configured testnet
  startclients-specific options:
    $CLIENT_OPTIONS
 
-Note: if RUST_LOG is set in the environment it will be propogated into the
+Note: if RUST_LOG is set in the environment it will be propagated into the
       network nodes.
 EOF
   exit $exitcode
