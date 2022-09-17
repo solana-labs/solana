@@ -855,6 +855,7 @@ impl Accounts {
         can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
         store_detailed_debug_info: bool,
+        enable_rehashing: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -866,7 +867,7 @@ impl Accounts {
             can_cached_slot_be_unflushed,
             ignore_mismatch,
             store_detailed_debug_info,
-            true,
+            enable_rehashing,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
