@@ -203,7 +203,7 @@ export class PublicKey extends Struct {
    * results in a valid program address.
    */
   static findProgramAddressSync(
-    seeds: Array<Buffer | Uint8Array>,
+    seeds: Array<Uint8Array>,
     programId: PublicKey,
   ): [PublicKey, number] {
     let nonce = 255;
