@@ -1613,7 +1613,7 @@ impl ScheduleStage {
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
-                while !runnable_finished && selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
+                while !runnable_queue.has_no_task() && selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
