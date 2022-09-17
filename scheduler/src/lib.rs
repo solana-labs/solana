@@ -502,6 +502,7 @@ impl Preloader {
             PageRc(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(&address, Usage::unused())),
                 Default::default(),
+                Default::default(),
             )))
         }))
     }
