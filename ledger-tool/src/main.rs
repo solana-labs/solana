@@ -385,20 +385,23 @@ fn output_account(
     if print_account_data {
         if encoding == UiAccountEncoding::Base58 {
             println!("  data: '{}'", bs58::encode(account.data()).into_string());
-            println!("  encoding: base58");
+            println!("  encoding: \"base58\"");
         } else {
             let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
             match account_data {
-                UiAccountData::Binary(data, data_encoding_str) => {
+                UiAccountData::Binary(data, data_encoding) => {
                     println!("  data: '{}'", data);
-                    println!("  encoding: {:?}", data_encoding_str);
+                    println!(
+                        "  encoding: {}",
+                        serde_json::to_string(&data_encoding).unwrap()
+                    );
                 }
                 UiAccountData::Json(account_data) => {
                     println!(
                         "  data: '{}'",
                         serde_json::to_string(&account_data).unwrap()
                     );
-                    println!("  encoding: jsonParsed");
+                    println!("  encoding: \"jsonParsed\"");
                 }
                 UiAccountData::LegacyBinary(_) => {}
             };
