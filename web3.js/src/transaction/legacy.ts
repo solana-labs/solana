@@ -47,7 +47,7 @@ export type AccountMeta = {
 export type TransactionInstructionCtorFields = {
   keys: Array<AccountMeta>;
   programId: PublicKey;
-  data?: Buffer;
+  data?: Uint8Array;
 };
 
 /**
@@ -76,7 +76,9 @@ export interface TransactionInstructionJSON {
 /**
  * Transaction Instruction class
  */
-export class TransactionInstruction {
+export class TransactionInstruction
+  implements TransactionInstructionCtorFields
+{
   /**
    * Public keys to include in this transaction
    * Boolean represents whether this pubkey needs to sign the transaction
