@@ -1343,7 +1343,7 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        //ee.reindex_with_address_book(ast);
+        ee.reindex_with_address_book(ast);
         assert!(ee.is_reindexed());
 
         ee.task.record_commit_time(*commit_clock);
@@ -1711,9 +1711,7 @@ impl ScheduleStage {
                     }
                 }
             }
-            if !(!select_skipped || executing_queue_count > 0) {
-                warn!("very odd {} {}", select_skipped, executing_queue_count);
-            }
+            assert!(!select_skipped || executing_queue_count > 0);
         }
         drop(to_next_stage);
         drop(ee_sender);
