@@ -19,6 +19,18 @@
   "publishConfig": {
     "access": "public"
   },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.esm.js"
+      },
+      "require": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.cjs.js"
+      }
+    }
+  },
   "browser": {
     "./lib/index.cjs.js": "./lib/index.browser.cjs.js",
     "./lib/index.esm.js": "./lib/index.browser.esm.js"
