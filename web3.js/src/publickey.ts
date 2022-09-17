@@ -147,10 +147,10 @@ export class PublicKey extends Struct {
     seed: string,
     programId: PublicKey,
   ): Promise<PublicKey> {
-    const buffer = Buffer.concat([
-      fromPublicKey.toBuffer(),
-      Buffer.from(seed),
-      programId.toBuffer(),
+    const buffer = Uint8Array.from([
+      ...fromPublicKey.toBytes(),
+      ...new TextEncoder().encode(seed),
+      ...programId.toBytes(),
     ]);
     const publicKeyBytes = sha256(buffer);
     return new PublicKey(publicKeyBytes);
