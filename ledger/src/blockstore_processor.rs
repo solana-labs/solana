@@ -368,6 +368,7 @@ fn execute_batches_internal(
     })
 }
 
+#[inline(never)]
 fn rebatch_transactions<'a>(
     lock_results: &'a [Result<()>],
     bank: &'a Arc<Bank>,
