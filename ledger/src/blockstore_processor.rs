@@ -388,6 +388,7 @@ fn rebatch_transactions<'a>(
     }
 }
 
+#[inline(never)]
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],

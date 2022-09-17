@@ -440,7 +440,7 @@ impl ReplayStage {
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
-            .name("solReplayStage".to_string())
+            .name("solScReplayStg".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());

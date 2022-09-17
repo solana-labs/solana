@@ -8412,11 +8412,13 @@ pub struct TotalAccountsStats {
 
 impl Drop for Bank {
     fn drop(&mut self) {
-        let r = self.wait_for_scheduler(true);
-        if let Err(err) = r {
-            warn!("Bank::drop(): slot: {} discarding error from scheduler: {:?}", self.slot(), err);
-        } else {
-            trace!("Bank::drop(): slot: {} scheduler is returned to the pool", self.slot());
+        if self.scheduler2.read().unwrap().is_some() {
+            let r = self.wait_for_scheduler(true);
+            if let Err(err) = r {
+                warn!("Bank::drop(): slot: {} discarding error from scheduler: {:?}", self.slot(), err);
+            } else {
+                trace!("Bank::drop(): slot: {} scheduler is returned to the pool", self.slot());
+            }
         }
 
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
