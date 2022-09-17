@@ -384,8 +384,8 @@ fn output_account(
     println!("  data_len: {}", account.data().len());
     if print_account_data {
         if encoding == UiAccountEncoding::Base58 {
-            println!(" data: '{}'", bs58::encode(account.data()).into_string());
-            println!(" encoding: base58");
+            println!("  data: '{}'", bs58::encode(account.data()).into_string());
+            println!("  encoding: base58");
         } else {
             let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
             match account_data {
