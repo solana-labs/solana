@@ -328,9 +328,11 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
-        let strictly_lockable_for_replay = if attempt.target_contended_unique_weights().task_ids.is_empty() {
+        let tcuw = attempt.target_contended_unique_weights().task_ids.back();
+
+        let strictly_lockable_for_replay = if tcuw.is_none() {
             true
-        } else if attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight {
+        } else if tcuw.unwrap().key() == unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target_contended_write_task_count().load(std::sync::atomic::Ordering::SeqCst) == 0 {
             true
