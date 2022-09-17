@@ -440,7 +440,7 @@ fn output_slot(
                                 //    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
                                 //}
 
-                                muxed_sender.send(solana_scheduler::SchedulablePayloadolana_scheduler::Flushable::Payload(t))).unwrap();
+                                muxed_sender.send(solana_scheduler::SchedulablePayloadolana_scheduler::Flushable::Payload(t)).unwrap();
                                 depth.fetch_add(1, Ordering::Relaxed);
                                 weight -= 1;
                             }
