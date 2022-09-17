@@ -1711,7 +1711,9 @@ impl ScheduleStage {
                     }
                 }
             }
-            //assert!(!select_skipped || executing_queue_count > 0);
+            if !(!select_skipped || executing_queue_count > 0) {
+                warn!("very odd {} {}", select_skipped, executing_queue_count);
+            }
         }
         drop(to_next_stage);
         drop(ee_sender);
