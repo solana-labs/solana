@@ -2472,6 +2472,7 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
+                info!("waiting for completed bank: slot: {}",bank.slot());
                 let r = bank.wait_for_scheduler(false);
                 if let Err(err) = r {
                     // Error means the slot needs to be marked as dead
