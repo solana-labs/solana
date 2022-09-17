@@ -1,5 +1,3 @@
-import type {Buffer} from 'buffer';
-
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
 import type {Connection} from './connection';
@@ -37,7 +35,7 @@ export class BpfLoader {
     connection: Connection,
     payer: Signer,
     program: Signer,
-    elf: Buffer | Uint8Array | Array<number>,
+    elf: Uint8Array | Array<number>,
     loaderProgramId: PublicKey,
   ): Promise<boolean> {
     return Loader.load(connection, payer, program, loaderProgramId, elf);
