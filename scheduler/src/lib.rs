@@ -104,7 +104,7 @@ impl ExecutionEnvironment {
                 });
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_contended_write_task_count().fetch_sub(1, std::sync::atomic::Ordering::SeqCst););
+                lock_attempt.target_contended_write_task_count().fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
     }
