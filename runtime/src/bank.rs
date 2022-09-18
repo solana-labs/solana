@@ -1396,7 +1396,7 @@ impl Scheduler {
                         ("thread", format!("solScExLane{:02}", ee.thx), String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
-                        ("status", format!("{:?}", ee.execution_result.unwrap()), String),
+                        ("status", format!("{:?}", ee.execution_result.as_ref().unwrap()), String),
                         ("duration", ee.execution_us, i64),
                         ("cpu_duration", ee.execution_cpu_us, i64),
                         ("compute_units", ee.cu, i64),
