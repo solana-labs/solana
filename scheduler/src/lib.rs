@@ -42,6 +42,7 @@ pub struct ExecutionEnvironment {
     pub slot: solana_sdk::clock::Slot,
     pub execution_us: usize,
     pub execution_cpu_us: usize,
+    pub finish_time: std::time::SystemTime,
 }
 
 impl ExecutionEnvironment {
@@ -1336,6 +1337,7 @@ impl ScheduleStage {
             transaction_index: Default::default(),
             execution_us: Default::default(),
             execution_cpu_us: Default::default(),
+            finish_time: Default::default(),
             slot: 0,
         })
     }
