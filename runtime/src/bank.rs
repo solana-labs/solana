@@ -1371,6 +1371,7 @@ impl Scheduler {
                     let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info_at!(
+                        3,
                         "individual_tx_stats",
                         ("slot", slot, i64),
                         ("index", transaction_index, i64),
