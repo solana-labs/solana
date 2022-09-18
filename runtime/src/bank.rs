@@ -1362,8 +1362,9 @@ impl Scheduler {
                 ee.execution_result = Some(tx_result);
                 ee.finish_time = Some(std::time::SystemTime::now());
                 ee.thx = thx;
-                wall_time.stop();
+                ee.transaction_index = transaction_index;
                 ee.slot = slot;
+                wall_time.stop();
                 ee.execution_us = wall_time.as_us();
                 ee.execution_cpu_us = cpu_time.elapsed().as_micros();
 
