@@ -7404,21 +7404,7 @@ impl AccountsDb {
             });
             reclaims
         };
-        if len > threshold {
-            let chunk_size = std::cmp::max(1, len / quarter_thread_count()); // # pubkeys/thread
-            let batches = 1 + len / chunk_size;
-            (0..batches)
-                .into_par_iter()
-                .map(|batch| {
-                    let start = batch * chunk_size;
-                    let end = std::cmp::min(start + chunk_size, len);
-                    update(start, end)
-                })
-                .flatten()
-                .collect::<Vec<_>>()
-        } else {
-            update(0, len)
-        }
+        update(0, len)
     }
 
     fn should_not_shrink(aligned_bytes: u64, total_bytes: u64, num_stores: usize) -> bool {
