@@ -1,6 +1,6 @@
-// Service to clean up dead slots in accounts_db
-//
-// This can be expensive since we have to walk the append vecs being cleaned up.
+//! Service to clean up dead slots in accounts_db
+//!
+//! This can be expensive since we have to walk the append vecs being cleaned up.
 
 mod stats;
 use {
