@@ -442,6 +442,10 @@ impl ReplayStage {
         let t_replay = Builder::new()
             .name("solScReplayStg".to_string())
             .spawn(move || {
+                let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
+                if max_thread_priority {
+                    thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
+                }
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut identity_keypair = cluster_info.keypair().clone();
