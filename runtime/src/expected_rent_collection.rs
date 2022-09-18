@@ -1248,7 +1248,7 @@ pub mod tests {
                         if rewrite_already {
                             if partition_index_bank_slot != partition_from_pubkey {
                                 // this is an invalid test occurrence.
-                                // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition idnex yet.
+                                // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition index yet.
                                 continue;
                             }
 
