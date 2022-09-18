@@ -23,7 +23,6 @@ export const PUBLIC_KEY_LENGTH = 32;
 export type PublicKeyInitData =
   | number
   | string
-  | Buffer
   | Uint8Array
   | Array<number>
   | PublicKeyData;
