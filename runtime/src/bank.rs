@@ -1371,8 +1371,17 @@ impl Scheduler {
                     let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info_at!(
-                        vec![],
-                        "individual_tx_stats"
+                        std::time::SystemTimw.now(),
+                        "individual_tx_stats",
+                        ("slot", slot, i64),
+                        ("index", transaction_index, i64),
+                        ("thread", current_thread_name, String),
+                        ("signature", &sig, String),
+                        ("account_locks_in_json", "{}", String),
+                        ("status", status_str.unwrap(), String),
+                        ("duration", duration_with_overhead, i64),
+                        ("cpu_duration", cpu_time.elapsed().as_micros(), i64),
+                        ("compute_units", ee.cu, i64),
                     );
                 }
 
