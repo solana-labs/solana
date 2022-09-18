@@ -1372,7 +1372,7 @@ impl Scheduler {
 
                     datapoint_info_at!(
                         3,
-                        "individual_tx_stats",
+                        "individual_tx_stats"
                     );
                 }
 
