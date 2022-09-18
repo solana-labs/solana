@@ -37,6 +37,10 @@ pub struct ExecutionEnvironment {
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
     pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
+    pub thx: usize,
+    pub slot: Slot,
+    pub execution_us: usize,
+    pub execution_cpu_us: usize,
 }
 
 impl ExecutionEnvironment {

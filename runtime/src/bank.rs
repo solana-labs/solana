@@ -1391,8 +1391,8 @@ impl Scheduler {
                     datapoint_info_at!(
                         ee.finish_time,
                         "individual_tx_stats",
-                        ("slot", slot, i64),
-                        ("index", transaction_index, i64),
+                        ("slot", ee.slot, i64),
+                        ("index", ee.transaction_index, i64),
                         ("thread", format!("solScExLane{:02}", ee.thx), String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
