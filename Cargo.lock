@@ -5122,6 +5122,7 @@ dependencies = [
  "tempfile",
  "test-case",
  "thiserror",
+ "thread-priority",
  "tokio",
  "trees",
 ]
