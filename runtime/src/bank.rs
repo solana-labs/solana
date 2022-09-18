@@ -1363,6 +1363,9 @@ impl Scheduler {
 
                 ee.finish_time = std::time::SystemTime::now();
                 ee.execution_result = Some(tx_result);
+                wall_time.stop();
+                ee.execution_us = wall_time.as_us();
+                ee.execution_cpu_us = cpu_time.elapsed().as_micros();
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
@@ -1385,8 +1388,6 @@ impl Scheduler {
                 if send_metrics {
                     let sig = ee.task.tx.0.signature().to_string();
 
-                    wall_time.stop();
-                    let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info_at!(
                         ee.finish_time,
@@ -1397,8 +1398,8 @@ impl Scheduler {
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
                         ("status", ee.execution_result.unwrap(), String),
-                        ("duration", duration_with_overhead, i64),
-                        ("cpu_duration", cpu_time.elapsed().as_micros(), i64),
+                        ("duration", ee.execution_us, i64),
+                        ("cpu_duration", ee.execution_cpu_us, i64),
                         ("compute_units", ee.cu, i64),
                     );
                 }
