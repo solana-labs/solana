@@ -288,56 +288,19 @@ fn execute_batches_internal(
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
-    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
-        Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = 
         batches
             .into_iter()
             .map(|transaction_batch_with_indexes| {
-                let transaction_count = transaction_batch_with_indexes
-                    .batch
-                    .sanitized_transactions()
-                    .len() as u64;
-                let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
-                    {
-                        let result = execute_batch(
-                            transaction_batch_with_indexes,
-                            bank,
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        result
-                    },
-                    "execute_batch",
+                let result = execute_batch(
+                    transaction_batch_with_indexes,
+                    bank,
                 );
-
-                let thread_index = 0;// PAR_THREAD_POOL.current_thread_index().unwrap();
-                execution_timings_per_thread
-                    .lock()
-                    .unwrap()
-                    .entry(thread_index)
-                    .and_modify(|thread_execution_time| {
-                        let ThreadExecuteTimings {
-                            total_thread_us,
-                            total_transactions_executed,
-                            execute_timings: total_thread_execute_timings,
-                        } = thread_execution_time;
-                        *total_thread_us += execute_batches_time.as_us();
-                        *total_transactions_executed += transaction_count;
-                        total_thread_execute_timings
-                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
-                        total_thread_execute_timings.accumulate(&timings);
-                    })
-                    .or_insert(ThreadExecuteTimings {
-                        total_thread_us: execute_batches_time.as_us(),
-                        total_transactions_executed: transaction_count,
-                        execute_timings: timings,
-                    });
+                if let Some(entry_callback) = entry_callback {
+                    entry_callback(bank);
+                }
                 result
             })
             .collect()
@@ -347,7 +310,7 @@ fn execute_batches_internal(
     first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {
-        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
+        execution_timings_per_thread: Default::default(),
         total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
