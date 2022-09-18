@@ -60,7 +60,7 @@ impl DataPoint {
         }
     }
 
-    pub fn at(name: &'static str, timestamp: SystemTime) -> Self {
+    pub fn at(timestamp: SystemTime, name: &'static str) -> Self {
         DataPoint {
             name,
             timestamp,
