@@ -216,12 +216,12 @@ macro_rules! datapoint {
 
 #[macro_export]
 macro_rules! datapoint_at {
-    ($at:expr, $level:expr, $name:expr) => {
+    ($level:expr, $at:expr, $name:expr) => {
         if log::log_enabled!($level) {
             $crate::submit($crate::create_datapoint_at!(@point $name, $at), $level);
         }
     };
-    ($at:expr, $level:expr, $name:expr, $($fields:tt)+) => {
+    ($level:expr, $at:expr, $name:expr, $($fields:tt)+) => {
         if log::log_enabled!($level) {
             $crate::submit($crate::create_datapoint_at!(@point $name, $at, $($fields)+), $level);
         }
