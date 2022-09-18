@@ -37,7 +37,7 @@ export function NFTokenAccountHeader({ account }: { account: Account }) {
   );
 }
 
-export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.NftAccount }) {
+function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.NftAccount }) {
   const { data: metadata } = useNftokenMetadata(nft.metadata_url);
 
   return (
@@ -47,7 +47,7 @@ export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.NftAccount }) {
       </div>
 
       <div className="col mb-3 ms-0.5 mt-3">
-        {<h6 className="header-pretitle ms-1">NFToken NFT</h6>}
+        <h6 className="header-pretitle ms-1">NFToken NFT</h6>
         <div className="d-flex align-items-center">
           <h2 className="header-title ms-1 align-items-center no-overflow-with-ellipsis">
             {metadata ? metadata.name || "No NFT name was found" : "Loading..."}
@@ -75,7 +75,7 @@ export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.NftAccount }) {
   );
 }
 
-export function NFTokenCollectionHeader({
+function NFTokenCollectionHeader({
   collection,
 }: {
   collection: NftokenTypes.CollectionAccount;

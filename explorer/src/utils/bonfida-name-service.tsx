@@ -19,7 +19,7 @@ export interface DomainInfo {
   name: string;
   address: PublicKey;
 }
-export const hasDomainSyntax = (value: string) => {
+export const hasBonfidaDomainSyntax = (value: string) => {
   return value.length > 4 && value.substring(value.length - 4) === ".sol";
 };
 
@@ -38,7 +38,7 @@ async function getDomainKey(
 }
 
 // returns non empty wallet string if a given .sol domain is owned by a wallet
-export async function getDomainInfo(domain: string, connection: Connection) {
+export async function getBonfidaDomainInfo(domain: string, connection: Connection) {
   const domainKey = await getDomainKey(
     domain.slice(0, -4), // remove .sol
     undefined,

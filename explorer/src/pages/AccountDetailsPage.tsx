@@ -44,6 +44,10 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 import React, { Suspense } from "react";
 import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
+import { GLOW_ID_ADDRESS } from "../components/account/glow-id/glow-id-utils";
+import { GlowIdAccountHeader } from "../components/account/glow-id/GlowIdAccountHeader";
+import { GlowIDAccountSection } from "../components/account/glow-id/GlowIDAccountSection";
+import { isGlowIdAccount } from "../components/account/glow-id/isGlowIdAccount";
 import { NFTokenAccountHeader } from "../components/account/nftoken/NFTokenAccountHeader";
 import { NFTokenAccountSection } from "../components/account/nftoken/NFTokenAccountSection";
 import { NFTokenCollectionNFTGrid } from "../components/account/nftoken/NFTokenCollectionNFTGrid";
@@ -221,6 +225,11 @@ export function AccountHeader({
     return <NFTokenAccountHeader account={account} />;
   }
 
+  const glowId = account && isGlowIdAccount(account);
+  if (glowId && account) {
+    return <GlowIdAccountHeader account={account} />;
+  }
+
   if (isToken) {
     let token;
     let unverified = false;
@@ -361,6 +370,8 @@ function InfoSection({ account }: { account: Account }) {
     );
   } else if (account.details?.owner.toBase58() === NFTOKEN_ADDRESS) {
     return <NFTokenAccountSection account={account} />;
+  } else if (account.details?.owner.toBase58() === GLOW_ID_ADDRESS) {
+    return <GlowIDAccountSection account={account} />;
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
   } else if (data && data.program === "nonce") {

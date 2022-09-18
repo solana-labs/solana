@@ -14,7 +14,11 @@ import { Cluster, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
-import { getDomainInfo, hasDomainSyntax } from "utils/name-service";
+import {
+  getBonfidaDomainInfo,
+  hasBonfidaDomainSyntax,
+} from "utils/bonfida-name-service";
+import { getGlowIdFromHandle, hasGlowIdSyntax } from "./account/glow-id/glow-id-utils";
 
 interface SearchOptions {
   label: string;
@@ -70,9 +74,11 @@ export function SearchBar() {
     setSearchOptions(options);
 
     // checking for non local search output
-    if (hasDomainSyntax(search)) {
+    if (hasBonfidaDomainSyntax(search)) {
       // if search input is a potential domain we continue the loading state
-      domainSearch(options);
+      bonfidaDomainSearch(options);
+    } else if (hasGlowIdSyntax(search)) {
+      glowIdSearch(options);
     } else {
       // if search input is not a potential domain we can conclude the search has finished
       setLoadingSearch(false);
@@ -81,12 +87,12 @@ export function SearchBar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  // appends domain lookup results to the local search state
-  const domainSearch = async (options: SearchOptions[]) => {
+  // appends bonfida domain lookup results to the local search state
+  const bonfidaDomainSearch = async (options: SearchOptions[]) => {
     setLoadingSearchMessage("Looking up domain...");
     const connection = new Connection(url);
     const searchTerm = search;
-    const updatedOptions = await buildDomainOptions(
+    const updatedOptions = await buildBonfidaDomainOptions(
       connection,
       search,
       options
@@ -94,6 +100,24 @@ export function SearchBar() {
     if (searchRef.current === searchTerm) {
       setSearchOptions(updatedOptions);
       // after attempting to fetch the domain name we can conclude the loading state
+      setLoadingSearch(false);
+      setLoadingSearchMessage("Loading...");
+    }
+  };
+
+  // appends Glow ID lookup results to the local search state
+  const glowIdSearch = async (options: SearchOptions[]) => {
+    setLoadingSearchMessage("Looking up Glow ID...");
+    const connection = new Connection(url);
+    const searchTerm = search;
+    const updatedOptions = await buildGlowIdOptions(
+      connection,
+      search,
+      options
+    );
+    if (searchRef.current === searchTerm) {
+      setSearchOptions(updatedOptions);
+      // after attempting to fetch the Glow ID we can conclude the loading state
       setLoadingSearch(false);
       setLoadingSearchMessage("Loading...");
     }
@@ -256,21 +280,25 @@ function buildTokenOptions(
   }
 }
 
-async function buildDomainOptions(
+async function buildBonfidaDomainOptions(
   connection: Connection,
   search: string,
   options: SearchOptions[]
 ) {
-  const domainInfo = await getDomainInfo(search, connection);
+  const bonfidaDomainInfo = await getBonfidaDomainInfo(search, connection);
   const updatedOptions: SearchOptions[] = [...options];
-  if (domainInfo && domainInfo.owner && domainInfo.address) {
+  if (
+    bonfidaDomainInfo &&
+    bonfidaDomainInfo.owner &&
+    bonfidaDomainInfo.address
+  ) {
     updatedOptions.push({
       label: "Domain Owner",
       options: [
         {
-          label: domainInfo.owner,
+          label: bonfidaDomainInfo.owner,
           value: [search],
-          pathname: "/address/" + domainInfo.owner,
+          pathname: "/address/" + bonfidaDomainInfo.owner,
         },
       ],
     });
@@ -280,7 +308,29 @@ async function buildDomainOptions(
         {
           label: search,
           value: [search],
-          pathname: "/address/" + domainInfo.address,
+          pathname: "/address/" + bonfidaDomainInfo.address,
+        },
+      ],
+    });
+  }
+  return updatedOptions;
+}
+
+async function buildGlowIdOptions(
+  connection: Connection,
+  search: string,
+  options: SearchOptions[]
+) {
+  const glowIdInfo = await getGlowIdFromHandle(search, connection);
+  const updatedOptions: SearchOptions[] = [...options];
+  if (glowIdInfo) {
+    updatedOptions.push({
+      label: "Glow ID",
+      options: [
+        {
+          label: glowIdInfo.name ? `${glowIdInfo.name} (${search})` : search,
+          value: [search],
+          pathname: "/address/" + glowIdInfo.address,
         },
       ],
     });
