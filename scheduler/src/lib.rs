@@ -42,7 +42,7 @@ pub struct ExecutionEnvironment {
     pub slot: solana_sdk::clock::Slot,
     pub execution_us: usize,
     pub execution_cpu_us: usize,
-    pub finish_time: std::time::SystemTime,
+    pub finish_time: Option<std::time::SystemTime>,
 }
 
 impl ExecutionEnvironment {
