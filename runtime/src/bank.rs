@@ -4346,7 +4346,7 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_results: Vec<Result<_>> = txs.iter()
-            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
+            .map(|tx| tx.get_account_locks(tx_account_lock_limit).map(|_| ()))
             .collect();
         let batch = TransactionBatch::new(lock_results, self, Cow::Borrowed(txs));
         batch.set_needs_unlock(false);
