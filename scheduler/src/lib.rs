@@ -1331,6 +1331,10 @@ impl ScheduleStage {
             finalized_lock_attempts,
             is_reindexed: Default::default(),
             execution_result: Default::default(),
+            thx: Default::default(),
+            transaction_index: Default::default(),
+            execution_us: Default::default(),
+            execution_cpu_us: Default::default(),
         })
     }
 
