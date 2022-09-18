@@ -1306,8 +1306,6 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            let current_thread_name = std::thread::current().name().unwrap().to_string();
-
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
@@ -1363,6 +1361,7 @@ impl Scheduler {
 
                 ee.finish_time = std::time::SystemTime::now();
                 ee.execution_result = Some(tx_result);
+                ee.thx = thx;
                 wall_time.stop();
                 ee.execution_us = wall_time.as_us();
                 ee.execution_cpu_us = cpu_time.elapsed().as_micros();
@@ -1394,7 +1393,7 @@ impl Scheduler {
                         "individual_tx_stats",
                         ("slot", slot, i64),
                         ("index", transaction_index, i64),
-                        ("thread", current_thread_name, String),
+                        ("thread", format!("solScExLane{:02}", ee.thx), String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
                         ("status", ee.execution_result.unwrap(), String),
