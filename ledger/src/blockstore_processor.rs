@@ -476,7 +476,7 @@ fn process_entries_with_callback(
 
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_sanitized_batch(transactions);
+                    let batch = bank.prepare_sanitized_batch_noop(transactions);
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
