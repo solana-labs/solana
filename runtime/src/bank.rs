@@ -1371,7 +1371,7 @@ impl Scheduler {
                     let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info_at!(
-                        3,
+                        vec![],
                         "individual_tx_stats"
                     );
                 }
