@@ -4345,7 +4345,7 @@ impl Bank {
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results: Vec<Result<_>> = txs
+        let lock_results: Vec<Result<_>> = txs.iter()
             .map(|tx| tx.get_account_locks(tx_account_lock_limit))
             .collect();
         let batch = TransactionBatch::new(lock_results, self, Cow::Borrowed(txs));
