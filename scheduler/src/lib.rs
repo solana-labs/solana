@@ -96,7 +96,9 @@ impl ExecutionEnvironment {
                             break;
                         }
                     }
-                    assert!(!should_remove || removed);
+                    if should_remove && !removed {
+                        contended_unique_weights.remove_task(&uq);
+                    }
                     found.then(|| Task::clone_in_queue(task))
                 })
                 .flatten()
