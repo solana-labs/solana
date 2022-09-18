@@ -9,6 +9,7 @@ use {
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
     solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
+    solana_measure::measure::Measure,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         account::Account,
@@ -571,6 +572,8 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     let mut request_pubkeys = Vec::<Pubkey>::with_capacity(num_accounts);
     let mut request_indexes = Vec::<usize>::with_capacity(num_accounts);
 
+    let mut total_get_nonce_accounts_elapsed = 0;
+    let mut total_get_nonce_accounts_count = 0;
     while !unprocessed.is_empty() {
         for i in &unprocessed {
             request_pubkeys.push(nonce_pubkeys[*i]);
@@ -578,10 +581,15 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         }
 
         let num_unprocessed_before = unprocessed.len();
+        let mut get_nonce_accounts_elapsed = Measure::start("get_nonce_accounts_elapsed");
         let accounts: Vec<Option<Account>> = nonce_pubkeys
             .chunks(MAX_MULTIPLE_ACCOUNTS)
             .flat_map(|pubkeys| get_nonce_accounts(client, pubkeys))
             .collect();
+        get_nonce_accounts_elapsed.stop();
+        total_get_nonce_accounts_elapsed += get_nonce_accounts_elapsed.as_us();
+        total_get_nonce_accounts_count +=
+            (nonce_pubkeys.len() + MAX_MULTIPLE_ACCOUNTS - 1) / MAX_MULTIPLE_ACCOUNTS;
 
         for (account, index) in accounts.iter().zip(request_indexes.iter()) {
             if let Some(nonce_account) = account {
@@ -598,6 +606,20 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         request_pubkeys.clear();
         request_indexes.clear();
     }
+    datapoint_info!(
+        "bench-tps-generate_txs",
+        (
+            "get_nonce_accounts_elapsed",
+            total_get_nonce_accounts_elapsed,
+            i64
+        ),
+        (
+            "get_nonce_accounts_count",
+            total_get_nonce_accounts_count,
+            i64
+        ),
+    );
+
     blockhashes
 }
 
