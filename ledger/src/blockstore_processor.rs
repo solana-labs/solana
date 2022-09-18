@@ -174,7 +174,7 @@ fn execute_batch(
     } = batch;
     //let record_token_balances = transaction_status_sender.is_some();
 
-    let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
+    //let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
     /*
     let pre_token_balances = if record_token_balances {
@@ -290,24 +290,17 @@ fn execute_batches_internal(
     assert!(!batches.is_empty());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = 
-        batches
-            .into_iter()
-            .map(|transaction_batch_with_indexes| {
-                let result = execute_batch(
-                    transaction_batch_with_indexes,
-                    bank,
-                );
-                if let Some(entry_callback) = entry_callback {
-                    entry_callback(bank);
-                }
-                result
-            })
-            .collect()
-    ;
+    for batch in batches {
+        let result = execute_batch(
+            batch,
+            bank,
+        );
+        if let Some(entry_callback) = entry_callback {
+            entry_callback(bank);
+        }
+        result?
+    }
     execute_batches_elapsed.stop();
-
-    first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: Default::default(),
