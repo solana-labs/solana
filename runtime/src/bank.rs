@@ -1353,38 +1353,15 @@ impl Scheduler {
                 } = tx_results;
 
                 let tx_result = fee_collection_results.into_iter().collect::<Result<_>>();
-                let status_str = if tx_result.is_ok() {
-                    let details = execution_results[0].details().expect(&format!("tx_result: {:?}", tx_result));
+                if tx_result.is_ok() {
+                    let details = execution_results[0].details().unwrap();
                     ee.cu = details.executed_units;
-                    send_metrics.then(|| format!("{:?}", details.status))
                 } else {
                     let sig = ee.task.tx.0.signature().to_string();
                     error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
-
-                    send_metrics.then(|| format!("{:?}", tx_result))
                 };
 
-                if send_metrics {
-                    let sig = ee.task.tx.0.signature().to_string();
-
-                    wall_time.stop();
-                    let duration_with_overhead = wall_time.as_us();
-
-                    datapoint_info_at!(
-                        std::time::SystemTime::now(),
-                        "individual_tx_stats",
-                        ("slot", slot, i64),
-                        ("index", transaction_index, i64),
-                        ("thread", current_thread_name, String),
-                        ("signature", &sig, String),
-                        ("account_locks_in_json", "{}", String),
-                        ("status", status_str.unwrap(), String),
-                        ("duration", duration_with_overhead, i64),
-                        ("cpu_duration", cpu_time.elapsed().as_micros(), i64),
-                        ("compute_units", ee.cu, i64),
-                    );
-                }
-
+                ee.finish_time = std::timeSystemTime::now();
                 ee.execution_result = Some(tx_result);
 
                 //ee.reindex_with_address_book();
@@ -1405,6 +1382,27 @@ impl Scheduler {
             }
 
             while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
+                if send_metrics {
+                    let sig = ee.task.tx.0.signature().to_string();
+
+                    wall_time.stop();
+                    let duration_with_overhead = wall_time.as_us();
+
+                    datapoint_info_at!(
+                        ee.finish_time,
+                        "individual_tx_stats",
+                        ("slot", slot, i64),
+                        ("index", transaction_index, i64),
+                        ("thread", current_thread_name, String),
+                        ("signature", &sig, String),
+                        ("account_locks_in_json", "{}", String),
+                        ("status", ee.execution_result.unwrap(), String),
+                        ("duration", duration_with_overhead, i64),
+                        ("cpu_duration", cpu_time.elapsed().as_micros(), i64),
+                        ("compute_units", ee.cu, i64),
+                    );
+                }
+
                         if ee.is_aborted() {
                             warn!(
                                 "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
