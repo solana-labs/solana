@@ -6516,7 +6516,7 @@ impl AccountsDb {
                                     // Because we're keeping the `lock' here, there is no need
                                     // to use retry_to_get_account_accessor()
                                     // In other words, flusher/shrinker/cleaner is blocked to
-                                    // cause any Accessor(None) situtation.
+                                    // cause any Accessor(None) situation.
                                     // Anyway this race condition concern is currently a moot
                                     // point because calculate_accounts_hash() should not
                                     // currently race with clean/shrink because the full hash
