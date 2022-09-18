@@ -539,7 +539,12 @@ fn get_rpc_node(
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
+<<<<<<< HEAD
         sleep(Duration::from_secs(1));
+=======
+        // Give gossip some time to populate and not spin on grabbing the crds lock
+        std::thread::sleep(Duration::from_secs(1));
+>>>>>>> baf31b075 (bootstrap: Sleep in loop to get rpc peers (#27843))
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
