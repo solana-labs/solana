@@ -618,6 +618,8 @@ fn get_rpc_nodes(
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
+        // Give gossip some time to populate and not spin on grabbing the crds lock
+        std::thread::sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
