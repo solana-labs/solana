@@ -55,4 +55,3 @@ function GlowIdWithDataHeader({ account }: { account: Account }) {
     </div>
   );
 }
-

@@ -18,7 +18,10 @@ import {
   getBonfidaDomainInfo,
   hasBonfidaDomainSyntax,
 } from "utils/bonfida-name-service";
-import { getGlowIdFromHandle, hasGlowIdSyntax } from "./account/glow-id/glow-id-utils";
+import {
+  getGlowIdFromHandle,
+  hasGlowIdSyntax,
+} from "./account/glow-id/glow-id-utils";
 
 interface SearchOptions {
   label: string;

@@ -3,7 +3,7 @@ import { Account } from "../../../providers/accounts";
 import { GlowIdTypes, parseGlowIdAccount } from "./glow-id-utils";
 
 export const useParseGlowID = (
-  account: Account,
+  account: Account
 ): {
   data: GlowIdTypes.Info | null;
   error: any;
@@ -20,7 +20,7 @@ export const useParseGlowID = (
     },
     {
       suspense: true,
-    },
+    }
   );
   // Not nullable since we use suspense
   return { data: data!, error, mutate };
