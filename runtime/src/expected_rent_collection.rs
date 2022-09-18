@@ -560,7 +560,7 @@ impl ExpectedRentCollection {
             }
             RentResult::LeaveAloneNoRent => {
                 // rent_epoch is not updated for this condition
-                // But, a rewrite WOULD HAVE occured at the expected slot.
+                // But, a rewrite WOULD HAVE occurred at the expected slot.
                 // So, fall through with same rent_epoch, but we will have already calculated 'expected_rent_collection_slot_max_epoch'
                 current_rent_epoch
             }
