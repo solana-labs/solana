@@ -39,7 +39,7 @@ pub struct ExecutionEnvironment {
     pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
     pub finish_time: Option<std::time::SystemTime>,
     pub thx: usize,
-    pub transaction_index: usize,
+    pub transaction_index: u64,
     pub slot: solana_sdk::clock::Slot,
     pub execution_us: u64,
     pub execution_cpu_us: u128,
