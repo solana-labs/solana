@@ -318,7 +318,7 @@ impl ExpectedRentCollection {
             RentResult::CollectRent { .. } => return None,
         };
         {
-            // grab epoch infno for bank slot and storage slot
+            // grab epoch info for bank slot and storage slot
             let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
                 (bank_info.epoch, bank_info.partition_index);
