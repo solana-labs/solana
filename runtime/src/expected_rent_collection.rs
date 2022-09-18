@@ -45,7 +45,7 @@ pubkey_partition_index of 'abc' = 80
 So, rent will be collected or a rewrite is expected to occur:
  each time a slot's pubkey_partition is == [footnote1] pubkey_partition_index within an epoch. [footnote2]
 
- If we skip rewrites, then pubkey's account data will not be rewritten when its rent collecion partition index occurs.
+ If we skip rewrites, then pubkey's account data will not be rewritten when its rent collection partition index occurs.
  However, later we need to get a hash value for the most recent update to this account.
  That leads us to the purpose of this file.
  To calculate a hash for account data, we need to know:
