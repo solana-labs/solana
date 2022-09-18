@@ -346,19 +346,6 @@ fn execute_batches(
         return Ok(());
     }
 
-    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
-        .iter()
-        .flat_map(|batch| {
-            batch
-                .batch
-                .lock_results()
-                .iter()
-                .cloned()
-                .zip(batch.batch.sanitized_transactions().to_vec())
-                .zip(batch.transaction_indexes.to_vec())
-        })
-        .unzip();
-
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
     let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
