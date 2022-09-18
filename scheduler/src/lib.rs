@@ -72,28 +72,25 @@ impl ExecutionEnvironment {
                     let mut removed = false;
                     let mut task = task_cursor.value();
                     //task.trace_timestamps("in_exec(initial list)");
+                    assert!(!task.already_finished());
                     while !task.currently_contended() {
                         if task_cursor.key() == &uq {
                             assert!(should_remove);
                             removed = task_cursor.remove();
                             assert!(removed);
                         }
-                        if task.already_finished() {
-                            task_cursor.remove();
-                        }
                         if let Some(new_cursor) = task_cursor.prev() {
                             assert!(new_cursor.key() < task_cursor.key());
                             task_cursor = new_cursor;
                             task = task_cursor.value();
+                            assert!(!task.already_finished());
                             //task.trace_timestamps("in_exec(subsequent list)");
                         } else {
                             found = false;
                             break;
                         }
                     }
-                    if should_remove && !removed {
-                        contended_unique_weights.remove_task(&uq);
-                    }
+                    assert!(!should_remove || removed);
                     found.then(|| Task::clone_in_queue(task))
                 })
                 .flatten()

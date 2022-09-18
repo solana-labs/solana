@@ -167,12 +167,6 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    replay_vote_sender: Option<&ReplayVoteSender>,
-    timings: &mut ExecuteTimings,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    tx_cost: u64,
-    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let TransactionBatchWithIndexes {
         batch,
@@ -189,8 +183,6 @@ fn execute_batch(
         vec![]
     };
     */
-
-    let pre_process_units: u64 = aggregate_total_execution_units(timings);
 
     batch.bank().schedule_and_commit_transactions(
         batch,
@@ -304,8 +296,7 @@ fn execute_batches_internal(
     let results: Vec<Result<()>> = 
         batches
             .into_iter()
-            .enumerate()
-            .map(|(index, transaction_batch_with_indexes)| {
+            .map(|transaction_batch_with_indexes| {
                 let transaction_count = transaction_batch_with_indexes
                     .batch
                     .sanitized_transactions()
@@ -316,12 +307,6 @@ fn execute_batches_internal(
                         let result = execute_batch(
                             transaction_batch_with_indexes,
                             bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                            tx_costs[index],
-                            log_messages_bytes_limit,
                         );
                         if let Some(entry_callback) = entry_callback {
                             entry_callback(bank);
@@ -420,68 +405,11 @@ fn execute_batches(
 
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
-    let mut total_cost_without_bpf: u64 = 0;
-    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
-    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
-    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
-    #[allow(clippy::needless_collect)]
-    let tx_costs = sanitized_txs
-        .iter()
-        .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
-            let cost = tx_cost.sum();
-            let cost_without_bpf = tx_cost.sum_without_bpf();
-            minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
-            total_cost = total_cost.saturating_add(cost);
-            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
-            (cost, cost_without_bpf)
-        })
-        .collect::<Vec<_>>();
-
-    let target_batch_count = get_thread_count() as u64;
-
     let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
     let mut tx_batch_costs: Vec<u64> = vec![];
-    let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
-        let target_batch_cost = total_cost / target_batch_count;
-        let mut batch_cost: u64 = 0;
-        let mut batch_cost_without_bpf: u64 = 0;
-        let mut slice_start = 0;
-        tx_costs
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, cost_pair)| {
-                let next_index = index + 1;
-                batch_cost = batch_cost.saturating_add(cost_pair.0);
-                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
-                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let tx_batch = rebatch_transactions(
-                        &lock_results,
-                        bank,
-                        &sanitized_txs,
-                        slice_start,
-                        index,
-                        &transaction_indexes,
-                    );
-                    slice_start = next_index;
-                    tx_batches.push(tx_batch);
-                    tx_batch_costs.push(batch_cost_without_bpf);
-                    batch_cost = 0;
-                    batch_cost_without_bpf = 0;
-                }
-            });
-        &tx_batches[..]
-    } else {
-        // Ensure that the total cost attributed to this batch is essentially correct
-        // batches.is_empty() check at top of function ensures that n > 0 for following divide
-        let n = batches.len();
-        tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n];
-        batches
-    };
-
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
-        rebatched_txs,
+        batches,
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
