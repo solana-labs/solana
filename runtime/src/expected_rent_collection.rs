@@ -553,7 +553,7 @@ impl ExpectedRentCollection {
             } => {
                 if next_epoch > current_rent_epoch && rent_due != 0 {
                     // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
-                    // It would be a waste of time to recalcluate a hash.
+                    // It would be a waste of time to recalculate a hash.
                     return None;
                 }
                 std::cmp::max(next_epoch, current_rent_epoch)
