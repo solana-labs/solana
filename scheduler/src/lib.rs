@@ -1336,7 +1336,7 @@ impl ScheduleStage {
             transaction_index: Default::default(),
             execution_us: Default::default(),
             execution_cpu_us: Default::default(),
-            slot: Default::default(),
+            slot: 0,
         })
     }
 
