@@ -1359,10 +1359,11 @@ impl Scheduler {
                     error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                 };
 
-                ee.finish_time = Some(std::time::SystemTime::now());
                 ee.execution_result = Some(tx_result);
+                ee.finish_time = Some(std::time::SystemTime::now());
                 ee.thx = thx;
                 wall_time.stop();
+                ee.slot = slot;
                 ee.execution_us = wall_time.as_us();
                 ee.execution_cpu_us = cpu_time.elapsed().as_micros();
 

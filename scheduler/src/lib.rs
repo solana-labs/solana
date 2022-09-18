@@ -37,12 +37,12 @@ pub struct ExecutionEnvironment {
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
     pub execution_result: Option<Result<(), solana_sdk::transaction::TransactionError>>,
+    pub finish_time: Option<std::time::SystemTime>,
     pub thx: usize,
     pub transaction_index: usize,
     pub slot: solana_sdk::clock::Slot,
     pub execution_us: u64,
     pub execution_cpu_us: u128,
-    pub finish_time: Option<std::time::SystemTime>,
 }
 
 impl ExecutionEnvironment {
