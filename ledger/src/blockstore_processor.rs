@@ -281,11 +281,6 @@ fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
-    transaction_status_sender: Option<&TransactionStatusSender>,
-    replay_vote_sender: Option<&ReplayVoteSender>,
-    cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    tx_costs: &[u64],
-    log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
 
@@ -346,19 +341,11 @@ fn execute_batches(
         return Ok(());
     }
 
-    let mut minimal_tx_cost = u64::MAX;
-    let mut total_cost: u64 = 0;
-    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
     let mut tx_batch_costs: Vec<u64> = vec![];
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         batches,
         entry_callback,
-        transaction_status_sender,
-        replay_vote_sender,
-        cost_capacity_meter,
-        &tx_batch_costs,
-        log_messages_bytes_limit,
     )?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
