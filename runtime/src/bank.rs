@@ -6876,7 +6876,7 @@ impl Bank {
             //
             // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
             // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
-            // will be required for the epoch accounts hash calculation to have compleleted and
+            // will be required for the epoch accounts hash calculation to have completed and
             // for this value to be `Some`.
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
