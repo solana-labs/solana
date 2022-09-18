@@ -104,12 +104,6 @@ impl RentCollector {
             if account_rent_epoch != 0
                 && (account_rent_epoch + 1 < self.epoch || account_rent_epoch > self.epoch + 1)
             {
-                // this should not occur in a running validator
-                if due == 0 {
-                    inc_new_counter_info!("rent-collector-rent-epoch-range-large-exempt", 1);
-                } else {
-                    inc_new_counter_info!("rent-collector-rent-epoch-range-large-paying", 1);
-                }
             }
 
             RentDue::Paying(due)
