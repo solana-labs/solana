@@ -83,7 +83,6 @@ use {
         ThreadPool, ThreadPoolBuilder,
     },
     solana_measure::{measure, measure::Measure},
-    solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
@@ -4246,7 +4245,6 @@ impl Bank {
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
 
-        inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
             self.register_recent_blockhash(hash);
         }
@@ -4907,7 +4905,6 @@ impl Bank {
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
-        inc_new_counter_info!("bank-process_transactions", sanitized_txs.len());
         let mut error_counters = TransactionErrorMetrics::default();
 
         let retryable_transaction_indexes: Vec<_> = batch
@@ -5391,12 +5388,6 @@ impl Bank {
 
         self.increment_transaction_count(tx_count);
         self.increment_signature_count(signature_count);
-
-        inc_new_counter_info!(
-            "bank-process_transactions-txs",
-            committed_transactions_count as usize
-        );
-        inc_new_counter_info!("bank-process_transactions-sigs", signature_count as usize);
 
         if committed_with_failure_result_count > 0 {
             self.transaction_error_count
@@ -5889,7 +5880,6 @@ impl Bank {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
                         if !rent_paying_pubkeys.contains(pubkey) {
                             // inc counter instead of assert while we verify this is correct
-                            inc_new_counter_info!("unexpected-rent-paying-pubkey", 1);
                             warn!(
                                 "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
                                 pubkey,
@@ -7292,11 +7282,13 @@ impl Bank {
         }
 
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}",
+            "bank frozen: {} (parent: {}) hash: {} accounts_delta: {} sigs: {} txs: {}, last_blockhash: {} capitalization: {}",
             self.slot(),
+            self.parent_slot(),
             hash,
             accounts_delta_hash.hash,
             self.signature_count(),
+            self.transaction_count(),
             self.last_blockhash(),
             self.capitalization(),
         );
