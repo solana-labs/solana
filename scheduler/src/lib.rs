@@ -40,8 +40,8 @@ pub struct ExecutionEnvironment {
     pub thx: usize,
     pub transaction_index: usize,
     pub slot: solana_sdk::clock::Slot,
-    pub execution_us: usize,
-    pub execution_cpu_us: usize,
+    pub execution_us: u64,
+    pub execution_cpu_us: u128,
     pub finish_time: Option<std::time::SystemTime>,
 }
 

@@ -1359,7 +1359,7 @@ impl Scheduler {
                     error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
                 };
 
-                ee.finish_time = std::time::SystemTime::now();
+                ee.finish_time = Some(std::time::SystemTime::now());
                 ee.execution_result = Some(tx_result);
                 ee.thx = thx;
                 wall_time.stop();
@@ -1389,7 +1389,7 @@ impl Scheduler {
 
 
                     datapoint_info_at!(
-                        ee.finish_time,
+                        ee.finish_time.unwrap(),
                         "individual_tx_stats",
                         ("slot", ee.slot, i64),
                         ("index", ee.transaction_index, i64),
