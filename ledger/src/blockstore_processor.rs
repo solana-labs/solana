@@ -297,7 +297,7 @@ fn execute_batches_internal(
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: Default::default(),
-        total_batches_len: 1
+        total_batches_len: 1,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
