@@ -89,10 +89,9 @@ impl RetransmitStats {
         if self.since.elapsed() < SUBMIT_CADENCE {
             return;
         }
-        let num_peers = cluster_nodes_cache
+        cluster_nodes_cache
             .get(root_bank.slot(), root_bank, working_bank, cluster_info)
-            .num_peers();
-        datapoint_info!("retransmit-num_nodes", ("count", num_peers, i64));
+            .submit_metrics("cluster_nodes_retransmit", timestamp());
         datapoint_info!(
             "retransmit-stage",
             ("total_time", self.total_time, i64),
