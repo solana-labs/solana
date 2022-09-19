@@ -7234,7 +7234,7 @@ impl Bank {
     /// When the validator starts up, there is an initial hash calculation verification of the snapshot.
     /// Then, in some conditions, there are additional slots replayed and a second hash calculation verification occurs.
     /// This function is called when all initial hash calculations have been requested or completed.
-    pub fn set_initial_blockstore_processing_complete(&self) {
+    pub fn initial_blockstore_processing_completed(&self) {
         self.rc
             .accounts
             .accounts_db
