@@ -1438,6 +1438,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_high_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
@@ -1747,6 +1748,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_high_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
     ) -> Option<std::sync::Arc<Checkpoint>> {
@@ -1762,6 +1764,7 @@ impl ScheduleStage {
             address_book,
             from,
             to_execute_substage,
+            to_high_execute_substage,
             from_execute_substage,
             maybe_to_next_stage,
             &crossbeam_channel::never(),

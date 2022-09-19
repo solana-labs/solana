@@ -1443,6 +1443,7 @@ impl Scheduler {
                     &mut address_book,
                     &transaction_receiver,
                     &scheduled_ee_sender,
+                    &scheduled_high_ee_sender,
                     &processed_ee_receiver,
                     Some(&retired_ee_sender),
                 );
@@ -1457,6 +1458,7 @@ impl Scheduler {
 
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
+            drop(scheduled_high_ee_sender);
             drop(processed_ee_receiver);
 
             todo!();
