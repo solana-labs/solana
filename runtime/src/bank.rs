@@ -1307,7 +1307,7 @@ impl Scheduler {
             }
 
 
-            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_high_ee_receiver.try_recv().map_err(|_e| scheduled_ee_receiver.recv()) {
+            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_high_ee_receiver.try_recv().or_else(|_e| scheduled_ee_receiver.recv()) {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
