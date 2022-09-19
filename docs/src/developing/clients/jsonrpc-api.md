@@ -1948,7 +1948,11 @@ Returns all accounts owned by the provided program Pubkey
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as encoded string
   - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
+<<<<<<< HEAD
     **NEW: This field, and base64 support generally, is only available in solana-core v1.14.3 or newer. Please omit when querying nodes on earlier versions**
+=======
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.2 or newer. Please omit when querying nodes on earlier versions**
+>>>>>>> 8f96a39e7 (Remove markdown file update from version increment-cargo-version.sh (#27851))
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
