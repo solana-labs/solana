@@ -329,7 +329,7 @@ fn rebatch_transactions<'a>(
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    transaction_indexes: impl Iter<Item = usize>,
+    transaction_indexes: impl Iterarator<Item = usize>,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
