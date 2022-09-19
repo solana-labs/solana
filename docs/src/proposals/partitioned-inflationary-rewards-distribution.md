@@ -16,24 +16,27 @@ worse.
 Instead of computing and reward stake accounts at epoch boundary, we will
 decouple reward computation and reward credit into two phases.
 
-A separate service, "epoch calc service" will be created. The service will
-listen to a channel for any incoming rewards calculation requests, and perform
-the calculation for the rewards. For each block that cross the epoch boundary,
-the bank will send a request to the `epoch calc service`. This marks the start
-of the reward computation phase.
+A separate service, "EpochRewardCalculationService" will be created. The service
+will listen to a channel for any incoming rewards calculation requests, and
+perform the calculation for the rewards. For each block that cross the epoch
+boundary, the bank will send a request to the `EpochRewardCalculationService`.
+This marks the start of the reward computation phase.
 
+```
 N-1 -- N -- N+1
      \
       \
         N+2
+```
 
 In the above example, N is the start of the new epoch. Two rewards calculation
-requests will be sent out at slot N and slot N+2. To avoid repeated computation
-with the same input, the signature of the computation requests,
-`hash(epoch_number, hash(stake_accounts_data), hash(vote_accounts), hash(delegation_map))`,
-are calculated. Duplicated computation requests will be
-discard. For the above example, if there are no stake/vote accounts changes between
-slot N-1 and slot N, the 2nd computation request will be discarded.
+requests will be sent out at slot N and slot N+2 because they both cross the
+epoch boundary and are on different forks. To avoid repeated computation with
+the same input, the signature of the computation requests, `hash(epoch_number,
+hash(stake_accounts_data), hash(vote_accounts), hash(delegation_map))`, are
+calculated. Duplicated computation requests will be discard. For the above
+example, if there are no stake/vote accounts changes between slot N and slot
+N+2, the 2nd computation request will be discarded.
 
 When reaching block height `N` after the start of the `reward computation
 phase`, the bank starts the second phase - reward credit, in which, the bank
@@ -43,9 +46,9 @@ then credit the rewards to the stake accounts for the next `M` blocks. If the
 rewards result is not available, the bank will wait until the results are
 available.
 
-We call them:
-(a) `calculating interval` `[epoch_start, epoch_start+N]`
-(b) `credit interval` `[epoch_start+N+1, epoch_start+N+M]`, respectively.
+We call them: <br/>
+(a) calculating interval: `[epoch_start, epoch_start+N]` <br/>
+(b) credit interval: `[epoch_start+N+1, epoch_start+N+M]`, respectively. <br/>
 And the combined interval `[epoch_start, epoch_start+N+M]` is called
 `rewarding interval`.
 
@@ -66,7 +69,7 @@ dependent value can be the epoch number, total rewards for the epoch, the leader
 pubkey for the epoch block, etc. `M` can be choses based on 50K account per
 block, which equal to `ceil(num_stake_accounts/50,000)`.
 
-`num_stake_account` is extracted from leader_schedule_epoch block, so we don't
+`num_stake_account` is extracted from `leader_schedule_epoch` block, so we don't
 run into discrepancy where new transactions right before an epoch boundary
 creates one fork with `X` stake accounts and another fork with `Y` stake accounts.
 
