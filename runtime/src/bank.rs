@@ -7244,7 +7244,7 @@ impl Bank {
 
     /// until this occurs, no additional accounts hash calculations can be started
     /// There will be 0..=2 of these requests.
-    pub fn get_initial_blockstore_processing_complete(&self) -> bool {
+    pub fn is_initial_blockstore_processing_complete(&self) -> bool {
         self.rc
             .accounts
             .accounts_db
