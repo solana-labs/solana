@@ -6612,7 +6612,7 @@ impl Bank {
         };
         let scheduler = s.as_ref().unwrap();
 
-        for (st, &i) in transactions.zip(transaction_indexes) {
+        for (st, &i) in transactions.iter().zip(transaction_indexes) {
             scheduler.schedule(st, i);
         }
     }
