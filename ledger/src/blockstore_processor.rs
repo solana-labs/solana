@@ -424,10 +424,7 @@ fn process_entries_with_callback(
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
-    let mut batches = vec![];
     let mut tick_hashes = vec![];
-    let mut rng = thread_rng();
-    let cost_model = CostModel::new();
 
     for ReplayEntry {
         entry,
@@ -439,20 +436,6 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                    // If it's a tick that will cause a new blockhash to be created,
-                    // execute the group and register the tick
-                    execute_batches(
-                        bank,
-                        &batches,
-                        entry_callback,
-                        transaction_status_sender,
-                        replay_vote_sender,
-                        confirmation_timing,
-                        cost_capacity_meter.clone(),
-                        &cost_model,
-                        log_messages_bytes_limit,
-                    )?;
-                    batches.clear();
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
                     }
@@ -461,50 +444,22 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = if randomize {
-                    panic!("randomize isn't supported");
-                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                        transactions.drain(..).zip(starting_index..).collect();
-                    transactions_and_indexes.shuffle(&mut rng);
-                    let (txs, indexes): (Vec<_>, Vec<_>) =
-                        transactions_and_indexes.into_iter().unzip();
-                    *transactions = txs;
-                    indexes
-                } else {
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
-                };
+                let transaction_indexes = (starting_index..starting_index.saturating_add(transactions.len())).collect();
 
-                let batch = bank.prepare_sanitized_batch_noop(transactions);
-                batches.push(TransactionBatchWithIndexes {
-                    batch,
-                    transaction_indexes,
-                });
                 execute_batches(
                     bank,
-                    &batches,
+                    &(transactions, transaction_indexes),
                     entry_callback,
                     transaction_status_sender,
                     replay_vote_sender,
                     confirmation_timing,
                     cost_capacity_meter.clone(),
-                    &cost_model,
                     log_messages_bytes_limit,
                 )?;
                 batches.clear();
             }
         }
     }
-    execute_batches(
-        bank,
-        &batches,
-        entry_callback,
-        transaction_status_sender,
-        replay_vote_sender,
-        confirmation_timing,
-        cost_capacity_meter,
-        &cost_model,
-        log_messages_bytes_limit,
-    )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
     }
