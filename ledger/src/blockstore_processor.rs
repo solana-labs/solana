@@ -285,7 +285,7 @@ fn execute_batches_internal(
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let result = execute_batch(
         transactions,
-        transaction_indexes
+        transaction_indexes,
         bank,
     );
     if let Some(entry_callback) = entry_callback {
