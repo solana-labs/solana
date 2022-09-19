@@ -457,7 +457,6 @@ fn process_entries_with_callback(
                     cost_capacity_meter.clone(),
                     log_messages_bytes_limit,
                 )?;
-                batches.clear();
             }
         }
     }
