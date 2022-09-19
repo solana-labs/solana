@@ -165,13 +165,10 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatchWithIndexes,
+    transactions: &[SanitizedTransaction],
+    transaction_indexes: impl Iterator<Item = usize>,
     bank: &Arc<Bank>,
 ) -> Result<()> {
-    let TransactionBatchWithIndexes {
-        batch,
-        transaction_indexes,
-    } = batch;
     //let record_token_balances = transaction_status_sender.is_some();
 
     //let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -184,12 +181,12 @@ fn execute_batch(
     };
     */
 
-    batch.bank().schedule_and_commit_transactions(
-        batch,
+    bank.schedule_and_commit_transactions(
         bank,
+        transactions,
         transaction_indexes,
     );
-    if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().into_iter().next() {
+    if let Some(first_error_from_scheduler) = bank.handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
     }
     return Ok(());
@@ -279,27 +276,27 @@ struct ExecuteBatchesInternalMetrics {
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    transactions: &[SanitizedTransaction],
+    transaction_indexes: impl Iterator<Item = usize>,
     entry_callback: Option<&ProcessCallback>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     assert!(!batches.is_empty());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    for batch in batches {
-        let result = execute_batch(
-            batch,
-            bank,
-        );
-        if let Some(entry_callback) = entry_callback {
-            entry_callback(bank);
-        }
-        result?
+    let result = execute_batch(
+        transactions,
+        transaction_indexes
+        bank,
+    );
+    if let Some(entry_callback) = entry_callback {
+        entry_callback(bank);
     }
+    result?
     execute_batches_elapsed.stop();
 
     Ok(ExecuteBatchesInternalMetrics {
         execution_timings_per_thread: Default::default(),
-        total_batches_len: batches.len() as u64,
+        total_batches_len: 1
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
@@ -328,7 +325,7 @@ fn rebatch_transactions<'a>(
 #[inline(never)]
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[SanitizedTransaction],
+    transactions: &[SanitizedTransaction],
     transaction_indexes: impl Iterator<Item = usize>,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
@@ -337,14 +334,10 @@ fn execute_batches(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    if batches.is_empty() {
-        return Ok(());
-    }
-
-    let mut tx_batch_costs: Vec<u64> = vec![];
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
-        batches,
+        transactions,
+        transaction_indexes,
         entry_callback,
     )?;
 
