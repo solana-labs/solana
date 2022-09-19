@@ -254,6 +254,9 @@ pub enum SnapshotError {
 
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
+
+    #[error("snapshot bank verify failed")]
+    BankVerifyFailed,
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -971,6 +974,88 @@ pub fn bank_from_snapshot_archives(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
+    // The first try is to skip unpacking the appendvec files from the snapshot
+    // if they already exist on disk.
+    let result_try_using_existing_accounts_files = bank_from_snapshot_archives_inner(
+        account_paths,
+        bank_snapshots_dir.as_ref(),
+        &full_snapshot_archive_info,
+        incremental_snapshot_archive_info,
+        genesis_config,
+        runtime_config,
+        debug_keys.clone(),
+        additional_builtins,
+        account_secondary_indexes.clone(),
+        accounts_db_caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        test_hash_calculation,
+        accounts_db_skip_shrink,
+        verify_index,
+        accounts_db_config.clone(),
+        accounts_update_notifier.clone(),
+        exit,
+    );
+
+    match result_try_using_existing_accounts_files {
+        Ok(ret) => Ok(ret),
+        Err(e) => {
+            info!("bank_from_latest_snapshot_archives failed with error {}, clear the accounts files and try again", e);
+            // Clear the account path and try again with the appendvec files unpacked from the snapshot
+            for path in account_paths {
+                let mut top_path = path.clone();
+                top_path.push("accounts");
+                if let Err(err) = std::fs::remove_dir_all(top_path) {
+                    panic!("error deleting accounts path {:?}: {}", path, err);
+                }
+            }
+
+            bank_from_snapshot_archives_inner(
+                account_paths,
+                bank_snapshots_dir.as_ref(),
+                &full_snapshot_archive_info,
+                incremental_snapshot_archive_info,
+                genesis_config,
+                runtime_config,
+                debug_keys,
+                additional_builtins,
+                account_secondary_indexes,
+                accounts_db_caching_enabled,
+                limit_load_slot_count_from_snapshot,
+                shrink_ratio,
+                test_hash_calculation,
+                accounts_db_skip_shrink,
+                verify_index,
+                accounts_db_config,
+                accounts_update_notifier,
+                exit,
+            )
+        }
+    }
+}
+
+// This is the inner function without the skipping_unpack retrying logic.
+#[allow(clippy::too_many_arguments)]
+fn bank_from_snapshot_archives_inner(
+    account_paths: &[PathBuf],
+    bank_snapshots_dir: impl AsRef<Path>,
+    full_snapshot_archive_info: &FullSnapshotArchiveInfo,
+    incremental_snapshot_archive_info: Option<&IncrementalSnapshotArchiveInfo>,
+    genesis_config: &GenesisConfig,
+    runtime_config: &RuntimeConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_secondary_indexes: AccountSecondaryIndexes,
+    accounts_db_caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    test_hash_calculation: bool,
+    accounts_db_skip_shrink: bool,
+    verify_index: bool,
+    accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
+) -> Result<(Bank, BankFromArchiveTimings)> {
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
             bank_snapshots_dir,
@@ -1018,15 +1103,19 @@ pub fn bank_from_snapshot_archives(
     info!("{}", measure_rebuild);
 
     let mut measure_verify = Measure::start("verify");
-    if !bank.verify_snapshot_bank(
+    let verified_ok = bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
         full_snapshot_archive_info.slot(),
-    ) && limit_load_slot_count_from_snapshot.is_none()
-    {
-        panic!("Snapshot bank for slot {} failed to verify", bank.slot());
-    }
+    );
     measure_verify.stop();
+    if (!verified_ok) && limit_load_slot_count_from_snapshot.is_none() {
+        info!("Snapshot bank for slot {} failed to verify", bank.slot());
+    }
+
+    if !verified_ok {
+        return Err(SnapshotError::BankVerifyFailed);
+    }
 
     let timings = BankFromArchiveTimings {
         rebuild_bank_from_snapshots_us: measure_rebuild.as_us(),
