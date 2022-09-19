@@ -276,7 +276,7 @@ impl BankForks {
             if self.snapshot_config.is_some()
                 && accounts_background_request_sender.is_snapshot_creation_enabled()
             {
-                if bank.is_startup_verification_complete() {
+                if bank.is_initial_blockstore_processing_complete() {
                     // Save off the status cache because these may get pruned if another
                     // `set_root()` is called before the snapshots package can be generated
                     let status_cache_slot_deltas =

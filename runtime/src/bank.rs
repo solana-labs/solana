@@ -163,7 +163,7 @@ use {
         sync::{
             atomic::{
                 AtomicBool, AtomicI64, AtomicU64, AtomicUsize,
-                Ordering::{AcqRel, Acquire, Relaxed},
+                Ordering::{AcqRel, Acquire, Relaxed, Release},
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
@@ -7231,6 +7231,28 @@ impl Bank {
         self.update_accounts_hash_with_index_option(true, false, false)
     }
 
+    /// When the validator starts up, there is an initial hash calculation verification of the snapshot.
+    /// Then, in some conditions, there are additional slots replayed and a second hash calculation verification occurs.
+    /// This function is called when all initial hash calculations have been requested or completed.
+    pub fn initial_blockstore_processing_completed(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .initial_blockstore_processing_complete
+            .store(true, Release);
+    }
+
+    /// until this occurs, no additional accounts hash calculations can be started
+    /// There will be 0..=2 of these requests.
+    pub fn is_initial_blockstore_processing_complete(&self) -> bool {
+        self.rc
+            .accounts
+            .accounts_db
+            .initial_blockstore_processing_complete
+            .load(Acquire)
+            && self.is_startup_verification_complete()
+    }
+
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
     /// calculation and could shield other real accounts.
     pub fn verify_snapshot_bank(
@@ -8152,9 +8174,7 @@ pub(crate) mod tests {
                 MAX_LOCKOUT_HISTORY,
             },
         },
-        std::{
-            result, str::FromStr, sync::atomic::Ordering::Release, thread::Builder, time::Duration,
-        },
+        std::{result, str::FromStr, thread::Builder, time::Duration},
         test_utils::goto_end_of_slot,
     };
 

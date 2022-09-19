@@ -1279,7 +1279,7 @@ mod tests {
     fn simple_test_validator_no_fees(pubkey: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_no_fees(pubkey, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 
@@ -1826,7 +1826,7 @@ mod tests {
     fn simple_test_validator(alice: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_custom_fees(alice, 10_000, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 
