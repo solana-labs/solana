@@ -6584,7 +6584,6 @@ impl Bank {
         transactions: &[SanitizedTransaction],
         transaction_indexes: impl Iterator<Item = usize>,
     ) {
-        assert_eq!(this_arced_bank.slot(), batch.bank().slot());
         trace!("schedule_and_commit_transactions(): [{:?}; {}]", transaction_indexes.iter().next(), transaction_indexes.len());
 
         let s = {
