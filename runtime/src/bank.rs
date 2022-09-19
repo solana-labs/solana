@@ -1443,7 +1443,7 @@ impl Scheduler {
                     &mut address_book,
                     &transaction_receiver,
                     &scheduled_ee_sender,
-                    &scheduled_high_ee_sender,
+                    Some(&scheduled_high_ee_sender),
                     &processed_ee_receiver,
                     Some(&retired_ee_sender),
                 );
