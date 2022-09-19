@@ -674,29 +674,6 @@ impl ServeRepair {
         ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf)
     }
 
-    fn requires_signature_check(
-        request: &RepairProtocol,
-        root_bank: &Bank,
-        sign_repairs_epoch: Option<Epoch>,
-    ) -> bool {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyOrphan(_, slot)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, slot, _)
-            | RepairProtocol::LegacyAncestorHashes(_, slot, _)
-            | RepairProtocol::WindowIndex { slot, .. }
-            | RepairProtocol::HighestWindowIndex { slot, .. }
-            | RepairProtocol::Orphan { slot, .. }
-            | RepairProtocol::AncestorHashes { slot, .. } => {
-                Self::should_sign_repair_request(*slot, root_bank, sign_repairs_epoch)
-            }
-            RepairProtocol::Pong(_) => true,
-        }
-    }
-
     fn ping_to_packet_mapper_by_request_variant(
         request: &RepairProtocol,
         dest_addr: SocketAddr,
@@ -746,7 +723,6 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
-        let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
         let check_ping_ancestor_request_epoch =
             Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let identity_keypair = self.cluster_info.keypair().clone();
@@ -769,12 +745,6 @@ impl ServeRepair {
                 continue;
             }
 
-            let require_signature_check =
-                Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
-            if require_signature_check && !request.supports_signature() {
-                stats.err_unsigned += 1;
-                continue;
-            }
             if request.supports_signature()
                 && !Self::verify_signed_packet(&my_id, packet, &request, stats)
             {
@@ -801,7 +771,7 @@ impl ServeRepair {
                 }
                 if !check {
                     stats.pings_required += 1;
-                    continue;
+                    // allow processing without ping/pong verification
                 }
             }
 
