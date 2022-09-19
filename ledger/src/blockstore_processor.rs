@@ -328,7 +328,7 @@ fn rebatch_transactions<'a>(
 #[inline(never)]
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    batches: &[SanitizedTransaction],
     transaction_indexes: impl Iterator<Item = usize>,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
