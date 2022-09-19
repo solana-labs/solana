@@ -1296,7 +1296,7 @@ impl Scheduler {
 
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
 
-        let executing_thread_handles = (0..executing_thread_count).map(|thx| {
+        let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
             let bank = bank.clone();
 
@@ -1306,8 +1306,7 @@ impl Scheduler {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-
-            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_high_ee_receiver.try_recv().or_else(|_e| scheduled_ee_receiver.recv()) {
+            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
