@@ -9,6 +9,11 @@ use {
     std::{convert::TryInto, mem::size_of},
 };
 
+pub struct InstructionPaddingConfig {
+    pub program_id: Pubkey,
+    pub data_size: u32,
+}
+
 declare_id!("iXpADd6AW1k5FaaXum5qHbSqyd7TtoN6AD7suVa83MF");
 
 pub fn create_padded_instruction(

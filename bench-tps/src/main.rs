@@ -7,7 +7,6 @@ use {
         bench::{do_bench_tps, max_lamporots_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
-        inline_instruction_padding_program,
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
@@ -156,7 +155,7 @@ fn main() {
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
         use_durable_nonce,
-        pad_instruction_data,
+        instruction_padding_config,
         ..
     } = &cli_config;
 
@@ -225,11 +224,14 @@ fn main() {
         *num_nodes,
         *target_node,
     );
-    if pad_instruction_data.is_some() {
-        info!("Checking for existence of instruction padding program");
+    if let Some(instruction_padding_config) = instruction_padding_config {
+        info!(
+            "Checking for existence of instruction padding program: {}",
+            instruction_padding_config.program_id
+        );
         client
-            .get_account(&inline_instruction_padding_program::id())
-            .expect("Instruction padding program must be deployed to cluster");
+            .get_account(&instruction_padding_config.program_id)
+            .expect("Instruction padding program must be deployed to cluster. Deploy the program using `solana program deploy ./bench-tps/tests/fixtures/spl_instruction_padding.so` and pass the resulting program id with `--instruction-padding-program-id`");
     }
     let keypairs = get_keypairs(
         client.clone(),

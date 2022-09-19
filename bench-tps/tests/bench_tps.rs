@@ -5,7 +5,7 @@ use {
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::Config,
-        inline_instruction_padding_program,
+        inline_instruction_padding_program::{self, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
     },
     solana_core::validator::ValidatorConfig,
@@ -47,9 +47,7 @@ fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
     let additional_accounts = vec![(
         inline_instruction_padding_program::id(),
-        program_account(include_bytes!(
-            "fixtures/solana_bpf_rust_instruction_padding.so"
-        )),
+        program_account(include_bytes!("fixtures/spl_instruction_padding.so")),
     )];
 
     solana_logger::setup();
@@ -122,7 +120,7 @@ fn test_bench_tps_test_validator(config: Config) {
         })
         .faucet_addr(Some(faucet_addr))
         .add_program(
-            "solana_bpf_rust_instruction_padding",
+            "spl_instruction_padding",
             inline_instruction_padding_program::id(),
         )
         .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
@@ -204,7 +202,10 @@ fn test_bench_tps_local_cluster_with_padding() {
     test_bench_tps_local_cluster(Config {
         tx_count: 100,
         duration: Duration::from_secs(10),
-        pad_instruction_data: Some(0),
+        instruction_padding_config: Some(InstructionPaddingConfig {
+            program_id: inline_instruction_padding_program::id(),
+            data_size: 0,
+        }),
         ..Config::default()
     });
 }
@@ -215,7 +216,10 @@ fn test_bench_tps_tpu_client_with_padding() {
     test_bench_tps_test_validator(Config {
         tx_count: 100,
         duration: Duration::from_secs(10),
-        pad_instruction_data: Some(0),
+        instruction_padding_config: Some(InstructionPaddingConfig {
+            program_id: inline_instruction_padding_program::id(),
+            data_size: 0,
+        }),
         ..Config::default()
     });
 }
