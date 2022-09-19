@@ -2083,7 +2083,7 @@ impl AccountsDb {
             new.temp_paths = Some(temp_dirs);
         };
 
-        new.start_background_hasher();
+        //new.start_background_hasher();
         {
             for path in new.paths.iter() {
                 std::fs::create_dir_all(path).expect("Create directory failed.");
@@ -2335,6 +2335,7 @@ impl AccountsDb {
         }
     }
 
+    /*
     fn start_background_hasher(&mut self) {
         let (sender, receiver) = unbounded();
         Builder::new()
@@ -2345,6 +2346,7 @@ impl AccountsDb {
             .unwrap();
         self.sender_bg_hasher = Some(sender);
     }
+    */
 
     pub(crate) fn purge_keys_exact<'a, C: 'a>(
         &'a self,
