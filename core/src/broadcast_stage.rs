@@ -381,14 +381,7 @@ fn update_peer_stats(
     last_datapoint_submit: &AtomicInterval,
 ) {
     if last_datapoint_submit.should_update(1000) {
-        let now = timestamp();
-        let num_live_peers = cluster_nodes.num_peers_live(now);
-        let broadcast_len = cluster_nodes.num_peers() + 1;
-        datapoint_info!(
-            "cluster_info-num_nodes",
-            ("live_count", num_live_peers, i64),
-            ("broadcast_count", broadcast_len, i64)
-        );
+        cluster_nodes.submit_metrics("cluster_nodes_broadcast", timestamp());
     }
 }
 
