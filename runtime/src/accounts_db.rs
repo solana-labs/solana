@@ -7438,49 +7438,6 @@ impl AccountsDb {
         }
     }
 
-    /// Perform the scan for pubkeys that were written to in a slot
-    fn do_scan_slot_for_dirty_pubkeys(
-        &self,
-        slot: Slot,
-    ) -> ScanStorageResult<Pubkey, DashSet<Pubkey>> {
-        self.scan_account_storage(
-            slot,
-            |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
-            |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
-                accum.insert(*loaded_account.pubkey());
-            },
-        )
-    }
-
-    /// Reduce the scan result of dirty pubkeys after calling `scan_account_storage()` into a
-    /// single vec of Pubkeys.
-    fn do_reduce_scan_slot_for_dirty_pubkeys(
-        scan_result: ScanStorageResult<Pubkey, DashSet<Pubkey>>,
-    ) -> Vec<Pubkey> {
-        match scan_result {
-            ScanStorageResult::Cached(cached_result) => cached_result,
-            ScanStorageResult::Stored(stored_result) => {
-                stored_result.into_iter().collect::<Vec<_>>()
-            }
-        }
-    }
-
-    /// Scan a slot for dirty pubkeys
-    fn scan_slot_for_dirty_pubkeys(&self, slot: Slot) -> Vec<Pubkey> {
-        let dirty_pubkeys = self.do_scan_slot_for_dirty_pubkeys(slot);
-        Self::do_reduce_scan_slot_for_dirty_pubkeys(dirty_pubkeys)
-    }
-
-    /// Scan a slot in the account storage for dirty pubkeys and insert them into the list of
-    /// uncleaned pubkeys
-    ///
-    /// This function is called in Bank::drop() when the bank is _not_ frozen, so that its pubkeys
-    /// are considered for cleanup.
-    pub fn scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(&self, slot: Slot) {
-        let dirty_pubkeys = self.scan_slot_for_dirty_pubkeys(slot);
-        self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
-    }
-
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
     }
