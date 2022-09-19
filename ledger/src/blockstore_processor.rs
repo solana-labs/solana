@@ -280,8 +280,6 @@ fn execute_batches_internal(
     transaction_indexes: impl Iterator<Item = usize>,
     entry_callback: Option<&ProcessCallback>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
-    assert!(!batches.is_empty());
-
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let result = execute_batch(
         transactions,
