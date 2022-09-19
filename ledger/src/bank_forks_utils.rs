@@ -154,11 +154,6 @@ pub fn load_bank_forks(
             .unwrap()
             .root_bank()
             .set_startup_verification_complete();
-        bank_forks
-            .read()
-            .unwrap()
-            .root_bank()
-            .set_initial_blockstore_processing_complete();
 
         (bank_forks, None)
     };
