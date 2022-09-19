@@ -87,25 +87,34 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
-    pub(crate) fn num_peers(&self) -> usize {
-        self.nodes.len().saturating_sub(1)
-    }
-
-    // A peer is considered live if they generated their contact info recently.
-    pub(crate) fn num_peers_live(&self, now: u64) -> usize {
-        self.nodes
-            .iter()
-            .filter(|node| node.pubkey() != self.pubkey)
-            .filter_map(|node| node.contact_info())
-            .filter(|node| {
-                let elapsed = if node.wallclock < now {
-                    now - node.wallclock
-                } else {
-                    node.wallclock - now
-                };
-                elapsed < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
-            })
-            .count()
+    pub(crate) fn submit_metrics(&self, name: &'static str, now: u64) {
+        let mut num_nodes_dead = 0;
+        let mut num_nodes_staked = 0;
+        let mut num_nodes_stale = 0;
+        for node in &self.nodes {
+            if node.stake != 0u64 {
+                num_nodes_staked += 1;
+            }
+            match node.contact_info() {
+                None => {
+                    num_nodes_dead += 1;
+                }
+                Some(node) => {
+                    let age = now.saturating_sub(node.wallclock);
+                    if age > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+                        num_nodes_stale += 1;
+                    }
+                }
+            }
+        }
+        num_nodes_stale += num_nodes_dead;
+        datapoint_info!(
+            name,
+            ("num_nodes", self.nodes.len(), i64),
+            ("num_nodes_dead", num_nodes_dead, i64),
+            ("num_nodes_staked", num_nodes_staked, i64),
+            ("num_nodes_stale", num_nodes_stale, i64),
+        );
     }
 }
 
