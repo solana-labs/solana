@@ -1555,6 +1555,9 @@ impl ScheduleStage {
                                trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
                                assert!(maybe_checkpoint.is_none());
                                maybe_checkpoint = Some(checkpoint);
+                                let delta = (processed_count - last_processed_count) as u128;
+                                let elapsed2 = elapsed.as_micros();
+                                info!("schedule_once:from_disconnected id_{:016x} ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
                            },
                            Err(_) => {
                                assert_eq!(from_prev.len(), 0);
