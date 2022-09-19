@@ -2023,7 +2023,7 @@ impl AccountsDb {
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
-            initial_blockstore_processing_complete: AtomicBool::default(),
+            initial_blockstore_processing_complete: AtomicBool::new(false),
             epoch_accounts_hash: Mutex::new(None),
         }
     }
