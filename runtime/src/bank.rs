@@ -6580,11 +6580,11 @@ impl Bank {
 
     pub fn schedule_and_commit_transactions(
         &self,
-        batch: &TransactionBatch,
-        bank: &Arc<Bank>,
-        transaction_indexes: &Vec<usize>,
+        this_arced_bank: &Arc<Bank>,
+        transactions: &[SanitizedTransaction],
+        transaction_indexes: impl Iterator<Item = usize>,
     ) {
-        assert_eq!(bank.slot(), batch.bank().slot());
+        assert_eq!(this_arced_bank.slot(), batch.bank().slot());
         trace!("schedule_and_commit_transactions(): [{:?}; {}]", transaction_indexes.iter().next(), transaction_indexes.len());
 
         let s = {
@@ -6597,7 +6597,7 @@ impl Bank {
                 // safe.
                 let ss = self.scheduler2.write().unwrap();
                 let w = ss.as_ref().unwrap();
-                *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
+                *w.bank.write().unwrap() = Some(Arc::downgrade(&this_arced_bank));
                 w.slot.store(bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 drop(ss);
@@ -6606,13 +6606,13 @@ impl Bank {
                 info!("reconfigured scheduler to the bank slot: {}", self.slot());
                 s
             } else {
-                assert_eq!(bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
+                assert_eq!(this_arced_bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
                 r
             }
         };
         let scheduler = s.as_ref().unwrap();
 
-        for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
+        for (st, &i) in transactions.zip(transaction_indexes) {
             scheduler.schedule(st, i);
         }
     }
