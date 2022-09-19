@@ -6585,7 +6585,7 @@ impl Bank {
         transaction_indexes: impl Iterator<Item = usize>,
     ) {
         assert_eq!(this_arced_bank.slot(), self.slot());
-        trace!("schedule_and_commit_transactions(): [{:?}; {}]", transaction_indexes.iter().next(), transaction_indexes.len());
+        trace!("schedule_and_commit_transactions(): [{:?}; {}]", transactions.len());
 
         let s = {
             let r = self.scheduler2.read().unwrap();
