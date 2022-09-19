@@ -444,7 +444,7 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = (starting_index..starting_index.saturating_add(transactions.len())).iter();
+                let transaction_indexes = (starting_index..starting_index.saturating_add(transactions.len())).into_iter();
 
                 execute_batches(
                     bank,
