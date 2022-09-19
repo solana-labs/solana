@@ -291,7 +291,8 @@ fn execute_batches_internal(
     if let Some(entry_callback) = entry_callback {
         entry_callback(bank);
     }
-    result?
+    result?;
+
     execute_batches_elapsed.stop();
 
     Ok(ExecuteBatchesInternalMetrics {
