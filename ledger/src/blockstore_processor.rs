@@ -448,7 +448,8 @@ fn process_entries_with_callback(
 
                 execute_batches(
                     bank,
-                    &(transactions, transaction_indexes),
+                    transactions,
+                    transaction_indexes,
                     entry_callback,
                     transaction_status_sender,
                     replay_vote_sender,
