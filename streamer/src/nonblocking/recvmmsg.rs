@@ -15,10 +15,10 @@ pub async fn recv_mmsg(
 ) -> io::Result</*num packets:*/ usize> {
     debug_assert!(packets.iter().all(|pkt| pkt.meta == Meta::default()));
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
-    socket.readable().await?;
     let mut i = 0;
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
+        socket.readable().await?;
         match socket.try_recv_from(p.buffer_mut()) {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 break;
