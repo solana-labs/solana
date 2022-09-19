@@ -13,6 +13,7 @@ use {
     regex::Regex,
     serde::Serialize,
     serde_json::json,
+    solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -369,8 +370,9 @@ fn output_account(
     account: &AccountSharedData,
     modified_slot: Option<Slot>,
     print_account_data: bool,
+    encoding: UiAccountEncoding,
 ) {
-    println!("{}", pubkey);
+    println!("{}:", pubkey);
     println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
     println!("  owner: '{}'", account.owner());
     println!("  executable: {}", account.executable());
@@ -380,7 +382,29 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        println!("  data: '{}'", bs58::encode(account.data()).into_string());
+        if encoding == UiAccountEncoding::Base58 {
+            println!("  data: '{}'", bs58::encode(account.data()).into_string());
+            println!("  encoding: \"base58\"");
+        } else {
+            let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+            match account_data {
+                UiAccountData::Binary(data, data_encoding) => {
+                    println!("  data: '{}'", data);
+                    println!(
+                        "  encoding: {}",
+                        serde_json::to_string(&data_encoding).unwrap()
+                    );
+                }
+                UiAccountData::Json(account_data) => {
+                    println!(
+                        "  data: '{}'",
+                        serde_json::to_string(&account_data).unwrap()
+                    );
+                    println!("  encoding: \"jsonParsed\"");
+                }
+                UiAccountData::LegacyBinary(_) => {}
+            };
+        }
     }
 }
 
@@ -1662,6 +1686,15 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
+            .arg(
+                Arg::with_name("encoding")
+                    .long("encoding")
+                    .takes_value(true)
+                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
+                    .default_value("base58")
+                    .requires("accounts")
+                    .help("Print account data in specified format when printing account contents."),
+            )
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -2011,6 +2044,13 @@ fn main() {
                 .long("no-account-data")
                 .takes_value(false)
                 .help("Do not print account data when printing account contents."),
+            ).arg(
+                Arg::with_name("encoding")
+                    .long("encoding")
+                    .takes_value(true)
+                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
+                    .default_value("base58")
+                    .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -2309,15 +2349,22 @@ fn main() {
             }
             ("genesis", Some(arg_matches)) => {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let print_accouunts = arg_matches.is_present("accounts");
-                if print_accouunts {
+                let print_accounts = arg_matches.is_present("accounts");
+                if print_accounts {
                     let print_account_data = !arg_matches.is_present("no_account_data");
+                    let print_encoding_format = match arg_matches.value_of("encoding") {
+                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+                        Some("base64") => UiAccountEncoding::Base64,
+                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+                        _ => UiAccountEncoding::Base58,
+                    };
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
                             &pubkey,
                             &AccountSharedData::from(account),
                             None,
                             print_account_data,
+                            print_encoding_format,
                         );
                     }
                 } else {
@@ -3356,9 +3403,21 @@ fn main() {
                 let print_account_contents = !arg_matches.is_present("no_account_contents");
                 if print_account_contents {
                     let print_account_data = !arg_matches.is_present("no_account_data");
+                    let print_encoding_format = match arg_matches.value_of("encoding") {
+                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+                        Some("base64") => UiAccountEncoding::Base64,
+                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+                        _ => UiAccountEncoding::Base58,
+                    };
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(&pubkey, &account, Some(slot), print_account_data);
+                        output_account(
+                            &pubkey,
+                            &account,
+                            Some(slot),
+                            print_account_data,
+                            print_encoding_format,
+                        );
                     }
                     measure.stop();
                     info!("{}", measure);
