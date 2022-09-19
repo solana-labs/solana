@@ -1363,9 +1363,10 @@ impl Scheduler {
                 ee.thx = thx;
                 ee.transaction_index = transaction_index;
                 ee.slot = slot;
+                ee.execution_cpu_us = cpu_time.elapsed().as_micros();
+                // make wall time is longer than cpu time, always
                 wall_time.stop();
                 ee.execution_us = wall_time.as_us();
-                ee.execution_cpu_us = cpu_time.elapsed().as_micros();
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
