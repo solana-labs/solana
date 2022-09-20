@@ -22,6 +22,7 @@ use {
         },
         slot_stats::{ShredSource, SlotsStats},
     },
+    assert_matches::debug_assert_matches,
     bincode::deserialize,
     crossbeam_channel::{bounded, Receiver, Sender, TrySendError},
     dashmap::DashSet,
@@ -1363,7 +1364,8 @@ impl Blockstore {
     }
 
     fn should_insert_coding_shred(shred: &Shred, last_root: &RwLock<u64>) -> bool {
-        shred.is_code() && shred.sanitize().is_ok() && shred.slot() > *last_root.read().unwrap()
+        debug_assert_matches!(shred.sanitize(), Ok(()));
+        shred.is_code() && shred.slot() > *last_root.read().unwrap()
     }
 
     fn insert_coding_shred(
@@ -1377,7 +1379,8 @@ impl Blockstore {
 
         // Assert guaranteed by integrity checks on the shred that happen before
         // `insert_coding_shred` is called
-        assert!(shred.is_code() && shred.sanitize().is_ok());
+        debug_assert_matches!(shred.sanitize(), Ok(()));
+        assert!(shred.is_code());
 
         // Commit step: commit all changes to the mutable structures at once, or none at all.
         // We don't want only a subset of these changes going through.
@@ -1426,23 +1429,7 @@ impl Blockstore {
         } else {
             false
         };
-        if let Err(err) = shred.sanitize() {
-            let leader_pubkey = leader_schedule
-                .and_then(|leader_schedule| leader_schedule.slot_leader_at(slot, None));
-
-            datapoint_error!(
-                "blockstore_error",
-                (
-                    "error",
-                    format!(
-                        "Leader {:?}, slot {}: received invalid shred: {:?}",
-                        leader_pubkey, slot, err,
-                    ),
-                    String
-                )
-            );
-            return false;
-        }
+        debug_assert_matches!(shred.sanitize(), Ok(()));
         // Check that we do not receive shred_index >= than the last_index
         // for the slot
         let last_index = slot_meta.last_index;
@@ -6310,18 +6297,6 @@ pub mod tests {
             &coding_shred,
             &last_root
         ));
-
-        // Trying to insert a shred with index < position should fail
-        {
-            let mut coding_shred = coding_shred.clone();
-            let index = coding_shred.index() - coding_shred.fec_set_index() - 1;
-            coding_shred.set_index(index as u32);
-
-            assert!(!Blockstore::should_insert_coding_shred(
-                &coding_shred,
-                &last_root
-            ));
-        }
 
         // Trying to insert value into slot <= than last root should fail
         {

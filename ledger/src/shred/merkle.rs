@@ -15,6 +15,7 @@ use {
         },
         shredder::{self, ReedSolomon},
     },
+    assert_matches::debug_assert_matches,
     itertools::Itertools,
     rayon::{prelude::*, ThreadPool},
     reed_solomon_erasure::Error::{InvalidIndex, TooFewParityShards, TooFewShards},
@@ -996,7 +997,7 @@ fn make_erasure_batch(
         shred.set_merkle_branch(merkle_branch)?;
         shred.set_signature(signature);
         debug_assert!(shred.verify(&keypair.pubkey()));
-        debug_assert!(shred.sanitize().is_ok());
+        debug_assert_matches!(shred.sanitize(), Ok(()));
         // Assert that shred payload is fully populated.
         debug_assert_eq!(shred, {
             let shred = shred.payload().clone();
