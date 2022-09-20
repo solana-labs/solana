@@ -558,7 +558,7 @@ fn transfer_with_compute_unit_price_and_padding(
             vec![],
             instruction_padding_config.data_size,
         )
-        .expect("Instruction too large")
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
@@ -651,7 +651,7 @@ fn nonced_transfer_with_padding(
             vec![],
             instruction_padding_config.data_size,
         )
-        .expect("Instruction too large")
+        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };

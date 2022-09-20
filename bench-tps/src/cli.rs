@@ -473,14 +473,14 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         args.use_durable_nonce = true;
     }
 
-    if let Some(d) = matches.value_of("instruction_padding_data_size") {
+    if let Some(data_size) = matches.value_of("instruction_padding_data_size") {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
             .unwrap_or(inline_instruction_padding_program::ID);
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
-            data_size: d
+            data_size: data_size
                 .to_string()
                 .parse()
                 .expect("Can't parse padded instruction data size"),

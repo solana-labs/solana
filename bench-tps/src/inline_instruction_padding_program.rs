@@ -58,8 +58,8 @@ pub fn create_padded_instruction(
     }
 
     // The format for account data goes:
-    // * first account is the program to call into
-    // * following accounts are the one required for the CPI
+    // * accounts required for the CPI
+    // * program account to call into
     // * additional accounts may be included as padding or to test loading / locks
     let num_accounts = instruction.accounts.len() + 1 + padding_accounts.len();
     if num_accounts > MAX_CPI_ACCOUNT_INFOS {

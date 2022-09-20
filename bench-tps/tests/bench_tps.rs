@@ -33,10 +33,10 @@ use {
     std::{sync::Arc, time::Duration},
 };
 
-fn program_account(elf: &[u8]) -> AccountSharedData {
+fn program_account(program_data: &[u8]) -> AccountSharedData {
     AccountSharedData::from(Account {
-        lamports: Rent::default().minimum_balance(elf.len()).min(1),
-        data: elf.to_vec(),
+        lamports: Rent::default().minimum_balance(program_data.len()).min(1),
+        data: program_data.to_vec(),
         owner: solana_sdk::bpf_loader::id(),
         executable: true,
         rent_epoch: 0,
