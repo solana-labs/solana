@@ -109,6 +109,7 @@ export class VersionedTransaction {
   }
 
   addSignature(publicKey: PublicKey, signature: Uint8Array) {
+    assert(signature.byteLength === 64, 'Signature must be 64 bytes long');
     const signerPubkeys = this.message.staticAccountKeys.slice(
       0,
       this.message.header.numRequiredSignatures,
@@ -118,7 +119,7 @@ export class VersionedTransaction {
     );
     assert(
       signerIndex >= 0,
-      `Cannot add signature with non signer key ${publicKey.toBase58()}`,
+      `Can not add signature; \`${publicKey.toBase58()}\` is not required to sign this transaction`,
     );
     this.signatures[signerIndex] = signature;
   }
