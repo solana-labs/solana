@@ -432,7 +432,7 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                    info!("exeucted {} txs so far in {}us", tx_count, started.elapsed().as_micros());
+                    info!("process_entries_with_callback(): exeucted {} txs so far in {}us (still in loop)", tx_count, started.elapsed().as_micros());
                     started = std::time::Instant::now();
                     tx_count = 0;
 
@@ -461,7 +461,7 @@ fn process_entries_with_callback(
             }
         }
     }
-    info!("exeucted {} txs so far in {}us", tx_count, started.elapsed().as_micros());
+    info!("process_entries_with_callback(): exeucted {} txs so far in {}us (after loop)", tx_count, started.elapsed().as_micros());
     started = std::time::Instant::now();
     for hash in tick_hashes {
         bank.register_tick(hash);
