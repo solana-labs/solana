@@ -979,7 +979,7 @@ pub fn bank_from_snapshot_archives(
     let result_try_using_existing_accounts_files = bank_from_snapshot_archives_inner(
         account_paths,
         bank_snapshots_dir.as_ref(),
-        &full_snapshot_archive_info,
+        full_snapshot_archive_info,
         incremental_snapshot_archive_info,
         genesis_config,
         runtime_config,
@@ -1013,7 +1013,7 @@ pub fn bank_from_snapshot_archives(
             bank_from_snapshot_archives_inner(
                 account_paths,
                 bank_snapshots_dir.as_ref(),
-                &full_snapshot_archive_info,
+                full_snapshot_archive_info,
                 incremental_snapshot_archive_info,
                 genesis_config,
                 runtime_config,
