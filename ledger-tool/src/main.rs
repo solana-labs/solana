@@ -1068,14 +1068,10 @@ fn load_bank_forks(
         );
 
         if non_primary_accounts_path.exists() {
-            info!("Skip accounts clearing, to save the snapshot unpacking work.")
-            /*
-            info!("Clearing {:?}", non_primary_accounts_path);
-            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
-            move_and_async_delete_path(&non_primary_accounts_path);
-            measure_time.stop();
-            info!("done. {}", measure_time);
-            */
+            info!(
+                "Skip clearing {}, to save the snapshot unpacking work.",
+                non_primary_accounts_path.display()
+            );
         }
 
         vec![non_primary_accounts_path]
