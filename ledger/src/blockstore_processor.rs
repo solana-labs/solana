@@ -461,7 +461,7 @@ fn process_entries_with_callback(
             }
         }
     }
-    info!("process_entries_with_callback(): slot: {} idx: {} exeucted {} txs so far in {}us (after loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
+    info!("process_entries_with_callback(): slot: {} exeucted {} txs so far in {}us (after loop)", bank.slot(), tx_count, started.elapsed().as_micros());
     started = std::time::Instant::now();
     for hash in tick_hashes {
         bank.register_tick(hash);
