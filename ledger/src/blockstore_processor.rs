@@ -186,9 +186,11 @@ fn execute_batch(
         transactions,
         transaction_indexes,
     );
+    /*
     if let Some(first_error_from_scheduler) = bank.handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
     }
+    */
     return Ok(());
 
     /*
@@ -417,6 +419,8 @@ fn process_entries_with_callback(
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut tick_hashes = vec![];
+    let mut started = std::time::Instant::now();
+    let mut tx_count = 0;
 
     for ReplayEntry {
         entry,
@@ -428,6 +432,10 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
+                    info!("exeucted {} txs so far in {}us", tx_count, started.elapsed().as_micros());
+                    started = std::time::Instant::now();
+                    tx_count = 0;
+
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
                     }
@@ -437,6 +445,7 @@ fn process_entries_with_callback(
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
                 let transaction_indexes = (starting_index..starting_index.saturating_add(transactions.len())).into_iter();
+                tx_count += transactions.len();
 
                 execute_batches(
                     bank,
@@ -452,6 +461,8 @@ fn process_entries_with_callback(
             }
         }
     }
+    info!("exeucted {} txs so far in {}us", tx_count, started.elapsed().as_micros());
+    started = std::time::Instant::now();
     for hash in tick_hashes {
         bank.register_tick(hash);
     }
