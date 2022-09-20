@@ -2919,6 +2919,208 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_syscall_edwards_curve_point_validation() {
+        use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_EDWARDS;
+
+        let config = Config::default();
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let valid_bytes: [u8; 32] = [
+            201, 179, 241, 122, 180, 185, 239, 50, 183, 52, 221, 0, 153, 195, 43, 18, 22, 38, 187,
+            206, 179, 192, 210, 58, 53, 45, 150, 98, 89, 17, 158, 11,
+        ];
+        let valid_bytes_va = 0x100000000;
+
+        let invalid_bytes: [u8; 32] = [
+            120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,
+            60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
+        ];
+        let invalid_bytes_va = 0x200000000;
+
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: valid_bytes.as_ptr() as *const _ as u64,
+                    vm_addr: valid_bytes_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: invalid_bytes.as_ptr() as *const _ as u64,
+                    vm_addr: invalid_bytes_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(
+                (invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_validate_point_cost)
+                    * 2,
+            );
+        let mut syscall = SyscallCurvePointValidation {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_EDWARDS,
+            valid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(0, result.unwrap());
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_EDWARDS,
+            invalid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(1, result.unwrap());
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_EDWARDS,
+            valid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(
+            Err(EbpfError::UserError(BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            result
+        );
+    }
+
+    #[test]
+    fn test_syscall_ristretto_curve_point_validation() {
+        use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_RISTRETTO;
+
+        let config = Config::default();
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let valid_bytes: [u8; 32] = [
+            226, 242, 174, 10, 106, 188, 78, 113, 168, 132, 169, 97, 197, 0, 81, 95, 88, 227, 11,
+            106, 165, 130, 221, 141, 182, 166, 89, 69, 224, 141, 45, 118,
+        ];
+        let valid_bytes_va = 0x100000000;
+
+        let invalid_bytes: [u8; 32] = [
+            120, 140, 152, 233, 41, 227, 203, 27, 87, 115, 25, 251, 219, 5, 84, 148, 117, 38, 84,
+            60, 87, 144, 161, 146, 42, 34, 91, 155, 158, 189, 121, 79,
+        ];
+        let invalid_bytes_va = 0x200000000;
+
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: valid_bytes.as_ptr() as *const _ as u64,
+                    vm_addr: valid_bytes_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: invalid_bytes.as_ptr() as *const _ as u64,
+                    vm_addr: invalid_bytes_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(
+                (invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_validate_point_cost)
+                    * 2,
+            );
+        let mut syscall = SyscallCurvePointValidation {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_RISTRETTO,
+            valid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(0, result.unwrap());
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_RISTRETTO,
+            invalid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(1, result.unwrap());
+
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall.call(
+            CURVE25519_RISTRETTO,
+            valid_bytes_va,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(
+            Err(EbpfError::UserError(BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
+            ))),
+            result
+        );
+    }
+
     fn create_filled_type<T: Default>(zero_init: bool) -> T {
         let mut val = T::default();
         let p = &mut val as *mut _ as *mut u8;
