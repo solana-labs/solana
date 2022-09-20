@@ -1445,7 +1445,7 @@ impl ScheduleStage {
     ) -> Option<std::sync::Arc<Checkpoint>> {
         let mut maybe_start_time = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
-        info!("schedule_once:initial id_{:016x}", random_id);
+        info!("schedule_once:stanby id_{:016x}", random_id);
 
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
@@ -1544,6 +1544,7 @@ impl ScheduleStage {
                    }
                    recv(from_prev) -> maybe_from => {
                        if maybe_start_time.is_none() {
+                            info!("schedule_once:initial id_{:016x}", random_id);
                            maybe_start_time = Some(std::time::Instant::now());
                            last_time = maybe_start_time.clone();
                        }
