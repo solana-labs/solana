@@ -314,6 +314,9 @@ impl TransactionContext {
                 callee_instruction_accounts_lamport_sum;
         }
         let index_in_trace = self.get_instruction_trace_length();
+        if index_in_trace >= self.instruction_trace_capacity {
+            return Err(InstructionError::MaxInstructionTraceLengthExceeded);
+        }
         self.instruction_trace.push(InstructionContext::default());
         if nesting_level >= self.instruction_stack_capacity {
             return Err(InstructionError::CallDepth);
