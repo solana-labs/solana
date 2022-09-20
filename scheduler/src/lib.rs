@@ -1443,8 +1443,8 @@ impl ScheduleStage {
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     ) -> Option<std::sync::Arc<Checkpoint>> {
-        let start_time = std::time::Instant::now();
-        let (mut last_time, mut last_processed_count) = (start_time.clone(), 0_usize);
+        let maybe_start_time = None;
+        let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
         info!("schedule_once:initial id_{:016x}", random_id);
 
         let mut executing_queue_count = 0_usize;
@@ -1543,6 +1543,10 @@ impl ScheduleStage {
                        }
                    }
                    recv(from_prev) -> maybe_from => {
+                       if maybe_start_time.is_none() {
+                           maybe_start_time = Some(std::time::Instant::now());
+                           last_time = maybe_start_time.clone();
+                       }
                        match maybe_from {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
                                 Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
@@ -1615,12 +1619,12 @@ impl ScheduleStage {
 
                     interval_count += 1;
                     if interval_count % 100 == 0 {
-                        let elapsed = last_time.elapsed();
+                        let elapsed = last_time.unwrap().elapsed();
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
                             info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
-                            (last_time, last_processed_count) = (std::time::Instant::now(), processed_count);
+                            (last_time, last_processed_count) = (Some(std::time::Instant::now()), processed_count);
                         }
                     }
                 }
@@ -1655,12 +1659,12 @@ impl ScheduleStage {
 
                     interval_count += 1;
                     if interval_count % 100 == 0 {
-                        let elapsed = last_time.elapsed();
+                        let elapsed = last_time.unwrap().elapsed();
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
                             info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
-                            (last_time, last_processed_count) = (std::time::Instant::now(), processed_count);
+                            (last_time, last_processed_count) = (Some(std::time::Instant::now()), processed_count);
                         }
                     }
                 }
@@ -1734,9 +1738,12 @@ impl ScheduleStage {
         }
 
 
-        let elapsed = start_time.elapsed();
-        let elapsed2 = elapsed.as_micros();
-        info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps!", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), 1_000_000_u128*(processed_count as u128)/elapsed2);
+        if let Some(start_time) = maybe_start_time {
+            let elapsed = start_time.elapsed();
+            let elapsed2 = elapsed.as_micros();
+            info!("schedule_once:final id_{:016x} (no_more_work: {}) ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} miss: {}, overall: {}txs/{}us={}tps!", random_id, no_more_work, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), (if from_exec_disconnected { "-".to_string() } else { format!("{}", from_exec.len())}), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), failed_lock_count, processed_count, elapsed.as_micros(), 1_000_000_u128*(processed_count as u128)/elapsed2);
+        }
+
         maybe_checkpoint
     }
 
