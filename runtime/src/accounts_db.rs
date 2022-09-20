@@ -7103,6 +7103,11 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
+            if !config.use_write_cache && self.accounts_cache.contains_any_slots(slot) {
+                // this indicates a race condition
+                inc_new_counter_info!("accounts_hash_items_in_write_cache", 1);
+            }
+
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();

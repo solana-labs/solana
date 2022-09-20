@@ -277,6 +277,10 @@ impl AccountsCache {
         }
     }
 
+    pub fn contains_any_slots(&self, max_slot_inclusive: Slot) -> bool {
+        self.cache.iter().any(|e| e.key() <= &max_slot_inclusive)
+    }
+
     // Removes slots less than or equal to `max_root`. Only safe to pass in a rooted slot,
     // otherwise the slot removed could still be undergoing replay!
     pub fn remove_slots_le(&self, max_root: Slot) -> Vec<(Slot, SlotCache)> {
