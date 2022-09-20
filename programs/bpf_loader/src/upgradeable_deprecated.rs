@@ -244,7 +244,7 @@ pub fn process_instruction_jit(
     process_instruction_common(first_instruction_account, invoke_context, true)
 }
 
-fn process_instruction_common(
+pub(crate) fn process_instruction_common(
     first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
     use_jit: bool,

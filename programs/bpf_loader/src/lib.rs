@@ -46,7 +46,8 @@ use {
             disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
             enable_bpf_loader_extend_program_data_ix,
-            error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
+            error_on_syscall_bpf_function_hash_collisions,
+            keyed_account_removal_from_builtin_programs, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -330,6 +331,16 @@ fn process_instruction_common(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
+    if !invoke_context
+        .feature_set
+        .is_active(&keyed_account_removal_from_builtin_programs::id())
+    {
+        return upgradeable_deprecated::process_instruction_common(
+            first_instruction_account,
+            invoke_context,
+            use_jit,
+        );
+    }
     let log_collector = invoke_context.get_log_collector();
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;

@@ -512,6 +512,10 @@ pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
 
+pub mod keyed_account_removal_from_builtin_programs {
+    solana_sdk::declare_id!("CD9HcpqP7yGXCgmreJSjZh9nyBGt1zqC6xjwMNgARPq5");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -634,6 +638,7 @@ lazy_static! {
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
+        (keyed_account_removal_from_builtin_programs::id(), "replace KeyedAccount by BorrowedAccount in built-in programs"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

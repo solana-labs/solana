@@ -1,7 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
-    crate::system_instruction_processor,
+    crate::{system_instruction_processor, system_instruction_processor_deprecated},
     solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
     solana_sdk::{
         feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
@@ -72,6 +72,11 @@ pub enum BuiltinFeatureTransition {
         builtin: Builtin,
         feature_id: Pubkey,
     },
+    /// Remove a builtin program if a feature is activated.
+    Remove {
+        builtin: Builtin,
+        feature_id: Pubkey,
+    },
     /// Remove a builtin program if a feature is activated or
     /// retain a previously added builtin.
     RemoveOrRetain {
@@ -93,6 +98,16 @@ impl BuiltinFeatureTransition {
             } => {
                 if should_apply_action_for_feature(feature_id) {
                     Some(BuiltinAction::Add(builtin.clone()))
+                } else {
+                    None
+                }
+            }
+            Self::Remove {
+                builtin,
+                feature_id,
+            } => {
+                if should_apply_action_for_feature(feature_id) {
+                    Some(BuiltinAction::Remove(builtin.id))
                 } else {
                     None
                 }
@@ -121,7 +136,7 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
-            system_instruction_processor::process_instruction,
+            system_instruction_processor_deprecated::process_instruction,
         ),
         Builtin::new(
             "vote_program",
@@ -152,6 +167,22 @@ fn dummy_process_instruction(
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
+        BuiltinFeatureTransition::Remove {
+            builtin: Builtin::new(
+                "system_program",
+                system_program::id(),
+                system_instruction_processor_deprecated::process_instruction,
+            ),
+            feature_id: feature_set::keyed_account_removal_from_builtin_programs::id(),
+        },
+        BuiltinFeatureTransition::Add {
+            builtin: Builtin::new(
+                "system_program",
+                system_program::id(),
+                system_instruction_processor::process_instruction,
+            ),
+            feature_id: feature_set::keyed_account_removal_from_builtin_programs::id(),
+        },
         BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "compute_budget_program",
@@ -212,6 +243,7 @@ pub fn get_pubkeys() -> Vec<Pubkey> {
     pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.id));
     pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
         BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.id),
+        BuiltinFeatureTransition::Remove { builtin, .. } => Some(builtin.id),
         BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
     }));
     pubkeys
