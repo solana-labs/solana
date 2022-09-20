@@ -132,6 +132,15 @@ impl VersionedMessage {
         }
     }
 
+    /// Program instructions that will be executed in sequence and committed in
+    /// one atomic transaction if all succeed.
+    pub fn instructions_mut(&mut self) -> &mut [CompiledInstruction] {
+        match self {
+            Self::Legacy(message) => &mut message.instructions,
+            Self::V0(message) => &mut message.instructions,
+        }
+    }
+
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(self).unwrap()
     }

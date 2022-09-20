@@ -18,7 +18,9 @@ use {
     crate::{
         http_sender::HttpSender,
         mock_sender::MockSender,
-        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
+        rpc_client::{
+            GetConfirmedSignaturesForAddress2Config, RpcClientConfig, SerializableTransaction,
+        },
         rpc_sender::*,
     },
     bincode::serialize,
@@ -48,7 +50,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, uses_durable_nonce, Transaction},
+        transaction::{self},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -658,7 +660,7 @@ impl RpcClient {
     /// ```
     pub async fn send_and_confirm_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         const SEND_RETRIES: usize = 1;
         const GET_STATUS_RETRIES: usize = usize::MAX;
@@ -666,13 +668,13 @@ impl RpcClient {
         'sending: for _ in 0..SEND_RETRIES {
             let signature = self.send_transaction(transaction).await?;
 
-            let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+            let recent_blockhash = if transaction.uses_durable_nonce() {
                 let (recent_blockhash, ..) = self
                     .get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                     .await?;
                 recent_blockhash
             } else {
-                transaction.message.recent_blockhash
+                *transaction.get_recent_blockhash()
             };
 
             for status_retry in 0..GET_STATUS_RETRIES {
@@ -711,7 +713,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         self.send_and_confirm_transaction_with_spinner_and_commitment(
             transaction,
@@ -723,7 +725,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
     ) -> ClientResult<Signature> {
         self.send_and_confirm_transaction_with_spinner_and_config(
@@ -740,16 +742,16 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
-        let recent_blockhash = if uses_durable_nonce(transaction).is_some() {
+        let recent_blockhash = if transaction.uses_durable_nonce() {
             self.get_latest_blockhash_with_commitment(CommitmentConfig::processed())
                 .await?
                 .0
         } else {
-            transaction.message.recent_blockhash
+            *transaction.get_recent_blockhash()
         };
         let signature = self
             .send_transaction_with_config(transaction, config)
@@ -829,7 +831,10 @@ impl RpcClient {
     /// # })?;
     /// # Ok::<(), Error>(())
     /// ```
-    pub async fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
+    pub async fn send_transaction(
+        &self,
+        transaction: &impl SerializableTransaction,
+    ) -> ClientResult<Signature> {
         self.send_transaction_with_config(
             transaction,
             RpcSendTransactionConfig {
@@ -927,7 +932,7 @@ impl RpcClient {
     /// ```
     pub async fn send_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
         let encoding = if let Some(encoding) = config.encoding {
@@ -944,7 +949,7 @@ impl RpcClient {
             preflight_commitment: Some(preflight_commitment.commitment),
             ..config
         };
-        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode(transaction, encoding)?;
         let signature_base58_str: String = match self
             .send(
                 RpcRequest::SendTransaction,
@@ -984,14 +989,15 @@ impl RpcClient {
         // should not be passed along to confirmation methods. The transaction may or may
         // not have been submitted to the cluster, so callers should verify the success of
         // the correct transaction signature independently.
-        if signature != transaction.signatures[0] {
+        if signature != *transaction.get_signature() {
             Err(RpcError::RpcRequestError(format!(
                 "RPC node returned mismatched signature {:?}, expected {:?}",
-                signature, transaction.signatures[0]
+                signature,
+                transaction.get_signature()
             ))
             .into())
         } else {
-            Ok(transaction.signatures[0])
+            Ok(*transaction.get_signature())
         }
     }
 
@@ -1290,7 +1296,7 @@ impl RpcClient {
     /// ```
     pub async fn simulate_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.simulate_transaction_with_config(
             transaction,
@@ -1377,7 +1383,7 @@ impl RpcClient {
     /// ```
     pub async fn simulate_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         let encoding = if let Some(encoding) = config.encoding {
@@ -1392,7 +1398,7 @@ impl RpcClient {
             commitment: Some(commitment),
             ..config
         };
-        let serialized_encoded = serialize_and_encode::<Transaction>(transaction, encoding)?;
+        let serialized_encoded = serialize_and_encode(transaction, encoding)?;
         self.send(
             RpcRequest::SimulateTransaction,
             json!([serialized_encoded, config]),
