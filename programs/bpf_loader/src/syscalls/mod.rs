@@ -3138,7 +3138,7 @@ mod tests {
             invoke_context,
             transaction_context,
             program_id,
-            bpf_loader_deprecated::id(),
+            bpf_loader::id(),
         );
 
         let left_point: [u8; 32] = [
@@ -3345,7 +3345,7 @@ mod tests {
             invoke_context,
             transaction_context,
             program_id,
-            bpf_loader_deprecated::id(),
+            bpf_loader::id(),
         );
 
         let left_point: [u8; 32] = [
