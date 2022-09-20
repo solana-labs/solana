@@ -3021,7 +3021,7 @@ mod tests {
     }
 
     #[test]
-    fn test_syscall_curve_point_validation() {
+    fn test_syscall_ristretto_curve_point_validation() {
         use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_RISTRETTO;
 
         let config = Config::default();
