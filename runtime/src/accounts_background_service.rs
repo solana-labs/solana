@@ -115,6 +115,15 @@ pub struct SnapshotRequest {
     pub request_type: SnapshotRequestType,
 }
 
+impl Debug for SnapshotRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SnapshotRequest")
+            .field("request type", &self.request_type)
+            .field("bank slot", &self.snapshot_root_bank.slot())
+            .finish()
+    }
+}
+
 /// What type of request is this?
 ///
 /// The snapshot request has been expanded to support more than just snapshots.  This is
@@ -141,10 +150,15 @@ impl SnapshotRequestHandler {
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
-        self.snapshot_request_receiver
-            .try_iter()
-            .last()
-            .map(|snapshot_request| {
+        self.snapshot_request_receiver.try_iter()
+            .map(|request| {
+                let accounts_package_type = new_accounts_package_type(&request, &self.snapshot_config, *last_full_snapshot_slot);
+                (request, accounts_package_type)
+            })
+            .inspect(|(request, package_type)| trace!("outstanding snapshot request: {:?}, {:?}", request, package_type))
+            .max_by(cmp_snapshot_requests)
+            .map(|(snapshot_request, accounts_package_type)| {
+                trace!("handling snapshot request: {:?}, {:?}", snapshot_request, accounts_package_type);
                 let mut total_time = Measure::start("snapshot_request_receiver_total_time");
                 let accounts_package_type = new_accounts_package_type(&snapshot_request, &self.snapshot_config, *last_full_snapshot_slot);
                 let SnapshotRequest {
@@ -615,6 +629,53 @@ fn new_accounts_package_type(
     }
 }
 
+/// Compare snapshot requests; used to pick the highest priority request to handle.
+///
+/// Priority, from highest to lowest:
+/// - Epoch Accounts Hash
+/// - Full Snapshot
+/// - Incremental Snapshot
+/// - Accounts Hash Verifier
+///
+/// If two snapshots of the same type are being compared, their bank slots are tiebreakers.
+#[must_use]
+fn cmp_snapshot_requests(
+    a: &(SnapshotRequest, AccountsPackageType),
+    b: &(SnapshotRequest, AccountsPackageType),
+) -> std::cmp::Ordering {
+    let (snapshot_request_a, accounts_package_type_a) = a;
+    let (snapshot_request_b, accounts_package_type_b) = b;
+    let slot_a = snapshot_request_a.snapshot_root_bank.slot();
+    let slot_b = snapshot_request_b.snapshot_root_bank.slot();
+
+    use {AccountsPackageType::*, SnapshotType::*};
+    match (accounts_package_type_a, accounts_package_type_b) {
+        // Epoch Accounts Hash packages
+        (EpochAccountsHash, EpochAccountsHash) => {
+            panic!("Only a single EAH snapshot request is allowed at a time")
+        }
+        (EpochAccountsHash, _) => std::cmp::Ordering::Greater,
+        (_, EpochAccountsHash) => std::cmp::Ordering::Less,
+
+        // Snapshot packages
+        (Snapshot(snapshot_type_a), Snapshot(snapshot_type_b)) => {
+            match (snapshot_type_a, snapshot_type_b) {
+                (FullSnapshot, FullSnapshot) => slot_a.cmp(&slot_b),
+                (FullSnapshot, IncrementalSnapshot(_)) => std::cmp::Ordering::Greater,
+                (IncrementalSnapshot(_), FullSnapshot) => std::cmp::Ordering::Less,
+                (IncrementalSnapshot(base_slot_a), IncrementalSnapshot(base_slot_b)) => {
+                    slot_a.cmp(&slot_b).then(base_slot_a.cmp(base_slot_b))
+                }
+            }
+        }
+        (Snapshot(_), _) => std::cmp::Ordering::Greater,
+        (_, Snapshot(_)) => std::cmp::Ordering::Less,
+
+        // Accounts Hash Verifier packages
+        (AccountsHashVerifier, AccountsHashVerifier) => slot_a.cmp(&slot_b),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use {
@@ -647,5 +708,137 @@ mod test {
         pruned_banks_request_handler.remove_dead_slots(&bank0, &mut 0, &mut 0);
 
         assert!(bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
+    }
+
+    #[test]
+    fn test_cmp_snapshot_requests() {
+        let genesis_config_info = create_genesis_config(10);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+
+        for (accounts_package_type_a, accounts_package_type_b, expected_result) in [
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::AccountsHashVerifier,
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::EpochAccountsHash,
+                std::cmp::Ordering::Less,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                std::cmp::Ordering::Equal,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::AccountsHashVerifier,
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::EpochAccountsHash,
+                std::cmp::Ordering::Less,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                std::cmp::Ordering::Less,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(6)),
+                std::cmp::Ordering::Less,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                std::cmp::Ordering::Equal,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(4)),
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(5)),
+                AccountsPackageType::AccountsHashVerifier,
+                std::cmp::Ordering::Greater,
+            ),
+            (
+                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageType::AccountsHashVerifier,
+                std::cmp::Ordering::Equal,
+            ),
+        ] {
+            let snapshot_request_a = SnapshotRequest {
+                snapshot_root_bank: Arc::clone(&bank),
+                status_cache_slot_deltas: Vec::default(),
+                request_type: new_snapshot_request_type(&accounts_package_type_a),
+            };
+            let snapshot_request_b = SnapshotRequest {
+                snapshot_root_bank: Arc::clone(&bank),
+                status_cache_slot_deltas: Vec::default(),
+                request_type: new_snapshot_request_type(&accounts_package_type_b),
+            };
+
+            let request_a = &(snapshot_request_a, accounts_package_type_a);
+            let request_b = &(snapshot_request_b, accounts_package_type_b);
+
+            let actual_result = cmp_snapshot_requests(request_a, request_b);
+            assert_eq!(expected_result, actual_result);
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cmp_snapshot_requests_both_eah() {
+        let genesis_config_info = create_genesis_config(10);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+
+        let accounts_package_type_a = AccountsPackageType::EpochAccountsHash;
+        let accounts_package_type_b = AccountsPackageType::EpochAccountsHash;
+
+        let snapshot_request_a = SnapshotRequest {
+            snapshot_root_bank: Arc::clone(&bank),
+            status_cache_slot_deltas: Vec::default(),
+            request_type: new_snapshot_request_type(&accounts_package_type_a),
+        };
+        let snapshot_request_b = SnapshotRequest {
+            snapshot_root_bank: Arc::clone(&bank),
+            status_cache_slot_deltas: Vec::default(),
+            request_type: new_snapshot_request_type(&accounts_package_type_b),
+        };
+
+        let request_a = &(snapshot_request_a, accounts_package_type_a);
+        let request_b = &(snapshot_request_b, accounts_package_type_b);
+
+        let _ = cmp_snapshot_requests(request_a, request_b);
+    }
+
+    fn new_snapshot_request_type(
+        accounts_package_type: &AccountsPackageType,
+    ) -> SnapshotRequestType {
+        match accounts_package_type {
+            AccountsPackageType::AccountsHashVerifier => SnapshotRequestType::Snapshot,
+            AccountsPackageType::Snapshot(_) => SnapshotRequestType::Snapshot,
+            AccountsPackageType::EpochAccountsHash => SnapshotRequestType::EpochAccountsHash,
+        }
     }
 }
