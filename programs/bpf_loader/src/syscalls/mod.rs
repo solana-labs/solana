@@ -1251,7 +1251,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 SUB => {
@@ -1286,7 +1287,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 MUL => {
@@ -1321,7 +1323,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 _ => {
@@ -1362,7 +1365,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 SUB => {
@@ -1399,7 +1403,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 MUL => {
@@ -1434,7 +1439,8 @@ declare_syscall!(
                             ),
                             result
                         ) = result_point;
-                        *result = Ok(0);
+                    } else {
+                        *result = Ok(1);
                     }
                 }
                 _ => {
