@@ -156,6 +156,10 @@ impl SnapshotRequestHandler {
                 // we should not rely on the state of this validator until startup verification is complete
                 assert!(snapshot_root_bank.is_startup_verification_complete());
 
+                if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
+                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
+                }
+
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
                     // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
@@ -227,10 +231,6 @@ impl SnapshotRequestHandler {
                     shrink_time = Measure::start("shrink_time");
                     snapshot_root_bank.shrink_candidate_slots();
                     shrink_time.stop();
-                }
-
-                if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
-                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
                 }
 
                 // Snapshot the bank and send over an accounts package
