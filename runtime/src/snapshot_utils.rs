@@ -255,8 +255,8 @@ pub enum SnapshotError {
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
 
-    #[error("snapshot bank verify failed")]
-    BankVerifyFailed,
+    #[error("snapshot bank verify failed at slot {}", .0)]
+    BankVerifyFailed(Slot),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
 
@@ -1000,7 +1000,10 @@ pub fn bank_from_snapshot_archives(
     match result_try_using_existing_accounts_files {
         Ok(ret) => Ok(ret),
         Err(e) => {
-            info!("bank_from_latest_snapshot_archives failed with error {}, clear the accounts files and try again", e);
+            info!(
+                "bank_from_snapshot_archives error: {}. Clear the accounts files and try again",
+                e
+            );
             // Clear the account path and try again with the appendvec files unpacked from the snapshot
             for path in account_paths {
                 let mut top_path = path.clone();
@@ -1114,7 +1117,7 @@ fn bank_from_snapshot_archives_inner(
     }
 
     if !verified_ok {
-        return Err(SnapshotError::BankVerifyFailed);
+        return Err(SnapshotError::BankVerifyFailed(bank.slot()));
     }
 
     let timings = BankFromArchiveTimings {

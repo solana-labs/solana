@@ -328,7 +328,7 @@ impl SnapshotRequestHandler {
             SnapshotError::NoSnapshotArchives => true,
             SnapshotError::MismatchedSlotHash(..) => true,
             SnapshotError::VerifySlotDeltas(..) => true,
-            SnapshotError::BankVerifyFailed => true,
+            SnapshotError::BankVerifyFailed(..) => true,
         }
     }
 }
