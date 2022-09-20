@@ -7,6 +7,7 @@ import {SIGNATURE_LENGTH_IN_BYTES} from './constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
 import {sign} from '../utils/ed25519';
+import {PublicKey} from '../publickey';
 
 export type TransactionVersion = 'legacy' | 0;
 
@@ -105,5 +106,20 @@ export class VersionedTransaction {
       );
       this.signatures[signerIndex] = sign(messageData, signer.secretKey);
     }
+  }
+
+  addSignature(publicKey: PublicKey, signature: Uint8Array) {
+    const signerPubkeys = this.message.staticAccountKeys.slice(
+      0,
+      this.message.header.numRequiredSignatures,
+    );
+    const signerIndex = signerPubkeys.findIndex(pubkey =>
+      pubkey.equals(publicKey),
+    );
+    assert(
+      signerIndex >= 0,
+      `Cannot add signature with non signer key ${publicKey.toBase58()}`,
+    );
+    this.signatures[signerIndex] = signature;
   }
 }
