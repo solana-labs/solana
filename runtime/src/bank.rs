@@ -1379,7 +1379,8 @@ impl Scheduler {
 
         let collected_errors = Arc::new(std::sync::Mutex::new(Vec::new()));
         let collected_errors_in_collector_thread = Arc::clone(&collected_errors);
-        fn error_collector_main() { move || {
+
+        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
             let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
             if max_thread_priority {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
@@ -1417,8 +1418,7 @@ impl Scheduler {
             todo!();
 
             Ok((started.0.elapsed(), started.1.elapsed()))
-        }}
-        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(error_collector_main).unwrap();
+        }).unwrap();
 
         let random_id = rand::thread_rng().gen::<u64>();
 
