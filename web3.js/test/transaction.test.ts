@@ -8,6 +8,7 @@ import {PublicKey} from '../src/publickey';
 import {
   Transaction,
   TransactionInstruction,
+  TransactionMessage,
   VersionedTransaction,
 } from '../src/transaction';
 import {StakeProgram, SystemProgram} from '../src/programs';
@@ -961,5 +962,49 @@ describe('Transaction', () => {
     const t1 = Transaction.from(t0.serialize({requireAllSignatures: false}));
     t1.partialSign(signer);
     t1.serialize();
+  });
+
+  it('externally signed versioned transaction', () => {
+    const signer = Keypair.generate();
+    const invalidSigner = Keypair.generate();
+
+    const recentBlockhash = new PublicKey(3).toBuffer();
+
+    const message = new TransactionMessage({
+      payerKey: signer.publicKey,
+      instructions: [
+        new TransactionInstruction({
+          data: Buffer.from('Hello!'),
+          keys: [
+            {
+              pubkey: signer.publicKey,
+              isSigner: true,
+              isWritable: true,
+            },
+          ],
+          programId: new PublicKey(
+            'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+          ),
+        }),
+      ],
+      recentBlockhash: bs58.encode(recentBlockhash),
+    });
+
+    const transaction = new VersionedTransaction(message.compileToV0Message());
+
+    const signature = sign(transaction.message.serialize(), signer.secretKey);
+
+    transaction.addSignature(signer.publicKey, signature);
+
+    expect(transaction.signatures).to.have.length(1);
+    expect(transaction.signatures[0]).to.eq(signature);
+    expect(() => {
+      transaction.addSignature(signer.publicKey, new Uint8Array(32));
+    }).to.throw('Signature must be 64 bytes long');
+    expect(() => {
+      transaction.addSignature(invalidSigner.publicKey, new Uint8Array(64));
+    }).to.throw(
+      `Can not add signature; \`${invalidSigner.publicKey.toBase58()}\` is not required to sign this transaction`,
+    );
   });
 });
