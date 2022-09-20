@@ -5458,7 +5458,7 @@ impl Bank {
     ///  allow accounts hash calculation to rehash anything.
     ///  We should use whatever hash found for each account as-is.
     pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
-        true // this will be goverened by a feature later
+        true // this will be governed by a feature later
     }
 
     /// Collect rent from `accounts`
