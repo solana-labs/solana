@@ -32,7 +32,7 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
-        feature_set::{check_ping_ancestor_requests, sign_repair_requests},
+        feature_set::sign_repair_requests,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -442,24 +442,6 @@ impl ServeRepair {
         }
     }
 
-    fn check_ping_ancestor_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
-        root_bank
-            .feature_set
-            .activated_slot(&check_ping_ancestor_requests::id())
-            .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
-    }
-
-    fn should_check_ping_ancestor_request(
-        slot: Slot,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
-    ) -> bool {
-        match check_ping_ancestor_request_epoch {
-            None => false,
-            Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
-        }
-    }
-
     /// Process messages from the network
     fn run_listen(
         &self,
@@ -677,8 +659,6 @@ impl ServeRepair {
     fn ping_to_packet_mapper_by_request_variant(
         request: &RepairProtocol,
         dest_addr: SocketAddr,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
     ) -> Option<Box<dyn FnOnce(Ping) -> Option<Packet>>> {
         match request {
             RepairProtocol::LegacyWindowIndex(_, _, _)
@@ -695,20 +675,7 @@ impl ServeRepair {
                 let ping = RepairResponse::Ping(ping);
                 Packet::from_data(Some(&dest_addr), ping).ok()
             })),
-            RepairProtocol::AncestorHashes { slot, .. } => {
-                if Self::should_check_ping_ancestor_request(
-                    *slot,
-                    root_bank,
-                    check_ping_ancestor_request_epoch,
-                ) {
-                    Some(Box::new(move |ping| {
-                        let ping = AncestorHashesResponse::Ping(ping);
-                        Packet::from_data(Some(&dest_addr), ping).ok()
-                    }))
-                } else {
-                    None
-                }
-            }
+            RepairProtocol::AncestorHashes { .. } => None,
         }
     }
 
@@ -719,12 +686,10 @@ impl ServeRepair {
         blockstore: &Blockstore,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
-        root_bank: &Bank,
+        _root_bank: &Bank,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
-        let check_ping_ancestor_request_epoch =
-            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let identity_keypair = self.cluster_info.keypair().clone();
         let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
@@ -752,12 +717,9 @@ impl ServeRepair {
             }
 
             let from_addr = packet.meta.socket_addr();
-            if let Some(ping_to_pkt) = Self::ping_to_packet_mapper_by_request_variant(
-                &request,
-                from_addr,
-                root_bank,
-                check_ping_ancestor_request_epoch,
-            ) {
+            if let Some(ping_to_pkt) =
+                Self::ping_to_packet_mapper_by_request_variant(&request, from_addr)
+            {
                 if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
                     stats.err_malformed += 1;
                     continue;
