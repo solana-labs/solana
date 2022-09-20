@@ -114,6 +114,7 @@ pub struct TransactionContext {
     #[cfg(not(target_os = "solana"))]
     account_touched_flags: RefCell<Pin<Box<[bool]>>>,
     instruction_stack_capacity: usize,
+    instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
     instruction_trace: Vec<InstructionContext>,
     return_data: TransactionReturnData,
@@ -131,7 +132,7 @@ impl TransactionContext {
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
         instruction_stack_capacity: usize,
-        _number_of_instructions_at_transaction_level: usize,
+        instruction_trace_capacity: usize,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -144,6 +145,7 @@ impl TransactionContext {
             accounts: Pin::new(accounts.into_boxed_slice()),
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
             instruction_stack_capacity,
+            instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
             instruction_trace: vec![InstructionContext::default()],
             return_data: TransactionReturnData::default(),
@@ -211,6 +213,11 @@ impl TransactionContext {
             .iter()
             .rposition(|key| key == pubkey)
             .map(|index| index as IndexOfAccount)
+    }
+
+    /// Gets the max length of the InstructionContext trace
+    pub fn get_instruction_trace_capacity(&self) -> usize {
+        self.instruction_trace_capacity
     }
 
     /// Returns the instruction trace length.
