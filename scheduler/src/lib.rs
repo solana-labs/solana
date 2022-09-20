@@ -1443,7 +1443,7 @@ impl ScheduleStage {
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     ) -> Option<std::sync::Arc<Checkpoint>> {
-        let maybe_start_time = None;
+        let mut maybe_start_time = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
         info!("schedule_once:initial id_{:016x}", random_id);
 
