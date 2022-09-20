@@ -4674,12 +4674,25 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint)
+        self.do_load(ancestors, pubkey, None, load_hint, load_zero_lamports)
     }
 
-    pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
+    pub fn load_account_into_read_cache(
+        &self,
+        ancestors: &Ancestors,
+        pubkey: &Pubkey,
+        load_zero_lamports: LoadZeroLamports,
+    ) {
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            None,
+            LoadHint::Unspecified,
+            true,
+            load_zero_lamports,
+        );
     }
 
     pub fn load_with_fixed_root(
@@ -4688,21 +4701,21 @@ impl AccountsDb {
         pubkey: &Pubkey,
         load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
-            .filter(|(account, _)| {
-                matches!(
-                    load_zero_lamports,
-                    LoadZeroLamports::SomeWithZeroLamportAccount
-                ) || !account.is_zero_lamport()
-            })
+        self.load(
+            ancestors,
+            pubkey,
+            LoadHint::FixedMaxRoot,
+            load_zero_lamports,
+        )
     }
 
     pub fn load_without_fixed_root(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::Unspecified)
+        self.load(ancestors, pubkey, LoadHint::Unspecified, load_zero_lamports)
     }
 
     fn read_index_for_accessor_or_load_slow<'a>(
@@ -5021,8 +5034,16 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
+            false,
+            load_zero_lamports,
+        )
     }
 
     /// if 'load_into_read_cache_only', then return value is meaningless.
@@ -5034,6 +5055,7 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
         load_into_read_cache_only: bool,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
@@ -5048,6 +5070,11 @@ impl AccountsDb {
                 if !in_write_cache {
                     let result = self.read_only_accounts_cache.load(*pubkey, slot);
                     if let Some(account) = result {
+                        if matches!(load_zero_lamports, LoadZeroLamports::None)
+                            && account.is_zero_lamport()
+                        {
+                            return None;
+                        }
                         return Some((account, slot));
                     }
                 }
@@ -5075,6 +5102,9 @@ impl AccountsDb {
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
         let account = loaded_account.take_account();
+        if matches!(load_zero_lamports, LoadZeroLamports::None) && account.is_zero_lamport() {
+            return None;
+        }
 
         if self.caching_enabled && !is_cached {
             /*
@@ -10237,7 +10267,7 @@ pub mod tests {
         db.add_root(0);
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key),
+            db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
             Some((account0, 0))
         );
     }
@@ -10256,13 +10286,25 @@ pub mod tests {
 
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            )
+            .unwrap()
+            .0,
             &account1
         );
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            )
+            .unwrap()
+            .0,
             &account1
         );
 
@@ -10292,13 +10334,25 @@ pub mod tests {
 
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            )
+            .unwrap()
+            .0,
             &account1
         );
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            )
+            .unwrap()
+            .0,
             &account1
         );
     }
@@ -10332,14 +10386,22 @@ pub mod tests {
         // at the Accounts level)
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            )
+            .unwrap()
+            .0,
             &account1
         );
 
         // we should see 1 token in slot 2
         let ancestors = vec![(0, 0), (2, 2)].into_iter().collect();
         assert_eq!(
-            &db.load_without_fixed_root(&ancestors, &key).unwrap().0,
+            &db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None)
+                .unwrap()
+                .0,
             &account0
         );
 
@@ -10347,12 +10409,16 @@ pub mod tests {
 
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key),
+            db.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            ),
             Some((account1, 1))
         );
         let ancestors = vec![(2, 2)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key),
+            db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
             Some((account0, 0))
         ); // original value
     }
@@ -10367,7 +10433,7 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account = db
-                .load_without_fixed_root(&ancestors, &pubkeys[idx])
+                .load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None)
                 .unwrap();
             let default_account = AccountSharedData::from(Account {
                 lamports: (idx + 1) as u64,
@@ -10383,11 +10449,11 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, 99);
             let ancestors = vec![(0, 0)].into_iter().collect();
             let account0 = db
-                .load_without_fixed_root(&ancestors, &pubkeys[idx])
+                .load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None)
                 .unwrap();
             let ancestors = vec![(1, 1)].into_iter().collect();
             let account1 = db
-                .load_without_fixed_root(&ancestors, &pubkeys[idx])
+                .load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None)
                 .unwrap();
             let default_account = AccountSharedData::from(Account {
                 lamports: (idx + 1) as u64,
@@ -10475,12 +10541,16 @@ pub mod tests {
         // original account
         let ancestors = vec![(0, 0), (1, 1)].into_iter().collect();
         assert_eq!(
-            db0.load_without_fixed_root(&ancestors, &key),
+            db0.load_without_fixed_root(
+                &ancestors,
+                &key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            ),
             Some((account1, 1))
         );
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(
-            db0.load_without_fixed_root(&ancestors, &key),
+            db0.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
             Some((account0, 0))
         );
     }
@@ -10510,7 +10580,9 @@ pub mod tests {
 
         // Purge the slot
         db.remove_unrooted_slots(&[(unrooted_slot, unrooted_bank_id)]);
-        assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
+        assert!(db
+            .load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None)
+            .is_none(),);
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
         assert!(db.storage.map.get(&unrooted_slot).is_none());
@@ -10564,7 +10636,7 @@ pub mod tests {
         // Check purged account stays gone
         let unrooted_slot_ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
         assert!(db
-            .load_without_fixed_root(&unrooted_slot_ancestors, &key)
+            .load_without_fixed_root(&unrooted_slot_ancestors, &key, LoadZeroLamports::None)
             .is_none());
     }
 
@@ -10583,7 +10655,7 @@ pub mod tests {
                 AccountSharedData::new((t + 1) as u64, space, AccountSharedData::default().owner());
             pubkeys.push(pubkey);
             assert!(accounts
-                .load_without_fixed_root(&ancestors, &pubkey)
+                .load_without_fixed_root(&ancestors, &pubkey, LoadZeroLamports::None)
                 .is_none());
             accounts.store_uncached(slot, &[(&pubkey, &account)]);
         }
@@ -10594,7 +10666,7 @@ pub mod tests {
             pubkeys.push(pubkey);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             assert!(accounts
-                .load_without_fixed_root(&ancestors, &pubkey)
+                .load_without_fixed_root(&ancestors, &pubkey, LoadZeroLamports::None)
                 .is_none());
             accounts.store_uncached(slot, &[(&pubkey, &account)]);
         }
@@ -10605,14 +10677,14 @@ pub mod tests {
             let idx = thread_rng().gen_range(0, range);
             let ancestors = vec![(slot, 0)].into_iter().collect();
             if let Some((mut account, _)) =
-                accounts.load_without_fixed_root(&ancestors, &pubkeys[idx])
+                accounts.load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None)
             {
                 account.checked_add_lamports(1).unwrap();
                 accounts.store_uncached(slot, &[(&pubkeys[idx], &account)]);
                 if account.is_zero_lamport() {
                     let ancestors = vec![(slot, 0)].into_iter().collect();
                     assert!(accounts
-                        .load_without_fixed_root(&ancestors, &pubkeys[idx])
+                        .load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None)
                         .is_none());
                 } else {
                     let default_account = AccountSharedData::from(Account {
@@ -10668,7 +10740,8 @@ pub mod tests {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         for _ in 0..num {
             let idx = thread_rng().gen_range(0, num);
-            let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
+            let account =
+                accounts.load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None);
             let account1 = Some((
                 AccountSharedData::new(
                     (idx + count) as u64,
@@ -10706,7 +10779,9 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 1, 0, 0);
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let account = db.load_without_fixed_root(&ancestors, &pubkeys[0]).unwrap();
+        let account = db
+            .load_without_fixed_root(&ancestors, &pubkeys[0], LoadZeroLamports::None)
+            .unwrap();
         let default_account = AccountSharedData::from(Account {
             lamports: 1,
             ..Account::default()
@@ -10748,7 +10823,7 @@ pub mod tests {
         for (i, key) in keys.iter().enumerate() {
             assert_eq!(
                 accounts
-                    .load_without_fixed_root(&ancestors, key)
+                    .load_without_fixed_root(&ancestors, key, LoadZeroLamports::None)
                     .unwrap()
                     .0
                     .lamports(),
@@ -10801,14 +10876,14 @@ pub mod tests {
         let ancestors = vec![(0, 0)].into_iter().collect();
         assert_eq!(
             accounts
-                .load_without_fixed_root(&ancestors, &pubkey1)
+                .load_without_fixed_root(&ancestors, &pubkey1, LoadZeroLamports::None)
                 .unwrap()
                 .0,
             account1
         );
         assert_eq!(
             accounts
-                .load_without_fixed_root(&ancestors, &pubkey2)
+                .load_without_fixed_root(&ancestors, &pubkey2, LoadZeroLamports::None)
                 .unwrap()
                 .0,
             account2
@@ -10827,14 +10902,14 @@ pub mod tests {
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
                 accounts
-                    .load_without_fixed_root(&ancestors, &pubkey1)
+                    .load_without_fixed_root(&ancestors, &pubkey1, LoadZeroLamports::None)
                     .unwrap()
                     .0,
                 account1
             );
             assert_eq!(
                 accounts
-                    .load_without_fixed_root(&ancestors, &pubkey2)
+                    .load_without_fixed_root(&ancestors, &pubkey2, LoadZeroLamports::None)
                     .unwrap()
                     .0,
                 account2
@@ -10888,7 +10963,7 @@ pub mod tests {
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
         assert_eq!(
-            accounts.load_without_fixed_root(&ancestors, &pubkey),
+            accounts.load_without_fixed_root(&ancestors, &pubkey, LoadZeroLamports::None),
             Some((account, 1))
         );
     }
@@ -11466,14 +11541,18 @@ pub mod tests {
     ) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         let (account, slot) = accounts
-            .load_without_fixed_root(&ancestors, &pubkey)
+            .load_without_fixed_root(
+                &ancestors,
+                &pubkey,
+                LoadZeroLamports::SomeWithZeroLamportAccount,
+            )
             .unwrap();
         assert_eq!((account.lamports(), slot), (expected_lamports, slot));
     }
 
     fn assert_not_load_account(accounts: &AccountsDb, slot: Slot, pubkey: Pubkey) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
-        let load = accounts.load_without_fixed_root(&ancestors, &pubkey);
+        let load = accounts.load_without_fixed_root(&ancestors, &pubkey, LoadZeroLamports::None);
         assert!(load.is_none(), "{:?}", load);
     }
 
@@ -11810,7 +11889,11 @@ pub mod tests {
                             db.store_uncached(slot, &[(&pubkey, &account)]);
 
                             let (account, slot) = db
-                                .load_without_fixed_root(&Ancestors::default(), &pubkey)
+                                .load_without_fixed_root(
+                                    &Ancestors::default(),
+                                    &pubkey,
+                                    LoadZeroLamports::None,
+                                )
                                 .unwrap_or_else(|| {
                                     panic!("Could not fetch stored account {}, iter {}", pubkey, i)
                                 });
@@ -11892,7 +11975,7 @@ pub mod tests {
         db.print_accounts_stats("post");
         let ancestors = vec![(2, 0)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key1)
+            db.load_without_fixed_root(&ancestors, &key1, LoadZeroLamports::None)
                 .unwrap()
                 .0
                 .lamports(),
@@ -11912,7 +11995,9 @@ pub mod tests {
         db.store_uncached(0, &[(&key, &account)]);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let ret = db.load_without_fixed_root(&ancestors, &key).unwrap();
+        let ret = db
+            .load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None)
+            .unwrap();
         assert_eq!(ret.0.data().len(), data_len);
     }
 
@@ -12024,7 +12109,10 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         db.store_uncached(some_slot, &[(&key, &account)]);
-        let mut account = db.load_without_fixed_root(&ancestors, &key).unwrap().0;
+        let mut account = db
+            .load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None)
+            .unwrap()
+            .0;
         account.checked_sub_lamports(1).unwrap();
         account.set_executable(true);
         db.store_uncached(some_slot, &[(&key, &account)]);
@@ -13612,7 +13700,10 @@ pub mod tests {
         ancestors.insert(2, 1);
         for (key, account_ref) in keys[..num_to_store].iter().zip(account_refs) {
             assert_eq!(
-                accounts.load_without_fixed_root(&ancestors, key).unwrap().0,
+                accounts
+                    .load_without_fixed_root(&ancestors, key, LoadZeroLamports::None)
+                    .unwrap()
+                    .0,
                 account_ref
             );
         }
@@ -13639,7 +13730,9 @@ pub mod tests {
         assert_eq!(slots - 1, db.next_id.load(Ordering::Acquire));
         let ancestors = Ancestors::default();
         keys.iter().for_each(|key| {
-            assert!(db.load_without_fixed_root(&ancestors, key).is_some());
+            assert!(db
+                .load_without_fixed_root(&ancestors, key, LoadZeroLamports::None)
+                .is_some(),);
         });
     }
 
@@ -13666,7 +13759,9 @@ pub mod tests {
         });
         let ancestors = Ancestors::default();
         keys.iter().for_each(|key| {
-            assert!(db.load_without_fixed_root(&ancestors, key).is_some());
+            assert!(db
+                .load_without_fixed_root(&ancestors, key, LoadZeroLamports::None)
+                .is_some(),);
         });
     }
 
@@ -13690,7 +13785,11 @@ pub mod tests {
 
         // Should still be able to find zero lamport account in slot 1
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::default(), &account_key),
+            db.load_without_fixed_root(
+                &Ancestors::default(),
+                &account_key,
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            ),
             Some((zero_lamport_account, 1))
         );
     }
@@ -13706,24 +13805,26 @@ pub mod tests {
 
         // Load with no ancestors and no root will return nothing
         assert!(db
-            .load_without_fixed_root(&Ancestors::default(), &key)
+            .load_without_fixed_root(&Ancestors::default(), &key, LoadZeroLamports::None)
             .is_none());
 
         // Load with ancestors not equal to `slot` will return nothing
         let ancestors = vec![(slot + 1, 1)].into_iter().collect();
-        assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
+        assert!(db
+            .load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None)
+            .is_none(),);
 
         // Load with ancestors equal to `slot` will return the account
         let ancestors = vec![(slot, 1)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key),
+            db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
             Some((account0.clone(), slot))
         );
 
         // Adding root will return the account even without ancestors
         db.add_root(slot);
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::default(), &key),
+            db.load_without_fixed_root(&Ancestors::default(), &key, LoadZeroLamports::None),
             Some((account0, slot))
         );
     }
@@ -13743,7 +13844,7 @@ pub mod tests {
         db.flush_accounts_cache(true, None);
         let ancestors = vec![(slot, 1)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &key),
+            db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
             Some((account0.clone(), slot))
         );
 
@@ -13751,7 +13852,7 @@ pub mod tests {
         db.add_root(slot);
         db.flush_accounts_cache(true, None);
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::default(), &key),
+            db.load_without_fixed_root(&Ancestors::default(), &key, LoadZeroLamports::None),
             Some((account0, slot))
         );
     }
@@ -13780,14 +13881,14 @@ pub mod tests {
         // Unrooted slot should be able to be fetched before the flush
         let ancestors = vec![(unrooted_slot, 1)].into_iter().collect();
         assert_eq!(
-            db.load_without_fixed_root(&ancestors, &unrooted_key),
+            db.load_without_fixed_root(&ancestors, &unrooted_key, LoadZeroLamports::None),
             Some((account0.clone(), unrooted_slot))
         );
         db.flush_accounts_cache(true, None);
 
         // After the flush, the unrooted slot is still in the cache
         assert!(db
-            .load_without_fixed_root(&ancestors, &unrooted_key)
+            .load_without_fixed_root(&ancestors, &unrooted_key, LoadZeroLamports::None)
             .is_some());
         assert!(db
             .accounts_index
@@ -13796,11 +13897,11 @@ pub mod tests {
         assert_eq!(db.accounts_cache.num_slots(), 1);
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_some());
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::default(), &key5),
+            db.load_without_fixed_root(&Ancestors::default(), &key5, LoadZeroLamports::None),
             Some((account0.clone(), root5))
         );
         assert_eq!(
-            db.load_without_fixed_root(&Ancestors::default(), &key6),
+            db.load_without_fixed_root(&Ancestors::default(), &key6, LoadZeroLamports::None),
             Some((account0, root6))
         );
     }
@@ -13875,7 +13976,7 @@ pub mod tests {
                 vec![(slot, 1)].into_iter().collect()
             };
             assert_eq!(
-                db.load_without_fixed_root(&ancestors, &key),
+                db.load_without_fixed_root(&ancestors, &key, LoadZeroLamports::None),
                 Some((account0.clone(), slot))
             );
         }
@@ -13963,6 +14064,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -13978,7 +14080,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &account_key,
                 Some(0),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LoadZeroLamports::None
             )
             .is_none());
     }
@@ -14062,7 +14165,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                load_hint
+                load_hint,
+                LoadZeroLamports::SomeWithZeroLamportAccount
             )
             .unwrap()
             .0
@@ -14191,6 +14295,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
@@ -14204,6 +14309,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LoadZeroLamports::None,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14218,6 +14324,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LoadZeroLamports::None,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14230,7 +14337,8 @@ pub mod tests {
                 &scan_ancestors,
                 &account_key,
                 Some(max_scan_root),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LoadZeroLamports::None
             )
             .is_none());
     }
@@ -14394,7 +14502,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LoadZeroLamports::None
                 )
                 .is_some());
         }
@@ -14422,7 +14531,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LoadZeroLamports::None
                 )
                 .is_none());
         }
@@ -14955,7 +15065,9 @@ pub mod tests {
                         .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
-                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    let loaded_account = db
+                        .do_load(&ancestors, &pubkey, None, load_hint, LoadZeroLamports::None)
+                        .unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports(),
@@ -15310,7 +15422,8 @@ pub mod tests {
                     .load(
                         &Ancestors::from(vec![(*slot, 0)]),
                         &account_in_slot,
-                        LoadHint::FixedMaxRoot
+                        LoadHint::FixedMaxRoot,
+                        LoadZeroLamports::None
                     )
                     .is_some());
                 // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`

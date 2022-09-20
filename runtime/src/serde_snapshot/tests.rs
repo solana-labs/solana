@@ -4,7 +4,9 @@ use {
     super::*,
     crate::{
         accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
+        accounts_db::{
+            get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap, LoadZeroLamports,
+        },
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
         genesis_utils::{activate_all_features, activate_feature},
@@ -77,7 +79,8 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
     for _ in 1..num {
         let idx = thread_rng().gen_range(0, num - 1);
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let account = accounts.load_without_fixed_root(&ancestors, &pubkeys[idx]);
+        let account =
+            accounts.load_without_fixed_root(&ancestors, &pubkeys[idx], LoadZeroLamports::None);
         let account1 = Some((
             AccountSharedData::new((idx + 1) as u64, 0, AccountSharedData::default().owner()),
             0,
