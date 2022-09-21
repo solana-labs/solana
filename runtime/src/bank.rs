@@ -1398,7 +1398,7 @@ impl Scheduler {
                 ee.execution_us = wall_time.as_us();
 
                 //ee.reindex_with_address_book();
-                processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
+                processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
             }
             todo!();
 

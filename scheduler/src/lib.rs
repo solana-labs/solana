@@ -1598,7 +1598,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread>(
+    fn _run<'a, AST: AtScheduleThread, T>(
         ast: AST,
         random_id: u64,
         max_executing_queue_count: usize,
@@ -1607,8 +1607,8 @@ impl ScheduleStage {
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
-        from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
+        from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     ) -> Option<std::sync::Arc<Checkpoint>> {
         let mut maybe_start_time = None;
@@ -1706,11 +1706,11 @@ impl ScheduleStage {
             if !from_disconnected || executing_queue_count >= 1 {
                 crossbeam_channel::select! {
                    recv(from_exec) -> maybe_from_exec => {
-                       if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
+                       if let Ok(UnlockablePayload((mut processed_execution_environment, extra))) = maybe_from_exec {
                            executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                            processed_count = processed_count.checked_add(1).unwrap();
                            Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                           to_next_stage.send(ExaminablePayload(processed_execution_environment)).unwrap();
+                           to_next_stage.send(ExaminablePayload(processed_execution_environment, extra)).unwrap();
                        } else {
                            assert_eq!(from_exec.len(), 0);
                            from_exec_disconnected = true;
@@ -1972,7 +1972,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run(
+    pub fn run<T>(
         random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
@@ -1980,8 +1980,8 @@ impl ScheduleStage {
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
-        from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload>>, // assume nonblocking
+        from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
     ) -> Option<std::sync::Arc<Checkpoint>> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
@@ -2005,8 +2005,8 @@ impl ScheduleStage {
 
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
-pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
+pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, T);
+pub struct ExaminablePayload<T>(pub Box<ExecutionEnvironment>, T);
 
 pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
