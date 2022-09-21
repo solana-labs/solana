@@ -15,7 +15,7 @@ bincode = "1.3.3"
 bs58 = "0.4.0"
 crossbeam-channel = "0.5"
 dashmap = "4.0.2"
-itertools = "0.10.3"
+itertools = "0.10.5"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0" }
 jsonrpc-derive = "18.0.0"
