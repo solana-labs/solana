@@ -907,13 +907,13 @@ impl TaskQueue {
 }
 
 struct ChannelBackedTaskQueue<'a, C> {
-    channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+    channel: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
     buffered_task: Option<TaskInQueue>,
     buffered_flush: Option<std::sync::Arc<Checkpoint<C>>>,
 }
 
 impl<'a, C> ChannelBackedTaskQueue<'a, C> {
-    fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
+    fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>) -> Self {
         Self {channel, buffered_task: None, buffered_flush: None}
     }
 
