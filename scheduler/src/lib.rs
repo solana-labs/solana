@@ -842,11 +842,12 @@ impl TaskQueue {
 struct ChannelBackedTaskQueue<'a> {
     channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
+    buffered_flush: Option<usize>,
 }
 
 impl<'a> ChannelBackedTaskQueue<'a> {
     fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
-        Self {channel, buffered_task: None}
+        Self {channel, buffered_task: None, buffered_flush: None}
     }
 
     fn buffer(&mut self, task: TaskInQueue) {
@@ -873,7 +874,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
                 // invocation
                 match self.channel.try_recv().unwrap() {
                     SchedulablePayload(Flushable::Payload(task)) => Some(ChannelBackedTaskQueueEntry(task)),
-                    SchedulablePayload(Flushable::Flush(_)) => { todo!("buffer flush and propagate back to the outermost loop") }
+                    SchedulablePayload(Flushable::Flush(f)) => { assert!(self.buffered_flush.is_none()); self.buffered_flush = Some(f) }
                 }
             }
         }
