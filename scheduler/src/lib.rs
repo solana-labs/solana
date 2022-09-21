@@ -870,7 +870,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
         // invocation
         match self.channel.try_recv().unwrap() {
             SchedulablePayload(Flushable::Payload(task)) => ChannelBackedTaskQueueEntry(task),
-            SchedulablePayload(Flushable::Checkpoint) => unreachable!(),
+            SchedulablePayload(Flushable::Flush) => unreachable!(),
         }
     }
 }
