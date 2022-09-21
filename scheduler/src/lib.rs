@@ -1972,7 +1972,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T>(
+    pub fn run<T: Send>(
         random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
