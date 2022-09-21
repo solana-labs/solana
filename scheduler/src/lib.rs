@@ -1596,15 +1596,15 @@ impl ScheduleStage {
                        }
                    }
                    recv(from_prev) -> maybe_from => {
-                       if maybe_start_time.is_none() {
-                            info!("schedule_once:initial id_{:016x}", random_id);
-                           maybe_start_time = Some(std::time::Instant::now());
-                           last_time = maybe_start_time.clone();
-                       }
                        match maybe_from {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
-                                //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                                channel_backed_runnable_queue.buffer(task);
+                               if maybe_start_time.is_none() {
+                                    info!("schedule_once:initial id_{:016x}", random_id);
+                                   maybe_start_time = Some(std::time::Instant::now());
+                                   last_time = maybe_start_time.clone();
+                               }
+                               //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                               channel_backed_runnable_queue.buffer(task);
                            },
                            Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
                                assert_eq!(from_prev.len(), 0);
