@@ -826,7 +826,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&self) -> Option<TaskQueueOccupiedEntry<'_>> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_>> {
         self.tasks.last_entry()
     }
 
@@ -866,11 +866,16 @@ impl<'a> ChannelBackedTaskQueue<'a> {
 
     #[inline(never)]
     fn heaviest_entry_to_execute(&mut self) -> Option<ChannelBackedTaskQueueEntry> {
-        // unblocking recv must have been gurantted to succeed at the time of this method
-        // invocation
-        match self.channel.try_recv().unwrap() {
-            SchedulablePayload(Flushable::Payload(task)) => Some(ChannelBackedTaskQueueEntry(task)),
-            SchedulablePayload(Flushable::Flush(_)) => { todo!("buffer flush and propagate back to the outermost loop") }
+        match self.buffered_task.take() {
+            Some(task) => Some(ChannelBackedTaskQueueEntry(task)),
+            None => {
+                // unblocking recv must have been gurantted to succeed at the time of this method
+                // invocation
+                match self.channel.try_recv().unwrap() {
+                    SchedulablePayload(Flushable::Payload(task)) => Some(ChannelBackedTaskQueueEntry(task)),
+                    SchedulablePayload(Flushable::Flush(_)) => { todo!("buffer flush and propagate back to the outermost loop") }
+                }
+            }
         }
     }
 }
