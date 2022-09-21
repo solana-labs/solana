@@ -882,8 +882,8 @@ impl ChannelBackedTaskQueueEntry {
         self.0
     }
 
-    fn key(&self) -> UniqueWeight {
-        self.0.unique_weight()
+    fn key(&self) -> &UniqueWeight {
+        &self.0.unique_weight()
     }
 }
 
