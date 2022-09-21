@@ -1628,7 +1628,7 @@ impl ScheduleStage {
 
         assert!(max_executing_queue_count > 0);
 
-        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload<T>>();
+        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload<T, C>>();
 
         let (to_next_stage, maybe_reaper_thread_handle) =
             if let Some(to_next_stage) = maybe_to_next_stage {
