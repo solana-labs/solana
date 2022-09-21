@@ -2027,7 +2027,7 @@ impl<T> Checkpoint<T> {
             self_remaining_threads_guard - 1
         );
 
-        *self_remaining_threads_guard -= 1;
+        self_remaining_threads_guard -= 1;
 
         if let Some(given_restart_value) = maybe_given_restart_value {
             assert!(self_return_value.is_none());
