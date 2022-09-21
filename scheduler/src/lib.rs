@@ -868,7 +868,10 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
         // unblocking recv must have been gurantted to succeed at the time of this method
         // invocation
-        self.channel.try_recv().unwrap()
+        match self.channel.try_recv().unwrap() {
+            SchedulablePayload::Flushable::Payload(task) => task,
+            SchedulablePayload::Flushable::Checkpoint => unreachable!(),
+        }
     }
 }
 
