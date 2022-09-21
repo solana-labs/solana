@@ -21,7 +21,7 @@ unsafe impl Send for PageRc {}
 
 type PageRcInner = triomphe::Arc<(
     std::cell::RefCell<Page>,
-    SkipListTaskIds,
+    //SkipListTaskIds,
     std::sync::atomic::AtomicUsize,
 )>;
 
@@ -267,6 +267,7 @@ pub struct Page {
     next_usage: Usage,
     provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
     cu: CU,
+    task_ids: TaskIds,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
