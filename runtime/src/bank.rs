@@ -1422,7 +1422,7 @@ impl Scheduler {
                 while let Ok(r) = retired_ee_receiver.recv()
                 {
                     match r {
-                        solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload(mut ee, timings)) => {
+                        solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
                             if send_metrics {
                                 let sig = ee.task.tx.0.signature().to_string();
