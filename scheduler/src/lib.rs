@@ -203,7 +203,7 @@ pub struct SkipListTaskIds {
 
 #[derive(Debug, Default)]
 pub struct BTreeMapTaskIds {
-    task_ids: std::collections::BTreeMap<std::cmp::Reverse<UniqueWeight>, TaskInQueue>,
+    task_ids: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
 }
 
 impl SkipListTaskIds {
@@ -276,13 +276,13 @@ impl SkipListTaskIds {
 impl BTreeMapTaskIds {
     #[inline(never)]
     pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
-        let pre_existed = self.task_ids.insert(std::cmp::Reverse(u), task);
+        let pre_existed = self.task_ids.insert(u, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     #[inline(never)]
     pub fn remove_task(&self, u: &TaskId) {
-        let removed_entry = self.task_ids.remove(&std::cmp::Reverse(*u));
+        let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
     }
 
@@ -290,7 +290,7 @@ impl BTreeMapTaskIds {
     pub fn heaviest_task_cursor(
         &self,
     ) -> Option<std::collections::btree_map::OccupiedEntry<'_, u64, triomphe::Arc<Task>>> {
-        self.task_ids.iter()
+        self.task_ids.iter().rev()
     }
 
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
