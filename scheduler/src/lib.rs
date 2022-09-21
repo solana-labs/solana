@@ -290,7 +290,7 @@ impl BTreeMapTaskIds {
     pub fn heaviest_task_cursor(
         &self,
     ) -> impl Iterator<Item = TaskInQueue> {
-        self.task_ids.iter().rev()
+        self.task_ids.values().rev()
     }
 
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
