@@ -305,11 +305,12 @@ mod tests {
     #[test]
     fn tx_uses_nonce_bad_prog_id_idx_fail() {
         let (_, _, mut tx) = nonced_transfer_tx();
-        tx.message
-            .instructions_mut()
-            .get_mut(0)
-            .unwrap()
-            .program_id_index = 255u8;
+        match &mut tx.message {
+            VersionedMessage::Legacy(message) => {
+                message.instructions.get_mut(0).unwrap().program_id_index = 255u8;
+            }
+            VersionedMessage::V0(_) => unreachable!(),
+        };
         assert!(!tx.uses_durable_nonce());
     }
 
