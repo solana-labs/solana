@@ -376,7 +376,7 @@ impl AddressBook {
 
         if !strictly_lockable_for_replay {
             attempt.status = LockStatus::Failed;
-            let page = attempt.target.page_mut(ast);
+            let page = attempt.target_page_mut(ast);
             return page.cu;
         }
 
@@ -386,7 +386,7 @@ impl AddressBook {
             status, /*, remembered*/
             ..
         } = attempt;
-        let mut page = target.page_mut(ast);
+        let mut page = target_page_mut(ast);
 
         let next_usage = page.next_usage;
         match page.current_usage {
@@ -473,7 +473,7 @@ impl AddressBook {
 
         let mut newly_uncontended = false;
 
-        let mut page = attempt.target.page_mut(ast);
+        let mut page = attempt.target_page_mut(ast);
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -504,7 +504,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn cancel<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt) {
-        let mut page = attempt.target.page_mut(ast);
+        let mut page = attempt.target_page_mut(ast);
 
         match page.next_usage {
             Usage::Unused => {
@@ -942,7 +942,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
             LockStatus::Failed => {
                 trace!(
                     "lock failed: {}/{:?}",
-                    attempt.target.page_mut(ast).address_str,
+                    attempt.target_page_mut(ast).address_str,
                     attempt.requested_usage
                 );
                 unlockable_count += 1;
@@ -1317,8 +1317,7 @@ impl ScheduleStage {
         for l in next_task.lock_attempts_mut(ast).iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target
-                        .page_mut(ast)
+                    l.target_page_mut(ast)
                         .provisional_task_ids
                         .push(triomphe::Arc::clone(&tracker));
                 }
@@ -1356,7 +1355,7 @@ impl ScheduleStage {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
-            let mut page = l.target.page_mut(ast);
+            let mut page = l.target_page_mut(ast);
             page.cu += cu;
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
