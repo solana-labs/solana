@@ -877,6 +877,12 @@ impl<'a> ChannelBackedTaskQueue<'a> {
 
 struct ChannelBackedTaskQueueEntry(TaskInQueue);
 
+impl ChannelBackedTaskQueue {
+    fn remove() {
+        // noop;
+    }
+}
+
 #[inline(never)]
 fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     ast: AST,
