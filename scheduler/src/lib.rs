@@ -282,7 +282,7 @@ impl BTreeMapTaskIds {
 
     #[inline(never)]
     pub fn remove_task(&self, u: &TaskId) {
-        let removed_entry = self.task_ids.remove(u);
+        let removed_entry = self.task_ids.remove(std::cmp::Reverse(u));
         assert!(removed_entry.is_some());
     }
 
