@@ -1673,7 +1673,7 @@ impl ScheduleStage {
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
-                        channel_backed_runnable_queue,
+                        &mut channel_backed_runnable_queue,
                         address_book,
                         &mut contended_count,
                         prefer_immediate,
