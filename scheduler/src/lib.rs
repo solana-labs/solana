@@ -359,7 +359,7 @@ impl AddressBook {
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
-            .target_page_mut(ast).contended_unique_weights.
+            .target_page_mut(ast).contended_unique_weights
             .heaviest_task_id();
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
