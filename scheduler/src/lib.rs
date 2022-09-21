@@ -784,7 +784,7 @@ impl Task {
     ) {
         for lock_attempt in &*this.lock_attempts_mut(ast) {
             lock_attempt
-                .target_contended_unique_weights()
+                .target_page_mut(ast).task_ids
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
