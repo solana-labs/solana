@@ -2015,7 +2015,7 @@ pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T),
 
 pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
 
-impl<T> Checkpoint {
+impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let (mut self_remaining_threads_guard, mut self_return_value) = self.0.lock().unwrap();
