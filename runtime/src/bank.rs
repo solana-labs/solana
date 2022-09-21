@@ -1417,9 +1417,12 @@ impl Scheduler {
                     .unwrap();
                 }
 
+                let mut cumulative_timings = Default::default();
+
                 while let Ok(solana_scheduler::ExaminablePayload(mut ee, timings)) =
                     retired_ee_receiver.recv()
                 {
+                    cumulative_timings.accumulate(&timings);
                     if send_metrics {
                         let sig = ee.task.tx.0.signature().to_string();
 
