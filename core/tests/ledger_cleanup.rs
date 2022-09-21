@@ -355,7 +355,7 @@ mod tests {
                         shred_storage_type: ShredStorageType::RocksFifo(
                             BlockstoreRocksFifoOptions {
                                 shred_data_cf_size: config.shred_data_cf_size,
-                                ..BlockstoreRocksFifoOptions::default()
+                                shred_code_cf_size: config.shred_data_cf_size,
                             },
                         ),
                         ..LedgerColumnOptions::default()

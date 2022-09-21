@@ -138,8 +138,8 @@ impl Default for ShredStorageType {
     }
 }
 
-const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
-const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
+pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
+pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
 impl ShredStorageType {
     /// Returns ShredStorageType::RocksFifo where the specified
@@ -212,24 +212,20 @@ pub struct BlockstoreRocksFifoOptions {
     pub shred_code_cf_size: u64,
 }
 
-// The default storage size for storing shreds when `rocksdb-shred-compaction`
-// is set to `fifo` in the validator arguments.  This amount of storage size
-// in bytes will equally allocated to both data shreds and coding shreds.
-pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
-
 pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
-
-impl Default for BlockstoreRocksFifoOptions {
-    fn default() -> Self {
-        BlockstoreRocksFifoOptions::new(DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)
-    }
-}
 
 impl BlockstoreRocksFifoOptions {
     fn new(shred_storage_size: u64) -> Self {
         Self {
             shred_data_cf_size: shred_storage_size / 2,
             shred_code_cf_size: shred_storage_size / 2,
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        Self {
+            shred_data_cf_size: 150_000_000_000,
+            shred_code_cf_size: 150_000_000_000,
         }
     }
 }
@@ -266,7 +262,11 @@ fn test_rocksdb_directory() {
         BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
     );
     assert_eq!(
-        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default()).blockstore_directory(),
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
+            shred_code_cf_size: 0,
+            shred_data_cf_size: 0
+        })
+        .blockstore_directory(),
         BLOCKSTORE_DIRECTORY_ROCKS_FIFO
     );
 }
