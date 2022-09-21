@@ -1848,6 +1848,8 @@ impl ScheduleStage {
                             .unwrap();
                     }
                     if !empty_from {
+                        unreachable!();
+
                         let SchedulablePayload(schedulable) = from_prev.recv().unwrap();
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
