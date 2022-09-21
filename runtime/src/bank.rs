@@ -1370,8 +1370,6 @@ impl Scheduler {
                 drop(weak_bank);
                 drop(ro_bank);
 
-                trace!("execute_substage: slot: {} transaction_index: {} timings: {:?}", slot, transaction_index, timings);
-
                 let TransactionResults {
                     fee_collection_results,
                     execution_results,
@@ -1419,7 +1417,7 @@ impl Scheduler {
                     .unwrap();
                 }
 
-                while let Ok(solana_scheduler::ExaminablePayload(mut ee, _extra)) =
+                while let Ok(solana_scheduler::ExaminablePayload(mut ee, timings)) =
                     retired_ee_receiver.recv()
                 {
                     if send_metrics {
@@ -1442,6 +1440,7 @@ impl Scheduler {
                             ("cpu_duration", ee.execution_cpu_us, i64),
                             ("compute_units", ee.cu, i64),
                         );
+                        info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
                     }
 
                     if ee.is_aborted() {
