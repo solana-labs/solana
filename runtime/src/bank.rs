@@ -1419,44 +1419,48 @@ impl Scheduler {
 
                 let mut cumulative_timings = ExecuteTimings::default();
 
-                while let Ok(solana_scheduler::ExaminablePayload(mut ee, timings)) =
-                    retired_ee_receiver.recv()
+                while let Ok(r) = retired_ee_receiver.recv()
                 {
-                    cumulative_timings.accumulate(&timings);
-                    if send_metrics {
-                        let sig = ee.task.tx.0.signature().to_string();
+                    match r {
+                        solana_scheduler::ExaminablePayload(solana_schduler::Flushable::Payload(mut ee, timings)) => {
+                            cumulative_timings.accumulate(&timings);
+                            if send_metrics {
+                                let sig = ee.task.tx.0.signature().to_string();
 
-                        datapoint_info_at!(
-                            ee.finish_time.unwrap(),
-                            "individual_tx_stats",
-                            ("slot", ee.slot, i64),
-                            ("index", ee.transaction_index, i64),
-                            ("thread", format!("solScExLane{:02}", ee.thx), String),
-                            ("signature", &sig, String),
-                            ("account_locks_in_json", "{}", String),
-                            (
-                                "status",
-                                format!("{:?}", ee.execution_result.as_ref().unwrap()),
-                                String
-                            ),
-                            ("duration", ee.execution_us, i64),
-                            ("cpu_duration", ee.execution_cpu_us, i64),
-                            ("compute_units", ee.cu, i64),
-                        );
-                        info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
-                    }
+                                datapoint_info_at!(
+                                    ee.finish_time.unwrap(),
+                                    "individual_tx_stats",
+                                    ("slot", ee.slot, i64),
+                                    ("index", ee.transaction_index, i64),
+                                    ("thread", format!("solScExLane{:02}", ee.thx), String),
+                                    ("signature", &sig, String),
+                                    ("account_locks_in_json", "{}", String),
+                                    (
+                                        "status",
+                                        format!("{:?}", ee.execution_result.as_ref().unwrap()),
+                                        String
+                                    ),
+                                    ("duration", ee.execution_us, i64),
+                                    ("cpu_duration", ee.execution_cpu_us, i64),
+                                    ("compute_units", ee.cu, i64),
+                                );
+                                info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
+                            }
 
-                    if ee.is_aborted() {
-                        warn!(
-                            "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
-                            ee.execution_result, ee.task.tx.0
-                        );
-                        collected_errors_in_collector_thread
-                            .lock()
-                            .unwrap()
-                            .push(ee.execution_result.take().unwrap());
+                            if ee.is_aborted() {
+                                warn!(
+                                    "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                                    ee.execution_result, ee.task.tx.0
+                                );
+                                collected_errors_in_collector_thread
+                                    .lock()
+                                    .unwrap()
+                                    .push(ee.execution_result.take().unwrap());
+                            }
+                            drop(ee);
+                        },
+                        _ => { todo!() },
                     }
-                    drop(ee);
                 }
                 todo!();
 
