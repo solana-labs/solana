@@ -859,21 +859,6 @@ pub fn process_blockstore_from_root(
 
     let processing_time = now.elapsed();
 
-    let debug_verify = opts.accounts_db_test_hash_calculation;
-    let mut time_cap = Measure::start("capitalization");
-    // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
-    // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
-    // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    let bank = bank_forks.read().unwrap().root_bank();
-    if start_slot != bank.slot() && !bank.calculate_and_verify_capitalization(debug_verify) {
-        return Err(
-            BlockstoreProcessorError::RootBankWithMismatchedCapitalization(
-                bank_forks.read().unwrap().root(),
-            ),
-        );
-    }
-    time_cap.stop();
-
     bank.initial_blockstore_processing_completed();
 
     datapoint_info!(
@@ -886,7 +871,6 @@ pub fn process_blockstore_from_root(
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
-        ("calculate_capitalization_us", time_cap.as_us(), i64),
     );
 
     info!("ledger processing timing: {:?}", timing);
