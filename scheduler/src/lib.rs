@@ -849,7 +849,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
         Self {channel, buffered_task: None}
     }
 
-    fn buffer(&mut self, task: usize) {
+    fn buffer(&mut self, task: TaskInQueue) {
         self.buffered_task = task;
     }
 }
