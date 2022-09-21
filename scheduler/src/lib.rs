@@ -842,7 +842,7 @@ impl TaskQueue {
 struct ChannelBackedTaskQueue<'a> {
     channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: Option<usize>,
+    buffered_flush: Option<std::sync::Arc<Checkpoint>>,
 }
 
 impl<'a> ChannelBackedTaskQueue<'a> {
