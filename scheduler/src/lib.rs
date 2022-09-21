@@ -2034,7 +2034,7 @@ impl<T> Checkpoint<T> {
             self_return_value = Some(given_restart_value);
         }
 
-        if *self_remaining_threads_guard == 0 {
+        if self_remaining_threads_guard == 0 {
             assert!(self_return_value.is_some());
             drop(self_remaining_threads_guard);
             self.1.notify_all();
