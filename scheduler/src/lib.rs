@@ -1899,7 +1899,7 @@ impl ScheduleStage {
                     break;
                 } else {
                     if !empty_from_exec {
-                        let mut processed_execution_environment = from_exec.recv().unwrap().0;
+                        let (mut processed_execution_environment, extra) = from_exec.recv().unwrap();
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
@@ -1912,7 +1912,7 @@ impl ScheduleStage {
                             &mut provisioning_tracker_count,
                         );
                         to_next_stage
-                            .send(ExaminablePayload(processed_execution_environment))
+                            .send(ExaminablePayload(processed_execution_environment, extra))
                             .unwrap();
                     }
                     if !empty_from {
