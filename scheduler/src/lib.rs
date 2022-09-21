@@ -869,8 +869,8 @@ impl<'a> ChannelBackedTaskQueue<'a> {
         // unblocking recv must have been gurantted to succeed at the time of this method
         // invocation
         match self.channel.try_recv().unwrap() {
-            SchedulablePayload::Flushable::Payload(task) => task,
-            SchedulablePayload::Flushable::Checkpoint => unreachable!(),
+            SchedulablePayload(Flushable::Payload(task)) => task,
+            SchedulablePayload(Flushable::Checkpoint) => unreachable!(),
         }
     }
 }
