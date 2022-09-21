@@ -2049,7 +2049,7 @@ impl<T> Checkpoint<T> {
             );
             let _ = *self
                 .1
-                .wait_while(g, |(remaining_threads, _)| {
+                .wait_while(g, |&mut (remaining_threads, _)| {
                     remaining_threads > 0
                 })
                 .unwrap();
