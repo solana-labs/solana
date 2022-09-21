@@ -75,7 +75,7 @@ solana-logger = { path = "../logger", version = "=1.15.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.15.0" }
 static_assertions = "1.1.0"
-systemstat = "0.1.11"
+systemstat = "0.2.0"
 test-case = "2.1.0"
 
 [target."cfg(unix)".dependencies]
