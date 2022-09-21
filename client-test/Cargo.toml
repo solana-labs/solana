@@ -30,7 +30,7 @@ solana-streamer = { path = "../streamer", version = "=1.15.0" }
 solana-test-validator = { path = "../test-validator", version = "=1.15.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 solana-version = { path = "../version", version = "=1.15.0" }
-systemstat = "0.1.11"
+systemstat = "0.2.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 
 [dev-dependencies]
