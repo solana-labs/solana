@@ -1459,7 +1459,7 @@ impl Scheduler {
                             }
                             drop(ee);
                         },
-                        _ => { todo!() },
+                        solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint) => { todo!() },
                     }
                 }
                 todo!();
