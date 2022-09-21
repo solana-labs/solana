@@ -1914,7 +1914,7 @@ impl ScheduleStage {
                             &mut provisioning_tracker_count,
                         );
                         to_next_stage
-                            .send(ExaminablePayload(processed_execution_environment, extra))
+                            .send(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra))))
                             .unwrap();
                     }
                     if !empty_from {
