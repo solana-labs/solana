@@ -1086,14 +1086,13 @@ fn process_loader_upgradeable_instruction(
                         );
                         return Err(InstructionError::InvalidArgument);
                     }
-
-                    drop(program_account);
                 }
                 _ => {
                     ic_logger_msg!(log_collector, "Invalid Program account");
                     return Err(InstructionError::InvalidAccountData);
                 }
             }
+            drop(program_account);
 
             let old_len = programdata_account.get_data().len();
             let new_len = old_len.saturating_add(additional_bytes as usize);
