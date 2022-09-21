@@ -1986,7 +1986,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
     ) -> Option<std::sync::Arc<Checkpoint<C>>> {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
