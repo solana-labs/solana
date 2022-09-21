@@ -863,6 +863,13 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     fn has_no_task(&self) -> bool {
         self.task_count() == 0
     }
+
+    #[inline(never)]
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
+        // unblocking recv must have been gurantted to succeed at the time of this method
+        // invocation
+        self.channel.try_recv().unwrap()
+    }
 }
 
 #[inline(never)]
