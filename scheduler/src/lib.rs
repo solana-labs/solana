@@ -386,7 +386,7 @@ impl AddressBook {
             status, /*, remembered*/
             ..
         } = attempt;
-        let mut page = target_page_mut(ast);
+        let mut page = target.page_mut(ast);
 
         let next_usage = page.next_usage;
         match page.current_usage {
