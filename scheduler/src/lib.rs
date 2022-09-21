@@ -2006,7 +2006,7 @@ impl ScheduleStage {
 pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
-pub struct ExaminablePayload<T>(pub Flushable<(pub Box<ExecutionEnvironment>, pub T)>);
+pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 
 pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
 
