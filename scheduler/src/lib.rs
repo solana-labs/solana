@@ -154,8 +154,8 @@ impl LockAttempt {
         &self.target.0.1
     }
 
-    fn target_page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        self.target.0.0.borrow_mut()
+    fn target_page_mut<AST: AtScheduleThread>(&self, ast: AST) -> std::cell::RefMut<'_, Page> {
+        self.target.page_mut(ast)
     }
 }
 
