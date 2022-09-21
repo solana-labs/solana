@@ -2018,7 +2018,7 @@ pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condva
 impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
-        let g = self.0.lock().unwrap();
+        let mut g = self.0.lock().unwrap();
         let (self_remaining_threads_guard, self_return_value) = &mut *g;
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
