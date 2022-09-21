@@ -1624,9 +1624,11 @@ impl ScheduleStage {
                                 if task.already_finished() {
                                     break;
                                 }
+                                /*
                                 lock_attempt
                                     .target_contended_unique_weights()
                                     .insert_task(task.unique_weight, Task::clone_in_queue(&task));
+                                */
                                 todo!("contended_write_task_count!");
                             }
                         }
