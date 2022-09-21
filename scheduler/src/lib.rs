@@ -203,7 +203,7 @@ pub struct SkipListTaskIds {
 
 #[derive(Debug, Default)]
 pub struct BTreeMapTaskIds {
-    task_ids: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+    task_ids: std::collections::BTreeMap<std::cmp::Reverse<UniqueWeight>, TaskInQueue>,
 }
 
 impl SkipListTaskIds {
