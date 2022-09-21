@@ -74,7 +74,7 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            if let Some(heaviest_uncontended) = lock_attempt.target_contended_unique_weights().reindex(should_remove, uq) {
+            if let Some(heaviest_uncontended) = lock_attempt.target_contended_unique_weights().reindex(should_remove, &uq) {
                 lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
             };
 
@@ -225,7 +225,7 @@ impl SkipListTaskIds {
     }
 
     #[inline(never)]
-    fn reindex(&self, should_remove: bool, uq: UniqueWeight) -> Option<TaskInQueue> {
+    fn reindex(&self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
         self
             .heaviest_task_cursor()
             .map(|mut task_cursor| {
@@ -235,7 +235,7 @@ impl SkipListTaskIds {
                 //task.trace_timestamps("in_exec(initial list)");
                 assert!(!task.already_finished());
                 while !task.currently_contended() {
-                    if task_cursor.key() == &uq {
+                    if task_cursor.key() == uq {
                         assert!(should_remove);
                         removed = task_cursor.remove();
                         assert!(removed);
@@ -252,7 +252,7 @@ impl SkipListTaskIds {
                     }
                 }
                 if should_remove && !removed {
-                    self.remove_task(&uq);
+                    self.remove_task(uq);
                 }
                 found.then(|| Task::clone_in_queue(task))
             })
