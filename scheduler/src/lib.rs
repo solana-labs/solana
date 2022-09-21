@@ -21,7 +21,7 @@ unsafe impl Send for PageRc {}
 
 type PageRcInner = triomphe::Arc<(
     std::cell::RefCell<Page>,
-    TaskIds,
+    SkipListTaskIds,
     std::sync::atomic::AtomicUsize,
 )>;
 
@@ -186,12 +186,14 @@ pub enum RequestedUsage {
     Writable,
 }
 
+type TaskIds = SkipListTaskIds;
+
 #[derive(Debug, Default)]
-pub struct TaskIds {
+pub struct SkipListTaskIds {
     task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue>,
 }
 
-impl TaskIds {
+impl SkipListTaskIds {
     #[inline(never)]
     pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
         let mut is_inserted = false;
