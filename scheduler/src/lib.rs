@@ -293,7 +293,7 @@ impl BTreeMapTaskIds {
         self.task_ids.values().rev()
     }
 
-    pub fn heaviest_task_id(&self) -> Option<TaskId> {
+    pub fn heaviest_task_id(&mut self) -> Option<TaskId> {
         self
             .task_ids
             .last_entry()
