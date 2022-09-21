@@ -275,13 +275,13 @@ impl SkipListTaskIds {
 
 impl BTreeMapTaskIds {
     #[inline(never)]
-    pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
+    pub fn insert_task(&mut self, u: TaskId, task: TaskInQueue) {
         let pre_existed = self.task_ids.insert(u, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     #[inline(never)]
-    pub fn remove_task(&self, u: &TaskId) {
+    pub fn remove_task(&mut self, u: &TaskId) {
         let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
     }
