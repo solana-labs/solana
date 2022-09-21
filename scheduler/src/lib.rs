@@ -290,7 +290,7 @@ impl BTreeMapTaskIds {
     pub fn heaviest_task_cursor(
         &self,
     ) -> Option<std::collections::btree_map::OccupiedEntry<'_, u64, triomphe::Arc<Task>>> {
-        self.task_ids.last_entry()
+        self.task_ids.riter()
     }
 
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
