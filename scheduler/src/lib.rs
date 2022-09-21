@@ -273,6 +273,69 @@ impl SkipListTaskIds {
     }
 }
 
+impl BTreeMapTaskIds {
+    #[inline(never)]
+    pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
+        let pre_existed = self.task_ids.insert(u, task);
+        assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+    }
+
+    #[inline(never)]
+    pub fn remove_task(&self, u: &TaskId) {
+        let removed_entry = self.task_ids.remove(u);
+        assert!(removed_entry.is_some());
+    }
+
+    #[inline(never)]
+    pub fn heaviest_task_cursor(
+        &self,
+    ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
+        self.task_ids.back()
+    }
+
+    pub fn heaviest_task_id(&self) -> Option<TaskId> {
+        self
+            .task_ids
+            .back()
+            .map(|j| *j.key())
+    }
+
+    #[inline(never)]
+    fn reindex(&self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
+        self
+            .heaviest_task_cursor()
+            .map(|mut task_cursor| {
+                let mut found = true;
+                let mut removed = false;
+                let mut task = task_cursor.value();
+                //task.trace_timestamps("in_exec(initial list)");
+                assert!(!task.already_finished());
+                while !task.currently_contended() {
+                    if task_cursor.key() == uq {
+                        assert!(should_remove);
+                        removed = task_cursor.remove();
+                        assert!(removed);
+                    }
+                    if let Some(new_cursor) = task_cursor.prev() {
+                        assert!(new_cursor.key() < task_cursor.key());
+                        task_cursor = new_cursor;
+                        task = task_cursor.value();
+                        assert!(!task.already_finished());
+                        //task.trace_timestamps("in_exec(subsequent list)");
+                    } else {
+                        found = false;
+                        break;
+                    }
+                }
+                if should_remove && !removed {
+                    self.remove_task(uq);
+                }
+                found.then(|| Task::clone_in_queue(task))
+            })
+            .flatten()
+    }
+}
+
 #[derive(Debug)]
 pub struct Page {
     address_str: String,
