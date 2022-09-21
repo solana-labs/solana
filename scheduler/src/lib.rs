@@ -2013,23 +2013,29 @@ pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
 
-pub struct Checkpoint(std::sync::Mutex<usize>, std::sync::Condvar);
+pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
 
-impl Checkpoint {
-    pub fn wait_for_restart(&self) {
+impl<T> Checkpoint {
+    pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
-        let mut remaining_threads_guard = self.0.lock().unwrap();
+        let (mut self_remaining_threads_guard, mut self_return_value) = self.0.lock().unwrap();
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name,
-            *remaining_threads_guard,
-            *remaining_threads_guard - 1
+            *self_remaining_threads_guard,
+            *self_remaining_threads_guard - 1
         );
 
-        *remaining_threads_guard -= 1;
+        *self_remaining_threads_guard -= 1;
 
-        if *remaining_threads_guard == 0 {
-            drop(remaining_threads_guard);
+        if let Some(given_restart_value) = maybe_given_restart_value {
+            assert!(self_return_value.is_none());
+            *self_return_value = Some(given_restart_value);
+        }
+
+        if *self_remaining_threads_guard == 0 {
+            assert!(self_return_value.is_some());
+            drop(self_remaining_threads_guard);
             self.1.notify_all();
             info!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
@@ -2042,7 +2048,7 @@ impl Checkpoint {
             );
             let _ = *self
                 .1
-                .wait_while(remaining_threads_guard, |&mut remaining_threads| {
+                .wait_while(self_remaining_threads_guard, |&mut remaining_threads| {
                     remaining_threads > 0
                 })
                 .unwrap();
@@ -2051,11 +2057,13 @@ impl Checkpoint {
                 current_thread_name
             );
         }
+
+        r
     }
 
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
-            std::sync::Mutex::new(remaining_threads),
+            std::sync::Mutex::new((remaining_threads, None)),
             std::sync::Condvar::new(),
         ))
     }
