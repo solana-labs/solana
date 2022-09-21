@@ -146,9 +146,11 @@ impl LockAttempt {
         }
     }
 
+    /*
     pub fn target_contended_unique_weights(&self) -> &TaskIds {
         panic!()//&self.target.0 .1
     }
+    */
 
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
         &self.target.0.1
@@ -356,7 +358,8 @@ impl AddressBook {
         attempt: &mut LockAttempt,
     ) -> CU {
         let tcuw = attempt
-            .target_contended_unique_weights()
+            //.target_contended_unique_weights()
+            .target_page_mut(ast).contended_unique_weights.
             .heaviest_task_id();
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
