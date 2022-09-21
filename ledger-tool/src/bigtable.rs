@@ -4,7 +4,10 @@ use {
     clap::{
         value_t, value_t_or_exit, values_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand,
     },
-    log::info,
+    crossbeam_channel::unbounded,
+    futures::stream::FuturesUnordered,
+    log::{debug, info},
+    num_cpus,
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
@@ -333,6 +336,39 @@ pub async fn transaction_history(
     Ok(())
 }
 
+async fn copy(
+    config: solana_storage_bigtable::LedgerStorageConfig,
+    from_slot: Slot,
+    to_slot: Option<Slot>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let to_slot = to_slot.unwrap_or_else(|| from_slot + 1);
+    debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
+
+    let (s, r) = unbounded::<u64>();
+    for i in from_slot..to_slot {
+        s.send(i).unwrap();
+    }
+
+    let workers = min(to_slot - from_slot, num_cpus::get().try_into().unwrap());
+    debug!("worker num: {}", workers);
+    let tasks = (0..workers)
+        .map(|i| {
+            let r = r.clone();
+            tokio::spawn(async move {
+                while let Ok(slot) = r.try_recv() {
+                    debug!("worker {}: received slot {}", i, slot);
+                }
+
+                debug!("worker {}: exit", i);
+            })
+        })
+        .collect::<FuturesUnordered<_>>();
+
+    futures::future::join_all(tasks).await;
+
+    Ok(())
+}
+
 pub trait BigTableSubCommand {
     fn bigtable_subcommand(self) -> Self;
 }
@@ -581,6 +617,29 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(false)
                                 .help("Display the full transactions"),
                         ),
+                )
+                .subcommand(
+                    SubCommand::with_name("copy")
+                        .about("copy blocks from a bigtable to another bigtable")
+                        .arg(
+                            Arg::with_name("starting_slot")
+                                .long("starting-slot")
+                                .validator(is_slot)
+                                .value_name("START_SLOT")
+                                .takes_value(true)
+                                .required(true)
+                                .help(
+                                    "Start copying at this slot",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("ending_slot")
+                                .long("ending-slot")
+                                .validator(is_slot)
+                                .value_name("END_SLOT")
+                                .takes_value(true)
+                                .help("Stop copying at this slot [default: starting-slot + 1]"),
+                        )
                 ),
         )
     }
@@ -777,6 +836,21 @@ pub fn bigtable_process_command(
                 show_transactions,
                 query_chunk_size,
                 config,
+            ))
+        }
+        ("copy", Some(arg_matches)) => {
+            let from_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
+            let to_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
+
+            runtime.block_on(copy(
+                solana_storage_bigtable::LedgerStorageConfig {
+                    read_only: true,
+                    instance_name,
+                    app_profile_id,
+                    ..solana_storage_bigtable::LedgerStorageConfig::default()
+                },
+                from_slot,
+                to_slot,
             ))
         }
         _ => unreachable!(),
