@@ -104,7 +104,6 @@ impl SnapshotTestConfig {
         );
         bank0.freeze();
         bank0.set_startup_verification_complete();
-        bank0.initial_blockstore_processing_completed();
         let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 

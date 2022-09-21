@@ -1154,10 +1154,6 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             .path(),
     );
     info!("validator full snapshot archives: {validator_full_snapshot_archives:#?}");
-    info!(
-        "bprumo DEBUG: leader full snapshot archive for comparison: {:#?}",
-        leader_full_snapshot_archive_for_comparison
-    );
     let validator_full_snapshot_archive_for_comparison = validator_full_snapshot_archives
         .into_iter()
         .find(|validator_full_snapshot_archive| {
