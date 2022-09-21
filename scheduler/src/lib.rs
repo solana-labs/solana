@@ -906,13 +906,13 @@ impl TaskQueue {
     }
 }
 
-struct ChannelBackedTaskQueue<'a> {
+struct ChannelBackedTaskQueue<'a, C> {
     channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     buffered_task: Option<TaskInQueue>,
-    buffered_flush: Option<std::sync::Arc<Checkpoint>>,
+    buffered_flush: Option<std::sync::Arc<Checkpoint<C>>>,
 }
 
-impl<'a> ChannelBackedTaskQueue<'a> {
+impl<'a, C> ChannelBackedTaskQueue<'a, C> {
     fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
         Self {channel, buffered_task: None, buffered_flush: None}
     }
@@ -1068,9 +1068,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn select_next_task<'a>(
+    fn select_next_task<'a, C>(
         //runnable_queue: &'a mut TaskQueue,
-        runnable_queue: &'a mut ChannelBackedTaskQueue,
+        runnable_queue: &'a mut ChannelBackedTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &usize,
         task_selection: &mut TaskSelection,
@@ -1163,11 +1163,11 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn pop_from_queue_then_lock<AST: AtScheduleThread>(
+    fn pop_from_queue_then_lock<AST: AtScheduleThread, C>(
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
-        runnable_queue: &mut ChannelBackedTaskQueue,
+        runnable_queue: &mut ChannelBackedTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
@@ -1548,11 +1548,11 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn schedule_next_execution<AST: AtScheduleThread>(
+    fn schedule_next_execution<AST: AtScheduleThread, C>(
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         //runnable_queue: &mut TaskQueue,
-        runnable_queue: &mut ChannelBackedTaskQueue,
+        runnable_queue: &mut ChannelBackedTaskQueue<C>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
@@ -1598,18 +1598,18 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T: Send>(
+    fn _run<'a, AST: AtScheduleThread, T: Send, C>(
         ast: AST,
         random_id: u64,
         max_executing_queue_count: usize,
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
-        never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+        never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
     ) -> Option<std::sync::Arc<Checkpoint>> {
         let mut maybe_start_time = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
@@ -1977,12 +1977,12 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    pub fn run<T: Send>(
+    pub fn run<T: Send, C>(
         random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<SchedulablePayload>,
+        from: &crossbeam_channel::Receiver<SchedulablePayload<C>>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
@@ -2008,7 +2008,7 @@ impl ScheduleStage {
     }
 }
 
-pub struct SchedulablePayload(pub Flushable<TaskInQueue>);
+pub struct SchedulablePayload<C>(pub Flushable<TaskInQueue, C>);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T>(pub Flushable<(Box<ExecutionEnvironment>, T)>);
@@ -2057,8 +2057,6 @@ impl<T> Checkpoint {
                 current_thread_name
             );
         }
-
-        r
     }
 
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
@@ -2069,7 +2067,7 @@ impl<T> Checkpoint {
     }
 }
 
-pub enum Flushable<T> {
+pub enum Flushable<T, C> {
     Payload(T),
-    Flush(std::sync::Arc<Checkpoint>),
+    Flush(std::sync::Arc<Checkpoint<C>>),
 }
