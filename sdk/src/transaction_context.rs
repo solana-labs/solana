@@ -839,13 +839,7 @@ impl<'a> BorrowedAccount<'a> {
         self.touch()?;
 
         if data.len() != self.account.data().len() {
-            let mut accounts_resize_delta = self
-                .transaction_context
-                .accounts_resize_delta
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::GenericError)?;
-            *accounts_resize_delta = accounts_resize_delta
-                .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
+            self.update_accounts_resize_delta(data.len())?;
         }
         self.account.set_data(data);
 
@@ -865,13 +859,7 @@ impl<'a> BorrowedAccount<'a> {
         self.touch()?;
 
         if data.len() != self.account.data().len() {
-            let mut accounts_resize_delta = self
-                .transaction_context
-                .accounts_resize_delta
-                .try_borrow_mut()
-                .map_err(|_| InstructionError::GenericError)?;
-            *accounts_resize_delta = accounts_resize_delta
-                .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
+            self.update_accounts_resize_delta(data.len())?;
         }
         self.account.set_data_from_slice(data);
 
@@ -890,13 +878,7 @@ impl<'a> BorrowedAccount<'a> {
             return Ok(());
         }
         self.touch()?;
-        let mut accounts_resize_delta = self
-            .transaction_context
-            .accounts_resize_delta
-            .try_borrow_mut()
-            .map_err(|_| InstructionError::GenericError)?;
-        *accounts_resize_delta = accounts_resize_delta
-            .saturating_add((new_length as i64).saturating_sub(self.get_data().len() as i64));
+        self.update_accounts_resize_delta(new_length)?;
         self.account.data_mut().resize(new_length, 0);
         Ok(())
     }
@@ -1091,6 +1073,18 @@ impl<'a> BorrowedAccount<'a> {
                 .get_mut(self.index_in_transaction as usize)
                 .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
         }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    fn update_accounts_resize_delta(&mut self, new_len: usize) -> Result<(), InstructionError> {
+        let mut accounts_resize_delta = self
+            .transaction_context
+            .accounts_resize_delta
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::GenericError)?;
+        *accounts_resize_delta = accounts_resize_delta
+            .saturating_add((new_len as i64).saturating_sub(self.get_data().len() as i64));
         Ok(())
     }
 }
