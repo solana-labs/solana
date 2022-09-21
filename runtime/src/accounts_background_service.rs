@@ -146,10 +146,11 @@ impl SnapshotRequestHandler {
             .last()
             .map(|snapshot_request| {
                 let mut total_time = Measure::start("snapshot_request_receiver_total_time");
+                let accounts_package_type = new_accounts_package_type(&snapshot_request, &self.snapshot_config, *last_full_snapshot_slot);
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
-                    request_type,
+                    request_type: _request_type,
                 } = snapshot_request;
 
                 // we should not rely on the state of this validator until startup verification is complete
@@ -228,21 +229,9 @@ impl SnapshotRequestHandler {
                     shrink_time.stop();
                 }
 
-                let block_height = snapshot_root_bank.block_height();
-                let accounts_package_type = match request_type {
-                    SnapshotRequestType::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
-                    _ => {
-                        if snapshot_utils::should_take_full_snapshot(block_height, self.snapshot_config.full_snapshot_archive_interval_slots) {
-                            *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
-                            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
-                        } else if snapshot_utils::should_take_incremental_snapshot(block_height, self.snapshot_config .incremental_snapshot_archive_interval_slots, *last_full_snapshot_slot) {
-                            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot( last_full_snapshot_slot.unwrap()))
-                        } else {
-                            AccountsPackageType::AccountsHashVerifier
-                        }
-                    },
-
-                };
+                if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
+                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
+                }
 
                 // Snapshot the bank and send over an accounts package
                 let mut snapshot_time = Measure::start("snapshot_time");
@@ -591,6 +580,37 @@ impl AccountsBackgroundService {
         {
             bank.expire_old_recycle_stores();
             *last_expiration_check_time = now;
+        }
+    }
+}
+
+/// Get the AccountsPackageType from a given SnapshotRequest
+#[must_use]
+fn new_accounts_package_type(
+    snapshot_request: &SnapshotRequest,
+    snapshot_config: &SnapshotConfig,
+    last_full_snapshot_slot: Option<Slot>,
+) -> AccountsPackageType {
+    let block_height = snapshot_request.snapshot_root_bank.block_height();
+    match snapshot_request.request_type {
+        SnapshotRequestType::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
+        _ => {
+            if snapshot_utils::should_take_full_snapshot(
+                block_height,
+                snapshot_config.full_snapshot_archive_interval_slots,
+            ) {
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+            } else if snapshot_utils::should_take_incremental_snapshot(
+                block_height,
+                snapshot_config.incremental_snapshot_archive_interval_slots,
+                last_full_snapshot_slot,
+            ) {
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
+                    last_full_snapshot_slot.unwrap(),
+                ))
+            } else {
+                AccountsPackageType::AccountsHashVerifier
+            }
         }
     }
 }
