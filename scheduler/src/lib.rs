@@ -2023,8 +2023,8 @@ impl<T> Checkpoint<T> {
         info!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name,
-            *self_remaining_threads_guard,
-            *self_remaining_threads_guard - 1
+            self_remaining_threads_guard,
+            self_remaining_threads_guard - 1
         );
 
         *self_remaining_threads_guard -= 1;
