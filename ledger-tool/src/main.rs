@@ -377,6 +377,7 @@ fn output_slot(
             let t3 = std::thread::Builder::new()
                 .name(format!("sol-consumer{}", thx))
                 .spawn(move || loop {
+                    /*
                     let ee = post_schedule_env_receiver.recv().unwrap().0;
                     d.fetch_sub(1, Ordering::Relaxed);
                     let step = step.fetch_add(1, Ordering::Relaxed);
@@ -388,6 +389,8 @@ fn output_slot(
                     if step % 1966 == 0 {
                         error!("finished!: {} {}", step, post_schedule_env_receiver.len());
                     }
+                    */
+                    todo!();
                 })
                 .unwrap();
             t3
