@@ -1417,7 +1417,7 @@ impl Scheduler {
                     .unwrap();
                 }
 
-                let mut cumulative_timings = Default::default();
+                let mut cumulative_timings = ExecuteTimings::default();
 
                 while let Ok(solana_scheduler::ExaminablePayload(mut ee, timings)) =
                     retired_ee_receiver.recv()
