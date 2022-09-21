@@ -881,6 +881,10 @@ impl ChannelBackedTaskQueueEntry {
     fn remove(self) -> TaskInQueue {
         self.0
     }
+
+    fn key(&self) -> UniqueWeight {
+        self.0.unique_weight()
+    }
 }
 
 #[inline(never)]
