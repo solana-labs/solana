@@ -351,7 +351,7 @@ fn output_slot(
                         // ee.reindex_with_address_book();
                         todo!("contended_write_task_count");
                         post_execute_env_sender
-                            .send(solana_scheduler::UnlockablePayload(ee))
+                            .send(solana_scheduler::UnlockablePayload(ee, ()))
                             .unwrap();
                     }
                 })
