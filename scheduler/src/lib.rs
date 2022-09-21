@@ -1598,7 +1598,7 @@ impl ScheduleStage {
     }
 
     #[must_use]
-    fn _run<'a, AST: AtScheduleThread, T>(
+    fn _run<'a, AST: AtScheduleThread, T: Send>(
         ast: AST,
         random_id: u64,
         max_executing_queue_count: usize,
