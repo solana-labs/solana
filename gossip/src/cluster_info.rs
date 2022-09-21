@@ -127,6 +127,7 @@ const MAX_PRUNE_DATA_NODES: usize = 32;
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 65536;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
+const GOSSIP_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(1280 / 64);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
@@ -412,6 +413,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             ping_cache: Mutex::new(PingCache::new(
                 GOSSIP_PING_CACHE_TTL,
+                GOSSIP_PING_CACHE_RATE_LIMIT_DELAY,
                 GOSSIP_PING_CACHE_CAPACITY,
             )),
             stats: GossipStats::default(),
