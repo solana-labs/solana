@@ -852,6 +852,17 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     fn buffer(&mut self, task: TaskInQueue) {
         self.buffered_task = Some(task);
     }
+
+    fn task_count(&self) -> usize {
+        self.channel.len() + (match self.buffered_task {
+            None => 0,
+            Some(_) => 1,
+        })
+    }
+
+    fn has_no_task(&self) -> bool {
+        self.task_count() == 0
+    }
 }
 
 #[inline(never)]
