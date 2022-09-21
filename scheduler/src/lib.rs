@@ -846,7 +846,7 @@ struct ChannelBackedTaskQueue<'a> {
 
 impl<'a> ChannelBackedTaskQueue<'a> {
     fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
-        Self {channel}
+        Self {channel, buffered_task: None}
     }
 
     if buffer(&mut self, task: usize) {
