@@ -216,6 +216,13 @@ impl TaskIds {
         self.task_ids.back()
     }
 
+    pub fn heaviest_task_id(&self) {
+        self
+            .task_ids
+            .back()
+            .map(|j| *j.key())
+    }
+
     #[inline(never)]
     fn reindex(&self, should_remove: bool, uq: UniqueWeight) -> Option<TaskInQueue> {
         self
@@ -343,9 +350,7 @@ impl AddressBook {
     ) -> CU {
         let tcuw = attempt
             .target_contended_unique_weights()
-            .task_ids
-            .back()
-            .map(|j| *j.key());
+            .heaviest_task_id()
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
             true
