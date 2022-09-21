@@ -1899,7 +1899,7 @@ impl ScheduleStage {
                     break;
                 } else {
                     if !empty_from_exec {
-                        let (mut processed_execution_environment, extra) = from_exec.recv().unwrap();
+                        let UnlockablePayload(mut processed_execution_environment, extra) = from_exec.recv().unwrap();
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
