@@ -865,15 +865,17 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskInQueue> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<ChannelBackedTaskQueueEntry> {
         // unblocking recv must have been gurantted to succeed at the time of this method
         // invocation
         match self.channel.try_recv().unwrap() {
-            SchedulablePayload(Flushable::Payload(task)) => task,
+            SchedulablePayload(Flushable::Payload(task)) => ChannelBackedTaskQueueEntry(task),
             SchedulablePayload(Flushable::Checkpoint) => unreachable!(),
         }
     }
 }
+
+struct ChannelBackedTaskQueueEntry(TaskInQueue);
 
 #[inline(never)]
 fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
