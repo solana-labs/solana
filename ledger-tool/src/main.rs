@@ -59,7 +59,9 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
-    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight, LockAttempt, RequestedUsage, Preloader},
+    solana_scheduler::{
+        AddressBook, LockAttempt, Preloader, RequestedUsage, ScheduleStage, TaskQueue, Weight,
+    },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -177,15 +179,15 @@ fn output_entry(
                     || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx)
                 {
                     let locks = sanitized_tx.get_account_locks(usize::max_value()).unwrap();
-                    let writable_lock_iter = locks
-                        .writable
-                        .iter()
-                        .map(|address| LockAttempt::new(preloader.load(**address), RequestedUsage::Writable));
-                    let readonly_lock_iter = locks
-                        .readonly
-                        .iter()
-                        .map(|address| LockAttempt::new(preloader.load(**address), RequestedUsage::Readonly));
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+                    let writable_lock_iter = locks.writable.iter().map(|address| {
+                        LockAttempt::new(preloader.load(**address), RequestedUsage::Writable)
+                    });
+                    let readonly_lock_iter = locks.readonly.iter().map(|address| {
+                        LockAttempt::new(preloader.load(**address), RequestedUsage::Readonly)
+                    });
+                    let locks = writable_lock_iter
+                        .chain(readonly_lock_iter)
+                        .collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
@@ -284,18 +286,19 @@ fn output_slot(
             use rand::Rng;
             let random_id = rand::thread_rng().gen::<u64>();
             loop {
-            ScheduleStage::run(
-                random_id,
-                lane_count * lane_channel_factor,
-                &mut runnable_queue,
-                &mut address_book,
-                &muxed_receiver,
-                &pre_execute_env_sender,
-                None,
-                &post_execute_env_receiver,
-                Some(&post_schedule_env_sender),
-            );
-        }})
+                ScheduleStage::run(
+                    random_id,
+                    lane_count * lane_channel_factor,
+                    &mut runnable_queue,
+                    &mut address_book,
+                    &muxed_receiver,
+                    &pre_execute_env_sender,
+                    None,
+                    &post_execute_env_receiver,
+                    Some(&post_schedule_env_sender),
+                );
+            }
+        })
         .unwrap();
     let handles = (0..lane_count)
         .map(|thx| {
@@ -347,7 +350,9 @@ fn output_slot(
                         */
                         // ee.reindex_with_address_book();
                         todo!("contended_write_task_count");
-                        post_execute_env_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
+                        post_execute_env_sender
+                            .send(solana_scheduler::UnlockablePayload(ee))
+                            .unwrap();
                     }
                 })
                 .unwrap();
@@ -363,15 +368,15 @@ fn output_slot(
         .parse::<usize>()
         .unwrap();
     let step = Arc::new(std::sync::atomic::AtomicUsize::default());
-    let handles3 = (0..consumer_count).map(|thx| {
-        let post_schedule_env_receiver = post_schedule_env_receiver.clone();
-        let d = d.clone();
-        let step = step.clone();
+    let handles3 = (0..consumer_count)
+        .map(|thx| {
+            let post_schedule_env_receiver = post_schedule_env_receiver.clone();
+            let d = d.clone();
+            let step = step.clone();
 
-        let t3 = std::thread::Builder::new()
-            .name(format!("sol-consumer{}", thx))
-            .spawn(move || {
-                loop {
+            let t3 = std::thread::Builder::new()
+                .name(format!("sol-consumer{}", thx))
+                .spawn(move || loop {
                     let ee = post_schedule_env_receiver.recv().unwrap().0;
                     d.fetch_sub(1, Ordering::Relaxed);
                     let step = step.fetch_add(1, Ordering::Relaxed);
@@ -383,11 +388,11 @@ fn output_slot(
                     if step % 1966 == 0 {
                         error!("finished!: {} {}", step, post_schedule_env_receiver.len());
                     }
-                }
-            })
-            .unwrap();
+                })
+                .unwrap();
             t3
-    }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     if verbose_level >= 2 {
         let mut txes = Vec::new();

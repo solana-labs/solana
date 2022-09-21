@@ -71,12 +71,9 @@ impl RentState {
 
 pub(crate) fn submit_rent_state_metrics(pre_rent_state: &RentState, post_rent_state: &RentState) {
     match (pre_rent_state, post_rent_state) {
-        (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {
-        }
-        (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {
-        }
-        (_, &RentState::RentPaying { .. }) => {
-        }
+        (&RentState::Uninitialized, &RentState::RentPaying { .. }) => {}
+        (&RentState::RentPaying { .. }, &RentState::RentPaying { .. }) => {}
+        (_, &RentState::RentPaying { .. }) => {}
         _ => {}
     }
 }

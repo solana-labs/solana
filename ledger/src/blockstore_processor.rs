@@ -181,11 +181,7 @@ fn execute_batch(
     };
     */
 
-    bank.schedule_and_commit_transactions(
-        bank,
-        transactions,
-        transaction_indexes,
-    );
+    bank.schedule_and_commit_transactions(bank, transactions, transaction_indexes);
     /*
     if let Some(first_error_from_scheduler) = bank.handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
@@ -283,11 +279,7 @@ fn execute_batches_internal(
     entry_callback: Option<&ProcessCallback>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let result = execute_batch(
-        transactions,
-        transaction_indexes,
-        bank,
-    );
+    let result = execute_batch(transactions, transaction_indexes, bank);
     if let Some(entry_callback) = entry_callback {
         entry_callback(bank);
     }
@@ -335,12 +327,8 @@ fn execute_batches(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    let execute_batches_internal_metrics = execute_batches_internal(
-        bank,
-        transactions,
-        transaction_indexes,
-        entry_callback,
-    )?;
+    let execute_batches_internal_metrics =
+        execute_batches_internal(bank, transactions, transaction_indexes, entry_callback)?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
     Ok(())
@@ -432,7 +420,7 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                    info!("process_entries_with_callback(): slot: {} idx: {} exeucted {} txs so far in {}us (still in loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
+                    info!("process_entries_with_callback(): slot: {} idx: {} scheduled {} txs so far in {}us (still in loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
                     started = std::time::Instant::now();
                     tx_count = 0;
 
@@ -444,7 +432,8 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = (starting_index..starting_index.saturating_add(transactions.len())).into_iter();
+                let transaction_indexes =
+                    (starting_index..starting_index.saturating_add(transactions.len())).into_iter();
                 tx_count += transactions.len();
 
                 execute_batches(
@@ -461,7 +450,12 @@ fn process_entries_with_callback(
             }
         }
     }
-    info!("process_entries_with_callback(): slot: {} exeucted {} txs so far in {}us (after loop)", bank.slot(), tx_count, started.elapsed().as_micros());
+    info!(
+        "process_entries_with_callback(): slot: {} scheduled {} txs so far in {}us (after loop)",
+        bank.slot(),
+        tx_count,
+        started.elapsed().as_micros()
+    );
     started = std::time::Instant::now();
     for hash in tick_hashes {
         bank.register_tick(hash);

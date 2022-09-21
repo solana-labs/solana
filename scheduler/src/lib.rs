@@ -19,7 +19,11 @@ type PageRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type PageRcInner = triomphe::Arc<(std::cell::RefCell<Page>, TaskIds, std::sync::atomic::AtomicUsize)>;
+type PageRcInner = triomphe::Arc<(
+    std::cell::RefCell<Page>,
+    TaskIds,
+    std::sync::atomic::AtomicUsize,
+)>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(PageRcInner);
@@ -109,7 +113,9 @@ impl ExecutionEnvironment {
                 });
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_contended_write_task_count().fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt
+                    .target_contended_write_task_count()
+                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
     }
@@ -132,7 +138,7 @@ pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        self.0.0.borrow_mut()
+        self.0 .0.borrow_mut()
     }
 }
 
@@ -175,11 +181,11 @@ impl LockAttempt {
     }
 
     pub fn target_contended_unique_weights(&self) -> &TaskIds {
-        &self.target.0.1
+        &self.target.0 .1
     }
 
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
-        &self.target.0.2
+        &self.target.0 .2
     }
 }
 
@@ -333,13 +339,22 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
-        let tcuw = attempt.target_contended_unique_weights().task_ids.back().map(|j| *j.key());
+        let tcuw = attempt
+            .target_contended_unique_weights()
+            .task_ids
+            .back()
+            .map(|j| *j.key());
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
             true
         } else if tcuw.unwrap() == *unique_weight {
             true
-        } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target_contended_write_task_count().load(std::sync::atomic::Ordering::SeqCst) == 0 {
+        } else if attempt.requested_usage == RequestedUsage::Readonly
+            && attempt
+                .target_contended_write_task_count()
+                .load(std::sync::atomic::Ordering::SeqCst)
+                == 0
+        {
             true
         } else {
             false
@@ -351,7 +366,6 @@ impl AddressBook {
             return page.cu;
         }
 
-
         let LockAttempt {
             target,
             requested_usage,
@@ -359,7 +373,6 @@ impl AddressBook {
             ..
         } = attempt;
         let mut page = target.page_mut(ast);
-
 
         let next_usage = page.next_usage;
         match page.current_usage {
@@ -611,14 +624,14 @@ impl Task {
         &self,
         _ast: AST,
     ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
-        self.tx.1.0.borrow_mut()
+        self.tx.1 .0.borrow_mut()
     }
 
     fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(
         &self,
         _nast: NAST,
     ) -> std::cell::Ref<'_, Vec<LockAttempt>> {
-        self.tx.1.0.borrow()
+        self.tx.1 .0.borrow()
     }
 
     fn update_busiest_page_cu(&self, cu: CU) {
@@ -655,7 +668,8 @@ impl Task {
 
     pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
         //self.queue_end_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
-        self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
+        self.execute_time
+            .store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn execute_time(&self) -> usize {
@@ -752,10 +766,14 @@ impl Task {
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
         for lock_attempt in &*this.lock_attempts_mut(ast) {
-            lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
+            lock_attempt
+                .target_contended_unique_weights()
+                .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target_contended_write_task_count().fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt
+                    .target_contended_write_task_count()
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
         //let a = Task::clone_in_queue(this);
@@ -849,7 +867,11 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
         match attempt.status {
             LockStatus::Succeded => {}
             LockStatus::Failed => {
-                trace!("lock failed: {}/{:?}", attempt.target.page_mut(ast).address_str, attempt.requested_usage);
+                trace!(
+                    "lock failed: {}/{:?}",
+                    attempt.target.page_mut(ast).address_str,
+                    attempt.requested_usage
+                );
                 unlockable_count += 1;
             }
             LockStatus::Provisional => {
@@ -890,7 +912,6 @@ enum TaskSelection {
     OnlyFromRunnable,
     OnlyFromContended(usize),
 }
-
 
 impl TaskSelection {
     fn should_proceed(&self) -> bool {
@@ -954,7 +975,10 @@ impl ScheduleStage {
                 let uw = weight_from_contended.key();
 
                 if weight_from_runnable > uw {
-                    panic!("replay shouldn't see this branch: {} > {}", weight_from_runnable, uw);
+                    panic!(
+                        "replay shouldn't see this branch: {} > {}",
+                        weight_from_runnable, uw
+                    );
 
                     /*
                     trace!("select: runnable > contended");
@@ -1027,9 +1051,12 @@ impl ScheduleStage {
         }
 
         loop {
-            if let Some((task_source, next_task)) =
-                Self::select_next_task(runnable_queue, address_book, contended_count, task_selection)
-            {
+            if let Some((task_source, next_task)) = Self::select_next_task(
+                runnable_queue,
+                address_book,
+                contended_count,
+                task_selection,
+            ) {
                 let from_runnable = task_source == TaskSource::Runnable;
                 if from_runnable {
                     next_task.record_queue_time(*sequence_clock, *queue_clock);
@@ -1137,7 +1164,7 @@ impl ScheduleStage {
                         */
 
                         //address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
-                        
+
                         break;
                     } else {
                         unreachable!();
@@ -1424,7 +1451,10 @@ impl ScheduleStage {
         sequence_time: &mut usize,
     ) {
         weighted_tx.record_sequence_time(*sequence_time);
-        assert_eq!(*sequence_time, weighted_tx.transaction_index_in_entries_for_replay() as usize);
+        assert_eq!(
+            *sequence_time,
+            weighted_tx.transaction_index_in_entries_for_replay() as usize
+        );
         *sequence_time = sequence_time.checked_add(1).unwrap();
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
@@ -1462,63 +1492,70 @@ impl ScheduleStage {
 
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload>();
 
-        let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
-            (to_next_stage, None)
-        } else {
-            todo!();
-            let h = std::thread::Builder::new()
-                .name("solScReaper".to_string())
-                .spawn(move || {
-                    #[derive(Clone, Copy, Debug)]
-                    struct NotAtTopOfScheduleThread;
-                    unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
-                    let nast = NotAtTopOfScheduleThread;
+        let (to_next_stage, maybe_reaper_thread_handle) =
+            if let Some(to_next_stage) = maybe_to_next_stage {
+                (to_next_stage, None)
+            } else {
+                todo!();
+                let h = std::thread::Builder::new()
+                    .name("solScReaper".to_string())
+                    .spawn(move || {
+                        #[derive(Clone, Copy, Debug)]
+                        struct NotAtTopOfScheduleThread;
+                        unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
+                        let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
-                                assert!(a.task.lock_attempts_not_mut(nast).is_empty());
-                                //assert!(a.task.sequence_time() != usize::max_value());
-                                //let lock_attempts = std::mem::take(&mut a.lock_attempts);
-                                //drop(lock_attempts);
-                                //TaskInQueue::get_mut(&mut a.task).unwrap();
-                    }
-                    assert_eq!(ee_receiver.len(), 0);
-                    Ok::<(), ()>(())
-                })
-                .unwrap();
+                        while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
+                            assert!(a.task.lock_attempts_not_mut(nast).is_empty());
+                            //assert!(a.task.sequence_time() != usize::max_value());
+                            //let lock_attempts = std::mem::take(&mut a.lock_attempts);
+                            //drop(lock_attempts);
+                            //TaskInQueue::get_mut(&mut a.task).unwrap();
+                        }
+                        assert_eq!(ee_receiver.len(), 0);
+                        Ok::<(), ()>(())
+                    })
+                    .unwrap();
 
-            (&ee_sender, Some(h))
-        };
+                (&ee_sender, Some(h))
+            };
         let (task_sender, task_receiver) =
             crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
         let indexer_count = std::env::var("INDEXER_COUNT")
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
             .unwrap();
-        let indexer_handles = (0..indexer_count).map(|thx| {
-            let task_receiver = task_receiver.clone();
-            std::thread::Builder::new()
-                .name(format!("solScIdxer{:02}", thx))
-                .spawn(move || {
-                    while let Ok((task, ll)) = task_receiver.recv() {
-                        for lock_attempt in ll {
-                            if task.already_finished() {
-                                break;
+        let indexer_handles = (0..indexer_count)
+            .map(|thx| {
+                let task_receiver = task_receiver.clone();
+                std::thread::Builder::new()
+                    .name(format!("solScIdxer{:02}", thx))
+                    .spawn(move || {
+                        while let Ok((task, ll)) = task_receiver.recv() {
+                            for lock_attempt in ll {
+                                if task.already_finished() {
+                                    break;
+                                }
+                                lock_attempt
+                                    .target_contended_unique_weights()
+                                    .insert_task(task.unique_weight, Task::clone_in_queue(&task));
+                                todo!("contended_write_task_count!");
                             }
-                            lock_attempt
-                                .target_contended_unique_weights()
-                                .insert_task(task.unique_weight, Task::clone_in_queue(&task));
-                            todo!("contended_write_task_count!");
                         }
-                    }
-                    assert_eq!(task_receiver.len(), 0);
-                    Ok::<(), ()>(())
-                })
-                .unwrap()
-        }).collect::<Vec<_>>();
+                        assert_eq!(task_receiver.len(), 0);
+                        Ok::<(), ()>(())
+                    })
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
 
         let no_aggresive_contended = std::env::var("NO_AGGRESSIVE_CONTENDED").is_ok();
 
-        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
+        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (
+            bool,
+            bool,
+            bool,
+        ) = Default::default();
 
         let mut maybe_checkpoint = None;
 
@@ -1577,10 +1614,15 @@ impl ScheduleStage {
                 select_skipped = true;
             }
 
-           no_more_work = from_disconnected && runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
-           if from_disconnected && (from_exec_disconnected || no_more_work) {
-               break;
-           }
+            no_more_work = from_disconnected
+                && runnable_queue.task_count()
+                    + contended_count
+                    + executing_queue_count
+                    + provisioning_tracker_count
+                    == 0;
+            if from_disconnected && (from_exec_disconnected || no_more_work) {
+                break;
+            }
 
             let mut first_iteration = true;
             let (mut empty_from, mut empty_from_exec) = (false, false);
@@ -1589,7 +1631,11 @@ impl ScheduleStage {
             loop {
                 let runnable_finished = from_disconnected && runnable_queue.has_no_task();
 
-                let mut selection = TaskSelection::OnlyFromContended(if runnable_finished { usize::max_value() } else { usize::max_value() /*2*/ });
+                let mut selection = TaskSelection::OnlyFromContended(if runnable_finished {
+                    usize::max_value()
+                } else {
+                    usize::max_value() /*2*/
+                });
                 while !address_book.uncontended_task_ids.is_empty() && selection.should_proceed() {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
@@ -1609,7 +1655,10 @@ impl ScheduleStage {
                     );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        to_high_execute_substage.unwrap_or(to_execute_substage).send(ExecutablePayload(ee)).unwrap();
+                        to_high_execute_substage
+                            .unwrap_or(to_execute_substage)
+                            .send(ExecutablePayload(ee))
+                            .unwrap();
                     }
                     debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
@@ -1625,12 +1674,18 @@ impl ScheduleStage {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
                             info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
-                            (last_time, last_processed_count) = (Some(std::time::Instant::now()), processed_count);
+                            (last_time, last_processed_count) =
+                                (Some(std::time::Instant::now()), processed_count);
                         }
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
-                while !runnable_queue.has_no_task() && selection.should_proceed() && (to_high_execute_substage.is_some() || executing_queue_count + provisioning_tracker_count < max_executing_queue_count) {
+                while !runnable_queue.has_no_task()
+                    && selection.should_proceed()
+                    && (to_high_execute_substage.is_some()
+                        || executing_queue_count + provisioning_tracker_count
+                            < max_executing_queue_count)
+                {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
                     let maybe_ee = Self::schedule_next_execution(
@@ -1654,7 +1709,9 @@ impl ScheduleStage {
                     debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
                     if !from_exec.is_empty() {
-                        trace!("abort aggressive runnable queue processing due to non-empty from_exec");
+                        trace!(
+                            "abort aggressive runnable queue processing due to non-empty from_exec"
+                        );
                         break;
                     }
 
@@ -1665,7 +1722,8 @@ impl ScheduleStage {
                             let delta = (processed_count - last_processed_count) as u128;
                             let elapsed2 = elapsed.as_micros();
                             info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{} ({}txs/{}us={}tps)", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count, delta, elapsed.as_micros(), 1_000_000_u128*delta/elapsed2);
-                            (last_time, last_processed_count) = (Some(std::time::Instant::now()), processed_count);
+                            (last_time, last_processed_count) =
+                                (Some(std::time::Instant::now()), processed_count);
                         }
                     }
                 }
@@ -1701,7 +1759,9 @@ impl ScheduleStage {
                             &mut commit_clock,
                             &mut provisioning_tracker_count,
                         );
-                        to_next_stage.send(ExaminablePayload(processed_execution_environment)).unwrap();
+                        to_next_stage
+                            .send(ExaminablePayload(processed_execution_environment))
+                            .unwrap();
                     }
                     if !empty_from {
                         let SchedulablePayload(schedulable) = from_prev.recv().unwrap();
@@ -1709,17 +1769,21 @@ impl ScheduleStage {
                         empty_from = from_len == 0;
                         match schedulable {
                             Flushable::Flush(checkpoint) => {
-                               assert!(empty_from);
-                               assert_eq!(from_prev.len(), 0);
-                               assert!(!from_disconnected);
-                               from_disconnected = true;
-                               from_prev = never;
-                               assert!(maybe_checkpoint.is_none());
-                               maybe_checkpoint = Some(checkpoint);
-                            },
+                                assert!(empty_from);
+                                assert_eq!(from_prev.len(), 0);
+                                assert!(!from_disconnected);
+                                from_disconnected = true;
+                                from_prev = never;
+                                assert!(maybe_checkpoint.is_none());
+                                maybe_checkpoint = Some(checkpoint);
+                            }
                             Flushable::Payload(task) => {
-                                Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                            },
+                                Self::register_runnable_task(
+                                    task,
+                                    runnable_queue,
+                                    &mut sequence_time,
+                                );
+                            }
                         }
                     }
                 }
@@ -1738,12 +1802,11 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-
         if let Some(start_time) = maybe_start_time {
             let elapsed = start_time.elapsed();
             let elapsed2 = elapsed.as_micros();
             let tps_label = if elapsed2 > 0 {
-                format!("{}", 1_000_000_u128*(processed_count as u128)/elapsed2)
+                format!("{}", 1_000_000_u128 * (processed_count as u128) / elapsed2)
             } else {
                 "-".into()
             };
@@ -1796,26 +1859,47 @@ impl Checkpoint {
     pub fn wait_for_restart(&self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut remaining_threads_guard = self.0.lock().unwrap();
-        info!("Checkpoint::wait_for_restart: {} is entering at {} -> {}", current_thread_name, *remaining_threads_guard, *remaining_threads_guard - 1);
+        info!(
+            "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
+            current_thread_name,
+            *remaining_threads_guard,
+            *remaining_threads_guard - 1
+        );
 
         *remaining_threads_guard -= 1;
 
         if *remaining_threads_guard == 0 {
             drop(remaining_threads_guard);
             self.1.notify_all();
-            info!("Checkpoint::wait_for_restart: {} notified all others...", current_thread_name);
+            info!(
+                "Checkpoint::wait_for_restart: {} notified all others...",
+                current_thread_name
+            );
         } else {
-            info!("Checkpoint::wait_for_restart: {} is paused...", current_thread_name);
-            let _ = *self.1.wait_while(remaining_threads_guard, |&mut remaining_threads| remaining_threads > 0).unwrap();
-            info!("Checkpoint::wait_for_restart: {} is started...", current_thread_name);
+            info!(
+                "Checkpoint::wait_for_restart: {} is paused...",
+                current_thread_name
+            );
+            let _ = *self
+                .1
+                .wait_while(remaining_threads_guard, |&mut remaining_threads| {
+                    remaining_threads > 0
+                })
+                .unwrap();
+            info!(
+                "Checkpoint::wait_for_restart: {} is started...",
+                current_thread_name
+            );
         }
     }
 
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
-        std::sync::Arc::new(Self(std::sync::Mutex::new(remaining_threads), std::sync::Condvar::new()))
+        std::sync::Arc::new(Self(
+            std::sync::Mutex::new(remaining_threads),
+            std::sync::Condvar::new(),
+        ))
     }
 }
-
 
 pub enum Flushable<T> {
     Payload(T),

@@ -3,9 +3,7 @@ use {
     crossbeam_channel::{select, Receiver, Sender},
     log::*,
     rand::Rng,
-    solana_core::{
-        transaction_scheduler::TransactionScheduler,
-    },
+    solana_core::transaction_scheduler::TransactionScheduler,
     solana_measure::measure,
     solana_perf::packet::{Packet, PacketBatch},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -117,33 +115,36 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
-        mut address_book: solana_scheduler::AddressBook,
-        num_execution_threads: usize,
-        packet_batch_receiver: Receiver<solana_scheduler::SchedulablePayload>,
-        transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-        completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
-        bank_forks: Arc<RwLock<BankForks>>,
-        max_batch_size: usize,
-        exit: Arc<AtomicBool>,
+    mut address_book: solana_scheduler::AddressBook,
+    num_execution_threads: usize,
+    packet_batch_receiver: Receiver<solana_scheduler::SchedulablePayload>,
+    transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
+    completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    max_batch_size: usize,
+    exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
         .unwrap_or(format!("{}", 10))
         .parse::<usize>()
         .unwrap();
 
-    std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
-        let mut runnable_queue = solana_scheduler::TaskQueue::default();
+    std::thread::Builder::new()
+        .name("sol-scheduler".to_string())
+        .spawn(move || {
+            let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
-        solana_scheduler::ScheduleStage::run(
-            num_execution_threads * lane_channel_factor,
-            &mut runnable_queue,
-            &mut address_book,
-            &packet_batch_receiver.clone(),
-            &transaction_batch_senders[0],
-            &completed_transaction_receiver,
-            None,//&completed_transaction_receiver
-        );
-    }).unwrap()
+            solana_scheduler::ScheduleStage::run(
+                num_execution_threads * lane_channel_factor,
+                &mut runnable_queue,
+                &mut address_book,
+                &packet_batch_receiver.clone(),
+                &transaction_batch_senders[0],
+                &completed_transaction_receiver,
+                None, //&completed_transaction_receiver
+            );
+        })
+        .unwrap()
 }
 
 fn main() {
@@ -168,7 +169,8 @@ fn main() {
     assert!(high_conflict_sender <= num_accounts);
 
     let (packet_batch_sender, packet_batch_receiver) = crossbeam_channel::unbounded();
-    let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
+    let (completed_transaction_sender, completed_transaction_receiver) =
+        crossbeam_channel::unbounded();
     let (transaction_batch_senders, transaction_batch_receivers) =
         build_channels(num_execution_threads);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
@@ -222,28 +224,31 @@ fn main() {
     );
 
     // Spawn thread for reporting metrics
-    std::thread::Builder::new().name("sol-metrics".to_string()).spawn({
-        move || {
-            let start = Instant::now();
-            loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                if start.elapsed() > duration {
-                    let pending_transactions =
-                        metrics.num_transactions_sent.load(Ordering::Relaxed)
-                            - metrics.num_transactions_completed.load(Ordering::Relaxed);
-                    if pending_transactions == 0 {
+    std::thread::Builder::new()
+        .name("sol-metrics".to_string())
+        .spawn({
+            move || {
+                let start = Instant::now();
+                loop {
+                    if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                }
+                    if start.elapsed() > duration {
+                        let pending_transactions =
+                            metrics.num_transactions_sent.load(Ordering::Relaxed)
+                                - metrics.num_transactions_completed.load(Ordering::Relaxed);
+                        if pending_transactions == 0 {
+                            break;
+                        }
+                    }
 
-                metrics.report();
-                std::thread::sleep(Duration::from_millis(100));
+                    metrics.report();
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                exit.store(true, Ordering::Relaxed);
             }
-            exit.store(true, Ordering::Relaxed);
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
     scheduler_handle.join().unwrap();
     execution_handles
@@ -285,16 +290,19 @@ fn start_execution_thread(
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::Builder::new().name(format!("sol-exec-{}", thread_index)).spawn(move || {
-        execution_worker(
-            metrics,
-            thread_index,
-            transaction_batch_receiver,
-            completed_transaction_sender,
-            execution_per_tx_us,
-            exit,
-        )
-    }).unwrap()
+    std::thread::Builder::new()
+        .name(format!("sol-exec-{}", thread_index))
+        .spawn(move || {
+            execution_worker(
+                metrics,
+                thread_index,
+                transaction_batch_receiver,
+                completed_transaction_sender,
+                execution_per_tx_us,
+                exit,
+            )
+        })
+        .unwrap()
 }
 
 fn execution_worker(
@@ -347,11 +355,18 @@ fn handle_transaction_batch(
     }
     */
     sleep(Duration::from_micros(
-        rand::thread_rng().gen_range(0..=execution_per_tx_us)
+        rand::thread_rng().gen_range(0..=execution_per_tx_us),
     ));
 
     use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-    let priority_collected = transaction_batch.0.task.tx.0.get_transaction_priority_details().unwrap().priority;
+    let priority_collected = transaction_batch
+        .0
+        .task
+        .tx
+        .0
+        .get_transaction_priority_details()
+        .unwrap()
+        .priority;
 
     metrics
         .num_transactions_completed
@@ -418,20 +433,23 @@ fn spawn_packet_sender(
     duration: Duration,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::Builder::new().name(format!("sol-producer{:02}", i)).spawn(move || {
-        send_packets(
-            unique_weight,
-            producer_count,
-            preloader,
-            metrics,
-            num_accounts,
-            accounts,
-            packet_batch_sender,
-            config,
-            duration,
-            exit,
-        );
-    }).unwrap()
+    std::thread::Builder::new()
+        .name(format!("sol-producer{:02}", i))
+        .spawn(move || {
+            send_packets(
+                unique_weight,
+                producer_count,
+                preloader,
+                metrics,
+                num_accounts,
+                accounts,
+                packet_batch_sender,
+                config,
+                duration,
+                exit,
+            );
+        })
+        .unwrap()
 }
 
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
@@ -500,10 +518,11 @@ fn send_packets(
                 let uw = unique_weight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 let p = (p << 32) | (uw & 0x0000_0000_ffff_ffff);
                 let t = solana_scheduler::Task::new_for_queue(nast, p, v);
-                packet_batch_sender.send(solana_scheduler::SchedulablePayload(t)).unwrap();
+                packet_batch_sender
+                    .send(solana_scheduler::SchedulablePayload(t))
+                    .unwrap();
             }
         }
-        
 
         std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
     }
@@ -555,26 +574,26 @@ fn build_packet(
             read_account_metas.chain(write_account_metas).collect(),
         ),
     ];
-    let transaction = Transaction::new_with_payer(
-        &ixs,
-        Some(&sending_keypair.pubkey()),
-    );
+    let transaction = Transaction::new_with_payer(&ixs, Some(&sending_keypair.pubkey()));
 
-    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(
-        transaction,
-    )
-    .unwrap();
+    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
 
     let locks = sanitized_tx.get_account_locks_unchecked();
-    let writable_lock_iter = locks
-        .writable
-        .iter()
-        .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Writable));
-    let readonly_lock_iter = locks
-        .readonly
-        .iter()
-        .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
-    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+    let writable_lock_iter = locks.writable.iter().map(|address| {
+        solana_scheduler::LockAttempt::new(
+            preloader.load(**address),
+            solana_scheduler::RequestedUsage::Writable,
+        )
+    });
+    let readonly_lock_iter = locks.readonly.iter().map(|address| {
+        solana_scheduler::LockAttempt::new(
+            preloader.load(**address),
+            solana_scheduler::RequestedUsage::Readonly,
+        )
+    });
+    let locks = writable_lock_iter
+        .chain(readonly_lock_iter)
+        .collect::<Vec<_>>();
 
     (sanitized_tx, locks)
 }

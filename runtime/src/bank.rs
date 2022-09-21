@@ -1212,7 +1212,12 @@ impl SchedulerPool {
 
     fn take_from_pool(&mut self) -> Arc<Scheduler> {
         if let Some(scheduler) = self.schedulers.pop() {
-            info!("SchedulerPool: id_{:016x} is taken... len: {} => {}", scheduler.random_id, self.schedulers.len() + 1, self.schedulers.len());
+            info!(
+                "SchedulerPool: id_{:016x} is taken... len: {} => {}",
+                scheduler.random_id,
+                self.schedulers.len() + 1,
+                self.schedulers.len()
+            );
             scheduler
         } else {
             self.create();
@@ -1221,18 +1226,28 @@ impl SchedulerPool {
     }
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
-        info!("SchedulerPool: id_{:016x} is returned... len: {} => {}", scheduler.random_id, self.schedulers.len(), self.schedulers.len() + 1);
+        info!(
+            "SchedulerPool: id_{:016x} is returned... len: {} => {}",
+            scheduler.random_id,
+            self.schedulers.len(),
+            self.schedulers.len() + 1
+        );
         assert_eq!(1, Arc::strong_count(&scheduler));
         assert!(scheduler.collected_errors.lock().unwrap().is_empty());
-        assert!(scheduler.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(scheduler
+            .graceful_stop_initiated
+            .load(std::sync::atomic::Ordering::SeqCst));
 
-        scheduler.graceful_stop_initiated.store(false, std::sync::atomic::Ordering::SeqCst);
+        scheduler
+            .graceful_stop_initiated
+            .store(false, std::sync::atomic::Ordering::SeqCst);
 
         self.schedulers.push(scheduler);
     }
 }
 
-static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> = std::sync::Mutex::new(SchedulerPool::new());
+static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> =
+    std::sync::Mutex::new(SchedulerPool::new());
 
 #[derive(Debug)]
 struct Scheduler {
@@ -1257,20 +1272,33 @@ impl Scheduler {
         let nast = NotAtTopOfScheduleThread;
 
         let locks = sanitized_tx.get_account_locks_unchecked();
-        let writable_lock_iter = locks
-            .writable
-            .iter()
-            .map(|address| solana_scheduler::LockAttempt::new(self.preloader.load(**address), solana_scheduler::RequestedUsage::Writable));
-        let readonly_lock_iter = locks
-            .readonly
-            .iter()
-            .map(|address| solana_scheduler::LockAttempt::new(self.preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
-        let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+        let writable_lock_iter = locks.writable.iter().map(|address| {
+            solana_scheduler::LockAttempt::new(
+                self.preloader.load(**address),
+                solana_scheduler::RequestedUsage::Writable,
+            )
+        });
+        let readonly_lock_iter = locks.readonly.iter().map(|address| {
+            solana_scheduler::LockAttempt::new(
+                self.preloader.load(**address),
+                solana_scheduler::RequestedUsage::Readonly,
+            )
+        });
+        let locks = writable_lock_iter
+            .chain(readonly_lock_iter)
+            .collect::<Vec<_>>();
 
         //assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         let uw = usize::max_value() - index;
-        let t = solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks));
-        self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Payload(t))).unwrap();
+        let t =
+            solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks));
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Payload(t),
+            ))
+            .unwrap();
     }
 }
 
@@ -1380,89 +1408,109 @@ impl Scheduler {
         let collected_errors = Arc::new(std::sync::Mutex::new(Vec::new()));
         let collected_errors_in_collector_thread = Arc::clone(&collected_errors);
 
-        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
-            let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
-            if max_thread_priority {
-                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
-            }
-
-            while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
-                if send_metrics {
-                    let sig = ee.task.tx.0.signature().to_string();
-
-
-                    datapoint_info_at!(
-                        ee.finish_time.unwrap(),
-                        "individual_tx_stats",
-                        ("slot", ee.slot, i64),
-                        ("index", ee.transaction_index, i64),
-                        ("thread", format!("solScExLane{:02}", ee.thx), String),
-                        ("signature", &sig, String),
-                        ("account_locks_in_json", "{}", String),
-                        ("status", format!("{:?}", ee.execution_result.as_ref().unwrap()), String),
-                        ("duration", ee.execution_us, i64),
-                        ("cpu_duration", ee.execution_cpu_us, i64),
-                        ("compute_units", ee.cu, i64),
-                    );
+        let error_collector_thread_handle = std::thread::Builder::new()
+            .name(format!("solScErrCol{:02}", 0))
+            .spawn(move || {
+                let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
+                if max_thread_priority {
+                    thread_priority::set_current_thread_priority(
+                        thread_priority::ThreadPriority::Max,
+                    )
+                    .unwrap();
                 }
 
-                        if ee.is_aborted() {
-                            warn!(
-                                "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
-                                ee.execution_result, ee.task.tx.0
-                            );
-                            collected_errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
-                        }
-                        drop(ee);
-            }
-            todo!();
+                while let Ok(solana_scheduler::ExaminablePayload(mut ee)) =
+                    retired_ee_receiver.recv()
+                {
+                    if send_metrics {
+                        let sig = ee.task.tx.0.signature().to_string();
 
-            Ok((started.0.elapsed(), started.1.elapsed()))
-        }).unwrap();
+                        datapoint_info_at!(
+                            ee.finish_time.unwrap(),
+                            "individual_tx_stats",
+                            ("slot", ee.slot, i64),
+                            ("index", ee.transaction_index, i64),
+                            ("thread", format!("solScExLane{:02}", ee.thx), String),
+                            ("signature", &sig, String),
+                            ("account_locks_in_json", "{}", String),
+                            (
+                                "status",
+                                format!("{:?}", ee.execution_result.as_ref().unwrap()),
+                                String
+                            ),
+                            ("duration", ee.execution_us, i64),
+                            ("cpu_duration", ee.execution_cpu_us, i64),
+                            ("compute_units", ee.cu, i64),
+                        );
+                    }
+
+                    if ee.is_aborted() {
+                        warn!(
+                            "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                            ee.execution_result, ee.task.tx.0
+                        );
+                        collected_errors_in_collector_thread
+                            .lock()
+                            .unwrap()
+                            .push(ee.execution_result.take().unwrap());
+                    }
+                    drop(ee);
+                }
+                todo!();
+
+                Ok((started.0.elapsed(), started.1.elapsed()))
+            })
+            .unwrap();
 
         let random_id = rand::thread_rng().gen::<u64>();
 
-        let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
-            let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
-            if max_thread_priority {
-                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
-            }
-
-            let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
-                .unwrap_or(format!("{}", 1))
-                .parse::<usize>()
-                .unwrap();
-
-            loop {
-                let mut runnable_queue = solana_scheduler::TaskQueue::default();
-                let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
-                    random_id,
-                    max_executing_queue_count,
-                    &mut runnable_queue,
-                    &mut address_book,
-                    &transaction_receiver,
-                    &scheduled_ee_sender,
-                    Some(&scheduled_high_ee_sender),
-                    &processed_ee_receiver,
-                    Some(&retired_ee_sender),
-                );
-
-                if let Some(checkpoint) = maybe_checkpoint {
-                    checkpoint.wait_for_restart();
-                    continue;
-                } else {
-                    break;
+        let scheduler_thread_handle = std::thread::Builder::new()
+            .name("solScheduler".to_string())
+            .spawn(move || {
+                let started = (cpu_time::ThreadTime::now(), std::time::Instant::now());
+                if max_thread_priority {
+                    thread_priority::set_current_thread_priority(
+                        thread_priority::ThreadPriority::Max,
+                    )
+                    .unwrap();
                 }
-            }
 
-            drop(transaction_receiver);
-            drop(scheduled_ee_sender);
-            drop(scheduled_high_ee_sender);
-            drop(processed_ee_receiver);
+                let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
+                    .unwrap_or(format!("{}", 1))
+                    .parse::<usize>()
+                    .unwrap();
 
-            todo!();
-            Ok((started.0.elapsed(), started.1.elapsed()))
-        }).unwrap();
+                loop {
+                    let mut runnable_queue = solana_scheduler::TaskQueue::default();
+                    let maybe_checkpoint = solana_scheduler::ScheduleStage::run(
+                        random_id,
+                        max_executing_queue_count,
+                        &mut runnable_queue,
+                        &mut address_book,
+                        &transaction_receiver,
+                        &scheduled_ee_sender,
+                        Some(&scheduled_high_ee_sender),
+                        &processed_ee_receiver,
+                        Some(&retired_ee_sender),
+                    );
+
+                    if let Some(checkpoint) = maybe_checkpoint {
+                        checkpoint.wait_for_restart();
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+
+                drop(transaction_receiver);
+                drop(scheduled_ee_sender);
+                drop(scheduled_high_ee_sender);
+                drop(processed_ee_receiver);
+
+                todo!();
+                Ok((started.0.elapsed(), started.1.elapsed()))
+            })
+            .unwrap();
 
         let s = Self {
             random_id,
@@ -1476,7 +1524,11 @@ impl Scheduler {
             bank,
             slot: Default::default(),
         };
-        info!("scheduler: id_{:016x} setup done with {}us", random_id, start.elapsed().as_micros());
+        info!(
+            "scheduler: id_{:016x} setup done with {}us",
+            random_id,
+            start.elapsed().as_micros()
+        );
 
         s
     }
@@ -1484,18 +1536,34 @@ impl Scheduler {
 
 impl Scheduler {
     fn gracefully_stop(&self) -> Result<()> {
-        if self.graceful_stop_initiated.load(std::sync::atomic::Ordering::SeqCst) {
-            info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
+        if self
+            .graceful_stop_initiated
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            info!(
+                "Scheduler::gracefully_stop(): id_{:016x} (skipped..?)",
+                self.random_id
+            );
             return Ok(());
         }
-        self.graceful_stop_initiated.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.graceful_stop_initiated
+            .store(true, std::sync::atomic::Ordering::SeqCst);
 
-        info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
+        info!(
+            "Scheduler::gracefully_stop(): id_{:016x} waiting..",
+            self.random_id
+        );
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
         let checkpoint = solana_scheduler::Checkpoint::new(2);
-        self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)))).unwrap();
+        self.transaction_sender
+            .as_ref()
+            .unwrap()
+            .send(solana_scheduler::SchedulablePayload(
+                solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
+            ))
+            .unwrap();
         checkpoint.wait_for_restart();
         {
             *self.bank.write().unwrap() = None;
@@ -4212,7 +4280,10 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
+        info!(
+            "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
+            self.slot()
+        );
 
         let maybe_last_error = self.wait_for_scheduler(false);
         let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
@@ -4225,13 +4296,24 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         //let new_scheduler = Scheduler::default();
         if maybe_last_error.is_err() {
-            warn!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
+            warn!(
+                "register_recent_blockhash: carrying over this error: {:?}",
+                maybe_last_error
+            );
             //new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
-            s2.as_ref().unwrap().collected_errors.lock().unwrap().push(maybe_last_error);
+            s2.as_ref()
+                .unwrap()
+                .collected_errors
+                .lock()
+                .unwrap()
+                .push(maybe_last_error);
         }
         //*self.scheduler.write().unwrap() = new_scheduler;
 
-        info!("register_recent_blockhash: slot: {} reinitializing the scheduler: end", self.slot());
+        info!(
+            "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
+            self.slot()
+        );
 
         w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
@@ -4347,7 +4429,8 @@ impl Bank {
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results: Vec<Result<_>> = txs.iter()
+        let lock_results: Vec<Result<_>> = txs
+            .iter()
             .map(|tx| tx.get_account_locks(tx_account_lock_limit).map(|_| ()))
             .collect();
         let mut batch = TransactionBatch::new(lock_results, self, Cow::Borrowed(txs));
@@ -6589,7 +6672,10 @@ impl Bank {
         transaction_indexes: impl Iterator<Item = usize>,
     ) {
         assert_eq!(this_arced_bank.slot(), self.slot());
-        trace!("schedule_and_commit_transactions(): {} txs", transactions.len());
+        trace!(
+            "schedule_and_commit_transactions(): {} txs",
+            transactions.len()
+        );
 
         let s = {
             let r = self.scheduler2.read().unwrap();
@@ -6602,7 +6688,8 @@ impl Bank {
                 let ss = self.scheduler2.write().unwrap();
                 let w = ss.as_ref().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&this_arced_bank));
-                w.slot.store(this_arced_bank.slot(), std::sync::atomic::Ordering::SeqCst);
+                w.slot
+                    .store(this_arced_bank.slot(), std::sync::atomic::Ordering::SeqCst);
                 drop(w);
                 drop(ss);
 
@@ -6610,7 +6697,13 @@ impl Bank {
                 info!("reconfigured scheduler to the bank slot: {}", self.slot());
                 s
             } else {
-                assert_eq!(this_arced_bank.slot(), r.as_ref().unwrap().slot.load(std::sync::atomic::Ordering::SeqCst));
+                assert_eq!(
+                    this_arced_bank.slot(),
+                    r.as_ref()
+                        .unwrap()
+                        .slot
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                );
                 r
             }
         };
@@ -6621,9 +6714,7 @@ impl Bank {
         }
     }
 
-    pub fn handle_aborted_transactions(
-        &self,
-    ) -> Vec<Result<()>> {
+    pub fn handle_aborted_transactions(&self) -> Vec<Result<()>> {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.handle_aborted_executions()
@@ -8284,12 +8375,19 @@ impl Bank {
 
         if let Some(scheduler) = s {
             scheduler.gracefully_stop().unwrap();
-            let e = scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()));
+            let e = scheduler
+                .handle_aborted_executions()
+                .into_iter()
+                .next()
+                .unwrap_or(Ok(()));
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
-            warn!("Bank::wait_for_scheduler(via_drop: {}) skipped by {} ...", via_drop, current_thread_name);
+            warn!(
+                "Bank::wait_for_scheduler(via_drop: {}) skipped by {} ...",
+                via_drop, current_thread_name
+            );
 
             Ok(())
         }
@@ -8423,9 +8521,16 @@ impl Drop for Bank {
         if self.scheduler2.read().unwrap().is_some() {
             let r = self.wait_for_scheduler(true);
             if let Err(err) = r {
-                warn!("Bank::drop(): slot: {} discarding error from scheduler: {:?}", self.slot(), err);
+                warn!(
+                    "Bank::drop(): slot: {} discarding error from scheduler: {:?}",
+                    self.slot(),
+                    err
+                );
             } else {
-                trace!("Bank::drop(): slot: {} scheduler is returned to the pool", self.slot());
+                trace!(
+                    "Bank::drop(): slot: {} scheduler is returned to the pool",
+                    self.slot()
+                );
             }
         }
 
