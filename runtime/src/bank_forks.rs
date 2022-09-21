@@ -12,12 +12,25 @@ use {
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc,
+        },
         time::Instant,
     },
 };
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
+pub type AtomicSlot = AtomicU64;
+pub struct ReadOnlyAtomicSlot {
+    slot: Arc<AtomicSlot>,
+}
+
+impl ReadOnlyAtomicSlot {
+    pub fn get(&self) -> Slot {
+        self.slot.load(Ordering::Relaxed)
+    }
+}
 
 #[derive(Debug, Default, Copy, Clone)]
 struct SetRootMetrics {
@@ -45,7 +58,8 @@ struct SetRootTimings {
 pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,
     descendants: HashMap<Slot, HashSet<Slot>>,
-    root: Slot,
+    root: Arc<AtomicSlot>,
+
     pub snapshot_config: Option<SnapshotConfig>,
 
     pub accounts_hash_interval_slots: Slot,
@@ -84,7 +98,7 @@ impl BankForks {
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<Slot, HashSet<Slot>> {
-        let root = self.root;
+        let root = self.root();
         self.banks
             .iter()
             .map(|(slot, bank)| {
@@ -160,7 +174,7 @@ impl BankForks {
             }
         }
         Self {
-            root,
+            root: Arc::new(AtomicSlot::new(root)),
             banks,
             descendants,
             snapshot_config: None,
@@ -219,7 +233,8 @@ impl BankForks {
         highest_confirmed_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
-        self.root = root;
+        self.root.store(root, Ordering::Relaxed);
+
         let root_bank = self
             .banks
             .get(&root)
@@ -427,7 +442,14 @@ impl BankForks {
     }
 
     pub fn root(&self) -> Slot {
-        self.root
+        self.root.load(Ordering::Relaxed)
+    }
+
+    /// Gets a read-only wrapper to an atomic slot holding the root slot.
+    pub fn get_atomic_root(&self) -> ReadOnlyAtomicSlot {
+        ReadOnlyAtomicSlot {
+            slot: self.root.clone(),
+        }
     }
 
     /// After setting a new root, prune the banks that are no longer on rooted paths
