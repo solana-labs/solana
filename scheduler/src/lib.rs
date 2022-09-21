@@ -1479,7 +1479,7 @@ impl ScheduleStage {
         ast: AST,
         random_id: u64,
         max_executing_queue_count: usize,
-        runnable_queue: &mut TaskQueue,
+        _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
