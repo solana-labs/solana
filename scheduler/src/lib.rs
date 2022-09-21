@@ -1987,7 +1987,7 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        Self::_run::<AtTopOfScheduleThread>(
+        Self::_run::<AtTopOfScheduleThread, T>(
             AtTopOfScheduleThread,
             random_id,
             max_executing_queue_count,
