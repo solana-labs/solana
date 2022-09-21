@@ -877,7 +877,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
 
 struct ChannelBackedTaskQueueEntry(TaskInQueue);
 
-impl ChannelBackedTaskQueue {
+impl ChannelBackedTaskQueueEntry {
     fn remove(&self) {
         // noop;
     }
