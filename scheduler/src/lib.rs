@@ -296,7 +296,7 @@ impl BTreeMapTaskIds {
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
         self
             .task_ids
-            .back()
+            .last()
             .map(|j| *j.key())
     }
 
