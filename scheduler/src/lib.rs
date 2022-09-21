@@ -840,11 +840,11 @@ impl TaskQueue {
 }
 
 struct ChannelBackedTaskQueue<'a> {
-    channel: &'a crossbeam_channel::Receiver<SchedulablePayload>
+    channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
 }
 
 impl<'a> ChannelBackedTaskQueue<'a> {
-    fn new(a: usize) -> Self {
+    fn new(a: &'a crossbeam_channel::Receiver<SchedulablePayload>) -> Self {
     }
 }
 
