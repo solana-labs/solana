@@ -530,7 +530,7 @@ impl Preloader {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(&address, Usage::unused())),
-                Default::default(),
+                //Default::default(),
                 Default::default(),
             )))
         }))
