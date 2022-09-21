@@ -312,6 +312,7 @@ impl BTreeMapTaskIds {
                 assert!(!task.already_finished());
                 task.currently_contended()
             })
+            .map(|task| Task::clone_in_queue(task))
     }
 }
 
