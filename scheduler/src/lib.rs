@@ -27,8 +27,8 @@ type PageRcInner = triomphe::Arc<(
 
 #[derive(Debug, Clone)]
 pub struct PageRc(PageRcInner);
-unsafe impl Send for PageRcInner {}
-unsafe impl Sync for PageRcInner {}
+unsafe impl Send for PageRc {}
+unsafe impl Sync for PageRc {}
 
 type CU = u64;
 
