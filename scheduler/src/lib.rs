@@ -834,7 +834,7 @@ impl TaskQueue {
         self.tasks.len()
     }
 
-    fn has_no_task(&self) -> bool {
+    fn has_no_task_hint(&self) -> bool {
         self.tasks.is_empty()
     }
 }
@@ -851,6 +851,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     }
 
     fn buffer(&mut self, task: TaskInQueue) {
+        assert!(self.buffered_task.is_none());
         self.buffered_task = Some(task);
     }
 
@@ -861,7 +862,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
         })
     }
 
-    fn has_no_task(&self) -> bool {
+    fn has_no_task_hint(&self) -> bool {
         self.task_count_hint() == 0
     }
 
@@ -1073,7 +1074,7 @@ impl ScheduleStage {
             (None, None) => {
                 trace!("select: none");
 
-                if false && runnable_queue.task_count_hint() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
+                if false && runnable_queue.has_no_task_hint() && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
                 {
                     trace!("handling stuck...");
                     let (stuck_task_id, task) = address_book.stuck_tasks.pop_first().unwrap();
@@ -1516,7 +1517,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn register_runnable_task(
+    fn _register_runnable_task(
         weighted_tx: TaskInQueue,
         runnable_queue: &mut TaskQueue,
         sequence_time: &mut usize,
@@ -1702,7 +1703,7 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let runnable_finished = from_disconnected && channel_backed_runnable_queue.has_no_task();
+                let runnable_finished = from_disconnected && channel_backed_runnable_queue.has_no_task_hint();
 
                 let mut selection = TaskSelection::OnlyFromContended(if runnable_finished {
                     usize::max_value()
@@ -1753,7 +1754,7 @@ impl ScheduleStage {
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
-                while !channel_backed_runnable_queue.has_no_task()
+                while !channel_backed_runnable_queue.has_no_task_hint()
                     && selection.should_proceed()
                     && (to_high_execute_substage.is_some()
                         || executing_queue_count + provisioning_tracker_count
@@ -1794,7 +1795,6 @@ impl ScheduleStage {
                     }
 
                     if let Some(checkpoint) = channel_backed_runnable_queue.take_buffered_flush() {
-                        assert!(empty_from);
                         assert_eq!(from_prev.len(), 0);
                         assert!(!from_disconnected);
                         from_disconnected = true;
@@ -1825,7 +1825,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec.len();
                     }
                 }
-                (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
+                (empty_from, empty_from_exec) = (true || from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
                     break;
