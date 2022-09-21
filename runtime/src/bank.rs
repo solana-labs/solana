@@ -1419,7 +1419,7 @@ impl Scheduler {
                     .unwrap();
                 }
 
-                while let Ok(solana_scheduler::ExaminablePayload(mut ee)) =
+                while let Ok(solana_scheduler::ExaminablePayload(mut ee, _extra)) =
                     retired_ee_receiver.recv()
                 {
                     if send_metrics {
