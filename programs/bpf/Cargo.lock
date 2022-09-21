@@ -3955,9 +3955,9 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.2"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a31480366ec990f395a61b7c08122d99bd40544fdb5abcfc1b06bb29994312c"
+checksum = "eaedf34ed289ea47c2b741bb72e5357a209512d67bcd4bda44359e5bf0470f56"
 dependencies = [
  "digest 0.10.3",
  "keccak",
@@ -5171,7 +5171,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.5",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.11.5",
  "solana-frozen-abi-macro 1.11.5",
  "solana-sdk-macro 1.11.5",
@@ -5218,7 +5218,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.5",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
  "solana-sdk-macro 1.15.0",
@@ -5529,7 +5529,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.5",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.11.5",
  "solana-frozen-abi-macro 1.11.5",
  "solana-logger 1.11.5",
@@ -5578,7 +5578,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.5",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
  "solana-logger 1.15.0",
