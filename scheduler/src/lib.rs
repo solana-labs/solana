@@ -841,7 +841,7 @@ impl TaskQueue {
 
 struct ChannelBackedTaskQueue<'a> {
     channel: &'a crossbeam_channel::Receiver<SchedulablePayload>,
-    buffered_task: Option<usize>,
+    buffered_task: Option<TaskInQueue>,
 }
 
 impl<'a> ChannelBackedTaskQueue<'a> {
@@ -850,7 +850,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
     }
 
     fn buffer(&mut self, task: TaskInQueue) {
-        self.buffered_task = task;
+        self.buffered_task = Some(task);
     }
 }
 
