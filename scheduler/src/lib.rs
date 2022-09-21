@@ -276,7 +276,7 @@ impl SkipListTaskIds {
 impl BTreeMapTaskIds {
     #[inline(never)]
     pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
-        let pre_existed = self.task_ids.insert(u, task);
+        let pre_existed = self.task_ids.insert(std::cmp::Reverse(u), task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
