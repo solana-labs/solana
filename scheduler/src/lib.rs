@@ -153,6 +153,10 @@ impl LockAttempt {
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
         &self.target.0.1
     }
+
+    fn target_page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
+        self.target.0.0.borrow_mut()
+    }
 }
 
 type UsageCount = usize;
