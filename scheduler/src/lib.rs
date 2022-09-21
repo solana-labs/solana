@@ -216,7 +216,7 @@ impl TaskIds {
         self.task_ids.back()
     }
 
-    pub fn heaviest_task_id(&self) -> &TaskId {
+    pub fn heaviest_task_id(&self) -> Option<TaskId> {
         self
             .task_ids
             .back()
