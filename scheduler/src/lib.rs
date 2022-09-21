@@ -826,7 +826,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_>> {
+    fn heaviest_entry_to_execute(&self) -> Option<TaskQueueOccupiedEntry<'_>> {
         self.tasks.last_entry()
     }
 
