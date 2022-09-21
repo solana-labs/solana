@@ -1608,7 +1608,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
     ) -> Option<std::sync::Arc<Checkpoint<C>>> {
         let mut maybe_start_time = None;
