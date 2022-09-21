@@ -301,7 +301,7 @@ impl BTreeMapTaskIds {
     }
 
     #[inline(never)]
-    fn reindex(&self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
+    fn reindex(&mut self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
         if should_remove {
             self.remove_task(uq);
         }
