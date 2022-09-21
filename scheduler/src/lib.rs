@@ -74,7 +74,8 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            if let Some(heaviest_uncontended) = lock_attempt.target_page_mut(ast).task_ids.reindex(should_remove, &uq) {
+            let ll = lock_attempt.target_page_mut(ast).task_ids.reindex(should_remove, &uq);
+            if let Some(heaviest_uncontended) = ll {
                 lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
             };
 
