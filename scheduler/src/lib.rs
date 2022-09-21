@@ -865,6 +865,10 @@ impl<'a> ChannelBackedTaskQueue<'a> {
         self.task_count() == 0
     }
 
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint>> {
+        self.buffered_flush.take()
+    }
+
     #[inline(never)]
     fn heaviest_entry_to_execute(&mut self) -> Option<ChannelBackedTaskQueueEntry> {
         match self.buffered_task.take() {
@@ -1731,11 +1735,6 @@ impl ScheduleStage {
                     }
                     debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
-                    if no_aggresive_contended && !from_exec.is_empty() {
-                        trace!("abort aggressive contended queue processing due to non-empty from_exec");
-                        break;
-                    }
-
                     interval_count += 1;
                     if interval_count % 100 == 0 {
                         let elapsed = last_time.unwrap().elapsed();
@@ -1746,6 +1745,11 @@ impl ScheduleStage {
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
+                    }
+
+                    if no_aggresive_contended && !from_exec.is_empty() {
+                        trace!("abort aggressive contended queue processing due to non-empty from_exec");
+                        break;
                     }
                 }
                 let mut selection = TaskSelection::OnlyFromRunnable;
@@ -1777,13 +1781,6 @@ impl ScheduleStage {
                     }
                     debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
-                    if !from_exec.is_empty() {
-                        trace!(
-                            "abort aggressive runnable queue processing due to non-empty from_exec"
-                        );
-                        break;
-                    }
-
                     interval_count += 1;
                     if interval_count % 100 == 0 {
                         let elapsed = last_time.unwrap().elapsed();
@@ -1794,6 +1791,24 @@ impl ScheduleStage {
                             (last_time, last_processed_count) =
                                 (Some(std::time::Instant::now()), processed_count);
                         }
+                    }
+
+                    if let Some(checkpoint) = channel_backed_runnable_queue.take_buffered_flush() {
+                        assert!(empty_from);
+                        assert_eq!(from_prev.len(), 0);
+                        assert!(!from_disconnected);
+                        from_disconnected = true;
+                        from_prev = never;
+                        assert!(maybe_checkpoint.is_none());
+                        maybe_checkpoint = Some(checkpoint);
+                        break;
+                    }
+
+                    if !from_exec.is_empty() {
+                        trace!(
+                            "abort aggressive runnable queue processing due to non-empty from_exec"
+                        );
+                        break;
                     }
                 }
 
