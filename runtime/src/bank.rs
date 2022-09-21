@@ -1195,11 +1195,11 @@ impl AbiExample for BuiltinPrograms {
     }
 }
 
-struct SchedulerPool {
-    schedulers: Vec<Arc<Scheduler>>,
+struct SchedulerPool<C> {
+    schedulers: Vec<Arc<Scheduler<C>>>,
 }
 
-impl SchedulerPool {
+impl<C> SchedulerPool<C> {
     const fn new() -> Self {
         Self {
             schedulers: Vec::new(),
