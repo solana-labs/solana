@@ -874,7 +874,7 @@ impl<'a> ChannelBackedTaskQueue<'a> {
                 // invocation
                 match self.channel.try_recv().unwrap() {
                     SchedulablePayload(Flushable::Payload(task)) => Some(ChannelBackedTaskQueueEntry(task)),
-                    SchedulablePayload(Flushable::Flush(f)) => { assert!(self.buffered_flush.is_none()); self.buffered_flush = Some(f) }
+                    SchedulablePayload(Flushable::Flush(f)) => { assert!(self.buffered_flush.is_none()); self.buffered_flush = Some(f); None }
                 }
             }
         }
