@@ -839,6 +839,14 @@ impl TaskQueue {
     }
 }
 
+struct ChannelBackedTaskQueue {
+}
+
+impl ChannelBackedTaskQueue {
+    fn new(a: usize) -> Self {
+    }
+}
+
 #[inline(never)]
 fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     ast: AST,
@@ -1558,6 +1566,7 @@ impl ScheduleStage {
         ) = Default::default();
 
         let mut maybe_checkpoint = None;
+        let mut channel_backed_runnable_queue = ChannelBackedTaskQueue::new(from_prev);
 
         loop {
             let mut select_skipped = false;
@@ -1587,7 +1596,8 @@ impl ScheduleStage {
                        }
                        match maybe_from {
                            Ok(SchedulablePayload(Flushable::Payload(task))) => {
-                                Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                                //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                                channel_backed_runnable_queue.buffer(task);
                            },
                            Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
                                assert_eq!(from_prev.len(), 0);
@@ -1778,11 +1788,12 @@ impl ScheduleStage {
                                 maybe_checkpoint = Some(checkpoint);
                             }
                             Flushable::Payload(task) => {
-                                Self::register_runnable_task(
+                                /*Self::register_runnable_task(
                                     task,
                                     runnable_queue,
                                     &mut sequence_time,
-                                );
+                                );*/
+                                channel_backed_runnable_queue.buffer(task);
                             }
                         }
                     }
