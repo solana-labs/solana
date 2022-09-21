@@ -1947,6 +1947,9 @@ impl ScheduleStage {
             }
             assert!(!select_skipped || executing_queue_count > 0);
         }
+        if let Some(checkpoint) = maybe_checkpoint {
+            to_next_stage.send(ExaminablePayload(Flushable::Flush(checkpoint))).unwrap();
+        }
         drop(to_next_stage);
         drop(ee_sender);
         drop(task_sender);
