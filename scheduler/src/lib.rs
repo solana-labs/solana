@@ -74,8 +74,7 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            let contended_unique_weights = lock_attempt.target_contended_unique_weights();
-            if let Some(heaviest_uncontended) = contended_unique_weights.reindex(should_remove, uq) {
+            if let Some(heaviest_uncontended) = lock_attempt.target_contended_unique_weights().reindex(should_remove, uq) {
                 lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
             };
 
