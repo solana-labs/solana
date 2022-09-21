@@ -281,6 +281,7 @@ impl Page {
             next_usage: Usage::Unused,
             provisional_task_ids: Default::default(),
             cu: Default::default(),
+            task_ids: Default::default(),
         }
     }
 
