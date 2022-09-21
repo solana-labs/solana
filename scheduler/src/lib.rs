@@ -24,11 +24,11 @@ type PageRcInner = triomphe::Arc<(
     TaskIds,
     std::sync::atomic::AtomicUsize,
 )>;
+unsafe impl Send for PageRcInner {}
+unsafe impl Sync for PageRcInner {}
 
 #[derive(Debug, Clone)]
 pub struct PageRc(PageRcInner);
-unsafe impl Send for PageRc {}
-unsafe impl Sync for PageRc {}
 
 type CU = u64;
 
