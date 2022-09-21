@@ -1706,7 +1706,7 @@ impl ScheduleStage {
             if !from_disconnected || executing_queue_count >= 1 {
                 crossbeam_channel::select! {
                    recv(from_exec) -> maybe_from_exec => {
-                       if let Ok(UnlockablePayload((mut processed_execution_environment, extra))) = maybe_from_exec {
+                       if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
                            executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                            processed_count = processed_count.checked_add(1).unwrap();
                            Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
