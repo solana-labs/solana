@@ -290,7 +290,7 @@ impl BTreeMapTaskIds {
     pub fn heaviest_task_cursor(
         &self,
     ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
-        self.task_ids.back()
+        self.task_ids.last_entry()
     }
 
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
