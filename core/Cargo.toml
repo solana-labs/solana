@@ -25,7 +25,7 @@ eager = "0.1.0"
 etcd-client = { version = "0.8.1", features = ["tls"] }
 fs_extra = "1.2.0"
 histogram = "0.6.9"
-itertools = "0.10.3"
+itertools = "0.10.5"
 lazy_static = "1.4.0"
 log = "0.4.17"
 lru = "0.7.7"
