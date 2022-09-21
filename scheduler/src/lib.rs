@@ -997,10 +997,18 @@ impl ScheduleStage {
         contended_count: &usize,
         task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
-        match (
-            runnable_queue.heaviest_entry_to_execute(),
-            Self::get_heaviest_from_contended(address_book),
-        ) {
+        let selected_heaviest_tasks = match task_selection {
+            TaskSelection::OnlyFromRunnable => (
+                runnable_queue.heaviest_entry_to_execute(),
+                None,
+            ),
+            TaskSelection::OnlyFromContended(_) => (
+                None,
+                Self::get_heaviest_from_contended(address_book),
+            ),
+        };
+
+        match selected_heaviest_tasks {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
                 if task_selection.runnable_exclusive() {
@@ -1020,6 +1028,8 @@ impl ScheduleStage {
                 }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
+                unreachable!("heaviest_entry_to_execute isn't idempotent....");
+
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = weight_from_contended.key();
 
