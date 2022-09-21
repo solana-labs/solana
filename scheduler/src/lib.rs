@@ -147,11 +147,11 @@ impl LockAttempt {
     }
 
     pub fn target_contended_unique_weights(&self) -> &TaskIds {
-        &self.target.0 .1
+        panic!()//&self.target.0 .1
     }
 
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
-        &self.target.0 .2
+        &self.target.0.1
     }
 }
 
