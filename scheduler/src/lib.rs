@@ -224,7 +224,7 @@ impl SkipListTaskIds {
     }
 
     #[inline(never)]
-    pub fn heaviest_task_cursor(
+    fn heaviest_task_cursor(
         &self,
     ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
         self.task_ids.back()
@@ -287,7 +287,7 @@ impl BTreeMapTaskIds {
     }
 
     #[inline(never)]
-    pub fn heaviest_task_cursor(
+    fn heaviest_task_cursor(
         &self,
     ) -> impl Iterator<Item = &TaskInQueue> {
         self.task_ids.values().rev()
@@ -302,37 +302,16 @@ impl BTreeMapTaskIds {
 
     #[inline(never)]
     fn reindex(&self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
+        if should_remove {
+            self.remove_task(uq);
+        }
+
         self
             .heaviest_task_cursor()
-            .map(|mut task_cursor| {
-                let mut found = true;
-                let mut removed = false;
-                let mut task = task_cursor.value();
-                //task.trace_timestamps("in_exec(initial list)");
+            .find(|task| {
                 assert!(!task.already_finished());
-                while !task.currently_contended() {
-                    if task_cursor.key() == uq {
-                        assert!(should_remove);
-                        removed = task_cursor.remove();
-                        assert!(removed);
-                    }
-                    if let Some(new_cursor) = task_cursor.prev() {
-                        assert!(new_cursor.key() < task_cursor.key());
-                        task_cursor = new_cursor;
-                        task = task_cursor.value();
-                        assert!(!task.already_finished());
-                        //task.trace_timestamps("in_exec(subsequent list)");
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                if should_remove && !removed {
-                    self.remove_task(uq);
-                }
-                found.then(|| Task::clone_in_queue(task))
+                task.currently_contended()
             })
-            .flatten()
     }
 }
 
