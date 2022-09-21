@@ -933,7 +933,7 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
         self.task_count_hint() == 0
     }
 
-    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint>> {
+    fn take_buffered_flush(&mut self) -> Option<std::sync::Arc<Checkpoint<C>>> {
         self.buffered_flush.take()
     }
 
@@ -1610,7 +1610,7 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
-    ) -> Option<std::sync::Arc<Checkpoint>> {
+    ) -> Option<std::sync::Arc<Checkpoint<C>>> {
         let mut maybe_start_time = None;
         let (mut last_time, mut last_processed_count) = (maybe_start_time.clone(), 0_usize);
         info!("schedule_once:standby id_{:016x}", random_id);
