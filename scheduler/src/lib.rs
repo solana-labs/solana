@@ -1643,6 +1643,7 @@ impl ScheduleStage {
                         unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                         let nast = NotAtTopOfScheduleThread;
 
+                        /*
                         while let Ok(ExaminablePayload(a, _e)) = ee_receiver.recv() {
                             assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                             //assert!(a.task.sequence_time() != usize::max_value());
@@ -1651,6 +1652,7 @@ impl ScheduleStage {
                             //TaskInQueue::get_mut(&mut a.task).unwrap();
                         }
                         assert_eq!(ee_receiver.len(), 0);
+                        */
                         Ok::<(), ()>(())
                     })
                     .unwrap();
