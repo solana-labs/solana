@@ -1258,7 +1258,7 @@ struct Scheduler<C> {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C>>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
-    collected_results: Arc<std::sync::Mutex<Vec<Result<Option<C>>>>>,
+    collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
 }
