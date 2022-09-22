@@ -8379,16 +8379,16 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<()> {
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<usize> {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
-            scheduler.gracefully_stop().unwrap();
+            let r = scheduler.gracefully_stop().unwrap();
             let e = scheduler
                 .handle_aborted_executions()
                 .into_iter()
                 .next()
-                .unwrap_or(Ok(()));
+                .unwrap_or(Ok(r));
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
@@ -8398,7 +8398,7 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            Ok(())
+            Ok(None)
         }
     }
 }
