@@ -1564,7 +1564,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(2);
+        let checkpoint = solana_scheduler::Checkpoint::new(3);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -1573,6 +1573,7 @@ impl<C> Scheduler<C> {
             ))
             .unwrap();
         checkpoint.wait_for_restart(None);
+        let r = checkpoint.take_restart_value();
         {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
@@ -1597,7 +1598,7 @@ impl<C> Scheduler<C> {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
-        Ok(())
+        Ok(r)
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<()>> {
