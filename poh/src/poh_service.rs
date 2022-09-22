@@ -109,7 +109,7 @@ impl PohService {
             .name("solPohTickProd".to_string())
             .spawn(move || {
                 solana_sys_tuner::request_realtime_poh();
-                if poh_config.hashes_per_tick.is_none() {
+                if poh_config.get_hashes_per_tick().is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(
                             poh_recorder,
@@ -414,11 +414,11 @@ mod tests {
             let default_target_tick_duration =
                 timing::duration_as_us(&PohConfig::default().target_tick_duration);
             let target_tick_duration = Duration::from_micros(default_target_tick_duration);
-            let poh_config = Arc::new(PohConfig {
-                hashes_per_tick: Some(clock::DEFAULT_HASHES_PER_TICK),
+            let poh_config = Arc::new(PohConfig::new(
                 target_tick_duration,
-                target_tick_count: None,
-            });
+                None,
+                Some(clock::DEFAULT_HASHES_PER_TICK),
+            ));
             let exit = Arc::new(AtomicBool::new(false));
 
             let ticks_per_slot = bank.ticks_per_slot();
@@ -516,13 +516,13 @@ mod tests {
                 if entry.is_tick() {
                     num_ticks += 1;
                     assert!(
-                        entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
+                        entry.num_hashes <= poh_config.get_hashes_per_tick().unwrap(),
                         "{} <= {}",
                         entry.num_hashes,
-                        poh_config.hashes_per_tick.unwrap()
+                        poh_config.get_hashes_per_tick().unwrap()
                     );
 
-                    if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
+                    if entry.num_hashes == poh_config.get_hashes_per_tick().unwrap() {
                         need_tick = false;
                     } else {
                         need_partial = false;
@@ -530,7 +530,7 @@ mod tests {
 
                     hashes += entry.num_hashes;
 
-                    assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
+                    assert_eq!(hashes, poh_config.get_hashes_per_tick().unwrap());
 
                     hashes = 0;
                 } else {

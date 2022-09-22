@@ -462,7 +462,7 @@ impl PohRecorder {
         let blockhash = reset_bank.last_blockhash();
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
-            poh.reset(blockhash, self.poh_config.hashes_per_tick);
+            poh.reset(blockhash, self.poh_config.get_hashes_per_tick());
             poh.hash
         };
         info!(
@@ -830,7 +830,7 @@ impl PohRecorder {
         let tick_number = 0;
         let poh = Arc::new(Mutex::new(Poh::new_with_slot_info(
             last_entry_hash,
-            poh_config.hashes_per_tick,
+            poh_config.get_hashes_per_tick(),
             ticks_per_slot,
             tick_number,
         )));
