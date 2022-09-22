@@ -859,8 +859,6 @@ pub fn process_blockstore_from_root(
 
     let processing_time = now.elapsed();
 
-    bank.initial_blockstore_processing_completed();
-
     datapoint_info!(
         "process_blockstore_from_root",
         ("total_time_us", processing_time.as_micros(), i64),

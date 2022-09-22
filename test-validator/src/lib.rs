@@ -600,17 +600,12 @@ impl TestValidator {
     }
 
     /// allow tests to indicate that validator has completed initialization
-    pub fn set_startup_verification_complete_for_tests(&self) {
+    pub fn set_startup_verification_complete(&self) {
         self.bank_forks()
             .read()
             .unwrap()
             .root_bank()
             .set_startup_verification_complete();
-        self.bank_forks()
-            .read()
-            .unwrap()
-            .root_bank()
-            .initial_blockstore_processing_completed();
     }
 
     /// Initialize the ledger directory
@@ -1008,7 +1003,7 @@ mod test {
     #[test]
     fn get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start();
-        test_validator.set_startup_verification_complete_for_tests();
+        test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
     }
@@ -1016,7 +1011,7 @@ mod test {
     #[tokio::test]
     async fn nonblocking_get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
-        test_validator.set_startup_verification_complete_for_tests();
+        test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_async_rpc_client();
         rpc_client.get_health().await.expect("health");
     }
