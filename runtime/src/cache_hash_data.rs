@@ -119,6 +119,42 @@ impl CacheHashDataFile {
     }
 }
 
+/// refer to a mmaped cache file and enable accessing the data held within
+struct MappedCacheFile {
+    /// the cache file
+    cache_file: CacheHashDataFile,
+    /// number of entries in the cache file
+    entries: usize,
+}
+
+impl MappedCacheFile {
+    /// Populate 'accumulator' from entire contents of the cache file.
+    fn load_all(
+        &mut self,
+        accumulator: &mut SavedType,
+        start_bin_index: usize,
+        bin_calculator: &PubkeyBinCalculator24,
+        stats: &mut CacheHashDataStats,
+    ) {
+        let mut m2 = Measure::start("decode");
+        for i in 0..self.entries {
+            let d = self.cache_file.get::<EntryType>(i as u64);
+            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
+            assert!(
+                pubkey_to_bin_index >= start_bin_index,
+                "{}, {}",
+                pubkey_to_bin_index,
+                start_bin_index
+            ); // this would indicate we put a pubkey in too high of a bin
+            pubkey_to_bin_index -= start_bin_index;
+            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+        }
+
+        m2.stop();
+        stats.decode_us += m2.as_us();
+    }
+}
+
 pub type PreExistingCacheFiles = HashSet<String>;
 pub struct CacheHashData {
     cache_folder: PathBuf,
@@ -207,6 +243,19 @@ impl CacheHashData {
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("overall");
+        let mut cache_file = self.map(file_name, stats)?;
+        cache_file.load_all(accumulator, start_bin_index, bin_calculator, stats);
+        m.stop();
+        stats.load_us += m.as_us();
+        Ok(())
+    }
+
+    /// create and return a MappedCacheFile for a cache file path
+    fn map<P: AsRef<Path> + std::fmt::Debug>(
+        &self,
+        file_name: &P,
+        stats: &mut CacheHashDataStats,
+    ) -> Result<MappedCacheFile, std::io::Error> {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
@@ -257,25 +306,13 @@ impl CacheHashData {
 
         stats.loaded_from_cache += 1;
         stats.entries_loaded_from_cache += entries;
-        let mut m2 = Measure::start("decode");
-        for i in 0..entries {
-            let d = cache_file.get::<EntryType>(i as u64);
-            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
-            assert!(
-                pubkey_to_bin_index >= start_bin_index,
-                "{}, {}",
-                pubkey_to_bin_index,
-                start_bin_index
-            ); // this would indicate we put a pubkey in too high of a bin
-            pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
-        }
 
-        m2.stop();
-        stats.decode_us += m2.as_us();
-        m.stop();
-        stats.load_us += m.as_us();
-        Ok(())
+        let mapped_file = MappedCacheFile {
+            cache_file,
+            entries,
+        };
+
+        Ok(mapped_file)
     }
 
     /// save 'data' to 'file_name'
