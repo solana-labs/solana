@@ -420,7 +420,7 @@ fn process_entries_with_callback(
                 // If it's a tick, save it for later
                 tick_hashes.push(hash);
                 if bank.is_block_boundary(bank.tick_height() + tick_hashes.len() as u64) {
-                    info!("process_entries_with_callback(): slot: {} idx: {} scheduled {} txs so far in {}us (still in loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
+                    trace!("process_entries_with_callback(): slot: {} idx: {} scheduled {} txs so far in {}us (still in loop)", bank.slot(), starting_index, tx_count, started.elapsed().as_micros());
                     started = std::time::Instant::now();
                     tx_count = 0;
 
@@ -450,7 +450,7 @@ fn process_entries_with_callback(
             }
         }
     }
-    info!(
+    trace!(
         "process_entries_with_callback(): slot: {} scheduled {} txs so far in {}us (after loop)",
         bank.slot(),
         tx_count,

@@ -4290,7 +4290,7 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        info!(
+        debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: start",
             self.slot()
         );
@@ -4320,7 +4320,7 @@ impl Bank {
                 .push(last_result);
         //*self.scheduler.write().unwrap() = new_scheduler;
 
-        info!(
+        debug!(
             "register_recent_blockhash: slot: {} reinitializing the scheduler: end",
             self.slot()
         );

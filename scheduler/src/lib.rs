@@ -2019,31 +2019,31 @@ impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         let mut g = self.0.lock().unwrap();
-        let (self_remaining_threads_guard, self_return_value) = &mut *g;
-        info!(
+        let (self_remaining_threads, self_return_value) = &mut *g;
+        trace!(
             "Checkpoint::wait_for_restart: {} is entering at {} -> {}",
             current_thread_name,
-            *self_remaining_threads_guard,
-            *self_remaining_threads_guard - 1
+            *self_remaining_threads,
+            *self_remaining_threads - 1
         );
 
-        *self_remaining_threads_guard -= 1;
+        *self_remaining_threads -= 1;
 
         if let Some(given_restart_value) = maybe_given_restart_value {
             assert!(self_return_value.is_none());
             *self_return_value = Some(given_restart_value);
         }
 
-        if *self_remaining_threads_guard == 0 {
+        if *self_remaining_threads == 0 {
             assert!(self_return_value.is_some());
-            drop(self_remaining_threads_guard);
+            drop(self_remaining_threads);
             self.1.notify_all();
-            info!(
+            trace!(
                 "Checkpoint::wait_for_restart: {} notified all others...",
                 current_thread_name
             );
         } else {
-            info!(
+            trace!(
                 "Checkpoint::wait_for_restart: {} is paused...",
                 current_thread_name
             );
@@ -2053,7 +2053,7 @@ impl<T> Checkpoint<T> {
                     remaining_threads > 0
                 })
                 .unwrap();
-            info!(
+            trace!(
                 "Checkpoint::wait_for_restart: {} is started...",
                 current_thread_name
             );
@@ -2062,7 +2062,7 @@ impl<T> Checkpoint<T> {
 
     pub fn take_restart_value(&self) -> T {
         let mut g = self.0.lock().unwrap();
-        let (self_remaining_threads_guard, self_return_value) = &mut *g;
+        let (self_remaining_threads, self_return_value) = &mut *g;
         self_return_value.take().unwrap()
     }
 
