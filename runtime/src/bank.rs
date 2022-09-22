@@ -1246,7 +1246,7 @@ impl<C> SchedulerPool<C> {
     }
 }
 
-static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool> =
+static SCHEDULER_POOL: std::sync::Mutex<SchedulerPool<ExecuteTimings>> =
     std::sync::Mutex::new(SchedulerPool::new());
 
 #[derive(Debug)]
