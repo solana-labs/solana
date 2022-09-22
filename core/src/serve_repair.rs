@@ -162,7 +162,6 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
-    pings_required: usize,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -523,7 +522,6 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
-            ("pings_required", stats.pings_required, i64),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -645,40 +643,6 @@ impl ServeRepair {
         true
     }
 
-    fn check_ping_cache(
-        request: &RepairProtocol,
-        from_addr: &SocketAddr,
-        identity_keypair: &Keypair,
-        ping_cache: &mut PingCache,
-    ) -> (bool, Option<Ping>) {
-        let mut rng = rand::thread_rng();
-        let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
-        ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf)
-    }
-
-    fn ping_to_packet_mapper_by_request_variant(
-        request: &RepairProtocol,
-        dest_addr: SocketAddr,
-    ) -> Option<Box<dyn FnOnce(Ping) -> Option<Packet>>> {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, _, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-            | RepairProtocol::LegacyAncestorHashes(_, _, _)
-            | RepairProtocol::Pong(_) => None,
-            RepairProtocol::WindowIndex { .. }
-            | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::Orphan { .. } => Some(Box::new(move |ping| {
-                let ping = RepairResponse::Ping(ping);
-                Packet::from_data(Some(&dest_addr), ping).ok()
-            })),
-            RepairProtocol::AncestorHashes { .. } => None,
-        }
-    }
-
     fn handle_packets(
         &self,
         ping_cache: &mut PingCache,
@@ -691,9 +655,7 @@ impl ServeRepair {
         data_budget: &DataBudget,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
-        let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
-        let mut pending_pings = Vec::default();
 
         // iter over the packets
         for (i, packet) in packet_batch.iter().enumerate() {
@@ -717,26 +679,6 @@ impl ServeRepair {
             }
 
             let from_addr = packet.meta.socket_addr();
-            if let Some(ping_to_pkt) =
-                Self::ping_to_packet_mapper_by_request_variant(&request, from_addr)
-            {
-                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                    stats.err_malformed += 1;
-                    continue;
-                }
-                let (check, ping) =
-                    Self::check_ping_cache(&request, &from_addr, &identity_keypair, ping_cache);
-                if let Some(ping) = ping {
-                    if let Some(pkt) = ping_to_pkt(ping) {
-                        pending_pings.push(pkt);
-                    }
-                }
-                if !check {
-                    stats.pings_required += 1;
-                    // allow processing without ping/pong verification
-                }
-            }
-
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -754,11 +696,6 @@ impl ServeRepair {
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }
-        }
-
-        if !pending_pings.is_empty() {
-            let batch = PacketBatch::new(pending_pings);
-            let _ignore = response_sender.send(batch);
         }
     }
 
