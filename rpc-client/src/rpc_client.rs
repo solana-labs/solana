@@ -21,6 +21,7 @@ use {
         nonblocking::{self, rpc_client::get_rpc_request_str},
         rpc_sender::*,
     },
+    serde::Serialize,
     serde_json::Value,
     solana_account_decoder::{
         parse_token::{UiTokenAccount, UiTokenAmount},
@@ -43,7 +44,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -64,6 +65,36 @@ impl RpcClientConfig {
             commitment_config,
             ..Self::default()
         }
+    }
+}
+
+/// Trait used to add support for versioned transactions to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableTransaction: Serialize {
+    fn get_signature(&self) -> &Signature;
+    fn get_recent_blockhash(&self) -> &Hash;
+    fn uses_durable_nonce(&self) -> bool;
+}
+impl SerializableTransaction for Transaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        &self.message.recent_blockhash
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        uses_durable_nonce(self).is_some()
+    }
+}
+impl SerializableTransaction for VersionedTransaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        self.message.recent_blockhash()
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        self.uses_durable_nonce()
     }
 }
 
@@ -629,7 +660,7 @@ impl RpcClient {
     /// ```
     pub fn send_and_confirm_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_and_confirm_transaction(transaction))
     }
@@ -637,7 +668,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
         self.invoke(
             (self.rpc_client.as_ref()).send_and_confirm_transaction_with_spinner(transaction),
@@ -647,7 +678,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
     ) -> ClientResult<Signature> {
         self.invoke(
@@ -659,7 +690,7 @@ impl RpcClient {
     #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         commitment: CommitmentConfig,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
@@ -740,7 +771,10 @@ impl RpcClient {
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// # Ok::<(), Error>(())
     /// ```
-    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
+    pub fn send_transaction(
+        &self,
+        transaction: &impl SerializableTransaction,
+    ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_transaction(transaction))
     }
 
@@ -825,7 +859,7 @@ impl RpcClient {
     /// ```
     pub fn send_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSendTransactionConfig,
     ) -> ClientResult<Signature> {
         self.invoke((self.rpc_client.as_ref()).send_transaction_with_config(transaction, config))
@@ -1025,7 +1059,7 @@ impl RpcClient {
     /// ```
     pub fn simulate_transaction(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.invoke((self.rpc_client.as_ref()).simulate_transaction(transaction))
     }
@@ -1102,7 +1136,7 @@ impl RpcClient {
     /// ```
     pub fn simulate_transaction_with_config(
         &self,
-        transaction: &Transaction,
+        transaction: &impl SerializableTransaction,
         config: RpcSimulateTransactionConfig,
     ) -> RpcResult<RpcSimulateTransactionResult> {
         self.invoke(
