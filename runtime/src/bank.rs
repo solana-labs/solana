@@ -4304,7 +4304,7 @@ impl Bank {
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         //let new_scheduler = Scheduler::default();
-        if last_error.is_err() {
+        if last_result.is_err() {
             warn!(
                 "register_recent_blockhash: carrying over this error: {:?}",
                 maybe_last_error
