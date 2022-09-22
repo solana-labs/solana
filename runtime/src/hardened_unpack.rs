@@ -482,7 +482,7 @@ pub fn unpack_genesis_archive(
     let extract_start = Instant::now();
 
     fs::create_dir_all(destination_dir)?;
-    let tar_bz2 = File::open(&archive_filename)?;
+    let tar_bz2 = File::open(archive_filename)?;
     let tar = BzDecoder::new(BufReader::new(tar_bz2));
     let mut archive = Archive::new(tar);
     unpack_genesis(

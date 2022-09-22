@@ -64,6 +64,7 @@ fn test_build() {
 #[serial]
 fn test_dump() {
     // This test requires rustfilt.
+<<<<<<< HEAD
     assert!(Command::new("cargo")
         .args(&["install", "-f", "rustfilt"])
         .status()
@@ -71,6 +72,13 @@ fn test_dump() {
         .success());
     let output = run_cargo_build("noop", &["--dump"], "test_dump");
     assert!(output.status.success());
+=======
+    assert_cmd::Command::new("cargo")
+        .args(["install", "-f", "rustfilt"])
+        .assert()
+        .success();
+    run_cargo_build("noop", &["--dump"], false);
+>>>>>>> 9a57c64f2 (patches clippy errors from new rust nightly release (#27996))
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
         .join("tests")
@@ -114,3 +122,42 @@ fn test_generate_child_script_on_failre() {
     fs::remove_file(scr).expect("Failed to remove script");
     clean_target("fail");
 }
+<<<<<<< HEAD
+=======
+
+#[test]
+#[serial]
+fn test_sbfv2() {
+    run_cargo_build("noop", &["--arch", "sbfv2"], false);
+    let cwd = env::current_dir().expect("Unable to get current working directory");
+    let bin = cwd
+        .join("tests")
+        .join("crates")
+        .join("noop")
+        .join("target")
+        .join("deploy")
+        .join("noop.so");
+    let bin = bin.to_str().unwrap();
+    let root = cwd
+        .parent()
+        .expect("Unable to get parent directory of current working dir")
+        .parent()
+        .expect("Unable to get ../.. of current working dir");
+    let readelf = root
+        .join("sdk")
+        .join("bpf")
+        .join("dependencies")
+        .join("sbf-tools")
+        .join("llvm")
+        .join("bin")
+        .join("llvm-readelf");
+    assert_cmd::Command::new(readelf)
+        .args(["-h", bin])
+        .assert()
+        .stdout(predicate::str::contains(
+            "Flags:                             0x20",
+        ))
+        .success();
+    clean_target("noop");
+}
+>>>>>>> 9a57c64f2 (patches clippy errors from new rust nightly release (#27996))

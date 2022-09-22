@@ -120,12 +120,10 @@ impl<SecondaryIndexEntryType: SecondaryIndexEntry + Default + Sync + Send>
 
     pub fn insert(&self, key: &Pubkey, inner_key: &Pubkey) {
         {
-            let pubkeys_map = self.index.get(key).unwrap_or_else(|| {
-                self.index
-                    .entry(*key)
-                    .or_insert(SecondaryIndexEntryType::default())
-                    .downgrade()
-            });
+            let pubkeys_map = self
+                .index
+                .get(key)
+                .unwrap_or_else(|| self.index.entry(*key).or_default().downgrade());
 
             pubkeys_map.insert_if_not_exists(inner_key, &self.stats.num_inner_keys);
         }

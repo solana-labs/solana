@@ -38,7 +38,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
             let a = p.meta.socket_addr();
             assert!(p.meta.size <= PACKET_DATA_SIZE);
             let data = p.data(..).unwrap_or_default();
-            send.send_to(data, &a).unwrap();
+            send.send_to(data, a).unwrap();
             num += 1;
         }
         assert_eq!(num, 10);
