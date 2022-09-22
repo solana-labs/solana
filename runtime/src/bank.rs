@@ -1504,7 +1504,7 @@ impl<C> Scheduler<C> {
                     );
 
                     if let Some(checkpoint) = maybe_checkpoint {
-                        checkpoint.wait_for_restart();
+                        checkpoint.wait_for_restart(None);
                         continue;
                     } else {
                         break;
@@ -1573,7 +1573,7 @@ impl<C> Scheduler<C> {
                 solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
             ))
             .unwrap();
-        checkpoint.wait_for_restart();
+        checkpoint.wait_for_restart(None);
         {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
