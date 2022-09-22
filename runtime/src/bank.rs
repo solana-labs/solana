@@ -1606,7 +1606,7 @@ impl Scheduler {
     }
 }
 
-impl Drop for Scheduler {
+impl<C> Drop for Scheduler<C> {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("Scheduler::drop() by {}...", current_thread_name);
