@@ -3250,19 +3250,15 @@ impl Bank {
                         self.store_account(&vote_pubkey, &vote_account);
                     }
 
-                    if vote_rewards > 0 {
-                        Some((
-                            vote_pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Voting,
-                                lamports: vote_rewards as i64,
-                                post_balance: vote_account.lamports(),
-                                commission: Some(commission),
-                            },
-                        ))
-                    } else {
-                        None
-                    }
+                    Some((
+                        vote_pubkey,
+                        RewardInfo {
+                            reward_type: RewardType::Voting,
+                            lamports: vote_rewards as i64,
+                            post_balance: vote_account.lamports(),
+                            commission: Some(commission),
+                        },
+                    ))
                 },
             )
             .collect::<Vec<_>>();
@@ -10347,15 +10343,26 @@ pub(crate) mod tests {
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
             *bank1.rewards.read().unwrap(),
-            vec![(
-                stake_id,
-                RewardInfo {
-                    reward_type: RewardType::Staking,
-                    lamports: validator_rewards as i64,
-                    post_balance: bank1.get_balance(&stake_id),
-                    commission: Some(0),
-                }
-            )]
+            vec![
+                (
+                    vote_id,
+                    RewardInfo {
+                        reward_type: RewardType::Voting,
+                        lamports: 0,
+                        post_balance: bank1.get_balance(&vote_id),
+                        commission: Some(0),
+                    }
+                ),
+                (
+                    stake_id,
+                    RewardInfo {
+                        reward_type: RewardType::Staking,
+                        lamports: validator_rewards as i64,
+                        post_balance: bank1.get_balance(&stake_id),
+                        commission: Some(0),
+                    }
+                )
+            ]
         );
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization(true));
@@ -10398,7 +10405,7 @@ pub(crate) mod tests {
 
         let vote_id = solana_sdk::pubkey::new_rand();
         let mut vote_account =
-            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 50, 100);
+            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 0, 100);
         let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
