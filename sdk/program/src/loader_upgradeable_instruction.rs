@@ -125,4 +125,27 @@ pub enum UpgradeableLoaderInstruction {
     ///   3. `[writable]` The associated Program account if the account to close
     ///      is a ProgramData account.
     Close,
+<<<<<<< HEAD
+=======
+
+    /// Extend a program's ProgramData account by the specified number of bytes.
+    /// Only upgradeable program's can be extended.
+    ///
+    /// The payer account must contain sufficient lamports to fund the
+    /// ProgramData account to be rent-exempt. If the ProgramData account
+    /// balance is already sufficient to cover the rent exemption cost
+    /// for the extended bytes, the payer account is not required.
+    ///
+    /// # Account references
+    ///   0. `[writable]` The ProgramData account.
+    ///   1. `[writable]` The ProgramData account's associated Program account.
+    ///   2. `[]` System program (`solana_sdk::system_program::id()`), optional, used to transfer
+    ///      lamports from the payer to the ProgramData account.
+    ///   3. `[signer]` The payer account, optional, that will pay necessary rent exemption costs
+    ///      for the increased storage size.
+    ExtendProgram {
+        /// Number of bytes to extend the program data.
+        additional_bytes: u32,
+    },
+>>>>>>> 108b245e6 (Require program account to be writable in extend program data ix (#27911))
 }
