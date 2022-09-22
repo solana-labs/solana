@@ -1233,7 +1233,7 @@ impl SchedulerPool<ExecuteTimings> {
             self.schedulers.len() + 1
         );
         assert_eq!(1, Arc::strong_count(&scheduler));
-        assert!(scheduler.collected_errors.lock().unwrap().is_empty());
+        assert!(scheduler.collected_results.lock().unwrap().is_empty());
         assert!(scheduler
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst));
@@ -1258,7 +1258,7 @@ struct Scheduler<C> {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C>>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
-    collected_errors: Arc<std::sync::Mutex<Vec<Result<Option<C>>>>>,
+    collected_results: Arc<std::sync::Mutex<Vec<Result<Option<C>>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: AtomicU64,
 }
@@ -1403,8 +1403,8 @@ impl Scheduler<ExecuteTimings> {
             Ok((started.0.elapsed(), started.1.elapsed()))
         }).unwrap()}).collect();
 
-        let collected_errors = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let collected_errors_in_collector_thread = Arc::clone(&collected_errors);
+        let collected_results = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let collected_results_in_collector_thread = Arc::clone(&collected_results);
 
         let error_collector_thread_handle = std::thread::Builder::new()
             .name(format!("solScErrCol{:02}", 0))
@@ -1452,7 +1452,7 @@ impl Scheduler<ExecuteTimings> {
                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                                     ee.execution_result, ee.task.tx.0
                                 );
-                                collected_errors_in_collector_thread
+                                collected_results_in_collector_thread
                                     .lock()
                                     .unwrap()
                                     .push(ee.execution_result.take().unwrap().map(|a| Default::default()));
@@ -1528,7 +1528,7 @@ impl Scheduler<ExecuteTimings> {
             transaction_sender: Some(transaction_sender),
             preloader,
             graceful_stop_initiated: Default::default(),
-            collected_errors,
+            collected_results,
             bank,
             slot: Default::default(),
         };
@@ -1602,7 +1602,7 @@ impl<C> Scheduler<C> {
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<Option<C>>> {
-        std::mem::take(&mut self.collected_errors.lock().unwrap())
+        std::mem::take(&mut self.collected_results.lock().unwrap())
     }
 }
 
@@ -4309,10 +4309,10 @@ impl Bank {
                 "register_recent_blockhash: carrying over this error: {:?}",
                 maybe_last_error
             );
-            //new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
+            //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
             s2.as_ref()
                 .unwrap()
-                .collected_errors
+                .collected_results
                 .lock()
                 .unwrap()
                 .push(maybe_last_error);
