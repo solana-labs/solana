@@ -454,7 +454,7 @@ pub mod preserve_rent_epoch_for_rent_exempt_accounts {
     solana_sdk::declare_id!("HH3MUYReL2BvqqA3oEcAa7txju5GY6G4nxJ51zvsEjEZ");
 }
 
-pub mod enable_bpf_loader_extend_program_data_ix {
+pub mod enable_bpf_loader_extend_program_ix {
     solana_sdk::declare_id!("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme");
 }
 
@@ -638,7 +638,7 @@ lazy_static! {
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
-        (enable_bpf_loader_extend_program_data_ix::id(), "enable bpf upgradeable loader ExtendProgramData instruction #25234"),
+        (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
