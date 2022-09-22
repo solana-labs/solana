@@ -8422,8 +8422,9 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        for i in 0..10 {
-            let slot = i;
+        assert_eq!(blockstore.lowest_slot(), 0);
+
+        for slot in 0..10 {
             let (shreds, _) = make_slot_entries(slot, 0, 1);
             blockstore.insert_shreds(shreds, None, false).unwrap();
         }
