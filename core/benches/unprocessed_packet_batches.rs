@@ -23,7 +23,7 @@ use {
 
 fn build_packet_batch(
     packet_per_batch_count: usize,
-    hash: Option<Hash>,
+    recent_blockhash: Option<Hash>,
 ) -> (PacketBatch, Vec<usize>) {
     let packet_batch = PacketBatch::new(
         (0..packet_per_batch_count)
@@ -32,7 +32,7 @@ fn build_packet_batch(
                     &Keypair::new(),
                     &solana_sdk::pubkey::new_rand(),
                     1,
-                    hash.unwrap_or_else(Hash::new_unique),
+                    recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
                 let mut packet = Packet::from_data(None, &tx).unwrap();
                 packet.meta.sender_stake = sender_stake as u64;
@@ -47,7 +47,7 @@ fn build_packet_batch(
 
 fn build_randomized_packet_batch(
     packet_per_batch_count: usize,
-    hash: Option<Hash>,
+    recent_blockhash: Option<Hash>,
 ) -> (PacketBatch, Vec<usize>) {
     let mut rng = rand::thread_rng();
     let distribution = Uniform::from(0..200_000);
@@ -59,7 +59,7 @@ fn build_randomized_packet_batch(
                     &Keypair::new(),
                     &solana_sdk::pubkey::new_rand(),
                     1,
-                    hash.unwrap_or_else(Hash::new_unique),
+                    recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
                 let mut packet = Packet::from_data(None, &tx).unwrap();
                 let sender_stake = distribution.sample(&mut rng);

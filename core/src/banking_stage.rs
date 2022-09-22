@@ -1077,13 +1077,13 @@ impl BankingStage {
                                 banking_stage_stats,
                             );
 
-                        let retained_transaction_indexes = Self::filter_invalid_transactions(
+                        let forwardable_transaction_indexes = Self::filter_invalid_transactions(
                             &sanitized_transactions,
                             bank,
                             banking_stage_stats,
                         );
 
-                        for forwardable_transaction_index in &retained_transaction_indexes {
+                        for forwardable_transaction_index in &forwardable_transaction_indexes {
                             saturating_add_assign!(total_forwardable_packets, 1);
                             let forwardable_packet_index =
                                 transaction_to_packet_indexes[*forwardable_transaction_index];
@@ -1097,7 +1097,7 @@ impl BankingStage {
                             &packets_to_process,
                             &sanitized_transactions,
                             &transaction_to_packet_indexes,
-                            &retained_transaction_indexes,
+                            &forwardable_transaction_indexes,
                             &mut dropped_tx_before_forwarding_count,
                         );
 
@@ -1106,7 +1106,7 @@ impl BankingStage {
                             &packets_to_process,
                             &Self::prepare_filtered_packet_indexes(
                                 &transaction_to_packet_indexes,
-                                &retained_transaction_indexes,
+                                &forwardable_transaction_indexes,
                             ),
                         )
                     } else {
@@ -1291,11 +1291,11 @@ impl BankingStage {
         let mut accepting_packets = true;
         for retained_transaction_index in retained_transaction_indexes {
             let sanitized_transaction = &transactions[*retained_transaction_index];
-            let immutable_deserizlized_packet = packets_to_process
+            let immutable_deserialized_packet = packets_to_process
                 [transaction_to_packet_indexes[*retained_transaction_index]]
                 .clone();
             accepting_packets =
-                forward_buffer.try_add_packet(sanitized_transaction, immutable_deserizlized_packet);
+                forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet);
             if !accepting_packets {
                 break;
             }
