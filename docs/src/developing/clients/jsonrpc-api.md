@@ -3266,6 +3266,7 @@ each containing an array of JSON objects with the following sub fields:
 - `commission: <number>`, percentage (0-100) of rewards payout owed to the vote account
 - `lastVote: <u64>` - Most recent slot voted on by this vote account
 - `epochCredits: <array>` - History of how many credits earned by the end of each epoch, as an array of arrays containing: `[epoch, credits, previousCredits]`
+- `rootSlot: <u64>` - Current root slot for this vote account
 
 #### Example:
 
