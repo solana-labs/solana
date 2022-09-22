@@ -32,7 +32,26 @@ struct CacheHashDataFile {
 }
 
 impl CacheHashDataFile {
+    /// get '&mut T' from cache file [ix]
     fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
+        let item_slice = self.get_slice_internal::<T>(ix);
+        unsafe {
+            let item = item_slice.as_ptr() as *mut T;
+            &mut *item
+        }
+    }
+
+    /// get '&T' from cache file [ix]
+    fn get<T: Sized>(&self, ix: u64) -> &T {
+        let item_slice = self.get_slice_internal::<T>(ix);
+        unsafe {
+            let item = item_slice.as_ptr() as *const T;
+            &*item
+        }
+    }
+
+    /// get the bytes representing cache file [ix]
+    fn get_slice_internal<T: Sized>(&self, ix: u64) -> &[u8] {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
         let end = start + std::mem::size_of::<T>();
         assert!(
@@ -43,11 +62,7 @@ impl CacheHashDataFile {
             ix,
             self.cell_size
         );
-        let item_slice: &[u8] = &self.mmap[start..end];
-        unsafe {
-            let item = item_slice.as_ptr() as *mut T;
-            &mut *item
-        }
+        &self.mmap[start..end]
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
@@ -228,7 +243,7 @@ impl CacheHashData {
         stats.entries_loaded_from_cache += entries;
         let mut m2 = Measure::start("decode");
         for i in 0..entries {
-            let d = cache_file.get_mut::<EntryType>(i as u64);
+            let d = cache_file.get::<EntryType>(i as u64);
             let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
             assert!(
                 pubkey_to_bin_index >= start_bin_index,
