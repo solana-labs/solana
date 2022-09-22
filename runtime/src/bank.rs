@@ -1543,7 +1543,7 @@ impl<C> Scheduler<C> {
     }
 }
 
-impl Scheduler {
+impl<C> Scheduler<C> {
     fn gracefully_stop(&self) -> Result<()> {
         if self
             .graceful_stop_initiated
