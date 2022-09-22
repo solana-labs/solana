@@ -2509,7 +2509,7 @@ impl ReplayStage {
                     .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
-                let r_replay_stats = replay_stats.write().unwrap();
+                let mut r_replay_stats = replay_stats.write().unwrap();
                 let mut metrics = solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
                 metrics.execution_timings_per_thread.insert(0, cumulative_timings2);
                 r_replay_stats.process_execute_batches_internal_metrics(metrics);
