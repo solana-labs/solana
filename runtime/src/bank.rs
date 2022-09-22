@@ -4315,7 +4315,7 @@ impl Bank {
                 .collected_errors
                 .lock()
                 .unwrap()
-                .push(maybe_last_error.map(|_| ()));
+                .push(maybe_last_error);
         }
         //*self.scheduler.write().unwrap() = new_scheduler;
 
