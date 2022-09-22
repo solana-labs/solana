@@ -74,7 +74,10 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            let ll = lock_attempt.target_page_mut(ast).task_ids.reindex(should_remove, &uq);
+            let ll = lock_attempt
+                .target_page_mut(ast)
+                .task_ids
+                .reindex(should_remove, &uq);
             if let Some(heaviest_uncontended) = ll {
                 lock_attempt.heaviest_uncontended = Some(heaviest_uncontended);
             };
@@ -154,7 +157,7 @@ impl LockAttempt {
     */
 
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
-        &self.target.0.1
+        &self.target.0 .1
     }
 
     fn target_page_mut<AST: AtScheduleThread>(&self, ast: AST) -> std::cell::RefMut<'_, Page> {
@@ -231,16 +234,12 @@ impl SkipListTaskIds {
     }
 
     pub fn heaviest_task_id(&self) -> Option<TaskId> {
-        self
-            .task_ids
-            .back()
-            .map(|j| *j.key())
+        self.task_ids.back().map(|j| *j.key())
     }
 
     #[inline(never)]
     fn reindex(&self, should_remove: bool, uq: &UniqueWeight) -> Option<TaskInQueue> {
-        self
-            .heaviest_task_cursor()
+        self.heaviest_task_cursor()
             .map(|mut task_cursor| {
                 let mut found = true;
                 let mut removed = false;
@@ -287,17 +286,12 @@ impl BTreeMapTaskIds {
     }
 
     #[inline(never)]
-    fn heaviest_task_cursor(
-        &self,
-    ) -> impl Iterator<Item = &TaskInQueue> {
+    fn heaviest_task_cursor(&self) -> impl Iterator<Item = &TaskInQueue> {
         self.task_ids.values().rev()
     }
 
     pub fn heaviest_task_id(&mut self) -> Option<TaskId> {
-        self
-            .task_ids
-            .last_entry()
-            .map(|j| *j.key())
+        self.task_ids.last_entry().map(|j| *j.key())
     }
 
     #[inline(never)]
@@ -306,8 +300,7 @@ impl BTreeMapTaskIds {
             self.remove_task(uq);
         }
 
-        self
-            .heaviest_task_cursor()
+        self.heaviest_task_cursor()
             .find(|task| {
                 assert!(!task.already_finished());
                 task.currently_contended()
@@ -409,7 +402,8 @@ impl AddressBook {
     ) -> CU {
         let tcuw = attempt
             //.target_contended_unique_weights()
-            .target_page_mut(ast).task_ids
+            .target_page_mut(ast)
+            .task_ids
             .heaviest_task_id();
 
         let strictly_lockable_for_replay = if tcuw.is_none() {
@@ -834,7 +828,8 @@ impl Task {
     ) {
         for lock_attempt in &*this.lock_attempts_mut(ast) {
             lock_attempt
-                .target_page_mut(ast).task_ids
+                .target_page_mut(ast)
+                .task_ids
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
@@ -914,7 +909,11 @@ struct ChannelBackedTaskQueue<'a, C> {
 
 impl<'a, C> ChannelBackedTaskQueue<'a, C> {
     fn new(channel: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>) -> Self {
-        Self {channel, buffered_task: None, buffered_flush: None}
+        Self {
+            channel,
+            buffered_task: None,
+            buffered_flush: None,
+        }
     }
 
     fn buffer(&mut self, task: TaskInQueue) {
@@ -923,10 +922,11 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
     }
 
     fn task_count_hint(&self) -> usize {
-        self.channel.len() + (match self.buffered_task {
-            None => 0,
-            Some(_) => 1,
-        })
+        self.channel.len()
+            + (match self.buffered_task {
+                None => 0,
+                Some(_) => 1,
+            })
     }
 
     fn has_no_task_hint(&self) -> bool {
@@ -945,8 +945,14 @@ impl<'a, C> ChannelBackedTaskQueue<'a, C> {
                 // unblocking recv must have been gurantted to succeed at the time of this method
                 // invocation
                 match self.channel.try_recv().unwrap() {
-                    SchedulablePayload(Flushable::Payload(task)) => Some(ChannelBackedTaskQueueEntry(task)),
-                    SchedulablePayload(Flushable::Flush(f)) => { assert!(self.buffered_flush.is_none()); self.buffered_flush = Some(f); None }
+                    SchedulablePayload(Flushable::Payload(task)) => {
+                        Some(ChannelBackedTaskQueueEntry(task))
+                    }
+                    SchedulablePayload(Flushable::Flush(f)) => {
+                        assert!(self.buffered_flush.is_none());
+                        self.buffered_flush = Some(f);
+                        None
+                    }
                 }
             }
         }
@@ -1076,14 +1082,10 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
         let selected_heaviest_tasks = match task_selection {
-            TaskSelection::OnlyFromRunnable => (
-                runnable_queue.heaviest_entry_to_execute(),
-                None,
-            ),
-            TaskSelection::OnlyFromContended(_) => (
-                None,
-                Self::get_heaviest_from_contended(address_book),
-            ),
+            TaskSelection::OnlyFromRunnable => (runnable_queue.heaviest_entry_to_execute(), None),
+            TaskSelection::OnlyFromContended(_) => {
+                (None, Self::get_heaviest_from_contended(address_book))
+            }
         };
 
         match selected_heaviest_tasks {
@@ -1773,7 +1775,8 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let runnable_finished = from_disconnected && channel_backed_runnable_queue.has_no_task_hint();
+                let runnable_finished =
+                    from_disconnected && channel_backed_runnable_queue.has_no_task_hint();
 
                 let mut selection = TaskSelection::OnlyFromContended(if runnable_finished {
                     usize::max_value()
@@ -1901,7 +1904,8 @@ impl ScheduleStage {
                     break;
                 } else {
                     if !empty_from_exec {
-                        let UnlockablePayload(mut processed_execution_environment, extra) = from_exec.recv().unwrap();
+                        let UnlockablePayload(mut processed_execution_environment, extra) =
+                            from_exec.recv().unwrap();
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
@@ -1914,7 +1918,10 @@ impl ScheduleStage {
                             &mut provisioning_tracker_count,
                         );
                         to_next_stage
-                            .send(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra))))
+                            .send(ExaminablePayload(Flushable::Payload((
+                                processed_execution_environment,
+                                extra,
+                            ))))
                             .unwrap();
                     }
                     if !empty_from {
@@ -1948,7 +1955,11 @@ impl ScheduleStage {
             assert!(!select_skipped || executing_queue_count > 0);
         }
         if let Some(checkpoint) = &maybe_checkpoint {
-            to_next_stage.send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(checkpoint)))).unwrap();
+            to_next_stage
+                .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
+                    checkpoint,
+                ))))
+                .unwrap();
         }
         drop(to_next_stage);
         drop(ee_sender);
@@ -2049,9 +2060,7 @@ impl<T> Checkpoint<T> {
             );
             let _ = *self
                 .1
-                .wait_while(g, |&mut (remaining_threads, _)| {
-                    remaining_threads > 0
-                })
+                .wait_while(g, |&mut (remaining_threads, _)| remaining_threads > 0)
                 .unwrap();
             trace!(
                 "Checkpoint::wait_for_restart: {} is started...",

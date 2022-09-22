@@ -1207,7 +1207,8 @@ impl SchedulerPool<ExecuteTimings> {
     }
 
     fn create(&mut self) {
-        self.schedulers.push(Arc::new(Scheduler::<ExecuteTimings>::default2()));
+        self.schedulers
+            .push(Arc::new(Scheduler::<ExecuteTimings>::default2()));
     }
 
     fn take_from_pool(&mut self) -> Arc<Scheduler<ExecuteTimings>> {
@@ -4311,13 +4312,13 @@ impl Bank {
                 last_result
             );
         }
-            //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
-            s2.as_ref()
-                .unwrap()
-                .collected_results
-                .lock()
-                .unwrap()
-                .push(last_result);
+        //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
+        s2.as_ref()
+            .unwrap()
+            .collected_results
+            .lock()
+            .unwrap()
+            .push(last_result);
         //*self.scheduler.write().unwrap() = new_scheduler;
 
         debug!(
@@ -6730,7 +6731,7 @@ impl Bank {
         let scheduler = s.as_ref().unwrap();
         scheduler.handle_aborted_executions()
     }
-    */ 
+    */
 
     /// Process a batch of transactions.
     #[must_use]
@@ -8390,7 +8391,8 @@ impl Bank {
             let e = scheduler
                 .handle_aborted_executions()
                 .into_iter()
-                .next().unwrap();
+                .next()
+                .unwrap();
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
