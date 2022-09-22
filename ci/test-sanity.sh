@@ -43,9 +43,9 @@ if [[ -z $CI_TAG ]]; then
       if [[ $CHANNEL_LATEST_TAG = v$version ]]; then
         echo "Error: A release has been tagged since your feature branch was created. <current version> should be greater than <latest channel tag>.
         Possible solutions (in the order they should be tried):
-        - rebase your feature branch on the base branch
-        - merge the PR: \"Bump Version to <$version+1>\" and then rebase
-        - ask for help in #devops."
+        1. rebase your feature branch on the base branch
+        2. merge the PR: \"Bump Version to <$version+1>\" and then rebase
+        3. ask for help in #devops."
         exit 1
       fi
     else
