@@ -1207,10 +1207,10 @@ impl<C> SchedulerPool<C> {
     }
 
     fn create(&mut self) {
-        self.schedulers.push(Arc::new(Scheduler::default2()));
+        self.schedulers.push(Arc::new(Scheduler<C>::default2()));
     }
 
-    fn take_from_pool(&mut self) -> Arc<Scheduler> {
+    fn take_from_pool(&mut self) -> Arc<Scheduler<C>> {
         if let Some(scheduler) = self.schedulers.pop() {
             info!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -1225,7 +1225,7 @@ impl<C> SchedulerPool<C> {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Arc<Scheduler>) {
+    fn return_to_pool(&mut self, scheduler: Arc<Scheduler<C>>) {
         info!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
