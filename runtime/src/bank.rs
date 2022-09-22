@@ -1302,7 +1302,7 @@ impl<C> Scheduler<C> {
     }
 }
 
-impl<C> Scheduler<C> {
+impl Scheduler<ExecuteTimings> {
     fn default2() -> Self {
         let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
