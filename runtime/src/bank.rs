@@ -4294,7 +4294,7 @@ impl Bank {
             self.slot()
         );
 
-        let maybe_last_error = self.wait_for_scheduler(false);
+        let last_result = self.wait_for_scheduler(false);
         let scheduler = SCHEDULER_POOL.lock().unwrap().take_from_pool();
         let mut s2 = self.scheduler2.write().unwrap();
         *s2 = Some(scheduler);
@@ -4304,19 +4304,19 @@ impl Bank {
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         //let new_scheduler = Scheduler::default();
-        if maybe_last_error.is_err() {
+        if last_error.is_err() {
             warn!(
                 "register_recent_blockhash: carrying over this error: {:?}",
                 maybe_last_error
             );
+        }
             //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
             s2.as_ref()
                 .unwrap()
                 .collected_results
                 .lock()
                 .unwrap()
-                .push(maybe_last_error);
-        }
+                .push(last_result);
         //*self.scheduler.write().unwrap() = new_scheduler;
 
         info!(
