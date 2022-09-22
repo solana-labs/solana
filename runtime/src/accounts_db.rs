@@ -6531,10 +6531,8 @@ impl AccountsDb {
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
         let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        // we are going to use a fixed slots per epoch here.
-        // We are mainly interested in the network at steady state.
-        let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
-        let one_epoch_old_slot = max_slot_inclusive.saturating_sub(slots_in_epoch);
+        // artifically put this at 0 for now. Really, this should be: max_slot_inclusive.saturating_sub(slots_in_epoch);
+        let one_epoch_old_slot = 0;
 
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
