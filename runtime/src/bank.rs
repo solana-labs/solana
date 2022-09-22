@@ -1803,7 +1803,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler2: RwLock<Option<Arc<Scheduler>>>,
+    scheduler2: RwLock<Option<Arc<Scheduler<C>>>>,
 }
 
 struct VoteWithStakeDelegations {
