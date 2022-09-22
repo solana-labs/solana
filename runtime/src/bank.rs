@@ -8383,6 +8383,7 @@ impl Bank {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
+            let _r = scheduler.gracefully_stop().unwrap();
             let e = scheduler
                 .handle_aborted_executions()
                 .into_iter()
