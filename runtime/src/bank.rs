@@ -1601,7 +1601,7 @@ impl<C> Scheduler<C> {
         Ok(Some(r))
     }
 
-    fn handle_aborted_executions(&self) -> Vec<Result<()>> {
+    fn handle_aborted_executions(&self) -> Vec<Result<C>> {
         std::mem::take(&mut self.collected_errors.lock().unwrap())
     }
 }
