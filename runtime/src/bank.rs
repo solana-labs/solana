@@ -8382,7 +8382,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<Option<ExecuteTimings>> {
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
@@ -8400,7 +8400,7 @@ impl Bank {
                 via_drop, current_thread_name
             );
 
-            Ok(None)
+            Ok(Default::default())
         }
     }
 }
