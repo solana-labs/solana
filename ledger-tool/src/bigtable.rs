@@ -336,12 +336,23 @@ pub async fn transaction_history(
     Ok(())
 }
 
-async fn copy(
-    config: solana_storage_bigtable::LedgerStorageConfig,
+struct CopyArgs {
     from_slot: Slot,
     to_slot: Option<Slot>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let to_slot = to_slot.unwrap_or_else(|| from_slot + 1);
+}
+
+impl CopyArgs {
+    pub fn process(arg_matches: &ArgMatches) -> Self {
+        CopyArgs {
+            from_slot: value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0),
+            to_slot: value_t!(arg_matches, "ending_slot", Slot).ok(),
+        }
+    }
+}
+
+async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let from_slot = args.from_slot;
+    let to_slot = args.to_slot.unwrap_or_else(|| from_slot + 1);
     debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
 
     let (s, r) = unbounded::<u64>();
@@ -838,21 +849,7 @@ pub fn bigtable_process_command(
                 config,
             ))
         }
-        ("copy", Some(arg_matches)) => {
-            let from_slot = value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0);
-            let to_slot = value_t!(arg_matches, "ending_slot", Slot).ok();
-
-            runtime.block_on(copy(
-                solana_storage_bigtable::LedgerStorageConfig {
-                    read_only: true,
-                    instance_name,
-                    app_profile_id,
-                    ..solana_storage_bigtable::LedgerStorageConfig::default()
-                },
-                from_slot,
-                to_slot,
-            ))
-        }
+        ("copy", Some(arg_matches)) => runtime.block_on(copy(CopyArgs::process(arg_matches))),
         _ => unreachable!(),
     };
 
