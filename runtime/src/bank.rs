@@ -1447,15 +1447,15 @@ impl Scheduler<ExecuteTimings> {
                                 info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
                             }
 
-                            if ee.is_aborted() {
+                            if let Some(Err(e)) = ee.execution_result.take() {
                                 warn!(
                                     "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
-                                    ee.execution_result, ee.task.tx.0
+                                    e, ee.task.tx.0
                                 );
                                 collected_results_in_collector_thread
                                     .lock()
                                     .unwrap()
-                                    .push(ee.execution_result.take().unwrap().map(|a| Default::default()));
+                                    .push(Err(e));
                             }
                             drop(ee);
                         },
