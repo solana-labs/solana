@@ -1574,7 +1574,7 @@ impl<C> Scheduler<C> {
             .unwrap();
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
-        self.collected_results.lock().unwrap().push(Ok(Some(r)));
+        self.collected_results.lock().unwrap().push(Ok(r));
         {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
