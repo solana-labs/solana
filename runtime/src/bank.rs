@@ -1455,7 +1455,7 @@ impl Scheduler<ExecuteTimings> {
                                 collected_errors_in_collector_thread
                                     .lock()
                                     .unwrap()
-                                    .push(ee.execution_result.take().unwrap());
+                                    .push(ee.execution_result.take().unwrap().map(|a| Default::default()));
                             }
                             drop(ee);
                         },
