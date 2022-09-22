@@ -6704,7 +6704,7 @@ impl Bank {
                 drop(ss);
 
                 let s = self.scheduler2.read().unwrap();
-                info!("reconfigured scheduler to the bank slot: {}", self.slot());
+                trace!("reconfigured scheduler to the bank slot: {}", self.slot());
                 s
             } else {
                 assert_eq!(
