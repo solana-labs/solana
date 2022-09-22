@@ -2506,7 +2506,7 @@ impl ReplayStage {
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let r_replay_stats = replay_stats.read().unwrap();
-                let mut metrics = ExecuteBatchesInternalMetrics::default();
+                let mut metrics = solana_ledger::blockstore_processor::ExecuteBatchesInternalMetrics::default();
                 metrics.execution_timings_per_thread.insert(0, r);
                 r_replay_stats.process_execute_batches_internal_metrics(metrics);
                 let replay_progress = bank_progress.replay_progress.clone();
