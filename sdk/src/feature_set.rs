@@ -407,6 +407,17 @@ pub mod preserve_rent_epoch_for_rent_exempt_accounts {
     solana_sdk::declare_id!("HH3MUYReL2BvqqA3oEcAa7txju5GY6G4nxJ51zvsEjEZ");
 }
 
+<<<<<<< HEAD
+=======
+pub mod enable_bpf_loader_extend_program_ix {
+    solana_sdk::declare_id!("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme");
+}
+
+pub mod enable_early_verification_of_account_modifications {
+    solana_sdk::declare_id!("7Vced912WrRnfjaiKRiNBcbuFw7RrnLv3E3z95Y4GTNc");
+}
+
+>>>>>>> 108b245e6 (Require program account to be writable in extend program data ix (#27911))
 pub mod prevent_crediting_accounts_that_end_rent_paying {
     solana_sdk::declare_id!("812kqX67odAp5NFwM8D2N24cku7WTm9CHUTFUXaDkWPn");
 }
@@ -523,6 +534,11 @@ lazy_static! {
         (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
+<<<<<<< HEAD
+=======
+        (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
+        (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+>>>>>>> 108b245e6 (Require program account to be writable in extend program data ix (#27911))
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
