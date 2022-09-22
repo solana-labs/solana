@@ -37,11 +37,15 @@ if [[ -z $CI_TAG ]]; then
       source scripts/read-cargo-variable.sh
 
       version=$(readCargoVariable version "version/Cargo.toml")
-      echo "version: v$version"
       echo "latest channel tag: $CHANNEL_LATEST_TAG"
+      echo "current version: v$version"
 
       if [[ $CHANNEL_LATEST_TAG = v$version ]]; then
-        echo "Error: please run ./scripts/increment-cargo-version.sh"
+        echo "Error: A release has been tagged since your feature branch was created. <current version> should be greater than <latest channel tag>.
+        Possible solutions (in the order they should be tried):
+        - rebase your feature branch on the base branch
+        - merge the PR: \"Bump Version to <$version+1>\" and then rebase
+        - ask for help in #devops."
         exit 1
       fi
     else
