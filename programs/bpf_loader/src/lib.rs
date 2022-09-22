@@ -1049,20 +1049,12 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidInstructionData);
             }
 
-<<<<<<< HEAD
             const PROGRAM_DATA_ACCOUNT_INDEX: usize = 0;
+            const PROGRAM_ACCOUNT_INDEX: usize = 1;
             #[allow(dead_code)]
             // System program is only required when a CPI is performed
-            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
-            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 2;
-=======
-            const PROGRAM_DATA_ACCOUNT_INDEX: IndexOfAccount = 0;
-            const PROGRAM_ACCOUNT_INDEX: IndexOfAccount = 1;
-            #[allow(dead_code)]
-            // System program is only required when a CPI is performed
-            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: IndexOfAccount = 2;
-            const OPTIONAL_PAYER_ACCOUNT_INDEX: IndexOfAccount = 3;
->>>>>>> 108b245e6 (Require program account to be writable in extend program data ix (#27911))
+            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 2;
+            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 3;
 
             let programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
