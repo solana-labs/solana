@@ -8387,8 +8387,8 @@ impl Bank {
             let e = scheduler
                 .handle_aborted_executions()
                 .into_iter()
-                .next()
                 .map_ok(|_| r)
+                .next()
                 .or(Ok(r));
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
