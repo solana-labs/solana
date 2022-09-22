@@ -4307,7 +4307,7 @@ impl Bank {
         if last_result.is_err() {
             warn!(
                 "register_recent_blockhash: carrying over this error: {:?}",
-                maybe_last_error
+                last_result
             );
         }
             //new_scheduler.collected_results.lock().unwrap().push(maybe_last_error);
