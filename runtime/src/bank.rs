@@ -8389,7 +8389,7 @@ impl Bank {
                 .into_iter()
                 .map_ok(|_| r)
                 .next()
-                .or(Ok(r));
+                .or(r);
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
