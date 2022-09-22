@@ -159,8 +159,14 @@ the minimum rent-exempt balance for your deposit accounts, query the
 [`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getMinimumBalanceForRentExemption",
+  "params":[0]
+}'
 
+# Result
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
@@ -216,8 +222,14 @@ Solana API node.
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlocks","params":[5]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getBlocks",
+  "params": [5]
+}'
 
+# Result
 {"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
 ```
 
@@ -225,11 +237,37 @@ Not every slot produces a block, so there may be gaps in the sequence of integer
 
 - For each block, request its contents with a [`getBlock` request](developing/clients/jsonrpc-api.md#getblock):
 
-```bash
-curl -X POST -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1, "method":"getBlock","params":[148696677, {"encoding":"jsonParsed","rewards":false,"maxSupportedTransactionVersion":0}]}' \
-  http://localhost:8899
+### Block Fetching Tips
 
+- `{"rewards": false}`
+
+By default, fetched blocks will return information about validator fees on each
+block and staking rewards on epoch boundaries. If you don't need this
+information, disable it with the "rewards" parameter.
+
+- `{"transactionDetails": "accounts"}`
+
+By default, fetched blocks will return a lot of transaction info and metadata
+that isn't necessary for tracking account balances. Set the "transactionDetails"
+parameter to speed up block fetching.
+
+```bash
+curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getBlock",
+  "params": [
+    148696677,
+    {
+      "encoding": "jsonParsed",
+      "maxSupportedTransactionVersion": 0,
+      "transactionDetails": "accounts",
+      "rewards": false
+    }
+  ]
+}'
+
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
@@ -243,15 +281,6 @@ curl -X POST -H 'Content-Type: application/json' \
         "meta": {
           "err": null,
           "fee": 5000,
-          "innerInstructions": [],
-          "loadedAddresses": {
-            "writable": [],
-            "readonly": []
-          },
-          "logMessages": [
-            "Program 11111111111111111111111111111111 invoke [1]",
-            "Program 11111111111111111111111111111111 success"
-          ],
           "postBalances": [
             7161091286,
             2769675090,
@@ -264,47 +293,31 @@ curl -X POST -H 'Content-Type: application/json' \
             1
           ],
           "preTokenBalances": [],
-          "rewards": [],
           "status": {
             "Ok": null
           }
         },
         "transaction": {
-          "message": {
-            "accountKeys": [
-              {
-                "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
-                "signer": true,
-                "writable": true
-              },
-              {
-                "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
-                "signer": false,
-                "writable": true
-              },
-              {
-                "pubkey": "11111111111111111111111111111111",
-                "signer": false,
-                "writable": false
-              }
-            ],
-            "addressTableLookups": null,
-            "instructions": [
-              {
-                "parsed": {
-                  "info": {
-                    "destination": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
-                    "lamports": 969480042,
-                    "source": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri"
-                  },
-                  "type": "transfer"
-                },
-                "program": "system",
-                "programId": "11111111111111111111111111111111"
-              }
-            ],
-            "recentBlockhash": "3rD1wetABxx8NurveZGN6kDhQTRL2GQbT3S4rAkpRVm6"
-          },
+          "accountKeys": [
+            {
+              "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
+              "signer": true,
+              "source": "transaction",
+              "writable": true
+            },
+            {
+              "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+              "signer": false,
+              "source": "transaction",
+              "writable": true
+            },
+            {
+              "pubkey": "11111111111111111111111111111111",
+              "signer": false,
+              "source": "transaction",
+              "writable": false
+            }
+          ],
           "signatures": [
             "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs"
           ]
@@ -341,8 +354,19 @@ time.
   request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getSignaturesForAddress","params":["3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN", {"limit": 3}]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getSignaturesForAddress",
+  "params": [
+    "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+    {
+      "limit": 3
+    }
+  ]
+}'
 
+# Result
 {
   "jsonrpc": "2.0",
   "result": [
@@ -379,37 +403,42 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
   [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
 
 ```bash
-curl -X POST -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1, "method":"getTransaction","params":["36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs", {"encoding":"jsonParsed","maxSupportedTransactionVersion":0}]}' \
-  http://localhost:8899
+curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
+  "jsonrpc":"2.0",
+  "id":1,
+  "method":"getTransaction",
+  "params":[
+    "4Cswku8E9sm8TVZ4kP4iHbwCQygMDx78SXSURBkJuJAaXCbL9eYM8RPS2BDooLd5ftML4JjQrohe4deJrFkVzPBa",
+    {
+      "encoding":"jsonParsed",
+      "maxSupportedTransactionVersion":0
+    }
+  ]
+}'
 
-// Result
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
-    "blockTime": 1662064341,
+    "blockTime": 1660763773,
     "meta": {
       "err": null,
       "fee": 5000,
       "innerInstructions": [],
-      "loadedAddresses": {
-        "writable": [],
-        "readonly": []
-      },
       "logMessages": [
         "Program 11111111111111111111111111111111 invoke [1]",
         "Program 11111111111111111111111111111111 success"
       ],
       "postBalances": [
-        7161091286,
-        2769675090,
-        1
+        2078778739,
+        1,
+        26396753106
       ],
       "postTokenBalances": [],
       "preBalances": [
-        8130576328,
-        1800195048,
-        1
+        2078783740,
+        1,
+        26396753105
       ],
       "preTokenBalances": [],
       "rewards": [],
@@ -417,34 +446,45 @@ curl -X POST -H 'Content-Type: application/json' \
         "Ok": null
       }
     },
-    "slot": 148696677,
+    "slot": 155713260,
     "transaction": {
       "message": {
         "accountKeys": [
           {
-            "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
+            "pubkey": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde",
             "signer": true,
-            "writable": true
-          },
-          {
-            "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
-            "signer": false,
+            "source": "transaction",
             "writable": true
           },
           {
             "pubkey": "11111111111111111111111111111111",
             "signer": false,
+            "source": "transaction",
             "writable": false
+          },
+          {
+            "pubkey": "2xNweLHLqrbx4zo1waDvgWJHgsUpPj8Y8icbAFeR4a8i",
+            "signer": false,
+            "source": "lookupTable",
+            "writable": true
           }
         ],
-        "addressTableLookups": null,
+        "addressTableLookups": [
+          {
+            "accountKey": "3LZbwptsCkv5R5uu1GNZKiX9SoC6egNG8NXg9zH5ZVM9",
+            "readonlyIndexes": [],
+            "writableIndexes": [
+              1
+            ]
+          }
+        ],
         "instructions": [
           {
             "parsed": {
               "info": {
-                "destination": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
-                "lamports": 969480042,
-                "source": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri"
+                "destination": "2xNweLHLqrbx4zo1waDvgWJHgsUpPj8Y8icbAFeR4a8i",
+                "lamports": 1,
+                "source": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde"
               },
               "type": "transfer"
             },
@@ -452,13 +492,13 @@ curl -X POST -H 'Content-Type: application/json' \
             "programId": "11111111111111111111111111111111"
           }
         ],
-        "recentBlockhash": "3rD1wetABxx8NurveZGN6kDhQTRL2GQbT3S4rAkpRVm6"
+        "recentBlockhash": "9nLh3gmVhyjrh68UeV1rafyo8BFNyZtHSRUUjZYikveh"
       },
       "signatures": [
-        "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs"
+        "4Cswku8E9sm8TVZ4kP4iHbwCQygMDx78SXSURBkJuJAaXCbL9eYM8RPS2BDooLd5ftML4JjQrohe4deJrFkVzPBa"
       ]
     },
-    "version": "legacy"
+    "version": 0
   },
   "id": 1
 }
@@ -528,8 +568,19 @@ The `confirmations` field reports how many
 transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0", "id":1, "method":"getSignatureStatuses", "params":[["5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"]]}' http://localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc":"2.0",
+  "id":1,
+  "method":"getSignatureStatuses",
+  "params":[
+    [
+      "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+      "5j7s6NiJS3JAkvgkoc18WVAsiSaci2pxB2A6ueCJP4tprA2TFg9wSyTLeYouxPBJEMzJinENTkpA52YStRW5Dia7"
+    ]
+  ]
+}'
 
+# Result
 {
   "jsonrpc": "2.0",
   "result": {
@@ -573,7 +624,7 @@ As withdrawals are irreversible, it may be a good practice to validate a
 user-supplied account address before authorizing a withdrawal in order to
 prevent accidental loss of user funds.
 
-#### Basic verfication
+#### Basic verification
 
 Solana addresses a 32-byte array, encoded with the bitcoin base58 alphabet. This
 results in an ASCII text string matching the following regular expression:
@@ -668,8 +719,14 @@ holding no data), currently: 0.000890880 SOL
 Similarly, every deposit account must contain at least this balance.
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getMinimumBalanceForRentExemption","params":[0]}' localhost:8899
+curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "getMinimumBalanceForRentExemption",
+  "params": [0]
+}'
 
+# Result
 {"jsonrpc":"2.0","result":890880,"id":1}
 ```
 
