@@ -300,13 +300,19 @@ pub fn close_any(
     Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::Close, metas)
 }
 
-/// Returns the instruction required to extend the size of a program data account
-pub fn extend_program_data(
-    program_data_address: &Pubkey,
+/// Returns the instruction required to extend the size of a program's
+/// executable data account
+pub fn extend_program(
+    program_address: &Pubkey,
     payer_address: Option<&Pubkey>,
     additional_bytes: u32,
 ) -> Instruction {
-    let mut metas = vec![AccountMeta::new(*program_data_address, false)];
+    let (program_data_address, _) =
+        Pubkey::find_program_address(&[program_address.as_ref()], &id());
+    let mut metas = vec![
+        AccountMeta::new(program_data_address, false),
+        AccountMeta::new(*program_address, false),
+    ];
     if let Some(payer_address) = payer_address {
         metas.push(AccountMeta::new_readonly(
             crate::system_program::id(),
@@ -316,7 +322,7 @@ pub fn extend_program_data(
     }
     Instruction::new_with_bincode(
         id(),
-        &UpgradeableLoaderInstruction::ExtendProgramData { additional_bytes },
+        &UpgradeableLoaderInstruction::ExtendProgram { additional_bytes },
         metas,
     )
 }

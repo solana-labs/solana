@@ -44,8 +44,8 @@ use {
             cap_accounts_data_len, cap_bpf_program_instruction_accounts,
             disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
-            enable_bpf_loader_extend_program_data_ix,
-            error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
+            enable_bpf_loader_extend_program_ix, error_on_syscall_bpf_function_hash_collisions,
+            reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -1036,10 +1036,10 @@ fn process_loader_upgradeable_instruction(
                 }
             }
         }
-        UpgradeableLoaderInstruction::ExtendProgramData { additional_bytes } => {
+        UpgradeableLoaderInstruction::ExtendProgram { additional_bytes } => {
             if !invoke_context
                 .feature_set
-                .is_active(&enable_bpf_loader_extend_program_data_ix::ID)
+                .is_active(&enable_bpf_loader_extend_program_ix::ID)
             {
                 return Err(InstructionError::InvalidInstructionData);
             }
@@ -1050,10 +1050,11 @@ fn process_loader_upgradeable_instruction(
             }
 
             const PROGRAM_DATA_ACCOUNT_INDEX: usize = 0;
+            const PROGRAM_ACCOUNT_INDEX: usize = 1;
             #[allow(dead_code)]
             // System program is only required when a CPI is performed
-            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
-            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 2;
+            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 2;
+            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 3;
 
             let programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
@@ -1067,6 +1068,35 @@ fn process_loader_upgradeable_instruction(
                 ic_logger_msg!(log_collector, "ProgramData is not writable");
                 return Err(InstructionError::InvalidArgument);
             }
+
+            let program_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_ACCOUNT_INDEX)?;
+            if !program_account.is_writable() {
+                ic_logger_msg!(log_collector, "Program account is not writable");
+                return Err(InstructionError::InvalidArgument);
+            }
+            if program_account.get_owner() != program_id {
+                ic_logger_msg!(log_collector, "Program account not owned by loader");
+                return Err(InstructionError::InvalidAccountOwner);
+            }
+            match program_account.get_state()? {
+                UpgradeableLoaderState::Program {
+                    programdata_address,
+                } => {
+                    if programdata_address != programdata_key {
+                        ic_logger_msg!(
+                            log_collector,
+                            "Program account does not match ProgramData account"
+                        );
+                        return Err(InstructionError::InvalidArgument);
+                    }
+                }
+                _ => {
+                    ic_logger_msg!(log_collector, "Invalid Program account");
+                    return Err(InstructionError::InvalidAccountData);
+                }
+            }
+            drop(program_account);
 
             let old_len = programdata_account.get_data().len();
             let new_len = old_len.saturating_add(additional_bytes as usize);
