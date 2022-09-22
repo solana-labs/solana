@@ -1199,7 +1199,7 @@ struct SchedulerPool<C> {
     schedulers: Vec<Arc<Scheduler<C>>>,
 }
 
-impl<C> SchedulerPool<C> {
+impl SchedulerPool<ExecuteTimings> {
     const fn new() -> Self {
         Self {
             schedulers: Vec::new(),
@@ -1207,10 +1207,10 @@ impl<C> SchedulerPool<C> {
     }
 
     fn create(&mut self) {
-        self.schedulers.push(Arc::new(Scheduler::<C>::default2()));
+        self.schedulers.push(Arc::new(Scheduler::<ExecuteTimings>::default2()));
     }
 
-    fn take_from_pool(&mut self) -> Arc<Scheduler<C>> {
+    fn take_from_pool(&mut self) -> Arc<Scheduler<ExecuteTimings>> {
         if let Some(scheduler) = self.schedulers.pop() {
             info!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
@@ -1225,7 +1225,7 @@ impl<C> SchedulerPool<C> {
         }
     }
 
-    fn return_to_pool(&mut self, scheduler: Arc<Scheduler<C>>) {
+    fn return_to_pool(&mut self, scheduler: Arc<Scheduler<ExecuteTimings>>) {
         info!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
