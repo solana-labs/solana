@@ -6838,6 +6838,27 @@ impl AccountsDb {
         }
     }
 
+    /// if ancient append vecs are enabled, return a slot one epoch old from 'max_slot_inclusive'
+    /// otherwise, return 0
+    fn get_one_epoch_old_slot_for_hash_calc_scan(
+        &self,
+        max_slot_inclusive: Slot,
+        config: &CalcAccountsHashConfig<'_>,
+    ) -> Slot {
+        if self.ancient_append_vecs {
+            // we are going to use a fixed slots per epoch here.
+            // We are mainly interested in the network at steady state.
+            let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
+            // For performance, this is required when ancient appendvecs are enabled
+            max_slot_inclusive.saturating_sub(slots_in_epoch)
+        } else {
+            // This causes the entire range to be chunked together, treating older append vecs just like new ones.
+            // This performs well if there are many old append vecs that haven't been cleaned yet.
+            // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
+            0
+        }
+    }
+
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<S>(
         &self,
@@ -6861,10 +6882,8 @@ impl AccountsDb {
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
         let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        // we are going to use a fixed slots per epoch here.
-        // We are mainly interested in the network at steady state.
-        let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
-        let one_epoch_old_slot = max_slot_inclusive.saturating_sub(slots_in_epoch);
+        let one_epoch_old_slot =
+            self.get_one_epoch_old_slot_for_hash_calc_scan(max_slot_inclusive, config);
 
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
@@ -16108,6 +16127,28 @@ pub mod tests {
             &HashSet::default(),
         );
         assert_eq!(db.accounts_index.ref_count_from_storage(&pk1), 0);
+    }
+
+    #[test]
+    fn test_get_one_epoch_old_slot_for_hash_calc_scan() {
+        let mut db = AccountsDb::new_single_for_tests();
+        let config = CalcAccountsHashConfig::default();
+        let slot = config.epoch_schedule.slots_per_epoch;
+        assert_ne!(slot, 0);
+        let offset = 10;
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
+            0
+        );
+        db.ancient_append_vecs = true;
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot, &config),
+            0
+        );
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
+            offset
+        );
     }
 
     #[test]
