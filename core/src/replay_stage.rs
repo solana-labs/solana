@@ -2498,7 +2498,7 @@ impl ReplayStage {
                     // bank is completed
                     continue;
                 }
-                let cumulative_timings2 = ThreadExecuteTimings {
+                let cumulative_timings2 = solana_program_runtime::timings::ThreadExecuteTimings {
                     execute_timings: cumulative_timings.unwrap(),
                     ..Default::default()
                 };
