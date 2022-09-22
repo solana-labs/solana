@@ -441,7 +441,7 @@ pub fn archive_snapshot_package(
     // Atomically move the archive into position for other validators to find
     let metadata = fs::metadata(&archive_path)
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
-    fs::rename(&archive_path, &snapshot_package.path())
+    fs::rename(&archive_path, snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
     purge_old_snapshot_archives(
@@ -1628,10 +1628,8 @@ pub fn purge_old_snapshot_archives(
         incremental_snapshot_archives.sort_unstable();
         let num_to_retain = if Some(base_slot) == highest_full_snapshot_slot {
             maximum_incremental_snapshot_archives_to_retain
-        } else if retained_full_snapshot_slots.contains(&base_slot) {
-            1
         } else {
-            0
+            usize::from(retained_full_snapshot_slots.contains(&base_slot))
         };
         trace!(
             "There are {} incremental snapshot archives for base slot {}, removing {} of them",
@@ -1691,7 +1689,7 @@ fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
 ) -> SharedBuffer {
-    let open_file = || File::open(&snapshot_tar).unwrap();
+    let open_file = || File::open(snapshot_tar).unwrap();
     match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
@@ -3062,7 +3060,7 @@ mod tests {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
 
         for snap_name in snapshot_names {
-            let snap_path = temp_snap_dir.path().join(&snap_name);
+            let snap_path = temp_snap_dir.path().join(snap_name);
             let mut _snap_file = File::create(snap_path);
         }
         purge_old_snapshot_archives(

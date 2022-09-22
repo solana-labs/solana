@@ -192,7 +192,7 @@ pub mod tests {
         ) {
             self.accounts_notified
                 .entry(meta.pubkey)
-                .or_insert(Vec::default())
+                .or_default()
                 .push((slot, account.clone()));
         }
 
@@ -201,7 +201,7 @@ pub mod tests {
         fn notify_account_restore_from_snapshot(&self, slot: Slot, account: &StoredAccountMeta) {
             self.accounts_notified
                 .entry(account.meta.pubkey)
-                .or_insert(Vec::default())
+                .or_default()
                 .push((slot, account.clone_account()));
         }
 

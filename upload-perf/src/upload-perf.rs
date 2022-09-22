@@ -43,7 +43,7 @@ fn main() {
     let upload_metrics = args.len() > 2;
 
     let git_output = Command::new("git")
-        .args(&["rev-parse", "HEAD"])
+        .args(["rev-parse", "HEAD"])
         .output()
         .expect("failed to execute git rev-parse");
     let git_commit_hash = String::from_utf8_lossy(&git_output.stdout);

@@ -396,7 +396,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
     for dir in default_shared_object_dirs() {
-        let candidate = dir.join(&filename);
+        let candidate = dir.join(filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -604,7 +604,7 @@ impl ProgramTest {
                     })
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "".to_string())
+                    .unwrap_or_default()
             );
 
             this.add_account(

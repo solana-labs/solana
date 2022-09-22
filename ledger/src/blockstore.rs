@@ -234,7 +234,7 @@ impl Blockstore {
     }
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
-        fs::create_dir_all(&ledger_path)?;
+        fs::create_dir_all(ledger_path)?;
         let blockstore_path = ledger_path.join(
             options
                 .column_options
@@ -2579,7 +2579,7 @@ impl Blockstore {
         // Check the active_transaction_status_index to see if it contains slot. If so, start with
         // that index, as it will contain higher slots
         let starting_primary_index = *self.active_transaction_status_index.read().unwrap();
-        let next_primary_index = if starting_primary_index == 0 { 1 } else { 0 };
+        let next_primary_index = u64::from(starting_primary_index == 0);
         let next_max_slot = self
             .transaction_status_index_cf
             .get(next_primary_index)?

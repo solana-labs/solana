@@ -52,7 +52,7 @@ fn tune_poh_service_priority(uid: u32) {
         info!("PoH thread PID is {}", pid);
         let pid = format!("{}", pid);
         let output = Command::new("chrt")
-            .args(&["-r", "-p", "99", pid.as_str()])
+            .args(["-r", "-p", "99", pid.as_str()])
             .output()
             .expect("Expected to set priority of thread");
         if output.status.success() {

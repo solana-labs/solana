@@ -924,7 +924,7 @@ pub fn test_process_distribute_tokens_with_client(
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
-    wtr.write_record(&["recipient", "amount"]).unwrap();
+    wtr.write_record(["recipient", "amount"]).unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
         lamports_to_sol(expected_amount).to_string(),
@@ -1024,7 +1024,7 @@ pub fn test_process_create_stake_with_client(client: &RpcClient, sender_keypair:
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
@@ -1146,7 +1146,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),

@@ -257,7 +257,7 @@ impl Rocks {
         let access_type = options.access_type.clone();
         let recovery_mode = options.recovery_mode.clone();
 
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(path)?;
 
         // Use default database options
         if should_disable_auto_compactions(&access_type) {

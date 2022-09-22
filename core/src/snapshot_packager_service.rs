@@ -298,7 +298,7 @@ mod tests {
             .collect();
 
         // Create directory of hard links for snapshots
-        let link_snapshots_dir = tempfile::tempdir_in(&temp_dir).unwrap();
+        let link_snapshots_dir = tempfile::tempdir_in(temp_dir).unwrap();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
             let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);

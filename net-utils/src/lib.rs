@@ -523,7 +523,7 @@ pub fn bind_common(
     let addr = SocketAddr::new(ip_addr, port);
     let sock_addr = SockAddr::from(addr);
     sock.bind(&sock_addr)
-        .and_then(|_| TcpListener::bind(&addr).map(|listener| (sock.into(), listener)))
+        .and_then(|_| TcpListener::bind(addr).map(|listener| (sock.into(), listener)))
 }
 
 pub fn bind_two_in_range_with_offset(

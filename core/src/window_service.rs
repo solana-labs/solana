@@ -426,7 +426,7 @@ impl WindowService {
                         &verified_receiver,
                         &blockstore,
                         &leader_schedule_cache,
-                        &handle_duplicate,
+                        handle_duplicate,
                         &mut metrics,
                         &mut ws_metrics,
                         &completed_data_sets_sender,
