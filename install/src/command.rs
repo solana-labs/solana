@@ -167,7 +167,7 @@ fn extract_release_archive(
     progress_bar.set_message(format!("{}Extracting...", PACKAGE));
 
     if extract_dir.exists() {
-        let _ = fs::remove_dir_all(&extract_dir);
+        let _ = fs::remove_dir_all(extract_dir);
     }
 
     let tmp_extract_dir = extract_dir.with_file_name("tmp-extract");
@@ -188,7 +188,7 @@ fn extract_release_archive(
 }
 
 fn load_release_version(version_yml: &Path) -> Result<ReleaseVersion, String> {
-    let file = File::open(&version_yml)
+    let file = File::open(version_yml)
         .map_err(|err| format!("Unable to open {:?}: {:?}", version_yml, err))?;
     let version: ReleaseVersion = serde_yaml::from_reader(file)
         .map_err(|err| format!("Unable to parse {:?}: {:?}", version_yml, err))?;

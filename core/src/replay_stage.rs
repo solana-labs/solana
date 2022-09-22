@@ -935,7 +935,7 @@ impl ReplayStage {
                         replay_active_banks_time.as_us(),
                         wait_receive_time.as_us(),
                         heaviest_fork_failures_time.as_us(),
-                        if did_complete_bank {1} else {0},
+                        u64::from(did_complete_bank),
                         process_gossip_duplicate_confirmed_slots_time.as_us(),
                         process_unfrozen_gossip_verified_vote_hashes_time.as_us(),
                         process_duplicate_slots_time.as_us(),

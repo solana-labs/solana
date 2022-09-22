@@ -15977,7 +15977,7 @@ pub mod tests {
                 vec![(pk1, vec![slot1].into_iter().collect::<HashSet<_>>())],
                 purged_stored_account_slots.into_iter().collect::<Vec<_>>()
             );
-            let expected = if already_removed { 1 } else { 0 };
+            let expected = u64::from(already_removed);
             assert_eq!(db.accounts_index.ref_count_from_storage(&pk1), expected);
         }
     }

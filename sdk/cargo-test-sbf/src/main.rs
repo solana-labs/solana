@@ -319,7 +319,7 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(&["bpf", "sbf", "sbfv2"])
+                .possible_values(["bpf", "sbf", "sbfv2"])
                 .default_value("sbf")
                 .help("Build for the given SBF version"),
         )

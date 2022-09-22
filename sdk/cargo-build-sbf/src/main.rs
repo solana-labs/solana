@@ -141,7 +141,7 @@ fn install_if_missing(
             .next()
             .is_none()
     {
-        fs::remove_dir(&target_path).map_err(|err| err.to_string())?;
+        fs::remove_dir(target_path).map_err(|err| err.to_string())?;
     }
 
     // Check whether the package is already in ~/.cache/solana.
@@ -153,9 +153,9 @@ fn install_if_missing(
             .unwrap_or(false)
     {
         if target_path.exists() {
-            fs::remove_file(&target_path).map_err(|err| err.to_string())?;
+            fs::remove_file(target_path).map_err(|err| err.to_string())?;
         }
-        fs::create_dir_all(&target_path).map_err(|err| err.to_string())?;
+        fs::create_dir_all(target_path).map_err(|err| err.to_string())?;
         let mut url = String::from(url);
         url.push('/');
         url.push_str(config.sbf_tools_version);
@@ -169,9 +169,7 @@ fn install_if_missing(
         let zip = File::open(&download_file_path).map_err(|err| err.to_string())?;
         let tar = BzDecoder::new(BufReader::new(zip));
         let mut archive = Archive::new(tar);
-        archive
-            .unpack(&target_path)
-            .map_err(|err| err.to_string())?;
+        archive.unpack(target_path).map_err(|err| err.to_string())?;
         fs::remove_file(download_file_path).map_err(|err| err.to_string())?;
     }
     // Make a symbolic link source_path -> target_path in the
@@ -475,7 +473,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         })
         .join("release");
 
-    env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
+    env::set_current_dir(root_package_dir).unwrap_or_else(|err| {
         error!(
             "Unable to set current directory to {}: {}",
             root_package_dir, err
@@ -536,7 +534,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         // The package version directory doesn't contain a valid
         // installation, and it should be removed.
         let target_path_parent = target_path.parent().expect("Invalid package path");
-        fs::remove_dir_all(&target_path_parent).unwrap_or_else(|err| {
+        fs::remove_dir_all(target_path_parent).unwrap_or_else(|err| {
             error!(
                 "Failed to remove {} while recovering from installation failure: {}",
                 target_path_parent.to_string_lossy(),
@@ -711,7 +709,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             #[cfg(not(windows))]
             let output = spawn(
                 &config.sbf_sdk.join("scripts").join("strip.sh"),
-                &[&program_unstripped_so, &program_so],
+                [&program_unstripped_so, &program_so],
                 config.generate_child_script_on_failure,
             );
             if config.verbose {
@@ -734,7 +732,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             {
                 let output = spawn(
                     &dump_script,
-                    &[&program_unstripped_so, &program_dump],
+                    [&program_unstripped_so, &program_dump],
                     config.generate_child_script_on_failure,
                 );
                 if config.verbose {
@@ -752,7 +750,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
             let output = spawn(
                 llvm_objcopy,
-                &[
+                [
                     "--only-keep-debug".as_ref(),
                     program_unstripped_so.as_os_str(),
                     program_debug.as_os_str(),
@@ -939,7 +937,7 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(&["bpf", "sbf", "sbfv2"])
+                .possible_values(["bpf", "sbf", "sbfv2"])
                 .default_value("sbf")
                 .help("Build for the given SBF version"),
         )

@@ -2072,7 +2072,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         return;
     }
 
-    if let Err(err) = std::fs::rename(&path, &path_delete) {
+    if let Err(err) = std::fs::rename(path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
@@ -2094,7 +2094,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
 fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
-    if let Ok(dir_entries) = std::fs::read_dir(&path) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
         for entry in dir_entries.flatten() {
             let sub_path = entry.path();
             let metadata = match entry.metadata() {

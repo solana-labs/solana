@@ -818,7 +818,7 @@ impl RpcSubscriptions {
                             {
                                 debug!("slot notify: {:?}", slot_info);
                                 inc_new_counter_info!("rpc-subscription-notify-slot", 1);
-                                notifier.notify(&slot_info, sub, false);
+                                notifier.notify(slot_info, sub, false);
                             }
                         }
                         NotificationEntry::SlotUpdate(slot_update) => {
@@ -857,7 +857,7 @@ impl RpcSubscriptions {
                             {
                                 debug!("root notify: {:?}", root);
                                 inc_new_counter_info!("rpc-subscription-notify-root", 1);
-                                notifier.notify(&root, sub, false);
+                                notifier.notify(root, sub, false);
                             }
                         }
                         NotificationEntry::Bank(commitment_slots) => {

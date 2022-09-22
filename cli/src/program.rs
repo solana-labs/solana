@@ -818,7 +818,7 @@ fn get_default_program_keypair(program_location: &Option<String>) -> Keypair {
             filename.push("-keypair");
             keypair_file.set_file_name(filename);
             keypair_file.set_extension("json");
-            if let Ok(keypair) = read_keypair_file(&keypair_file.to_str().unwrap()) {
+            if let Ok(keypair) = read_keypair_file(keypair_file.to_str().unwrap()) {
                 keypair
             } else {
                 Keypair::new()

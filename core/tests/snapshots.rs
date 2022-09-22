@@ -452,7 +452,7 @@ fn test_concurrent_snapshot_packaging(
     // currently sitting in the channel
     snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
+    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
     assert!(bank_snapshots
         .into_iter()
