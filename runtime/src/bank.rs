@@ -8379,7 +8379,7 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<ExecuteTimings> {
+    pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<Option<ExecuteTimings>> {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
