@@ -1557,7 +1557,7 @@ impl<C> Scheduler<C> {
         self.graceful_stop_initiated
             .store(true, std::sync::atomic::Ordering::SeqCst);
 
-        info!(
+        trace!(
             "Scheduler::gracefully_stop(): id_{:016x} waiting..",
             self.random_id
         );

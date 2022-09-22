@@ -2062,7 +2062,7 @@ impl<T> Checkpoint<T> {
 
     pub fn take_restart_value(&self) -> T {
         let mut g = self.0.lock().unwrap();
-        let (self_remaining_threads, self_return_value) = &mut *g;
+        let (_self_remaining_threads, self_return_value) = &mut *g;
         self_return_value.take().unwrap()
     }
 
