@@ -2506,7 +2506,9 @@ impl ReplayStage {
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let r_replay_stats = replay_stats.read().unwrap();
-                r_replay_stats.process_execute_batches_internal_metrics(3);
+                let mut metrics = ExecuteBatchesInternalMetrics::default();
+                metrics.execution_timings_per_thread.insert(0, r);
+                r_replay_stats.process_execute_batches_internal_metrics(metrics);
                 let replay_progress = bank_progress.replay_progress.clone();
                 let r_replay_progress = replay_progress.read().unwrap();
                 debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
