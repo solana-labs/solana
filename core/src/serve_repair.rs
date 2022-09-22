@@ -672,10 +672,9 @@ impl ServeRepair {
                 continue;
             }
 
-            if request.supports_signature()
-                && !Self::verify_signed_packet(&my_id, packet, &request, stats)
-            {
-                continue;
+            if request.supports_signature() {
+                // collect stats for signature verification
+                Self::verify_signed_packet(&my_id, packet, &request, stats);
             }
 
             let from_addr = packet.meta.socket_addr();
