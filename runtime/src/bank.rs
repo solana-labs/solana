@@ -1543,16 +1543,16 @@ impl Scheduler<ExecuteTimings> {
 }
 
 impl<C> Scheduler<C> {
-    fn gracefully_stop(&self) -> Result<C> {
+    fn gracefully_stop(&self) -> Result<Option<C>> {
         if self
             .graceful_stop_initiated
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            info!(
+            warn!(
                 "Scheduler::gracefully_stop(): id_{:016x} (skipped..?)",
                 self.random_id
             );
-            return Ok(());
+            return Ok(None);
         }
         self.graceful_stop_initiated
             .store(true, std::sync::atomic::Ordering::SeqCst);
