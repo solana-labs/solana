@@ -1263,7 +1263,7 @@ struct Scheduler<C> {
     slot: AtomicU64,
 }
 
-impl Scheduler {
+impl<C> Scheduler<C> {
     fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
         trace!("Scheduler::schedule()");
         #[derive(Clone, Copy, Debug)]
