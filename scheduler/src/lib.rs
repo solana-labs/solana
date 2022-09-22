@@ -2060,6 +2060,12 @@ impl<T> Checkpoint<T> {
         }
     }
 
+    pub fn take_restart_value(&self) -> T {
+        let mut g = self.0.lock().unwrap();
+        let (self_remaining_threads_guard, self_return_value) = &mut *g;
+        self_return_value.take()
+    }
+
     pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None)),
