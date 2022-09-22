@@ -8388,7 +8388,7 @@ impl Bank {
                 .handle_aborted_executions()
                 .into_iter()
                 .next()
-                .map(|_| r)
+                .map_ok(|_| r)
                 .or(Ok(r));
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
