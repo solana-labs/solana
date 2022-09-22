@@ -2478,7 +2478,7 @@ impl ReplayStage {
             if bank.is_complete() {
                 info!("waiting for completed bank: slot: {}", bank.slot());
                 let cumulative_timings = bank.wait_for_scheduler(false).unwrap();
-                if let Err(err) = r {
+                if let Err(err) = cumulative_timings {
                     // Error means the slot needs to be marked as dead
                     Self::mark_dead_slot(
                         blockstore,
