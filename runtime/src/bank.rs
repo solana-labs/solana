@@ -8383,13 +8383,10 @@ impl Bank {
         let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
-            let r = scheduler.gracefully_stop().unwrap();
             let e = scheduler
                 .handle_aborted_executions()
                 .into_iter()
-                .map_ok(|_| r)
-                .next()
-                .or(r);
+                .next().unwrap();
             SCHEDULER_POOL.lock().unwrap().return_to_pool(scheduler);
             e
         } else {
