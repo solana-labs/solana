@@ -1598,7 +1598,7 @@ impl<C> Scheduler<C> {
         info!("Scheduler::gracefully_stop(): slot: {} id_{:016x} durations 2/2 (wall): scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.slot.map(|s| format!("{}", s)).unwrap_or("-".into()), self.random_id, scheduler_thread_wall_time_us, error_collector_thread_wall_time_us, executing_thread_wall_time_us.iter().sum::<u128>(), &executing_thread_wall_time_us);
         */
 
-        Ok(r)
+        Ok(Some(r))
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<()>> {
