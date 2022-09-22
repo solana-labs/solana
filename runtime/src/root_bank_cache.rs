@@ -7,14 +7,12 @@ use {
         bank::Bank,
         bank_forks::{BankForks, ReadOnlyAtomicSlot},
     },
-    solana_sdk::slot_history::Slot,
     std::sync::{Arc, RwLock},
 };
 
 /// Cached root bank that only loads from bank forks if the root has been updated.
 pub struct RootBankCache {
     bank_forks: Arc<RwLock<BankForks>>,
-    cached_root_slot: Slot,
     cached_root_bank: Arc<Bank>,
     root_slot: ReadOnlyAtomicSlot,
 }
@@ -27,7 +25,6 @@ impl RootBankCache {
         };
         Self {
             bank_forks,
-            cached_root_slot: cached_root_bank.slot(),
             cached_root_bank,
             root_slot,
         }
@@ -35,10 +32,9 @@ impl RootBankCache {
 
     pub fn root_bank(&mut self) -> Arc<Bank> {
         let current_root_slot = self.root_slot.get();
-        if self.cached_root_slot != current_root_slot {
+        if self.cached_root_bank.slot() != current_root_slot {
             let lock = self.bank_forks.read().unwrap();
-            let new_root_bank = lock.root_bank();
-            self.cached_root_slot = new_root_bank.slot();
+            self.cached_root_bank = lock.root_bank();
         }
         self.cached_root_bank.clone()
     }
