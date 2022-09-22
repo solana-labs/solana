@@ -1617,7 +1617,7 @@ impl Drop for Scheduler {
     }
 }
 
-impl Drop for SchedulerPool {
+impl<C> Drop for SchedulerPool<C> {
     fn drop(&mut self) {
         let current_thread_name = std::thread::current().name().unwrap().to_string();
         warn!("SchedulerPool::drop() by {}...", current_thread_name);
