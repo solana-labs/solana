@@ -108,7 +108,9 @@ where
     let mut actual_total_size: u64 = 0;
     let mut total_count: u64 = 0;
 
-    let mut total_entries = 0;
+    let mut total_entries = 0; // total processed entries, some unpacked, some skipped unpacking because the target files exist
+    let mut unpacked_entries = 0;
+    let mut unpacking_skipped_entries = 0;
     let mut last_log_update = Instant::now();
     let re_appendvec_filename = Regex::new(r#"^accounts/\d+\.\d+$"#).unwrap();
     for entry in archive.entries()? {
@@ -177,9 +179,11 @@ where
                 "The accounts target {} exists.  Skip unpacking",
                 target.display()
             );
+            unpacking_skipped_entries += 1;
         } else {
             let unpack = entry.unpack(target);
             check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
+            unpacked_entries += 1;
         }
 
         // Sanitize permissions.
@@ -196,11 +200,17 @@ where
         total_entries += 1;
         let now = Instant::now();
         if now.duration_since(last_log_update).as_secs() >= 10 {
-            info!("unpacked {} entries so far...", total_entries);
+            info!(
+                "processed {} entries so far, unpacked {}, skipped {} ...",
+                total_entries, unpacked_entries, unpacking_skipped_entries
+            );
             last_log_update = now;
         }
     }
-    info!("unpacked {} entries total", total_entries);
+    info!(
+        "upack_archive {} entries total, unpacked {}, skipped {}",
+        total_entries, unpacked_entries, unpacking_skipped_entries
+    );
 
     return Ok(());
 
