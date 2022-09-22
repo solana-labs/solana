@@ -1212,7 +1212,7 @@ impl SchedulerPool<ExecuteTimings> {
 
     fn take_from_pool(&mut self) -> Arc<Scheduler<ExecuteTimings>> {
         if let Some(scheduler) = self.schedulers.pop() {
-            info!(
+            trace!(
                 "SchedulerPool: id_{:016x} is taken... len: {} => {}",
                 scheduler.random_id,
                 self.schedulers.len() + 1,
@@ -1226,7 +1226,7 @@ impl SchedulerPool<ExecuteTimings> {
     }
 
     fn return_to_pool(&mut self, scheduler: Arc<Scheduler<ExecuteTimings>>) {
-        info!(
+        trace!(
             "SchedulerPool: id_{:016x} is returned... len: {} => {}",
             scheduler.random_id,
             self.schedulers.len(),
