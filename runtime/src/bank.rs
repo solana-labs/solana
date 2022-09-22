@@ -6723,7 +6723,7 @@ impl Bank {
         }
     }
 
-    pub fn handle_aborted_transactions(&self) -> Vec<Result<ExecuteTimings>> {
+    pub fn handle_aborted_transactions(&self) -> Vec<Result<Option<ExecuteTimings>>> {
         let s = self.scheduler2.read().unwrap();
         let scheduler = s.as_ref().unwrap();
         scheduler.handle_aborted_executions()
