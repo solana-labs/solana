@@ -10207,9 +10207,8 @@ pub(crate) mod tests {
                 .collect(),
             // set it up so the first epoch is a full year long
             poh_config: PohConfig::new_sleep(Duration::from_secs(
-                SECONDS_PER_YEAR as u64
-                    / MINIMUM_SLOTS_PER_EPOCH as u64
-                    / DEFAULT_TICKS_PER_SLOT)),
+                SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH as u64 / DEFAULT_TICKS_PER_SLOT,
+            )),
             cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()
@@ -10332,9 +10331,8 @@ pub(crate) mod tests {
             // set it up so the first epoch is a full year long
 
             poh_config: PohConfig::new_sleep(Duration::from_secs(
-                SECONDS_PER_YEAR as u64
-                    / MINIMUM_SLOTS_PER_EPOCH as u64
-                    / DEFAULT_TICKS_PER_SLOT)),
+                SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH as u64 / DEFAULT_TICKS_PER_SLOT,
+            )),
             cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()

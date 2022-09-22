@@ -30,7 +30,7 @@ impl PohConfig {
     pub fn new(
         target_tick_duration: Duration,
         target_tick_count: Option<u64>,
-        hashes_per_tick: Option<u64>
+        hashes_per_tick: Option<u64>,
     ) -> Self {
         PohConfig {
             target_tick_duration,

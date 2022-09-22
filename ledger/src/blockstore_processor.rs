@@ -1947,7 +1947,9 @@ pub mod tests {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(10_000);
-        genesis_config.poh_config.set_hashes_per_tick(Some(hashes_per_tick));
+        genesis_config
+            .poh_config
+            .set_hashes_per_tick(Some(hashes_per_tick));
         let ticks_per_slot = genesis_config.ticks_per_slot;
 
         let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
@@ -2639,7 +2641,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(mint, &leader_pubkey, 50);
-        genesis_config.poh_config.set_hashes_per_tick(Some(hashes_per_tick));
+        genesis_config
+            .poh_config
+            .set_hashes_per_tick(Some(hashes_per_tick));
         let (ledger_path, mut last_entry_hash) =
             create_new_tmp_ledger_auto_delete!(&genesis_config);
         debug!("ledger_path: {:?}", ledger_path);
@@ -4185,7 +4189,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        genesis_config.poh_config.set_hashes_per_tick(Some(HASHES_PER_TICK));
+        genesis_config
+            .poh_config
+            .set_hashes_per_tick(Some(HASHES_PER_TICK));
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
 
@@ -4453,7 +4459,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
-        genesis_config.poh_config.set_hashes_per_tick(Some(HASHES_PER_TICK));
+        genesis_config
+            .poh_config
+            .set_hashes_per_tick(Some(HASHES_PER_TICK));
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
 
