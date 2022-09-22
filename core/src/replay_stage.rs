@@ -2498,7 +2498,10 @@ impl ReplayStage {
                     // bank is completed
                     continue;
                 }
-                let cumulative_timings2 = cumulative_timings.unwrap();
+                let cumulative_timings2 = ThreadExecuteTimings {
+                    execute_timings: cumulative_timings.unwrap(),
+                    ..Default::default()
+                };
 
                 let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
