@@ -8379,7 +8379,7 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self, via_drop: bool) -> Result<()> {
-        let s: Option<Arc<Scheduler>> = self.scheduler2.write().unwrap().take();
+        let s: Option<Arc<Scheduler<ExecuteTimings>>> = self.scheduler2.write().unwrap().take();
 
         if let Some(scheduler) = s {
             scheduler.gracefully_stop().unwrap();
