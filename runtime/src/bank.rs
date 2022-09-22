@@ -285,7 +285,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
+#[frozen_abi(digest = "A7T7XohiSoo8FGoCPTsaXAYYugXTkoYnBjQAdBgYHH85")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -4363,7 +4363,14 @@ impl Bank {
                 None
             },
             compute_budget.max_invoke_depth.saturating_add(1),
-            compute_budget.max_instruction_trace_length,
+            if self
+                .feature_set
+                .is_active(&feature_set::limit_max_instruction_trace_length::id())
+            {
+                compute_budget.max_instruction_trace_length
+            } else {
+                std::usize::MAX
+            },
         );
         if self
             .feature_set
