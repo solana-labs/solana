@@ -24,12 +24,7 @@ impl PohConfig {
     }
 
     pub fn get_hashes_per_tick(&self) -> Option<u64> {
-        if let Some(hashes) = self.hashes_per_tick {
-            Some(hashes)
-        }
-        else {
-            None
-        }
+        self.hashes_per_tick
     }
 
     pub fn new(
@@ -38,9 +33,9 @@ impl PohConfig {
         hashes_per_tick: Option<u64>
     ) -> Self {
         PohConfig {
-            target_tick_duration: target_tick_duration,
-            target_tick_count: target_tick_count,
-            hashes_per_tick: hashes_per_tick,
+            target_tick_duration,
+            target_tick_count,
+            hashes_per_tick,
         }
     }
 
