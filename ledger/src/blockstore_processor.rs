@@ -266,7 +266,7 @@ fn execute_batch(
 }
 
 #[derive(Default)]
-struct ExecuteBatchesInternalMetrics {
+pub struct ExecuteBatchesInternalMetrics {
     execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
@@ -796,7 +796,7 @@ pub struct ConfirmationTiming {
 }
 
 impl ConfirmationTiming {
-    fn process_execute_batches_internal_metrics(
+    pub fn process_execute_batches_internal_metrics(
         &mut self,
         execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
     ) {
