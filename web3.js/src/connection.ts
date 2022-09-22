@@ -5114,11 +5114,8 @@ export class Connection {
                   return;
                 }
 
-                const isErrorSubscription =
-                  isErrorStatefulSubscription(subscription);
-
                 if (
-                  isErrorSubscription &&
+                  subscription.state === 'error' &&
                   subscription.retryCount + 1 > SUBSCRIPTION_ERROR_RETRY_LIMIT
                 ) {
                   console.error(
@@ -5131,7 +5128,7 @@ export class Connection {
                 } else {
                   this._subscriptionsByHash[hash] = {
                     ...subscription,
-                    retryCount: isErrorSubscription
+                    retryCount: subscription.state === 'error'
                       ? subscription.retryCount + 1
                       : 0,
                     state: 'error',
