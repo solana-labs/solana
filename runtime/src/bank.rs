@@ -1460,8 +1460,7 @@ impl<C> Scheduler<C> {
                             drop(ee);
                         },
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Flush(checkpoint)) => {
-                            checkpoint.wait_for_restart();
-                            cumulative_timings = ExecuteTimings::default();
+                            checkpoint.wait_for_restart(std::mem::take(&mut cumulative_timings));
                         },
                     }
                 }
