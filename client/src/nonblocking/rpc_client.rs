@@ -17,17 +17,13 @@ use {
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         http_sender::HttpSender,
         mock_sender::MockSender,
-<<<<<<< HEAD:client/src/nonblocking/rpc_client.rs
-        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
+        rpc_client::{
+            GetConfirmedSignaturesForAddress2Config, RpcClientConfig, SerializableTransaction,
+        },
         rpc_config::{RpcAccountInfoConfig, *},
         rpc_filter::{self, RpcFilterType},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
-=======
-        rpc_client::{
-            GetConfirmedSignaturesForAddress2Config, RpcClientConfig, SerializableTransaction,
-        },
->>>>>>> 00b0a92ec4 (Support sending versioned txs in rpc client (#27933)):rpc-client/src/nonblocking/rpc_client.rs
         rpc_sender::*,
         spinner,
     },

@@ -765,16 +765,11 @@ impl RpcClient {
     /// let signature = rpc_client.send_transaction(&tx)?;
     /// # Ok::<(), ClientError>(())
     /// ```
-<<<<<<< HEAD:client/src/rpc_client.rs
-    pub fn send_transaction(&self, transaction: &Transaction) -> ClientResult<Signature> {
-        self.invoke(self.rpc_client.send_transaction(transaction))
-=======
     pub fn send_transaction(
         &self,
         transaction: &impl SerializableTransaction,
     ) -> ClientResult<Signature> {
-        self.invoke((self.rpc_client.as_ref()).send_transaction(transaction))
->>>>>>> 00b0a92ec4 (Support sending versioned txs in rpc client (#27933)):rpc-client/src/rpc_client.rs
+        self.invoke(self.rpc_client.send_transaction(transaction))
     }
 
     /// Submits a signed transaction to the network.
