@@ -866,7 +866,7 @@ pub mod tests {
             );
             let partition_index_passed_pubkey = partition_from_pubkey <= partition_index;
             let expected_rent_epoch =
-                rent_collector.epoch - if partition_index_passed_pubkey { 0 } else { 1 };
+                rent_collector.epoch - u64::from(!partition_index_passed_pubkey);
             let expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch
                 + partition_from_pubkey
                 - if partition_index_passed_pubkey {
@@ -1090,7 +1090,7 @@ pub mod tests {
                             partition_index_from_max_slot,
                             first_slot_in_max_epoch,
                             expected_rent_collection_slot_max_epoch,
-                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else {1},
+                            rent_epoch: rent_collector.epoch - u64::from(!hit_this_epoch),
                         }),
                         "partition_index_from_max_slot: {}, epoch: {}, hit_this_epoch: {}, skipped_slot: {}",
                         partition_index_from_max_slot,

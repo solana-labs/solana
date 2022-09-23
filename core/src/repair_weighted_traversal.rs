@@ -275,7 +275,7 @@ pub mod test {
         let completed_shreds: Vec<Shred> = [0, 2, 4, 6]
             .iter()
             .map(|slot| {
-                let parent_offset = if *slot == 0 { 0 } else { 1 };
+                let parent_offset = u16::from(*slot != 0);
                 let shred = Shred::new_from_data(
                     *slot,
                     last_shred as u32, // index

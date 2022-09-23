@@ -164,16 +164,11 @@ impl CostTracker {
     }
 
     fn find_costliest_account(&self) -> (Pubkey, u64) {
-        let mut costliest_account = Pubkey::default();
-        let mut costliest_account_cost = 0;
-        for (key, cost) in self.cost_by_writable_accounts.iter() {
-            if *cost > costliest_account_cost {
-                costliest_account = *key;
-                costliest_account_cost = *cost;
-            }
-        }
-
-        (costliest_account, costliest_account_cost)
+        self.cost_by_writable_accounts
+            .iter()
+            .max_by_key(|(_, &cost)| cost)
+            .map(|(&pubkey, &cost)| (pubkey, cost))
+            .unwrap_or_default()
     }
 
     fn would_fit(&self, tx_cost: &TransactionCost) -> Result<(), CostTrackerError> {
@@ -315,9 +310,9 @@ impl CostTracker {
     /// count number of none-zero CU accounts
     fn number_of_accounts(&self) -> usize {
         self.cost_by_writable_accounts
-            .iter()
-            .map(|(_key, units)| usize::from(*units > 0))
-            .sum()
+            .values()
+            .filter(|units| **units > 0)
+            .count()
     }
 }
 

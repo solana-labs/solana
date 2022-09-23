@@ -580,8 +580,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let issued_lamports = genesis_config
         .accounts
-        .iter()
-        .map(|(_key, account)| account.lamports)
+        .values()
+        .map(|account| account.lamports)
         .sum::<u64>();
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);

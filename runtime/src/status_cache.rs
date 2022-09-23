@@ -154,9 +154,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         key: K,
         ancestors: &Ancestors,
     ) -> Option<(Slot, T)> {
-        let mut keys = vec![];
-        let mut val: Vec<_> = self.cache.iter().map(|(k, _)| *k).collect();
-        keys.append(&mut val);
+        let keys: Vec<_> = self.cache.keys().copied().collect();
 
         for blockhash in keys.iter() {
             trace!("get_status_any_blockhash: trying {}", blockhash);
