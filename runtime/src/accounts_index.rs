@@ -412,14 +412,8 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         account_info: T,
         storage: &Arc<BucketMapHolder<T>>,
     ) -> AccountMapEntry<T> {
-<<<<<<< HEAD
-        let ref_count = if account_info.is_cached() { 0 } else { 1 };
+        let ref_count = u64::from(!account_info.is_cached());
         let meta = AccountMapEntryMeta::new_dirty(storage);
-=======
-        let is_cached = account_info.is_cached();
-        let ref_count = u64::from(!is_cached);
-        let meta = AccountMapEntryMeta::new_dirty(storage, is_cached);
->>>>>>> 9ee53e594 (patches clippy errors from new rust nightly release (#28028))
         Arc::new(AccountMapEntryInner::new(
             vec![(slot, account_info)],
             ref_count,
@@ -4059,40 +4053,6 @@ pub mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
-    fn test_unref() {
-        let value = true;
-        let key = solana_sdk::pubkey::new_rand();
-        let index = AccountsIndex::<bool>::default_for_tests();
-        let slot1 = 1;
-
-        index.upsert_simple_test(&key, slot1, value);
-
-        let map = index.get_bin(&key);
-        for expected in [false, true] {
-            assert!(map.get_internal(&key, |entry| {
-                // check refcount BEFORE the unref
-                assert_eq!(u64::from(!expected), entry.unwrap().ref_count());
-                // first time, ref count was at 1, we can unref once. Unref should return false.
-                // second time, ref count was at 0, it is an error to unref. Unref should return true
-                assert_eq!(expected, entry.unwrap().unref());
-                // check refcount AFTER the unref
-                assert_eq!(
-                    if expected {
-                        (0 as RefCount).wrapping_sub(1)
-                    } else {
-                        0
-                    },
-                    entry.unwrap().ref_count()
-                );
-                (false, true)
-            }));
-        }
-    }
-
-    #[test]
->>>>>>> 9ee53e594 (patches clippy errors from new rust nightly release (#28028))
     fn test_clean_rooted_entries_return() {
         solana_logger::setup();
         let value = true;
