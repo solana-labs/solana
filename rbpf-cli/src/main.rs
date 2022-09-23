@@ -128,7 +128,7 @@ native machine code before execting it in the virtual machine.",
                 .long("use")
                 .takes_value(true)
                 .value_name("VALUE")
-                .possible_values(&["cfg", "disassembler", "interpreter", "jit"])
+                .possible_values(["cfg", "disassembler", "interpreter", "jit"])
                 .default_value("jit"),
         )
         .arg(
@@ -159,7 +159,7 @@ native machine code before execting it in the virtual machine.",
                 .value_name("FORMAT")
                 .global(true)
                 .takes_value(true)
-                .possible_values(&["json", "json-compact"]),
+                .possible_values(["json", "json-compact"]),
         )
         .get_matches();
 
@@ -246,7 +246,7 @@ native machine code before execting it in the virtual machine.",
     let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
     let program = matches.value_of("PROGRAM").unwrap();
-    let mut file = File::open(&Path::new(program)).unwrap();
+    let mut file = File::open(Path::new(program)).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
     file.seek(SeekFrom::Start(0)).unwrap();

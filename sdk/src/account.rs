@@ -11,7 +11,7 @@ use {
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
-        fmt,
+        fmt, ptr,
         rc::Rc,
         sync::Arc,
     },
@@ -538,17 +538,50 @@ impl Account {
 }
 
 impl AccountSharedData {
-    pub fn set_data_from_slice(&mut self, data: &[u8]) {
-        let len = self.data.len();
-        let len_different = len != data.len();
-        let different = len_different || data != &self.data[..];
-        if different {
-            self.data = Arc::new(data.to_vec());
-        }
+    pub fn set_data_from_slice(&mut self, new_data: &[u8]) {
+        let data = match Arc::get_mut(&mut self.data) {
+            // The buffer isn't shared, so we're going to memcpy in place.
+            Some(data) => data,
+            // If the buffer is shared, the cheapest thing to do is to clone the
+            // incoming slice and replace the buffer.
+            None => return self.set_data(new_data.to_vec()),
+        };
+
+        let new_len = new_data.len();
+
+        // Reserve additional capacity if needed. Here we make the assumption
+        // that growing the current buffer is cheaper than doing a whole new
+        // allocation to make `new_data` owned.
+        //
+        // This assumption holds true during CPI, especially when the account
+        // size doesn't change but the account is only changed in place. And
+        // it's also true when the account is grown by a small margin (the
+        // realloc limit is quite low), in which case the allocator can just
+        // update the allocation metadata without moving.
+        //
+        // Shrinking and copying in place is always faster than making
+        // `new_data` owned, since shrinking boils down to updating the Vec's
+        // length.
+
+        data.reserve(new_len.saturating_sub(data.len()));
+
+        // Safety:
+        // We just reserved enough capacity. We set data::len to 0 to avoid
+        // possible UB on panic (dropping uninitialized elements), do the copy,
+        // finally set the new length once everything is initialized.
+        #[allow(clippy::uninit_vec)]
+        // this is a false positive, the lint doesn't currently special case set_len(0)
+        unsafe {
+            data.set_len(0);
+            ptr::copy_nonoverlapping(new_data.as_ptr(), data.as_mut_ptr(), new_len);
+            data.set_len(new_len);
+        };
     }
+
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = Arc::new(data);
     }
+
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {
         shared_new(lamports, space, owner)
     }

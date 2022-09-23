@@ -479,8 +479,6 @@ mod tests {
                     let mut num_shreds = 0;
                     let mut max_speed = 0f32;
                     let mut min_speed = f32::MAX;
-                    let (mut shreds_with_parent, _) = make_many_slot_shreds(
-                        1, batch_size_slots, shreds_per_slot);
                     let (first_shreds, _) = make_many_slot_shreds(
                         0, batch_size_slots, shreds_per_slot);
                     loop {
@@ -502,14 +500,10 @@ mod tests {
                                 break;
                             }
                         } else {
-                            let mut slot_id = start_slot;
+                            let slot_id = start_slot;
                             if slot_id > 0 {
-                                for shred in shreds_with_parent.iter_mut() {
-                                    shred.set_slot(slot_id);
-                                    if shred.index() as u64 == shreds_per_slot - 1 {
-                                        slot_id += 1;
-                                    }
-                                }
+                                let (shreds_with_parent, _) = make_many_slot_shreds(
+                                    slot_id, batch_size_slots, shreds_per_slot);
                                 total += shreds_with_parent.len();
                                 cloned_blockstore.insert_shreds(
                                     shreds_with_parent.clone(), None, false).unwrap()

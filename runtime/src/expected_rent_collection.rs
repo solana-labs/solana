@@ -703,7 +703,7 @@ pub mod tests {
             let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
-                expected_rent_collection_slot_max_epoch + if greater { 1 } else { 0 },
+                expected_rent_collection_slot_max_epoch + u64::from(greater),
                 &epoch_schedule,
                 &rent_collector,
                 &SlotInfoInEpoch::new(max_slot_in_storages_inclusive, &epoch_schedule),
@@ -740,7 +740,7 @@ pub mod tests {
                 find_unskipped_slot,
                 None,
             );
-            let epoch_delta = if previous_epoch { 1 } else { 0 };
+            let epoch_delta = u64::from(previous_epoch);
             let slot_delta = epoch_delta * slots_per_epoch;
             assert_eq!(
                 result,
@@ -763,7 +763,7 @@ pub mod tests {
         let original_rent_epoch = account.rent_epoch();
         for already_collected in [true, false] {
             // to consider: maybe if we already collected rent_epoch IN this slot and slot matches what we need, then we should return None here
-            account.set_rent_epoch(original_rent_epoch + if already_collected { 1 } else { 0 });
+            account.set_rent_epoch(original_rent_epoch + u64::from(already_collected));
             let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
@@ -866,7 +866,7 @@ pub mod tests {
             );
             let partition_index_passed_pubkey = partition_from_pubkey <= partition_index;
             let expected_rent_epoch =
-                rent_collector.epoch - if partition_index_passed_pubkey { 0 } else { 1 };
+                rent_collector.epoch - u64::from(!partition_index_passed_pubkey);
             let expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch
                 + partition_from_pubkey
                 - if partition_index_passed_pubkey {
@@ -959,7 +959,7 @@ pub mod tests {
                     } else {
                         expected_rent_collection_slot_max_epoch
                     },
-                    rent_epoch: rent_collector.epoch - if prior_epoch { 1 } else { 0 },
+                    rent_epoch: rent_collector.epoch - u64::from(prior_epoch),
                 }),
                 "find_unskipped_slot(0): {:?}, rent_collector.epoch: {}, prior_epoch: {}",
                 find_unskipped_slot(0),
@@ -1047,7 +1047,7 @@ pub mod tests {
                     rent_collector.epoch = epoch_schedule.get_epoch(max_slot_in_storages_inclusive);
                     let first_slot_in_max_epoch = max_slot_in_storages_inclusive
                         - max_slot_in_storages_inclusive % slots_per_epoch;
-                    let skip_offset = if skipped_slot { 1 } else { 0 };
+                    let skip_offset = u64::from(skipped_slot);
                     let mut expected_rent_collection_slot_max_epoch =
                         first_slot_in_max_epoch + partition_from_pubkey + skip_offset;
                     let hit_this_epoch =
@@ -1090,7 +1090,7 @@ pub mod tests {
                             partition_index_from_max_slot,
                             first_slot_in_max_epoch,
                             expected_rent_collection_slot_max_epoch,
-                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else {1},
+                            rent_epoch: rent_collector.epoch - u64::from(!hit_this_epoch),
                         }),
                         "partition_index_from_max_slot: {}, epoch: {}, hit_this_epoch: {}, skipped_slot: {}",
                         partition_index_from_max_slot,

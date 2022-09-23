@@ -163,6 +163,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            false, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
 
@@ -178,6 +179,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    false, // merkle_variant
                     &mut ProcessShredsStats::default(),
                 );
                 // Don't mark the last shred as last so that validators won't
@@ -189,6 +191,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    false, // merkle_variant
                     &mut ProcessShredsStats::default(),
                 );
                 let sigs: Vec<_> = partition_last_data_shred

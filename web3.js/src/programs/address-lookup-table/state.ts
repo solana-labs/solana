@@ -32,7 +32,7 @@ export class AddressLookupTableAccount {
   }
 
   isActive(): boolean {
-    const U64_MAX = 18446744073709551615n;
+    const U64_MAX = BigInt('0xffffffffffffffff');
     return this.state.deactivationSlot === U64_MAX;
   }
 

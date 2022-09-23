@@ -27,7 +27,7 @@ pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 24;
 /// Number of compute units for one write lock
 pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 /// Number of data bytes per compute units
-pub const DATA_BYTES_UNITS: u64 = 550 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
+pub const INSTRUCTION_DATA_BYTES_COST: u64 = 140 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
 // Number of compute units for each built-in programs
 lazy_static! {
     /// Number of compute units for each built-in programs

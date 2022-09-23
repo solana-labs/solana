@@ -1,6 +1,6 @@
 use {
     crate::shred::{
-        Error, ProcessShredsStats, Shred, ShredData, ShredFlags, DATA_SHREDS_PER_FEC_BLOCK,
+        self, Error, ProcessShredsStats, Shred, ShredData, ShredFlags, DATA_SHREDS_PER_FEC_BLOCK,
     },
     itertools::Itertools,
     lazy_static::lazy_static,
@@ -69,11 +69,30 @@ impl Shredder {
         is_last_in_slot: bool,
         next_shred_index: u32,
         next_code_index: u32,
+        merkle_variant: bool,
         stats: &mut ProcessShredsStats,
     ) -> (
         Vec<Shred>, // data shreds
         Vec<Shred>, // coding shreds
     ) {
+        if merkle_variant {
+            return shred::make_merkle_shreds_from_entries(
+                &PAR_THREAD_POOL,
+                keypair,
+                entries,
+                self.slot,
+                self.parent_slot,
+                self.version,
+                self.reference_tick,
+                is_last_in_slot,
+                next_shred_index,
+                next_code_index,
+                stats,
+            )
+            .unwrap()
+            .into_iter()
+            .partition(Shred::is_data);
+        }
         let data_shreds =
             self.entries_to_data_shreds(keypair, entries, is_last_in_slot, next_shred_index, stats);
         let coding_shreds =
@@ -347,7 +366,7 @@ impl Shredder {
 }
 
 /// Maps number of data shreds in each batch to the erasure batch size.
-fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
+pub(crate) fn get_erasure_batch_size(num_data_shreds: usize) -> usize {
     ERASURE_BATCH_SIZE
         .get(num_data_shreds)
         .copied()
@@ -444,6 +463,7 @@ mod tests {
             true,        // is_last_in_slot
             start_index, // next_shred_index
             start_index, // next_code_index
+            true,        // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         let next_index = data_shreds.last().unwrap().index() + 1;
@@ -521,6 +541,7 @@ mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         let deserialized_shred =
@@ -551,6 +572,7 @@ mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         data_shreds.iter().for_each(|s| {
@@ -586,6 +608,7 @@ mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         data_shreds.iter().for_each(|s| {
@@ -630,6 +653,7 @@ mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         for (i, s) in data_shreds.iter().enumerate() {
@@ -682,8 +706,9 @@ mod tests {
             &keypair,
             &entries,
             is_last_in_slot,
-            0, // next_shred_index
-            0, // next_code_index
+            0,     // next_shred_index
+            0,     // next_code_index
+            false, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         let num_coding_shreds = coding_shreds.len();
@@ -809,9 +834,10 @@ mod tests {
         let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
             &keypair,
             &entries,
-            true, // is_last_in_slot
-            25,   // next_shred_index,
-            25,   // next_code_index
+            true,  // is_last_in_slot
+            25,    // next_shred_index,
+            25,    // next_code_index
+            false, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         // We should have 10 shreds now
@@ -903,6 +929,7 @@ mod tests {
             is_last_in_slot,
             next_shred_index,
             next_shred_index, // next_code_index
+            false,            // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         let num_data_shreds = data_shreds.len();
@@ -963,6 +990,7 @@ mod tests {
             true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         assert!(!data_shreds
@@ -995,6 +1023,7 @@ mod tests {
             true,        // is_last_in_slot
             start_index, // next_shred_index
             start_index, // next_code_index
+            true,        // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         const MIN_CHUNK_SIZE: usize = DATA_SHREDS_PER_FEC_BLOCK;

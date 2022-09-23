@@ -65,6 +65,12 @@ impl AccountsHashVerifier {
                         continue;
                     }
                     let accounts_package = accounts_package.unwrap();
+                    debug!(
+                        "handling accounts package, type: {:?}, slot: {}, block height: {}",
+                        accounts_package.package_type,
+                        accounts_package.slot,
+                        accounts_package.block_height,
+                    );
 
                     Self::process_accounts_package(
                         accounts_package,
@@ -231,6 +237,10 @@ impl AccountsHashVerifier {
 
     fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: Hash) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
+            debug!(
+                "saving epoch accounts hash, slot: {}, hash: {}",
+                accounts_package.slot, accounts_hash
+            );
             let new_epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
             let old_epoch_accounts_hash = accounts_package
                 .accounts
