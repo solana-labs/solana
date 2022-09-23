@@ -3987,12 +3987,22 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
+        // let lock_results = self.rc.accounts.lock_accounts_with_results(
+        //     transactions.iter(),
+        //     transaction_results,
+        //     tx_account_lock_limit,
+        // );
+        let (lock_results, staged_locks) = self.rc.accounts.stage_and_lock_accounts(
             transactions.iter(),
             transaction_results,
             tx_account_lock_limit,
         );
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
+        TransactionBatch::new_with_staged_locks(
+            lock_results,
+            staged_locks,
+            self,
+            Cow::Borrowed(transactions),
+        )
     }
 
     /// Prepare a transaction batch without locking accounts for transaction simulation.
@@ -4118,9 +4128,13 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
-            self.rc
-                .accounts
-                .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
+            if batch.has_staged_locks() {
+                self.rc.accounts.unlock_staged_locks(batch.staged_locks());
+            } else {
+                self.rc
+                    .accounts
+                    .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
+            }
         }
     }
 

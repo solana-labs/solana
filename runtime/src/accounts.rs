@@ -113,6 +113,65 @@ impl AccountLocks {
     fn unlock_write(&mut self, key: &Pubkey) {
         self.write_locks.remove(key);
     }
+
+    fn commit_staged_locks(&mut self, staged_account_locks: &StagedAccountLocks) {
+        for key in staged_account_locks.write_locks().iter() {
+            assert!(self.write_locks.insert(*key));
+        }
+
+        for key in staged_account_locks.read_locks().iter() {
+            assert!(!self.write_locks.contains(key));
+            let count = self.readonly_locks.entry(*key).or_default();
+            *count += 1;
+        }
+    }
+
+    fn unlock_staged_locks(&mut self, staged_account_locks: &StagedAccountLocks) {
+        for key in staged_account_locks.write_locks().iter() {
+            self.unlock_write(key);
+        }
+
+        for key in staged_account_locks.read_locks().iter() {
+            self.unlock_readonly(key);
+        }
+    }
+}
+
+/// Used to lock a batch of transactions in a collective manner
+#[derive(Debug, Default)]
+pub struct StagedAccountLocks {
+    /// accounts that need write-locking
+    write_locks: HashSet<Pubkey>,
+    /// accounts that only need read-locking
+    readonly_locks: HashSet<Pubkey>,
+}
+
+impl StagedAccountLocks {
+    fn add_locks(&mut self, writable_accounts: &[&Pubkey], readonly_accounts: &[&Pubkey]) {
+        for writable_account in writable_accounts {
+            self.readonly_locks.remove(*writable_account); // remove from read-only if it exists there
+            self.write_locks.insert(**writable_account);
+        }
+
+        for readonly_account in readonly_accounts {
+            // only add to read-only if it's not already write-locked
+            if !self.write_locks.contains(*readonly_account) {
+                self.readonly_locks.insert(**readonly_account);
+            }
+        }
+    }
+
+    fn write_locks(&self) -> &HashSet<Pubkey> {
+        &self.write_locks
+    }
+
+    fn read_locks(&self) -> &HashSet<Pubkey> {
+        &self.readonly_locks
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.write_locks.is_empty() && self.readonly_locks.is_empty()
+    }
 }
 
 /// This structure handles synchronization for db
@@ -1188,6 +1247,34 @@ impl Accounts {
     }
 
     #[must_use]
+    pub fn stage_and_lock_accounts<'a>(
+        &self,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        results: impl Iterator<Item = &'a Result<()>>,
+        tx_account_lock_limit: usize,
+    ) -> (Vec<Result<()>>, StagedAccountLocks) {
+        // Lock this while we stage the locks and commit them
+        let mut lock = self.account_locks.lock().unwrap();
+
+        let mut staged_locks = StagedAccountLocks::default();
+        let tx_account_locks_results: Vec<Result<_>> = txs
+            .zip(results)
+            .map(|(tx, result)| match result {
+                Ok(()) => {
+                    let locks = tx.get_account_locks(tx_account_lock_limit)?;
+                    self.can_lock_account(&lock, &locks.writable, &locks.readonly)?;
+                    staged_locks.add_locks(&locks.writable[..], &locks.readonly[..]);
+                    Ok(())
+                }
+                Err(err) => Err(err.clone()),
+            })
+            .collect();
+        lock.commit_staged_locks(&staged_locks);
+
+        (tx_account_locks_results, staged_locks)
+    }
+
+    #[must_use]
     fn lock_accounts_inner(
         &self,
         tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
@@ -1233,6 +1320,11 @@ impl Accounts {
         keys.into_iter().for_each(|keys| {
             self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
         });
+    }
+
+    pub fn unlock_staged_locks(&self, staged_locks: &StagedAccountLocks) {
+        let mut account_locks = self.account_locks.lock().unwrap();
+        account_locks.unlock_staged_locks(staged_locks);
     }
 
     /// Store the accounts into the DB
