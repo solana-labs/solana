@@ -743,6 +743,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             &leader_snapshot_test_config.validator_config,
             1,
         ),
+        skip_warmup_slots: true,
         ..ClusterConfig::default()
     };
 
