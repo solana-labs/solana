@@ -107,13 +107,8 @@ fn main() {
                 "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
                 program
             );
-<<<<<<< HEAD
             assert!(Command::new("../../cargo-build-bpf")
-                .args(&[
-=======
-            assert!(Command::new("../../cargo-build-sbf")
                 .args([
->>>>>>> 9a57c64f2 (patches clippy errors from new rust nightly release (#27996))
                     "--manifest-path",
                     &format!("rust/{}/Cargo.toml", program),
                     "--bpf-out-dir",

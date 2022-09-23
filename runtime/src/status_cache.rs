@@ -440,14 +440,8 @@ mod tests {
         let mut status_cache = BankStatusCache::default();
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear();
-<<<<<<< HEAD
-        status_cache.insert(&blockhash, &sig, 0, ());
-        let slot_deltas = status_cache.slot_deltas(&[0]);
-=======
         status_cache.insert(&blockhash, sig, 0, ());
-        assert!(status_cache.roots().contains(&0));
-        let slot_deltas = status_cache.root_slot_deltas();
->>>>>>> 9a57c64f2 (patches clippy errors from new rust nightly release (#27996))
+        let slot_deltas = status_cache.slot_deltas(&[0]);
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
         let slot_deltas = cache.slot_deltas(&[0]);
