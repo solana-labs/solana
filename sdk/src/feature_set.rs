@@ -415,6 +415,33 @@ pub mod sign_repair_requests {
     solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
 }
 
+<<<<<<< HEAD
+=======
+pub mod incremental_snapshot_only_incremental_hash_calculation {
+    solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
+}
+
+pub mod disable_cpi_setting_executable_and_rent_epoch {
+    solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
+}
+
+pub mod relax_authority_signer_check_for_lookup_table_creation {
+    solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
+}
+
+pub mod stop_sibling_instruction_search_at_parent {
+    solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
+}
+
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
+pub mod cap_accounts_data_allocations_per_transaction {
+    solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
+}
+
+>>>>>>> 206cc9407 (allow unsigned repair requests (#27910))
 pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
@@ -525,7 +552,16 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
+<<<<<<< HEAD
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
+=======
+        (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+        (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
+        (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
+        (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
+        (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
+>>>>>>> 206cc9407 (allow unsigned repair requests (#27910))
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         /*************** ADD NEW FEATURES HERE ***************/
