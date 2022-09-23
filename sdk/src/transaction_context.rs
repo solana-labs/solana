@@ -837,10 +837,7 @@ impl<'a> BorrowedAccount<'a> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
-
-        if data.len() != self.account.data().len() {
-            self.update_accounts_resize_delta(data.len())?;
-        }
+        self.update_accounts_resize_delta(data.len())?;
         self.account.set_data(data);
 
         Ok(())
@@ -857,10 +854,7 @@ impl<'a> BorrowedAccount<'a> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
-
-        if data.len() != self.account.data().len() {
-            self.update_accounts_resize_delta(data.len())?;
-        }
+        self.update_accounts_resize_delta(data.len())?;
         self.account.set_data_from_slice(data);
 
         Ok(())
@@ -906,7 +900,6 @@ impl<'a> BorrowedAccount<'a> {
 
         self.touch()?;
         self.update_accounts_resize_delta(new_len)?;
-
         self.account.data_mut().extend_from_slice(data);
         Ok(())
     }
