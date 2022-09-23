@@ -196,19 +196,24 @@ pub enum RequestedUsage {
     Writable,
 }
 
+
+
 //type TaskIds = SkipListTaskIds;
 type TaskIds = BTreeMapTaskIds;
 
+/*
 #[derive(Debug, Default)]
 pub struct SkipListTaskIds {
     task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue>,
 }
+*/
 
 #[derive(Debug, Default)]
 pub struct BTreeMapTaskIds {
     task_ids: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
 }
 
+/*
 impl SkipListTaskIds {
     #[inline(never)]
     pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
@@ -271,6 +276,7 @@ impl SkipListTaskIds {
             .flatten()
     }
 }
+*/
 
 impl BTreeMapTaskIds {
     #[inline(never)]
