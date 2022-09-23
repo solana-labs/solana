@@ -307,6 +307,7 @@ pub mod test {
                     parent.unwrap_or(slot),
                     is_slot_complete,
                     0,
+                    true, // merkle_variant
                 );
 
                 // remove next to last shred

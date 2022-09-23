@@ -49,9 +49,10 @@ fn make_shreds(num_shreds: usize) -> Vec<Shred> {
     let (data_shreds, _) = shredder.entries_to_shreds(
         &Keypair::new(),
         &entries,
-        true, // is_last_in_slot
-        0,    // next_shred_index
-        0,    // next_code_index
+        true,  // is_last_in_slot
+        0,     // next_shred_index
+        0,     // next_code_index
+        false, // merkle_variant
         &mut ProcessShredsStats::default(),
     );
     assert!(data_shreds.len() >= num_shreds);
@@ -85,6 +86,7 @@ fn bench_shredder_ticks(bencher: &mut Bencher) {
             true,
             0,
             0,
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
     })
@@ -111,6 +113,7 @@ fn bench_shredder_large_entries(bencher: &mut Bencher) {
             true,
             0,
             0,
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
     })
@@ -131,6 +134,7 @@ fn bench_deshredder(bencher: &mut Bencher) {
         true,
         0,
         0,
+        true, // merkle_variant
         &mut ProcessShredsStats::default(),
     );
     bencher.iter(|| {

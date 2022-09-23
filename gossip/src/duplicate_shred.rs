@@ -342,6 +342,7 @@ pub(crate) mod tests {
             true, // is_last_in_slot
             next_shred_index,
             next_shred_index, // next_code_index
+            true,             // merkle_variant
             &mut ProcessShredsStats::default(),
         );
         data_shreds.swap_remove(0)
