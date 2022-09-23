@@ -13,7 +13,7 @@ edition = "2021"
 base64 = "0.13.0"
 bs58 = "0.4.0"
 jsonrpc-core = "18.0.0"
-reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 semver = "1.0.14"
 serde = "1.0.144"
 serde_derive = "1.0.103"
