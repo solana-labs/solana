@@ -12,7 +12,6 @@ publish = true
 
 [dependencies]
 crossbeam-channel = "0.5.5"
-crossbeam-skiplist = { path = "../../../crossbeam/crossbeam-skiplist" }
 dashmap = { version = "4.0.2" }
 log = "0.4.17"
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
