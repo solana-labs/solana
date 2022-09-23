@@ -9183,17 +9183,6 @@ pub(crate) mod tests {
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
             *bank1.rewards.read().unwrap(),
-<<<<<<< HEAD
-            vec![(
-                stake_id,
-                RewardInfo {
-                    reward_type: RewardType::Staking,
-                    lamports: (rewards.validator_point_value * validator_points as f64) as i64,
-                    post_balance: bank1.get_balance(&stake_id),
-                    commission: Some(0),
-                }
-            )]
-=======
             vec![
                 (
                     vote_id,
@@ -9208,13 +9197,12 @@ pub(crate) mod tests {
                     stake_id,
                     RewardInfo {
                         reward_type: RewardType::Staking,
-                        lamports: validator_rewards as i64,
+                        lamports: (rewards.validator_point_value * validator_points as f64) as i64,
                         post_balance: bank1.get_balance(&stake_id),
                         commission: Some(0),
                     }
                 )
             ]
->>>>>>> fb686cc83 (Nodes with 0% commission are now included in the `getBlock` RPC method `rewards` response field.)
         );
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization(true));
