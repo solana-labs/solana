@@ -832,7 +832,7 @@ impl<'a> BorrowedAccount<'a> {
         }
         self.touch()?;
         self.update_accounts_resize_delta(new_length)?;
-        self.account.data_mut().resize(new_length, 0);
+        self.account.resize(new_length, 0);
         Ok(())
     }
 
@@ -849,7 +849,7 @@ impl<'a> BorrowedAccount<'a> {
 
         self.touch()?;
         self.update_accounts_resize_delta(new_len)?;
-        self.account.data_mut().extend_from_slice(data);
+        self.account.extend_from_slice(data);
         Ok(())
     }
 

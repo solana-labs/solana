@@ -174,7 +174,6 @@ pub trait WritableAccount: ReadableAccount {
     fn saturating_sub_lamports(&mut self, lamports: u64) {
         self.set_lamports(self.lamports().saturating_sub(lamports))
     }
-    fn data_mut(&mut self) -> &mut Vec<u8>;
     fn data_as_mut_slice(&mut self) -> &mut [u8];
     fn set_owner(&mut self, owner: Pubkey);
     fn copy_into_owner_from_slice(&mut self, source: &[u8]);
@@ -228,9 +227,6 @@ impl WritableAccount for Account {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
     }
-    fn data_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.data
-    }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
     }
@@ -266,9 +262,6 @@ impl WritableAccount for Account {
 impl WritableAccount for AccountSharedData {
     fn set_lamports(&mut self, lamports: u64) {
         self.lamports = lamports;
-    }
-    fn data_mut(&mut self) -> &mut Vec<u8> {
-        Arc::make_mut(&mut self.data)
     }
     fn data_as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data_mut()[..]
@@ -540,6 +533,18 @@ impl Account {
 }
 
 impl AccountSharedData {
+    fn data_mut(&mut self) -> &mut Vec<u8> {
+        Arc::make_mut(&mut self.data)
+    }
+
+    pub fn resize(&mut self, new_len: usize, value: u8) {
+        self.data_mut().resize(new_len, value)
+    }
+
+    pub fn extend_from_slice(&mut self, data: &[u8]) {
+        self.data_mut().extend_from_slice(data)
+    }
+
     pub fn set_data_from_slice(&mut self, new_data: &[u8]) {
         let data = match Arc::get_mut(&mut self.data) {
             // The buffer isn't shared, so we're going to memcpy in place.
