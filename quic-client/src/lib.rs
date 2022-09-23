@@ -5,7 +5,9 @@ pub mod nonblocking;
 use {
     solana_sdk::{pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair},
     solana_streamer::{
-        streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
+        nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
+        streamer::StakedNodes,
+        tls_certificates::new_self_signed_tls_certificate_chain,
     },
     solana_tpu_client::{
         connection_cache::ConnectionCacheStats,
@@ -91,6 +93,32 @@ impl Default for QuicConfig {
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
         }
+    }
+}
+
+impl QuicConfig {
+    fn create_endpoint(&self) -> Arc<QuicLazyInitializedEndpoint> {
+        Arc::new(QuicLazyInitializedEndpoint::new(
+            self.client_certificate.clone(),
+        ))
+    }
+
+    fn compute_max_parallel_streams(&self) -> usize {
+        let (client_type, stake, total_stake) =
+            self.maybe_client_pubkey
+                .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
+                    self.maybe_staked_nodes.as_ref().map_or(
+                        (ConnectionPeerType::Unstaked, 0, 0),
+                        |stakes| {
+                            let rstakes = stakes.read().unwrap();
+                            rstakes.pubkey_stake_map.get(&pubkey).map_or(
+                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake),
+                                |stake| (ConnectionPeerType::Staked, *stake, rstakes.total_stake),
+                            )
+                        },
+                    )
+                });
+        compute_max_allowed_uni_streams(client_type, stake, total_stake)
     }
 }
 
