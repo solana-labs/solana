@@ -5,6 +5,7 @@ pub mod nonblocking;
 pub mod quic_client;
 pub mod tpu_client;
 pub mod tpu_connection;
+pub mod tpu_connection_cache;
 pub mod udp_client;
 
 #[macro_use]

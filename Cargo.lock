@@ -5903,6 +5903,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-quic-client"
+version = "1.15.0"
+dependencies = [
+ "solana-metrics",
+ "solana-tpu-client",
+]
+
+[[package]]
 name = "solana-rayon-threadlimit"
 version = "1.15.0"
 dependencies = [
@@ -6587,6 +6595,13 @@ dependencies = [
  "spl-token",
  "spl-token-2022",
  "thiserror",
+]
+
+[[package]]
+name = "solana-udp-client"
+version = "1.15.0"
+dependencies = [
+ "solana-tpu-client",
 ]
 
 [[package]]
