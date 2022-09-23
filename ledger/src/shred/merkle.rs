@@ -850,7 +850,7 @@ pub(super) fn make_shreds_from_data(
                 let num_data_shreds = (data.len() + data_buffer_size - 1) / data_buffer_size;
                 let erasure_batch_size = shredder::get_erasure_batch_size(num_data_shreds);
                 (proof_size == get_proof_size(erasure_batch_size))
-                    .then_some((proof_size, data_buffer_size))
+                    .then(|| (proof_size, data_buffer_size))
             })
             .ok_or(Error::UnknownProofSize)?;
         let merkle_branch = MerkleBranch::new_zeroed(proof_size);
