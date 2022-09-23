@@ -6,7 +6,7 @@ mod tests {
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{quic::StreamStats, streamer::StakedNodes},
         solana_tpu_client::{
-            connection_cache::ConnectionCacheStats,
+            connection_cache_stats::ConnectionCacheStats,
             nonblocking::quic_client::QuicLazyInitializedEndpoint,
         },
         std::{

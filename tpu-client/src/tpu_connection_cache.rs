@@ -1,6 +1,6 @@
 use {
     crate::{
-        connection_cache::ConnectionCacheStats,
+        connection_cache_stats::ConnectionCacheStats,
         nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
         tpu_connection::TpuConnection as BlockingTpuConnection,
     },

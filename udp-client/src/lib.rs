@@ -9,7 +9,7 @@ use {
         udp_client::UdpTpuConnection as BlockingUdpTpuConnection,
     },
     solana_tpu_client::{
-        connection_cache::ConnectionCacheStats,
+        connection_cache_stats::ConnectionCacheStats,
         tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
     },
     std::{
