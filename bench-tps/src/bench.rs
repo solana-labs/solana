@@ -48,7 +48,7 @@ const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
 /// calculate maximum possible prioritizatino fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
-pub fn max_lamporots_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
+pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
     if use_randomized_compute_unit_price {
         const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
         let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
