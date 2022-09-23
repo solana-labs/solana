@@ -46,10 +46,13 @@ fn create_client(
     target_node: Option<Pubkey>,
 ) -> Arc<dyn BenchTpsClient + Send + Sync> {
     match external_client_type {
-        ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
-            json_rpc_url.to_string(),
-            CommitmentConfig::confirmed(),
-        )),
+        ExternalClientType::RpcClient => {
+            info!("Airdrop RPC: {:?}", json_rpc_url);
+            Arc::new(RpcClient::new_with_commitment(
+                json_rpc_url.to_string(),
+                CommitmentConfig::confirmed(),
+            ))
+        }
         ExternalClientType::ThinClient => {
             let connection_cache = match use_quic {
                 true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
@@ -103,6 +106,7 @@ fn create_client(
             }
         }
         ExternalClientType::TpuClient => {
+            info!("Airdrop RPC: {:?}", json_rpc_url);
             let rpc_client = Arc::new(RpcClient::new_with_commitment(
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),

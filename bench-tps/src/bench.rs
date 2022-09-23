@@ -1042,9 +1042,6 @@ pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
                 )
                 .is_err()
             {
-                error!(
-                    "make sure json_rpc_url is properly configured"
-                );
                 return Err(BenchTpsError::AirdropFailure);
             }
         }
