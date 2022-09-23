@@ -1080,11 +1080,11 @@ impl Accounts {
         self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
-    fn lock_account(
+    fn can_lock_account(
         &self,
-        account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        account_locks: &AccountLocks,
+        writable_keys: &[&Pubkey],
+        readonly_keys: &[&Pubkey],
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
@@ -1098,6 +1098,17 @@ impl Accounts {
                 return Err(TransactionError::AccountInUse);
             }
         }
+
+        Ok(())
+    }
+
+    fn lock_account(
+        &self,
+        account_locks: &mut AccountLocks,
+        writable_keys: Vec<&Pubkey>,
+        readonly_keys: Vec<&Pubkey>,
+    ) -> Result<()> {
+        self.can_lock_account(account_locks, &writable_keys, &readonly_keys)?;
 
         for k in writable_keys {
             account_locks.write_locks.insert(*k);
