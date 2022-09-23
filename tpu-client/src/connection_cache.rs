@@ -1,3 +1,6 @@
+pub use crate::tpu_connection_cache::{
+    DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+};
 use {
     crate::{
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
@@ -6,6 +9,7 @@ use {
             tpu_connection::NonblockingConnection,
         },
         tpu_connection::BlockingConnection,
+        tpu_connection_cache::MAX_CONNECTIONS,
     },
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
@@ -24,18 +28,6 @@ use {
         sync::{atomic::Ordering, Arc, RwLock},
     },
 };
-
-// Should be non-zero
-static MAX_CONNECTIONS: usize = 1024;
-
-/// Used to decide whether the TPU and underlying connection cache should use
-/// QUIC connections.
-pub const DEFAULT_TPU_USE_QUIC: bool = true;
-
-/// Default TPU connection pool size per remote address
-pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
-
-pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 
 pub struct ConnectionCache {
     map: RwLock<IndexMap<SocketAddr, ConnectionPool>>,
