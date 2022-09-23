@@ -1317,7 +1317,7 @@ impl Scheduler<ExecuteTimings> {
         let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
-            .unwrap_or(format!("{}", 1))
+            .unwrap_or(format!("{}", 8))
             .parse::<usize>()
             .unwrap();
 
@@ -1485,7 +1485,7 @@ impl Scheduler<ExecuteTimings> {
                 }
 
                 let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
-                    .unwrap_or(format!("{}", 1))
+                    .unwrap_or(format!("{}", 9))
                     .parse::<usize>()
                     .unwrap();
 

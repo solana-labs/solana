@@ -1670,7 +1670,7 @@ impl ScheduleStage {
         let (task_sender, task_receiver) =
             crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
         let indexer_count = std::env::var("INDEXER_COUNT")
-            .unwrap_or(format!("{}", 4))
+            .unwrap_or(format!("{}", 0))
             .parse::<usize>()
             .unwrap();
         let indexer_handles = (0..indexer_count)
