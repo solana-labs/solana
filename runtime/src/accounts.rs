@@ -55,7 +55,7 @@ use {
         slot_hashes::SlotHashes,
         system_program,
         sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
-        transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
+        transaction::{Result, SanitizedTransaction, TransactionError},
         transaction_context::{IndexOfAccount, TransactionAccount},
     },
     std::{
@@ -87,17 +87,6 @@ impl AccountLocks {
 
     fn is_locked_write(&self, key: &Pubkey) -> bool {
         self.write_locks.contains(key)
-    }
-
-    fn insert_new_readonly(&mut self, key: &Pubkey) {
-        assert!(self.readonly_locks.insert(*key, 1).is_none());
-    }
-
-    fn lock_readonly(&mut self, key: &Pubkey) -> bool {
-        self.readonly_locks.get_mut(key).map_or(false, |count| {
-            *count += 1;
-            true
-        })
     }
 
     fn unlock_readonly(&mut self, key: &Pubkey) {
@@ -167,10 +156,6 @@ impl StagedAccountLocks {
 
     fn read_locks(&self) -> &HashSet<Pubkey> {
         &self.readonly_locks
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.write_locks.is_empty() && self.readonly_locks.is_empty()
     }
 }
 
@@ -1161,27 +1146,6 @@ impl Accounts {
         Ok(())
     }
 
-    fn lock_account(
-        &self,
-        account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
-    ) -> Result<()> {
-        self.can_lock_account(account_locks, &writable_keys, &readonly_keys)?;
-
-        for k in writable_keys {
-            account_locks.write_locks.insert(*k);
-        }
-
-        for k in readonly_keys {
-            if !account_locks.lock_readonly(k) {
-                account_locks.insert_new_readonly(k);
-            }
-        }
-
-        Ok(())
-    }
-
     fn unlock_account(
         &self,
         account_locks: &mut AccountLocks,
@@ -1216,38 +1180,16 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    #[allow(clippy::needless_collect)]
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         tx_account_lock_limit: usize,
-    ) -> Vec<Result<()>> {
-        let tx_account_locks_results: Vec<Result<_>> = txs
-            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
-            .collect();
-        self.lock_accounts_inner(tx_account_locks_results)
+    ) -> (Vec<Result<()>>, StagedAccountLocks) {
+        self.lock_accounts_with_results(txs, std::iter::repeat(&Ok(())), tx_account_lock_limit)
     }
 
     #[must_use]
-    #[allow(clippy::needless_collect)]
     pub fn lock_accounts_with_results<'a>(
-        &self,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-        results: impl Iterator<Item = &'a Result<()>>,
-        tx_account_lock_limit: usize,
-    ) -> Vec<Result<()>> {
-        let tx_account_locks_results: Vec<Result<_>> = txs
-            .zip(results)
-            .map(|(tx, result)| match result {
-                Ok(()) => tx.get_account_locks(tx_account_lock_limit),
-                Err(err) => Err(err.clone()),
-            })
-            .collect();
-        self.lock_accounts_inner(tx_account_locks_results)
-    }
-
-    #[must_use]
-    pub fn stage_and_lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: impl Iterator<Item = &'a Result<()>>,
@@ -1272,25 +1214,6 @@ impl Accounts {
         lock.commit_staged_locks(&staged_locks);
 
         (tx_account_locks_results, staged_locks)
-    }
-
-    #[must_use]
-    fn lock_accounts_inner(
-        &self,
-        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
-    ) -> Vec<Result<()>> {
-        let account_locks = &mut self.account_locks.lock().unwrap();
-        tx_account_locks_results
-            .into_iter()
-            .map(|tx_account_locks_result| match tx_account_locks_result {
-                Ok(tx_account_locks) => self.lock_account(
-                    account_locks,
-                    tx_account_locks.writable,
-                    tx_account_locks.readonly,
-                ),
-                Err(err) => Err(err),
-            })
-            .collect()
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline

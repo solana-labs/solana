@@ -16,24 +16,10 @@ pub struct TransactionBatch<'a, 'b> {
 impl<'a, 'b> TransactionBatch<'a, 'b> {
     pub fn new(
         lock_results: Vec<Result<()>>,
-        bank: &'a Bank,
-        sanitized_txs: Cow<'b, [SanitizedTransaction]>,
-    ) -> Self {
-        Self::new_with_staged_locks(
-            lock_results,
-            StagedAccountLocks::default(),
-            bank,
-            sanitized_txs,
-        )
-    }
-
-    pub fn new_with_staged_locks(
-        lock_results: Vec<Result<()>>,
         staged_locks: StagedAccountLocks,
         bank: &'a Bank,
         sanitized_txs: Cow<'b, [SanitizedTransaction]>,
     ) -> Self {
-        assert_eq!(lock_results.len(), sanitized_txs.len());
         Self {
             lock_results,
             staged_locks,
@@ -61,10 +47,6 @@ impl<'a, 'b> TransactionBatch<'a, 'b> {
 
     pub fn needs_unlock(&self) -> bool {
         self.needs_unlock
-    }
-
-    pub fn has_staged_locks(&self) -> bool {
-        !self.staged_locks.is_empty()
     }
 
     pub fn staged_locks(&self) -> &StagedAccountLocks {

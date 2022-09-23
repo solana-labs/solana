@@ -18,6 +18,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
+        accounts::StagedAccountLocks,
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
@@ -364,7 +365,12 @@ fn rebatch_transactions<'a>(
 ) -> TransactionBatchWithIndexes<'a, 'a> {
     let txs = &sanitized_txs[start..=end];
     let results = &lock_results[start..=end];
-    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    let mut tx_batch = TransactionBatch::new(
+        results.to_vec(),
+        StagedAccountLocks::default(),
+        bank,
+        Cow::from(txs),
+    );
     tx_batch.set_needs_unlock(false);
 
     let transaction_indexes = transaction_indexes[start..=end].to_vec();

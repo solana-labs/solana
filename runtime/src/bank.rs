@@ -594,6 +594,7 @@ pub struct BankRc {
     pub(crate) bank_id_generator: Arc<AtomicU64>,
 }
 
+use crate::accounts::StagedAccountLocks;
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
@@ -3930,11 +3931,11 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
+        let (lock_results, staged_locks) = self
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), transaction_account_lock_limit);
-        TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
+        TransactionBatch::new(lock_results, staged_locks, self, Cow::Owned(sanitized_txs))
     }
 
     /// Prepare a transaction batch from a list of versioned transactions from
@@ -3954,12 +3955,13 @@ impl Bank {
             })
             .collect::<Result<Vec<_>>>()?;
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results = self
+        let (lock_results, staged_locks) = self
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), tx_account_lock_limit);
         Ok(TransactionBatch::new(
             lock_results,
+            staged_locks,
             self,
             Cow::Owned(sanitized_txs),
         ))
@@ -3971,11 +3973,11 @@ impl Bank {
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        let lock_results = self
+        let (lock_results, staged_locks) = self
             .rc
             .accounts
             .lock_accounts(txs.iter(), tx_account_lock_limit);
-        TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
+        TransactionBatch::new(lock_results, staged_locks, self, Cow::Borrowed(txs))
     }
 
     /// Prepare a locked transaction batch from a list of sanitized transactions, and their cost
@@ -3987,17 +3989,12 @@ impl Bank {
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
-        // let lock_results = self.rc.accounts.lock_accounts_with_results(
-        //     transactions.iter(),
-        //     transaction_results,
-        //     tx_account_lock_limit,
-        // );
-        let (lock_results, staged_locks) = self.rc.accounts.stage_and_lock_accounts(
+        let (lock_results, staged_locks) = self.rc.accounts.lock_accounts_with_results(
             transactions.iter(),
             transaction_results,
             tx_account_lock_limit,
         );
-        TransactionBatch::new_with_staged_locks(
+        TransactionBatch::new(
             lock_results,
             staged_locks,
             self,
@@ -4014,8 +4011,12 @@ impl Bank {
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
             .map(|_| ());
-        let mut batch =
-            TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
+        let mut batch = TransactionBatch::new(
+            vec![lock_result],
+            StagedAccountLocks::default(),
+            self,
+            Cow::Owned(vec![transaction]),
+        );
         batch.set_needs_unlock(false);
         batch
     }
@@ -4128,13 +4129,7 @@ impl Bank {
     pub fn unlock_accounts(&self, batch: &mut TransactionBatch) {
         if batch.needs_unlock() {
             batch.set_needs_unlock(false);
-            if batch.has_staged_locks() {
-                self.rc.accounts.unlock_staged_locks(batch.staged_locks());
-            } else {
-                self.rc
-                    .accounts
-                    .unlock_accounts(batch.sanitized_transactions().iter(), batch.lock_results())
-            }
+            self.rc.accounts.unlock_staged_locks(batch.staged_locks());
         }
     }
 
