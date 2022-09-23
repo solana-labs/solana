@@ -3226,6 +3226,16 @@ impl Blockstore {
         self.last_root()
     }
 
+    /// Returns the highest available slot in the blockstore
+    pub fn highest_slot(&self) -> Result<Option<Slot>> {
+        let highest_slot = self
+            .db
+            .iter::<cf::SlotMeta>(IteratorMode::End)?
+            .next()
+            .map(|(slot, _)| slot);
+        Ok(highest_slot)
+    }
+
     pub fn lowest_cleanup_slot(&self) -> Slot {
         *self.lowest_cleanup_slot.read().unwrap()
     }
@@ -8431,6 +8441,27 @@ pub mod tests {
         assert_eq!(blockstore.lowest_slot(), 1);
         blockstore.run_purge(0, 5, PurgeType::PrimaryIndex).unwrap();
         assert_eq!(blockstore.lowest_slot(), 6);
+    }
+
+    #[test]
+    fn test_highest_slot() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        assert_eq!(blockstore.highest_slot().unwrap(), None);
+
+        for slot in 0..10 {
+            let (shreds, _) = make_slot_entries(slot, 0, 1);
+            blockstore.insert_shreds(shreds, None, false).unwrap();
+            assert_eq!(blockstore.highest_slot().unwrap(), Some(slot));
+        }
+        blockstore
+            .run_purge(5, 10, PurgeType::PrimaryIndex)
+            .unwrap();
+        assert_eq!(blockstore.highest_slot().unwrap(), Some(4));
+
+        blockstore.run_purge(0, 4, PurgeType::PrimaryIndex).unwrap();
+        assert_eq!(blockstore.highest_slot().unwrap(), None);
     }
 
     #[test]

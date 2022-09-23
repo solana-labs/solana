@@ -1418,7 +1418,9 @@ fn load_blockstore(
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
-    let halt_at_slot = config.halt_at_slot.or_else(|| highest_slot(&blockstore));
+    let halt_at_slot = config
+        .halt_at_slot
+        .or_else(|| blockstore.highest_slot().unwrap_or(None));
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify: config.poh_verify,
@@ -1517,29 +1519,6 @@ fn load_blockstore(
     ))
 }
 
-fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
-    let mut start = Measure::start("Blockstore search for highest slot");
-    let highest_slot = blockstore
-        .slot_meta_iterator(0)
-        .map(|metas| {
-            let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-            if slots.is_empty() {
-                info!("Ledger is empty");
-                None
-            } else {
-                let first = slots.first().unwrap();
-                Some(*slots.last().unwrap_or(first))
-            }
-        })
-        .unwrap_or_else(|err| {
-            warn!("Failed to ledger slot meta: {}", err);
-            None
-        });
-    start.stop();
-    info!("{}. Found slot {:?}", start, highest_slot);
-    highest_slot
-}
-
 pub struct ProcessBlockStore<'a> {
     id: &'a Pubkey,
     vote_account: &'a Pubkey,
@@ -1598,7 +1577,7 @@ impl<'a> ProcessBlockStore<'a> {
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
 
             let exit = Arc::new(AtomicBool::new(false));
-            if let Some(max_slot) = highest_slot(self.blockstore) {
+            if let Ok(Some(max_slot)) = self.blockstore.highest_slot() {
                 let bank_forks = self.bank_forks.clone();
                 let exit = exit.clone();
                 let start_progress = self.start_progress.clone();

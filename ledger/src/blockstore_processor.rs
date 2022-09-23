@@ -820,10 +820,8 @@ pub fn process_blockstore_from_root(
         );
     }
 
-    if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
-        if let Some((slot, _meta)) = metas.last() {
-            info!("ledger holds data through slot {}", slot);
-        }
+    if let Ok(Some(highest_slot)) = blockstore.highest_slot() {
+        info!("ledger holds data through slot {}", highest_slot);
     }
 
     let mut timing = ExecuteTimings::default();
