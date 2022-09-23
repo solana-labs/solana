@@ -272,6 +272,7 @@ pub mod test {
         let completed_shreds: Vec<Shred> = [0, 2, 4, 6]
             .iter()
             .map(|slot| {
+<<<<<<< HEAD
                 let mut shred = Shred::new_from_serialized_shred(
                     blockstore
                         .get_data_shred(*slot, last_shred - 1)
@@ -281,6 +282,20 @@ pub mod test {
                 .unwrap();
                 shred.set_index(last_shred as u32);
                 shred.set_last_in_slot();
+=======
+                let parent_offset = u16::from(*slot != 0);
+                let shred = Shred::new_from_data(
+                    *slot,
+                    last_shred as u32, // index
+                    parent_offset,
+                    &[0u8; 8], // data
+                    ShredFlags::LAST_SHRED_IN_SLOT,
+                    8,                 // reference_tick
+                    0,                 // version
+                    last_shred as u32, // fec_set_index
+                );
+                assert!(shred.sanitize().is_ok());
+>>>>>>> 9ee53e594 (patches clippy errors from new rust nightly release (#28028))
                 shred
             })
             .collect();

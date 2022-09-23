@@ -393,14 +393,7 @@ impl RepairService {
                     .chain(repair_stats.highest_shred.slot_pubkeys.iter())
                     .chain(repair_stats.orphan.slot_pubkeys.iter())
                     .map(|(slot, slot_repairs)| {
-                        (
-                            slot,
-                            slot_repairs
-                                .pubkey_repairs
-                                .iter()
-                                .map(|(_key, count)| count)
-                                .sum::<u64>(),
-                        )
+                        (slot, slot_repairs.pubkey_repairs.values().sum::<u64>())
                     })
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);

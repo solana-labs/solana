@@ -39,10 +39,10 @@ pub struct SlotStats {
 impl SlotStats {
     pub fn get_min_index_count(&self) -> usize {
         self.turbine_fec_set_index_counts
-            .iter()
-            .map(|(_, cnt)| *cnt)
+            .values()
             .min()
-            .unwrap_or(0)
+            .copied()
+            .unwrap_or_default()
     }
 
     fn report(&self, slot: Slot) {
