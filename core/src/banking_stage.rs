@@ -1651,8 +1651,8 @@ impl BankingStage {
         let (units, times): (Vec<_>, Vec<_>) = execute_timings
             .details
             .per_program_timings
-            .iter()
-            .map(|(_program_id, program_timings)| {
+            .values()
+            .map(|program_timings| {
                 (
                     program_timings.accumulated_units,
                     program_timings.accumulated_us,

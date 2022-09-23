@@ -16936,7 +16936,7 @@ pub(crate) mod tests {
             load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
         assert_eq!(
             vote_and_stake_accounts.len(),
-            if check_owner_change { 0 } else { 1 }
+            usize::from(!check_owner_change)
         );
     }
 

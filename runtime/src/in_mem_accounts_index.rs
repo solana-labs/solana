@@ -1057,7 +1057,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
-            let new_ref_count = if v.is_cached() { 0 } else { 1 };
+            let new_ref_count = u64::from(!v.is_cached());
             disk.update(&k, |current| {
                 match current {
                     Some((current_slot_list, mut ref_count)) => {

@@ -3865,10 +3865,7 @@ pub(crate) mod tests {
             vec![root, root + 1]
         );
         assert_eq!(
-            epoch_slots_frozen_slots
-                .into_iter()
-                .map(|(slot, _hash)| slot)
-                .collect::<Vec<Slot>>(),
+            epoch_slots_frozen_slots.into_keys().collect::<Vec<Slot>>(),
             vec![root, root + 1]
         );
     }
