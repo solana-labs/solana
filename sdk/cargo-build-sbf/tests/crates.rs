@@ -65,7 +65,7 @@ fn test_build() {
 fn test_dump() {
     // This test requires rustfilt.
     assert!(Command::new("cargo")
-        .args(&["install", "-f", "rustfilt"])
+        .args(["install", "-f", "rustfilt"])
         .status()
         .expect("Unable to install rustfilt required for --dump option")
         .success());

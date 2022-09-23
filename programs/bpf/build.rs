@@ -108,7 +108,7 @@ fn main() {
                 program
             );
             assert!(Command::new("../../cargo-build-bpf")
-                .args(&[
+                .args([
                     "--manifest-path",
                     &format!("rust/{}/Cargo.toml", program),
                     "--bpf-out-dir",

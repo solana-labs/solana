@@ -2823,7 +2823,7 @@ pub mod test {
                 OpenOptions::new()
                     .write(true)
                     .truncate(true)
-                    .open(&path)
+                    .open(path)
                     .unwrap_or_else(|_| panic!("Failed to truncate file: {:?}", path));
             },
         );

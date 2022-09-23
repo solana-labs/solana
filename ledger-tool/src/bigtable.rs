@@ -277,7 +277,7 @@ pub async fn transaction_history(
                     "{}, slot={}, memo=\"{}\", status={}",
                     result.signature,
                     result.slot,
-                    result.memo.unwrap_or_else(|| "".to_string()),
+                    result.memo.unwrap_or_default(),
                     match result.err {
                         None => "Confirmed".to_string(),
                         Some(err) => format!("Failed: {:?}", err),
