@@ -1,8 +1,16 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod nonblocking;
+pub mod quic_client;
 
 use {
+    crate::{
+        nonblocking::quic_client::{
+            QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
+            QuicTpuConnection as NonblockingQuicTpuConnection,
+        },
+        quic_client::QuicTpuConnection as BlockingQuicTpuConnection,
+    },
     solana_sdk::{pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair},
     solana_streamer::{
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
@@ -11,11 +19,6 @@ use {
     },
     solana_tpu_client::{
         connection_cache::ConnectionCacheStats,
-        nonblocking::quic_client::{
-            QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
-            QuicTpuConnection as NonblockingQuicTpuConnection,
-        },
-        quic_client::QuicTpuConnection as BlockingQuicTpuConnection,
         tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
     },
     std::{

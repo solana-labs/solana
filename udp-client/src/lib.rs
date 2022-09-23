@@ -1,13 +1,16 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod nonblocking;
+pub mod udp_client;
 
 use {
+    crate::{
+        nonblocking::udp_client::UdpTpuConnection as NonblockingUdpTpuConnection,
+        udp_client::UdpTpuConnection as BlockingUdpTpuConnection,
+    },
     solana_tpu_client::{
         connection_cache::ConnectionCacheStats,
-        nonblocking::udp_client::UdpTpuConnection as NonblockingUdpTpuConnection,
         tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
-        udp_client::UdpTpuConnection as BlockingUdpTpuConnection,
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
