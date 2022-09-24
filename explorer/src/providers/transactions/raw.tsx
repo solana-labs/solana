@@ -2,8 +2,9 @@ import React from "react";
 import {
   Connection,
   TransactionSignature,
-  Transaction,
-  Message,
+  TransactionMessage,
+  DecompileArgs,
+  VersionedMessage,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import * as Cache from "providers/cache";
@@ -12,8 +13,8 @@ import { reportError } from "utils/sentry";
 
 export interface Details {
   raw?: {
-    transaction: Transaction;
-    message: Message;
+    transaction: TransactionMessage;
+    message: VersionedMessage;
     signatures: string[];
   } | null;
 }
@@ -66,17 +67,22 @@ async function fetchRawTransaction(
 ) {
   let fetchStatus;
   try {
-    const response = await new Connection(url).getTransaction(signature);
+    const response = await new Connection(url).getTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+    });
     fetchStatus = FetchStatus.Fetched;
 
     let data: Details = { raw: null };
     if (response !== null) {
       const { message, signatures } = response.transaction;
+      const accountKeysFromLookups = response.meta?.loadedAddresses;
+      const decompileArgs: DecompileArgs | undefined =
+        accountKeysFromLookups && { accountKeysFromLookups };
       data = {
         raw: {
           message,
           signatures,
-          transaction: Transaction.populate(message, signatures),
+          transaction: TransactionMessage.decompile(message, decompileArgs),
         },
       };
     }
