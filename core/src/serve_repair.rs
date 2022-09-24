@@ -32,7 +32,7 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
-        feature_set::{check_ping_ancestor_requests, sign_repair_requests},
+        feature_set::sign_repair_requests,
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -162,7 +162,6 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
-    pings_required: usize,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -442,24 +441,6 @@ impl ServeRepair {
         }
     }
 
-    fn check_ping_ancestor_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
-        root_bank
-            .feature_set
-            .activated_slot(&check_ping_ancestor_requests::id())
-            .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
-    }
-
-    fn should_check_ping_ancestor_request(
-        slot: Slot,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
-    ) -> bool {
-        match check_ping_ancestor_request_epoch {
-            None => false,
-            Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
-        }
-    }
-
     /// Process messages from the network
     fn run_listen(
         &self,
@@ -541,7 +522,6 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
-            ("pings_required", stats.pings_required, i64),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -663,78 +643,6 @@ impl ServeRepair {
         true
     }
 
-    fn check_ping_cache(
-        request: &RepairProtocol,
-        from_addr: &SocketAddr,
-        identity_keypair: &Keypair,
-        ping_cache: &mut PingCache,
-    ) -> (bool, Option<Ping>) {
-        let mut rng = rand::thread_rng();
-        let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
-        ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf)
-    }
-
-    fn requires_signature_check(
-        request: &RepairProtocol,
-        root_bank: &Bank,
-        sign_repairs_epoch: Option<Epoch>,
-    ) -> bool {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyOrphan(_, slot)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, slot, _)
-            | RepairProtocol::LegacyAncestorHashes(_, slot, _)
-            | RepairProtocol::WindowIndex { slot, .. }
-            | RepairProtocol::HighestWindowIndex { slot, .. }
-            | RepairProtocol::Orphan { slot, .. }
-            | RepairProtocol::AncestorHashes { slot, .. } => {
-                Self::should_sign_repair_request(*slot, root_bank, sign_repairs_epoch)
-            }
-            RepairProtocol::Pong(_) => true,
-        }
-    }
-
-    fn ping_to_packet_mapper_by_request_variant(
-        request: &RepairProtocol,
-        dest_addr: SocketAddr,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
-    ) -> Option<Box<dyn FnOnce(Ping) -> Option<Packet>>> {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, _, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-            | RepairProtocol::LegacyAncestorHashes(_, _, _)
-            | RepairProtocol::Pong(_) => None,
-            RepairProtocol::WindowIndex { .. }
-            | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::Orphan { .. } => Some(Box::new(move |ping| {
-                let ping = RepairResponse::Ping(ping);
-                Packet::from_data(Some(&dest_addr), ping).ok()
-            })),
-            RepairProtocol::AncestorHashes { slot, .. } => {
-                if Self::should_check_ping_ancestor_request(
-                    *slot,
-                    root_bank,
-                    check_ping_ancestor_request_epoch,
-                ) {
-                    Some(Box::new(move |ping| {
-                        let ping = AncestorHashesResponse::Ping(ping);
-                        Packet::from_data(Some(&dest_addr), ping).ok()
-                    }))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
     fn handle_packets(
         &self,
         ping_cache: &mut PingCache,
@@ -742,17 +650,12 @@ impl ServeRepair {
         blockstore: &Blockstore,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
-        root_bank: &Bank,
+        _root_bank: &Bank,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
-        let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let check_ping_ancestor_request_epoch =
-            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let identity_keypair = self.cluster_info.keypair().clone();
-        let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
-        let mut pending_pings = Vec::default();
 
         // iter over the packets
         for (i, packet) in packet_batch.iter().enumerate() {
@@ -769,42 +672,12 @@ impl ServeRepair {
                 continue;
             }
 
-            let require_signature_check =
-                Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
-            if require_signature_check && !request.supports_signature() {
-                stats.err_unsigned += 1;
-                continue;
-            }
-            if request.supports_signature()
-                && !Self::verify_signed_packet(&my_id, packet, &request, stats)
-            {
-                continue;
+            if request.supports_signature() {
+                // collect stats for signature verification
+                Self::verify_signed_packet(&my_id, packet, &request, stats);
             }
 
             let from_addr = packet.meta.socket_addr();
-            if let Some(ping_to_pkt) = Self::ping_to_packet_mapper_by_request_variant(
-                &request,
-                from_addr,
-                root_bank,
-                check_ping_ancestor_request_epoch,
-            ) {
-                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                    stats.err_malformed += 1;
-                    continue;
-                }
-                let (check, ping) =
-                    Self::check_ping_cache(&request, &from_addr, &identity_keypair, ping_cache);
-                if let Some(ping) = ping {
-                    if let Some(pkt) = ping_to_pkt(ping) {
-                        pending_pings.push(pkt);
-                    }
-                }
-                if !check {
-                    stats.pings_required += 1;
-                    continue;
-                }
-            }
-
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -822,11 +695,6 @@ impl ServeRepair {
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }
-        }
-
-        if !pending_pings.is_empty() {
-            let batch = PacketBatch::new(pending_pings);
-            let _ignore = response_sender.send(batch);
         }
     }
 
