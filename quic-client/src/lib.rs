@@ -22,6 +22,7 @@ use {
         tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
     },
     std::{
+        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
     },
@@ -122,6 +123,28 @@ impl QuicConfig {
                     )
                 });
         compute_max_allowed_uni_streams(client_type, stake, total_stake)
+    }
+
+    pub fn update_client_certificate(
+        &mut self,
+        keypair: &Keypair,
+        ipaddr: IpAddr,
+    ) -> Result<(), Box<dyn Error>> {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        self.client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+        Ok(())
+    }
+
+    pub fn set_staked_nodes(
+        &mut self,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
+        client_pubkey: &Pubkey,
+    ) {
+        self.maybe_staked_nodes = Some(staked_nodes.clone());
+        self.maybe_client_pubkey = Some(*client_pubkey);
     }
 }
 

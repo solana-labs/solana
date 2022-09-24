@@ -2,7 +2,7 @@ use {
     crate::{
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
         nonblocking::{
-            quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
+            quic_client::{QuicClient, QuicClientCertificate},
             tpu_connection::TpuConnection as NonblockingTpuConnection,
         },
         tpu_connection::TpuConnection as BlockingTpuConnection,
@@ -12,12 +12,9 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{pubkey::Pubkey, signature::Keypair, timing::AtomicInterval},
     solana_streamer::{
-        nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
-        streamer::StakedNodes,
-        tls_certificates::new_self_signed_tls_certificate_chain,
+        streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
     },
     std::{
-        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc, RwLock},
     },
@@ -57,70 +54,6 @@ impl ConnectionCache {
             connection_pool_size,
             ..Self::default()
         }
-    }
-
-    pub fn update_client_certificate(
-        &mut self,
-        keypair: &Keypair,
-        ipaddr: IpAddr,
-    ) -> Result<(), Box<dyn Error>> {
-        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
-        self.client_certificate = Arc::new(QuicClientCertificate {
-            certificates: certs,
-            key: priv_key,
-        });
-        Ok(())
-    }
-
-    pub fn set_staked_nodes(
-        &mut self,
-        staked_nodes: &Arc<RwLock<StakedNodes>>,
-        client_pubkey: &Pubkey,
-    ) {
-        self.maybe_staked_nodes = Some(staked_nodes.clone());
-        self.maybe_client_pubkey = Some(*client_pubkey);
-    }
-
-    pub fn with_udp(connection_pool_size: usize) -> Self {
-        // The minimum pool size is 1.
-        let connection_pool_size = 1.max(connection_pool_size);
-        Self {
-            use_quic: false,
-            connection_pool_size,
-            ..Self::default()
-        }
-    }
-
-    pub fn use_quic(&self) -> bool {
-        self.use_quic
-    }
-
-    fn create_endpoint(&self, force_use_udp: bool) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic() && !force_use_udp {
-            Some(Arc::new(QuicLazyInitializedEndpoint::new(
-                self.client_certificate.clone(),
-            )))
-        } else {
-            None
-        }
-    }
-
-    fn compute_max_parallel_streams(&self) -> usize {
-        let (client_type, stake, total_stake) =
-            self.maybe_client_pubkey
-                .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
-                    self.maybe_staked_nodes.as_ref().map_or(
-                        (ConnectionPeerType::Unstaked, 0, 0),
-                        |stakes| {
-                            let rstakes = stakes.read().unwrap();
-                            rstakes.pubkey_stake_map.get(&pubkey).map_or(
-                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake),
-                                |stake| (ConnectionPeerType::Staked, *stake, rstakes.total_stake),
-                            )
-                        },
-                    )
-                });
-        compute_max_allowed_uni_streams(client_type, stake, total_stake)
     }
 
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
