@@ -27,7 +27,7 @@ pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
 pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 
-pub struct ConnectionCache<P: ConnectionPool> {
+pub struct TpuConnectionCache<P: ConnectionPool> {
     pub map: RwLock<IndexMap<SocketAddr, P>>,
     pub stats: Arc<ConnectionCacheStats>,
     pub last_stats: AtomicInterval,
@@ -35,7 +35,7 @@ pub struct ConnectionCache<P: ConnectionPool> {
     pub tpu_config: P::TpuConfig,
 }
 
-impl<P: ConnectionPool> ConnectionCache<P> {
+impl<P: ConnectionPool> TpuConnectionCache<P> {
     pub fn new(connection_pool_size: usize) -> Self {
         Self {
             connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
@@ -239,7 +239,7 @@ impl<P: ConnectionPool> ConnectionCache<P> {
     }
 }
 
-impl<P: ConnectionPool> Default for ConnectionCache<P> {
+impl<P: ConnectionPool> Default for TpuConnectionCache<P> {
     fn default() -> Self {
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
