@@ -9,11 +9,10 @@ import {
   StakeMeta,
   StakeAccountType,
 } from "validators/accounts/stake";
-import BN from "bn.js";
 import { StakeActivationData } from "@solana/web3.js";
 import { Epoch } from "components/common/Epoch";
 
-const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
+const U64_MAX = BigInt("0xffffffffffffffff");
 
 export function StakeAccountSection({
   account,
@@ -163,11 +162,11 @@ function DelegationCard({
   const delegation = stakeAccount?.stake?.delegation;
   if (delegation) {
     voterPubkey = delegation.voter;
-    if (!delegation.activationEpoch.eq(MAX_EPOCH)) {
-      activationEpoch = delegation.activationEpoch.toNumber();
+    if (delegation.activationEpoch !== U64_MAX) {
+      activationEpoch = delegation.activationEpoch;
     }
-    if (!delegation.deactivationEpoch.eq(MAX_EPOCH)) {
-      deactivationEpoch = delegation.deactivationEpoch.toNumber();
+    if (delegation.deactivationEpoch !== U64_MAX) {
+      deactivationEpoch = delegation.deactivationEpoch;
     }
   }
   const { stake } = stakeAccount;
@@ -297,10 +296,10 @@ function isFullyInactivated(
   }
 
   const delegatedStake = stake.delegation.stake;
-  const inactiveStake = new BN(activation.inactive);
+  const inactiveStake = BigInt(activation.inactive);
 
   return (
-    !stake.delegation.deactivationEpoch.eq(MAX_EPOCH) &&
-    delegatedStake.eq(inactiveStake)
+    stake.delegation.deactivationEpoch !== U64_MAX &&
+    delegatedStake === inactiveStake
   );
 }
