@@ -112,9 +112,14 @@ impl DeserializedPacket {
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let priority_details = priority_details
+        let mut priority_details = priority_details
             .or_else(|| get_priority_details(sanitized_transaction.get_message()))
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
+
+        // set priority to zero for vote transactions
+        if is_simple_vote {
+            priority_details.priority = 0;
+        };
 
         Ok(Self {
             immutable_section: Rc::new(ImmutableDeserializedPacket {
