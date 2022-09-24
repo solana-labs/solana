@@ -24,6 +24,8 @@ use crate::{
 /// program, and provided by _its_ caller. The same is true of the program ID of
 /// the called program.
 ///
+/// [entrypoint!]: crate::entrypoint!
+///
 /// The `Instruction` is usually built from within the calling program, but may
 /// be deserialized from an external source.
 ///

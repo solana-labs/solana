@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { BlockResponse, PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { Address } from "src/components/common/Address";
 import { clusterPath } from "src/utils/url";
 
@@ -16,7 +16,7 @@ export function BlockAccountsCard({
   block,
   blockSlot,
 }: {
-  block: BlockResponse;
+  block: VersionedBlockResponse;
   blockSlot: number;
 }) {
   const router = useRouter();
@@ -28,9 +28,12 @@ export function BlockAccountsCard({
     block.transactions.forEach((tx) => {
       const message = tx.transaction.message;
       const txSet = new Map<string, boolean>();
-      message.instructions.forEach((ix) => {
-        ix.accounts.forEach((index) => {
-          const address = message.accountKeys[index].toBase58();
+      const accountKeys = message.getAccountKeys({
+        accountKeysFromLookups: tx.meta?.loadedAddresses,
+      });
+      message.compiledInstructions.forEach((ix) => {
+        ix.accountKeyIndexes.forEach((index) => {
+          const address = accountKeys.get(index)!.toBase58();
           txSet.set(address, message.isAccountWritable(index));
         });
       });

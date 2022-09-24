@@ -41,10 +41,6 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "src/components/instruction/serum/types";
-import {
-  isBonfidaBotInstruction,
-  parseBonfidaBotInstructionTitle,
-} from "src/components/instruction/bonfida-bot/types";
 import { INNER_INSTRUCTIONS_START_SLOT } from "pages/tx/[signature]";
 import { useCluster, Cluster } from "src/providers/cluster";
 import { useQuery } from "src/utils/url";
@@ -398,8 +394,8 @@ const TokenTransactionRow = React.memo(
       statusText = "Success";
     }
 
-    const instructions =
-      details?.data?.transaction?.transaction.message.instructions;
+    const transactionWithMeta = details?.data?.transactionWithMeta;
+    const instructions = transactionWithMeta?.transaction.message.instructions;
     if (!instructions)
       return (
         <tr key={tx.signature}>
@@ -428,9 +424,7 @@ const TokenTransactionRow = React.memo(
 
     let tokenInstructionNames: InstructionType[] = [];
 
-    if (details?.data?.transaction) {
-      const transaction = details.data.transaction;
-
+    if (transactionWithMeta) {
       tokenInstructionNames = instructions
         .map((ix, index): InstructionType | undefined => {
           let name = "Unknown";
@@ -441,11 +435,11 @@ const TokenTransactionRow = React.memo(
           )[] = [];
 
           if (
-            transaction.meta?.innerInstructions &&
+            transactionWithMeta.meta?.innerInstructions &&
             (cluster !== Cluster.MainnetBeta ||
-              transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+              transactionWithMeta.slot >= INNER_INSTRUCTIONS_START_SLOT)
           ) {
-            transaction.meta.innerInstructions.forEach((ix) => {
+            transactionWithMeta.meta.innerInstructions.forEach((ix) => {
               if (ix.index === index) {
                 ix.instructions.forEach((inner) => {
                   innerInstructions.push(inner);
@@ -455,9 +449,9 @@ const TokenTransactionRow = React.memo(
           }
 
           let transactionInstruction;
-          if (transaction?.transaction) {
+          if (transactionWithMeta?.transaction) {
             transactionInstruction = intoTransactionInstruction(
-              transaction.transaction,
+              transactionWithMeta.transaction,
               ix
             );
           }
@@ -494,16 +488,6 @@ const TokenTransactionRow = React.memo(
           ) {
             try {
               name = parseTokenLendingInstructionTitle(transactionInstruction);
-            } catch (error) {
-              reportError(error, { signature: tx.signature });
-              return undefined;
-            }
-          } else if (
-            transactionInstruction &&
-            isBonfidaBotInstruction(transactionInstruction)
-          ) {
-            try {
-              name = parseBonfidaBotInstructionTitle(transactionInstruction);
             } catch (error) {
               reportError(error, { signature: tx.signature });
               return undefined;

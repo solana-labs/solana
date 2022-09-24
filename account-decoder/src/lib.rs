@@ -5,6 +5,7 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod parse_account_data;
+pub mod parse_address_lookup_table;
 pub mod parse_bpf_loader;
 pub mod parse_config;
 pub mod parse_nonce;
@@ -114,10 +115,7 @@ impl UiAccount {
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary(
-                        base64::encode(&account.data()),
-                        UiAccountEncoding::Base64,
-                    )
+                    UiAccountData::Binary(base64::encode(account.data()), UiAccountEncoding::Base64)
                 }
             }
         };

@@ -46,7 +46,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("entry_{}", ix))
+        .thread_name(|ix| format!("solEntry{:02}", ix))
         .build()
         .unwrap();
 }
@@ -525,21 +525,24 @@ pub fn start_verify_transactions(
             let tx_offset_recycler = verify_recyclers.tx_offset_recycler;
             let out_recycler = verify_recyclers.out_recycler;
             let num_packets = entry_txs.len();
-            let gpu_verify_thread = thread::spawn(move || {
-                let mut verify_time = Measure::start("sigverify");
-                sigverify::ed25519_verify(
-                    &mut packet_batches,
-                    &tx_offset_recycler,
-                    &out_recycler,
-                    false,
-                    num_packets,
-                );
-                let verified = packet_batches
-                    .iter()
-                    .all(|batch| batch.iter().all(|p| !p.meta.discard()));
-                verify_time.stop();
-                (verified, verify_time.as_us())
-            });
+            let gpu_verify_thread = thread::Builder::new()
+                .name("solGpuSigVerify".into())
+                .spawn(move || {
+                    let mut verify_time = Measure::start("sigverify");
+                    sigverify::ed25519_verify(
+                        &mut packet_batches,
+                        &tx_offset_recycler,
+                        &out_recycler,
+                        false,
+                        num_packets,
+                    );
+                    let verified = packet_batches
+                        .iter()
+                        .all(|batch| batch.iter().all(|p| !p.meta.discard()));
+                    verify_time.stop();
+                    (verified, verify_time.as_us())
+                })
+                .unwrap();
             Ok(EntrySigVerificationState {
                 verification_status: EntryVerificationStatus::Pending,
                 entries: Some(entries),
@@ -770,25 +773,28 @@ impl EntrySlice for [Entry] {
         let hashes = Arc::new(Mutex::new(hashes_pinned));
         let hashes_clone = hashes.clone();
 
-        let gpu_verify_thread = thread::spawn(move || {
-            let mut hashes = hashes_clone.lock().unwrap();
-            let gpu_wait = Instant::now();
-            let res;
-            unsafe {
-                res = (api.poh_verify_many)(
-                    hashes.as_mut_ptr() as *mut u8,
-                    num_hashes_vec.as_ptr(),
-                    length,
-                    1,
+        let gpu_verify_thread = thread::Builder::new()
+            .name("solGpuPohVerify".into())
+            .spawn(move || {
+                let mut hashes = hashes_clone.lock().unwrap();
+                let gpu_wait = Instant::now();
+                let res;
+                unsafe {
+                    res = (api.poh_verify_many)(
+                        hashes.as_mut_ptr() as *mut u8,
+                        num_hashes_vec.as_ptr(),
+                        length,
+                        1,
+                    );
+                }
+                assert!(res == 0, "GPU PoH verify many failed");
+                inc_new_counter_info!(
+                    "entry_verify-gpu_thread",
+                    timing::duration_as_us(&gpu_wait.elapsed()) as usize
                 );
-            }
-            assert!(res == 0, "GPU PoH verify many failed");
-            inc_new_counter_info!(
-                "entry_verify-gpu_thread",
-                timing::duration_as_us(&gpu_wait.elapsed()) as usize
-            );
-            timing::duration_as_us(&gpu_wait.elapsed())
-        });
+                timing::duration_as_us(&gpu_wait.elapsed())
+            })
+            .unwrap();
 
         let verifications = PAR_THREAD_POOL.install(|| {
             self.into_par_iter()

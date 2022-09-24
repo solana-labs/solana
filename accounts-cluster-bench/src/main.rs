@@ -6,9 +6,10 @@ use {
     rayon::prelude::*,
     solana_account_decoder::parse_token::spl_token_pubkey,
     solana_clap_utils::input_parsers::pubkey_of,
-    solana_client::{rpc_client::RpcClient, transaction_executor::TransactionExecutor},
+    solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::inline_spl_token,
     solana_sdk::{
         commitment_config::CommitmentConfig,

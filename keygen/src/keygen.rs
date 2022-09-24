@@ -14,10 +14,14 @@ use {
     solana_cli_config::{Config, CONFIG_FILE},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
+        derivation_path::DerivationPath,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::{write_pubkey_file, Pubkey},
-        signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
+        signature::{
+            keypair_from_seed, keypair_from_seed_and_derivation_path, write_keypair,
+            write_keypair_file, Keypair, Signer,
+        },
     },
     std::{
         collections::HashSet,
@@ -34,6 +38,7 @@ use {
 };
 
 const NO_PASSPHRASE: &str = "";
+const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
 
 struct GrindMatch {
     starts: String,
@@ -68,7 +73,7 @@ const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
 fn word_count_arg<'a>() -> Arg<'a> {
     Arg::new(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
-        .possible_values(&["12", "15", "18", "21", "24"])
+        .possible_values(["12", "15", "18", "21", "24"])
         .default_value("12")
         .value_name("NUMBER")
         .takes_value(true)
@@ -78,7 +83,7 @@ fn word_count_arg<'a>() -> Arg<'a> {
 fn language_arg<'a>() -> Arg<'a> {
     Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
-        .possible_values(&[
+        .possible_values([
             "english",
             "chinese-simplified",
             "chinese-traditional",
@@ -138,7 +143,7 @@ fn get_keypair_from_matches(
     } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
-        path.extend(&[".config", "solana", "id.json"]);
+        path.extend([".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
     signer_from_path(matches, path, "pubkey recovery", wallet_manager)
@@ -325,6 +330,33 @@ fn grind_parse_args(
     grind_matches
 }
 
+fn derivation_path_arg<'a>() -> Arg<'a> {
+    Arg::new("derivation_path")
+        .long("derivation-path")
+        .value_name("DERIVATION_PATH")
+        .takes_value(true)
+        .min_values(0)
+        .max_values(1)
+        .help("Derivation path. All indexes will be promoted to hardened. \
+            If arg is not presented then derivation path will not be used. \
+            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
+        )
+}
+
+fn acquire_derivation_path(
+    matches: &ArgMatches,
+) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
+    if matches.is_present("derivation_path") {
+        Ok(Some(DerivationPath::from_absolute_path_str(
+            matches
+                .value_of("derivation_path")
+                .unwrap_or(DEFAULT_DERIVATION_PATH),
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
     let matches = Command::new(crate_name!())
@@ -389,6 +421,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
+                .arg(
+                    derivation_path_arg()
+                )
                 .key_generation_common_args()
                 .arg(no_outfile_arg()
                     .conflicts_with_all(&["outfile", "silent"])
@@ -449,6 +484,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     Arg::new("use_mnemonic")
                         .long("use-mnemonic")
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
+                )
+                .arg(
+                    derivation_path_arg()
+                        .requires("use_mnemonic")
                 )
                 .key_generation_common_args()
                 .arg(
@@ -558,7 +597,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             } else if matches.is_present(NO_OUTFILE_ARG.name) {
                 None
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 Some(path.to_str().unwrap())
             };
 
@@ -576,11 +615,17 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             if !silent {
                 println!("Generating a new keypair");
             }
+
+            let derivation_path = acquire_derivation_path(matches)?;
+
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
 
             let seed = Seed::new(&mnemonic, &passphrase);
-            let keypair = keypair_from_seed(seed.as_bytes())?;
+            let keypair = match derivation_path {
+                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path),
+                None => keypair_from_seed(seed.as_bytes()),
+            }?;
 
             if let Some(outfile) = outfile {
                 output_keypair(&keypair, outfile, "new")
@@ -601,7 +646,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
 
@@ -671,6 +716,8 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             let use_mnemonic = matches.is_present("use_mnemonic");
 
+            let derivation_path = acquire_derivation_path(matches)?;
+
             let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
@@ -696,6 +743,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                     let grind_matches_thread_safe = grind_matches_thread_safe.clone();
                     let passphrase = passphrase.clone();
                     let passphrase_message = passphrase_message.clone();
+                    let derivation_path = derivation_path.clone();
 
                     thread::spawn(move || loop {
                         if done.load(Ordering::Relaxed) {
@@ -713,7 +761,11 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let (keypair, phrase) = if use_mnemonic {
                             let mnemonic = Mnemonic::new(mnemonic_type, language);
                             let seed = Seed::new(&mnemonic, &passphrase);
-                            (keypair_from_seed(seed.as_bytes()).unwrap(), mnemonic.phrase().to_string())
+                            let keypair = match derivation_path {
+                                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path.clone()),
+                                None => keypair_from_seed(seed.as_bytes()),
+                            }.unwrap();
+                            (keypair, mnemonic.phrase().to_string())
                         } else {
                             (Keypair::new(), "".to_string())
                         };

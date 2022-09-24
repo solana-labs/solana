@@ -1,51 +1,62 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { PublicKey } from "@solana/web3.js";
-import { CacheEntry, FetchStatus } from "src/providers/cache";
-import {
-  useFetchAccountInfo,
-  useAccountInfo,
-  Account,
-  TokenProgramData,
-  useMintAccountInfo,
-} from "src/providers/accounts";
-import { StakeAccountSection } from "src/components/account/StakeAccountSection";
-import { TokenAccountSection } from "src/components/account/TokenAccountSection";
-import { ErrorCard } from "src/components/common/ErrorCard";
-import { LoadingCard } from "src/components/common/LoadingCard";
-import { useCluster, ClusterStatus } from "src/providers/cluster";
-import { clusterPath } from "src/utils/url";
-import { UnknownAccountCard } from "src/components/account/UnknownAccountCard";
-import { OwnedTokensCard } from "src/components/account/OwnedTokensCard";
-import { TokenHistoryCard } from "src/components/account/TokenHistoryCard";
-import { TokenLargestAccountsCard } from "src/components/account/TokenLargestAccountsCard";
-import { VoteAccountSection } from "src/components/account/VoteAccountSection";
-import { NonceAccountSection } from "src/components/account/NonceAccountSection";
-import { VotesCard } from "src/components/account/VotesCard";
-import { SysvarAccountSection } from "src/components/account/SysvarAccountSection";
-import { SlotHashesCard } from "src/components/account/SlotHashesCard";
-import { StakeHistoryCard } from "src/components/account/StakeHistoryCard";
-import { BlockhashesCard } from "src/components/account/BlockhashesCard";
-import { ConfigAccountSection } from "src/components/account/ConfigAccountSection";
-import { useFlaggedAccounts } from "src/providers/accounts/flagged-accounts";
-import { UpgradeableLoaderAccountSection } from "src/components/account/UpgradeableLoaderAccountSection";
-import { useTokenRegistry } from "src/providers/mints/token-registry";
-import { Identicon } from "src/components/common/Identicon";
-import { TransactionHistoryCard } from "src/components/account/history/TransactionHistoryCard";
-import { TokenTransfersCard } from "src/components/account/history/TokenTransfersCard";
-import { TokenInstructionsCard } from "src/components/account/history/TokenInstructionsCard";
-import { RewardsCard } from "src/components/account/RewardsCard";
-import { MetaplexMetadataCard } from "src/components/account/MetaplexMetadataCard";
-import { MetaplexNFTAttributesCard } from "src/components/account/MetaplexNFTAttributesCard";
-import { NFTHeader } from "src/components/account/MetaplexNFTHeader";
-import { DomainsCard } from "src/components/account/DomainsCard";
-import isMetaplexNFT from "src/providers/accounts/utils/isMetaplexNFT";
-import { SecurityCard } from "src/components/account/SecurityCard";
+import { NavLink } from "src/components/NavLink";
 import { AnchorAccountCard } from "src/components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "src/components/account/AnchorProgramCard";
+import { BlockhashesCard } from "src/components/account/BlockhashesCard";
+import { ConfigAccountSection } from "src/components/account/ConfigAccountSection";
+import { DomainsCard } from "src/components/account/DomainsCard";
+import { TokenInstructionsCard } from "src/components/account/history/TokenInstructionsCard";
+import { TokenTransfersCard } from "src/components/account/history/TokenTransfersCard";
+import { TransactionHistoryCard } from "src/components/account/history/TransactionHistoryCard";
+import { MetaplexMetadataCard } from "src/components/account/MetaplexMetadataCard";
+import { MetaplexNFTAttributesCard } from "src/components/account/MetaplexNFTAttributesCard";
+import { MetaplexNFTHeader } from "src/components/account/MetaplexNFTHeader";
+import { NonceAccountSection } from "src/components/account/NonceAccountSection";
+import { OwnedTokensCard } from "src/components/account/OwnedTokensCard";
+import { RewardsCard } from "src/components/account/RewardsCard";
+import { SecurityCard } from "src/components/account/SecurityCard";
+import { SlotHashesCard } from "src/components/account/SlotHashesCard";
+import { StakeAccountSection } from "src/components/account/StakeAccountSection";
+import { StakeHistoryCard } from "src/components/account/StakeHistoryCard";
+import { SysvarAccountSection } from "src/components/account/SysvarAccountSection";
+import { TokenAccountSection } from "src/components/account/TokenAccountSection";
+import { TokenHistoryCard } from "src/components/account/TokenHistoryCard";
+import { TokenLargestAccountsCard } from "src/components/account/TokenLargestAccountsCard";
+import { UnknownAccountCard } from "src/components/account/UnknownAccountCard";
+import { UpgradeableLoaderAccountSection } from "src/components/account/UpgradeableLoaderAccountSection";
+import { VoteAccountSection } from "src/components/account/VoteAccountSection";
+import { VotesCard } from "src/components/account/VotesCard";
+import { ErrorCard } from "src/components/common/ErrorCard";
+import { Identicon } from "src/components/common/Identicon";
+import { LoadingCard } from "src/components/common/LoadingCard";
+import {
+  Account,
+  TokenProgramData,
+  useAccountInfo,
+  useFetchAccountInfo,
+  useMintAccountInfo,
+} from "src/providers/accounts";
+import { useFlaggedAccounts } from "src/providers/accounts/flagged-accounts";
+import isMetaplexNFT from "src/providers/accounts/utils/isMetaplexNFT";
 import { useAnchorProgram } from "src/providers/anchor";
-import { NavLink } from "src/components/NavLink";
+import { CacheEntry, FetchStatus } from "src/providers/cache";
+import { ClusterStatus, useCluster } from "src/providers/cluster";
+import { useTokenRegistry } from "src/providers/mints/token-registry";
+import { clusterPath } from "src/utils/url";
+import { NFTokenAccountHeader } from "src/components/account/nftoken/NFTokenAccountHeader";
+import { NFTokenAccountSection } from "src/components/account/nftoken/NFTokenAccountSection";
+import { NFTokenCollectionNFTGrid } from "src/components/account/nftoken/NFTokenCollectionNFTGrid";
+import { NFTOKEN_ADDRESS } from "src/components/account/nftoken/nftoken";
+import {
+  isNFTokenAccount,
+  parseNFTokenCollectionAccount,
+} from "src/components/account/nftoken/isNFTokenAccount";
+import { isAddressLookupTableAccount } from "src/components/account/address-lookup-table/types";
+import { AddressLookupTableAccountSection } from "src/components/account/address-lookup-table/AddressLookupTableAccountSection";
+import { LookupTableEntriesCard } from "src/components/account/address-lookup-table/LookupTableEntriesCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -126,6 +137,20 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       path: "/security",
     },
   ],
+  "nftoken:collection": [
+    {
+      slug: "nftoken-collection-nfts",
+      title: "NFTs",
+      path: "/nfts",
+    },
+  ],
+  "address-lookup-table": [
+    {
+      slug: "entries",
+      title: "Table Entries",
+      path: "/entries",
+    },
+  ],
 };
 
 const TOKEN_TABS_HIDDEN = [
@@ -197,11 +222,16 @@ export function AccountHeader({
 
   if (isMetaplexNFT(data, mintInfo)) {
     return (
-      <NFTHeader
+      <MetaplexNFTHeader
         nftData={(data as TokenProgramData).nftData!}
         address={address}
       />
     );
+  }
+
+  const nftokenNFT = account && isNFTokenAccount(account);
+  if (nftokenNFT && account) {
+    return <NFTokenAccountHeader account={account} />;
   }
 
   if (isToken) {
@@ -324,7 +354,8 @@ function DetailsSections({
 }
 
 function InfoSection({ account }: { account: Account }) {
-  const data = account?.details?.data;
+  const details = account?.details;
+  const data = details?.data;
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -343,6 +374,8 @@ function InfoSection({ account }: { account: Account }) {
         stakeAccountType={data.parsed.type}
       />
     );
+  } else if (account.details?.owner.toBase58() === NFTOKEN_ADDRESS) {
+    return <NFTokenAccountSection account={account} />;
   } else if (data && data.program === "spl-token") {
     return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
   } else if (data && data.program === "nonce") {
@@ -356,6 +389,16 @@ function InfoSection({ account }: { account: Account }) {
   } else if (data && data.program === "config") {
     return (
       <ConfigAccountSection account={account} configAccount={data.parsed} />
+    );
+  } else if (
+    details?.rawData &&
+    isAddressLookupTableAccount(details.owner, details.rawData)
+  ) {
+    return (
+      <AddressLookupTableAccountSection
+        account={account}
+        data={details.rawData}
+      />
     );
   } else {
     return <UnknownAccountCard account={account} />;
@@ -376,6 +419,7 @@ type TabComponent = {
 export type MoreTabs =
   | "history"
   | "tokens"
+  | "nftoken-collection-nfts"
   | "largest"
   | "vote-history"
   | "slot-hashes"
@@ -389,7 +433,8 @@ export type MoreTabs =
   | "domains"
   | "security"
   | "anchor-program"
-  | "anchor-account";
+  | "anchor-account"
+  | "entries";
 
 function MoreSection({
   account,
@@ -401,7 +446,8 @@ function MoreSection({
   tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const data = account?.details?.data;
+  const details = account?.details;
+  const data = details?.data;
 
   return (
     <>
@@ -446,6 +492,13 @@ function MoreSection({
           nftData={(account.details?.data as TokenProgramData).nftData!}
         />
       )}
+      {tab === "nftoken-collection-nfts" && (
+        <Suspense
+          fallback={<LoadingCard message="Loading NFTs for collection." />}
+        >
+          <NFTokenCollectionNFTGrid collection={account.pubkey.toBase58()} />
+        </Suspense>
+      )}
       {tab === "attributes" && (
         <MetaplexNFTAttributesCard
           nftData={(account.details?.data as TokenProgramData).nftData!}
@@ -471,6 +524,11 @@ function MoreSection({
           <AnchorAccountCard account={account} />
         </React.Suspense>
       )}
+      {tab === "entries" &&
+        details?.rawData &&
+        isAddressLookupTableAccount(details.owner, details.rawData) && (
+          <LookupTableEntriesCard lookupTableAccountData={details?.rawData} />
+        )}
     </>
   );
 }
@@ -499,6 +557,14 @@ function getTabs(pubkey: PublicKey, account: Account, routerPath: string): TabCo
     tabs.push(...TABS_LOOKUP[programTypeKey]);
   }
 
+  // Add the key for address lookup tables
+  if (
+    account.details?.rawData &&
+    isAddressLookupTableAccount(account.details.owner, account.details.rawData)
+  ) {
+    tabs.push(...TABS_LOOKUP["address-lookup-table"]);
+  }
+
   // Add the key for Metaplex NFTs
   if (
     data &&
@@ -508,12 +574,25 @@ function getTabs(pubkey: PublicKey, account: Account, routerPath: string): TabCo
     tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
   }
 
+  const isNFToken = account && isNFTokenAccount(account);
+  if (isNFToken) {
+    const collection = parseNFTokenCollectionAccount(account);
+    if (collection) {
+      tabs.push({
+        slug: "nftoken-collection-nfts",
+        title: "NFTs",
+        path: "/nftoken-collection-nfts",
+      });
+    }
+  }
+
   if (
-    !data ||
-    !(
-      TOKEN_TABS_HIDDEN.includes(data.program) ||
-      TOKEN_TABS_HIDDEN.includes(programTypeKey)
-    )
+    !isNFToken &&
+    (!data ||
+      !(
+        TOKEN_TABS_HIDDEN.includes(data.program) ||
+        TOKEN_TABS_HIDDEN.includes(programTypeKey)
+      ))
   ) {
     tabs.push({
       slug: "tokens",

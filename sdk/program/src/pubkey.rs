@@ -372,7 +372,7 @@ impl Pubkey {
     ///
     /// ```
     /// # use borsh::{BorshSerialize, BorshDeserialize};
-    /// # use solana_program::example_mocks::{solana_sdk, solana_client};
+    /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
     /// # use solana_program::{
     /// #     pubkey::Pubkey,
     /// #     instruction::Instruction,
@@ -385,7 +385,7 @@ impl Pubkey {
     /// #     signature::{Signer, Signature},
     /// #     transaction::Transaction,
     /// # };
-    /// # use solana_client::rpc_client::RpcClient;
+    /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use std::convert::TryFrom;
     /// # use anyhow::Result;
     /// #

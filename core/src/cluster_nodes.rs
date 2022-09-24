@@ -26,7 +26,7 @@ use {
         any::TypeId,
         cmp::Reverse,
         collections::HashMap,
-        iter::{once, repeat_with},
+        iter::repeat_with,
         marker::PhantomData,
         net::SocketAddr,
         ops::Deref,
@@ -87,25 +87,34 @@ impl Node {
 }
 
 impl<T> ClusterNodes<T> {
-    pub(crate) fn num_peers(&self) -> usize {
-        self.nodes.len().saturating_sub(1)
-    }
-
-    // A peer is considered live if they generated their contact info recently.
-    pub(crate) fn num_peers_live(&self, now: u64) -> usize {
-        self.nodes
-            .iter()
-            .filter(|node| node.pubkey() != self.pubkey)
-            .filter_map(|node| node.contact_info())
-            .filter(|node| {
-                let elapsed = if node.wallclock < now {
-                    now - node.wallclock
-                } else {
-                    node.wallclock - now
-                };
-                elapsed < CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS
-            })
-            .count()
+    pub(crate) fn submit_metrics(&self, name: &'static str, now: u64) {
+        let mut num_nodes_dead = 0;
+        let mut num_nodes_staked = 0;
+        let mut num_nodes_stale = 0;
+        for node in &self.nodes {
+            if node.stake != 0u64 {
+                num_nodes_staked += 1;
+            }
+            match node.contact_info() {
+                None => {
+                    num_nodes_dead += 1;
+                }
+                Some(node) => {
+                    let age = now.saturating_sub(node.wallclock);
+                    if age > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS {
+                        num_nodes_stale += 1;
+                    }
+                }
+            }
+        }
+        num_nodes_stale += num_nodes_dead;
+        datapoint_info!(
+            name,
+            ("num_nodes", self.nodes.len(), i64),
+            ("num_nodes_dead", num_nodes_dead, i64),
+            ("num_nodes_staked", num_nodes_staked, i64),
+            ("num_nodes_stale", num_nodes_stale, i64),
+        );
     }
 }
 
@@ -114,62 +123,11 @@ impl ClusterNodes<BroadcastStage> {
         new_cluster_nodes(cluster_info, stakes)
     }
 
-    pub(crate) fn get_broadcast_addrs(
-        &self,
-        shred: &ShredId,
-        root_bank: &Bank,
-        fanout: usize,
-        socket_addr_space: &SocketAddrSpace,
-    ) -> Vec<SocketAddr> {
-        const MAX_CONTACT_INFO_AGE: Duration = Duration::from_secs(2 * 60);
+    pub(crate) fn get_broadcast_peer(&self, shred: &ShredId) -> Option<&ContactInfo> {
         let shred_seed = shred.seed(&self.pubkey);
         let mut rng = ChaChaRng::from_seed(shred_seed);
-        let index = match self.weighted_shuffle.first(&mut rng) {
-            None => return Vec::default(),
-            Some(index) => index,
-        };
-        if let Some(node) = self.nodes[index].contact_info() {
-            let now = timestamp();
-            let age = Duration::from_millis(now.saturating_sub(node.wallclock));
-            if age < MAX_CONTACT_INFO_AGE
-                && ContactInfo::is_valid_address(&node.tvu, socket_addr_space)
-            {
-                return vec![node.tvu];
-            }
-        }
-        let mut rng = ChaChaRng::from_seed(shred_seed);
-        let nodes: Vec<&Node> = self
-            .weighted_shuffle
-            .clone()
-            .shuffle(&mut rng)
-            .map(|index| &self.nodes[index])
-            .collect();
-        if nodes.is_empty() {
-            return Vec::default();
-        }
-        if drop_redundant_turbine_path(shred.slot(), root_bank) {
-            let peers = once(nodes[0]).chain(get_retransmit_peers(fanout, 0, &nodes));
-            let addrs = peers.filter_map(Node::contact_info).map(|peer| peer.tvu);
-            return addrs
-                .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
-                .collect();
-        }
-        let (neighbors, children) = compute_retransmit_peers(fanout, 0, &nodes);
-        neighbors[..1]
-            .iter()
-            .filter_map(|node| Some(node.contact_info()?.tvu))
-            .chain(
-                neighbors[1..]
-                    .iter()
-                    .filter_map(|node| Some(node.contact_info()?.tvu_forwards)),
-            )
-            .chain(
-                children
-                    .iter()
-                    .filter_map(|node| Some(node.contact_info()?.tvu)),
-            )
-            .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
-            .collect()
+        let index = self.weighted_shuffle.first(&mut rng)?;
+        self.nodes[index].contact_info()
     }
 }
 

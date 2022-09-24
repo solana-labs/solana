@@ -1,11 +1,26 @@
+//! Information about recent blocks and their fee calculators.
+//!
+//! The _recent blockhashes sysvar_ provides access to the [`RecentBlockhashes`],
+//! which contains recent blockhahes and their [`FeeCalculator`]s.
+//!
+//! [`RecentBlockhashes`] does not implement [`Sysvar::get`].
+//!
+//! This sysvar is deprecated and should not be used. Transaction fees should be
+//! determined with the [`getFeeForMessage`] RPC method. For additional context
+//! see the [Comprehensive Compute Fees proposal][ccf].
+//!
+//! [`getFeeForMessage`]: https://docs.solana.com/developing/clients/jsonrpc-api#getfeeformessage
+//! [ccf]: https://docs.solana.com/proposals/comprehensive-compute-fees
+//!
+//! See also the Solana [documentation on the recent blockhashes sysvar][sdoc].
+//!
+//! [sdoc]: https://docs.solana.com/developing/runtime-facilities/sysvars#recentblockhashes
+
 #![allow(deprecated)]
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{
-        declare_deprecated_sysvar_id,
-        fee_calculator::FeeCalculator,
-        hash::{hash, Hash},
-        sysvar::Sysvar,
+        declare_deprecated_sysvar_id, fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar,
     },
     std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
 };
@@ -143,22 +158,6 @@ impl Deref for RecentBlockhashes {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
-    let blocks: Vec<_> = (start..start + MAX_ENTRIES)
-        .map(|i| {
-            (
-                i as u64,
-                hash(&bincode::serialize(&i).unwrap()),
-                i as u64 * 100,
-            )
-        })
-        .collect();
-    blocks
-        .iter()
-        .map(|(i, hash, lamports_per_signature)| IterItem(*i, hash, *lamports_per_signature))
-        .collect()
 }
 
 #[cfg(test)]

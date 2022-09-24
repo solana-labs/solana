@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
+            BankHashInfo, LoadHint, LoadZeroLamports, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -35,7 +35,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-            self, add_set_compute_unit_price_ix, use_default_units_in_fee_calculation, FeatureSet,
+            self, remove_deprecated_request_unit_ix, return_none_for_zero_lamport_accounts,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -55,7 +56,7 @@ use {
         system_program,
         sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
-        transaction_context::TransactionAccount,
+        transaction_context::{IndexOfAccount, TransactionAccount},
     },
     std::{
         cmp::Reverse,
@@ -63,7 +64,7 @@ use {
         ops::RangeBounds,
         path::PathBuf,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
@@ -127,7 +128,7 @@ pub struct Accounts {
 
 // for the load instructions
 pub type TransactionRent = u64;
-pub type TransactionProgramIndices = Vec<Vec<usize>>;
+pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
@@ -166,6 +167,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -184,6 +186,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            &Arc::default(),
         )
     }
 
@@ -195,6 +198,7 @@ impl Accounts {
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -205,6 +209,7 @@ impl Accounts {
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
+                exit,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -253,6 +258,13 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
+        let load_zero_lamports =
+            if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
+                LoadZeroLamports::None
+            } else {
+                LoadZeroLamports::SomeWithZeroLamportAccount
+            };
+
         // Copy all the accounts
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
@@ -288,7 +300,7 @@ impl Accounts {
                             (account_override.clone(), 0)
                         } else {
                             self.accounts_db
-                                .load_with_fixed_root(ancestors, key)
+                                .load_with_fixed_root(ancestors, key, load_zero_lamports)
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
@@ -315,7 +327,7 @@ impl Accounts {
                             Self::validate_fee_payer(
                                 key,
                                 &mut account,
-                                i,
+                                i as IndexOfAccount,
                                 error_counters,
                                 rent_collector,
                                 feature_set,
@@ -337,9 +349,12 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
-                                    if let Some((programdata_account, _)) = self
-                                        .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                    if let Some((programdata_account, _)) =
+                                        self.accounts_db.load_with_fixed_root(
+                                            ancestors,
+                                            &programdata_address,
+                                            load_zero_lamports,
+                                        )
                                     {
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -381,11 +396,12 @@ impl Accounts {
                         self.load_executable_accounts(
                             ancestors,
                             &mut accounts,
-                            instruction.program_id_index as usize,
+                            instruction.program_id_index as IndexOfAccount,
                             error_counters,
+                            load_zero_lamports,
                         )
                     })
-                    .collect::<Result<Vec<Vec<usize>>>>()?;
+                    .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
                 Ok(LoadedTransaction {
                     accounts,
@@ -403,7 +419,7 @@ impl Accounts {
     fn validate_fee_payer(
         payer_address: &Pubkey,
         payer_account: &mut AccountSharedData,
-        payer_index: usize,
+        payer_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
@@ -442,7 +458,7 @@ impl Accounts {
             payer_account,
             feature_set
                 .is_active(&feature_set::include_account_index_in_rent_error::ID)
-                .then(|| payer_index),
+                .then_some(payer_index),
             feature_set
                 .is_active(&feature_set::prevent_crediting_accounts_that_end_rent_paying::id()),
         )
@@ -452,11 +468,12 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         accounts: &mut Vec<TransactionAccount>,
-        mut program_account_index: usize,
+        mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
-    ) -> Result<Vec<usize>> {
+        load_zero_lamports: LoadZeroLamports,
+    ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
-        let mut program_id = match accounts.get(program_account_index) {
+        let mut program_id = match accounts.get(program_account_index as usize) {
             Some(program_account) => program_account.0,
             None => {
                 error_counters.account_not_found += 1;
@@ -471,12 +488,13 @@ impl Accounts {
             }
             depth += 1;
 
-            program_account_index = match self
-                .accounts_db
-                .load_with_fixed_root(ancestors, &program_id)
-            {
+            program_account_index = match self.accounts_db.load_with_fixed_root(
+                ancestors,
+                &program_id,
+                load_zero_lamports,
+            ) {
                 Some((program_account, _)) => {
-                    let account_index = accounts.len();
+                    let account_index = accounts.len() as IndexOfAccount;
                     accounts.push((program_id, program_account));
                     account_index
                 }
@@ -485,7 +503,7 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
-            let program = &accounts[program_account_index].1;
+            let program = &accounts[program_account_index as usize].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
@@ -500,12 +518,13 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    let programdata_account_index = match self
-                        .accounts_db
-                        .load_with_fixed_root(ancestors, &programdata_address)
-                    {
+                    let programdata_account_index = match self.accounts_db.load_with_fixed_root(
+                        ancestors,
+                        &programdata_address,
+                        load_zero_lamports,
+                    ) {
                         Some((programdata_account, _)) => {
-                            let account_index = accounts.len();
+                            let account_index = accounts.len() as IndexOfAccount;
                             accounts.push((programdata_address, programdata_account));
                             account_index
                         }
@@ -554,8 +573,8 @@ impl Accounts {
                             tx.message(),
                             lamports_per_signature,
                             fee_structure,
-                            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -601,10 +620,15 @@ impl Accounts {
         ancestors: &Ancestors,
         address_table_lookup: &MessageAddressTableLookup,
         slot_hashes: &SlotHashes,
+        load_zero_lamports: LoadZeroLamports,
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
         let table_account = self
             .accounts_db
-            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .load_with_fixed_root(
+                ancestors,
+                &address_table_lookup.account_key,
+                load_zero_lamports,
+            )
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
@@ -794,9 +818,13 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        enable_rehashing: bool,
     ) -> u64 {
         let use_index = false;
         let is_startup = true;
+        self.accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete();
         self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,
@@ -808,12 +836,14 @@ impl Accounts {
                 epoch_schedule,
                 rent_collector,
                 is_startup,
+                enable_rehashing,
             )
             .1
     }
 
     /// Only called from startup or test code.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
@@ -824,6 +854,8 @@ impl Accounts {
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
+        store_detailed_debug_info: bool,
+        enable_rehashing: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -834,6 +866,8 @@ impl Accounts {
             rent_collector,
             can_cached_slot_be_unflushed,
             ignore_mismatch,
+            store_detailed_debug_info,
+            enable_rehashing,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
@@ -1116,9 +1150,11 @@ impl Accounts {
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
+        tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
-        let tx_account_locks_results: Vec<Result<_>> =
-            txs.map(|tx| tx.get_account_locks()).collect();
+        let tx_account_locks_results: Vec<Result<_>> = txs
+            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
+            .collect();
         self.lock_accounts_inner(tx_account_locks_results)
     }
 
@@ -1128,11 +1164,12 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: impl Iterator<Item = &'a Result<()>>,
+        tx_account_lock_limit: usize,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
-                Ok(()) => tx.get_account_locks(),
+                Ok(()) => tx.get_account_locks(tx_account_lock_limit),
                 Err(err) => Err(err.clone()),
             })
             .collect();
@@ -1289,7 +1326,9 @@ impl Accounts {
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
-                        if account.rent_epoch() == INITIAL_RENT_EPOCH {
+                        if !preserve_rent_epoch_for_rent_exempt_accounts
+                            && account.rent_epoch() == INITIAL_RENT_EPOCH
+                        {
                             let rent = rent_collector
                                 .collect_from_created_account(
                                     address,
@@ -1666,7 +1705,7 @@ mod tests {
             lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
+            false,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2021,11 +2060,11 @@ mod tests {
                     for (i, program_index) in program_indices.iter().enumerate() {
                         // +1 to skip first not loader account
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index].0,
+                            loaded_transaction.accounts[*program_index as usize].0,
                             accounts[i + 1].0
                         );
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index].1,
+                            loaded_transaction.accounts[*program_index as usize].1,
                             accounts[i + 1].1
                         );
                     }
@@ -2058,6 +2097,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::LookupTableAccountNotFound),
         );
@@ -2075,7 +2115,8 @@ mod tests {
         );
 
         let invalid_table_key = Pubkey::new_unique();
-        let invalid_table_account = AccountSharedData::default();
+        let mut invalid_table_account = AccountSharedData::default();
+        invalid_table_account.set_lamports(1);
         accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
 
         let address_table_lookup = MessageAddressTableLookup {
@@ -2089,6 +2130,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::InvalidAccountOwner),
         );
@@ -2121,6 +2163,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(AddressLookupError::InvalidAccountData),
         );
@@ -2165,6 +2208,7 @@ mod tests {
                 &ancestors,
                 &address_table_lookup,
                 &SlotHashes::default(),
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Ok(LoadedAddresses {
                 writable: vec![table_addresses[0]],
@@ -2255,7 +2299,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[2]
+        );
     }
 
     #[test]
@@ -2338,7 +2385,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[5]
+        );
 
         // Solution 2: mark programdata as readonly
         message.account_keys = vec![key0, key1, key2]; // revert key change
@@ -2350,9 +2400,18 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
-        assert_eq!(result.accounts[result.program_indices[0][1]], accounts[4]);
-        assert_eq!(result.accounts[result.program_indices[0][2]], accounts[3]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[5]
+        );
+        assert_eq!(
+            result.accounts[result.program_indices[0][1] as usize],
+            accounts[4]
+        );
+        assert_eq!(
+            result.accounts[result.program_indices[0][2] as usize],
+            accounts[3]
+        );
     }
 
     #[test]
@@ -2421,7 +2480,7 @@ mod tests {
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
         assert_eq!(
-            result.accounts[result.program_indices[0][0]],
+            result.accounts[result.program_indices[0][0] as usize],
             accounts_with_upgradeable_loader[2]
         );
 
@@ -2435,7 +2494,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[2]
+        );
     }
 
     #[test]
@@ -2461,6 +2523,7 @@ mod tests {
                 &mut vec![(keypair.pubkey(), account)],
                 0,
                 &mut error_counters,
+                LoadZeroLamports::SomeWithZeroLamportAccount,
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
@@ -2501,7 +2564,7 @@ mod tests {
         };
 
         let tx = new_sanitized_tx(&[&keypair], message, Hash::default());
-        let results = accounts.lock_accounts([tx].iter());
+        let results = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
         assert_eq!(results[0], Err(TransactionError::AccountLoadedTwice));
     }
 
@@ -2534,7 +2597,7 @@ mod tests {
             };
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
-            let results = accounts.lock_accounts(txs.iter());
+            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
             assert_eq!(results[0], Ok(()));
             accounts.unlock_accounts(txs.iter(), &results);
         }
@@ -2556,7 +2619,7 @@ mod tests {
             };
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
-            let results = accounts.lock_accounts(txs.iter());
+            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
             assert_eq!(results[0], Err(TransactionError::TooManyAccountLocks));
         }
     }
@@ -2595,7 +2658,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx.clone()].iter());
+        let results0 = accounts.lock_accounts([tx.clone()].iter(), MAX_TX_ACCOUNT_LOCKS);
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -2630,7 +2693,7 @@ mod tests {
         );
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
-        let results1 = accounts.lock_accounts(txs.iter());
+        let results1 = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -2657,7 +2720,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
-        let results2 = accounts.lock_accounts([tx].iter());
+        let results2 = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -2726,7 +2789,9 @@ mod tests {
             let exit_clone = exit_clone.clone();
             loop {
                 let txs = vec![writable_tx.clone()];
-                let results = accounts_clone.clone().lock_accounts(txs.iter());
+                let results = accounts_clone
+                    .clone()
+                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
@@ -2741,7 +2806,9 @@ mod tests {
         let counter_clone = counter;
         for _ in 0..5 {
             let txs = vec![readonly_tx.clone()];
-            let results = accounts_arc.clone().lock_accounts(txs.iter());
+            let results = accounts_arc
+                .clone()
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
@@ -2787,7 +2854,7 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
-        let results0 = accounts.lock_accounts([tx].iter());
+        let results0 = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
 
         assert!(results0[0].is_ok());
         // Instruction program-id account demoted to readonly
@@ -2878,7 +2945,11 @@ mod tests {
             Ok(()),
         ];
 
-        let results = accounts.lock_accounts_with_results(txs.iter(), qos_results.iter());
+        let results = accounts.lock_accounts_with_results(
+            txs.iter(),
+            qos_results.iter(),
+            MAX_TX_ACCOUNT_LOCKS,
+        );
 
         assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times
         assert!(results[1].is_err()); // is not locked due to !qos_results[1].is_ok()
@@ -3066,7 +3137,7 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts(None, false, None);
+        accounts.accounts_db.clean_accounts_for_tests();
     }
 
     fn load_accounts_no_store(

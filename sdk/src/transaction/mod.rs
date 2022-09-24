@@ -42,21 +42,21 @@
 //! transaction nonce]_ mechanism instead of a recent blockhash to ensure unique
 //! transactions.
 //!
-//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
+//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
 //! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!
-//! This example uses the [`solana_client`] and [`anyhow`] crates.
+//! This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
 //!
-//! [`solana_client`]: https://docs.rs/solana-client
+//! [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
 //! [`anyhow`]: https://docs.rs/anyhow
 //!
 //! ```
-//! # use solana_sdk::example_mocks::solana_client;
+//! # use solana_sdk::example_mocks::solana_rpc_client;
 //! use anyhow::Result;
 //! use borsh::{BorshSerialize, BorshDeserialize};
-//! use solana_client::rpc_client::RpcClient;
+//! use solana_rpc_client::rpc_client::RpcClient;
 //! use solana_sdk::{
 //!      instruction::Instruction,
 //!      message::Message,
@@ -206,16 +206,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -285,16 +285,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -364,16 +364,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -440,16 +440,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -648,16 +648,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -789,16 +789,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,

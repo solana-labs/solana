@@ -5,7 +5,7 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
-    serde::{Deserialize, Serialize},
+    serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
@@ -17,6 +17,8 @@ use {
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
+        collections::HashMap,
+        error,
         fmt::{self, Display},
         net::SocketAddr,
         path::{Path, PathBuf},
@@ -41,6 +43,7 @@ pub struct AdminRpcRequestMetadata {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub tower_storage: Arc<dyn TowerStorage>,
+    pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
@@ -175,6 +178,9 @@ pub trait AdminRpc {
         require_tower: bool,
     ) -> Result<()>;
 
+    #[rpc(meta, name = "setStakedNodesOverrides")]
+    fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()>;
+
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
 }
@@ -186,22 +192,25 @@ impl AdminRpc for AdminRpcImpl {
     fn exit(&self, meta: Self::Metadata) -> Result<()> {
         debug!("exit admin rpc request received");
 
-        thread::spawn(move || {
-            // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
-            // receive a confusing error as the validator shuts down before a response is sent back.
-            thread::sleep(Duration::from_millis(100));
+        thread::Builder::new()
+            .name("solProcessExit".into())
+            .spawn(move || {
+                // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
+                // receive a confusing error as the validator shuts down before a response is sent back.
+                thread::sleep(Duration::from_millis(100));
 
-            warn!("validator exit requested");
-            meta.validator_exit.write().unwrap().exit();
+                warn!("validator exit requested");
+                meta.validator_exit.write().unwrap().exit();
 
-            // TODO: Debug why Exit doesn't always cause the validator to fully exit
-            // (rocksdb background processing or some other stuck thread perhaps?).
-            //
-            // If the process is still alive after five seconds, exit harder
-            thread::sleep(Duration::from_secs(5));
-            warn!("validator exit timeout");
-            std::process::exit(0);
-        });
+                // TODO: Debug why Exit doesn't always cause the validator to fully exit
+                // (rocksdb background processing or some other stuck thread perhaps?).
+                //
+                // If the process is still alive after five seconds, exit harder
+                thread::sleep(Duration::from_secs(5));
+                warn!("validator exit timeout");
+                std::process::exit(0);
+            })
+            .unwrap();
         Ok(())
     }
 
@@ -294,6 +303,24 @@ impl AdminRpc for AdminRpcImpl {
         AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
     }
 
+    fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()> {
+        let loaded_config = load_staked_nodes_overrides(&path)
+            .map_err(|err| {
+                error!(
+                    "Failed to load staked nodes overrides from {}: {}",
+                    &path, err
+                );
+                jsonrpc_core::error::Error::internal_error()
+            })?
+            .staked_map_id;
+        let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
+        write_staked_nodes.clear();
+        write_staked_nodes.extend(loaded_config.into_iter());
+        info!("Staked nodes overrides loaded from {}", path);
+        debug!("overrides map: {:?}", write_staked_nodes);
+        Ok(())
+    }
+
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
         meta.with_post_init(|post_init| Ok(post_init.cluster_info.my_contact_info().into()))
     }
@@ -351,14 +378,14 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
     let admin_rpc_path = admin_rpc_path(ledger_path);
 
     let event_loop = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("sol-adminrpc-el")
+        .thread_name("solAdminRpcEl")
         .worker_threads(3) // Three still seems like a lot, and better than the default of available core count
         .enable_all()
         .build()
         .unwrap();
 
     Builder::new()
-        .name("solana-adminrpc".to_string())
+        .name("solAdminRpc".to_string())
         .spawn(move || {
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
@@ -425,4 +452,40 @@ pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Clie
 
 pub fn runtime() -> jsonrpc_server_utils::tokio::runtime::Runtime {
     jsonrpc_server_utils::tokio::runtime::Runtime::new().expect("new tokio runtime")
+}
+
+#[derive(Default, Deserialize, Clone)]
+pub struct StakedNodesOverrides {
+    #[serde(deserialize_with = "deserialize_pubkey_map")]
+    pub staked_map_id: HashMap<Pubkey, u64>,
+}
+
+pub fn deserialize_pubkey_map<'de, D>(des: D) -> std::result::Result<HashMap<Pubkey, u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let container: HashMap<String, u64> = serde::Deserialize::deserialize(des)?;
+    let mut container_typed: HashMap<Pubkey, u64> = HashMap::new();
+    for (key, value) in container.iter() {
+        let typed_key = Pubkey::try_from(key.as_str())
+            .map_err(|_| serde::de::Error::invalid_type(serde::de::Unexpected::Map, &"PubKey"))?;
+        container_typed.insert(typed_key, *value);
+    }
+    Ok(container_typed)
+}
+
+pub fn load_staked_nodes_overrides(
+    path: &String,
+) -> std::result::Result<StakedNodesOverrides, Box<dyn error::Error>> {
+    debug!("Loading staked nodes overrides configuration from {}", path);
+    if Path::new(&path).exists() {
+        let file = std::fs::File::open(path)?;
+        Ok(serde_yaml::from_reader(file)?)
+    } else {
+        Err(format!(
+            "Staked nodes overrides provided '{}' a non-existing file path.",
+            path
+        )
+        .into())
+    }
 }

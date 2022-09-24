@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequest},
+        accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         snapshot_config::SnapshotConfig,
     },
@@ -12,12 +12,25 @@ use {
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc,
+        },
         time::Instant,
     },
 };
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
+pub type AtomicSlot = AtomicU64;
+pub struct ReadOnlyAtomicSlot {
+    slot: Arc<AtomicSlot>,
+}
+
+impl ReadOnlyAtomicSlot {
+    pub fn get(&self) -> Slot {
+        self.slot.load(Ordering::Relaxed)
+    }
+}
 
 #[derive(Debug, Default, Copy, Clone)]
 struct SetRootMetrics {
@@ -45,7 +58,8 @@ struct SetRootTimings {
 pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,
     descendants: HashMap<Slot, HashSet<Slot>>,
-    root: Slot,
+    root: Arc<AtomicSlot>,
+
     pub snapshot_config: Option<SnapshotConfig>,
 
     pub accounts_hash_interval_slots: Slot,
@@ -84,7 +98,7 @@ impl BankForks {
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<Slot, HashSet<Slot>> {
-        let root = self.root;
+        let root = self.root();
         self.banks
             .iter()
             .map(|(slot, bank)| {
@@ -107,7 +121,7 @@ impl BankForks {
             .collect()
     }
 
-    pub fn active_banks(&self) -> Vec<Slot> {
+    pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()
             .filter(|(_, v)| !v.is_frozen())
@@ -160,7 +174,7 @@ impl BankForks {
             }
         }
         Self {
-            root,
+            root: Arc::new(AtomicSlot::new(root)),
             banks,
             descendants,
             snapshot_config: None,
@@ -219,7 +233,8 @@ impl BankForks {
         highest_confirmed_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
-        self.root = root;
+        self.root.store(root, Ordering::Relaxed);
+
         let root_bank = self
             .banks
             .get(&root)
@@ -258,53 +273,47 @@ impl BankForks {
         let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
-        for bank in banks.iter() {
+        if let Some(bank) = banks.iter().find(|bank| {
+            bank.slot() > self.last_accounts_hash_slot
+                && bank.block_height() % self.accounts_hash_interval_slots == 0
+        }) {
             let bank_slot = bank.slot();
-            if bank.block_height() % self.accounts_hash_interval_slots == 0
-                && bank_slot > self.last_accounts_hash_slot
-            {
-                self.last_accounts_hash_slot = bank_slot;
-                let squash_timing = bank.squash();
-                total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
-                total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
-                total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
-                total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
-                total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
-                is_root_bank_squashed = bank_slot == root;
+            self.last_accounts_hash_slot = bank_slot;
+            let squash_timing = bank.squash();
+            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
+            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            is_root_bank_squashed = bank_slot == root;
 
-                let mut snapshot_time = Measure::start("squash::snapshot_time");
-                if self.snapshot_config.is_some()
-                    && accounts_background_request_sender.is_snapshot_creation_enabled()
-                {
-                    let snapshot_root_bank = self.root_bank();
-                    let root_slot = snapshot_root_bank.slot();
-                    if snapshot_root_bank.is_startup_verification_complete() {
-                        // Save off the status cache because these may get pruned if another
-                        // `set_root()` is called before the snapshots package can be generated
-                        let status_cache_slot_deltas = snapshot_root_bank
-                            .status_cache
-                            .read()
-                            .unwrap()
-                            .root_slot_deltas();
-                        if let Err(e) = accounts_background_request_sender.send_snapshot_request(
-                            SnapshotRequest {
-                                snapshot_root_bank,
-                                status_cache_slot_deltas,
-                            },
-                        ) {
-                            warn!(
-                                "Error sending snapshot request for bank: {}, err: {:?}",
-                                root_slot, e
-                            );
-                        }
-                    } else {
-                        info!("Not sending snapshot request for bank: {}, startup verification is incomplete", root_slot);
+            let mut snapshot_time = Measure::start("squash::snapshot_time");
+            if self.snapshot_config.is_some()
+                && accounts_background_request_sender.is_snapshot_creation_enabled()
+            {
+                if bank.is_startup_verification_complete() {
+                    // Save off the status cache because these may get pruned if another
+                    // `set_root()` is called before the snapshots package can be generated
+                    let status_cache_slot_deltas =
+                        bank.status_cache.read().unwrap().root_slot_deltas();
+                    if let Err(e) =
+                        accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
+                            snapshot_root_bank: Arc::clone(bank),
+                            status_cache_slot_deltas,
+                            request_type: SnapshotRequestType::Snapshot,
+                        })
+                    {
+                        warn!(
+                            "Error sending snapshot request for bank: {}, err: {:?}",
+                            bank_slot, e
+                        );
                     }
+                } else {
+                    info!("Not sending snapshot request for bank: {}, startup verification is incomplete", bank_slot);
                 }
-                snapshot_time.stop();
-                total_snapshot_ms += snapshot_time.as_ms() as i64;
-                break;
             }
+            snapshot_time.stop();
+            total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
@@ -433,7 +442,14 @@ impl BankForks {
     }
 
     pub fn root(&self) -> Slot {
-        self.root
+        self.root.load(Ordering::Relaxed)
+    }
+
+    /// Gets a read-only wrapper to an atomic slot holding the root slot.
+    pub fn get_atomic_root(&self) -> ReadOnlyAtomicSlot {
+        ReadOnlyAtomicSlot {
+            slot: self.root.clone(),
+        }
     }
 
     /// After setting a new root, prune the banks that are no longer on rooted paths
@@ -635,7 +651,7 @@ mod tests {
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
-        assert_eq!(bank_forks.active_banks(), vec![1]);
+        assert_eq!(bank_forks.active_bank_slots(), vec![1]);
     }
 
     #[test]

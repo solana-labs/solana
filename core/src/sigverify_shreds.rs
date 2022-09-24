@@ -37,7 +37,7 @@ pub(crate) fn spawn_shred_sigverify(
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
     Builder::new()
-        .name("shred-verifier".to_string())
+        .name("solShredVerifr".to_string())
         .spawn(move || loop {
             match run_shred_sigverify(
                 &self_pubkey,
@@ -151,7 +151,7 @@ fn get_slot_leaders(
             let leader = leaders.entry(slot).or_insert_with(|| {
                 let leader = leader_schedule_cache.slot_leader_at(slot, Some(bank))?;
                 // Discard the shred if the slot leader is the node itself.
-                (&leader != self_pubkey).then(|| leader)
+                (&leader != self_pubkey).then_some(leader)
             });
             if leader.is_none() {
                 packet.meta.set_discard(true);

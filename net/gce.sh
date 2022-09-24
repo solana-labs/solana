@@ -397,6 +397,7 @@ cloud_ForEachInstance() {
     declare name publicIp privateIp
     IFS=: read -r name publicIp privateIp zone < <(echo "$info")
 
+    # shellcheck disable=SC2294
     eval "$cmd" "$name" "$publicIp" "$privateIp" "$zone" "$count" "$@"
     count=$((count + 1))
   done

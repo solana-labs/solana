@@ -312,7 +312,7 @@ impl BankClient {
         let thread_bank = bank.clone();
         let bank = bank.clone();
         Builder::new()
-            .name("solana-bank-client".to_string())
+            .name("solBankClient".to_string())
             .spawn(move || Self::run(&thread_bank, transaction_receiver))
             .unwrap();
         Self {

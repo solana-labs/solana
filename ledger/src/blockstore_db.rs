@@ -5,7 +5,8 @@ use {
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
             BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus, PERF_METRIC_OP_NAME_GET,
-            PERF_METRIC_OP_NAME_PUT, PERF_METRIC_OP_NAME_WRITE_BATCH,
+            PERF_METRIC_OP_NAME_MULTI_GET, PERF_METRIC_OP_NAME_PUT,
+            PERF_METRIC_OP_NAME_WRITE_BATCH,
         },
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
@@ -20,8 +21,8 @@ use {
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
-        DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
-        IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+        DBCompactionStyle, DBIterator, DBPinnableSlice, DBRawIterator, FifoCompactOptions,
+        IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -93,9 +94,6 @@ const BLOCK_HEIGHT_CF: &str = "block_height";
 const PROGRAM_COSTS_CF: &str = "program_costs";
 /// Column family for optimistic slots
 const OPTIMISTIC_SLOTS_CF: &str = "optimistic_slots";
-
-// 1 day is chosen for the same reasoning of DEFAULT_COMPACTION_SLOT_INTERVAL
-const PERIODIC_COMPACTION_SECONDS: u64 = 60 * 60 * 24;
 
 #[derive(Error, Debug)]
 pub enum BlockstoreError {
@@ -259,7 +257,7 @@ impl Rocks {
         let access_type = options.access_type.clone();
         let recovery_mode = options.recovery_mode.clone();
 
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(path)?;
 
         // Use default database options
         if should_disable_auto_compactions(&access_type) {
@@ -280,7 +278,7 @@ impl Rocks {
                     path,
                     Self::cf_descriptors(&options, &oldest_slot),
                 )?,
-                access_type: access_type.clone(),
+                access_type,
                 oldest_slot,
                 column_options,
                 write_batch_perf_status: PerfSamplingStatus::default(),
@@ -301,70 +299,13 @@ impl Rocks {
                         &secondary_path,
                         Self::cf_descriptors(&options, &oldest_slot),
                     )?,
-                    access_type: access_type.clone(),
+                    access_type,
                     oldest_slot,
                     column_options,
                     write_batch_perf_status: PerfSamplingStatus::default(),
                 }
             }
         };
-        // This is only needed by solana-validator for LedgerCleanupService so guard with AccessType::Primary
-        if matches!(access_type, AccessType::Primary) {
-            for cf_name in Self::columns() {
-                // these special column families must be excluded from LedgerCleanupService's rocksdb
-                // compactions
-                if should_exclude_from_compaction(cf_name) {
-                    continue;
-                }
-
-                // This is the crux of our write-stall-free storage cleaning strategy with consistent
-                // state view for higher-layers
-                //
-                // For the consistent view, we commit delete_range on pruned slot range by LedgerCleanupService.
-                // simple story here.
-                //
-                // For actual storage cleaning, we employ RocksDB compaction. But default RocksDB compaction
-                // settings don't work well for us. That's because we're using it rather like a really big
-                // (100 GBs) ring-buffer. RocksDB is basically assuming uniform data write over the key space for
-                // efficient compaction, which isn't true for our use as a ring buffer.
-                //
-                // So, we customize the compaction strategy with 2 combined tweaks:
-                // (1) compaction_filter and (2) shortening its periodic cycles.
-                //
-                // Via the compaction_filter, we finally reclaim previously delete_range()-ed storage occupied
-                // by pruned slots. When compaction_filter is set, each SST files are re-compacted periodically
-                // to hunt for keys newly expired by the compaction_filter re-evaluation. But RocksDb's default
-                // `periodic_compaction_seconds` is 30 days, which is too long for our case. So, we
-                // shorten it to a day (24 hours).
-                //
-                // As we write newer SST files over time at rather consistent rate of speed, this
-                // effectively makes each newly-created sets be re-compacted for the filter at
-                // well-dispersed different timings.
-                // As a whole, we rewrite the whole dataset at every PERIODIC_COMPACTION_SECONDS,
-                // slowly over the duration of PERIODIC_COMPACTION_SECONDS. So, this results in
-                // amortization.
-                // So, there is a bit inefficiency here because we'll rewrite not-so-old SST files
-                // too. But longer period would introduce higher variance of ledger storage sizes over
-                // the long period. And it's much better than the daily IO spike caused by compact_range() by
-                // previous implementation.
-                //
-                // `ttl` and `compact_range`(`ManualCompaction`), doesn't work nicely. That's
-                // because its original intention is delete_range()s to reclaim disk space. So it tries to merge
-                // them with N+1 SST files all way down to the bottommost SSTs, often leading to vastly large amount
-                // (= all) of invalidated SST files, when combined with newer writes happening at the opposite
-                // edge of the key space. This causes a long and heavy disk IOs and possible write
-                // stall and ultimately, the deadly Replay/Banking stage stall at higher layers.
-                db.db
-                    .set_options_cf(
-                        db.cf_handle(cf_name),
-                        &[(
-                            "periodic_compaction_seconds",
-                            &format!("{}", PERIODIC_COMPACTION_SECONDS),
-                        )],
-                    )
-                    .unwrap();
-            }
-        }
 
         Ok(db)
     }
@@ -445,13 +386,46 @@ impl Rocks {
         Ok(opt)
     }
 
+    fn get_pinned_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<DBPinnableSlice>> {
+        let opt = self.db.get_pinned_cf(cf, key)?;
+        Ok(opt)
+    }
+
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
         self.db.put_cf(cf, key, value)?;
         Ok(())
     }
 
+    fn multi_get_cf(
+        &self,
+        cf: &ColumnFamily,
+        keys: Vec<&[u8]>,
+    ) -> Vec<Result<Option<DBPinnableSlice>>> {
+        let values = self
+            .db
+            .batched_multi_get_cf(cf, keys, false)
+            .into_iter()
+            .map(|result| match result {
+                Ok(opt) => Ok(opt),
+                Err(e) => Err(BlockstoreError::RocksDb(e)),
+            })
+            .collect::<Vec<_>>();
+        values
+    }
+
     fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
         self.db.delete_cf(cf, key)?;
+        Ok(())
+    }
+
+    /// Delete files whose slot range is within \[`from`, `to`\].
+    fn delete_file_in_range_cf(
+        &self,
+        cf: &ColumnFamily,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<()> {
+        self.db.delete_file_in_range_cf(cf, from_key, to_key)?;
         Ok(())
     }
 
@@ -509,10 +483,17 @@ impl Rocks {
     ///
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &str) -> Result<i64> {
+    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &'static std::ffi::CStr) -> Result<i64> {
         match self.db.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
+
+    fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        match self.db.live_files() {
+            Ok(live_files) => Ok(live_files),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
         }
     }
@@ -1041,9 +1022,11 @@ impl Database {
     where
         C: TypedColumn + ColumnName,
     {
-        if let Some(serialized_value) = self.backend.get_cf(self.cf_handle::<C>(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self
+            .backend
+            .get_pinned_cf(self.cf_handle::<C>(), &C::key(key))?
+        {
+            let value = deserialize(pinnable_slice.as_ref())?;
             Ok(Some(value))
         } else {
             Ok(None)
@@ -1059,7 +1042,10 @@ impl Database {
     {
         let cf = self.cf_handle::<C>();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
-        Ok(iter.map(|(key, value)| (C::index(&key), value)))
+        Ok(iter.map(|pair| {
+            let (key, value) = pair.unwrap();
+            (C::index(&key), value)
+        }))
     }
 
     #[inline]
@@ -1106,15 +1092,32 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    // Adds a range to delete to the given write batch
+    /// Adds a \[`from`, `to`\] range to delete to the given write batch
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
+        // Note that the default behavior of rocksdb's delete_range_cf deletes
+        // files within [from, to), while our purge logic applies to [from, to].
+        //
+        // For consistency, we make our delete_range_cf works for [from, to] by
+        // adjusting the `to` slot range by 1.
         let from_index = C::as_index(from);
-        let to_index = C::as_index(to);
+        let to_index = C::as_index(to.saturating_add(1));
         batch.delete_range_cf::<C>(cf, from_index, to_index)
+    }
+
+    /// Delete files whose slot range is within \[`from`, `to`\].
+    pub fn delete_file_in_range_cf<C>(&self, from: Slot, to: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        self.backend.delete_file_in_range_cf(
+            self.cf_handle::<C>(),
+            &C::key(C::as_index(from)),
+            &C::key(C::as_index(to)),
+        )
     }
 
     pub fn is_primary_access(&self) -> bool {
@@ -1123,6 +1126,10 @@ impl Database {
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
         self.backend.oldest_slot.set(oldest_slot);
+    }
+
+    pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        self.backend.live_files_metadata()
     }
 }
 
@@ -1153,7 +1160,10 @@ where
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
         let cf = self.handle();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
-        Ok(iter.map(|(key, value)| (C::index(&key), value)))
+        Ok(iter.map(|pair| {
+            let (key, value) = pair.unwrap();
+            (C::index(&key), value)
+        }))
     }
 
     pub fn delete_slot(
@@ -1235,7 +1245,7 @@ where
     ///
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-    pub fn get_int_property(&self, name: &str) -> Result<i64> {
+    pub fn get_int_property(&self, name: &'static std::ffi::CStr) -> Result<i64> {
         self.backend.get_int_property_cf(self.handle(), name)
     }
 }
@@ -1244,15 +1254,48 @@ impl<C> LedgerColumn<C>
 where
     C: TypedColumn + ColumnName,
 {
+    pub fn multi_get(&self, keys: Vec<C::Index>) -> Vec<Result<Option<C::Type>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(deserialize(pinnable_slice.as_ref())?)),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
+    }
+
     pub fn get(&self, key: C::Index) -> Result<Option<C::Type>> {
         let mut result = Ok(None);
         let is_perf_enabled = maybe_enable_rocksdb_perf(
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        if let Some(serialized_value) = self.backend.get_cf(self.handle(), &C::key(key))? {
-            let value = deserialize(&serialized_value)?;
-
+        if let Some(pinnable_slice) = self.backend.get_pinned_cf(self.handle(), &C::key(key))? {
+            let value = deserialize(pinnable_slice.as_ref())?;
             result = Ok(Some(value))
         }
 
@@ -1319,7 +1362,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1329,10 +1372,10 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            let value = match C::Type::decode(&serialized_value[..]) {
+        if let Some(pinnable_slice) = result? {
+            let value = match C::Type::decode(pinnable_slice.as_ref()) {
                 Ok(value) => value,
-                Err(_) => deserialize::<T>(&serialized_value)?.into(),
+                Err(_) => deserialize::<T>(pinnable_slice.as_ref())?.into(),
             };
             Ok(Some(value))
         } else {
@@ -1345,7 +1388,7 @@ where
             self.column_options.rocks_perf_sample_interval,
             &self.read_perf_status,
         );
-        let result = self.backend.get_cf(self.handle(), &C::key(key));
+        let result = self.backend.get_pinned_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_read_perf(
                 C::NAME,
@@ -1355,8 +1398,8 @@ where
             );
         }
 
-        if let Some(serialized_value) = result? {
-            Ok(Some(C::Type::decode(&serialized_value[..])?))
+        if let Some(pinnable_slice) = result? {
+            Ok(Some(C::Type::decode(pinnable_slice.as_ref())?))
         } else {
             Ok(None)
         }
@@ -1412,11 +1455,17 @@ impl<'a> WriteBatch<'a> {
         self.map[C::NAME]
     }
 
-    pub fn delete_range_cf<C: Column>(
+    /// Adds a \[`from`, `to`) range deletion entry to the batch.
+    ///
+    /// Note that the \[`from`, `to`) deletion range of WriteBatch::delete_range_cf
+    /// is different from \[`from`, `to`\] of Database::delete_range_cf as we makes
+    /// the semantics of Database::delete_range_cf matches the blockstore purge
+    /// logic.
+    fn delete_range_cf<C: Column>(
         &mut self,
         cf: &ColumnFamily,
         from: C::Index,
-        to: C::Index,
+        to: C::Index, // exclusive
     ) -> Result<()> {
         self.write_batch
             .delete_range_cf(cf, C::key(from), C::key(to));

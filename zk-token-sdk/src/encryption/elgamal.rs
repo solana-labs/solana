@@ -18,7 +18,6 @@ use {
         discrete_log::DiscreteLog,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
-    arrayref::{array_ref, array_refs},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -166,7 +165,7 @@ impl ElGamalKeypair {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
             return Err(SignerError::Custom("Rejecting default signature".into()));
         }
 
@@ -195,8 +194,12 @@ impl ElGamalKeypair {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != 64 {
+            return None;
+        }
+
         Some(Self {
-            public: ElGamalPubkey::from_bytes(bytes[..32].try_into().ok()?)?,
+            public: ElGamalPubkey::from_bytes(&bytes[..32])?,
             secret: ElGamalSecretKey::from_bytes(bytes[32..].try_into().ok()?)?,
         })
     }
@@ -276,7 +279,11 @@ impl ElGamalPubkey {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8; 32]) -> Option<ElGamalPubkey> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(ElGamalPubkey(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
@@ -375,8 +382,11 @@ impl ElGamalSecretKey {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: [u8; 32]) -> Option<ElGamalSecretKey> {
-        Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey)
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
+        match bytes.try_into() {
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
+            _ => None,
+        }
     }
 }
 
@@ -431,15 +441,13 @@ impl ElGamalCiphertext {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalCiphertext> {
-        let bytes = array_ref![bytes, 0, 64];
-        let (commitment, handle) = array_refs![bytes, 32, 32];
-
-        let commitment = CompressedRistretto::from_slice(commitment).decompress()?;
-        let handle = CompressedRistretto::from_slice(handle).decompress()?;
+        if bytes.len() != 64 {
+            return None;
+        }
 
         Some(ElGamalCiphertext {
-            commitment: PedersenCommitment(commitment),
-            handle: DecryptHandle(handle),
+            commitment: PedersenCommitment::from_bytes(&bytes[..32])?,
+            handle: DecryptHandle::from_bytes(&bytes[32..])?,
         })
     }
 
@@ -549,6 +557,10 @@ impl DecryptHandle {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<DecryptHandle> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(DecryptHandle(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))

@@ -1,5 +1,6 @@
 use {
     crate::{
+        parse_address_lookup_table::parse_address_lookup_table,
         parse_bpf_loader::parse_bpf_upgradeable_loader,
         parse_config::parse_config,
         parse_nonce::parse_nonce,
@@ -10,20 +11,27 @@ use {
     },
     inflector::Inflector,
     serde_json::Value,
-    solana_sdk::{instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar},
+    solana_sdk::{
+        instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar, vote,
+    },
     std::collections::HashMap,
     thiserror::Error,
 };
 
 lazy_static! {
+    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = solana_address_lookup_table_program::id();
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
     static ref CONFIG_PROGRAM_ID: Pubkey = solana_config_program::id();
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
-    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
+    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
+        m.insert(
+            *ADDRESS_LOOKUP_PROGRAM_ID,
+            ParsableAccount::AddressLookupTable,
+        );
         m.insert(
             *BPF_UPGRADEABLE_LOADER_PROGRAM_ID,
             ParsableAccount::BpfUpgradeableLoader,
@@ -68,6 +76,7 @@ pub struct ParsedAccount {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableAccount {
+    AddressLookupTable,
     BpfUpgradeableLoader,
     Config,
     Nonce,
@@ -94,6 +103,9 @@ pub fn parse_account_data(
         .ok_or(ParseAccountError::ProgramNotParsable)?;
     let additional_data = additional_data.unwrap_or_default();
     let parsed_json = match program_name {
+        ParsableAccount::AddressLookupTable => {
+            serde_json::to_value(parse_address_lookup_table(data)?)?
+        }
         ParsableAccount::BpfUpgradeableLoader => {
             serde_json::to_value(parse_bpf_upgradeable_loader(data)?)?
         }
@@ -117,11 +129,16 @@ pub fn parse_account_data(
 mod test {
     use {
         super::*,
-        solana_sdk::nonce::{
-            state::{Data, Versions},
-            State,
+        solana_sdk::{
+            nonce::{
+                state::{Data, Versions},
+                State,
+            },
+            vote::{
+                program::id as vote_program_id,
+                state::{VoteState, VoteStateVersions},
+            },
         },
-        solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     };
 
     #[test]
@@ -137,7 +154,7 @@ mod test {
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
         let parsed = parse_account_data(
             &account_pubkey,
-            &solana_vote_program::id(),
+            &vote_program_id(),
             &vote_account_data,
             None,
         )

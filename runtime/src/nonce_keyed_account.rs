@@ -11,7 +11,9 @@ use {
         pubkey::Pubkey,
         system_instruction::{nonce_to_instruction_error, NonceError},
         sysvar::rent::Rent,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::collections::HashSet,
 };
@@ -79,9 +81,9 @@ pub fn advance_nonce_account(
 }
 
 pub fn withdraw_nonce_account(
-    from_account_index: usize,
+    from_account_index: IndexOfAccount,
     lamports: u64,
-    to_account_index: usize,
+    to_account_index: IndexOfAccount,
     rent: &Rent,
     signers: &HashSet<Pubkey>,
     invoke_context: &InvokeContext,
@@ -282,14 +284,17 @@ mod test {
         },
     };
 
-    pub const NONCE_ACCOUNT_INDEX: usize = 0;
-    pub const WITHDRAW_TO_ACCOUNT_INDEX: usize = 1;
+    pub const NONCE_ACCOUNT_INDEX: IndexOfAccount = 0;
+    pub const WITHDRAW_TO_ACCOUNT_INDEX: IndexOfAccount = 1;
 
     macro_rules! push_instruction_context {
         ($invoke_context:expr, $transaction_context:ident, $instruction_context:ident, $instruction_accounts:ident) => {
             $invoke_context
-                .push(&$instruction_accounts, &[2], &[])
-                .unwrap();
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[2], &$instruction_accounts, &[]);
+            $invoke_context.push().unwrap();
             let $transaction_context = &$invoke_context.transaction_context;
             let $instruction_context = $transaction_context
                 .get_current_instruction_context()

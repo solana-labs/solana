@@ -13,18 +13,20 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+            AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
+            AccountsPackage, AccountsPackageType, PendingAccountsPackage, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         snapshot_utils::{
             self, ArchiveFormat,
@@ -94,16 +96,14 @@ impl SnapshotTestConfig {
         genesis_config_info.genesis_config.cluster_type = cluster_type;
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
+            Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             accounts_db::AccountShrinkThreshold::default(),
-            false,
-            None,
         );
         bank0.freeze();
+        bank0.set_startup_verification_complete();
         let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
@@ -165,6 +165,7 @@ fn restore_from_snapshot(
         &full_snapshot_archive_info,
         None,
         old_genesis_config,
+        &RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -176,6 +177,7 @@ fn restore_from_snapshot(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 
@@ -207,7 +209,6 @@ fn run_bank_forks_snapshot_n<F>(
     );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -240,6 +241,7 @@ fn run_bank_forks_snapshot_n<F>(
         .expect("no bank snapshots found in path");
     let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
+        AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
@@ -250,13 +252,14 @@ fn run_bank_forks_snapshot_n<F>(
         ArchiveFormat::TarBzip2,
         snapshot_version,
         None,
-        Some(SnapshotType::FullSnapshot),
     )
     .unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
+        None,
+        None,
     );
     let snapshot_package = SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
     snapshot_utils::archive_snapshot_package(
@@ -389,7 +392,7 @@ fn test_concurrent_snapshot_packaging(
             snapshot_config.snapshot_version,
             snapshot_config.archive_format,
             None,
-            Some(SnapshotType::FullSnapshot),
+            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         )
         .unwrap();
 
@@ -449,7 +452,7 @@ fn test_concurrent_snapshot_packaging(
     // currently sitting in the channel
     snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
+    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
     assert!(bank_snapshots
         .into_iter()
@@ -492,6 +495,8 @@ fn test_concurrent_snapshot_packaging(
                 accounts_package.snapshot_links.path(),
                 accounts_package.slot,
                 &Hash::default(),
+                None,
+                None,
             );
             let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
             pending_snapshot_package
@@ -535,6 +540,8 @@ fn test_concurrent_snapshot_packaging(
         saved_snapshots_dir.path(),
         saved_slot,
         &Hash::default(),
+        None,
+        None,
     );
 
     snapshot_utils::verify_snapshot_archive(
@@ -668,7 +675,6 @@ fn test_bank_forks_incremental_snapshot(
             snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -685,11 +691,11 @@ fn test_bank_forks_incremental_snapshot(
         let bank = {
             let bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 0, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -831,6 +837,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         &snapshot_config.incremental_snapshot_archives_dir,
         &[accounts_dir],
         genesis_config,
+        &RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -842,6 +849,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )?;
 
     assert_eq!(bank, &deserialized_bank);
@@ -903,10 +911,6 @@ fn test_snapshots_with_background_services(
     let pending_accounts_package = PendingAccountsPackage::default();
     let pending_snapshot_package = PendingSnapshotPackage::default();
 
-    snapshot_test_config
-        .bank_forks
-        .root_bank()
-        .set_startup_verification_complete();
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
         .read()
@@ -921,14 +925,17 @@ fn test_snapshots_with_background_services(
     }
 
     let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
-    let snapshot_request_handler = Some(SnapshotRequestHandler {
+    let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
         pending_accounts_package: Arc::clone(&pending_accounts_package),
-    });
-    let abs_request_handler = AbsRequestHandler {
-        snapshot_request_handler,
+    };
+    let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
+    };
+    let abs_request_handler = AbsRequestHandlers {
+        snapshot_request_handler,
+        pruned_banks_request_handler,
     };
 
     let exit = Arc::new(AtomicBool::new(false));
@@ -971,11 +978,11 @@ fn test_snapshots_with_background_services(
                 slot,
             );
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 0, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -1022,6 +1029,7 @@ fn test_snapshots_with_background_services(
             .incremental_snapshot_archives_dir,
         &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
         &snapshot_test_config.genesis_config_info.genesis_config,
+        &RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -1033,6 +1041,7 @@ fn test_snapshots_with_background_services(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 

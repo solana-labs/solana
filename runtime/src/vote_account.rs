@@ -3,7 +3,7 @@ use {
     once_cell::sync::OnceCell,
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
-        account::{accounts_equal, AccountSharedData, ReadableAccount},
+        account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -53,6 +53,10 @@ pub struct VoteAccounts {
 }
 
 impl VoteAccount {
+    pub(crate) fn account(&self) -> &AccountSharedData {
+        &self.0.account
+    }
+
     pub(crate) fn lamports(&self) -> u64 {
         self.0.account.lamports()
     }
@@ -252,12 +256,6 @@ impl PartialEq<VoteAccountInner> for VoteAccountInner {
             vote_state: _,
         } = self;
         account == &other.account
-    }
-}
-
-impl PartialEq<AccountSharedData> for VoteAccount {
-    fn eq(&self, other: &AccountSharedData) -> bool {
-        accounts_equal(&self.0.account, other)
     }
 }
 

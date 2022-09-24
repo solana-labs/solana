@@ -110,7 +110,7 @@ fn main() {
     for x in 0..iterations {
         if clean {
             let mut time = Measure::start("clean");
-            accounts.accounts_db.clean_accounts(None, false, None);
+            accounts.accounts_db.clean_accounts_for_tests();
             time.stop();
             println!("{}", time);
             for slot in 0..num_slots {
@@ -125,6 +125,7 @@ fn main() {
                 &ancestors,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+                true,
             );
             time.stop();
             let mut time_store = Measure::start("hash using store");
@@ -138,6 +139,7 @@ fn main() {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 false,
+                true,
             );
             time_store.stop();
             if results != results_store {

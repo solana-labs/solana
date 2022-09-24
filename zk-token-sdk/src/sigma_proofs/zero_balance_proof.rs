@@ -152,6 +152,10 @@ impl ZeroBalanceProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
+        if bytes.len() != 96 {
+            return Err(ZeroBalanceProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 96];
         let (Y_P, Y_D, z) = array_refs![bytes, 32, 32, 32];
 

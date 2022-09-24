@@ -45,7 +45,7 @@ pubkey_partition_index of 'abc' = 80
 So, rent will be collected or a rewrite is expected to occur:
  each time a slot's pubkey_partition is == [footnote1] pubkey_partition_index within an epoch. [footnote2]
 
- If we skip rewrites, then pubkey's account data will not be rewritten when its rent collecion partition index occurs.
+ If we skip rewrites, then pubkey's account data will not be rewritten when its rent collection partition index occurs.
  However, later we need to get a hash value for the most recent update to this account.
  That leads us to the purpose of this file.
  To calculate a hash for account data, we need to know:
@@ -318,7 +318,7 @@ impl ExpectedRentCollection {
             RentResult::CollectRent { .. } => return None,
         };
         {
-            // grab epoch infno for bank slot and storage slot
+            // grab epoch info for bank slot and storage slot
             let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
                 (bank_info.epoch, bank_info.partition_index);
@@ -553,14 +553,14 @@ impl ExpectedRentCollection {
             } => {
                 if next_epoch > current_rent_epoch && rent_due != 0 {
                     // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
-                    // It would be a waste of time to recalcluate a hash.
+                    // It would be a waste of time to recalculate a hash.
                     return None;
                 }
                 std::cmp::max(next_epoch, current_rent_epoch)
             }
             RentResult::LeaveAloneNoRent => {
                 // rent_epoch is not updated for this condition
-                // But, a rewrite WOULD HAVE occured at the expected slot.
+                // But, a rewrite WOULD HAVE occurred at the expected slot.
                 // So, fall through with same rent_epoch, but we will have already calculated 'expected_rent_collection_slot_max_epoch'
                 current_rent_epoch
             }
@@ -684,7 +684,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (!leave_alone).then(|| ExpectedRentCollection {
+                (!leave_alone).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -703,7 +703,7 @@ pub mod tests {
             let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
-                expected_rent_collection_slot_max_epoch + if greater { 1 } else { 0 },
+                expected_rent_collection_slot_max_epoch + u64::from(greater),
                 &epoch_schedule,
                 &rent_collector,
                 &SlotInfoInEpoch::new(max_slot_in_storages_inclusive, &epoch_schedule),
@@ -712,7 +712,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (!greater).then(|| ExpectedRentCollection {
+                (!greater).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -740,7 +740,7 @@ pub mod tests {
                 find_unskipped_slot,
                 None,
             );
-            let epoch_delta = if previous_epoch { 1 } else { 0 };
+            let epoch_delta = u64::from(previous_epoch);
             let slot_delta = epoch_delta * slots_per_epoch;
             assert_eq!(
                 result,
@@ -763,7 +763,7 @@ pub mod tests {
         let original_rent_epoch = account.rent_epoch();
         for already_collected in [true, false] {
             // to consider: maybe if we already collected rent_epoch IN this slot and slot matches what we need, then we should return None here
-            account.set_rent_epoch(original_rent_epoch + if already_collected { 1 } else { 0 });
+            account.set_rent_epoch(original_rent_epoch + u64::from(already_collected));
             let result = ExpectedRentCollection::new(
                 &pubkey,
                 &account,
@@ -866,7 +866,7 @@ pub mod tests {
             );
             let partition_index_passed_pubkey = partition_from_pubkey <= partition_index;
             let expected_rent_epoch =
-                rent_collector.epoch - if partition_index_passed_pubkey { 0 } else { 1 };
+                rent_collector.epoch - u64::from(!partition_index_passed_pubkey);
             let expected_rent_collection_slot_max_epoch = first_slot_in_max_epoch
                 + partition_from_pubkey
                 - if partition_index_passed_pubkey {
@@ -909,7 +909,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (account_rent_epoch != 0).then(|| ExpectedRentCollection {
+                (account_rent_epoch != 0).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch + 1,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -959,7 +959,7 @@ pub mod tests {
                     } else {
                         expected_rent_collection_slot_max_epoch
                     },
-                    rent_epoch: rent_collector.epoch - if prior_epoch { 1 } else { 0 },
+                    rent_epoch: rent_collector.epoch - u64::from(prior_epoch),
                 }),
                 "find_unskipped_slot(0): {:?}, rent_collector.epoch: {}, prior_epoch: {}",
                 find_unskipped_slot(0),
@@ -1047,7 +1047,7 @@ pub mod tests {
                     rent_collector.epoch = epoch_schedule.get_epoch(max_slot_in_storages_inclusive);
                     let first_slot_in_max_epoch = max_slot_in_storages_inclusive
                         - max_slot_in_storages_inclusive % slots_per_epoch;
-                    let skip_offset = if skipped_slot { 1 } else { 0 };
+                    let skip_offset = u64::from(skipped_slot);
                     let mut expected_rent_collection_slot_max_epoch =
                         first_slot_in_max_epoch + partition_from_pubkey + skip_offset;
                     let hit_this_epoch =
@@ -1084,13 +1084,13 @@ pub mod tests {
                     };
                     assert_eq!(
                         result,
-                        some_expected.then(|| ExpectedRentCollection {
+                        some_expected.then_some(ExpectedRentCollection {
                             partition_from_pubkey,
                             epoch_of_max_storage_slot: rent_collector.epoch,
                             partition_index_from_max_slot,
                             first_slot_in_max_epoch,
                             expected_rent_collection_slot_max_epoch,
-                            rent_epoch: rent_collector.epoch - if hit_this_epoch { 0 } else {1},
+                            rent_epoch: rent_collector.epoch - u64::from(!hit_this_epoch),
                         }),
                         "partition_index_from_max_slot: {}, epoch: {}, hit_this_epoch: {}, skipped_slot: {}",
                         partition_index_from_max_slot,
@@ -1248,7 +1248,7 @@ pub mod tests {
                         if rewrite_already {
                             if partition_index_bank_slot != partition_from_pubkey {
                                 // this is an invalid test occurrence.
-                                // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition idnex yet.
+                                // we wouldn't have inserted pubkey into 'rewrite_already' for this slot if the current partition index wasn't at the pubkey's partition index yet.
                                 continue;
                             }
 

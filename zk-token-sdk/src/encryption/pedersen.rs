@@ -176,6 +176,10 @@ impl PedersenCommitment {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<PedersenCommitment> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(PedersenCommitment(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))

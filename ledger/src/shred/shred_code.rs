@@ -1,16 +1,21 @@
 use {
-    crate::shred::{
-        common::dispatch,
-        legacy, merkle,
-        traits::{Shred, ShredCode as ShredCodeTrait},
-        CodingShredHeader, Error, ShredCommonHeader, ShredType, MAX_DATA_SHREDS_PER_FEC_BLOCK,
-        MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
+    crate::{
+        shred::{
+            common::dispatch,
+            legacy, merkle,
+            traits::{Shred, ShredCode as ShredCodeTrait},
+            CodingShredHeader, Error, ShredCommonHeader, ShredType, DATA_SHREDS_PER_FEC_BLOCK,
+            MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
+        },
+        shredder::ERASURE_BATCH_SIZE,
     },
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
-pub(super) const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
+const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
+pub(crate) const MAX_CODE_SHREDS_PER_SLOT: usize =
+    MAX_DATA_SHREDS_PER_SLOT * (ERASURE_BATCH_SIZE[1] - 1);
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
@@ -117,7 +122,7 @@ pub(super) fn erasure_shard_index<T: ShredCodeTrait>(shred: &T) -> Option<usize>
     let position = usize::from(coding_header.position);
     let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
     let index = position.checked_add(num_data_shreds)?;
-    (index < fec_set_size).then(|| index)
+    (index < fec_set_size).then_some(index)
 }
 
 pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {
@@ -132,8 +137,8 @@ pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {
             common_header.index,
         ));
     }
-    let num_coding_shreds = u32::from(coding_header.num_coding_shreds);
-    if num_coding_shreds > 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK {
+    let num_coding_shreds = usize::from(coding_header.num_coding_shreds);
+    if num_coding_shreds > 8 * DATA_SHREDS_PER_FEC_BLOCK {
         return Err(Error::InvalidNumCodingShreds(
             coding_header.num_coding_shreds,
         ));

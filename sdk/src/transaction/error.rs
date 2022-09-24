@@ -142,9 +142,9 @@ pub enum TransactionError {
     #[error("Transaction contains a duplicate instruction ({0}) that is not allowed")]
     DuplicateInstruction(u8),
 
-    /// Transaction results in an account without insufficient funds for rent
+    /// Transaction results in an account with insufficient funds for rent
     #[error(
-        "Transaction results in an account ({account_index}) without insufficient funds for rent"
+        "Transaction results in an account ({account_index}) with insufficient funds for rent"
     )]
     InsufficientFundsForRent { account_index: u8 },
 }

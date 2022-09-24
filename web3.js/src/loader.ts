@@ -2,15 +2,14 @@ import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
 import {PublicKey} from './publickey';
-import {Transaction} from './transaction';
+import {Transaction, PACKET_DATA_SIZE} from './transaction';
 import {SYSVAR_RENT_PUBKEY} from './sysvar';
-import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
-import {sleep} from './util/sleep';
+import {sendAndConfirmTransaction} from './utils/send-and-confirm-transaction';
+import {sleep} from './utils/sleep';
 import type {Connection} from './connection';
 import type {Signer} from './keypair';
-import {SystemProgram} from './system-program';
+import {SystemProgram} from './programs/system';
 import {IInstructionInputData} from './instruction';
-import {PACKET_DATA_SIZE} from './transaction-constants';
 
 // Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the
 // rest of the Transaction fields

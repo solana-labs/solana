@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 
 import {AgentManager, DESTROY_TIMEOUT_MS} from '../src/agent-manager';
-import {sleep} from '../src/util/sleep';
+import {sleep} from '../src/utils/sleep';
 
 describe('AgentManager', () => {
   it('works', async () => {

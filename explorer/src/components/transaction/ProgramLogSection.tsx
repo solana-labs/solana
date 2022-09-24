@@ -9,12 +9,12 @@ export function ProgramLogSection({ signature }: SignatureProps) {
   const { cluster, url } = useCluster();
   const details = useTransactionDetails(signature);
 
-  const transaction = details?.data?.transaction;
-  if (!transaction) return null;
-  const message = transaction.transaction.message;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!transactionWithMeta) return null;
+  const message = transactionWithMeta.transaction.message;
 
-  const logMessages = transaction.meta?.logMessages || null;
-  const err = transaction.meta?.err || null;
+  const logMessages = transactionWithMeta.meta?.logMessages || null;
+  const err = transactionWithMeta.meta?.err || null;
 
   let prettyLogs = null;
   if (logMessages !== null) {

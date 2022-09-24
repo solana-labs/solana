@@ -13,7 +13,7 @@ import { clusterPath } from "src/utils/url";
 import { EditionInfo } from "src/providers/accounts/utils/getEditionInfo";
 import { PublicKey } from "@solana/web3.js";
 
-export function NFTHeader({
+export function MetaplexNFTHeader({
   nftData,
   address,
 }: {

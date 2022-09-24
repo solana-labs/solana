@@ -16,6 +16,7 @@ use {
         signer::{Signer, SignerError},
     },
     std::{convert::TryInto, fmt},
+    subtle::ConstantTimeEq,
     zeroize::Zeroize,
 };
 
@@ -71,7 +72,7 @@ impl AeKey {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
             Err(SignerError::Custom("Rejecting default signature".into()))
         } else {
             Ok(AeKey(signature.as_ref()[..16].try_into().unwrap()))

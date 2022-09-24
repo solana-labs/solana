@@ -30,6 +30,8 @@ pub enum ProofError {
     Decryption,
     #[error("discrete log number of threads not power-of-two")]
     DiscreteLogThreads,
+    #[error("discrete log batch size too large")]
+    DiscreteLogBatchSize,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

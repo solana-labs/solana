@@ -4,7 +4,7 @@ import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
 import {Connection, PublicKey, Transaction, Signer} from '../../src';
-import invariant from '../../src/util/assert';
+import invariant from '../../src/utils/assert';
 import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';
 
 export const mockServer: mockttp.Mockttp | undefined =

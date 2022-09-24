@@ -412,7 +412,7 @@ impl SigVerifyStage {
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
-            .name("solana-verifier".to_string())
+            .name("solSigVerifier".to_string())
             .spawn(move || {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {
@@ -472,13 +472,9 @@ mod tests {
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
         packet_batches
             .iter()
-            .map(|batch| {
-                batch
-                    .iter()
-                    .map(|p| if p.meta.discard() { 0 } else { 1 })
-                    .sum::<usize>()
-            })
-            .sum::<usize>()
+            .flatten()
+            .filter(|p| !p.meta.discard())
+            .count()
     }
 
     #[test]

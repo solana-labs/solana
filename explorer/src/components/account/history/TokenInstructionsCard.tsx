@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  ParsedConfirmedTransaction,
+  ParsedTransactionWithMeta,
   ParsedInstruction,
   PartiallyDecodedInstruction,
   PublicKey,
@@ -47,23 +47,23 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
   const { hasTimestamps, detailsList } = React.useMemo(() => {
     const detailedHistoryMap =
       history?.data?.transactionMap ||
-      new Map<string, ParsedConfirmedTransaction>();
+      new Map<string, ParsedTransactionWithMeta>();
     const hasTimestamps = transactionRows.some((element) => element.blockTime);
     const detailsList: React.ReactNode[] = [];
     const mintMap = new Map<string, MintDetails>();
 
     transactionRows.forEach(
       ({ signatureInfo, signature, blockTime, statusClass, statusText }) => {
-        const parsed = detailedHistoryMap.get(signature);
-        if (!parsed) return;
+        const transactionWithMeta = detailedHistoryMap.get(signature);
+        if (!transactionWithMeta) return;
 
-        extractMintDetails(parsed, mintMap);
+        extractMintDetails(transactionWithMeta, mintMap);
 
         let instructions: (ParsedInstruction | PartiallyDecodedInstruction)[] =
           [];
 
-        InstructionContainer.create(parsed).instructions.forEach(
-          ({ instruction, inner }, index) => {
+        InstructionContainer.create(transactionWithMeta).instructions.forEach(
+          ({ instruction, inner }) => {
             if (isRelevantInstruction(pubkey, address, mintMap, instruction)) {
               instructions.push(instruction);
             }
@@ -79,7 +79,7 @@ export function TokenInstructionsCard({ pubkey }: { pubkey: PublicKey }) {
           const programId = ix.programId;
 
           const instructionName = getTokenInstructionName(
-            parsed,
+            transactionWithMeta,
             ix,
             signatureInfo
           );

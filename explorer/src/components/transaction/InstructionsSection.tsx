@@ -19,16 +19,15 @@ import { TokenLendingDetailsCard } from "src/components/instruction/TokenLending
 import { TokenSwapDetailsCard } from "src/components/instruction/TokenSwapDetailsCard";
 import { WormholeDetailsCard } from "src/components/instruction/WormholeDetailsCard";
 import { UnknownDetailsCard } from "src/components/instruction/UnknownDetailsCard";
-import { BonfidaBotDetailsCard } from "src/components/instruction/BonfidaBotDetails";
 import {
   INNER_INSTRUCTIONS_START_SLOT,
   SignatureProps,
 } from "pages/tx/[signature]";
 import { intoTransactionInstruction } from "src/utils/tx";
+import { isAddressLookupTableInstruction } from "src/components/instruction/address-lookup-table/types";
 import { isSerumInstruction } from "src/components/instruction/serum/types";
 import { isTokenLendingInstruction } from "src/components/instruction/token-lending/types";
 import { isTokenSwapInstruction } from "src/components/instruction/token-swap/types";
-import { isBonfidaBotInstruction } from "src/components/instruction/bonfida-bot/types";
 import { useFetchTransactionDetails } from "src/providers/transactions/parsed";
 import {
   useTransactionDetails,
@@ -48,6 +47,7 @@ import { useAnchorProgram } from "src/providers/anchor";
 import { LoadingCard } from "src/components/common/LoadingCard";
 import { ErrorBoundary } from "@sentry/react";
 import { ComputeBudgetDetailsCard } from "src/components/instruction/ComputeBudgetDetailsCard";
+import { AddressLookupTableDetailsCard } from "src/components/instruction/AddressLookupTableDetailsCard";
 
 export type InstructionDetailsProps = {
   tx: ParsedTransaction;
@@ -66,11 +66,11 @@ export function InstructionsSection({ signature }: SignatureProps) {
   const refreshDetails = () => fetchDetails(signature);
 
   const result = status?.data?.info?.result;
-  if (!result || !details?.data?.transaction) {
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!result || !transactionWithMeta) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
-  const { meta } = details.data.transaction;
-  const { transaction } = details.data?.transaction;
+  const { meta, transaction } = transactionWithMeta;
 
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
@@ -83,7 +83,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
   if (
     meta?.innerInstructions &&
     (cluster !== Cluster.MainnetBeta ||
-      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+      transactionWithMeta.slot >= INNER_INSTRUCTIONS_START_SLOT)
   ) {
     meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
       if (!innerInstructions[parsed.index]) {
@@ -224,8 +224,8 @@ function InstructionCard({
     childIndex,
   };
 
-  if (isBonfidaBotInstruction(transactionIx)) {
-    return <BonfidaBotDetailsCard key={key} {...props} />;
+  if (isAddressLookupTableInstruction(transactionIx)) {
+    return <AddressLookupTableDetailsCard key={key} {...props} />;
   } else if (isMangoInstruction(transactionIx)) {
     return <MangoDetailsCard key={key} {...props} />;
   } else if (isSerumInstruction(transactionIx)) {

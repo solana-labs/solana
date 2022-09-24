@@ -198,9 +198,11 @@ function StatusCard({
     }
   }
 
-  const fee = details?.data?.transaction?.meta?.fee;
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const fee = transactionWithMeta?.meta?.fee;
+  const transaction = transactionWithMeta?.transaction;
   const blockhash = transaction?.message.recentBlockhash;
+  const version = transactionWithMeta?.version;
   const isNonce = (() => {
     if (!transaction || transaction.message.instructions.length < 1) {
       return false;
@@ -333,6 +335,13 @@ function StatusCard({
             </td>
           </tr>
         )}
+
+        {version !== undefined && (
+          <tr>
+            <td>Transaction Version</td>
+            <td className="text-lg-end text-uppercase">{version}</td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );
@@ -342,7 +351,8 @@ function DetailsSection({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
   const status = useTransactionStatus(signature);
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const transaction = transactionWithMeta?.transaction;
   const message = transaction?.message;
   const { status: clusterStatus } = useCluster();
   const refreshDetails = () => fetchDetails(signature);
@@ -364,7 +374,7 @@ function DetailsSection({ signature }: SignatureProps) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;
-  } else if (!details.data?.transaction || !message) {
+  } else if (!transactionWithMeta || !message) {
     return <ErrorCard text="Details are not available" />;
   }
 
@@ -381,11 +391,12 @@ function DetailsSection({ signature }: SignatureProps) {
 function AccountsCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
 
-  if (!details?.data?.transaction) {
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!transactionWithMeta) {
     return null;
   }
 
-  const { meta, transaction } = details.data.transaction;
+  const { meta, transaction } = transactionWithMeta;
   const { message } = transaction;
 
   if (!meta) {
@@ -415,14 +426,19 @@ function AccountsCard({ signature }: SignatureProps) {
           {index === 0 && (
             <span className="badge bg-info-soft me-1">Fee Payer</span>
           )}
-          {account.writable && (
-            <span className="badge bg-info-soft me-1">Writable</span>
-          )}
           {account.signer && (
             <span className="badge bg-info-soft me-1">Signer</span>
           )}
+          {account.writable && (
+            <span className="badge bg-danger-soft me-1">Writable</span>
+          )}
           {message.instructions.find((ix) => ix.programId.equals(pubkey)) && (
-            <span className="badge bg-info-soft me-1">Program</span>
+            <span className="badge bg-warning-soft me-1">Program</span>
+          )}
+          {account.source === "lookupTable" && (
+            <span className="badge bg-gray-soft me-1">
+              Address Table Lookup
+            </span>
           )}
         </td>
       </tr>

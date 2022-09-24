@@ -106,7 +106,7 @@ impl PohService {
         let poh_exit_ = poh_exit.clone();
         let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
-            .name("solana-poh-service-tick_producer".to_string())
+            .name("solPohTickProd".to_string())
             .spawn(move || {
                 solana_sys_tuner::request_realtime_poh();
                 if poh_config.hashes_per_tick.is_none() {
@@ -452,7 +452,7 @@ mod tests {
                 let exit = exit.clone();
 
                 Builder::new()
-                    .name("solana-poh-service-entry_producer".to_string())
+                    .name("solPohEntryProd".to_string())
                     .spawn(move || {
                         let now = Instant::now();
                         let mut total_us = 0;

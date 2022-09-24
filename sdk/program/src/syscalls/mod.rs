@@ -16,6 +16,6 @@ pub const MAX_CPI_INSTRUCTION_ACCOUNTS: u8 = u8::MAX;
 
 /// Maximum number of account info structs that can be used in a single CPI
 /// invocation. A limit on account info structs is effectively the same as
-/// limiting the number of unique accounts. 64 was chosen to match the max
+/// limiting the number of unique accounts. 128 was chosen to match the max
 /// number of locked accounts per transaction (MAX_TX_ACCOUNT_LOCKS).
-pub const MAX_CPI_ACCOUNT_INFOS: usize = 64;
+pub const MAX_CPI_ACCOUNT_INFOS: usize = 128;

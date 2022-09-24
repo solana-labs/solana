@@ -299,7 +299,7 @@ pub enum ResultingStateChange {
 impl SlotStateUpdate {
     fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
         let bank_frozen_hash = self.bank_hash();
-        if bank_frozen_hash == None {
+        if bank_frozen_hash.is_none() {
             // If the bank hasn't been frozen yet, then there's nothing to do
             // since replay of the slot hasn't finished yet.
             return vec![];

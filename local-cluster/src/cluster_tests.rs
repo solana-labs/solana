@@ -6,7 +6,6 @@ use log::*;
 use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
@@ -32,16 +31,26 @@ use {
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::vote_transaction,
     std::{
         collections::{HashMap, HashSet},
-        net::SocketAddr,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::Path,
         sync::{Arc, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
 };
+
+pub fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, SocketAddr) {
+    let (rpc, mut tpu) = contact_info.client_facing_addr();
+    // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
+    // 0.0.0.0 as the IP instead of 127.0.0.1.
+    tpu.set_ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    (rpc, tpu)
+}
 
 /// Spend and verify from every node in the network
 pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
@@ -61,7 +70,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             return;
         }
         let random_keypair = Keypair::new();
-        let (rpc, tpu) = ingress_node.client_facing_addr();
+        let (rpc, tpu) = get_client_facing_addr(ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         let bal = client
             .poll_get_balance_with_commitment(
@@ -83,7 +92,7 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
             if ignore_nodes.contains(&validator.id) {
                 continue;
             }
-            let (rpc, tpu) = validator.client_facing_addr();
+            let (rpc, tpu) = get_client_facing_addr(validator);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             client.poll_for_signature_confirmation(&sig, confs).unwrap();
         }
@@ -95,7 +104,7 @@ pub fn verify_balances<S: ::std::hash::BuildHasher>(
     node: &ContactInfo,
     connection_cache: Arc<ConnectionCache>,
 ) {
-    let (rpc, tpu) = node.client_facing_addr();
+    let (rpc, tpu) = get_client_facing_addr(node);
     let client = ThinClient::new(rpc, tpu, connection_cache);
     for (pk, b) in expected_balances {
         let bal = client
@@ -112,7 +121,7 @@ pub fn send_many_transactions(
     max_tokens_per_transfer: u64,
     num_txs: u64,
 ) -> HashMap<Pubkey, u64> {
-    let (rpc, tpu) = node.client_facing_addr();
+    let (rpc, tpu) = get_client_facing_addr(node);
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
     let mut expected_balances = HashMap::new();
     for _ in 0..num_txs {
@@ -205,7 +214,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     let cluster_nodes =
         discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
     assert!(cluster_nodes.len() >= nodes);
-    let (rpc, tpu) = entry_point_info.client_facing_addr();
+    let (rpc, tpu) = get_client_facing_addr(entry_point_info);
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());
 
     // sleep long enough to make sure we are in epoch 3
@@ -235,7 +244,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
             continue;
         }
 
-        let (rpc, tpu) = ingress_node.client_facing_addr();
+        let (rpc, tpu) = get_client_facing_addr(ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         let balance = client
             .poll_get_balance_with_commitment(
@@ -318,7 +327,7 @@ pub fn check_for_new_roots(
         assert!(loop_start.elapsed() < loop_timeout);
 
         for (i, ingress_node) in contact_infos.iter().enumerate() {
-            let (rpc, tpu) = ingress_node.client_facing_addr();
+            let (rpc, tpu) = get_client_facing_addr(ingress_node);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let root_slot = client
                 .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -351,7 +360,7 @@ pub fn check_no_new_roots(
         .iter()
         .enumerate()
         .map(|(i, ingress_node)| {
-            let (rpc, tpu) = ingress_node.client_facing_addr();
+            let (rpc, tpu) = get_client_facing_addr(ingress_node);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             let initial_root = client
                 .get_slot()
@@ -370,7 +379,7 @@ pub fn check_no_new_roots(
     let mut reached_end_slot = false;
     loop {
         for contact_info in contact_infos {
-            let (rpc, tpu) = contact_info.client_facing_addr();
+            let (rpc, tpu) = get_client_facing_addr(contact_info);
             let client = ThinClient::new(rpc, tpu, connection_cache.clone());
             current_slot = client
                 .get_slot_with_commitment(CommitmentConfig::processed())
@@ -393,7 +402,7 @@ pub fn check_no_new_roots(
     }
 
     for (i, ingress_node) in contact_infos.iter().enumerate() {
-        let (rpc, tpu) = ingress_node.client_facing_addr();
+        let (rpc, tpu) = get_client_facing_addr(ingress_node);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         assert_eq!(
             client
@@ -415,7 +424,7 @@ fn poll_all_nodes_for_signature(
         if validator.id == entry_point_info.id {
             continue;
         }
-        let (rpc, tpu) = validator.client_facing_addr();
+        let (rpc, tpu) = get_client_facing_addr(validator);
         let client = ThinClient::new(rpc, tpu, connection_cache.clone());
         client.poll_for_signature_confirmation(sig, confs)?;
     }

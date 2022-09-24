@@ -26,7 +26,7 @@ const SIGN_SHRED_GPU_MIN: usize = 256;
 lazy_static! {
     static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_shreds_{}", ix))
+        .thread_name(|ix| format!("solSvrfyShred{:02}", ix))
         .build()
         .unwrap();
 }
@@ -304,7 +304,7 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
     let pubkey = keypair.pubkey().to_bytes();
     let secret = keypair.secret().to_bytes();
     let mut hasher = Sha512::default();
-    hasher.update(&secret);
+    hasher.update(secret);
     let mut result = hasher.finalize();
     result[0] &= 248;
     result[31] &= 63;

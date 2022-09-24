@@ -105,8 +105,8 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
 
     fn erase_previous_drives(drives: &[PathBuf]) {
         drives.iter().for_each(|folder| {
-            let _ = fs::remove_dir_all(&folder);
-            let _ = fs::create_dir_all(&folder);
+            let _ = fs::remove_dir_all(folder);
+            let _ = fs::create_dir_all(folder);
         })
     }
 

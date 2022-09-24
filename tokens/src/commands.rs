@@ -17,11 +17,11 @@ use {
     solana_account_decoder::parse_token::{
         pubkey_from_spl_token, real_number_string, spl_token_pubkey,
     },
-    solana_client::{
-        client_error::{ClientError, Result as ClientResult},
-        rpc_client::RpcClient,
-        rpc_config::RpcSendTransactionConfig,
-        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::{Error as ClientError, Result as ClientResult},
+        config::RpcSendTransactionConfig,
+        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -528,9 +528,12 @@ fn read_allocations(
 
 fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgresStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar
 }
 
@@ -830,7 +833,11 @@ fn check_payer_balances(
     Ok(())
 }
 
-pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), Error> {
+pub fn process_balances(
+    client: &RpcClient,
+    args: &BalancesArgs,
+    exit: Arc<AtomicBool>,
+) -> Result<(), Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
     let allocations = merge_allocations(&allocations);
@@ -852,6 +859,10 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
     );
 
     for allocation in &allocations {
+        if exit.load(Ordering::SeqCst) {
+            return Err(Error::ExitSignal);
+        }
+
         if let Some(spl_token_args) = &args.spl_token_args {
             print_token_balances(client, allocation, spl_token_args)?;
         } else {
@@ -913,7 +924,7 @@ pub fn test_process_distribute_tokens_with_client(
     let allocations_file = NamedTempFile::new().unwrap();
     let input_csv = allocations_file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(allocations_file);
-    wtr.write_record(&["recipient", "amount"]).unwrap();
+    wtr.write_record(["recipient", "amount"]).unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
         lamports_to_sol(expected_amount).to_string(),
@@ -1013,7 +1024,7 @@ pub fn test_process_create_stake_with_client(client: &RpcClient, sender_keypair:
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
@@ -1135,7 +1146,7 @@ pub fn test_process_distribute_stake_with_client(client: &RpcClient, sender_keyp
     let file = NamedTempFile::new().unwrap();
     let input_csv = file.path().to_str().unwrap().to_string();
     let mut wtr = csv::WriterBuilder::new().from_writer(file);
-    wtr.write_record(&["recipient", "amount", "lockup_date"])
+    wtr.write_record(["recipient", "amount", "lockup_date"])
         .unwrap();
     wtr.write_record(&[
         alice_pubkey.to_string(),
@@ -1268,7 +1279,7 @@ mod tests {
     fn simple_test_validator_no_fees(pubkey: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_no_fees(pubkey, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 
@@ -1815,7 +1826,7 @@ mod tests {
     fn simple_test_validator(alice: Pubkey) -> TestValidator {
         let test_validator =
             TestValidator::with_custom_fees(alice, 10_000, None, SocketAddrSpace::Unspecified);
-        test_validator.set_startup_verification_complete();
+        test_validator.set_startup_verification_complete_for_tests();
         test_validator
     }
 

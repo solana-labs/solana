@@ -129,8 +129,8 @@ fn process_iftop_logs(matches: &ArgMatches) {
         }
     });
     let output: Vec<LogLine> = unique_latest_logs
-        .into_iter()
-        .map(|(_, l)| {
+        .into_values()
+        .map(|l| {
             if map_list.is_empty() {
                 l
             } else {

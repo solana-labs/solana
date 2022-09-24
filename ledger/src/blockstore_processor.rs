@@ -2,6 +2,7 @@ use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
         blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
+        token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -30,6 +31,7 @@ use {
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
@@ -40,7 +42,6 @@ use {
         feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
-        instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signature},
         timing,
@@ -49,15 +50,13 @@ use {
             VersionedTransaction,
         },
     },
-    solana_transaction_status::token_balances::{
-        collect_token_balances, TransactionTokenBalancesSet,
-    },
+    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         borrow::Cow,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{Arc, Mutex, RwLock},
+        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -107,7 +106,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
         .build()
         .unwrap();
 }
@@ -239,8 +238,6 @@ fn execute_batch(
         ..
     } = tx_results;
 
-    check_accounts_data_size(bank, &execution_results)?;
-
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
@@ -284,6 +281,7 @@ fn execute_batches_internal(
     tx_costs: &[u64],
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
+    assert!(!batches.is_empty());
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
@@ -387,6 +385,10 @@ fn execute_batches(
     cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
+    if batches.is_empty() {
+        return Ok(());
+    }
+
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
@@ -454,11 +456,10 @@ fn execute_batches(
             });
         &tx_batches[..]
     } else {
-        match batches.len() {
-            // Ensure that the total cost attributed to this batch is essentially correct
-            0 => tx_batch_costs = Vec::new(),
-            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
-        }
+        // Ensure that the total cost attributed to this batch is essentially correct
+        // batches.is_empty() check at top of function ensures that n > 0 for following divide
+        let n = batches.len();
+        tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n];
         batches
     };
 
@@ -516,6 +517,7 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
@@ -526,6 +528,7 @@ pub fn process_entries_for_tests(
         &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
+        &_ignored_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", confirmation_timing);
@@ -544,6 +547,7 @@ fn process_entries_with_callback(
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -606,6 +610,9 @@ fn process_entries_with_callback(
                             batch,
                             transaction_indexes,
                         });
+                        // entry is scheduled to be processed, transactions in it can be used to
+                        // update prioritization fee cache asynchronously.
+                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
                         // done with this entry
                         break;
                     }
@@ -708,12 +715,14 @@ pub struct ProcessOptions {
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
+    pub on_halt_store_hash_raw_data_for_debug: bool,
 }
 
 pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
     opts: &ProcessOptions,
+    exit: &Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
     let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
@@ -724,6 +733,7 @@ pub fn test_process_blockstore(
         opts,
         None,
         None,
+        exit,
     );
     process_blockstore_from_root(
         blockstore,
@@ -745,10 +755,12 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Arc<RwLock<BankForks>> {
     // Setup bank for slot 0
-    let mut bank0 = Bank::new_with_paths(
+    let bank0 = Bank::new_with_paths(
         genesis_config,
+        Arc::new(opts.runtime_config.clone()),
         account_paths,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
@@ -758,8 +770,8 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
+        exit,
     );
-    bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
     info!("Processing ledger for slot 0...");
@@ -808,10 +820,8 @@ pub fn process_blockstore_from_root(
         );
     }
 
-    if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
-        if let Some((slot, _meta)) = metas.last() {
-            info!("ledger holds data through slot {}", slot);
-        }
+    if let Ok(Some(highest_slot)) = blockstore.highest_slot() {
+        info!("ledger holds data through slot {}", highest_slot);
     }
 
     let mut timing = ExecuteTimings::default();
@@ -847,25 +857,6 @@ pub fn process_blockstore_from_root(
 
     let processing_time = now.elapsed();
 
-    let debug_verify = opts.accounts_db_test_hash_calculation;
-    let mut time_cap = Measure::start("capitalization");
-    // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
-    // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
-    // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks
-        .read()
-        .unwrap()
-        .root_bank()
-        .calculate_and_verify_capitalization(debug_verify)
-    {
-        return Err(
-            BlockstoreProcessorError::RootBankWithMismatchedCapitalization(
-                bank_forks.read().unwrap().root(),
-            ),
-        );
-    }
-    time_cap.stop();
-
     datapoint_info!(
         "process_blockstore_from_root",
         ("total_time_us", processing_time.as_micros(), i64),
@@ -876,7 +867,6 @@ pub fn process_blockstore_from_root(
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
-        ("calculate_capitalization_us", time_cap.as_us(), i64),
     );
 
     info!("ledger processing timing: {:?}", timing);
@@ -894,7 +884,7 @@ pub fn process_blockstore_from_root(
             if bank_slots.len() > 1 { "s" } else { "" },
             bank_slots.iter().map(|slot| slot.to_string()).join(", "),
         );
-        assert!(bank_forks.active_banks().is_empty());
+        assert!(bank_forks.active_bank_slots().is_empty());
     }
 
     Ok(())
@@ -957,6 +947,8 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+
     confirm_slot(
         blockstore,
         bank,
@@ -969,6 +961,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
+        &_ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -1095,6 +1088,7 @@ pub fn confirm_slot(
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1123,6 +1117,7 @@ pub fn confirm_slot(
         entry_callback,
         recyclers,
         log_messages_bytes_limit,
+        prioritization_fee_cache,
     )
 }
 
@@ -1138,6 +1133,7 @@ fn confirm_slot_entries(
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1239,6 +1235,7 @@ fn confirm_slot_entries(
                 timing,
                 cost_capacity_meter,
                 log_messages_bytes_limit,
+                prioritization_fee_cache,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -1399,6 +1396,7 @@ fn load_frozen_forks(
     )?;
 
     let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
+    let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
     if bank_forks.read().unwrap().root() != halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
@@ -1531,22 +1529,32 @@ fn load_frozen_forks(
             )?;
 
             if slot >= halt_at_slot {
-                bank.force_flush_accounts_cache();
-                let can_cached_slot_be_unflushed = true;
-                // note that this slot may not be a root
-                let _ = bank.verify_bank_hash(VerifyBankHash {
-                    test_hash_calculation: false,
-                    can_cached_slot_be_unflushed,
-                    ignore_mismatch: true,
-                    require_rooted_bank: false,
-                    run_in_background: false,
-                });
+                run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
                 break;
             }
         }
+    } else if on_halt_store_hash_raw_data_for_debug {
+        run_final_hash_calc(
+            &bank_forks.read().unwrap().root_bank(),
+            on_halt_store_hash_raw_data_for_debug,
+        );
     }
 
     Ok(())
+}
+
+fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
+    bank.force_flush_accounts_cache();
+    let can_cached_slot_be_unflushed = false;
+    // note that this slot may not be a root
+    let _ = bank.verify_bank_hash(VerifyBankHash {
+        test_hash_calculation: false,
+        can_cached_slot_be_unflushed,
+        ignore_mismatch: true,
+        require_rooted_bank: false,
+        run_in_background: false,
+        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+    });
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -1765,64 +1773,6 @@ pub fn fill_blockstore_slot_with_ticks(
     last_entry_hash
 }
 
-/// Check to see if the transactions exceeded the accounts data size limits
-fn check_accounts_data_size<'a>(
-    bank: &Bank,
-    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
-) -> Result<()> {
-    check_accounts_data_block_size(bank)?;
-    check_accounts_data_total_size(bank, execution_results)
-}
-
-/// Check to see if transactions exceeded the accounts data size limit per block
-fn check_accounts_data_block_size(bank: &Bank) -> Result<()> {
-    if !bank
-        .feature_set
-        .is_active(&feature_set::cap_accounts_data_size_per_block::id())
-    {
-        return Ok(());
-    }
-
-    debug_assert!(MAX_ACCOUNT_DATA_BLOCK_LEN <= i64::MAX as u64);
-    if bank.load_accounts_data_size_delta_on_chain() > MAX_ACCOUNT_DATA_BLOCK_LEN as i64 {
-        Err(TransactionError::WouldExceedAccountDataBlockLimit)
-    } else {
-        Ok(())
-    }
-}
-
-/// Check the transaction execution results to see if any instruction errored by exceeding the max
-/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
-fn check_accounts_data_total_size<'a>(
-    bank: &Bank,
-    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
-) -> Result<()> {
-    if !bank
-        .feature_set
-        .is_active(&feature_set::cap_accounts_data_len::id())
-    {
-        return Ok(());
-    }
-
-    if let Some(result) = execution_results
-        .into_iter()
-        .map(|execution_result| execution_result.flattened_result())
-        .find(|result| {
-            matches!(
-                result,
-                Err(TransactionError::InstructionError(
-                    _,
-                    InstructionError::MaxAccountsDataSizeExceeded
-                )),
-            )
-        })
-    {
-        return result;
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 pub mod tests {
     use {
@@ -1836,9 +1786,6 @@ pub mod tests {
         matches::assert_matches,
         rand::{thread_rng, Rng},
         solana_entry::entry::{create_ticks, next_entry, next_entry_mut},
-        solana_program_runtime::{
-            accounts_data_meter::MAX_ACCOUNTS_DATA_LEN, invoke_context::InvokeContext,
-        },
         solana_runtime::{
             genesis_utils::{
                 self, create_genesis_config_with_vote_accounts, ValidatorVoteKeypairs,
@@ -1849,11 +1796,10 @@ pub mod tests {
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
             hash::Hash,
-            instruction::InstructionError,
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
-            system_instruction::{SystemError, MAX_PERMITTED_DATA_LENGTH},
+            system_instruction::SystemError,
             system_transaction,
             transaction::{Transaction, TransactionError},
         },
@@ -1882,7 +1828,7 @@ pub mod tests {
             AccessType::Primary | AccessType::PrimaryForMaintenance => {
                 // Attempting to open a second Primary access would fail, so
                 // just pass the original session if it is a Primary variant
-                test_process_blockstore(genesis_config, blockstore, opts)
+                test_process_blockstore(genesis_config, blockstore, opts, &Arc::default())
             }
             AccessType::Secondary => {
                 let secondary_blockstore = Blockstore::open_with_options(
@@ -1893,7 +1839,12 @@ pub mod tests {
                     },
                 )
                 .expect("Unable to open access to blockstore");
-                test_process_blockstore(genesis_config, &secondary_blockstore, opts)
+                test_process_blockstore(
+                    genesis_config,
+                    &secondary_blockstore,
+                    opts,
+                    &Arc::default(),
+                )
             }
         }
     }
@@ -2002,6 +1953,7 @@ pub mod tests {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            &Arc::default(),
         );
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
 
@@ -2016,6 +1968,7 @@ pub mod tests {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            &Arc::default(),
         );
 
         // One valid fork, one bad fork.  process_blockstore() should only return the valid fork
@@ -2070,7 +2023,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
     }
 
@@ -2134,7 +2088,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
 
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
@@ -2153,7 +2108,8 @@ pub mod tests {
         };
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0, 3]);
@@ -2219,7 +2175,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // One fork, other one is ignored b/c not a descendant of the root
@@ -2298,7 +2255,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
@@ -2354,8 +2312,12 @@ pub mod tests {
         blockstore.set_dead_slot(2).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 3]);
@@ -2399,8 +2361,12 @@ pub mod tests {
         blockstore.set_dead_slot(4).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see the parent of the dead child
@@ -2447,8 +2413,12 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
         blockstore.set_dead_slot(1).unwrap();
         blockstore.set_dead_slot(2).unwrap();
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, &ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see only the parent of the dead children
@@ -2499,7 +2469,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // There is one fork, head is last_slot + 1
@@ -2643,7 +2614,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
@@ -2673,7 +2645,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
@@ -2693,7 +2666,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, leader_schedule) =
-            test_process_blockstore(&genesis_config, &blockstore, &opts);
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -2752,7 +2725,7 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        test_process_blockstore(&genesis_config, &blockstore, &opts);
+        test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -3406,7 +3379,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, &opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
@@ -3659,14 +3633,11 @@ pub mod tests {
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             account_paths,
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            false,
-            None,
         );
         *bank.epoch_schedule()
     }
@@ -4118,6 +4089,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &PrioritizationFeeCache::new(0u64),
         )
     }
 
@@ -4261,6 +4233,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &PrioritizationFeeCache::new(0u64),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4306,6 +4279,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &PrioritizationFeeCache::new(0u64),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
@@ -4504,207 +4478,6 @@ pub mod tests {
                     );
                 }
             }
-        }
-    }
-
-    #[test]
-    fn test_check_accounts_data_block_size() {
-        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-        const NUM_ACCOUNTS: u64 = MAX_ACCOUNT_DATA_BLOCK_LEN / ACCOUNT_SIZE;
-
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.deactivate_feature(
-            &feature_set::enable_early_verification_of_account_modifications::id(),
-        );
-        let bank = Arc::new(bank);
-        assert!(bank
-            .feature_set
-            .is_active(&feature_set::cap_accounts_data_size_per_block::id()));
-
-        for _ in 0..NUM_ACCOUNTS {
-            let transaction = system_transaction::create_account(
-                &mint_keypair,
-                &Keypair::new(),
-                bank.last_blockhash(),
-                LAMPORTS_PER_SOL,
-                ACCOUNT_SIZE,
-                &solana_sdk::system_program::id(),
-            );
-            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
-            assert_eq!(
-                process_entries_for_tests(&bank, vec![entry], true, None, None),
-                Ok(()),
-            );
-        }
-
-        let transaction = system_transaction::create_account(
-            &mint_keypair,
-            &Keypair::new(),
-            bank.last_blockhash(),
-            LAMPORTS_PER_SOL,
-            ACCOUNT_SIZE,
-            &solana_sdk::system_program::id(),
-        );
-        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
-        assert_eq!(
-            process_entries_for_tests(&bank, vec![entry], true, None, None),
-            Err(TransactionError::WouldExceedAccountDataBlockLimit)
-        );
-    }
-
-    #[test]
-    fn test_check_accounts_data_total_size() {
-        const REMAINING_ACCOUNTS_DATA_SIZE: u64 =
-            MAX_ACCOUNT_DATA_BLOCK_LEN - MAX_PERMITTED_DATA_LENGTH;
-        const INITIAL_ACCOUNTS_DATA_SIZE: u64 =
-            MAX_ACCOUNTS_DATA_LEN - REMAINING_ACCOUNTS_DATA_SIZE;
-        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
-        const SHRINK_SIZE: u64 = 5678;
-        const ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION: u64 = ACCOUNT_SIZE - SHRINK_SIZE;
-        const NUM_ITERATIONS: u64 =
-            REMAINING_ACCOUNTS_DATA_SIZE / ACCOUNTS_DATA_SIZE_DELTA_PER_ITERATION;
-        const ACCOUNT_BALANCE: u64 = 70 * LAMPORTS_PER_SOL; // rent exempt amount for a 10MB account is a little less than 70 SOL
-
-        let GenesisConfigInfo {
-            genesis_config,
-            mint_keypair,
-            ..
-        } = create_genesis_config((1_000_000 + NUM_ITERATIONS + 1) * ACCOUNT_BALANCE);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        let mock_realloc_program_id = Pubkey::new_unique();
-        bank.add_builtin(
-            "mock_realloc_program",
-            &mock_realloc_program_id,
-            mock_realloc::process_instruction,
-        );
-        bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
-        bank.deactivate_feature(
-            &feature_set::enable_early_verification_of_account_modifications::id(),
-        );
-        let bank = Arc::new(bank);
-        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
-        assert!(bank
-            .feature_set
-            .is_active(&feature_set::cap_accounts_data_len::id()));
-
-        for _ in 0..NUM_ITERATIONS {
-            let accounts_data_size_before = bank.load_accounts_data_size();
-
-            // Create a new account, with the full size
-            let new_account = Keypair::new();
-            let transaction = system_transaction::create_account(
-                &mint_keypair,
-                &new_account,
-                bank.last_blockhash(),
-                ACCOUNT_BALANCE,
-                ACCOUNT_SIZE,
-                &mock_realloc_program_id,
-            );
-
-            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
-            assert_eq!(
-                process_entries_for_tests(&bank, vec![entry], true, None, None),
-                Ok(()),
-            );
-            let accounts_data_size_after = bank.load_accounts_data_size();
-            assert_eq!(
-                accounts_data_size_after - accounts_data_size_before,
-                ACCOUNT_SIZE,
-            );
-
-            // Resize the account to be smaller
-            let new_size = ACCOUNT_SIZE - SHRINK_SIZE;
-            let transaction = mock_realloc::create_transaction(
-                &mint_keypair,
-                &new_account.pubkey(),
-                new_size as usize,
-                mock_realloc_program_id,
-                bank.last_blockhash(),
-            );
-
-            let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
-            assert_eq!(
-                process_entries_for_tests(&bank, vec![entry], true, None, None),
-                Ok(()),
-            );
-            let accounts_data_size_after = bank.load_accounts_data_size();
-            assert_eq!(
-                accounts_data_size_after - accounts_data_size_before,
-                new_size,
-            );
-        }
-
-        let transaction = system_transaction::create_account(
-            &mint_keypair,
-            &Keypair::new(),
-            bank.last_blockhash(),
-            ACCOUNT_BALANCE,
-            ACCOUNT_SIZE,
-            &solana_sdk::system_program::id(),
-        );
-        let entry = next_entry(&bank.last_blockhash(), 1, vec![transaction]);
-        assert!(matches!(
-            process_entries_for_tests(&bank, vec![entry], true, None, None),
-            Err(TransactionError::InstructionError(
-                _,
-                InstructionError::MaxAccountsDataSizeExceeded,
-            ))
-        ));
-    }
-
-    mod mock_realloc {
-        use {
-            super::*,
-            serde::{Deserialize, Serialize},
-        };
-
-        #[derive(Debug, Serialize, Deserialize)]
-        enum Instruction {
-            Realloc { new_size: usize },
-        }
-
-        pub fn process_instruction(
-            _first_instruction_account: usize,
-            invoke_context: &mut InvokeContext,
-        ) -> result::Result<(), InstructionError> {
-            let transaction_context = &invoke_context.transaction_context;
-            let instruction_context = transaction_context.get_current_instruction_context()?;
-            let instruction_data = instruction_context.get_instruction_data();
-            if let Ok(instruction) = bincode::deserialize(instruction_data) {
-                match instruction {
-                    Instruction::Realloc { new_size } => instruction_context
-                        .try_borrow_instruction_account(transaction_context, 0)?
-                        .set_data_length(new_size),
-                }
-            } else {
-                Err(InstructionError::InvalidInstructionData)
-            }
-        }
-
-        pub fn create_transaction(
-            payer: &Keypair,
-            reallocd: &Pubkey,
-            new_size: usize,
-            mock_realloc_program_id: Pubkey,
-            recent_blockhash: Hash,
-        ) -> Transaction {
-            let account_metas = vec![solana_sdk::instruction::AccountMeta::new(*reallocd, false)];
-            let instruction = solana_sdk::instruction::Instruction::new_with_bincode(
-                mock_realloc_program_id,
-                &Instruction::Realloc { new_size },
-                account_metas,
-            );
-            Transaction::new_signed_with_payer(
-                &[instruction],
-                Some(&payer.pubkey()),
-                &[payer],
-                recent_blockhash,
-            )
         }
     }
 }

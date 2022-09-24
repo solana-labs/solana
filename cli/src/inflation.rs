@@ -9,8 +9,8 @@ use {
     solana_cli_output::{
         CliEpochRewardshMetadata, CliInflation, CliKeyedEpochReward, CliKeyedEpochRewards,
     },
-    solana_client::rpc_client::RpcClient,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::sync::Arc,
 };

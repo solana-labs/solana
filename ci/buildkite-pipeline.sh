@@ -110,7 +110,8 @@ EOF
 
 trigger_secondary_step() {
   cat  >> "$output_file" <<"EOF"
-  - trigger: "solana-secondary"
+  - name: "Trigger Build on solana-secondary"
+    trigger: "solana-secondary"
     branches: "!pull/*"
     async: true
     build:
@@ -234,7 +235,7 @@ EOF
     cat >> "$output_file" <<"EOF"
   - command: "scripts/build-downstream-projects.sh"
     name: "downstream-projects"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 35
     agents:
       queue: "solana"
 EOF

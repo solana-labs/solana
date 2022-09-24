@@ -29,6 +29,8 @@ pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> 
                         | VoteInstruction::VoteSwitch(_, _)
                         | VoteInstruction::UpdateVoteState(_)
                         | VoteInstruction::UpdateVoteStateSwitch(_, _)
+                        | VoteInstruction::CompactUpdateVoteState(_)
+                        | VoteInstruction::CompactUpdateVoteStateSwitch(..)
                 );
             }
         }
@@ -78,6 +80,12 @@ fn parse_vote_instruction_data(
             Some((VoteTransaction::from(vote_state_update), None))
         }
         VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
+            Some((VoteTransaction::from(vote_state_update), Some(hash)))
+        }
+        VoteInstruction::CompactUpdateVoteState(vote_state_update) => {
+            Some((VoteTransaction::from(vote_state_update), None))
+        }
+        VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, hash) => {
             Some((VoteTransaction::from(vote_state_update), Some(hash)))
         }
         VoteInstruction::Authorize(_, _)

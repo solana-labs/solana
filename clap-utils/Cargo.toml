@@ -1,6 +1,6 @@
 [package]
 name = "solana-clap-utils"
-version = "1.11.5"
+version = "1.15.0"
 description = "Solana utilities for the clap"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,10 +12,10 @@ edition = "2021"
 [dependencies]
 chrono = "0.4"
 clap = "2.33.0"
-rpassword = "6.0"
-solana-perf = { path = "../perf", version = "=1.11.5" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.5", default-features = false }
-solana-sdk = { path = "../sdk", version = "=1.11.5" }
+rpassword = "7.0"
+solana-perf = { path = "../perf", version = "=1.15.0" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.15.0", default-features = false }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"
 uriparse = "0.6.4"

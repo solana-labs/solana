@@ -117,7 +117,7 @@ pub(crate) mod tests {
         let verify_ = Arc::clone(verify);
         verify.start(|| {
             Builder::new()
-                .name("solana-bg-hash-verifier".to_string())
+                .name("solBgHashVerfy".to_string())
                 .spawn(move || {
                     // should have been marked not complete before thread started
                     assert!(!verify_.check_complete());

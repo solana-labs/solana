@@ -1,8 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     solana_cli::cli::{process_command, CliCommand, CliConfig},
-    solana_client::rpc_client::RpcClient,
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         native_token::sol_to_lamports,

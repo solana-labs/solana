@@ -3,8 +3,8 @@
 use {
     crate::banks_server::start_tcp_server,
     futures::{future::FutureExt, pin_mut, prelude::stream::StreamExt, select},
-    solana_client::connection_cache::ConnectionCache,
     solana_runtime::{bank_forks::BankForks, commitment::BlockCommitmentCache},
+    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         net::SocketAddr,
         sync::{
@@ -88,7 +88,7 @@ impl RpcBanksService {
         let connection_cache = connection_cache.clone();
         let exit = exit.clone();
         let thread_hdl = Builder::new()
-            .name("solana-rpc-banks".to_string())
+            .name("solRpcBanksSvc".to_string())
             .spawn(move || {
                 Self::run(
                     listen_addr,

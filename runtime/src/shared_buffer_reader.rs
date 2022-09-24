@@ -75,7 +75,7 @@ impl SharedBuffer {
         let bg_reader_data = instance.bg_reader_data.clone();
 
         let handle = Builder::new()
-            .name("solana-compressed_file_reader".to_string())
+            .name("solCompFileRead".to_string())
             .spawn(move || {
                 // importantly, this thread does NOT hold a refcount on the arc of 'instance'
                 bg_reader_data.read_entire_file_in_bg(reader, total_buffer_budget, chunk_size);

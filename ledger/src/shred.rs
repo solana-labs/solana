@@ -49,16 +49,15 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
-pub(crate) use shred_data::ShredData;
-pub use {
-    self::stats::{ProcessShredsStats, ShredFetchStats},
-    crate::shredder::Shredder,
-};
+#[cfg(test)]
+pub(crate) use shred_code::MAX_CODE_SHREDS_PER_SLOT;
 use {
     self::{shred_code::ShredCode, traits::Shred as _},
     crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    rayon::ThreadPool,
+    reed_solomon_erasure::Error::TooFewShardsPresent,
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_perf::packet::Packet,
@@ -66,11 +65,18 @@ use {
         clock::Slot,
         hash::{hashv, Hash},
         pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
+        signature::{Keypair, Signature, Signer, SIGNATURE_BYTES},
     },
     static_assertions::const_assert_eq,
-    std::fmt::Debug,
+    std::{fmt::Debug, time::Instant},
     thiserror::Error,
+};
+pub use {
+    self::{
+        shred_data::ShredData,
+        stats::{ProcessShredsStats, ShredFetchStats},
+    },
+    crate::shredder::Shredder,
 };
 
 mod common;
@@ -90,7 +96,7 @@ pub const SIZE_OF_NONCE: usize = 4;
 const SIZE_OF_COMMON_SHRED_HEADER: usize = 83;
 const SIZE_OF_DATA_SHRED_HEADERS: usize = 88;
 const SIZE_OF_CODING_SHRED_HEADERS: usize = 89;
-const SIZE_OF_SIGNATURE: usize = 64;
+const SIZE_OF_SIGNATURE: usize = SIGNATURE_BYTES;
 const SIZE_OF_SHRED_VARIANT: usize = 1;
 const SIZE_OF_SHRED_SLOT: usize = 8;
 const SIZE_OF_SHRED_INDEX: usize = 4;
@@ -99,7 +105,11 @@ const OFFSET_OF_SHRED_VARIANT: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_VARIANT;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 
-pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
+// Shreds are uniformly split into erasure batches with a "target" number of
+// data shreds per each batch as below. The actual number of data shreds in
+// each erasure batch depends on the number of shreds obtained from serializing
+// a &[Entry].
+pub const DATA_SHREDS_PER_FEC_BLOCK: usize = 32;
 
 // For legacy tests and benchmarks.
 const_assert_eq!(LEGACY_SHRED_DATA_CAPACITY, 1051);
@@ -125,7 +135,7 @@ pub enum Error {
     #[error("Invalid data size: {size}, payload: {payload}")]
     InvalidDataSize { size: u16, payload: usize },
     #[error("Invalid erasure shard index: {0:?}")]
-    InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug>),
+    InvalidErasureShardIndex(/*headers:*/ Box<dyn Debug + Send>),
     #[error("Invalid merkle proof")]
     InvalidMerkleProof,
     #[error("Invalid num coding shreds: {0}")]
@@ -138,6 +148,10 @@ pub enum Error {
     InvalidPayloadSize(/*payload size:*/ usize),
     #[error("Invalid proof size: {0}")]
     InvalidProofSize(/*proof_size:*/ u8),
+    #[error("Invalid recovered shred")]
+    InvalidRecoveredShred,
+    #[error("Invalid shard size: {0}")]
+    InvalidShardSize(/*shard_size:*/ usize),
     #[error("Invalid shred flags: {0}")]
     InvalidShredFlags(u8),
     #[error("Invalid {0:?} shred index: {1}")]
@@ -148,6 +162,8 @@ pub enum Error {
     InvalidShredVariant,
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error("Unknown proof size")]
+    UnknownProofSize,
 }
 
 #[repr(u8)]
@@ -205,7 +221,7 @@ struct DataShredHeader {
 struct CodingShredHeader {
     num_data_shreds: u16,
     num_coding_shreds: u16,
-    position: u16,
+    position: u16, // [0..num_coding_shreds)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -287,6 +303,8 @@ macro_rules! dispatch {
         }
     }
 }
+
+use dispatch;
 
 impl Shred {
     dispatch!(fn common_header(&self) -> &ShredCommonHeader);
@@ -488,6 +506,7 @@ impl Shred {
         }
     }
 
+    #[must_use]
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         let message = self.signed_message();
         self.signature().verify(pubkey.as_ref(), message)
@@ -607,7 +626,7 @@ pub mod layout {
                 merkle::ShredData::get_signed_message_range(proof_size)?
             }
         };
-        (shred.len() <= range.end).then(|| range)
+        (range.end <= shred.len()).then_some(range)
     }
 
     pub(crate) fn get_reference_tick(shred: &[u8]) -> Result<u8, Error> {
@@ -633,6 +652,28 @@ impl From<ShredCode> for Shred {
 impl From<ShredData> for Shred {
     fn from(shred: ShredData) -> Self {
         Self::ShredData(shred)
+    }
+}
+
+impl From<merkle::Shred> for Shred {
+    fn from(shred: merkle::Shred) -> Self {
+        match shred {
+            merkle::Shred::ShredCode(shred) => Self::ShredCode(ShredCode::Merkle(shred)),
+            merkle::Shred::ShredData(shred) => Self::ShredData(ShredData::Merkle(shred)),
+        }
+    }
+}
+
+impl TryFrom<Shred> for merkle::Shred {
+    type Error = Error;
+
+    fn try_from(shred: Shred) -> Result<Self, Self::Error> {
+        match shred {
+            Shred::ShredCode(ShredCode::Legacy(_)) => Err(Error::InvalidShredVariant),
+            Shred::ShredCode(ShredCode::Merkle(shred)) => Ok(Self::ShredCode(shred)),
+            Shred::ShredData(ShredData::Legacy(_)) => Err(Error::InvalidShredVariant),
+            Shred::ShredData(ShredData::Merkle(shred)) => Ok(Self::ShredData(shred)),
+        }
     }
 }
 
@@ -674,6 +715,60 @@ impl TryFrom<u8> for ShredVariant {
             }
         }
     }
+}
+
+pub(crate) fn recover(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
+    match shreds
+        .first()
+        .ok_or(TooFewShardsPresent)?
+        .common_header()
+        .shred_variant
+    {
+        ShredVariant::LegacyData | ShredVariant::LegacyCode => Shredder::try_recovery(shreds),
+        ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+            let shreds = shreds
+                .into_iter()
+                .map(merkle::Shred::try_from)
+                .collect::<Result<_, _>>()?;
+            Ok(merkle::recover(shreds)?
+                .into_iter()
+                .map(Shred::from)
+                .collect())
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn make_merkle_shreds_from_entries(
+    thread_pool: &ThreadPool,
+    keypair: &Keypair,
+    entries: &[Entry],
+    slot: Slot,
+    parent_slot: Slot,
+    shred_version: u16,
+    reference_tick: u8,
+    is_last_in_slot: bool,
+    next_shred_index: u32,
+    next_code_index: u32,
+    stats: &mut ProcessShredsStats,
+) -> Result<Vec<Shred>, Error> {
+    let now = Instant::now();
+    let entries = bincode::serialize(entries)?;
+    stats.serialize_elapsed += now.elapsed().as_micros() as u64;
+    let shreds = merkle::make_shreds_from_data(
+        thread_pool,
+        keypair,
+        &entries[..],
+        slot,
+        parent_slot,
+        shred_version,
+        reference_tick,
+        is_last_in_slot,
+        next_shred_index,
+        next_code_index,
+        stats,
+    )?;
+    Ok(shreds.into_iter().flatten().map(Shred::from).collect())
 }
 
 // Accepts shreds in the slot range [root + 1, max_slot].

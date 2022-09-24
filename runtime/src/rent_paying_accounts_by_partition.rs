@@ -5,6 +5,10 @@ use {
     std::collections::HashSet,
 };
 
+lazy_static! {
+    pub static ref EMPTY_HASHSET: HashSet<Pubkey> = HashSet::default();
+}
+
 /// populated at startup with the accounts that were found that are rent paying.
 /// These are the 'possible' rent paying accounts.
 /// This set can never grow during runtime since it is not possible to create rent paying accounts now.
@@ -45,7 +49,9 @@ impl RentPayingAccountsByPartition {
         &self,
         partition_end_index: PartitionIndex,
     ) -> &HashSet<Pubkey> {
-        &self.accounts[partition_end_index as usize]
+        self.accounts
+            .get(partition_end_index as usize)
+            .unwrap_or(&EMPTY_HASHSET)
     }
     pub fn is_initialized(&self) -> bool {
         self.partition_count != 0

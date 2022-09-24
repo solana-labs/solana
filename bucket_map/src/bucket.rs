@@ -142,38 +142,43 @@ impl<T: Clone + Copy> Bucket<T> {
         Self::bucket_find_entry(&self.index, key, self.random)
     }
 
-    fn find_entry_mut(&self, key: &Pubkey) -> Option<(&mut IndexEntry, u64)> {
-        Self::bucket_find_entry_mut(&self.index, key, self.random)
-    }
-
-    fn bucket_find_entry_mut<'a>(
-        index: &'a BucketStorage,
+    fn find_entry_mut<'a>(
+        &'a self,
         key: &Pubkey,
-        random: u64,
-    ) -> Option<(&'a mut IndexEntry, u64)> {
+    ) -> Result<(bool, &'a mut IndexEntry, u64), BucketMapError> {
+        let ix = Self::bucket_index_ix(&self.index, key, self.random);
+        let mut first_free = None;
         let mut m = Measure::start("bucket_find_entry_mut");
-        let ix = Self::bucket_index_ix(index, key, random);
-        for i in ix..ix + index.max_search() {
-            let ii = i % index.capacity();
-            if index.is_free(ii) {
+        for i in ix..ix + self.index.max_search() {
+            let ii = i % self.index.capacity();
+            if self.index.is_free(ii) {
+                if first_free.is_none() {
+                    first_free = Some(ii);
+                }
                 continue;
             }
-            let elem: &mut IndexEntry = index.get_mut(ii);
+            let elem: &mut IndexEntry = self.index.get_mut(ii);
             if elem.key == *key {
                 m.stop();
-                index
-                    .stats
+                self.stats
+                    .index
                     .find_entry_mut_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
-                return Some((elem, ii));
+                return Ok((true, elem, ii));
             }
         }
         m.stop();
-        index
-            .stats
+        self.stats
+            .index
             .find_entry_mut_us
             .fetch_add(m.as_us(), Ordering::Relaxed);
-        None
+        match first_free {
+            Some(ii) => {
+                let elem: &mut IndexEntry = self.index.get_mut(ii);
+                Ok((false, elem, ii))
+            }
+            None => Err(self.index_no_space()),
+        }
     }
 
     fn bucket_find_entry<'a>(
@@ -231,31 +236,33 @@ impl<T: Clone + Copy> Bucket<T> {
     }
 
     pub fn addref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        let (elem, _) = self.find_entry_mut(key)?;
-        elem.ref_count += 1;
-        Some(elem.ref_count)
+        if let Ok((found, elem, _)) = self.find_entry_mut(key) {
+            if found {
+                elem.ref_count += 1;
+                return Some(elem.ref_count);
+            }
+        }
+        None
     }
 
     pub fn unref(&mut self, key: &Pubkey) -> Option<RefCount> {
-        let (elem, _) = self.find_entry_mut(key)?;
-        elem.ref_count -= 1;
-        Some(elem.ref_count)
-    }
-
-    fn create_key(&mut self, key: &Pubkey) -> Result<u64, BucketMapError> {
-        Self::bucket_create_key(
-            &mut self.index,
-            key,
-            IndexEntry::key_uid(key),
-            self.random,
-            false,
-        )
+        if let Ok((found, elem, _)) = self.find_entry_mut(key) {
+            if found {
+                elem.ref_count -= 1;
+                return Some(elem.ref_count);
+            }
+        }
+        None
     }
 
     pub fn read_value(&self, key: &Pubkey) -> Option<(&[T], RefCount)> {
         //debug!("READ_VALUE: {:?}", key);
         let (elem, _) = self.find_entry(key)?;
         elem.read_value(self)
+    }
+
+    fn index_no_space(&self) -> BucketMapError {
+        BucketMapError::IndexNoSpace(self.index.capacity_pow2)
     }
 
     pub fn try_write(
@@ -269,15 +276,15 @@ impl<T: Clone + Copy> Bucket<T> {
             // fail early if the data bucket we need doesn't exist - we don't want the index entry partially allocated
             return Err(BucketMapError::DataNoSpace((best_fit_bucket, 0)));
         }
-        let index_entry = self.find_entry_mut(key);
-        let (elem, elem_ix) = match index_entry {
-            None => {
-                let ii = self.create_key(key)?;
-                let elem: &mut IndexEntry = self.index.get_mut(ii);
-                (elem, ii)
-            }
-            Some(res) => res,
-        };
+        let (found, elem, elem_ix) = self.find_entry_mut(key)?;
+        if !found {
+            let is_resizing = false;
+            let elem_uid = IndexEntry::key_uid(key);
+            self.index.allocate(elem_ix, elem_uid, is_resizing).unwrap();
+            // These fields will be overwritten after allocation by callers.
+            // Since this part of the mmapped file could have previously been used by someone else, there can be garbage here.
+            elem.init(key);
+        }
         elem.ref_count = ref_count;
         let elem_uid = self.index.uid_unchecked(elem_ix);
         let bucket_ix = elem.data_bucket_ix();

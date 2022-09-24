@@ -1,19 +1,23 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
 import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
-import {Transaction, TransactionInstruction} from '../src/transaction';
-import {StakeProgram} from '../src/stake-program';
-import {SystemProgram} from '../src/system-program';
+import {
+  Transaction,
+  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
+} from '../src/transaction';
+import {StakeProgram, SystemProgram} from '../src/programs';
 import {Message} from '../src/message';
-import invariant from '../src/util/assert';
-import {toBuffer} from '../src/util/to-buffer';
+import invariant from '../src/utils/assert';
+import {toBuffer} from '../src/utils/to-buffer';
 import {helpers} from './mocks/rpc-http';
 import {url} from './url';
+import {sign} from '../src/utils/ed25519';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -415,7 +419,7 @@ describe('Transaction', () => {
     expect(partialTransaction).to.eql(transaction);
 
     invariant(partialTransaction.signatures[0].signature);
-    partialTransaction.signatures[0].signature[0] = 0;
+    partialTransaction.signatures[0].signature.fill(1);
     expect(() =>
       partialTransaction.serialize({requireAllSignatures: false}),
     ).to.throw();
@@ -833,7 +837,7 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.setSigners(from.publicKey);
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
@@ -852,7 +856,7 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.feePayer = from.publicKey;
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
@@ -938,5 +942,99 @@ describe('Transaction', () => {
     const t1 = Transaction.from(t0.serialize({requireAllSignatures: false}));
     t1.partialSign(signer);
     t1.serialize();
+  });
+});
+
+describe('VersionedTransaction', () => {
+  it('deserializes versioned transactions', () => {
+    const serializedVersionedTx = Buffer.from(
+      'AdTIDASR42TgVuXKkd7mJKk373J3LPVp85eyKMVcrboo9KTY8/vm6N/Cv0NiHqk2I8iYw6VX5ZaBKG8z' +
+        '9l1XjwiAAQACA+6qNbqfjaIENwt9GzEK/ENiB/ijGwluzBUmQ9xlTAMcCaS0ctnyxTcXXlJr7u2qtnaM' +
+        'gIAO2/c7RBD0ipHWUcEDBkZv5SEXMv/srbpyw5vnvIzlu8X3EmssQ5s6QAAAAJbI7VNs6MzREUlnzRaJ' +
+        'pBKP8QQoDn2dWQvD0KIgHFDiAwIACQAgoQcAAAAAAAIABQEAAAQAATYPBwAKBDIBAyQWIw0oCxIdCA4i' +
+        'JzQRKwUZHxceHCohMBUJJiwpMxAaGC0TLhQxGyAMBiU2NS8VDgAAAADuAgAAAAAAAAIAAAAAAAAAAdGCT' +
+        'Qiq5yw3+3m1sPoRNj0GtUNNs0FIMocxzt3zuoSZHQABAwQFBwgLDA8RFBcYGhwdHh8iIyUnKiwtLi8yF' +
+        'wIGCQoNDhASExUWGRsgISQmKCkrMDEz',
+      'base64',
+    );
+
+    expect(() => Transaction.from(serializedVersionedTx)).to.throw(
+      'Versioned messages must be deserialized with VersionedMessage.deserialize()',
+    );
+
+    const versionedTx = VersionedTransaction.deserialize(serializedVersionedTx);
+    expect(versionedTx.message.version).to.eq(0);
+  });
+
+  describe('addSignature', () => {
+    const signer1 = Keypair.generate();
+    const signer2 = Keypair.generate();
+    const signer3 = Keypair.generate();
+
+    const recentBlockhash = new PublicKey(3).toBuffer();
+
+    const message = new TransactionMessage({
+      payerKey: signer1.publicKey,
+      instructions: [
+        new TransactionInstruction({
+          data: Buffer.from('Hello!'),
+          keys: [
+            {
+              pubkey: signer1.publicKey,
+              isSigner: true,
+              isWritable: true,
+            },
+            {
+              pubkey: signer2.publicKey,
+              isSigner: true,
+              isWritable: true,
+            },
+            {
+              pubkey: signer3.publicKey,
+              isSigner: false,
+              isWritable: false,
+            },
+          ],
+          programId: new PublicKey(
+            'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+          ),
+        }),
+      ],
+      recentBlockhash: bs58.encode(recentBlockhash),
+    });
+
+    const transaction = new VersionedTransaction(message.compileToV0Message());
+
+    it('appends externally generated signatures at correct indexes', () => {
+      const signature1 = sign(
+        transaction.message.serialize(),
+        signer1.secretKey,
+      );
+      const signature2 = sign(
+        transaction.message.serialize(),
+        signer2.secretKey,
+      );
+
+      transaction.addSignature(signer2.publicKey, signature2);
+      transaction.addSignature(signer1.publicKey, signature1);
+
+      expect(transaction.signatures).to.have.length(2);
+      expect(transaction.signatures[0]).to.eq(signature1);
+      expect(transaction.signatures[1]).to.eq(signature2);
+    });
+
+    it('fatals when the signature is the wrong length', () => {
+      expect(() => {
+        transaction.addSignature(signer1.publicKey, new Uint8Array(32));
+      }).to.throw('Signature must be 64 bytes long');
+    });
+
+    it('fatals when adding a signature for a public key that has not been marked as a signer', () => {
+      expect(() => {
+        transaction.addSignature(signer3.publicKey, new Uint8Array(64));
+      }).to.throw(
+        `Can not add signature; \`${signer3.publicKey.toBase58()}\` is not required to sign this transaction`,
+      );
+    });
   });
 });

@@ -213,7 +213,7 @@ async fn confirm(
                 let decoded_tx = confirmed_tx.get_transaction();
                 let encoded_tx_with_meta = confirmed_tx
                     .tx_with_meta
-                    .encode(UiTransactionEncoding::Json, Some(0))
+                    .encode(UiTransactionEncoding::Json, Some(0), true)
                     .map_err(|_| "Failed to encode transaction in block".to_string())?;
                 transaction = Some(CliTransaction {
                     transaction: encoded_tx_with_meta.transaction,
@@ -277,7 +277,7 @@ pub async fn transaction_history(
                     "{}, slot={}, memo=\"{}\", status={}",
                     result.signature,
                     result.slot,
-                    result.memo.unwrap_or_else(|| "".to_string()),
+                    result.memo.unwrap_or_default(),
                     match result.err {
                         None => "Confirmed".to_string(),
                         Some(err) => format!("Failed: {:?}", err),
@@ -624,6 +624,7 @@ pub fn bigtable_process_command(
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
+    let force_update_to_open = matches.is_present("force_update_to_open");
     let output_format = OutputFormat::from_matches(matches, "output_format", verbose);
 
     let (subcommand, sub_matches) = matches.subcommand();
@@ -650,6 +651,7 @@ pub fn bigtable_process_command(
                 AccessType::Secondary,
                 None,
                 shred_storage_type,
+                force_update_to_open,
             );
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,

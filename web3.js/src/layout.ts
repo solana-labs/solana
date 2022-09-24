@@ -1,11 +1,20 @@
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
+import {VoteAuthorizeWithSeedArgs} from './programs/vote';
+
 /**
  * Layout for a public key
  */
 export const publicKey = (property: string = 'publicKey') => {
   return BufferLayout.blob(32, property);
+};
+
+/**
+ * Layout for a signature
+ */
+export const signature = (property: string = 'signature') => {
+  return BufferLayout.blob(64, property);
 };
 
 /**
@@ -134,6 +143,23 @@ export const voteInit = (property: string = 'voteInit') => {
   );
 };
 
+/**
+ *  Layout for a VoteAuthorizeWithSeedArgs object
+ */
+export const voteAuthorizeWithSeedArgs = (
+  property: string = 'voteAuthorizeWithSeedArgs',
+) => {
+  return BufferLayout.struct<VoteAuthorizeWithSeedArgs>(
+    [
+      BufferLayout.u32('voteAuthorizationType'),
+      publicKey('currentAuthorityDerivedKeyOwnerPubkey'),
+      rustString('currentAuthorityDerivedKeySeed'),
+      publicKey('newAuthorized'),
+    ],
+    property,
+  );
+};
+
 export function getAlloc(type: any, fields: any): number {
   const getItemAlloc = (item: any): number => {
     if (item.span >= 0) {
@@ -145,6 +171,9 @@ export function getAlloc(type: any, fields: any): number {
       if (Array.isArray(field)) {
         return field.length * getItemAlloc(item.elementLayout);
       }
+    } else if ('fields' in item) {
+      // This is a `Structure` whose size needs to be recursively measured.
+      return getAlloc({layout: item}, fields[item.property]);
     }
     // Couldn't determine allocated size of layout
     return 0;

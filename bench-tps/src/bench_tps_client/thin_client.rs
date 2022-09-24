@@ -1,6 +1,5 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, Result},
-    solana_client::thin_client::ThinClient,
+    crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},
@@ -12,6 +11,7 @@ use {
         signature::Signature,
         transaction::Transaction,
     },
+    solana_thin_client::thin_client::ThinClient,
 };
 
 impl BenchTpsClient for ThinClient {
@@ -88,6 +88,26 @@ impl BenchTpsClient for ThinClient {
     fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
         self.rpc_client()
             .get_account(pubkey)
+            .map_err(|err| err.into())
+    }
+
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Account> {
+        SyncClient::get_account_with_commitment(self, pubkey, commitment_config)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
+    }
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+        self.rpc_client()
+            .get_multiple_accounts(pubkeys)
             .map_err(|err| err.into())
     }
 }

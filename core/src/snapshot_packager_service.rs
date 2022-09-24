@@ -49,7 +49,7 @@ impl SnapshotPackagerService {
         );
 
         let t_snapshot_packager = Builder::new()
-            .name("snapshot-packager".to_string())
+            .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = if enable_gossip_push {
@@ -298,7 +298,7 @@ mod tests {
             .collect();
 
         // Create directory of hard links for snapshots
-        let link_snapshots_dir = tempfile::tempdir_in(&temp_dir).unwrap();
+        let link_snapshots_dir = tempfile::tempdir_in(temp_dir).unwrap();
         for snapshots_path in snapshots_paths {
             let snapshot_file_name = snapshots_path.file_name().unwrap();
             let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);

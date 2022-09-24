@@ -5,7 +5,7 @@ import chaiAsPromised from 'chai-as-promised';
 
 import {Connection} from '../src';
 import {url, wsUrl} from './url';
-import {sleep} from '../src/util/sleep';
+import {sleep} from '../src/utils/sleep';
 
 use(chaiAsPromised);
 

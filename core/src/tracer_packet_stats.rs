@@ -199,7 +199,8 @@ impl TracerPacketStats {
                     )
                 );
 
-                *self = Self::default();
+                let id = self.id;
+                *self = Self::new(id);
                 self.last_report = timestamp();
             }
         }

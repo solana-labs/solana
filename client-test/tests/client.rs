@@ -2,22 +2,21 @@ use {
     futures_util::StreamExt,
     serde_json::{json, Value},
     serial_test::serial,
-    solana_client::{
-        nonblocking,
-        pubsub_client::PubsubClient,
-        rpc_client::RpcClient,
-        rpc_config::{
-            RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
-            RpcProgramAccountsConfig,
-        },
-        rpc_response::SlotInfo,
-    },
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
+    solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
     solana_rpc::{
         optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
         rpc::{create_test_transaction_entries, populate_blockstore_for_tests},
         rpc_pubsub_service::{PubSubConfig, PubSubService},
         rpc_subscriptions::RpcSubscriptions,
+    },
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        config::{
+            RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
+            RpcProgramAccountsConfig,
+        },
+        response::SlotInfo,
     },
     solana_runtime::{
         bank::Bank,

@@ -1,6 +1,6 @@
 import React from "react";
 import { useRouter } from "next/router";
-import { Message, PACKET_DATA_SIZE } from "@solana/web3.js";
+import { PACKET_DATA_SIZE, VersionedMessage } from "@solana/web3.js";
 
 import { TableCardBody } from "src/components/common/TableCardBody";
 import { SolBalance } from "src/utils";
@@ -14,6 +14,7 @@ import { LoadingCard } from "src/components/common/LoadingCard";
 import { ErrorCard } from "src/components/common/ErrorCard";
 import { TransactionSignatures } from "src/components/inspector/SignaturesCard";
 import { AccountsCard } from "src/components/inspector/AccountsCard";
+import { AddressTableLookupsCard } from "src/components/inspector/AddressTableLookupsCard";
 import {
   AddressWithContext,
   createFeePayerValidator,
@@ -26,7 +27,7 @@ import { dummyUrl } from "src/constants/urls";
 
 export type TransactionData = {
   rawMessage: Uint8Array;
-  message: Message;
+  message: VersionedMessage;
   signatures?: (string | null)[];
 };
 
@@ -118,7 +119,7 @@ function decodeUrlParams(
       throw new Error("message buffer is too short");
     }
 
-    const message = Message.from(buffer);
+    const message = VersionedMessage.deserialize(buffer);
     const data = {
       message,
       rawMessage: buffer,
@@ -295,6 +296,7 @@ function LoadedView({
         />
       )}
       <AccountsCard message={message} />
+      <AddressTableLookupsCard message={message} />
       <InstructionsSection message={message} />
     </>
   );
@@ -309,7 +311,7 @@ function OverviewCard({
   raw,
   onClear,
 }: {
-  message: Message;
+  message: VersionedMessage;
   raw: Uint8Array;
   onClear: () => void;
 }) {
@@ -369,11 +371,11 @@ function OverviewCard({
               </div>
             </td>
             <td className="text-end">
-              {message.accountKeys.length === 0 ? (
+              {message.staticAccountKeys.length === 0 ? (
                 "No Fee Payer"
               ) : (
                 <AddressWithContext
-                  pubkey={message.accountKeys[0]}
+                  pubkey={message.staticAccountKeys[0]}
                   validator={feePayerValidator}
                 />
               )}

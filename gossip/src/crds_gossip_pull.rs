@@ -256,7 +256,7 @@ impl CrdsGossipPull {
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
-                    check.then(|| (weight, peer))
+                    check.then_some((weight, peer))
                 })
                 .unzip()
         };

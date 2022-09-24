@@ -7,8 +7,8 @@ import {
 } from 'superstruct';
 
 import * as Layout from './layout';
-import * as shortvec from './util/shortvec-encoding';
-import {PublicKey} from './publickey';
+import * as shortvec from './utils/shortvec-encoding';
+import {PublicKey, PUBLIC_KEY_LENGTH} from './publickey';
 
 export const VALIDATOR_INFO_KEY = new PublicKey(
   'Va1idator1nfo111111111111111111111111111111',
@@ -77,16 +77,14 @@ export class ValidatorInfo {
   static fromConfigData(
     buffer: Buffer | Uint8Array | Array<number>,
   ): ValidatorInfo | null {
-    const PUBKEY_LENGTH = 32;
-
     let byteArray = [...buffer];
     const configKeyCount = shortvec.decodeLength(byteArray);
     if (configKeyCount !== 2) return null;
 
     const configKeys: Array<ConfigKey> = [];
     for (let i = 0; i < 2; i++) {
-      const publicKey = new PublicKey(byteArray.slice(0, PUBKEY_LENGTH));
-      byteArray = byteArray.slice(PUBKEY_LENGTH);
+      const publicKey = new PublicKey(byteArray.slice(0, PUBLIC_KEY_LENGTH));
+      byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
       const isSigner = byteArray.slice(0, 1)[0] === 1;
       byteArray = byteArray.slice(1);
       configKeys.push({publicKey, isSigner});

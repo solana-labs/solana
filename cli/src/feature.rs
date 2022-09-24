@@ -8,10 +8,9 @@ use {
     serde::{Deserialize, Serialize},
     solana_clap_utils::{input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{cli_version::CliVersion, QuietDisplay, VerboseDisplay},
-    solana_client::{
-        client_error::ClientError, rpc_client::RpcClient, rpc_request::MAX_MULTIPLE_ACCOUNTS,
-    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{client_error::Error as ClientError, request::MAX_MULTIPLE_ACCOUNTS},
     solana_sdk::{
         account::Account,
         clock::Slot,

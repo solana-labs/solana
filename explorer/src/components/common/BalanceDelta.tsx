@@ -12,7 +12,7 @@ export function BalanceDelta({
   let sols;
 
   if (isSol) {
-    sols = <SolBalance lamports={delta.toNumber()} />;
+    sols = <SolBalance lamports={Math.abs(delta.toNumber())} />;
   }
 
   if (delta.gt(0)) {

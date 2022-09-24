@@ -4,12 +4,13 @@
 //!
 //! The sysvar ID is declared in [`sysvar::slot_history`].
 //!
-//! [`sysvar::slot_history`]: crate::slot_history
+//! [`sysvar::slot_history`]: crate::sysvar::slot_history
 
 #![allow(clippy::integer_arithmetic)]
 pub use crate::clock::Slot;
 use bv::{BitVec, BitsMut};
 
+/// A bitvector indicating which slots are present in the past epoch.
 #[repr(C)]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SlotHistory {

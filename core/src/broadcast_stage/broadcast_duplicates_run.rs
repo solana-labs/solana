@@ -3,7 +3,7 @@ use {
     crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
-    solana_gossip::cluster_info::DATA_PLANE_FANOUT,
+    solana_gossip::contact_info::ContactInfo,
     solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{
         hash::Hash,
@@ -163,6 +163,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            false, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
 
@@ -178,6 +179,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    false, // merkle_variant
                     &mut ProcessShredsStats::default(),
                 );
                 // Don't mark the last shred as last so that validators won't
@@ -189,6 +191,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    false, // merkle_variant
                     &mut ProcessShredsStats::default(),
                 );
                 let sigs: Vec<_> = partition_last_data_shred
@@ -270,12 +273,6 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             (bank_forks.root_bank(), bank_forks.working_bank())
         };
         let self_pubkey = cluster_info.id();
-        let nodes: Vec<_> = cluster_info
-            .all_peers()
-            .into_iter()
-            .map(|(node, _)| node)
-            .collect();
-
         // Create cluster partition.
         let cluster_partition: HashSet<Pubkey> = {
             let mut cumilative_stake = 0;
@@ -302,17 +299,8 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let packets: Vec<_> = shreds
             .iter()
             .filter_map(|shred| {
-                let addr = cluster_nodes
-                    .get_broadcast_addrs(
-                        &shred.id(),
-                        &root_bank,
-                        DATA_PLANE_FANOUT,
-                        socket_addr_space,
-                    )
-                    .first()
-                    .copied()?;
-                let node = nodes.iter().find(|node| node.tvu == addr)?;
-                if !socket_addr_space.check(&node.tvu) {
+                let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
+                if ContactInfo::is_valid_address(&node.tvu, socket_addr_space) {
                     return None;
                 }
                 if self

@@ -28,11 +28,10 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
     return null;
   }
 
-  const preTokenBalances = details.data?.transaction?.meta?.preTokenBalances;
-  const postTokenBalances = details.data?.transaction?.meta?.postTokenBalances;
-
-  const accountKeys =
-    details.data?.transaction?.transaction.message.accountKeys;
+  const transactionWithMeta = details.data?.transactionWithMeta;
+  const preTokenBalances = transactionWithMeta?.meta?.preTokenBalances;
+  const postTokenBalances = transactionWithMeta?.meta?.postTokenBalances;
+  const accountKeys = transactionWithMeta?.transaction.message.accountKeys;
 
   if (!preTokenBalances || !postTokenBalances || !accountKeys) {
     return null;

@@ -45,14 +45,16 @@ if [[ -n $CI ]]; then
   # Share the real ~/.cargo between docker containers in CI for speed
   ARGS+=(--volume "$HOME:/home")
 
-  # sccache
-  ARGS+=(
-    --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
-    --env AWS_ACCESS_KEY_ID
-    --env AWS_SECRET_ACCESS_KEY
-    --env SCCACHE_BUCKET
-    --env SCCACHE_REGION
-  )
+  if [[ -n $BUILDKITE ]]; then
+    # sccache
+    ARGS+=(
+      --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+      --env AWS_ACCESS_KEY_ID
+      --env AWS_SECRET_ACCESS_KEY
+      --env SCCACHE_BUCKET
+      --env SCCACHE_REGION
+    )
+  fi
 else
   # Avoid sharing ~/.cargo when building locally to avoid a mixed macOS/Linux
   # ~/.cargo

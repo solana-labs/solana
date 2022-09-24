@@ -202,7 +202,7 @@ found in [Accounts](accounts.md#signers)
 
 ## Recent Blockhash
 
-A transaction includes a recent [blockhash](terminology.md#blockhash) to prevent
+A transaction includes a recent [blockhash](../../terminology.md#blockhash) to prevent
 duplication and to give transactions lifetimes. Any transaction that is
 completely identical to a previous one is rejected, so adding a newer blockhash
 allows multiple transactions to repeat the exact same action. Transactions also

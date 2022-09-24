@@ -6,7 +6,6 @@ use {
         Banks, BanksRequest, BanksResponse, BanksTransactionResultWithSimulation,
         TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
     },
-    solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
@@ -28,6 +27,7 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         convert::TryFrom,
         io,
@@ -105,7 +105,7 @@ impl BanksServer {
         }
         let server_bank_forks = bank_forks.clone();
         Builder::new()
-            .name("solana-bank-forks-client".to_string())
+            .name("solBankForksCli".to_string())
             .spawn(move || Self::run(server_bank_forks, transaction_receiver))
             .unwrap();
         Self::new(
@@ -153,13 +153,9 @@ fn verify_transaction(
     transaction: &Transaction,
     feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
-    if let Err(err) = transaction.verify() {
-        Err(err)
-    } else if let Err(err) = transaction.verify_precompiles(feature_set) {
-        Err(err)
-    } else {
-        Ok(())
-    }
+    transaction.verify()?;
+    transaction.verify_precompiles(feature_set)?;
+    Ok(())
 }
 
 fn simulate_transaction(

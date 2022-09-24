@@ -1,5 +1,7 @@
 use {
-    crate::unprocessed_packet_batches::{self, ImmutableDeserializedPacket},
+    crate::{
+        immutable_deserialized_packet::ImmutableDeserializedPacket, unprocessed_packet_batches,
+    },
     solana_perf::packet::Packet,
     solana_runtime::{
         bank::Bank,
@@ -97,7 +99,7 @@ impl ForwardBatch {
 pub struct ForwardPacketBatchesByAccounts {
     // Need a `bank` to load all accounts for VersionedTransaction. Currently
     // using current rooted bank for it.
-    current_bank: Arc<Bank>,
+    pub(crate) current_bank: Arc<Bank>,
     // Forwardable packets are staged in number of batches, each batch is limited
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.
@@ -187,14 +189,12 @@ impl ForwardPacketBatchesByAccounts {
 mod tests {
     use {
         super::*,
-        crate::{
-            transaction_priority_details::TransactionPriorityDetails,
-            unprocessed_packet_batches::DeserializedPacket,
-        },
+        crate::unprocessed_packet_batches::DeserializedPacket,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            transaction_priority_details::TransactionPriorityDetails,
         },
         solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
         std::sync::RwLock,

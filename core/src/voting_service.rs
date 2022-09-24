@@ -46,7 +46,7 @@ impl VotingService {
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
         let thread_hdl = Builder::new()
-            .name("sol-vote-service".to_string())
+            .name("solVoteService".to_string())
             .spawn(move || {
                 for vote_op in vote_receiver.iter() {
                     let rooted_bank = bank_forks.read().unwrap().root_bank().clone();

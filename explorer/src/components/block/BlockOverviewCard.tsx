@@ -8,7 +8,7 @@ import { Slot } from "src/components/common/Slot";
 import { ClusterStatus, useCluster } from "src/providers/cluster";
 import { BlockHistoryCard } from "./BlockHistoryCard";
 import { BlockRewardsCard } from "./BlockRewardsCard";
-import { BlockResponse } from "@solana/web3.js";
+import { VersionedBlockResponse } from "@solana/web3.js";
 import { NavLink } from "src/components/NavLink";
 import { clusterPath } from "src/utils/url";
 import { BlockProgramsCard } from "./BlockProgramsCard";
@@ -212,7 +212,7 @@ function MoreSection({
   tab,
 }: {
   slot: number;
-  block: BlockResponse;
+  block: VersionedBlockResponse;
   tab?: string;
 }) {
   const router = useRouter();

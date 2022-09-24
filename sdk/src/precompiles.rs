@@ -4,9 +4,7 @@
 
 use {
     crate::{
-        decode_error::DecodeError,
-        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
-        instruction::CompiledInstruction,
+        decode_error::DecodeError, feature_set::FeatureSet, instruction::CompiledInstruction,
         pubkey::Pubkey,
     },
     lazy_static::lazy_static,
@@ -81,12 +79,12 @@ lazy_static! {
     static ref PRECOMPILES: Vec<Precompile> = vec![
         Precompile::new(
             crate::secp256k1_program::id(),
-            Some(prevent_calling_precompiles_as_programs::id()),
+            None, // always enabled
             crate::secp256k1_instruction::verify,
         ),
         Precompile::new(
             crate::ed25519_program::id(),
-            Some(prevent_calling_precompiles_as_programs::id()),
+            None, // always enabled
             crate::ed25519_instruction::verify,
         ),
     ];
