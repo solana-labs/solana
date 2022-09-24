@@ -454,7 +454,7 @@ pub mod preserve_rent_epoch_for_rent_exempt_accounts {
     solana_sdk::declare_id!("HH3MUYReL2BvqqA3oEcAa7txju5GY6G4nxJ51zvsEjEZ");
 }
 
-pub mod enable_bpf_loader_extend_program_data_ix {
+pub mod enable_bpf_loader_extend_program_ix {
     solana_sdk::declare_id!("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme");
 }
 
@@ -484,10 +484,6 @@ pub mod compact_vote_state_updates {
 
 pub mod sign_repair_requests {
     solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
-}
-
-pub mod check_ping_ancestor_requests {
-    solana_sdk::declare_id!("AXLB87anNaUQtqBSsxkm4gvNzYY985aLtNtpJC94uWLJ");
 }
 
 pub mod incremental_snapshot_only_incremental_hash_calculation {
@@ -638,7 +634,7 @@ lazy_static! {
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
-        (enable_bpf_loader_extend_program_data_ix::id(), "enable bpf upgradeable loader ExtendProgramData instruction #25234"),
+        (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
@@ -646,7 +642,6 @@ lazy_static! {
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
-        (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
         (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
         (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),

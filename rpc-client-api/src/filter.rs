@@ -57,7 +57,7 @@ impl RpcFilterType {
                                 if bytes.len() > MAX_DATA_BASE64_SIZE {
                                     return Err(RpcFilterError::DataTooLarge);
                                 }
-                                let bytes = base64::decode(&bytes)?;
+                                let bytes = base64::decode(bytes)?;
                                 if bytes.len() > MAX_DATA_SIZE {
                                     Err(RpcFilterError::DataTooLarge)
                                 } else {

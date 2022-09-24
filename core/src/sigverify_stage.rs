@@ -472,13 +472,9 @@ mod tests {
     fn count_non_discard(packet_batches: &[PacketBatch]) -> usize {
         packet_batches
             .iter()
-            .map(|batch| {
-                batch
-                    .iter()
-                    .map(|p| if p.meta.discard() { 0 } else { 1 })
-                    .sum::<usize>()
-            })
-            .sum::<usize>()
+            .flatten()
+            .filter(|p| !p.meta.discard())
+            .count()
     }
 
     #[test]

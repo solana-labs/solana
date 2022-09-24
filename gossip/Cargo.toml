@@ -16,7 +16,7 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 flate2 = "1.0"
 indexmap = { version = "1.9", features = ["rayon"] }
-itertools = "0.10.3"
+itertools = "0.10.5"
 log = "0.4.17"
 lru = "0.7.7"
 matches = "0.1.9"

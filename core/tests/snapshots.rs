@@ -104,7 +104,6 @@ impl SnapshotTestConfig {
         );
         bank0.freeze();
         bank0.set_startup_verification_complete();
-        bank0.initial_blockstore_processing_completed();
         let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
@@ -453,7 +452,7 @@ fn test_concurrent_snapshot_packaging(
     // currently sitting in the channel
     snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
+    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
     assert!(bank_snapshots
         .into_iter()
@@ -912,10 +911,6 @@ fn test_snapshots_with_background_services(
     let pending_accounts_package = PendingAccountsPackage::default();
     let pending_snapshot_package = PendingSnapshotPackage::default();
 
-    snapshot_test_config
-        .bank_forks
-        .root_bank()
-        .set_startup_verification_complete();
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
         .read()

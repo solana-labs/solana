@@ -91,6 +91,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            true, // merkle_variant
             &mut ProcessShredsStats::default(),
         );
 
@@ -105,6 +106,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 true,
                 self.next_shred_index,
                 self.next_code_index,
+                true, // merkle_variant
                 &mut ProcessShredsStats::default(),
             );
             // Don't mark the last shred as last so that validators won't know
@@ -116,6 +118,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 false,
                 self.next_shred_index,
                 self.next_code_index,
+                true, // merkle_variant
                 &mut ProcessShredsStats::default(),
             );
             self.next_shred_index += 1;

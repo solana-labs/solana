@@ -416,7 +416,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         storage: &Arc<BucketMapHolder<T>>,
     ) -> AccountMapEntry<T> {
         let is_cached = account_info.is_cached();
-        let ref_count = if is_cached { 0 } else { 1 };
+        let ref_count = u64::from(!is_cached);
         let meta = AccountMapEntryMeta::new_dirty(storage, is_cached);
         Arc::new(AccountMapEntryInner::new(
             vec![(slot, account_info)],
@@ -2601,7 +2601,7 @@ pub mod tests {
         // verify the added entry matches expected
         {
             let entry = index.get_account_read_entry(&key).unwrap();
-            assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
+            assert_eq!(entry.ref_count(), u64::from(!is_cached));
             let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
             let new_entry: AccountMapEntry<_> = PreAllocatedAccountMapEntry::new(
@@ -4063,7 +4063,7 @@ pub mod tests {
         for expected in [false, true] {
             assert!(map.get_internal(&key, |entry| {
                 // check refcount BEFORE the unref
-                assert_eq!(if expected { 0 } else { 1 }, entry.unwrap().ref_count());
+                assert_eq!(u64::from(!expected), entry.unwrap().ref_count());
                 // first time, ref count was at 1, we can unref once. Unref should return false.
                 // second time, ref count was at 0, it is an error to unref. Unref should return true
                 assert_eq!(expected, entry.unwrap().unref());

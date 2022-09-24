@@ -51,7 +51,7 @@ fn test_build() {
 fn test_dump() {
     // This test requires rustfilt.
     assert_cmd::Command::new("cargo")
-        .args(&["install", "-f", "rustfilt"])
+        .args(["install", "-f", "rustfilt"])
         .assert()
         .success();
     run_cargo_build("noop", &["--dump"], false);
@@ -120,7 +120,7 @@ fn test_sbfv2() {
         .join("bin")
         .join("llvm-readelf");
     assert_cmd::Command::new(readelf)
-        .args(&["-h", bin])
+        .args(["-h", bin])
         .assert()
         .stdout(predicate::str::contains(
             "Flags:                             0x20",

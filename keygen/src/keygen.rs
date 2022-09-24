@@ -73,7 +73,7 @@ const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
 fn word_count_arg<'a>() -> Arg<'a> {
     Arg::new(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
-        .possible_values(&["12", "15", "18", "21", "24"])
+        .possible_values(["12", "15", "18", "21", "24"])
         .default_value("12")
         .value_name("NUMBER")
         .takes_value(true)
@@ -83,7 +83,7 @@ fn word_count_arg<'a>() -> Arg<'a> {
 fn language_arg<'a>() -> Arg<'a> {
     Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
-        .possible_values(&[
+        .possible_values([
             "english",
             "chinese-simplified",
             "chinese-traditional",
@@ -143,7 +143,7 @@ fn get_keypair_from_matches(
     } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
-        path.extend(&[".config", "solana", "id.json"]);
+        path.extend([".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
     signer_from_path(matches, path, "pubkey recovery", wallet_manager)
@@ -597,7 +597,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             } else if matches.is_present(NO_OUTFILE_ARG.name) {
                 None
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 Some(path.to_str().unwrap())
             };
 
@@ -646,7 +646,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
 

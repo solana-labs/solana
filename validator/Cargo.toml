@@ -16,8 +16,8 @@ clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-fd-lock = "3.0.5"
-indicatif = "0.17.0"
+fd-lock = "3.0.6"
+indicatif = "0.17.1"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
 jsonrpc-derive = "18.0.0"
@@ -29,7 +29,7 @@ rand = "0.7.0"
 rayon = "1.5.3"
 serde = "1.0.144"
 serde_json = "1.0.83"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.13"
 solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.15.0" }
 solana-core = { path = "../core", version = "=1.15.0" }
