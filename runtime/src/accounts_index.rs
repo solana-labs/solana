@@ -412,7 +412,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         account_info: T,
         storage: &Arc<BucketMapHolder<T>>,
     ) -> AccountMapEntry<T> {
-        let ref_count = if account_info.is_cached() { 0 } else { 1 };
+        let ref_count = u64::from(!account_info.is_cached());
         let meta = AccountMapEntryMeta::new_dirty(storage);
         Arc::new(AccountMapEntryInner::new(
             vec![(slot, account_info)],
@@ -2587,7 +2587,7 @@ pub mod tests {
         // verify the added entry matches expected
         {
             let entry = index.get_account_read_entry(&key).unwrap();
-            assert_eq!(entry.ref_count(), if is_cached { 0 } else { 1 });
+            assert_eq!(entry.ref_count(), u64::from(!is_cached));
             let expected = vec![(slot0, account_infos[0])];
             assert_eq!(entry.slot_list().to_vec(), expected);
             let new_entry: AccountMapEntry<_> = PreAllocatedAccountMapEntry::new(
