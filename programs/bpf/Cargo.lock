@@ -4964,6 +4964,7 @@ dependencies = [
 name = "solana-ledger"
 version = "1.15.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bitflags",
  "byteorder 1.4.3",
