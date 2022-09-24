@@ -771,24 +771,11 @@ impl ServeRepair {
                 continue;
             }
 
-<<<<<<< HEAD
-            let require_signature_check =
-                Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
-            if require_signature_check && !request.supports_signature() {
-                stats.err_unsigned += 1;
-                continue;
-            }
-            if request.supports_signature()
-                && !Self::verify_signed_packet(&my_id, packet, &request, stats)
-            {
-                continue;
-=======
             if request.supports_signature() {
                 // collect stats for signature verification
                 Self::verify_signed_packet(&my_id, packet, &request, stats);
             } else {
                 stats.unsigned_requests += 1;
->>>>>>> 8b43215dd (count unsigned repair requests (#27953))
             }
 
             let from_addr = packet.meta.socket_addr();
