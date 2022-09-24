@@ -505,15 +505,11 @@ impl Blockstore {
         )? {
             *columns_purged &= self
                 .db
-                .delete_range_cf::<cf::TransactionStatus>(write_batch, purged_index, purged_index)
+                .delete_cf::<cf::TransactionStatus>(write_batch, purged_index)
                 .is_ok()
                 & self
                     .db
-                    .delete_range_cf::<cf::AddressSignatures>(
-                        write_batch,
-                        purged_index,
-                        purged_index,
-                    )
+                    .delete_cf::<cf::AddressSignatures>(write_batch, purged_index)
                     .is_ok();
         }
         Ok(())

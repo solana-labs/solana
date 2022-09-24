@@ -1092,6 +1092,13 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
+    pub fn delete_cf<C>(&self, batch: &mut WriteBatch, slot: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        batch.delete_cf::<C>(self.cf_handle::<C>(), C::as_index(slot))
+    }
+
     /// Adds a \[`from`, `to`\] range to delete to the given write batch
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
@@ -1453,6 +1460,11 @@ impl<'a> WriteBatch<'a> {
     #[inline]
     fn get_cf<C: Column + ColumnName>(&self) -> &'a ColumnFamily {
         self.map[C::NAME]
+    }
+
+    pub fn delete_cf<C: Column>(&mut self, cf: &ColumnFamily, key: C::Index) -> Result<()> {
+        self.write_batch.delete_cf(cf, C::key(key));
+        Ok(())
     }
 
     /// Adds a \[`from`, `to`) range deletion entry to the batch.
