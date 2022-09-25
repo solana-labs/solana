@@ -108,7 +108,7 @@ fn main() {
                 program
             );
             assert!(Command::new("../../cargo-build-sbf")
-                .args(&[
+                .args([
                     "--manifest-path",
                     &format!("rust/{}/Cargo.toml", program),
                     "--sbf-out-dir",

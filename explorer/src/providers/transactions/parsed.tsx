@@ -57,7 +57,7 @@ async function fetchDetails(
   try {
     transactionWithMeta = await new Connection(url).getParsedTransaction(
       signature,
-      "confirmed"
+      { commitment: "confirmed", maxSupportedTransactionVersion: 0 }
     );
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {

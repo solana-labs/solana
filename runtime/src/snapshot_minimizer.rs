@@ -388,6 +388,7 @@ impl<'a> SnapshotMinimizer<'a> {
             slot,
             &mut dead_storages.lock().unwrap(),
             |store| !append_vec_set.contains(&store.append_vec_id()),
+            true, // add_dirty_stores
         );
     }
 

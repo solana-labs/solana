@@ -180,7 +180,7 @@ impl CostModel {
         }
         tx_cost.builtins_execution_cost = builtin_costs;
         tx_cost.bpf_execution_cost = bpf_costs;
-        tx_cost.data_bytes_cost = data_bytes_len_total / DATA_BYTES_UNITS;
+        tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
     }
 
     fn calculate_account_data_size_on_deserialized_system_instruction(
@@ -367,7 +367,7 @@ mod tests {
         testee.get_transaction_cost(&mut tx_cost, &simple_transaction);
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
-        assert_eq!(0, tx_cost.data_bytes_cost);
+        assert_eq!(3, tx_cost.data_bytes_cost);
     }
 
     #[test]
@@ -397,7 +397,7 @@ mod tests {
         testee.get_transaction_cost(&mut tx_cost, &tx);
         assert_eq!(expected_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
-        assert_eq!(1, tx_cost.data_bytes_cost);
+        assert_eq!(6, tx_cost.data_bytes_cost);
     }
 
     #[test]

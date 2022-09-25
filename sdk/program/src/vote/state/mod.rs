@@ -128,6 +128,10 @@ impl VoteStateUpdate {
     pub fn slots(&self) -> Vec<Slot> {
         self.lockouts.iter().map(|lockout| lockout.slot).collect()
     }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.lockouts.back().map(|l| l.slot)
+    }
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]

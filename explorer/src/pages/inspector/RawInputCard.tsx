@@ -1,12 +1,12 @@
 import React from "react";
-import { Message } from "@solana/web3.js";
+import { VersionedMessage } from "@solana/web3.js";
 import type { TransactionData } from "./InspectorPage";
 import { useQuery } from "utils/url";
 import { useHistory, useLocation } from "react-router";
 import base58 from "bs58";
 
 function deserializeTransaction(bytes: Uint8Array): {
-  message: Message;
+  message: VersionedMessage;
   signatures: string[];
 } | null {
   const SIGNATURE_LENGTH = 64;
@@ -19,17 +19,12 @@ function deserializeTransaction(bytes: Uint8Array): {
       bytes = bytes.slice(SIGNATURE_LENGTH);
       signatures.push(base58.encode(rawSignature));
     }
-
-    const requiredSignatures = bytes[0];
-    if (requiredSignatures !== signaturesLen) {
-      throw new Error("Signature length mismatch");
-    }
   } catch (err) {
     // Errors above indicate that the bytes do not encode a transaction.
     return null;
   }
 
-  const message = Message.from(bytes);
+  const message = VersionedMessage.deserialize(bytes);
   return { message, signatures };
 }
 
@@ -103,7 +98,7 @@ export function RawInput({
             signatures: tx.signatures,
           });
         } else {
-          const message = Message.from(buffer);
+          const message = VersionedMessage.deserialize(buffer);
           setTransactionData({
             rawMessage: buffer,
             message,

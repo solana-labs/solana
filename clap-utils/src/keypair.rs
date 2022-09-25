@@ -1229,7 +1229,7 @@ mod tests {
             } if p == absolute_path_str)
         );
         assert!(
-            matches!(parse_signer_source(&relative_path_str).unwrap(), SignerSource {
+            matches!(parse_signer_source(relative_path_str).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,

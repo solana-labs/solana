@@ -79,7 +79,9 @@ fn insert_test_shreds(ledger_path: &Path, ending_slot: u64) {
     let blockstore = Blockstore::open(ledger_path).unwrap();
     for i in 1..ending_slot {
         let entries = entry::create_ticks(1, 0, Hash::default());
-        let shreds = blockstore::entries_to_test_shreds(&entries, i, 0, false, 0);
+        let shreds = blockstore::entries_to_test_shreds(
+            &entries, i, 0, false, 0, /*merkle_variant:*/ true,
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
     }
 }

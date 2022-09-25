@@ -1,7 +1,7 @@
 import React from "react";
 import * as Sentry from "@sentry/react";
 import * as Cache from "providers/cache";
-import { Connection, BlockResponse, PublicKey } from "@solana/web3.js";
+import { Connection, PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { useCluster, Cluster } from "./cluster";
 
 export enum FetchStatus {
@@ -16,7 +16,7 @@ export enum ActionType {
 }
 
 type Block = {
-  block?: BlockResponse;
+  block?: VersionedBlockResponse;
   blockLeader?: PublicKey;
   childSlot?: number;
   childLeader?: PublicKey;
@@ -77,10 +77,7 @@ export async function fetchBlock(
   try {
     const connection = new Connection(url, "confirmed");
     const block = await connection.getBlock(slot, {
-      maxSupportedTransactionVersion: process.env
-        .REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION
-        ? parseInt(process.env.REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION, 10)
-        : 0,
+      maxSupportedTransactionVersion: 0,
     });
     if (block === null) {
       data = {};

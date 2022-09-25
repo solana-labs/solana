@@ -381,7 +381,7 @@ pub struct RpcVoteAccountInfo {
     /// Most recent slot voted on by this vote account (0 if no votes exist)
     pub last_vote: u64,
 
-    /// Current root slot for this vote account (0 if not root slot exists)
+    /// Current root slot for this vote account (0 if no root slot exists)
     pub root_slot: Slot,
 }
 

@@ -803,7 +803,14 @@ pub mod tests {
 
         for x in 0..index0_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                x,                   // slot
+                x.saturating_sub(1), // parent_slot
+                true,                // is_full_slot
+                0,                   // version
+                true,                // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature = entries
                 .iter()
@@ -839,7 +846,14 @@ pub mod tests {
 
         for x in index0_max_slot + 1..index1_max_slot + 1 {
             let entries = make_slot_entries_with_transactions(1);
-            let shreds = entries_to_test_shreds(&entries, x, x.saturating_sub(1), true, 0);
+            let shreds = entries_to_test_shreds(
+                &entries,
+                x,                   // slot
+                x.saturating_sub(1), // parent_slot
+                true,                // is_full_slot
+                0,                   // version
+                true,                // merkle_variant
+            );
             blockstore.insert_shreds(shreds, None, false).unwrap();
             let signature: Signature = entries
                 .iter()
@@ -1239,7 +1253,14 @@ pub mod tests {
             let mut tick = create_ticks(1, 0, hash(&serialize(&x).unwrap()));
             entries.append(&mut tick);
         }
-        let shreds = entries_to_test_shreds(&entries, slot, slot - 1, true, 0);
+        let shreds = entries_to_test_shreds(
+            &entries,
+            slot,
+            slot - 1, // parent_slot
+            true,     // is_full_slot
+            0,        // version
+            true,     // merkle_variant
+        );
         blockstore.insert_shreds(shreds, None, false).unwrap();
 
         let mut write_batch = blockstore.db.batch().unwrap();

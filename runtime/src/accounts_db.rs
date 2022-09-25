@@ -145,6 +145,17 @@ pub enum StoreReclaims {
     Ignore,
 }
 
+/// specifies how to return zero lamport accounts
+/// This will only be useful until a feature activation occurs.
+#[derive(Clone, Copy)]
+pub enum LoadZeroLamports {
+    /// return None if loaded account has zero lamports
+    None,
+    /// return Some(account with zero lamports) if loaded account has zero lamports
+    /// Today this is the default. With feature activation, this will no longer be possible.
+    SomeWithZeroLamportAccount,
+}
+
 // the current best way to add filler accounts is gradually.
 // In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
 // add filler accounts at the beginning, so that code path remains but won't execute at the moment.
@@ -706,6 +717,8 @@ struct CleanKeyTimings {
     delta_key_count: u64,
     dirty_pubkeys_count: u64,
     oldest_dirty_slot: Slot,
+    /// number of ancient append vecs that were scanned because they were dirty when clean started
+    dirty_ancient_stores: usize,
 }
 
 /// Persistent storage structure holding the accounts
@@ -1457,6 +1470,7 @@ impl CleanAccountsStats {
 #[derive(Debug, Default)]
 struct ShrinkAncientStats {
     shrink_stats: ShrinkStats,
+    ancient_append_vecs_shrunk: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -1711,6 +1725,11 @@ impl ShrinkAncientStats {
                 (
                     "accounts_loaded",
                     self.shrink_stats.accounts_loaded.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "ancient_append_vecs_shrunk",
+                    self.ancient_append_vecs_shrunk.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -2536,6 +2555,7 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
+        let dirty_ancient_stores = AtomicUsize::default();
         let mut dirty_store_routine = || {
             let chunk_size = 1.max(dirty_stores_len.saturating_div(rayon::current_num_threads()));
             let oldest_dirty_slots: Vec<u64> = dirty_stores
@@ -2543,6 +2563,9 @@ impl AccountsDb {
                 .map(|dirty_store_chunk| {
                     let mut oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
                     dirty_store_chunk.iter().for_each(|(slot, store)| {
+                        if is_ancient(&store.accounts) {
+                            dirty_ancient_stores.fetch_add(1, Ordering::Relaxed);
+                        }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
                         store.accounts.account_iter().for_each(|account| {
                             pubkeys.insert(account.meta.pubkey);
@@ -2573,6 +2596,7 @@ impl AccountsDb {
         timings.dirty_pubkeys_count = pubkeys.len() as u64;
         dirty_store_processing_time.stop();
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
+        timings.dirty_ancient_stores = dirty_ancient_stores.load(Ordering::Relaxed);
 
         let mut collect_delta_keys = Measure::start("key_create");
         let delta_keys =
@@ -2983,6 +3007,11 @@ impl AccountsDb {
             (
                 "pubkeys_removed_from_accounts_index",
                 pubkeys_removed_from_accounts_index.len(),
+                i64
+            ),
+            (
+                "dirty_ancient_stores",
+                key_timings.dirty_ancient_stores,
                 i64
             ),
             (
@@ -3493,7 +3522,11 @@ impl AccountsDb {
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
 
+            let mut all_are_zero_lamports = true;
             for (pubkey, alive_account) in alive_accounts {
+                if all_are_zero_lamports && alive_account.account.lamports() != 0 {
+                    all_are_zero_lamports = false;
+                }
                 accounts.push((pubkey, &alive_account.account));
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
@@ -3524,9 +3557,19 @@ impl AccountsDb {
 
             // Purge old, overwritten storage entries
             let mut start = Measure::start("write_storage_elapsed");
-            let remaining_stores = self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-                !store_ids.contains(&store.append_vec_id())
-            });
+            let remaining_stores = self.mark_dirty_dead_stores(
+                slot,
+                &mut dead_storages,
+                |store| !store_ids.contains(&store.append_vec_id()),
+                // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
+                // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
+                all_are_zero_lamports,
+            );
+
+            if !all_are_zero_lamports {
+                self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
+            }
+
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
                 info!(
@@ -3590,20 +3633,23 @@ impl AccountsDb {
 
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
-    /// for stores not retained, insert in 'dirty_stores' and 'dead_storages'
+    /// for stores not retained, insert in 'dead_storages' and optionally 'dirty_stores'
     /// returns # of remaining stores for this slot
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
         dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
         should_retain: impl Fn(&AccountStorageEntry) -> bool,
+        add_dirty_stores: bool,
     ) -> usize {
         if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             let mut list = slot_stores.write().unwrap();
             list.retain(|_key, store| {
                 if !should_retain(store) {
-                    self.dirty_stores
-                        .insert((slot, store.append_vec_id()), store.clone());
+                    if add_dirty_stores {
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
+                    }
                     dead_storages.push(store.clone());
                     false
                 } else {
@@ -3956,6 +4002,9 @@ impl AccountsDb {
                 // we are full, but we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate some contents
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
+                self.shrink_ancient_stats
+                    .ancient_append_vecs_shrunk
+                    .fetch_add(1, Ordering::Relaxed);
                 return true;
             }
             // since we skipped an ancient append vec, we don't want to append to whatever append vec USED to be the current one
@@ -4028,7 +4077,9 @@ impl AccountsDb {
 
             let len = stored_accounts.len();
             let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
-            self.shrink_stats
+            let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
+            self.shrink_ancient_stats
+                .shrink_stats
                 .accounts_loaded
                 .fetch_add(len as u64, Ordering::Relaxed);
 
@@ -4039,11 +4090,12 @@ impl AccountsDb {
                     let skip = chunk * chunk_size;
 
                     let mut alive_accounts = Vec::with_capacity(chunk_size);
+                    let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
                     let alive_total = self.load_accounts_index_for_shrink(
                         &stored_accounts[skip..],
                         chunk_size,
                         &mut alive_accounts,
-                        None,
+                        Some(&mut unrefed_pubkeys),
                     );
 
                     // collect
@@ -4051,6 +4103,10 @@ impl AccountsDb {
                         .lock()
                         .unwrap()
                         .append(&mut alive_accounts);
+                    unrefed_pubkeys_collect
+                        .lock()
+                        .unwrap()
+                        .push(unrefed_pubkeys);
                     alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
                 });
             });
@@ -4058,6 +4114,7 @@ impl AccountsDb {
             let mut create_and_insert_store_elapsed = 0;
 
             let alive_accounts = alive_accounts_collect.into_inner().unwrap();
+            let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
             let alive_total = alive_total_collect.load(Ordering::Relaxed);
             index_read_elapsed.stop();
             let aligned_total: u64 = Self::page_align(alive_total as u64);
@@ -4078,6 +4135,10 @@ impl AccountsDb {
             let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
             start.stop();
             let find_alive_elapsed = start.as_us();
+
+            let all_are_zero_lamports = !alive_accounts
+                .iter()
+                .any(|(_key, found)| !found.account.is_zero_lamport());
 
             let mut ids = vec![ancient_store.append_vec_id()];
             // if this slot is not the ancient slot we're writing to, then this root will be dropped
@@ -4140,13 +4201,27 @@ impl AccountsDb {
             }
             rewrite_elapsed.stop();
 
-            let mut start = Measure::start("write_storage_elapsed");
+            let mut start = Measure::start("mark_dirty_dead_stores");
             // Purge old, overwritten storage entries
             let mut dead_storages = vec![];
-            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-                ids.contains(&store.append_vec_id())
-            });
+            self.mark_dirty_dead_stores(
+                slot,
+                &mut dead_storages,
+                |store| ids.contains(&store.append_vec_id()),
+                // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
+                // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
+                all_are_zero_lamports,
+            );
+
+            if !all_are_zero_lamports {
+                self.add_uncleaned_pubkeys_after_shrink(
+                    slot,
+                    unrefed_pubkeys.into_iter().flatten().cloned(),
+                );
+            }
+
             start.stop();
+
             let write_storage_elapsed = start.as_us();
 
             self.drop_or_recycle_stores(dead_storages);
@@ -4154,6 +4229,9 @@ impl AccountsDb {
             if drop_root {
                 dropped_roots.push(slot);
             }
+
+            // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
+            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
             self.shrink_ancient_stats
                 .shrink_stats
@@ -4241,12 +4319,47 @@ impl AccountsDb {
         self.shrink_ancient_stats.report();
     }
 
+    /// add all 'pubkeys' into the set of pubkeys that are 'uncleaned', associated with 'slot'
+    /// clean will visit these pubkeys next time it runs
+    fn add_uncleaned_pubkeys_after_shrink(
+        &self,
+        slot: Slot,
+        pubkeys: impl Iterator<Item = Pubkey>,
+    ) {
+        /*
+        This is only called during 'shrink'-type operations.
+        Original accounts were separated into 'accounts' and 'unrefed_pubkeys'.
+        These sets correspond to 'alive' and 'dead'.
+        'alive' means this account in this slot is in the accounts index.
+        'dead' means this account in this slot is NOT in the accounts index.
+        If dead, nobody will care if this version of this account is not written into the newly shrunk append vec for this slot.
+        For all dead accounts, they were already unrefed and are now absent in the new append vec.
+        This means that another version of this pubkey could possibly now be cleaned since this one is now gone.
+        For example, a zero lamport account in a later slot can be removed if we just removed the only non-zero lamport account for that pubkey in this slot.
+        So, for all unrefed accounts, send them to clean to be revisited next time clean runs.
+        If an account is alive, then its status has not changed. It was previously alive in this slot. It is still alive in this slot.
+        Clean doesn't care about alive accounts that remain alive.
+        Except... A slightly different case is if ALL the alive accounts in this slot are zero lamport accounts, then it is possible that
+        this slot can be marked dead. So, if all alive accounts are zero lamports, we send the entire OLD/pre-shrunk append vec
+        to clean so that all the pubkeys are visited.
+        It is a performance optimization to not send the ENTIRE old/pre-shrunk append vec to clean in the normal case.
+        */
+
+        let mut uncleaned_pubkeys = self
+            .uncleaned_pubkeys
+            .entry(slot)
+            .or_insert_with(Vec::default);
+        uncleaned_pubkeys.extend(pubkeys);
+    }
+
     pub fn shrink_candidate_slots(&self) -> usize {
-        let shrink_candidates_slots =
-            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
-        if !shrink_candidates_slots.is_empty() {
+        if !self.shrink_candidate_slots.lock().unwrap().is_empty() {
+            // this can affect 'shrink_candidate_slots', so don't 'take' it until after this completes
             self.shrink_ancient_slots();
         }
+
+        let shrink_candidates_slots =
+            std::mem::take(&mut *self.shrink_candidate_slots.lock().unwrap());
 
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
@@ -4569,8 +4682,15 @@ impl AccountsDb {
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
+            .filter(|(account, _)| {
+                matches!(
+                    load_zero_lamports,
+                    LoadZeroLamports::SomeWithZeroLamportAccount
+                ) || !account.is_zero_lamport()
+            })
     }
 
     pub fn load_without_fixed_root(
@@ -5053,6 +5173,9 @@ impl AccountsDb {
                         ret.get_path(),
                         old_id
                     );
+                    self.stats
+                        .recycle_store_count
+                        .fetch_add(1, Ordering::Relaxed);
                     return Some(ret);
                 }
             }
@@ -5100,20 +5223,12 @@ impl AccountsDb {
                     if store.try_available() {
                         let ret = store.clone();
                         drop(slot_stores);
-                        if create_extra {
-                            if self
+                        if create_extra
+                            && self
                                 .try_recycle_and_insert_store(slot, size as u64, std::u64::MAX)
                                 .is_none()
-                            {
-                                self.stats
-                                    .create_store_count
-                                    .fetch_add(1, Ordering::Relaxed);
-                                self.create_and_insert_store(slot, self.file_size, "store extra");
-                            } else {
-                                self.stats
-                                    .recycle_store_count
-                                    .fetch_add(1, Ordering::Relaxed);
-                            }
+                        {
+                            self.create_and_insert_store(slot, self.file_size, "store extra");
                         }
                         find_existing.stop();
                         self.stats
@@ -5134,14 +5249,8 @@ impl AccountsDb {
             .fetch_add(find_existing.as_us(), Ordering::Relaxed);
 
         let store = if let Some(store) = self.try_recycle_store(slot, size as u64, std::u64::MAX) {
-            self.stats
-                .recycle_store_count
-                .fetch_add(1, Ordering::Relaxed);
             store
         } else {
-            self.stats
-                .create_store_count
-                .fetch_add(1, Ordering::Relaxed);
             self.create_store(slot, self.file_size, "store", &self.paths)
         };
 
@@ -5178,6 +5287,9 @@ impl AccountsDb {
         from: &str,
         paths: &[PathBuf],
     ) -> Arc<AccountStorageEntry> {
+        self.stats
+            .create_store_count
+            .fetch_add(1, Ordering::Relaxed);
         let path_index = thread_rng().gen_range(0, paths.len());
         let store = Arc::new(self.new_storage_entry(
             slot,
@@ -5764,14 +5876,7 @@ impl AccountsDb {
                         .try_recycle_and_insert_store(slot, special_store_size, std::u64::MAX)
                         .is_none()
                     {
-                        self.stats
-                            .create_store_count
-                            .fetch_add(1, Ordering::Relaxed);
                         self.create_and_insert_store(slot, special_store_size, "large create");
-                    } else {
-                        self.stats
-                            .recycle_store_count
-                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 continue;
@@ -6486,7 +6591,7 @@ impl AccountsDb {
                                     // Because we're keeping the `lock' here, there is no need
                                     // to use retry_to_get_account_accessor()
                                     // In other words, flusher/shrinker/cleaner is blocked to
-                                    // cause any Accessor(None) situtation.
+                                    // cause any Accessor(None) situation.
                                     // Anyway this race condition concern is currently a moot
                                     // point because calculate_accounts_hash() should not
                                     // currently race with clean/shrink because the full hash
@@ -6733,6 +6838,27 @@ impl AccountsDb {
         }
     }
 
+    /// if ancient append vecs are enabled, return a slot one epoch old from 'max_slot_inclusive'
+    /// otherwise, return 0
+    fn get_one_epoch_old_slot_for_hash_calc_scan(
+        &self,
+        max_slot_inclusive: Slot,
+        config: &CalcAccountsHashConfig<'_>,
+    ) -> Slot {
+        if self.ancient_append_vecs {
+            // we are going to use a fixed slots per epoch here.
+            // We are mainly interested in the network at steady state.
+            let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
+            // For performance, this is required when ancient appendvecs are enabled
+            max_slot_inclusive.saturating_sub(slots_in_epoch)
+        } else {
+            // This causes the entire range to be chunked together, treating older append vecs just like new ones.
+            // This performs well if there are many old append vecs that haven't been cleaned yet.
+            // 0 will have the effect of causing ALL older append vecs to be chunked together, just like every other append vec.
+            0
+        }
+    }
+
     /// Scan through all the account storage in parallel
     fn scan_account_storage_no_bank<S>(
         &self,
@@ -6756,10 +6882,8 @@ impl AccountsDb {
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
         let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        // we are going to use a fixed slots per epoch here.
-        // We are mainly interested in the network at steady state.
-        let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
-        let one_epoch_old_slot = max_slot_inclusive.saturating_sub(slots_in_epoch);
+        let one_epoch_old_slot =
+            self.get_one_epoch_old_slot_for_hash_calc_scan(max_slot_inclusive, config);
 
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
@@ -6994,6 +7118,11 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
+            if !config.use_write_cache && self.accounts_cache.contains_any_slots(slot) {
+                // this indicates a race condition
+                inc_new_counter_info!("accounts_hash_items_in_write_cache", 1);
+            }
+
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
             collect_time.stop();
@@ -7406,49 +7535,6 @@ impl AccountsDb {
                 Err(MissingBankHash)
             }
         }
-    }
-
-    /// Perform the scan for pubkeys that were written to in a slot
-    fn do_scan_slot_for_dirty_pubkeys(
-        &self,
-        slot: Slot,
-    ) -> ScanStorageResult<Pubkey, DashSet<Pubkey>> {
-        self.scan_account_storage(
-            slot,
-            |loaded_account: LoadedAccount| Some(*loaded_account.pubkey()),
-            |accum: &DashSet<Pubkey>, loaded_account: LoadedAccount| {
-                accum.insert(*loaded_account.pubkey());
-            },
-        )
-    }
-
-    /// Reduce the scan result of dirty pubkeys after calling `scan_account_storage()` into a
-    /// single vec of Pubkeys.
-    fn do_reduce_scan_slot_for_dirty_pubkeys(
-        scan_result: ScanStorageResult<Pubkey, DashSet<Pubkey>>,
-    ) -> Vec<Pubkey> {
-        match scan_result {
-            ScanStorageResult::Cached(cached_result) => cached_result,
-            ScanStorageResult::Stored(stored_result) => {
-                stored_result.into_iter().collect::<Vec<_>>()
-            }
-        }
-    }
-
-    /// Scan a slot for dirty pubkeys
-    fn scan_slot_for_dirty_pubkeys(&self, slot: Slot) -> Vec<Pubkey> {
-        let dirty_pubkeys = self.do_scan_slot_for_dirty_pubkeys(slot);
-        Self::do_reduce_scan_slot_for_dirty_pubkeys(dirty_pubkeys)
-    }
-
-    /// Scan a slot in the account storage for dirty pubkeys and insert them into the list of
-    /// uncleaned pubkeys
-    ///
-    /// This function is called in Bank::drop() when the bank is _not_ frozen, so that its pubkeys
-    /// are considered for cleanup.
-    pub fn scan_slot_and_insert_dirty_pubkeys_into_uncleaned_pubkeys(&self, slot: Slot) {
-        let dirty_pubkeys = self.scan_slot_for_dirty_pubkeys(slot);
-        self.uncleaned_pubkeys.insert(slot, dirty_pubkeys);
     }
 
     pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
@@ -13848,13 +13934,13 @@ pub mod tests {
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
@@ -13862,10 +13948,9 @@ pub mod tests {
         db.store_cached((2, &[(&account_key, &zero_lamport_account)][..]), None);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
-            .map(|(account, _)| account)
-            .unwrap();
-        assert_eq!(account.lamports(), 0);
+            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
+            .map(|(account, _)| account);
+        assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
@@ -15911,7 +15996,7 @@ pub mod tests {
                 vec![(pk1, vec![slot1].into_iter().collect::<HashSet<_>>())],
                 purged_stored_account_slots.into_iter().collect::<Vec<_>>()
             );
-            let expected = if already_removed { 1 } else { 0 };
+            let expected = u64::from(already_removed);
             assert_eq!(db.accounts_index.ref_count_from_storage(&pk1), expected);
         }
     }
@@ -16042,5 +16127,90 @@ pub mod tests {
             &HashSet::default(),
         );
         assert_eq!(db.accounts_index.ref_count_from_storage(&pk1), 0);
+    }
+
+    #[test]
+    fn test_get_one_epoch_old_slot_for_hash_calc_scan() {
+        let mut db = AccountsDb::new_single_for_tests();
+        let config = CalcAccountsHashConfig::default();
+        let slot = config.epoch_schedule.slots_per_epoch;
+        assert_ne!(slot, 0);
+        let offset = 10;
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
+            0
+        );
+        db.ancient_append_vecs = true;
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot, &config),
+            0
+        );
+        assert_eq!(
+            db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
+            offset
+        );
+    }
+
+    #[test]
+    fn test_mark_dirty_dead_stores() {
+        let db = AccountsDb::new_single_for_tests();
+        let slot = 0;
+        let called = AtomicUsize::default();
+        let add_dirty_stores = false;
+        let mut dead_storages = Vec::default();
+        let remaining_stores = db.mark_dirty_dead_stores(
+            slot,
+            &mut dead_storages,
+            |_store| {
+                called.fetch_add(1, Ordering::Relaxed);
+                false
+            },
+            add_dirty_stores,
+        );
+        assert_eq!(0, called.load(Ordering::Relaxed));
+        assert_eq!(0, remaining_stores);
+
+        let size = 1;
+        let inserted_store = db.create_and_insert_store(slot, size, "test");
+        let remaining_stores = db.mark_dirty_dead_stores(
+            slot,
+            &mut dead_storages,
+            |store| {
+                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
+                called.fetch_add(1, Ordering::Relaxed);
+                true // retain
+            },
+            add_dirty_stores,
+        );
+        assert_eq!(1, called.load(Ordering::Relaxed));
+        assert_eq!(1, remaining_stores);
+
+        let called = AtomicUsize::default();
+        let remaining_stores = db.mark_dirty_dead_stores(
+            slot,
+            &mut dead_storages,
+            |store| {
+                assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
+                called.fetch_add(1, Ordering::Relaxed);
+                false // don't retain
+            },
+            add_dirty_stores,
+        );
+        assert_eq!(1, called.load(Ordering::Relaxed));
+        assert!(db
+            .get_storages_for_slot(slot)
+            .unwrap_or_default()
+            .is_empty());
+        assert_eq!(0, remaining_stores);
+        assert!(db.dirty_stores.is_empty());
+    }
+
+    #[test]
+    fn test_add_uncleaned_pubkeys_after_shrink() {
+        let db = AccountsDb::new_single_for_tests();
+        let slot = 0;
+        let pubkey = Pubkey::new(&[1; 32]);
+        db.add_uncleaned_pubkeys_after_shrink(slot, vec![pubkey].into_iter());
+        assert_eq!(&*db.uncleaned_pubkeys.get(&slot).unwrap(), &vec![pubkey]);
     }
 }

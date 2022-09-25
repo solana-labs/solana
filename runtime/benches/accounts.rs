@@ -113,6 +113,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             false,
             false,
             false,
+            true,
         ))
     });
 }

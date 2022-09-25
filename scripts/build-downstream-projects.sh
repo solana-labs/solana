@@ -45,6 +45,7 @@ spl() {
       token/program-2022
       token/program-2022-test
       associated-token-account/program
+      token-upgrade/program
       feature-proposal/program
       governance/addin-mock/program
       governance/program

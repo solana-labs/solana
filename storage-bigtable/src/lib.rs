@@ -975,11 +975,7 @@ impl LedgerStorage {
             .collect();
 
         let tx_deletion_rows = if !expected_tx_infos.is_empty() {
-            let signatures = expected_tx_infos
-                .iter()
-                .map(|(signature, _info)| signature)
-                .cloned()
-                .collect::<Vec<_>>();
+            let signatures = expected_tx_infos.keys().cloned().collect::<Vec<_>>();
             let fetched_tx_infos: HashMap<String, std::result::Result<UploadedTransaction, _>> =
                 self.connection
                     .get_bincode_cells_with_retry::<TransactionInfo>("tx", &signatures)

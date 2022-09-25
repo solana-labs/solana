@@ -284,7 +284,7 @@ solana program write-buffer <PROGRAM_FILEPATH>
 Buffer accounts support authorities like program accounts:
 
 ```bash
-solana program set-buffer-authority <BUFFER_ADDRESS> --new-upgrade-authority <NEW_UPGRADE_AUTHORITY>
+solana program set-buffer-authority <BUFFER_ADDRESS> --new-buffer-authority <NEW_BUFFER_AUTHORITY>
 ```
 
 One exception is that buffer accounts cannot be marked immutable like program

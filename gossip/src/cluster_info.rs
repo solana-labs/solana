@@ -548,7 +548,7 @@ impl ClusterInfo {
         let filename = self.contact_info_path.join("contact-info.bin");
         let tmp_filename = &filename.with_extension("tmp");
 
-        match File::create(&tmp_filename) {
+        match File::create(tmp_filename) {
             Ok(mut file) => {
                 if let Err(err) = bincode::serialize_into(&mut file, &nodes) {
                     warn!(
@@ -565,7 +565,7 @@ impl ClusterInfo {
             }
         }
 
-        match fs::rename(&tmp_filename, &filename) {
+        match fs::rename(tmp_filename, &filename) {
             Ok(()) => {
                 info!(
                     "Saved contact info for {} nodes into {}",
@@ -1097,7 +1097,7 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
         let buf = serialize(transaction)?;
-        self.socket.send_to(&buf, &tpu)?;
+        self.socket.send_to(&buf, tpu)?;
         Ok(())
     }
 

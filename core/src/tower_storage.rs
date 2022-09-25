@@ -173,7 +173,7 @@ impl TowerStorage for FileTowerStorage {
         trace!("load {}", filename.display());
 
         // Ensure to create parent dir here, because restore() precedes save() always
-        fs::create_dir_all(&filename.parent().unwrap())?;
+        fs::create_dir_all(filename.parent().unwrap())?;
 
         if let Ok(file) = File::open(&filename) {
             // New format

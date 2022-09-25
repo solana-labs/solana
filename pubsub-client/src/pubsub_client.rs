@@ -1,3 +1,91 @@
+//! A client for subscribing to messages from the RPC server.
+//!
+//! The [`PubsubClient`] implements [Solana WebSocket event
+//! subscriptions][spec].
+//!
+//! [spec]: https://docs.solana.com/developing/clients/jsonrpc-api#subscription-websocket
+//!
+//! This is a blocking API. For a non-blocking API use the asynchronous client
+//! in [`crate::nonblocking::pubsub_client`].
+//!
+//! `PubsubClient` contains static methods to subscribe to events, like
+//! [`PubsubClient::account_subscribe`]. These methods each return their own
+//! subscription type, like [`AccountSubscription`], that are typedefs of
+//! tuples, the first element being a handle to the subscription, like
+//! [`AccountSubscription`], the second a [`Receiver`] of [`RpcResponse`] of
+//! whichever type is appropriate for the subscription. The subscription handle
+//! is a typedef of [`PubsubClientSubscription`], and it must remain live for
+//! the receiver to continue receiving messages.
+//!
+//! Because this is a blocking API, with blocking receivers, a reasonable
+//! pattern for using this API is to move each event receiver to its own thread
+//! to block on messages, while holding all subscription handles on a single
+//! primary thread.
+//!
+//! While `PubsubClientSubscription` contains methods for shutting down,
+//! [`PubsubClientSubscription::send_unsubscribe`], and
+//! [`PubsubClientSubscription::shutdown`], because its internal receivers block
+//! on events from the server, these subscriptions cannot actually be shutdown
+//! reliably. For a non-blocking, cancelable API, use the asynchronous client
+//! in [`crate::nonblocking::pubsub_client`].
+//!
+//! By default the [`block_subscribe`] and [`vote_subscribe`] events are
+//! disabled on RPC nodes. They can be enabled by passing
+//! `--rpc-pubsub-enable-block-subscription` and
+//! `--rpc-pubsub-enable-vote-subscription` to `solana-validator`. When these
+//! methods are disabled, the RPC server will return a "Method not found" error
+//! message.
+//!
+//! [`block_subscribe`]: https://docs.rs/solana-rpc/latest/solana_rpc/rpc_pubsub/trait.RpcSolPubSub.html#tymethod.block_subscribe
+//! [`vote_subscribe`]: https://docs.rs/solana-rpc/latest/solana_rpc/rpc_pubsub/trait.RpcSolPubSub.html#tymethod.vote_subscribe
+//!
+//! # Examples
+//!
+//! This example subscribes to account events and then loops forever receiving
+//! them.
+//!
+//! ```
+//! use anyhow::Result;
+//! use solana_sdk::commitment_config::CommitmentConfig;
+//! use solana_pubsub_client::pubsub_client::PubsubClient;
+//! use solana_rpc_client_api::config::RpcAccountInfoConfig;
+//! use solana_sdk::pubkey::Pubkey;
+//! use std::thread;
+//!
+//! fn get_account_updates(account_pubkey: Pubkey) -> Result<()> {
+//!     let url = "wss://api.devnet.solana.com/";
+//!
+//!     let (mut account_subscription_client, account_subscription_receiver) =
+//!         PubsubClient::account_subscribe(
+//!             url,
+//!             &account_pubkey,
+//!             Some(RpcAccountInfoConfig {
+//!                 encoding: None,
+//!                 data_slice: None,
+//!                 commitment: Some(CommitmentConfig::confirmed()),
+//!                 min_context_slot: None,
+//!             }),
+//!         )?;
+//!
+//!     loop {
+//!         match account_subscription_receiver.recv() {
+//!             Ok(response) => {
+//!                 println!("account subscription response: {:?}", response);
+//!             }
+//!             Err(e) => {
+//!                 println!("account subscription error: {:?}", e);
+//!                 break;
+//!             }
+//!         }
+//!     }
+//!
+//!     Ok(())
+//! }
+//! #
+//! # get_account_updates(solana_sdk::pubkey::new_rand());
+//! # Ok::<(), anyhow::Error>(())
+//! ```
+
 pub use crate::nonblocking::pubsub_client::PubsubClientError;
 use {
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -36,6 +124,11 @@ use {
     url::Url,
 };
 
+/// A subscription.
+///
+/// The subscription is unsubscribed on drop, and note that unsubscription (and
+/// thus drop) time is unbounded. See
+/// [`PubsubClientSubscription::send_unsubscribe`].
 pub struct PubsubClientSubscription<T>
 where
     T: DeserializeOwned,
@@ -95,6 +188,14 @@ where
         )))
     }
 
+    /// Send an unsubscribe message to the server.
+    ///
+    /// Note that this will block as long as the internal subscription receiver
+    /// is waiting on messages from the server, and this can take an unbounded
+    /// amount of time if the server does not send any messages.
+    ///
+    /// If a pubsub client needs to shutdown reliably it should use
+    /// the async client in [`crate::nonblocking::pubsub_client`].
     pub fn send_unsubscribe(&self) -> Result<(), PubsubClientError> {
         let method = format!("{}Unsubscribe", self.operation);
         self.socket
@@ -167,6 +268,14 @@ where
         )))
     }
 
+    /// Shutdown the internel message receiver and wait for its thread to exit.
+    ///
+    /// Note that this will block as long as the subscription receiver is
+    /// waiting on messages from the server, and this can take an unbounded
+    /// amount of time if the server does not send any messages.
+    ///
+    /// If a pubsub client needs to shutdown reliably it should use
+    /// the async client in [`crate::nonblocking::pubsub_client`].
     pub fn shutdown(&mut self) -> std::thread::Result<()> {
         if self.t_cleanup.is_some() {
             info!("websocket thread - shutting down");
@@ -221,6 +330,9 @@ pub type VoteSubscription = (PubsubVoteClientSubscription, Receiver<RpcVote>);
 pub type PubsubRootClientSubscription = PubsubClientSubscription<Slot>;
 pub type RootSubscription = (PubsubRootClientSubscription, Receiver<Slot>);
 
+/// A client for subscribing to messages from the RPC server.
+///
+/// See the [module documentation][self].
 pub struct PubsubClient {}
 
 fn connect_with_retry(
@@ -258,6 +370,15 @@ fn connect_with_retry(
 }
 
 impl PubsubClient {
+    /// Subscribe to account events.
+    ///
+    /// Receives messages of type [`UiAccount`] when an account's lamports or data changes.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`accountSubscribe`] RPC method.
+    ///
+    /// [`accountSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#accountsubscribe
     pub fn account_subscribe(
         url: &str,
         pubkey: &Pubkey,
@@ -299,6 +420,18 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to block events.
+    ///
+    /// Receives messages of type [`RpcBlockUpdate`] when a block is confirmed or finalized.
+    ///
+    /// This method is disabled by default. It can be enabled by passing
+    /// `--rpc-pubsub-enable-block-subscription` to `solana-validator`.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`blockSubscribe`] RPC method.
+    ///
+    /// [`blockSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#blocksubscribe---unstable-disabled-by-default
     pub fn block_subscribe(
         url: &str,
         filter: RpcBlockSubscribeFilter,
@@ -338,6 +471,15 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to transaction log events.
+    ///
+    /// Receives messages of type [`RpcLogsResponse`] when a transaction is committed.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`logsSubscribe`] RPC method.
+    ///
+    /// [`logsSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#logssubscribe
     pub fn logs_subscribe(
         url: &str,
         filter: RpcTransactionLogsFilter,
@@ -377,6 +519,16 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to program account events.
+    ///
+    /// Receives messages of type [`RpcKeyedAccount`] when an account owned
+    /// by the given program changes.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`programSubscribe`] RPC method.
+    ///
+    /// [`programSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#programsubscribe
     pub fn program_subscribe(
         url: &str,
         pubkey: &Pubkey,
@@ -429,6 +581,19 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to vote events.
+    ///
+    /// Receives messages of type [`RpcVote`] when a new vote is observed. These
+    /// votes are observed prior to confirmation and may never be confirmed.
+    ///
+    /// This method is disabled by default. It can be enabled by passing
+    /// `--rpc-pubsub-enable-vote-subscription` to `solana-validator`.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`voteSubscribe`] RPC method.
+    ///
+    /// [`voteSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#votesubscribe---unstable-disabled-by-default
     pub fn vote_subscribe(url: &str) -> Result<VoteSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
@@ -462,6 +627,18 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to root events.
+    ///
+    /// Receives messages of type [`Slot`] when a new [root] is set by the
+    /// validator.
+    ///
+    /// [root]: https://docs.solana.com/terminology#root
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`rootSubscribe`] RPC method.
+    ///
+    /// [`rootSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#rootsubscribe
     pub fn root_subscribe(url: &str) -> Result<RootSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
@@ -495,6 +672,19 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to transaction confirmation events.
+    ///
+    /// Receives messages of type [`RpcSignatureResult`] when a transaction
+    /// with the given signature is committed.
+    ///
+    /// This is a subscription to a single notification. It is automatically
+    /// cancelled by the server once the notification is sent.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`signatureSubscribe`] RPC method.
+    ///
+    /// [`signatureSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#signaturesubscribe
     pub fn signature_subscribe(
         url: &str,
         signature: &Signature,
@@ -537,6 +727,15 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to slot events.
+    ///
+    /// Receives messages of type [`SlotInfo`] when a slot is processed.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`slotSubscribe`] RPC method.
+    ///
+    /// [`slotSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#slotsubscribe
     pub fn slot_subscribe(url: &str) -> Result<SlotsSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
@@ -571,6 +770,20 @@ impl PubsubClient {
         Ok((result, receiver))
     }
 
+    /// Subscribe to slot update events.
+    ///
+    /// Receives messages of type [`SlotUpdate`] when various updates to a slot occur.
+    ///
+    /// Note that this method operates differently than other subscriptions:
+    /// instead of sending the message to a reciever on a channel, it accepts a
+    /// `handler` callback that processes the message directly. This processing
+    /// occurs on another thread.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`slotUpdatesSubscribe`] RPC method.
+    ///
+    /// [`slotUpdatesSubscribe`]: https://docs.solana.com/developing/clients/jsonrpc-api#slotsupdatessubscribe---unstable
     pub fn slot_updates_subscribe(
         url: &str,
         handler: impl Fn(SlotUpdate) + Send + 'static,
