@@ -284,7 +284,7 @@ pub(crate) mod tests {
         super::*,
         rand::Rng,
         solana_entry::entry::Entry,
-        solana_ledger::shred::{ProcessShredsStats, Shredder},
+        solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
         solana_sdk::{
             hash,
             signature::{Keypair, Signer},
@@ -343,6 +343,7 @@ pub(crate) mod tests {
             next_shred_index,
             next_shred_index, // next_code_index
             true,             // merkle_variant
+            &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
         );
         data_shreds.swap_remove(0)
