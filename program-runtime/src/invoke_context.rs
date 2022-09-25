@@ -1312,6 +1312,21 @@ mod tests {
     }
 
     #[test]
+    fn test_max_instruction_trace_length() {
+        const MAX_INSTRUCTIONS: usize = 8;
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, MAX_INSTRUCTIONS);
+        for _ in 0..MAX_INSTRUCTIONS {
+            transaction_context.push().unwrap();
+            transaction_context.pop().unwrap();
+        }
+        assert_eq!(
+            transaction_context.push(),
+            Err(InstructionError::MaxInstructionTraceLengthExceeded)
+        );
+    }
+
+    #[test]
     fn test_process_instruction() {
         let callee_program_id = solana_sdk::pubkey::new_rand();
         let builtin_programs = &[BuiltinProgram {
