@@ -533,6 +533,14 @@ impl Account {
 }
 
 impl AccountSharedData {
+    pub fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.data) > 1
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.data_mut().reserve(additional)
+    }
+
     fn data_mut(&mut self) -> &mut Vec<u8> {
         Arc::make_mut(&mut self.data)
     }

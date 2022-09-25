@@ -17,6 +17,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
     },
+    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
     std::{
         cell::{RefCell, RefMut},
         collections::HashSet,
@@ -782,23 +783,26 @@ impl<'a> BorrowedAccount<'a> {
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
         self.can_data_be_changed()?;
         self.touch()?;
+        self.make_data_mut();
         Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide).
     ///
-    /// Call this when you have an owned buffer and want to replace the account
-    /// data with it.
-    ///
-    /// If you have a slice, use [`Self::set_data_from_slice()`].
+    /// You should almost always prefer set_data_from_slice() to this method.
+    /// This is currently only used by tests and the program-test crate.
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
+    pub fn set_data(&mut self, mut data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
+
+        // self.account might be mapped into a MemoryRegion. Ensure that its
+        // capacity doesn't shrink potentially leaving a hole in vm address
+        // space. The extra capacity will be zeroed by the runtime.
+        data.reserve(self.account.data().len().saturating_sub(data.len()));
         self.update_accounts_resize_delta(data.len())?;
         self.account.set_data(data);
-
         Ok(())
     }
 
@@ -806,14 +810,19 @@ impl<'a> BorrowedAccount<'a> {
     ///
     /// Call this when you have a slice of data you do not own and want to
     /// replace the account data with it.
-    ///
-    /// If you have an owned buffer (eg [`Vec<u8>`]), use [`Self::set_data()`].
     #[cfg(not(target_os = "solana"))]
     pub fn set_data_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
         self.update_accounts_resize_delta(data.len())?;
+        // Calling make_data_mut() here guarantees that set_data_from_slice()
+        // copies in places, extending the account capacity if necessary but
+        // never reducing it. This is required as the account migh be directly
+        // mapped into a MemoryRegion, and therefore reducing capacity would
+        // leave a hole in the vm address space. After CPI or upon program
+        // termination, the runtime will zero the extra capacity.
+        self.make_data_mut();
         self.account.set_data_from_slice(data);
 
         Ok(())
@@ -849,8 +858,23 @@ impl<'a> BorrowedAccount<'a> {
 
         self.touch()?;
         self.update_accounts_resize_delta(new_len)?;
+        // Even if extend_from_slice never reduces capacity, still realloc using
+        // make_data_mut() if necessary so that we grow the account of the full
+        // max realloc length in one go, avoiding smaller reallocations.
+        self.make_data_mut();
         self.account.extend_from_slice(data);
         Ok(())
+    }
+
+    fn make_data_mut(&mut self) {
+        // if the account is still shared, it means this is the first time we're
+        // about to write into it. Make the account mutable by copying it in a
+        // buffer with MAX_PERMITTED_DATA_INCREASE capacity so that if the
+        // transaction reallocs, we don't have to copy the whole account data a
+        // second time to fullfill the realloc.
+        if self.account.is_shared() {
+            self.account.reserve(MAX_PERMITTED_DATA_INCREASE);
+        }
     }
 
     /// Deserializes the account data into a state
