@@ -82,7 +82,10 @@ export function MetaplexNFTHeader({
 }
 
 type Creator = programs.metadata.Creator;
-function getCreatorDropdownItems(creators: Creator[] | null, routerPath: string) {
+function getCreatorDropdownItems(
+  creators: Creator[] | null,
+  routerPath: string
+) {
   const CreatorHeader = () => {
     const creatorTooltip =
       "Verified creators signed the metadata associated with this NFT when it was created.";

@@ -20,7 +20,10 @@ import {
   createFeePayerValidator,
 } from "src/components/inspector/AddressWithContext";
 import { SimulatorCard } from "src/components/inspector/SimulatorCard";
-import { MIN_MESSAGE_LENGTH, RawInput } from "src/components/inspector/RawInputCard";
+import {
+  MIN_MESSAGE_LENGTH,
+  RawInput,
+} from "src/components/inspector/RawInputCard";
 import { InstructionsSection } from "src/components/inspector/InstructionsSection";
 import base58 from "bs58";
 import { dummyUrl } from "src/constants/urls";
@@ -143,7 +146,10 @@ export function TransactionInspectorPage({
   const router = useRouter();
   const [paramString, setParamString] = React.useState<string>();
 
-  const location = React.useMemo(() => new URL(router.asPath, dummyUrl), [router.asPath]);
+  const location = React.useMemo(
+    () => new URL(router.asPath, dummyUrl),
+    [router.asPath]
+  );
 
   // Sync message with url search params
   React.useEffect(() => {
@@ -181,8 +187,7 @@ export function TransactionInspectorPage({
 
     if (query.toString().length > 0)
       router.push(`${location.pathname}?${query.toString()}`);
-    else
-      router.push(location.pathname);
+    else router.push(location.pathname);
 
     setTransaction(undefined);
   }, [query, location, router]);
@@ -194,9 +199,8 @@ export function TransactionInspectorPage({
     const [result, refreshUrl] = decodeUrlParams(query);
     if (refreshUrl) {
       if (query.toString().length > 0)
-      router.push(`${location.pathname}?${query.toString()}`);
-      else
-        router.push(location.pathname);
+        router.push(`${location.pathname}?${query.toString()}`);
+      else router.push(location.pathname);
     }
 
     if (typeof result === "string") {
@@ -236,13 +240,15 @@ function PermalinkView({
   const router = useRouter();
   const transaction = details?.data?.raw;
 
-  const location = React.useMemo(() => new URL(router.asPath, dummyUrl), [router.asPath]);
+  const location = React.useMemo(
+    () => new URL(router.asPath, dummyUrl),
+    [router.asPath]
+  );
 
   const reset = React.useCallback(() => {
     if (location.search.length > 0)
       router.push(`/tx/inspector${location.search}`);
-    else 
-      router.push("/tx/inspector");
+    else router.push("/tx/inspector");
   }, [router, location]);
 
   // Fetch details on load

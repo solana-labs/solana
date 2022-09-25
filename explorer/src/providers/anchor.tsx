@@ -19,7 +19,11 @@ export function useAnchorProgram(
   if (cacheEntry === undefined) {
     const promise = Program.at(
       programAddress,
-      new AnchorProvider(new Connection(url), new NodeWallet(Keypair.generate()), {})
+      new AnchorProvider(
+        new Connection(url),
+        new NodeWallet(Keypair.generate()),
+        {}
+      )
     )
       .then((program) => {
         cachedAnchorProgramPromises[key] = {

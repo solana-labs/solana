@@ -15,7 +15,10 @@ import { useCluster } from "src/providers/cluster";
 import { ErrorCard } from "src/components/common/ErrorCard";
 import { UnknownAccountCard } from "src/components/account/UnknownAccountCard";
 import { Downloadable } from "src/components/common/Downloadable";
-import { CheckingBadge, VerifiedBadge } from "src/components/common/VerifiedBadge";
+import {
+  CheckingBadge,
+  VerifiedBadge,
+} from "src/components/common/VerifiedBadge";
 import { InfoTooltip } from "src/components/common/InfoTooltip";
 import { useVerifiableBuilds } from "src/utils/program-verification";
 import { SecurityTXTBadge } from "src/components/common/SecurityTXTBadge";

@@ -1,28 +1,28 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-	reactStrictMode: true,
+  reactStrictMode: true,
 
-	webpack: (config) => {
-		config.resolve.fallback = { fs: false }
-		return config
-	},
+  webpack: (config) => {
+    config.resolve.fallback = { fs: false };
+    return config;
+  },
 
-	async rewrites() {
-		return [
-			{
-				source: '/(accounts|accounts/top)',
-				destination: '/supply',
-			},
-			{
-				source: '/(account|accounts|addresses)/:address',
-				destination: '/address/:address',
-			},
-			{
-				source: '/(txs|txn|txns|transaction|transactions)/:signature',
-				destination: '/tx/:signature',
-			},
-		]
-	},
-}
+  async rewrites() {
+    return [
+      {
+        source: "/(accounts|accounts/top)",
+        destination: "/supply",
+      },
+      {
+        source: "/(account|accounts|addresses)/:address",
+        destination: "/address/:address",
+      },
+      {
+        source: "/(txs|txn|txns|transaction|transactions)/:signature",
+        destination: "/tx/:signature",
+      },
+    ];
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

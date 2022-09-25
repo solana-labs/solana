@@ -244,7 +244,7 @@ type DropdownProps = {
 };
 
 const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
-  const router = useRouter()
+  const router = useRouter();
 
   const buildLocation = (display: Display) => {
     const location = new URL(router.asPath, dummyUrl);
@@ -278,9 +278,12 @@ const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
               href={buildLocation(displayOption)}
               scroll={false}
             >
-              <span className={`dropdown-item c-pointer${
-                displayOption === display ? " active" : ""
-              }`} onClick={toggle}>
+              <span
+                className={`dropdown-item c-pointer${
+                  displayOption === display ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
                 {displayOption === "detail" ? "Detailed" : "Summary"}
               </span>
             </Link>

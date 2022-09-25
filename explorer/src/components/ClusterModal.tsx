@@ -32,8 +32,8 @@ export function ClusterModal() {
   };
 
   useEffect(() => {
-    setDeveloperSetingsDisplay(localStorageIsAvailable())
-  }, [])
+    setDeveloperSetingsDisplay(localStorageIsAvailable());
+  }, []);
 
   return (
     <>
@@ -101,7 +101,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
       query.set("customUrl", customUrl);
     }
 
-    const location = new URL(router.asPath, dummyUrl)    
+    const location = new URL(router.asPath, dummyUrl);
     return `${location.pathname}?${query.toString()}`;
   };
 
@@ -109,7 +109,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
     updateCustomUrl(url);
     if (url.length > 0) {
       query.set("customUrl", url);
-      const location = new URL(router.asPath, dummyUrl)
+      const location = new URL(router.asPath, dummyUrl);
       router.push(`${location.pathname}?${query.toString()}`);
     }
   }, 500);
@@ -118,9 +118,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
   return (
     <>
       <Link href={clusterLocation()}>
-        <span className={`btn col-12 mb-3 ${btnClass}`}>
-          Custom RPC URL
-        </span>
+        <span className={`btn col-12 mb-3 ${btnClass}`}>Custom RPC URL</span>
       </Link>
       {active && (
         <input
@@ -173,7 +171,7 @@ function ClusterToggle() {
           : "btn-white";
 
         const clusterLocation = () => {
-          const location = new URL(router.asPath, dummyUrl)
+          const location = new URL(router.asPath, dummyUrl);
           const params = new URLSearchParams(location.search);
           const slug = clusterSlug(net);
           if (slug !== "mainnet-beta") {
@@ -188,10 +186,7 @@ function ClusterToggle() {
         };
 
         return (
-          <Link
-            key={index}
-            href={clusterLocation()}
-          >
+          <Link key={index} href={clusterLocation()}>
             <span className={`btn col-12 mb-3 ${btnClass}`}>
               {clusterName(net)}
             </span>

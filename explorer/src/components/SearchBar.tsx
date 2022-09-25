@@ -16,7 +16,9 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
 import { getDomainInfo, hasDomainSyntax } from "src/utils/name-service";
 
-const BrowserReactSelect = dynamic(() => import("react-select"), { ssr: false })
+const BrowserReactSelect = dynamic(() => import("react-select"), {
+  ssr: false,
+});
 
 interface SearchOptions {
   label: string;
@@ -43,17 +45,14 @@ export function SearchBar() {
     meta: ActionMeta<any>
   ) => {
     if (meta.action === "select-option") {
-      const { cluster, customUrl } = router.query
-      const queryParams = new URLSearchParams()
+      const { cluster, customUrl } = router.query;
+      const queryParams = new URLSearchParams();
 
-      if (cluster)
-        queryParams.append("cluster", cluster as string)
-      if (customUrl)
-        queryParams.append("customUrl", customUrl as string)
+      if (cluster) queryParams.append("cluster", cluster as string);
+      if (customUrl) queryParams.append("customUrl", customUrl as string);
 
-      if (queryParams.toString())
-        pathname += `?${queryParams.toString()}`
-      
+      if (queryParams.toString()) pathname += `?${queryParams.toString()}`;
+
       router.push(pathname);
       setSearch("");
     }

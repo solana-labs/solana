@@ -1,11 +1,11 @@
-import { useRouter } from 'next/router'
-import InspectorPage from 'pages/tx/inspector'
+import { useRouter } from "next/router";
+import InspectorPage from "pages/tx/inspector";
 
 export function TransactionInspectorPage() {
-	const router = useRouter()
-	const signature = router.query.signature as string | undefined
+  const router = useRouter();
+  const signature = router.query.signature as string | undefined;
 
-  return <InspectorPage signature={signature} />
+  return <InspectorPage signature={signature} />;
 }
 
-export default TransactionInspectorPage
+export default TransactionInspectorPage;

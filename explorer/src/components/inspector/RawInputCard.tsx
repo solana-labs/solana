@@ -57,7 +57,10 @@ export function RawInput({
   const query = useQuery();
   const router = useRouter();
 
-  const location = React.useMemo(() => new URL(router.asPath, dummyUrl), [router.asPath]);
+  const location = React.useMemo(
+    () => new URL(router.asPath, dummyUrl),
+    [router.asPath]
+  );
 
   const onInput = React.useCallback(() => {
     const base64 = rawTransactionInput.current?.value;
@@ -163,12 +166,15 @@ export function RawInput({
           <li className="mb-2">
             <strong>Rust: </strong>Add <code>base64</code> crate dependency and{" "}
             <code>
-              println!(&quot;{}&quot;, base64::encode(&transaction.message_data()));
+              println!(&quot;{}&quot;,
+              base64::encode(&transaction.message_data()));
             </code>
           </li>
           <li>
             <strong>JavaScript: </strong>Add{" "}
-            <code>console.log(tx.serializeMessage().toString(&quot;base64&quot;));</code>
+            <code>
+              console.log(tx.serializeMessage().toString(&quot;base64&quot;));
+            </code>
           </li>
         </ul>
       </div>

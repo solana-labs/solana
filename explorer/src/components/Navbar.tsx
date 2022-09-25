@@ -18,7 +18,12 @@ export function Navbar() {
         <Link href={clusterPath("/", router.asPath)} passHref>
           <a>
             <div className="d-flex">
-              <Image src="/img/logos-solana/dark-explorer-logo.svg" width={250} height={21.48} alt="Solana Explorer" />
+              <Image
+                src="/img/logos-solana/dark-explorer-logo.svg"
+                width={250}
+                height={21.48}
+                alt="Solana Explorer"
+              />
             </div>
           </a>
         </Link>
@@ -38,24 +43,27 @@ export function Navbar() {
         >
           <ul className="navbar-nav me-auto">
             <li className="nav-item">
-              <NavLink activeClassName="active" href={clusterPath("/", router.asPath)}>
-                <span className="nav-link">
-                  Cluster Stats
-                </span>
+              <NavLink
+                activeClassName="active"
+                href={clusterPath("/", router.asPath)}
+              >
+                <span className="nav-link">Cluster Stats</span>
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink activeClassName="active" href={clusterPath("/supply", router.asPath)}>
-                <span className="nav-link">
-                  Supply
-                </span>
+              <NavLink
+                activeClassName="active"
+                href={clusterPath("/supply", router.asPath)}
+              >
+                <span className="nav-link">Supply</span>
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink activeClassName="active" href={clusterPath("/tx/inspector", router.asPath)}>
-                <span className="nav-link">
-                  Inspector
-                </span>
+              <NavLink
+                activeClassName="active"
+                href={clusterPath("/tx/inspector", router.asPath)}
+              >
+                <span className="nav-link">Inspector</span>
               </NavLink>
             </li>
           </ul>

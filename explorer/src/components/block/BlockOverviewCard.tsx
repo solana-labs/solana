@@ -230,9 +230,7 @@ function MoreSection({
                     href={clusterPath(`/block/${slot}${path}`, router.asPath)}
                     scroll={false}
                   >
-                    <span className="nav-link">
-                      {title}
-                    </span>
+                    <span className="nav-link">{title}</span>
                   </NavLink>
                 </li>
               ))}

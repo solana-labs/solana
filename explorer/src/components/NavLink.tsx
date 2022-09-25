@@ -17,16 +17,21 @@ export const NavLink = ({
   const child = Children.only(children) as React.ReactElement;
   const childClassName = child.props.className || "";
 
-  const [pathWithoutParams] = asPath.split('?');
-  const [hrefWithoutParams] = (props.href as string).split('?');
-  const isActive = pathWithoutParams === hrefWithoutParams || pathWithoutParams === props.as;
+  const [pathWithoutParams] = asPath.split("?");
+  const [hrefWithoutParams] = (props.href as string).split("?");
+  const isActive =
+    pathWithoutParams === hrefWithoutParams || pathWithoutParams === props.as;
 
-  const className = cx(childClassName, { [activeClassName]: isActive }, 'c-pointer');
+  const className = cx(
+    childClassName,
+    { [activeClassName]: isActive },
+    "c-pointer"
+  );
 
   return (
     <Link {...props}>
       {React.cloneElement(child, {
-        className: className || null
+        className: className || null,
       })}
     </Link>
   );

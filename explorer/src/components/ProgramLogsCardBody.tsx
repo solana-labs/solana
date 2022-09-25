@@ -28,8 +28,9 @@ export function ProgramLogsCardBody({
 }) {
   let logIndex = 0;
 
-  const jumpToLocation = (index: number) => `#${getInstructionCardScrollAnchorId([index + 1])}`
-  
+  const jumpToLocation = (index: number) =>
+    `#${getInstructionCardScrollAnchorId([index + 1])}`;
+
   let instructionProgramIds: PublicKey[];
   if ("compiledInstructions" in message) {
     instructionProgramIds = message.compiledInstructions.map((ix) => {

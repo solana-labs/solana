@@ -5,7 +5,11 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program, Idl } from "@project-serum/anchor";
 import { useAnchorProgram } from "src/providers/anchor";
 import { getProgramName } from "src/utils/tx";
-import { snakeToTitleCase, camelToTitleCase, numberWithSeparator } from "src/utils";
+import {
+  snakeToTitleCase,
+  camelToTitleCase,
+  numberWithSeparator,
+} from "src/utils";
 import {
   IdlInstruction,
   IdlType,

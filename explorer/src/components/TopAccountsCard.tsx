@@ -188,7 +188,7 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
     } else {
       params.set("filter", filter);
     }
-    
+
     return params.toString().length > 0
       ? `${location.pathname}?${params.toString()}`
       : location.pathname;
@@ -212,9 +212,12 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
               href={buildLocation(filterOption)}
               scroll={false}
             >
-              <span className={`dropdown-item${
-                filterOption === filter ? " active" : ""
-              }`} onClick={toggle}>
+              <span
+                className={`dropdown-item${
+                  filterOption === filter ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
                 {filterTitle(filterOption)}
               </span>
             </Link>

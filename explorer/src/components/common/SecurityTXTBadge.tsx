@@ -18,7 +18,12 @@ export function SecurityTXTBadge({
   if (securityTXT) {
     return (
       <h3 className="mb-0">
-        <Link href={clusterPath(`/address/${pubkey.toBase58()}/security`, router.asPath)}>
+        <Link
+          href={clusterPath(
+            `/address/${pubkey.toBase58()}/security`,
+            router.asPath
+          )}
+        >
           <span className="c-pointer badge bg-success-soft rank">Included</span>
         </Link>
       </h3>

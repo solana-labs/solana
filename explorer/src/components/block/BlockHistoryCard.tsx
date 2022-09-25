@@ -225,7 +225,11 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                   className="text-muted c-pointer"
                   onClick={() => {
                     query.delete("sort");
-                    router.push(clusterPath(location.pathname, router.asPath, query,), undefined, { scroll: false });
+                    router.push(
+                      clusterPath(location.pathname, router.asPath, query),
+                      undefined,
+                      { scroll: false }
+                    );
                   }}
                 >
                   #
@@ -236,7 +240,11 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                   className="text-muted text-end c-pointer"
                   onClick={() => {
                     query.set("sort", "fee");
-                    router.push(clusterPath(location.pathname, router.asPath, query), undefined, { scroll: false });
+                    router.push(
+                      clusterPath(location.pathname, router.asPath, query),
+                      undefined,
+                      { scroll: false }
+                    );
                   }}
                 >
                   Fee
@@ -246,7 +254,11 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                     className="text-muted text-end c-pointer"
                     onClick={() => {
                       query.set("sort", "compute");
-                      router.push(clusterPath(location.pathname, router.asPath, query), undefined, { scroll: false });
+                      router.push(
+                        clusterPath(location.pathname, router.asPath, query),
+                        undefined,
+                        { scroll: false }
+                      );
                     }}
                   >
                     Compute
@@ -387,10 +399,10 @@ const FilterDropdown = ({
     } else {
       params.set("filter", filter);
     }
-    
+
     return params.toString().length > 0
       ? `${location.pathname}?${params.toString()}`
-      : location.pathname
+      : location.pathname;
   };
 
   let defaultFilterOption: FilterOption = {
@@ -457,9 +469,12 @@ const FilterDropdown = ({
               href={buildLocation(programId)}
               scroll={false}
             >
-              <span className={`dropdown-item c-pointer${
-                programId === filter ? " active" : ""
-              }`} onClick={toggle}>
+              <span
+                className={`dropdown-item c-pointer${
+                  programId === filter ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
                 {`${name} (${transactionCount})`}
               </span>
             </Link>

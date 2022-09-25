@@ -52,7 +52,9 @@ export function NFTokenCollectionNFTGrid({
                 <NftokenImage url={nft.image} size={80} />
 
                 <div>
-                  <Link href={clusterPath(`/address/${nft.address}`, router.asPath)}>
+                  <Link
+                    href={clusterPath(`/address/${nft.address}`, router.asPath)}
+                  >
                     <div>{nft.name ?? "No Name"}</div>
                   </Link>
                 </div>

@@ -7,7 +7,11 @@ import {
   usePerformanceInfo,
   useStatsProvider,
 } from "src/providers/stats/solanaClusterStats";
-import { abbreviatedNumber, lamportsToSol, slotsToHumanString } from "src/utils";
+import {
+  abbreviatedNumber,
+  lamportsToSol,
+  slotsToHumanString,
+} from "src/utils";
 import { ClusterStatus, useCluster } from "src/providers/cluster";
 import { LiveTransactionStatsCard } from "src/components/LiveTransactionStatsCard";
 import { displayTimestampWithoutDate } from "src/utils/date";
@@ -325,4 +329,4 @@ export function StatsNotReady({ error }: { error: boolean }) {
   );
 }
 
-export default ClusterStatsPage
+export default ClusterStatsPage;

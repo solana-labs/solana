@@ -167,7 +167,7 @@ export function AccountDetailsPage() {
   const router = useRouter();
   const { address: queryParams } = router.query;
 
-  let address = '';
+  let address = "";
   let tab: string | undefined;
 
   if (queryParams) {
@@ -533,7 +533,11 @@ function MoreSection({
   );
 }
 
-function getTabs(pubkey: PublicKey, account: Account, routerPath: string): TabComponent[] {
+function getTabs(
+  pubkey: PublicKey,
+  account: Account,
+  routerPath: string
+): TabComponent[] {
   const address = pubkey.toBase58();
   const data = account.details?.data;
   const tabs: Tab[] = [
@@ -616,9 +620,7 @@ function getTabs(pubkey: PublicKey, account: Account, routerPath: string): TabCo
             href={clusterPath(`/address/${address}${tab.path}`, routerPath)}
             scroll={false}
           >
-            <span className="nav-link">
-              {tab.title}
-            </span>
+            <span className="nav-link">{tab.title}</span>
           </NavLink>
         </li>
       ),
@@ -690,9 +692,7 @@ function AnchorProgramLink({
         activeClassName="active"
         href={clusterPath(`/address/${address}${tab.path}`, router.asPath)}
       >
-        <span className="nav-link">
-          {tab.title}
-        </span>
+        <span className="nav-link">{tab.title}</span>
       </NavLink>
     </li>
   );
@@ -724,9 +724,7 @@ function AccountDataLink({
         activeClassName="active"
         href={clusterPath(`/address/${address}${tab.path}`, router.asPath)}
       >
-        <span className="nav-link">
-          {tab.title}
-        </span>
+        <span className="nav-link">{tab.title}</span>
       </NavLink>
     </li>
   );
