@@ -291,10 +291,10 @@ fn parse_pubkey(
 ) -> Result<proc_macro2::TokenStream> {
     let id_vec = bs58::decode(id_literal.value())
         .into_vec()
-        .map_err(|_| syn::Error::new_spanned(&id_literal, "failed to decode base58 string"))?;
+        .map_err(|_| syn::Error::new_spanned(id_literal, "failed to decode base58 string"))?;
     let id_array = <[u8; 32]>::try_from(<&[u8]>::clone(&&id_vec[..])).map_err(|_| {
         syn::Error::new_spanned(
-            &id_literal,
+            id_literal,
             format!("pubkey array is not 32 bytes long: len={}", id_vec.len()),
         )
     })?;

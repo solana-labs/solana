@@ -2,11 +2,11 @@ import React from "react";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { Location } from "history";
 import {
-  BlockResponse,
   ConfirmedTransactionMeta,
   TransactionSignature,
   PublicKey,
   VOTE_PROGRAM_ID,
+  VersionedBlockResponse,
 } from "@solana/web3.js";
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
@@ -51,7 +51,7 @@ type TransactionWithInvocations = {
   logTruncated: boolean;
 };
 
-export function BlockHistoryCard({ block }: { block: BlockResponse }) {
+export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
   const query = useQuery();
@@ -72,7 +72,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           signature = tx.transaction.signatures[0];
         }
 
-        let programIndexes = tx.transaction.message.instructions
+        let programIndexes = tx.transaction.message.compiledInstructions
           .map((ix) => ix.programIdIndex)
           .concat(
             tx.meta?.innerInstructions?.flatMap((ix) => {
@@ -87,8 +87,11 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         });
 
         const invocations = new Map<string, number>();
+        const accountKeys = tx.transaction.message.getAccountKeys({
+          accountKeysFromLookups: tx.meta?.loadedAddresses,
+        });
         for (const [i, count] of indexMap.entries()) {
-          const programId = tx.transaction.message.accountKeys[i].toBase58();
+          const programId = accountKeys.get(i)!.toBase58();
           invocations.set(programId, count);
           const programTransactionCount = invokedPrograms.get(programId) || 0;
           invokedPrograms.set(programId, programTransactionCount + 1);
@@ -143,8 +146,15 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
         if (accountFilter === null) {
           return true;
         }
-        const tx = block.transactions[index].transaction;
-        return tx.message.accountKeys.find((key) => key.equals(accountFilter));
+
+        const tx = block.transactions[index];
+        const accountKeys = tx.transaction.message.getAccountKeys({
+          accountKeysFromLookups: tx.meta?.loadedAddresses,
+        });
+        return accountKeys
+          .keySegments()
+          .flat()
+          .find((key) => key.equals(accountFilter));
       });
 
     const showComputeUnits = filteredTxs.every(

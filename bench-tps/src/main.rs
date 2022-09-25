@@ -4,7 +4,7 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        bench::{do_bench_tps, max_lamporots_for_prioritization},
+        bench::{do_bench_tps, max_lamports_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
@@ -155,6 +155,7 @@ fn main() {
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
         use_durable_nonce,
+        instruction_padding_config,
         ..
     } = &cli_config;
 
@@ -165,7 +166,7 @@ fn main() {
         let num_accounts = keypairs.len() as u64;
         let max_fee = FeeRateGovernor::new(*target_lamports_per_signature, 0)
             .max_lamports_per_signature
-            .saturating_add(max_lamporots_for_prioritization(
+            .saturating_add(max_lamports_for_prioritization(
                 *use_randomized_compute_unit_price,
             ));
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
@@ -223,6 +224,15 @@ fn main() {
         *num_nodes,
         *target_node,
     );
+    if let Some(instruction_padding_config) = instruction_padding_config {
+        info!(
+            "Checking for existence of instruction padding program: {}",
+            instruction_padding_config.program_id
+        );
+        client
+            .get_account(&instruction_padding_config.program_id)
+            .expect("Instruction padding program must be deployed to this cluster. Deploy the program using `solana program deploy ./bench-tps/tests/fixtures/spl_instruction_padding.so` and pass the resulting program id with `--instruction-padding-program-id`");
+    }
     let keypairs = get_keypairs(
         client.clone(),
         id,

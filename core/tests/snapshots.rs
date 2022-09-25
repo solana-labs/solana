@@ -103,6 +103,7 @@ impl SnapshotTestConfig {
             accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
+        bank0.set_startup_verification_complete();
         let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
@@ -208,7 +209,6 @@ fn run_bank_forks_snapshot_n<F>(
     );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -452,7 +452,7 @@ fn test_concurrent_snapshot_packaging(
     // currently sitting in the channel
     snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
+    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
     assert!(bank_snapshots
         .into_iter()
@@ -675,7 +675,6 @@ fn test_bank_forks_incremental_snapshot(
             snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -912,10 +911,6 @@ fn test_snapshots_with_background_services(
     let pending_accounts_package = PendingAccountsPackage::default();
     let pending_snapshot_package = PendingSnapshotPackage::default();
 
-    snapshot_test_config
-        .bank_forks
-        .root_bank()
-        .set_startup_verification_complete();
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
         .read()

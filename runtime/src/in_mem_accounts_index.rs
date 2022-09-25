@@ -8,6 +8,7 @@ use {
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
     solana_measure::measure::Measure,
@@ -439,7 +440,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn unref(&self, pubkey: &Pubkey) {
         self.get_internal(pubkey, |entry| {
             if let Some(entry) = entry {
-                entry.unref();
+                if entry.unref() {
+                    info!("refcount of item already at 0: {pubkey}");
+                }
             }
             (true, ())
         })
@@ -1054,7 +1057,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
-            let new_ref_count = if v.is_cached() { 0 } else { 1 };
+            let new_ref_count = u64::from(!v.is_cached());
             disk.update(&k, |current| {
                 match current {
                     Some((current_slot_list, mut ref_count)) => {

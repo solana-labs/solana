@@ -108,7 +108,7 @@ impl VoteTransaction {
             VoteTransaction::Vote(vote) => vote.slots.last().copied(),
             VoteTransaction::VoteStateUpdate(vote_state_update)
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
-                Some(vote_state_update.lockouts.back()?.slot)
+                vote_state_update.last_voted_slot()
             }
         }
     }

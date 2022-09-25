@@ -88,4 +88,56 @@ describe('Message', () => {
     expect(message.instructions.length).to.eq(0);
     expect(message.recentBlockhash).to.eq(recentBlockhash);
   });
+
+  it('isAccountWritable', () => {
+    const accountKeys = [
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+    ];
+
+    const recentBlockhash = bs58.encode(sha256('test'));
+    const message = new Message({
+      header: {
+        numRequiredSignatures: 2,
+        numReadonlySignedAccounts: 1,
+        numReadonlyUnsignedAccounts: 1,
+      },
+      recentBlockhash,
+      accountKeys,
+      instructions: [],
+    });
+
+    expect(message.isAccountWritable(0)).to.be.true;
+    expect(message.isAccountWritable(1)).to.be.false;
+    expect(message.isAccountWritable(2)).to.be.true;
+    expect(message.isAccountWritable(3)).to.be.false;
+  });
+
+  it('isAccountSigner', () => {
+    const accountKeys = [
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+      PublicKey.unique(),
+    ];
+
+    const recentBlockhash = bs58.encode(sha256('test'));
+    const message = new Message({
+      header: {
+        numRequiredSignatures: 2,
+        numReadonlySignedAccounts: 1,
+        numReadonlyUnsignedAccounts: 1,
+      },
+      recentBlockhash,
+      accountKeys,
+      instructions: [],
+    });
+
+    expect(message.isAccountSigner(0)).to.be.true;
+    expect(message.isAccountSigner(1)).to.be.true;
+    expect(message.isAccountSigner(2)).to.be.false;
+    expect(message.isAccountSigner(3)).to.be.false;
+  });
 });

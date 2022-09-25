@@ -6,6 +6,10 @@ use {
     },
 };
 
+/// Account data as stored in the caller address space during CPI, translated to host memory.
+///
+/// At the start of a CPI, this can be different from the data stored in the
+/// corresponding BorrowedAccount, and needs to be synched.
 struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
@@ -663,6 +667,11 @@ where
                 invoke_context,
             )?;
             {
+                // before initiating CPI, the caller may have modified the
+                // account (caller_account). We need to update the corresponding
+                // BorrowedAccount (callee_account) so the callee can see the
+                // changes.
+
                 if callee_account.get_lamports() != *caller_account.lamports {
                     callee_account
                         .set_lamports(*caller_account.lamports)
@@ -674,7 +683,7 @@ where
                     .and_then(|_| callee_account.can_data_be_changed())
                 {
                     Ok(()) => callee_account
-                        .set_data(caller_account.data)
+                        .set_data_from_slice(caller_account.data)
                         .map_err(SyscallError::InstructionError)?,
                     Err(err) if callee_account.get_data() != caller_account.data => {
                         return Err(EbpfError::UserError(BpfError::SyscallError(
@@ -799,8 +808,16 @@ fn check_account_infos(
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
+        let max_cpi_account_infos = if invoke_context
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
+            MAX_CPI_ACCOUNT_INFOS
+        } else {
+            64
+        };
         let num_account_infos = num_account_infos as u64;
-        let max_account_infos = MAX_CPI_ACCOUNT_INFOS as u64;
+        let max_account_infos = max_cpi_account_infos as u64;
         if num_account_infos > max_account_infos {
             return Err(SyscallError::MaxInstructionAccountInfosExceeded {
                 num_account_infos,

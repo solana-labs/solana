@@ -238,7 +238,7 @@ mod tests {
                     MockSystemInstruction::ChangeData { data } => {
                         instruction_context
                             .try_borrow_instruction_account(transaction_context, 1)?
-                            .set_data(&[data])?;
+                            .set_data(vec![data])?;
                         Ok(())
                     }
                 }
@@ -466,7 +466,7 @@ mod tests {
                             .try_borrow_instruction_account(transaction_context, 2)?;
                         dup_account.checked_sub_lamports(lamports)?;
                         to_account.checked_add_lamports(lamports)?;
-                        dup_account.set_data(&[data])?;
+                        dup_account.set_data(vec![data])?;
                         drop(dup_account);
                         let mut from_account = instruction_context
                             .try_borrow_instruction_account(transaction_context, 0)?;

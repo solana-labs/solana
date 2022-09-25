@@ -15,7 +15,7 @@ This quickstart guide will demonstrate how to quickly install and setup your loc
 
 ## Install the Solana CLI
 
-To interact with the Solana clusters from your terminal, install the [Solana CLI tool suite](../../cli/install-solana-cli-tools) on your local system:
+To interact with the Solana clusters from your terminal, install the [Solana CLI tool suite](./../cli/install-solana-cli-tools) on your local system:
 
 ```bash
 sh -c "$(curl -sSfL https://release.solana.com/stable/install)"

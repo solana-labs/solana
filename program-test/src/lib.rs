@@ -160,7 +160,7 @@ pub fn builtin_process_instruction(
                     .is_ok()
                     && borrowed_account.can_data_be_changed().is_ok()
                 {
-                    borrowed_account.set_data(&account_info.data.borrow())?;
+                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
                 }
                 if borrowed_account.get_owner() != account_info.owner {
                     borrowed_account.set_owner(account_info.owner.as_ref())?;
@@ -286,7 +286,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .can_data_be_resized(account_info_data.len())
                 .and_then(|_| borrowed_account.can_data_be_changed())
             {
-                Ok(()) => borrowed_account.set_data(&account_info_data).unwrap(),
+                Ok(()) => borrowed_account
+                    .set_data_from_slice(&account_info_data)
+                    .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
                     panic!("{:?}", err);
                 }
@@ -396,7 +398,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
     for dir in default_shared_object_dirs() {
-        let candidate = dir.join(&filename);
+        let candidate = dir.join(filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -604,7 +606,7 @@ impl ProgramTest {
                     })
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "".to_string())
+                    .unwrap_or_default()
             );
 
             this.add_account(

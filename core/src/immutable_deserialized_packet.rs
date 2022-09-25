@@ -28,6 +28,8 @@ pub enum DeserializedPacketError {
     SanitizeError(#[from] SanitizeError),
     #[error("transaction failed prioritization")]
     PrioritizationFailure,
+    #[error("vote transaction failure")]
+    VoteTransactionError,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,9 +53,14 @@ impl ImmutableDeserializedPacket {
         let is_simple_vote = packet.meta.is_simple_vote_tx();
 
         // drop transaction if prioritization fails.
-        let priority_details = priority_details
+        let mut priority_details = priority_details
             .or_else(|| sanitized_transaction.get_transaction_priority_details())
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
+
+        // set priority to zero for vote transactions
+        if is_simple_vote {
+            priority_details.priority = 0;
+        };
 
         Ok(Self {
             original_packet: packet,

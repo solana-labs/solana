@@ -1117,7 +1117,7 @@ impl PartialEq for Bank {
             incremental_snapshot_persistence: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
-            // is added to the struct, this ParitalEq is accordingly updated.
+            // is added to the struct, this PartialEq is accordingly updated.
         } = self;
         *blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && ancestors == &other.ancestors
@@ -3250,19 +3250,15 @@ impl Bank {
                         self.store_account(&vote_pubkey, &vote_account);
                     }
 
-                    if vote_rewards > 0 {
-                        Some((
-                            vote_pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Voting,
-                                lamports: vote_rewards as i64,
-                                post_balance: vote_account.lamports(),
-                                commission: Some(commission),
-                            },
-                        ))
-                    } else {
-                        None
-                    }
+                    Some((
+                        vote_pubkey,
+                        RewardInfo {
+                            reward_type: RewardType::Voting,
+                            lamports: vote_rewards as i64,
+                            post_balance: vote_account.lamports(),
+                            commission: Some(commission),
+                        },
+                    ))
                 },
             )
             .collect::<Vec<_>>();
@@ -3913,8 +3909,13 @@ impl Bank {
             self.runtime_config.transaction_account_lock_limit
         {
             transaction_account_lock_limit
-        } else {
+        } else if self
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
             MAX_TX_ACCOUNT_LOCKS
+        } else {
+            64
         }
     }
 
@@ -5449,6 +5450,13 @@ impl Bank {
         }
     }
 
+    /// If we are skipping rewrites for bank hash, then we don't want to
+    ///  allow accounts hash calculation to rehash anything.
+    ///  We should use whatever hash found for each account as-is.
+    pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
+        true // this will be governed by a feature later
+    }
+
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -6864,7 +6872,7 @@ impl Bank {
             //
             // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
             // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
-            // will be required for the epoch accounts hash calculation to have compleleted and
+            // will be required for the epoch accounts hash calculation to have completed and
             // for this value to be `Some`.
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
@@ -6961,6 +6969,7 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
+        let enable_rehashing = self.bank_enable_rehashing_on_accounts_hash();
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6984,6 +6993,7 @@ impl Bank {
                             config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
+                            enable_rehashing,
                         );
                         accounts_
                             .accounts_db
@@ -7005,6 +7015,7 @@ impl Bank {
                 config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
+                enable_rehashing,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
@@ -7107,6 +7118,7 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
+            self.bank_enable_rehashing_on_accounts_hash(),
         )
     }
 
@@ -7170,7 +7182,7 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
-                true,
+                self.bank_enable_rehashing_on_accounts_hash(),
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -7197,7 +7209,7 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
-                        true,
+                        self.bank_enable_rehashing_on_accounts_hash(),
                     );
             }
 
@@ -8127,7 +8139,6 @@ pub(crate) mod tests {
             },
             system_program,
             timing::duration_as_s,
-            transaction::MAX_TX_ACCOUNT_LOCKS,
             transaction_context::IndexOfAccount,
         },
         solana_vote_program::{
@@ -8983,11 +8994,7 @@ pub(crate) mod tests {
 
         // Since, validator 1 and validator 2 has equal smallest stake, it comes down to comparison
         // between their pubkey.
-        let tweak_1 = if validator_1_pubkey > validator_2_pubkey {
-            1
-        } else {
-            0
-        };
+        let tweak_1 = u64::from(validator_1_pubkey > validator_2_pubkey);
         let validator_1_portion =
             ((validator_1_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + tweak_1;
         assert_eq!(
@@ -8997,11 +9004,7 @@ pub(crate) mod tests {
 
         // Since, validator 1 and validator 2 has equal smallest stake, it comes down to comparison
         // between their pubkey.
-        let tweak_2 = if validator_2_pubkey > validator_1_pubkey {
-            1
-        } else {
-            0
-        };
+        let tweak_2 = u64::from(validator_2_pubkey > validator_1_pubkey);
         let validator_2_portion =
             ((validator_2_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + tweak_2;
         assert_eq!(
@@ -9020,7 +9023,7 @@ pub(crate) mod tests {
 
         // only slot history is newly created
         let sysvar_and_builtin_program_delta =
-            min_rent_excempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
+            min_rent_exempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
         assert_eq!(
             previous_capitalization - (current_capitalization - sysvar_and_builtin_program_delta),
             burned_portion
@@ -10340,15 +10343,26 @@ pub(crate) mod tests {
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
             *bank1.rewards.read().unwrap(),
-            vec![(
-                stake_id,
-                RewardInfo {
-                    reward_type: RewardType::Staking,
-                    lamports: validator_rewards as i64,
-                    post_balance: bank1.get_balance(&stake_id),
-                    commission: Some(0),
-                }
-            )]
+            vec![
+                (
+                    vote_id,
+                    RewardInfo {
+                        reward_type: RewardType::Voting,
+                        lamports: 0,
+                        post_balance: bank1.get_balance(&vote_id),
+                        commission: Some(0),
+                    }
+                ),
+                (
+                    stake_id,
+                    RewardInfo {
+                        reward_type: RewardType::Staking,
+                        lamports: validator_rewards as i64,
+                        post_balance: bank1.get_balance(&stake_id),
+                        commission: Some(0),
+                    }
+                )
+            ]
         );
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization(true));
@@ -10391,7 +10405,7 @@ pub(crate) mod tests {
 
         let vote_id = solana_sdk::pubkey::new_rand();
         let mut vote_account =
-            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 50, 100);
+            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 0, 100);
         let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
@@ -12035,7 +12049,7 @@ pub(crate) mod tests {
             },
             |old, new| {
                 assert_eq!(
-                    old + min_rent_excempt_balance_for_sysvars(&bank1, &[sysvar::clock::id()]),
+                    old + min_rent_exempt_balance_for_sysvars(&bank1, &[sysvar::clock::id()]),
                     new
                 );
             },
@@ -14353,7 +14367,8 @@ pub(crate) mod tests {
             bank.last_blockhash(),
         );
 
-        while tx.message.account_keys.len() <= MAX_TX_ACCOUNT_LOCKS {
+        let transaction_account_lock_limit = bank.get_transaction_account_lock_limit();
+        while tx.message.account_keys.len() <= transaction_account_lock_limit {
             tx.message.account_keys.push(solana_sdk::pubkey::new_rand());
         }
 
@@ -15773,7 +15788,7 @@ pub(crate) mod tests {
         bank.store_account(vote_pubkey, &vote_account);
     }
 
-    fn min_rent_excempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
+    fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
         sysvar_ids
             .iter()
             .map(|sysvar_id| {
@@ -16921,7 +16936,7 @@ pub(crate) mod tests {
             load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
         assert_eq!(
             vote_and_stake_accounts.len(),
-            if check_owner_change { 0 } else { 1 }
+            usize::from(!check_owner_change)
         );
     }
 
@@ -17300,7 +17315,7 @@ pub(crate) mod tests {
             let instruction_context = transaction_context.get_current_instruction_context()?;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 1)?
-                .set_data(&[0; 40])?;
+                .set_data(vec![0; 40])?;
             Ok(())
         }
 

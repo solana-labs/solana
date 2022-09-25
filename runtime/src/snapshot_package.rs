@@ -119,7 +119,7 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
-            enable_rehashing: true, // this will be feature driven using bank
+            enable_rehashing: bank.bank_enable_rehashing_on_accounts_hash(),
         })
     }
 }

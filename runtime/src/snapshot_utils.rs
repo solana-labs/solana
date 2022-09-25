@@ -64,6 +64,7 @@ use {
     crate::{
         accounts_db::{AccountStorageMap, AtomicAppendVecId},
         hardened_unpack::streaming_unpack_snapshot,
+        snapshot_utils::snapshot_storage_rebuilder::RebuiltSnapshotStorage,
     },
     crossbeam_channel::Sender,
     std::thread::{Builder, JoinHandle},
@@ -134,10 +135,6 @@ impl SnapshotVersion {
     pub fn as_str(self) -> &'static str {
         <&str as From<Self>>::from(self)
     }
-
-    fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
-        version_string.parse::<Self>().ok()
-    }
 }
 
 /// Information about a bank snapshot. Namely the slot of the bank, the path to the snapshot, and
@@ -203,7 +200,7 @@ struct UnarchivedSnapshot {
 #[derive(Debug)]
 struct UnpackedSnapshotsDirAndVersion {
     unpacked_snapshots_dir: PathBuf,
-    snapshot_version: String,
+    snapshot_version: SnapshotVersion,
 }
 
 /// Helper type for passing around account storage map and next append vec id
@@ -444,7 +441,7 @@ pub fn archive_snapshot_package(
     // Atomically move the archive into position for other validators to find
     let metadata = fs::metadata(&archive_path)
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path stat"))?;
-    fs::rename(&archive_path, &snapshot_package.path())
+    fs::rename(&archive_path, snapshot_package.path())
         .map_err(|e| SnapshotError::IoWithSource(e, "archive path rename"))?;
 
     purge_old_snapshot_archives(
@@ -1262,7 +1259,6 @@ where
         .prefix(unpacked_snapshots_dir_prefix)
         .tempdir_in(bank_snapshots_dir)?;
     let unpacked_snapshots_dir = unpack_dir.path().join("snapshots");
-    let unpacked_version_file = unpack_dir.path().join("version");
 
     let (file_sender, file_receiver) = crossbeam_channel::unbounded();
     streaming_unarchive_snapshot(
@@ -1277,18 +1273,20 @@ where
     let num_rebuilder_threads = num_cpus::get_physical()
         .saturating_sub(parallel_divisions)
         .max(1);
-    let (storage, measure_untar) = measure!(
+    let (version_and_storages, measure_untar) = measure!(
         SnapshotStorageRebuilder::rebuild_storage(
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id
-        ),
+        )?,
         measure_name
     );
     info!("{}", measure_untar);
 
-    let snapshot_version = snapshot_version_from_file(&unpacked_version_file)?;
-
+    let RebuiltSnapshotStorage {
+        snapshot_version,
+        storage,
+    } = version_and_storages;
     Ok(UnarchivedSnapshot {
         unpack_dir,
         storage,
@@ -1630,10 +1628,8 @@ pub fn purge_old_snapshot_archives(
         incremental_snapshot_archives.sort_unstable();
         let num_to_retain = if Some(base_slot) == highest_full_snapshot_slot {
             maximum_incremental_snapshot_archives_to_retain
-        } else if retained_full_snapshot_slots.contains(&base_slot) {
-            1
         } else {
-            0
+            usize::from(retained_full_snapshot_slots.contains(&base_slot))
         };
         trace!(
             "There are {} incremental snapshot archives for base slot {}, removing {} of them",
@@ -1693,7 +1689,7 @@ fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
 ) -> SharedBuffer {
-    let open_file = || File::open(&snapshot_tar).unwrap();
+    let open_file = || File::open(snapshot_tar).unwrap();
     match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
@@ -1726,14 +1722,7 @@ fn verify_unpacked_snapshots_dir_and_version(
         &unpacked_snapshots_dir_and_version.snapshot_version
     );
 
-    let snapshot_version =
-        SnapshotVersion::maybe_from_string(&unpacked_snapshots_dir_and_version.snapshot_version)
-            .ok_or_else(|| {
-                get_io_error(&format!(
-                    "unsupported snapshot version: {}",
-                    &unpacked_snapshots_dir_and_version.snapshot_version,
-                ))
-            })?;
+    let snapshot_version = unpacked_snapshots_dir_and_version.snapshot_version;
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {
@@ -3071,7 +3060,7 @@ mod tests {
         let temp_snap_dir = tempfile::TempDir::new().unwrap();
 
         for snap_name in snapshot_names {
-            let snap_path = temp_snap_dir.path().join(&snap_name);
+            let snap_path = temp_snap_dir.path().join(snap_name);
             let mut _snap_file = File::create(snap_path);
         }
         purge_old_snapshot_archives(

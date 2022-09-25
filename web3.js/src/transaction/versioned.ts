@@ -7,6 +7,7 @@ import {SIGNATURE_LENGTH_IN_BYTES} from './constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
 import {sign} from '../utils/ed25519';
+import {PublicKey} from '../publickey';
 
 export type TransactionVersion = 'legacy' | 0;
 
@@ -105,5 +106,21 @@ export class VersionedTransaction {
       );
       this.signatures[signerIndex] = sign(messageData, signer.secretKey);
     }
+  }
+
+  addSignature(publicKey: PublicKey, signature: Uint8Array) {
+    assert(signature.byteLength === 64, 'Signature must be 64 bytes long');
+    const signerPubkeys = this.message.staticAccountKeys.slice(
+      0,
+      this.message.header.numRequiredSignatures,
+    );
+    const signerIndex = signerPubkeys.findIndex(pubkey =>
+      pubkey.equals(publicKey),
+    );
+    assert(
+      signerIndex >= 0,
+      `Can not add signature; \`${publicKey.toBase58()}\` is not required to sign this transaction`,
+    );
+    this.signatures[signerIndex] = signature;
   }
 }

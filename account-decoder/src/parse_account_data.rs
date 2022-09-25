@@ -11,7 +11,9 @@ use {
     },
     inflector::Inflector,
     serde_json::Value,
-    solana_sdk::{instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar},
+    solana_sdk::{
+        instruction::InstructionError, pubkey::Pubkey, stake, system_program, sysvar, vote,
+    },
     std::collections::HashMap,
     thiserror::Error,
 };
@@ -23,7 +25,7 @@ lazy_static! {
     static ref STAKE_PROGRAM_ID: Pubkey = stake::program::id();
     static ref SYSTEM_PROGRAM_ID: Pubkey = system_program::id();
     static ref SYSVAR_PROGRAM_ID: Pubkey = sysvar::id();
-    static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
+    static ref VOTE_PROGRAM_ID: Pubkey = vote::program::id();
     pub static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableAccount> = {
         let mut m = HashMap::new();
         m.insert(
@@ -127,11 +129,16 @@ pub fn parse_account_data(
 mod test {
     use {
         super::*,
-        solana_sdk::nonce::{
-            state::{Data, Versions},
-            State,
+        solana_sdk::{
+            nonce::{
+                state::{Data, Versions},
+                State,
+            },
+            vote::{
+                program::id as vote_program_id,
+                state::{VoteState, VoteStateVersions},
+            },
         },
-        solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     };
 
     #[test]
@@ -147,7 +154,7 @@ mod test {
         VoteState::serialize(&versioned, &mut vote_account_data).unwrap();
         let parsed = parse_account_data(
             &account_pubkey,
-            &solana_vote_program::id(),
+            &vote_program_id(),
             &vote_account_data,
             None,
         )
