@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_gossip::contact_info::ContactInfo,
-    solana_ledger::shred::{ProcessShredsStats, Shredder},
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signature, Signer},
@@ -36,6 +36,7 @@ pub(super) struct BroadcastDuplicatesRun {
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
     original_last_data_shreds: Arc<Mutex<HashSet<Signature>>>,
     partition_last_data_shreds: Arc<Mutex<HashSet<Signature>>>,
+    reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl BroadcastDuplicatesRun {
@@ -56,6 +57,7 @@ impl BroadcastDuplicatesRun {
             cluster_nodes_cache,
             original_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
             partition_last_data_shreds: Arc::<Mutex<HashSet<Signature>>>::default(),
+            reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
 }
@@ -164,6 +166,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             self.next_shred_index,
             self.next_code_index,
             false, // merkle_variant
+            &self.reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
 
@@ -180,6 +183,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     self.next_shred_index,
                     self.next_code_index,
                     false, // merkle_variant
+                    &self.reed_solomon_cache,
                     &mut ProcessShredsStats::default(),
                 );
                 // Don't mark the last shred as last so that validators won't
@@ -192,6 +196,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     self.next_shred_index,
                     self.next_code_index,
                     false, // merkle_variant
+                    &self.reed_solomon_cache,
                     &mut ProcessShredsStats::default(),
                 );
                 let sigs: Vec<_> = partition_last_data_shred

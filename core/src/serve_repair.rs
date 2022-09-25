@@ -154,7 +154,8 @@ impl RequestResponse for AncestorHashesRepairType {
 struct ServeRepairStats {
     total_requests: usize,
     unsigned_requests: usize,
-    dropped_requests: usize,
+    dropped_requests_outbound_bandwidth: usize,
+    dropped_requests_load_shed: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
     total_response_bytes: usize,
@@ -471,7 +472,7 @@ impl ServeRepair {
             }
         }
 
-        stats.dropped_requests += dropped_requests;
+        stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
         let root_bank = self.bank_forks.read().unwrap().root_bank();
@@ -504,7 +505,16 @@ impl ServeRepair {
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
             ("unsigned_requests", stats.unsigned_requests, i64),
-            ("dropped_requests", stats.dropped_requests, i64),
+            (
+                "dropped_requests_outbound_bandwidth",
+                stats.dropped_requests_outbound_bandwidth,
+                i64
+            ),
+            (
+                "dropped_requests_load_shed",
+                stats.dropped_requests_load_shed,
+                i64
+            ),
             (
                 "total_dropped_response_packets",
                 stats.total_dropped_response_packets,
@@ -701,7 +711,7 @@ impl ServeRepair {
                 stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
             } else {
-                stats.dropped_requests += packet_batch.len() - i;
+                stats.dropped_requests_outbound_bandwidth += packet_batch.len() - i;
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }
