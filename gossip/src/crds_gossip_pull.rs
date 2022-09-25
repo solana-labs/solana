@@ -1011,7 +1011,7 @@ pub(crate) mod tests {
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(PingCache::new(
             Duration::from_secs(20 * 60),      // ttl
-            Duration::from_secs(20 * 60) / 64, // delay
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         ));
         assert_eq!(
@@ -1110,7 +1110,7 @@ pub(crate) mod tests {
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut ping_cache = PingCache::new(
             Duration::from_secs(20 * 60),      // ttl
-            Duration::from_secs(20 * 60) / 64, // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         );
         let mut crds = Crds::default();
@@ -1210,7 +1210,7 @@ pub(crate) mod tests {
         let mut node_crds = Crds::default();
         let mut ping_cache = PingCache::new(
             Duration::from_secs(20 * 60),      // ttl
-            Duration::from_secs(20 * 60) / 64, // delay
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         );
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
@@ -1323,7 +1323,7 @@ pub(crate) mod tests {
             .unwrap();
         let mut ping_cache = PingCache::new(
             Duration::from_secs(20 * 60),      // ttl
-            Duration::from_secs(20 * 60) / 64, // delay
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
@@ -1384,7 +1384,7 @@ pub(crate) mod tests {
             .unwrap();
         let mut ping_cache = PingCache::new(
             Duration::from_secs(20 * 60),      // ttl
-            Duration::from_secs(20 * 60) / 64, // delay
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 1);

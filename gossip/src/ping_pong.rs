@@ -156,6 +156,8 @@ impl Signable for Pong {
 
 impl PingCache {
     pub fn new(ttl: Duration, rate_limit_delay: Duration, cap: usize) -> Self {
+        // Sanity check ttl/rate_limit_delay
+        assert!(rate_limit_delay <= ttl / 2);
         Self {
             ttl,
             rate_limit_delay,
