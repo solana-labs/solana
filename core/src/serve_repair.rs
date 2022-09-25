@@ -151,6 +151,7 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 struct ServeRepairStats {
     total_requests: usize,
+    unsigned_requests: usize,
     dropped_requests: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
@@ -500,6 +501,7 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
+            ("unsigned_requests", stats.unsigned_requests, i64),
             ("dropped_requests", stats.dropped_requests, i64),
             (
                 "total_dropped_response_packets",
@@ -675,6 +677,8 @@ impl ServeRepair {
             if request.supports_signature() {
                 // collect stats for signature verification
                 Self::verify_signed_packet(&my_id, packet, &request, stats);
+            } else {
+                stats.unsigned_requests += 1;
             }
 
             let from_addr = packet.meta.socket_addr();
