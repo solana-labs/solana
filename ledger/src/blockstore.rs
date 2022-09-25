@@ -17,8 +17,8 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
         shred::{
-            self, max_ticks_per_n_shreds, ErasureSetId, ProcessShredsStats, Shred, ShredData,
-            ShredId, ShredType, Shredder,
+            self, max_ticks_per_n_shreds, ErasureSetId, ProcessShredsStats, ReedSolomonCache,
+            Shred, ShredData, ShredId, ShredType, Shredder,
         },
         slot_stats::{ShredSource, SlotsStats},
     },
@@ -634,6 +634,7 @@ impl Blockstore {
         recovered_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
+        reed_solomon_cache: &ReedSolomonCache,
     ) {
         // Find shreds for this erasure set and try recovery
         let slot = index.slot;
@@ -652,7 +653,7 @@ impl Blockstore {
             code_cf,
         ))
         .collect();
-        if let Ok(mut result) = shred::recover(available_shreds) {
+        if let Ok(mut result) = shred::recover(available_shreds, reed_solomon_cache) {
             Self::submit_metrics(slot, erasure_meta, true, "complete".into(), result.len());
             recovered_shreds.append(&mut result);
         } else {
@@ -712,6 +713,7 @@ impl Blockstore {
         erasure_metas: &HashMap<ErasureSetId, ErasureMeta>,
         index_working_set: &mut HashMap<u64, IndexMetaWorkingSetEntry>,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
+        reed_solomon_cache: &ReedSolomonCache,
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
@@ -734,6 +736,7 @@ impl Blockstore {
                         &mut recovered_shreds,
                         &data_cf,
                         &code_cf,
+                        reed_solomon_cache,
                     );
                 }
                 ErasureMetaStatus::DataFull => {
@@ -812,6 +815,7 @@ impl Blockstore {
         is_trusted: bool,
         retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
         handle_duplicate: &F,
+        reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
@@ -899,6 +903,7 @@ impl Blockstore {
                 &erasure_metas,
                 &mut index_working_set,
                 &just_inserted_shreds,
+                reed_solomon_cache,
             );
 
             metrics.num_recovered += recovered_shreds
@@ -1098,6 +1103,7 @@ impl Blockstore {
             is_trusted,
             None,    // retransmit-sender
             &|_| {}, // handle-duplicates
+            &ReedSolomonCache::default(),
             &mut BlockstoreInsertionMetrics::default(),
         )
     }
@@ -1704,6 +1710,7 @@ impl Blockstore {
         let mut shredder = Shredder::new(current_slot, parent_slot, 0, version).unwrap();
         let mut all_shreds = vec![];
         let mut slot_entries = vec![];
+        let reed_solomon_cache = ReedSolomonCache::default();
         // Find all the entries for start_slot
         for entry in entries.into_iter() {
             if remaining_ticks_in_slot == 0 {
@@ -1725,6 +1732,7 @@ impl Blockstore {
                     start_index, // next_shred_index
                     start_index, // next_code_index
                     true,        // merkle_variant
+                    &reed_solomon_cache,
                     &mut ProcessShredsStats::default(),
                 );
                 all_shreds.append(&mut data_shreds);
@@ -1752,6 +1760,7 @@ impl Blockstore {
                 0,    // next_shred_index
                 0,    // next_code_index
                 true, // merkle_variant
+                &reed_solomon_cache,
                 &mut ProcessShredsStats::default(),
             );
             all_shreds.append(&mut data_shreds);
@@ -3867,6 +3876,7 @@ pub fn create_new_ledger(
         0,    // next_shred_index
         0,    // next_code_index
         true, // merkle_variant
+        &ReedSolomonCache::default(),
         &mut ProcessShredsStats::default(),
     );
     assert!(shreds.last().unwrap().last_in_slot());
@@ -4133,6 +4143,7 @@ pub fn entries_to_test_shreds(
             0, // next_shred_index,
             0, // next_code_index
             merkle_variant,
+            &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
         )
         .0
@@ -8770,6 +8781,7 @@ pub mod tests {
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
+            &ReedSolomonCache::default(),
             &mut ProcessShredsStats::default(),
         );
 
@@ -8824,6 +8836,7 @@ pub mod tests {
         let entries1 = make_slot_entries_with_transactions(1);
         let entries2 = make_slot_entries_with_transactions(1);
         let leader_keypair = Arc::new(Keypair::new());
+        let reed_solomon_cache = ReedSolomonCache::default();
         let shredder = Shredder::new(slot, 0, 0, 0).unwrap();
         let (shreds, _) = shredder.entries_to_shreds(
             &leader_keypair,
@@ -8832,6 +8845,7 @@ pub mod tests {
             0,    // next_shred_index
             0,    // next_code_index,
             true, // merkle_variant
+            &reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
         let (duplicate_shreds, _) = shredder.entries_to_shreds(
@@ -8841,6 +8855,7 @@ pub mod tests {
             0,    // next_shred_index
             0,    // next_code_index
             true, // merkle_variant
+            &reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
         let shred = shreds[0].clone();
@@ -9188,8 +9203,17 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let coding1 = Shredder::generate_coding_shreds(&shreds, /*next_code_index:*/ 0);
-        let coding2 = Shredder::generate_coding_shreds(&shreds, /*next_code_index:*/ 1);
+        let reed_solomon_cache = ReedSolomonCache::default();
+        let coding1 = Shredder::generate_coding_shreds(
+            &shreds,
+            0, // next_code_index
+            &reed_solomon_cache,
+        );
+        let coding2 = Shredder::generate_coding_shreds(
+            &shreds,
+            1, // next_code_index
+            &reed_solomon_cache,
+        );
         for shred in &shreds {
             info!("shred {:?}", shred);
         }

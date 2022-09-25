@@ -9,7 +9,7 @@ use {
         broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
     },
     solana_entry::entry::Entry,
-    solana_ledger::shred::{ProcessShredsStats, Shred, ShredFlags, Shredder},
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shred, ShredFlags, Shredder},
     solana_sdk::{
         signature::Keypair,
         timing::{duration_as_us, AtomicInterval},
@@ -29,6 +29,7 @@ pub struct StandardBroadcastRun {
     last_datapoint_submit: Arc<AtomicInterval>,
     num_batches: usize,
     cluster_nodes_cache: Arc<ClusterNodesCache<BroadcastStage>>,
+    reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl StandardBroadcastRun {
@@ -48,6 +49,7 @@ impl StandardBroadcastRun {
             last_datapoint_submit: Arc::default(),
             num_batches: 0,
             cluster_nodes_cache,
+            reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
 
@@ -77,6 +79,7 @@ impl StandardBroadcastRun {
                     state.next_shred_index,
                     state.next_code_index,
                     false, // merkle_variant
+                    &self.reed_solomon_cache,
                     stats,
                 );
                 self.report_and_reset_stats(true);
@@ -126,6 +129,7 @@ impl StandardBroadcastRun {
             next_shred_index,
             next_code_index,
             false, // merkle_variant
+            &self.reed_solomon_cache,
             process_stats,
         );
         let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
