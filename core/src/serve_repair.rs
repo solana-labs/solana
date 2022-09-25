@@ -150,7 +150,13 @@ impl RequestResponse for AncestorHashesRepairType {
 struct ServeRepairStats {
     total_requests: usize,
     unsigned_requests: usize,
+<<<<<<< HEAD
     dropped_requests: usize,
+=======
+    dropped_requests_outbound_bandwidth: usize,
+    dropped_requests_load_shed: usize,
+    total_dropped_response_packets: usize,
+>>>>>>> 9816c94d7 (metrics to distinguish why repair packets are dropped (#27960))
     total_response_packets: usize,
     processed: usize,
     self_repair: usize,
@@ -464,7 +470,7 @@ impl ServeRepair {
             }
         }
 
-        stats.dropped_requests += dropped_requests;
+        stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
         let timer = Instant::now();
@@ -499,7 +505,25 @@ impl ServeRepair {
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
             ("unsigned_requests", stats.unsigned_requests, i64),
+<<<<<<< HEAD
             ("dropped_requests", stats.dropped_requests, i64),
+=======
+            (
+                "dropped_requests_outbound_bandwidth",
+                stats.dropped_requests_outbound_bandwidth,
+                i64
+            ),
+            (
+                "dropped_requests_load_shed",
+                stats.dropped_requests_load_shed,
+                i64
+            ),
+            (
+                "total_dropped_response_packets",
+                stats.total_dropped_response_packets,
+                i64
+            ),
+>>>>>>> 9816c94d7 (metrics to distinguish why repair packets are dropped (#27960))
             ("total_response_packets", stats.total_response_packets, i64),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
@@ -676,11 +700,29 @@ impl ServeRepair {
 
             let from_addr = packet.meta.socket_addr();
             stats.processed += 1;
+<<<<<<< HEAD
             let rsp =
                 Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
             stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
             if let Some(rsp) = rsp {
                 let _ignore_disconnect = response_sender.send(rsp);
+=======
+            let rsp = match Self::handle_repair(
+                recycler, &from_addr, blockstore, request, stats, ping_cache,
+            ) {
+                None => continue,
+                Some(rsp) => rsp,
+            };
+            let num_response_packets = rsp.len();
+            let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
+            if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
+                stats.total_response_bytes += num_response_bytes;
+                stats.total_response_packets += num_response_packets;
+            } else {
+                stats.dropped_requests_outbound_bandwidth += packet_batch.len() - i;
+                stats.total_dropped_response_packets += num_response_packets;
+                break;
+>>>>>>> 9816c94d7 (metrics to distinguish why repair packets are dropped (#27960))
             }
         }
     }
