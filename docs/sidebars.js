@@ -144,6 +144,16 @@ module.exports = {
         },
         {
           type: "doc",
+          id: "developing/versioned-transactions",
+          label: "Versioned Transactions",
+        },
+        {
+          type: "doc",
+          id: "developing/lookup-tables",
+          label: "Address Lookup Tables",
+        },
+        {
+          type: "doc",
           id: "developing/intro/programs",
           label: "Programs",
         },
