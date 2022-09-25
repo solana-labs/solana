@@ -171,6 +171,95 @@ use {
     },
 };
 
+#[derive(Default)]
+struct TransactionTimings {
+    pub slot: solana_sdk::clock::Slot,
+    pub transaction_index: u64,
+    pub sig: Signature,
+    pub cu: u64,
+    pub execution_result: Option<Result<()>>,
+    pub finish_time: Option<std::time::SystemTime>,
+    pub thread_name: String,
+    pub execution_us: u64,
+    pub execution_cpu_us: u128,
+}
+
+fn record_transaction_timings(
+    slot: Slot,
+    &sig: &Signature,
+    &cu: &u64,
+    execution_result: &Result<crate::message_processor::ProcessedMessageInfo>,
+    thread_name: String,
+    process_message_time: &Measure,
+    cpu_time: &std::time::Duration,
+) {
+    static INSTANCE: once_cell::sync::OnceCell<
+        Option<crossbeam_channel::Sender<TransactionTimings>>,
+    > = once_cell::sync::OnceCell::new();
+    let maybe_sender = INSTANCE.get_or_init(|| {
+        let enable = std::env::var("TRANSACTION_TIMINGS").is_ok();
+        if !enable {
+            return None;
+        }
+        if let Ok(config) = std::env::var("SOLANA_METRICS_CONFIG") {
+            assert!(
+                config.contains("localhost"),
+                "Don't spam non-localhost influxdbs: {}",
+                config
+            )
+        }
+
+        let (sender, receiver) = crossbeam_channel::unbounded::<TransactionTimings>();
+        let _handle = std::thread::Builder::new()
+            .name("solTxTimings".into())
+            .spawn(move || {
+                while let Ok(transaction_timings) =
+                    receiver.recv_timeout(std::time::Duration::from_millis(20))
+                {
+                    datapoint_info_at!(
+                        transaction_timings.finish_time.unwrap(),
+                        "transaction_timings",
+                        ("slot", transaction_timings.slot, i64),
+                        ("index", transaction_timings.transaction_index, i64),
+                        ("thread", transaction_timings.thread_name, String),
+                        ("signature", &format!("{}", transaction_timings.sig), String),
+                        ("account_locks_in_json", "{}", String),
+                        (
+                            "status",
+                            format!(
+                                "{:?}",
+                                transaction_timings.execution_result.as_ref().unwrap()
+                            ),
+                            String
+                        ),
+                        ("duration", transaction_timings.execution_us, i64),
+                        ("cpu_duration", transaction_timings.execution_cpu_us, i64),
+                        ("compute_units", transaction_timings.cu, i64),
+                    );
+                }
+            })
+            .unwrap();
+
+        Some(sender)
+    });
+
+    if let Some(sender) = maybe_sender {
+        sender
+            .send_buffered(TransactionTimings {
+                slot,
+                transaction_index: 0,
+                sig,
+                cu,
+                execution_result: Some(execution_result.clone().map(|_| ())),
+                finish_time: Some(std::time::SystemTime::now()),
+                thread_name,
+                execution_us: process_message_time.as_us(),
+                execution_cpu_us: cpu_time.as_micros(),
+            })
+            .unwrap()
+    }
+}
+
 /// params to `verify_bank_hash`
 pub struct VerifyBankHash {
     pub test_hash_calculation: bool,
@@ -4379,6 +4468,8 @@ impl Bank {
         let mut executed_units = 0u64;
 
         let mut process_message_time = Measure::start("process_message_time");
+        let cpu_time = cpu_time::ThreadTime::now();
+
         let process_result = MessageProcessor::process_message(
             &self.builtin_programs.vec,
             tx.message(),
@@ -4396,7 +4487,17 @@ impl Bank {
             prev_accounts_data_len,
             &mut executed_units,
         );
+        let cpu_elapsed = cpu_time.elapsed();
         process_message_time.stop();
+        record_transaction_timings(
+            self.slot(),
+            tx.signature(),
+            &executed_units,
+            &process_result,
+            std::thread::current().name().unwrap().into(),
+            &process_message_time,
+            &cpu_elapsed,
+        );
 
         saturating_add_assign!(
             timings.execute_accessories.process_message_us,

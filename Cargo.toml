@@ -104,3 +104,4 @@ resolver = "2"
 # for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
 [patch.crates-io]
 crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }
+crossbeam-channel = { git = "https://github.com/solana-labs/crossbeam", rev = "f2ff9b27a0b71ed5c6dc8da19cb22d6308f4eaa4" }
