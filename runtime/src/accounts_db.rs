@@ -1,6 +1,7 @@
 //! Persistent accounts are stored in below path location:
 //!  <path>/<pid>/data/
 //!
+//!
 //! The persistent store would allow for this mode of operation:
 //!  - Concurrent single thread append with many concurrent readers.
 //!
