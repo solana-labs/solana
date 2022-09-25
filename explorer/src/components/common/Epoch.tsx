@@ -4,7 +4,7 @@ import { clusterPath } from "utils/url";
 import { Copyable } from "./Copyable";
 
 type Props = {
-  epoch: number;
+  epoch: number | bigint;
   link?: boolean;
 };
 export function Epoch({ epoch, link }: Props) {

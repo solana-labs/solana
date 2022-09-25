@@ -2,7 +2,7 @@
 
 import { Infer, number, nullable, enums, type } from "superstruct";
 import { PublicKeyFromString } from "validators/pubkey";
-import { BigNumFromString } from "validators/bignum";
+import { BigIntFromString } from "validators/number";
 
 export type StakeAccountType = Infer<typeof StakeAccountType>;
 export const StakeAccountType = enums([
@@ -14,7 +14,7 @@ export const StakeAccountType = enums([
 
 export type StakeMeta = Infer<typeof StakeMeta>;
 export const StakeMeta = type({
-  rentExemptReserve: BigNumFromString,
+  rentExemptReserve: BigIntFromString,
   authorized: type({
     staker: PublicKeyFromString,
     withdrawer: PublicKeyFromString,
@@ -33,9 +33,9 @@ export const StakeAccountInfo = type({
     type({
       delegation: type({
         voter: PublicKeyFromString,
-        stake: BigNumFromString,
-        activationEpoch: BigNumFromString,
-        deactivationEpoch: BigNumFromString,
+        stake: BigIntFromString,
+        activationEpoch: BigIntFromString,
+        deactivationEpoch: BigIntFromString,
         warmupCooldownRate: number(),
       }),
       creditsObserved: number(),

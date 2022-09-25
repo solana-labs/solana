@@ -304,14 +304,14 @@ impl Processor {
             LOOKUP_TABLE_META_SIZE,
             new_table_addresses_len.saturating_mul(PUBKEY_BYTES),
         )?;
-
         {
-            let mut table_data = lookup_table_account.get_data_mut()?.to_vec();
-            AddressLookupTable::overwrite_meta_data(&mut table_data, lookup_table_meta)?;
+            AddressLookupTable::overwrite_meta_data(
+                lookup_table_account.get_data_mut()?,
+                lookup_table_meta,
+            )?;
             for new_address in new_addresses {
-                table_data.extend_from_slice(new_address.as_ref());
+                lookup_table_account.extend_from_slice(new_address.as_ref())?;
             }
-            lookup_table_account.set_data(&table_data)?;
         }
         drop(lookup_table_account);
 
@@ -462,7 +462,7 @@ impl Processor {
 
         let mut lookup_table_account =
             instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-        lookup_table_account.set_data(&[])?;
+        lookup_table_account.set_data_length(0)?;
         lookup_table_account.set_lamports(0)?;
 
         Ok(())

@@ -1,11 +1,11 @@
 import React from "react";
 import { SolBalance } from "utils";
-import { BlockResponse, PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 
 const PAGE_SIZE = 10;
 
-export function BlockRewardsCard({ block }: { block: BlockResponse }) {
+export function BlockRewardsCard({ block }: { block: VersionedBlockResponse }) {
   const [rewardsDisplayed, setRewardsDisplayed] = React.useState(PAGE_SIZE);
 
   if (!block.rewards || block.rewards.length < 1) {

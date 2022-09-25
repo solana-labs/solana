@@ -1,4 +1,3 @@
-import BN from "bn.js";
 import {
   HumanizeDuration,
   HumanizeDurationLanguage,
@@ -36,7 +35,6 @@ export function microLamportsToLamports(
     return microLamports / MICRO_LAMPORTS_PER_LAMPORT;
   }
 
-  console.log(microLamports);
   const microLamportsString = microLamports.toString().padStart(7, "0");
   const splitIndex = microLamportsString.length - 6;
   const lamportString =
@@ -56,17 +54,17 @@ export function microLamportsToLamportsString(
   );
 }
 
-export function lamportsToSol(lamports: number | BN): number {
+export function lamportsToSol(lamports: number | bigint): number {
   if (typeof lamports === "number") {
-    return Math.abs(lamports) / LAMPORTS_PER_SOL;
+    return lamports / LAMPORTS_PER_SOL;
   }
 
   let signMultiplier = 1;
-  if (lamports.isNeg()) {
+  if (lamports < 0) {
     signMultiplier = -1;
   }
 
-  const absLamports = lamports.abs();
+  const absLamports = lamports < 0 ? -lamports : lamports;
   const lamportsString = absLamports.toString(10).padStart(10, "0");
   const splitIndex = lamportsString.length - 9;
   const solString =
@@ -77,7 +75,7 @@ export function lamportsToSol(lamports: number | BN): number {
 }
 
 export function lamportsToSolString(
-  lamports: number | BN,
+  lamports: number | bigint,
   maximumFractionDigits: number = 9
 ): string {
   const sol = lamportsToSol(lamports);
@@ -92,7 +90,7 @@ export function SolBalance({
   lamports,
   maximumFractionDigits = 9,
 }: {
-  lamports: number | BN;
+  lamports: number | bigint;
   maximumFractionDigits?: number;
 }) {
   return (

@@ -6,6 +6,10 @@ use {
     },
 };
 
+/// Account data as stored in the caller address space during CPI, translated to host memory.
+///
+/// At the start of a CPI, this can be different from the data stored in the
+/// corresponding BorrowedAccount, and needs to be synched.
 struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
@@ -663,6 +667,11 @@ where
                 invoke_context,
             )?;
             {
+                // before initiating CPI, the caller may have modified the
+                // account (caller_account). We need to update the corresponding
+                // BorrowedAccount (callee_account) so the callee can see the
+                // changes.
+
                 if callee_account.get_lamports() != *caller_account.lamports {
                     callee_account
                         .set_lamports(*caller_account.lamports)
@@ -674,7 +683,7 @@ where
                     .and_then(|_| callee_account.can_data_be_changed())
                 {
                     Ok(()) => callee_account
-                        .set_data(caller_account.data)
+                        .set_data_from_slice(caller_account.data)
                         .map_err(SyscallError::InstructionError)?,
                     Err(err) if callee_account.get_data() != caller_account.data => {
                         return Err(EbpfError::UserError(BpfError::SyscallError(
