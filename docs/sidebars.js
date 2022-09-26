@@ -138,9 +138,25 @@ module.exports = {
           label: "Accounts",
         },
         {
-          type: "doc",
-          id: "developing/programming-model/transactions",
+          type: "category",
           label: "Transactions",
+          items: [
+            {
+              type: "doc",
+              id: "developing/programming-model/transactions",
+              label: "Overview",
+            },
+            {
+              type: "doc",
+              id: "developing/versioned-transactions",
+              label: "Versioned Transactions",
+            },
+            {
+              type: "doc",
+              id: "developing/lookup-tables",
+              label: "Address Lookup Tables",
+            },
+          ],
         },
         {
           type: "doc",
