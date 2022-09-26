@@ -43,10 +43,26 @@ impl CacheHashDataFile {
 
     /// get '&T' from cache file [ix]
     fn get<T: Sized>(&self, ix: u64) -> &T {
-        let item_slice = self.get_slice_internal::<T>(ix);
+        // get cache file[ix..]
+        let slice = self.get_slice::<T>(ix);
+        // return [0]
+        &slice[0]
+    }
+
+    /// get '&[T]' from cache file [ix..]
+    fn get_slice<T: Sized>(&self, ix: u64) -> &[T] {
+        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+        let item_slice: &[u8] = &self.mmap[start..];
+        let remaining_elements = item_slice.len() / std::mem::size_of::<T>();
+        assert!(
+            remaining_elements > 0,
+            "ix: {ix}, remaining_elements: {remaining_elements}, capacity: {}",
+            self.mmap.len()
+        );
+
         unsafe {
             let item = item_slice.as_ptr() as *const T;
-            &*item
+            std::slice::from_raw_parts(item, remaining_elements)
         }
     }
 
