@@ -5906,6 +5906,7 @@ dependencies = [
 name = "solana-quic-client"
 version = "1.15.0"
 dependencies = [
+ "solana-logger 1.15.0",
  "solana-metrics",
  "solana-sdk 1.15.0",
  "solana-streamer",

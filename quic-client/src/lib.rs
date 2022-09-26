@@ -169,3 +169,64 @@ impl BaseTpuConnection for Quic {
         NonblockingQuicTpuConnection::new_with_client(self.0.clone(), stats)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_sdk::quic::{
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+        },
+        solana_tpu_client::tpu_connection_cache::TpuConnectionCache,
+    };
+
+    #[test]
+    fn test_connection_cache_max_parallel_chunks() {
+        solana_logger::setup();
+        let connection_cache = TpuConnectionCache::<QuicPool>::default();
+        let mut tpu_config = connection_cache.tpu_config;
+        assert_eq!(
+            tpu_config.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let pubkey = Pubkey::new_unique();
+        tpu_config.set_staked_nodes(&staked_nodes, &pubkey);
+        assert_eq!(
+            tpu_config.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes.write().unwrap().total_stake = 10000;
+        assert_eq!(
+            tpu_config.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1);
+        assert_eq!(
+            tpu_config.compute_max_parallel_streams(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .remove(&pubkey);
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1000);
+        assert_ne!(
+            tpu_config.compute_max_parallel_streams(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+    }
+}
