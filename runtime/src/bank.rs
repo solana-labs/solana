@@ -3730,6 +3730,7 @@ impl Bank {
             !self
                 .feature_set
                 .is_active(&remove_deprecated_request_unit_ix::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
         ))
     }
 
@@ -3774,6 +3775,7 @@ impl Bank {
             !self
                 .feature_set
                 .is_active(&remove_deprecated_request_unit_ix::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
         )
     }
 
@@ -4602,6 +4604,7 @@ impl Bank {
                                 !self
                                     .feature_set
                                     .is_active(&remove_deprecated_request_unit_ix::id()),
+                                Self::get_loaded_accounts_data_limit_type(&self.feature_set),
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -4888,6 +4891,7 @@ impl Bank {
         fee_structure: &FeeStructure,
         use_default_units_per_instruction: bool,
         support_request_units_deprecated: bool,
+        loaded_accounts_data_limit_type: compute_budget::LoadedAccountsDataLimitType,
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4904,6 +4908,7 @@ impl Bank {
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
                 support_request_units_deprecated,
+                loaded_accounts_data_limit_type,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4972,6 +4977,7 @@ impl Bank {
                     !self
                         .feature_set
                         .is_active(&remove_deprecated_request_unit_ix::id()),
+                    Self::get_loaded_accounts_data_limit_type(&self.feature_set),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -7934,6 +7940,17 @@ impl Bank {
             .epoch_accounts_hash
             .lock()
             .unwrap()
+    }
+
+    /// if the `default` and/or `max` value for ComputeBudget:::Accounts_data_size_limit changes,
+    /// the change needs to be gated by feature gate with corresponding new enum value.
+    /// should use this function to get correct loaded_accounts_data_limit_type based on
+    /// feature_set.
+    pub fn get_loaded_accounts_data_limit_type(
+        _feature_set: &FeatureSet,
+    ) -> compute_budget::LoadedAccountsDataLimitType {
+        compute_budget::LoadedAccountsDataLimitType::V0
+        // In the future, use feature_set to determine correct LoadedAccountsDataLimitType here.
     }
 }
 
@@ -10975,6 +10992,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -11156,6 +11174,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11174,6 +11193,7 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             false,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11290,6 +11310,7 @@ pub(crate) mod tests {
                             &FeeStructure::default(),
                             true,
                             false,
+                            compute_budget::LoadedAccountsDataLimitType::V0,
                         ) * 2
                     )
                     .0
@@ -17839,6 +17860,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                compute_budget::LoadedAccountsDataLimitType::V0,
             ),
             0
         );
@@ -17854,6 +17876,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                compute_budget::LoadedAccountsDataLimitType::V0,
             ),
             1
         );
@@ -17874,6 +17897,7 @@ pub(crate) mod tests {
                 },
                 true,
                 false,
+                compute_budget::LoadedAccountsDataLimitType::V0,
             ),
             4
         );
@@ -17893,7 +17917,14 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(
+                &message,
+                1,
+                &fee_structure,
+                true,
+                false,
+                compute_budget::LoadedAccountsDataLimitType::V0
+            ),
             max_fee + lamports_per_signature
         );
 
@@ -17905,7 +17936,14 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(
+                &message,
+                1,
+                &fee_structure,
+                true,
+                false,
+                compute_budget::LoadedAccountsDataLimitType::V0
+            ),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17938,7 +17976,14 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, false);
+            let fee = Bank::calculate_fee(
+                &message,
+                1,
+                &fee_structure,
+                true,
+                false,
+                compute_budget::LoadedAccountsDataLimitType::V0,
+            );
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17977,7 +18022,14 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(
+                &message,
+                1,
+                &fee_structure,
+                true,
+                false,
+                compute_budget::LoadedAccountsDataLimitType::V0
+            ),
             2
         );
 
@@ -17989,7 +18041,14 @@ pub(crate) mod tests {
         ))
         .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, false),
+            Bank::calculate_fee(
+                &message,
+                1,
+                &fee_structure,
+                true,
+                false,
+                compute_budget::LoadedAccountsDataLimitType::V0
+            ),
             11
         );
     }

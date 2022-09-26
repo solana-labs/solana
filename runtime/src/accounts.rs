@@ -561,6 +561,7 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            Bank::get_loaded_accounts_data_limit_type(feature_set),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1425,7 +1426,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::invoke_context::Executors,
+        solana_program_runtime::{compute_budget, invoke_context::Executors},
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1683,6 +1684,7 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(fee, lamports_per_signature);
 
