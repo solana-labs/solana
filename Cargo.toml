@@ -37,6 +37,7 @@ members = [
     "log-analyzer",
     "logger",
     "measure",
+    "memory-management",
     "merkle-root-bench",
     "merkle-tree",
     "metrics",
