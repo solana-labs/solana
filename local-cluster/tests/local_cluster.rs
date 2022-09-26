@@ -73,6 +73,7 @@ use {
 mod common;
 
 #[test]
+#[serial]
 fn test_local_cluster_start_and_exit() {
     solana_logger::setup();
     let num_nodes = 1;
@@ -86,6 +87,7 @@ fn test_local_cluster_start_and_exit() {
 }
 
 #[test]
+#[serial]
 fn test_local_cluster_start_and_exit_with_config() {
     solana_logger::setup();
     const NUM_NODES: usize = 1;
@@ -250,6 +252,7 @@ fn test_local_cluster_signature_subscribe() {
 }
 
 #[test]
+#[serial]
 #[allow(unused_attributes)]
 #[ignore]
 fn test_spend_and_verify_all_nodes_env_num_nodes() {
@@ -1520,6 +1523,7 @@ fn test_fake_shreds_broadcast_leader() {
 }
 
 #[test]
+#[serial]
 fn test_wait_for_max_stake() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let validator_config = ValidatorConfig::default_for_test();
@@ -1539,6 +1543,7 @@ fn test_wait_for_max_stake() {
 }
 
 #[test]
+#[serial]
 // Test that when a leader is leader for banks B_i..B_{i+n}, and B_i is not
 // votable, then B_{i+1} still chains to B_i
 fn test_no_voting() {
@@ -2032,6 +2037,7 @@ fn restart_whole_cluster_after_hard_fork(
 }
 
 #[test]
+#[serial]
 fn test_hard_fork_invalidates_tower() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
 
