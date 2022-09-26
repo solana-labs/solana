@@ -113,7 +113,8 @@ pub struct TransactionContext {
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
     #[cfg(not(target_os = "solana"))]
     account_touched_flags: RefCell<Pin<Box<[bool]>>>,
-    instruction_context_capacity: usize,
+    instruction_stack_capacity: usize,
+    instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
     instruction_trace: Vec<InstructionContext>,
     return_data: TransactionReturnData,
@@ -130,8 +131,8 @@ impl TransactionContext {
     pub fn new(
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
-        instruction_context_capacity: usize,
-        _number_of_instructions_at_transaction_level: usize,
+        instruction_stack_capacity: usize,
+        instruction_trace_capacity: usize,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -143,8 +144,9 @@ impl TransactionContext {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
             accounts: Pin::new(accounts.into_boxed_slice()),
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
-            instruction_context_capacity,
-            instruction_stack: Vec::with_capacity(instruction_context_capacity),
+            instruction_stack_capacity,
+            instruction_trace_capacity,
+            instruction_stack: Vec::with_capacity(instruction_stack_capacity),
             instruction_trace: vec![InstructionContext::default()],
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
@@ -213,6 +215,11 @@ impl TransactionContext {
             .map(|index| index as IndexOfAccount)
     }
 
+    /// Gets the max length of the InstructionContext trace
+    pub fn get_instruction_trace_capacity(&self) -> usize {
+        self.instruction_trace_capacity
+    }
+
     /// Returns the instruction trace length.
     ///
     /// Not counting the last empty InstructionContext which is always pre-reserved for the next instruction.
@@ -246,8 +253,8 @@ impl TransactionContext {
     }
 
     /// Gets the max height of the InstructionContext stack
-    pub fn get_instruction_context_capacity(&self) -> usize {
-        self.instruction_context_capacity
+    pub fn get_instruction_stack_capacity(&self) -> usize {
+        self.instruction_stack_capacity
     }
 
     /// Gets instruction stack height, top-level instructions are height
@@ -307,8 +314,11 @@ impl TransactionContext {
                 callee_instruction_accounts_lamport_sum;
         }
         let index_in_trace = self.get_instruction_trace_length();
+        if index_in_trace >= self.instruction_trace_capacity {
+            return Err(InstructionError::MaxInstructionTraceLengthExceeded);
+        }
         self.instruction_trace.push(InstructionContext::default());
-        if nesting_level >= self.instruction_context_capacity {
+        if nesting_level >= self.instruction_stack_capacity {
             return Err(InstructionError::CallDepth);
         }
         self.instruction_stack.push(index_in_trace);

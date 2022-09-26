@@ -37,6 +37,8 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed
     pub max_invoke_depth: usize,
+    /// Maximum cross-program invocation and instructions per transaction
+    pub max_instruction_trace_length: usize,
     /// Base number of compute units consumed to call SHA256
     pub sha256_base_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
@@ -100,6 +102,7 @@ impl ComputeBudget {
             create_program_address_units: 1500,
             invoke_units: 1000,
             max_invoke_depth: 4,
+            max_instruction_trace_length: 64,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
             sha256_max_slices: 20_000,

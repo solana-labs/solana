@@ -334,7 +334,7 @@ mod test {
                 },
             ];
             let mut transaction_context =
-                TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
+                TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         };
     }
