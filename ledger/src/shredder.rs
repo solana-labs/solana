@@ -216,15 +216,29 @@ impl Shredder {
             )
             .collect();
         // 1) Generate coding shreds
-        let mut coding_shreds: Vec<_> = PAR_THREAD_POOL.install(|| {
+        let mut coding_shreds: Vec<_> = if chunks.len() <= 1 {
             chunks
-                .into_par_iter()
+                .into_iter()
                 .zip(next_code_index)
                 .flat_map(|(shreds, next_code_index)| {
                     Shredder::generate_coding_shreds(&shreds, next_code_index, reed_solomon_cache)
                 })
                 .collect()
-        });
+        } else {
+            PAR_THREAD_POOL.install(|| {
+                chunks
+                    .into_par_iter()
+                    .zip(next_code_index)
+                    .flat_map(|(shreds, next_code_index)| {
+                        Shredder::generate_coding_shreds(
+                            &shreds,
+                            next_code_index,
+                            reed_solomon_cache,
+                        )
+                    })
+                    .collect()
+            })
+        };
         gen_coding_time.stop();
 
         let mut sign_coding_time = Measure::start("sign_coding_shreds");

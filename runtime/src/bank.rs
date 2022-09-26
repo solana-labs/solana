@@ -285,7 +285,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
+#[frozen_abi(digest = "A7T7XohiSoo8FGoCPTsaXAYYugXTkoYnBjQAdBgYHH85")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -4363,7 +4363,14 @@ impl Bank {
                 None
             },
             compute_budget.max_invoke_depth.saturating_add(1),
-            tx.message().instructions().len(),
+            if self
+                .feature_set
+                .is_active(&feature_set::limit_max_instruction_trace_length::id())
+            {
+                compute_budget.max_instruction_trace_length
+            } else {
+                std::usize::MAX
+            },
         );
         if self
             .feature_set
@@ -18774,7 +18781,6 @@ pub(crate) mod tests {
             sol_to_lamports(1.),
             bank.last_blockhash(),
         );
-        let number_of_instructions_at_transaction_level = tx.message().instructions.len();
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -18797,7 +18803,7 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             Some(Rent::default()),
             compute_budget.max_invoke_depth.saturating_add(1),
-            number_of_instructions_at_transaction_level,
+            compute_budget.max_instruction_trace_length,
         );
 
         assert_eq!(
@@ -18945,8 +18951,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
-        let mut transaction_context = TransactionContext::new(vec![], None, 3, 3);
-        for (index_in_trace, stack_height) in [1, 2, 1, 1, 2, 3, 2].into_iter().enumerate() {
+        let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
+        let mut transaction_context =
+            TransactionContext::new(vec![], None, 3, instruction_trace.len());
+        for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();
             }

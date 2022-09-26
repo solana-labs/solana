@@ -1,6 +1,6 @@
 import React from "react";
 import { TableCardBody } from "components/common/TableCardBody";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Address } from "components/common/Address";
 import { AddressLookupTableAccount } from "@solana/web3.js";

@@ -6131,6 +6131,7 @@ dependencies = [
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk 1.15.0",
+ "static_assertions",
  "strum",
  "strum_macros",
  "symlink",

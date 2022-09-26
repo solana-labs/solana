@@ -3870,8 +3870,10 @@ mod tests {
                 )
             })
             .collect::<Vec<_>>();
-        let mut transaction_context = TransactionContext::new(transaction_accounts, None, 4, 1);
-        for (index_in_trace, stack_height) in [1, 2, 3, 2, 2, 3, 4, 3].into_iter().enumerate() {
+        let instruction_trace = [1, 2, 3, 2, 2, 3, 4, 3];
+        let mut transaction_context =
+            TransactionContext::new(transaction_accounts, None, 4, instruction_trace.len());
+        for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();
             }

@@ -15,7 +15,7 @@ import { pickClusterParams, useQuery } from "utils/url";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
 import { parseProgramLogs } from "utils/program-logs";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 
 const PAGE_SIZE = 25;
 
