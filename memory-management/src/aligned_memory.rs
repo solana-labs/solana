@@ -203,8 +203,7 @@ pub fn is_memory_aligned(data: &[u8], align: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::io::Write;
+    use {super::*, std::io::Write};
 
     fn do_test<const ALIGN: usize>() {
         let mut aligned_memory = AlignedMemory::<ALIGN>::with_capacity(10);
