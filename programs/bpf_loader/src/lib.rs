@@ -44,12 +44,14 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
             enable_bpf_loader_extend_program_ix, error_on_syscall_bpf_function_hash_collisions,
-            reject_callx_r10,
+            limit_max_instruction_trace_length, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        program_error::MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED,
+        program_error::{
+            MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED, MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED,
+        },
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -1362,14 +1364,20 @@ impl Executor for BpfExecutor {
             }
             match result {
                 Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = if status
+                    let error: InstructionError = if (status
                         == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
                         && !invoke_context
                             .feature_set
-                            .is_active(&cap_accounts_data_allocations_per_transaction::id())
+                            .is_active(&cap_accounts_data_allocations_per_transaction::id()))
+                        || (status == MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED
+                            && !invoke_context
+                                .feature_set
+                                .is_active(&limit_max_instruction_trace_length::id()))
                     {
                         // Until the cap_accounts_data_allocations_per_transaction feature is
-                        // enabled, map the MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED error to InvalidError
+                        // enabled, map the `MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED` error to `InvalidError`.
+                        // Until the limit_max_instruction_trace_length feature is
+                        // enabled, map the `MAX_INSTRUCTION_TRACE_LENGTH_EXCEEDED` error to `InvalidError`.
                         InstructionError::InvalidError
                     } else {
                         status.into()
