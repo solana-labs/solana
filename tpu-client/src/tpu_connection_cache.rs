@@ -329,3 +329,163 @@ struct CreateConnectionResult<T: BaseTpuConnection> {
     num_evictions: u64,
     eviction_timing_ms: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::{
+            connection_cache::{ConnectionCache, MAX_CONNECTIONS},
+            tpu_connection::TpuConnection,
+        },
+        rand::{Rng, SeedableRng},
+        rand_chacha::ChaChaRng,
+        solana_sdk::{
+            pubkey::Pubkey,
+            quic::{
+                QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+                QUIC_PORT_OFFSET,
+            },
+        },
+        solana_streamer::streamer::StakedNodes,
+        std::{
+            net::{IpAddr, Ipv4Addr, SocketAddr},
+            sync::{Arc, RwLock},
+        },
+    };
+
+    fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
+        let a = rng.gen_range(1, 255);
+        let b = rng.gen_range(1, 255);
+        let c = rng.gen_range(1, 255);
+        let d = rng.gen_range(1, 255);
+
+        let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
+
+        addr_str.parse().expect("Invalid address")
+    }
+
+    #[test]
+    fn test_connection_cache() {
+        solana_logger::setup();
+        // Allow the test to run deterministically
+        // with the same pseudorandom sequence between runs
+        // and on different platforms - the cryptographic security
+        // property isn't important here but ChaChaRng provides a way
+        // to get the same pseudorandom sequence on different platforms
+        let mut rng = ChaChaRng::seed_from_u64(42);
+
+        // Generate a bunch of random addresses and create TPUConnections to them
+        // Since TPUConnection::new is infallible, it should't matter whether or not
+        // we can actually connect to those addresses - TPUConnection implementations should either
+        // be lazy and not connect until first use or handle connection errors somehow
+        // (without crashing, as would be required in a real practical validator)
+        let connection_cache = ConnectionCache::default();
+        let port_offset = if connection_cache.use_quic() {
+            QUIC_PORT_OFFSET
+        } else {
+            0
+        };
+        let addrs = (0..MAX_CONNECTIONS)
+            .into_iter()
+            .map(|_| {
+                let addr = get_addr(&mut rng);
+                connection_cache.get_connection(&addr);
+                addr
+            })
+            .collect::<Vec<_>>();
+        {
+            let map = connection_cache.map.read().unwrap();
+            assert!(map.len() == MAX_CONNECTIONS);
+            addrs.iter().for_each(|a| {
+                let port = a
+                    .port()
+                    .checked_add(port_offset)
+                    .unwrap_or_else(|| a.port());
+                let addr = &SocketAddr::new(a.ip(), port);
+
+                let conn = &map.get(addr).expect("Address not found").connections[0];
+                let conn = conn.new_blocking_connection(*addr, connection_cache.stats.clone());
+                assert!(addr.ip() == conn.tpu_addr().ip());
+            });
+        }
+
+        let addr = &get_addr(&mut rng);
+        connection_cache.get_connection(addr);
+
+        let port = addr
+            .port()
+            .checked_add(port_offset)
+            .unwrap_or_else(|| addr.port());
+        let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
+        let map = connection_cache.map.read().unwrap();
+        assert!(map.len() == MAX_CONNECTIONS);
+        let _conn = map.get(&addr_with_quic_port).expect("Address not found");
+    }
+
+    #[test]
+    fn test_connection_cache_max_parallel_chunks() {
+        solana_logger::setup();
+        let mut connection_cache = ConnectionCache::default();
+        assert_eq!(
+            connection_cache.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let pubkey = Pubkey::new_unique();
+        connection_cache.set_staked_nodes(&staked_nodes, &pubkey);
+        assert_eq!(
+            connection_cache.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes.write().unwrap().total_stake = 10000;
+        assert_eq!(
+            connection_cache.compute_max_parallel_streams(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1);
+        assert_eq!(
+            connection_cache.compute_max_parallel_streams(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .remove(&pubkey);
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1000);
+        assert_ne!(
+            connection_cache.compute_max_parallel_streams(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+    }
+
+    // Test that we can get_connection with a connection cache configured for quic
+    // on an address with a port that, if QUIC_PORT_OFFSET were added to it, it would overflow to
+    // an invalid port.
+    #[test]
+    fn test_overflow_address() {
+        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
+        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let connection_cache = ConnectionCache::new(1);
+
+        let conn = connection_cache.get_connection(&addr);
+        // We (intentionally) don't have an interface that allows us to distinguish between
+        // UDP and Quic connections, so check instead that the port is valid (non-zero)
+        // and is the same as the input port (falling back on UDP)
+        assert!(conn.tpu_addr().port() != 0);
+        assert!(conn.tpu_addr().port() == port);
+    }
+}
