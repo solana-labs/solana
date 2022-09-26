@@ -267,6 +267,7 @@ fn test_ledger_cleanup_service() {
 // slot_hash expiry to 64 slots.
 
 #[test]
+#[serial]
 fn test_slot_hash_expiry() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     solana_sdk::slot_hashes::set_entries_for_tests_only(64);
