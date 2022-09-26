@@ -1021,8 +1021,9 @@ pub(crate) mod tests {
         let node = CrdsGossipPull::default();
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         ));
         assert_eq!(
             node.new_pull_request(
@@ -1119,8 +1120,9 @@ pub(crate) mod tests {
         let now: u64 = 1_605_127_770_789;
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let mut crds = Crds::default();
         let node_keypair = Keypair::new();
@@ -1217,8 +1219,9 @@ pub(crate) mod tests {
         let node_keypair = Keypair::new();
         let mut node_crds = Crds::default();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &node_keypair.pubkey(),
@@ -1329,8 +1332,9 @@ pub(crate) mod tests {
             .insert(entry, 0, GossipRoute::LocalMessage)
             .unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         ping_cache.mock_pong(new.id, new.gossip, Instant::now());
@@ -1389,8 +1393,9 @@ pub(crate) mod tests {
             .insert(entry, 0, GossipRoute::LocalMessage)
             .unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 1);
         ping_cache.mock_pong(new.id, new.gossip, Instant::now());
