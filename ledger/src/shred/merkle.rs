@@ -931,15 +931,25 @@ pub(super) fn make_shreds_from_data(
         .collect();
     // Generate coding shreds, populate merkle branch
     // for all shreds and attach signature.
-    let shreds = thread_pool.install(|| {
+    let shreds: Result<Vec<_>, Error> = if shreds.len() <= 1 {
         shreds
-            .into_par_iter()
+            .into_iter()
             .zip(next_code_index)
             .map(|(shreds, next_code_index)| {
                 make_erasure_batch(keypair, shreds, next_code_index, reed_solomon_cache)
             })
-            .collect::<Result<Vec<_>, Error>>()
-    });
+            .collect()
+    } else {
+        thread_pool.install(|| {
+            shreds
+                .into_par_iter()
+                .zip(next_code_index)
+                .map(|(shreds, next_code_index)| {
+                    make_erasure_batch(keypair, shreds, next_code_index, reed_solomon_cache)
+                })
+                .collect()
+        })
+    };
     stats.gen_coding_elapsed += now.elapsed().as_micros() as u64;
     shreds
 }
