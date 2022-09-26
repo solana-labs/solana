@@ -2793,14 +2793,28 @@ impl Blockstore {
             .map(|(_, end_index)| u64::from(*end_index) - start_index + 1)
             .unwrap_or(0);
 
-        let entries: Result<Vec<Vec<Entry>>> = PAR_THREAD_POOL.install(|| {
+        let entries: Result<Vec<Vec<Entry>>> = if completed_ranges.len() <= 1 {
             completed_ranges
-                .par_iter()
+                .into_iter()
                 .map(|(start_index, end_index)| {
-                    self.get_entries_in_data_block(slot, *start_index, *end_index, Some(&slot_meta))
+                    self.get_entries_in_data_block(slot, start_index, end_index, Some(&slot_meta))
                 })
                 .collect()
-        });
+        } else {
+            PAR_THREAD_POOL.install(|| {
+                completed_ranges
+                    .into_par_iter()
+                    .map(|(start_index, end_index)| {
+                        self.get_entries_in_data_block(
+                            slot,
+                            start_index,
+                            end_index,
+                            Some(&slot_meta),
+                        )
+                    })
+                    .collect()
+            })
+        };
         let entries: Vec<Entry> = entries?.into_iter().flatten().collect();
         Ok((entries, num_shreds, slot_meta.is_full()))
     }
