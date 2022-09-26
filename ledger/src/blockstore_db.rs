@@ -254,6 +254,12 @@ pub mod columns {
     #[derive(Debug)]
     /// The transaction status index column.
     ///
+    /// This column family maintains the metadata of both the active and the
+    /// most recent frozen transaction status. It includes the primary index
+    /// for accessing both [`TransactionStatus`] and [`AddressSignature`]
+    /// column families. The metadata also includes information about when
+    /// update the primary indices of the transaction status.
+    ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::TransactionStatusIndexMeta`
     pub struct TransactionStatusIndex;

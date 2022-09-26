@@ -312,6 +312,10 @@ impl DuplicateSlotProof {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+/// The metadata struct that is used to track the primary indices of both the
+/// active and the most recent frozen transaction status.  The primary index
+/// can be used to access [`TransactionStatus`] and [`AddressSignature`]
+/// column families.
 pub struct TransactionStatusIndexMeta {
     pub max_slot: Slot,
     pub frozen: bool,

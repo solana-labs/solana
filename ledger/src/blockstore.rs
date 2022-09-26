@@ -2058,6 +2058,23 @@ impl Blockstore {
 
     /// Toggles the active primary index between `0` and `1`, and clears the
     /// stored max-slot of the frozen index in preparation for pruning.
+    ///
+    /// The function returns the primary index of the most recent frozen
+    /// transaction status that can be used to access [`TransactionStatus`]
+    /// and [`AddressSignature`] column families.
+    ///
+    /// Arguments:
+    ///  - `batch`: the `WriteBatch` that will include the update entries
+    ///  created by this function to [`TransactionStatusIndex`] column family.
+    ///
+    ///  - `w_active_transaction_status_index`: the active transaction status
+    ///  index that is guarded by the lock [`active_transaction_status_index`].
+    ///  After this function call, this argument will carry the up-to-date
+    ///  primary index of the active transaction status.
+    ///
+    ///  - `to_slot`: the cursor that represents the purge progress of the
+    ///  [`LedgerCleanupService`]  Everything before `to_slot` is considered
+    ///  obsolete and eligible to be purged.
     fn toggle_transaction_status_index(
         &self,
         batch: &mut WriteBatch,
@@ -2111,6 +2128,8 @@ impl Blockstore {
         }
     }
 
+    /// Update the max_slot of the active TransactionStatusIndexMeta entry
+    /// based on the specified slot.
     fn get_primary_index_to_write(
         &self,
         slot: Slot,

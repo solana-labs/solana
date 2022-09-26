@@ -489,8 +489,8 @@ impl Blockstore {
     }
 
     /// Purges special columns (using a non-Slot primary-index) by range. Purge
-    /// occurs if frozen primary index has a max-slot less than the highest slot
-    /// being purged.
+    /// occurs if the frozen primary index has a max-slot less than the highest
+    /// slot being purged.
     fn purge_special_columns_with_primary_index(
         &self,
         write_batch: &mut WriteBatch,
