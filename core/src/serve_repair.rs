@@ -76,7 +76,7 @@ pub const MAX_ANCESTOR_RESPONSES: usize =
 pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
 pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
 pub const REPAIR_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
-const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_millis(500);
+const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(2);
 pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
     4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
