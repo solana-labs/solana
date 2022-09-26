@@ -49,7 +49,9 @@ To prevent abuse of computational resources, each transaction is allocated a
 compute budget. The budget specifies a maximum number of compute units that a
 transaction can consume, the costs associated with different types of operations
 the transaction may perform, and operational bounds the transaction must adhere
-to.  As the transaction is processed compute units are consumed by its
+to.
+
+As the transaction is processed compute units are consumed by its
 instruction's programs performing operations such as executing BPF instructions,
 calling syscalls, etc... When the transaction consumes its entire budget, or
 exceeds a bound such as attempting a call stack that is too deep, the runtime
@@ -71,11 +73,11 @@ budget, or exceeds a bound, the entire invocation chain and the top level
 transaction processing are halted.
 
 The current [compute
-budget](https://github.com/solana-labs/solana/blob/090e11210aa7222d8295610a6ccac4acda711bb9/program-runtime/src/compute_budget.rs#L26-L87)
+budget](https://github.com/solana-labs/solana/blob/090e11210aa7222d8295610a6ccac4acda711bb9/program-runtime/src/compute_budget.rs#L26-L87) can be found in the Solana Program Runtime.
 
-can be found in the Solana Program Runtime.
+#### Example Compute Budget
 
-For example, if the current budget is:
+For example, if the compute budget set in the Solana runtime is:
 
 ```rust
 max_units: 1,400,000,
@@ -89,20 +91,22 @@ log_pubkey_units: 100,
 ...
 ```
 
-Then the transaction
+Then any transaction:
 
 - Could execute 1,400,000 BPF instructions, if it did nothing else.
 - Cannot exceed 4k of stack usage.
 - Cannot exceed a BPF call depth of 64.
 - Cannot exceed 4 levels of cross-program invocations.
 
-Since the compute budget is consumed incrementally as the transaction executes,
-the total budget consumption will be a combination of the various costs of the
-operations it performs.
+> **NOTE:** Since the compute budget is consumed incrementally as the transaction executes,
+> the total budget consumption will be a combination of the various costs of the
+> operations it performs.
 
 At runtime a program may log how much of the compute budget remains. See
 [debugging](developing/on-chain-programs/debugging.md#monitoring-compute-budget-consumption)
 for more information.
+
+### Prioritization fees
 
 A transaction may set the maximum number of compute units it is allowed to
 consume and the compute unit price by including a `SetComputeUnitLimit` and a
@@ -112,20 +116,19 @@ respectively.
 
 If no `SetComputeUnitLimit` is provided the limit will be calculated as the
 product of the number of instructions in the transaction (excluding the [Compute
-budget
-instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22))
-and the default per-instruction units, which is currently 200k.
+budget instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22)) and the default per-instruction units, which is currently 200k.
 
-Note that a transaction's prioritization fee is calculated by multiplying the
-number of compute units by the compute unit price (measured in micro-lamports)
-set by the transaction via compute budget instructions.  So transactions should
-request the minimum amount of compute units required for execution to minimize
+> **NOTE:** A transaction's [prioritization fee](./../../terminology.md#prioritization-fee) is calculated by multiplying the
+> number of _compute units_ by the _compute unit price_ (measured in micro-lamports)
+> set by the transaction via compute budget instructions.
+
+Transactions should request the minimum amount of compute units required for execution to minimize
 fees. Also note that fees are not adjusted when the number of requested compute
 units exceeds the number of compute units actually consumed by an executed
 transaction.
 
 Compute Budget instructions don't require any accounts and don't consume any
-compute units to process.  Transactions can only contain one of each type of
+compute units to process. Transactions can only contain one of each type of
 compute budget instruction, duplicate types will result in an error.
 
 The `ComputeBudgetInstruction::set_compute_unit_limit` and

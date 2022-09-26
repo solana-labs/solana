@@ -4,19 +4,19 @@ title: Web3 JavaScript API
 
 ## What is Solana-Web3.js?
 
-The Solana-Web3.js library aims to provide complete coverage of Solana. The library was built on top of the [Solana JSON RPC API](https://docs.solana.com/developing/clients/jsonrpc-api).
+The Solana-Web3.js library aims to provide complete coverage of Solana. The library was built on top of the [Solana JSON RPC API](../clients/jsonrpc-api.md).
 
 You can find the full documentation for the `@solana/web3.js` library [here](https://solana-labs.github.io/solana-web3.js/).
 
 ## Common Terminology
 
-| Term | Definition |
-|-------------|------------------------|
-| Program     | Stateless executable code written to interpret instructions. Programs are capable of performing actions based on the instructions provided. |
+| Term        | Definition                                                                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Program     | Stateless executable code written to interpret instructions. Programs are capable of performing actions based on the instructions provided.                              |
 | Instruction | The smallest unit of a program that a client can include in a transaction. Within its processing code, an instruction may contain one or more cross-program invocations. |
-| Transaction | One or more instructions signed by the client using one or more Keypairs and executed atomically with only two possible outcomes: success or failure. |
+| Transaction | One or more instructions signed by the client using one or more Keypairs and executed atomically with only two possible outcomes: success or failure.                    |
 
-For the full list of terms, see [Solana terminology](https://docs.solana.com/terminology#cross-program-invocation)
+For the full list of terms, see [Solana terminology](../../terminology#cross-program-invocation)
 
 ## Getting Started
 
@@ -49,18 +49,16 @@ $ npm install --save @solana/web3.js
 #### Javascript
 
 ```javascript
-const solanaWeb3 = require('@solana/web3.js');
+const solanaWeb3 = require("@solana/web3.js");
 console.log(solanaWeb3);
 ```
-
 
 #### ES6
 
 ```javascript
-import * as solanaWeb3 from '@solana/web3.js';
+import * as solanaWeb3 from "@solana/web3.js";
 console.log(solanaWeb3);
 ```
-
 
 #### Browser Bundle
 
@@ -76,13 +74,14 @@ console.log(solanaWeb3);
 To allow users to use your dApp or application on Solana, they will need to get access to their Keypair. A Keypair is a private key with a matching public key, used to sign transactions.
 
 There are two ways to obtain a Keypair:
+
 1. Generate a new Keypair
 2. Obtain a Keypair using the secret key
 
 You can obtain a new Keypair with the following:
 
 ```javascript
-const {Keypair} = require("@solana/web3.js");
+const { Keypair } = require("@solana/web3.js");
 
 let keypair = Keypair.generate();
 ```
@@ -92,15 +91,13 @@ This will generate a brand new Keypair for a user to fund and use within your ap
 You can allow entry of the secretKey using a textbox, and obtain the Keypair with `Keypair.fromSecretKey(secretKey)`.
 
 ```javascript
-const {Keypair} = require("@solana/web3.js");
+const { Keypair } = require("@solana/web3.js");
 
 let secretKey = Uint8Array.from([
-  202, 171, 192, 129, 150, 189, 204, 241, 142,  71, 205,
-  2,  81,  97,   2, 176,  48,  81,  45,   1,  96, 138,
-  220, 132, 231, 131, 120,  77,  66,  40,  97, 172,  91,
-  245,  84, 221, 157, 190,   9, 145, 176, 130,  25,  43,
-  72, 107, 190, 229,  75,  88, 191, 136,   7, 167, 109,
-  91, 170, 164, 186,  15, 142,  36,  12,  23
+  202, 171, 192, 129, 150, 189, 204, 241, 142, 71, 205, 2, 81, 97, 2, 176, 48,
+  81, 45, 1, 96, 138, 220, 132, 231, 131, 120, 77, 66, 40, 97, 172, 91, 245, 84,
+  221, 157, 190, 9, 145, 176, 130, 25, 43, 72, 107, 190, 229, 75, 88, 191, 136,
+  7, 167, 109, 91, 170, 164, 186, 15, 142, 36, 12, 23,
 ]);
 
 let keypair = Keypair.fromSecretKey(secretKey);
@@ -117,7 +114,12 @@ A transaction in Solana-Web3.js is created using the [`Transaction`](javascript-
 Take the example of a transfer transaction:
 
 ```javascript
-const {Keypair, Transaction, SystemProgram, LAMPORTS_PER_SOL} = require("@solana/web3.js");
+const {
+  Keypair,
+  Transaction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} = require("@solana/web3.js");
 
 let fromKeypair = Keypair.generate();
 let toKeypair = Keypair.generate();
@@ -127,8 +129,8 @@ transaction.add(
   SystemProgram.transfer({
     fromPubkey: fromKeypair.publicKey,
     toPubkey: toKeypair.publicKey,
-    lamports: LAMPORTS_PER_SOL
-  })
+    lamports: LAMPORTS_PER_SOL,
+  }),
 );
 ```
 
@@ -137,16 +139,16 @@ The above code achieves creating a transaction ready to be signed and broadcaste
 All that is left is to sign the transaction with keypair and send it over the network. You can accomplish sending a transaction by using `sendAndConfirmTransaction` if you wish to alert the user or do something after a transaction is finished, or use `sendTransaction` if you don't need to wait for the transaction to be confirmed.
 
 ```javascript
-const {sendAndConfirmTransaction, clusterApiUrl, Connection} = require("@solana/web3.js");
+const {
+  sendAndConfirmTransaction,
+  clusterApiUrl,
+  Connection,
+} = require("@solana/web3.js");
 
 let keypair = Keypair.generate();
-let connection = new Connection(clusterApiUrl('testnet'));
+let connection = new Connection(clusterApiUrl("testnet"));
 
-sendAndConfirmTransaction(
-  connection,
-  transaction,
-  [keypair]
-);
+sendAndConfirmTransaction(connection, transaction, [keypair]);
 ```
 
 The above code takes in a `TransactionInstruction` using `SystemProgram`, creates a `Transaction`, and sends it over the network. You use `Connection` in order to define which Solana network you are connecting to, namely `mainnet-beta`, `testnet`, or `devnet`.
@@ -175,7 +177,7 @@ Let's look at how to call this instruction using solana-web3.js:
 ```javascript
 let keypair = web3.Keypair.generate();
 let payer = web3.Keypair.generate();
-let connection = new web3.Connection(web3.clusterApiUrl('testnet'));
+let connection = new web3.Connection(web3.clusterApiUrl("testnet"));
 
 let airdropSignature = await connection.requestAirdrop(
   payer.publicKey,
@@ -189,9 +191,9 @@ First, we set up the account Keypair and connection so that we have an account t
 
 ```javascript
 let allocateTransaction = new web3.Transaction({
-    feePayer: payer.publicKey
-  });
-let keys = [{pubkey: keypair.publicKey, isSigner: true, isWritable: true}];
+  feePayer: payer.publicKey,
+});
+let keys = [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }];
 let params = { space: 100 };
 ```
 
@@ -200,10 +202,7 @@ We create the transaction `allocateTransaction`, keys, and params objects. `feeP
 ```javascript
 let allocateStruct = {
   index: 8,
-  layout: struct([
-    u32('instruction'),
-    ns64('space'),
-  ])
+  layout: struct([u32("instruction"), ns64("space")]),
 };
 ```
 
@@ -270,20 +269,25 @@ The `layout` in the allocate struct must always have `u32('instruction')` first 
 
 ```javascript
 let data = Buffer.alloc(allocateStruct.layout.span);
-let layoutFields = Object.assign({instruction: allocateStruct.index}, params);
+let layoutFields = Object.assign({ instruction: allocateStruct.index }, params);
 allocateStruct.layout.encode(layoutFields, data);
 ```
 
 Using the previously created bufferLayout, we can allocate a data buffer. We then assign our params `{ space: 100 }` so that it maps correctly to the layout, and encode it to the data buffer. Now the data is ready to be sent to the program.
 
 ```javascript
-allocateTransaction.add(new web3.TransactionInstruction({
-  keys,
-  programId: web3.SystemProgram.programId,
-  data,
-}));
+allocateTransaction.add(
+  new web3.TransactionInstruction({
+    keys,
+    programId: web3.SystemProgram.programId,
+    data,
+  }),
+);
 
-await web3.sendAndConfirmTransaction(connection, allocateTransaction, [payer, keypair]);
+await web3.sendAndConfirmTransaction(connection, allocateTransaction, [
+  payer,
+  keypair,
+]);
 ```
 
 Finally, we add the transaction instruction with all the account keys, payer, data, and programId and broadcast the transaction to the network.
@@ -291,14 +295,14 @@ Finally, we add the transaction instruction with all the account keys, payer, da
 The full code can be found below.
 
 ```javascript
-const {struct, u32, ns64} = require("@solana/buffer-layout");
-const {Buffer} = require('buffer');
+const { struct, u32, ns64 } = require("@solana/buffer-layout");
+const { Buffer } = require("buffer");
 const web3 = require("@solana/web3.js");
 
 let keypair = web3.Keypair.generate();
 let payer = web3.Keypair.generate();
 
-let connection = new web3.Connection(web3.clusterApiUrl('testnet'));
+let connection = new web3.Connection(web3.clusterApiUrl("testnet"));
 
 let airdropSignature = await connection.requestAirdrop(
   payer.publicKey,
@@ -308,28 +312,30 @@ let airdropSignature = await connection.requestAirdrop(
 await connection.confirmTransaction(airdropSignature);
 
 let allocateTransaction = new web3.Transaction({
-  feePayer: payer.publicKey
+  feePayer: payer.publicKey,
 });
-let keys = [{pubkey: keypair.publicKey, isSigner: true, isWritable: true}];
+let keys = [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }];
 let params = { space: 100 };
 
 let allocateStruct = {
   index: 8,
-  layout: struct([
-    u32('instruction'),
-    ns64('space'),
-  ])
+  layout: struct([u32("instruction"), ns64("space")]),
 };
 
 let data = Buffer.alloc(allocateStruct.layout.span);
-let layoutFields = Object.assign({instruction: allocateStruct.index}, params);
+let layoutFields = Object.assign({ instruction: allocateStruct.index }, params);
 allocateStruct.layout.encode(layoutFields, data);
 
-allocateTransaction.add(new web3.TransactionInstruction({
-  keys,
-  programId: web3.SystemProgram.programId,
-  data,
-}));
+allocateTransaction.add(
+  new web3.TransactionInstruction({
+    keys,
+    programId: web3.SystemProgram.programId,
+    data,
+  }),
+);
 
-await web3.sendAndConfirmTransaction(connection, allocateTransaction, [payer, keypair]);
+await web3.sendAndConfirmTransaction(connection, allocateTransaction, [
+  payer,
+  keypair,
+]);
 ```
