@@ -13,7 +13,7 @@ import {
   SystemProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";

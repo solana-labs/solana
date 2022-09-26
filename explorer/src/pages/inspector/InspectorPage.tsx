@@ -2,7 +2,7 @@ import React from "react";
 import { PACKET_DATA_SIZE, VersionedMessage } from "@solana/web3.js";
 
 import { TableCardBody } from "components/common/TableCardBody";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { useQuery } from "utils/url";
 import { useHistory, useLocation } from "react-router";
 import {
