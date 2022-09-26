@@ -1,13 +1,13 @@
 [package]
 name = "solana-rpc-client-api"
-version = "1.15.0"
 description = "Solana Client Common Utilities"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-rpc-client-api"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 base64 = "0.13.0"

@@ -1,13 +1,13 @@
 [package]
 name = "solana-bloom"
-version = "1.15.0"
 description = "Solana bloom filter"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-bloom"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 bv = { version = "0.11.1", features = ["serde"] }

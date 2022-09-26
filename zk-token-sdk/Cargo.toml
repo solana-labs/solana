@@ -1,11 +1,12 @@
 [package]
 name = "solana-zk-token-sdk"
 description = "Solana Zk Token SDK"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-version = "1.15.0"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 base64 = "0.13"

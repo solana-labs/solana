@@ -1,14 +1,14 @@
 [package]
 name = "solana-rpc-test"
-version = "1.15.0"
 description = "Solana RPC Test"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-rpc-test"
-edition = "2021"
 publish = false
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 bincode = "1.3.3"

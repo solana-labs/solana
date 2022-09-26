@@ -1,14 +1,14 @@
 [package]
 name = "solana-client-test"
-version = "1.15.0"
 description = "Solana RPC Test"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-client-test"
-edition = "2021"
 publish = false
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 futures-util = "0.3.21"

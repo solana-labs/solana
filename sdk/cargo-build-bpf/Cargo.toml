@@ -1,13 +1,13 @@
 [package]
 name = "solana-cargo-build-bpf"
-version = "1.15.0"
 description = "Compile a local package and all of its dependencies using the Solana SBF SDK"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
-license = "Apache-2.0"
-edition = "2021"
 publish = false
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 cargo_metadata = "0.15.0"

@@ -1,13 +1,13 @@
 [package]
 name = "solana-client"
-version = "1.15.0"
 description = "Solana Client"
-authors = ["Solana Maintainers <maintainers@solana.foundation>"]
-repository = "https://github.com/solana-labs/solana"
-homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-client"
-license = "Apache-2.0"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+homepage = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 log = "0.4.17"

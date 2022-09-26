@@ -45,8 +45,10 @@ MAJOR=0
 MINOR=0
 PATCH=0
 SPECIAL=""
+WORKSPACE_CARGO_TOML="Cargo.toml"
 
-semverParseInto "$(readCargoVariable version "${Cargo_tomls[0]}")" MAJOR MINOR PATCH SPECIAL
+# Read the version from workspace (root directory) Cargo.toml
+semverParseInto "$(readCargoVariable version $WORKSPACE_CARGO_TOML)" MAJOR MINOR PATCH SPECIAL
 [[ -n $MAJOR ]] || usage
 
 currentVersion="$MAJOR\.$MINOR\.$PATCH$SPECIAL"
@@ -80,7 +82,8 @@ dropspecial)
 check)
   badTomls=()
   for Cargo_toml in "${Cargo_tomls[@]}"; do
-    if ! grep "^version *= *\"$currentVersion\"$" "$Cargo_toml" &>/dev/null; then
+    # Packages should either inherit the version or have same version if they are not a workspace member
+    if ! grep -e "^version = { workspace *= *true }$" -e "^version *= *\"$currentVersion\"$" "$Cargo_toml" &>/dev/null; then
       badTomls+=("$Cargo_toml")
     fi
   done
@@ -117,12 +120,20 @@ esac
 
 newVersion="$MAJOR.$MINOR.$PATCH$SPECIAL"
 
+# Update the workspace Cargo.toml file
+(
+  set -x
+  sed -i $WORKSPACE_CARGO_TOML -e "0,/^version =/{s/^version = \"[^\"]*\"$/version = \"$newVersion\"/}"
+)
 # Update all the Cargo.toml files
 for Cargo_toml in "${Cargo_tomls[@]}"; do
   # Set new crate version
   (
-    set -x
-    sed -i "$Cargo_toml" -e "0,/^version =/{s/^version = \"[^\"]*\"$/version = \"$newVersion\"/}"
+    # If the package is inheriting version from workspace, then no need to update
+    if ! grep "^version = { workspace *= *true }$" "$Cargo_toml" &>/dev/null; then
+      set -x
+      sed -i "$Cargo_toml" -e "0,/^version =/{s/^version = \"[^\"]*\"$/version = \"$newVersion\"/}"
+    fi
   )
 
   # Fix up the version references to other internal crates
