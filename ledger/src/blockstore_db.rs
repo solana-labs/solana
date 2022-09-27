@@ -135,82 +135,142 @@ pub enum IteratorMode<Index> {
 pub mod columns {
     #[derive(Debug)]
     /// The slot metadata column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::SlotMeta`
     pub struct SlotMeta;
 
     #[derive(Debug)]
     /// The orphans column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Orphans;
 
     #[derive(Debug)]
     /// The dead slots column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct DeadSlots;
 
     #[derive(Debug)]
     /// The duplicate slots column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::DuplicateSlotProof`
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
     /// The erasure meta column
+    ///
+    /// index type: (u64, u64)
+    /// value type: `blockstore_meta::ErasureMeta`
     pub struct ErasureMeta;
 
     #[derive(Debug)]
     /// The bank hash column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::FrozenHashVersioned`
     pub struct BankHash;
 
     #[derive(Debug)]
     /// The root column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Root;
 
     #[derive(Debug)]
     /// The index column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::Index`
     pub struct Index;
 
     #[derive(Debug)]
     /// The shred data column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredData;
 
     #[derive(Debug)]
     /// The shred erasure code column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredCode;
 
     #[derive(Debug)]
     /// The transaction status column
+    ///
+    /// index type: (u64, Signature, Slot)
+    /// value type: `generated::TransactionStatusMeta`
     pub struct TransactionStatus;
 
     #[derive(Debug)]
     /// The address signatures column
+    ///
+    /// index type: (u64, Pubkey, Slot, Signature)
+    /// value type: `blockstore_meta::AddressSignatureMeta`
     pub struct AddressSignatures;
 
     #[derive(Debug)]
     /// The transaction memos column
+    ///
+    /// index type: Signature
+    /// value type: String
     pub struct TransactionMemos;
 
     #[derive(Debug)]
-    /// The transaction status index column
+    /// The transaction status index column.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::TransactionStatusIndexMeta`
     pub struct TransactionStatusIndex;
 
     #[derive(Debug)]
     /// The rewards column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `generated::Rewards`
     pub struct Rewards;
 
     #[derive(Debug)]
     /// The blocktime column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `UnixTimestamp`
     pub struct Blocktime;
 
     #[derive(Debug)]
     /// The performance samples column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::PerfSample`
     pub struct PerfSamples;
 
     #[derive(Debug)]
     /// The block height column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: u64
     pub struct BlockHeight;
 
     #[derive(Debug)]
     /// The program costs column
+    ///
+    /// index type: `Pubkey`
+    /// value type: `blockstore_meta::ProgramCost`
     pub struct ProgramCosts;
 
     #[derive(Debug)]
     /// The optimistic slot column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::OptimisticSlotMetaVersioned`
     pub struct OptimisticSlots;
 
     // When adding a new column ...
@@ -541,26 +601,32 @@ pub trait ProtobufColumn: Column {
     type Type: prost::Message + Default;
 }
 
+/// SlotColumn is a trait for slot-based column families.  Its index is
+/// essentially Slot (or more generally speaking, has a 1:1 mapping to Slot).
 pub trait SlotColumn<Index = u64> {}
 
 impl<T: SlotColumn> Column for T {
     type Index = u64;
 
+    /// Converts a u64 Index to its RocksDB key.
     fn key(slot: u64) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
     }
 
+    /// Converts a RocksDB key to its u64 Index.
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
     }
 
+    /// Obtains the primary index from the specified index.
     fn primary_index(index: u64) -> Slot {
         index
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Converts a Slot to its u64 Index.
     fn as_index(slot: Slot) -> u64 {
         slot
     }

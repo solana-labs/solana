@@ -204,6 +204,10 @@ pub const NUM_LARGEST_ACCOUNTS: usize = 20;
 pub const MAX_GET_PROGRAM_ACCOUNT_FILTERS: usize = 4;
 pub const MAX_GET_SLOT_LEADERS: usize = 5000;
 
+// Limit the length of the `epoch_credits` array for each validator in a `get_vote_accounts`
+// response
+pub const MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY: usize = 5;
+
 // Validators that are this number of slots behind are considered delinquent
 pub const DELINQUENT_VALIDATOR_SLOT_DISTANCE: u64 = 128;
 

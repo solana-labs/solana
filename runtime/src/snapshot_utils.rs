@@ -1179,9 +1179,7 @@ fn spawn_unpack_snapshot_thread(
     thread_index: usize,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name(format!(
-            "solana-streaming-unarchive-snapshot-{thread_index}"
-        ))
+        .name(format!("solUnpkSnpsht{thread_index:02}"))
         .spawn(move || {
             streaming_unpack_snapshot(
                 &mut archive,
