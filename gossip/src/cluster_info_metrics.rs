@@ -163,6 +163,7 @@ pub struct GossipStats {
     pub(crate) prune_received_cache: Counter,
     pub(crate) pull_from_entrypoint_count: Counter,
     pub(crate) pull_request_ping_pong_check_failed_count: Counter,
+    pub(crate) pull_request_pings_rate_limited: Counter,
     pub(crate) pull_requests_count: Counter,
     pub(crate) purge: Counter,
     pub(crate) purge_count: Counter,
@@ -342,6 +343,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "pull_request_ping_pong_check_failed_count",
             stats.pull_request_ping_pong_check_failed_count.clear(),
+            i64
+        ),
+        (
+            "pull_request_pings_rate_limited",
+            stats.pull_request_pings_rate_limited.clear(),
             i64
         ),
         (

@@ -35,7 +35,7 @@ use {
         },
         epoch_slots::EpochSlots,
         gossip_error::GossipError,
-        ping_pong::{self, PingCache, Pong},
+        ping_pong::{self, PingCache, PingCacheStats, Pong},
         socketaddr, socketaddr_any,
         weighted_shuffle::WeightedShuffle,
     },
@@ -1432,6 +1432,7 @@ impl ClusterInfo {
     ) {
         let now = timestamp();
         let mut pings = Vec::new();
+        let mut ping_cache_stats = PingCacheStats::default();
         let mut pulls = {
             let _st = ScopedTimer::from(&self.stats.new_pull_requests);
             self.gossip
@@ -1446,9 +1447,13 @@ impl ClusterInfo {
                     &self.ping_cache,
                     &mut pings,
                     &self.socket_addr_space,
+                    &mut ping_cache_stats,
                 )
                 .unwrap_or_default()
         };
+        self.stats
+            .pull_request_pings_rate_limited
+            .add_relaxed(ping_cache_stats.pings_rate_limited as u64);
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
         let num_requests = pulls.values().map(Vec::len).sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
@@ -1897,7 +1902,8 @@ impl ClusterInfo {
         let mut pingf = move || Ping::new_rand(&mut rng, &self.keypair()).ok();
         let mut ping_cache = self.ping_cache.lock().unwrap();
         let mut hard_check = move |node| {
-            let (check, ping) = ping_cache.check(now, node, &mut pingf);
+            let mut ping_cache_stats = PingCacheStats::default();
+            let (check, ping) = ping_cache.check(now, node, &mut pingf, &mut ping_cache_stats);
             if let Some(ping) = ping {
                 let ping = Protocol::PingMessage(ping);
                 match Packet::from_data(Some(&node.1), ping) {
@@ -1905,6 +1911,9 @@ impl ClusterInfo {
                     Err(err) => error!("failed to write ping packet: {:?}", err),
                 };
             }
+            self.stats
+                .pull_request_pings_rate_limited
+                .add_relaxed(ping_cache_stats.pings_rate_limited as u64);
             if !check {
                 self.stats
                     .pull_request_ping_pong_check_failed_count
@@ -3309,7 +3318,8 @@ RPC Enabled Nodes: 1"#;
                 .iter()
                 .map(|(keypair, socket)| {
                     let node = (keypair.pubkey(), *socket);
-                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    let (check, ping) =
+                        ping_cache.check(now, node, &mut pingf, &mut PingCacheStats::default());
                     // Assert that initially remote nodes will not pass the
                     // ping/pong check.
                     assert!(!check);
@@ -3331,7 +3341,12 @@ RPC Enabled Nodes: 1"#;
             let mut ping_cache = cluster_info.ping_cache.lock().unwrap();
             for (keypair, socket) in &remote_nodes {
                 let node = (keypair.pubkey(), *socket);
-                let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+                let (check, _) = ping_cache.check(
+                    now,
+                    node,
+                    || -> Option<Ping> { None },
+                    &mut PingCacheStats::default(),
+                );
                 assert!(check);
             }
         }
@@ -3340,7 +3355,12 @@ RPC Enabled Nodes: 1"#;
             let mut ping_cache = cluster_info.ping_cache.lock().unwrap();
             let (keypair, socket) = new_rand_remote_node(&mut rng);
             let node = (keypair.pubkey(), socket);
-            let (check, _) = ping_cache.check(now, node, || -> Option<Ping> { None });
+            let (check, _) = ping_cache.check(
+                now,
+                node,
+                || -> Option<Ping> { None },
+                &mut PingCacheStats::default(),
+            );
             assert!(!check);
         }
     }
@@ -3719,6 +3739,7 @@ RPC Enabled Nodes: 1"#;
                 &cluster_info.ping_cache,
                 &mut pings,
                 &cluster_info.socket_addr_space,
+                &mut PingCacheStats::default(),
             )
             .ok()
             .unwrap();

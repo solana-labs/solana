@@ -15,7 +15,7 @@ use {
         crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
-        ping_pong::PingCache,
+        ping_pong::{PingCache, PingCacheStats},
     },
     rayon::ThreadPool,
     solana_ledger::shred::Shred,
@@ -217,6 +217,7 @@ impl CrdsGossip {
         ping_cache: &Mutex<PingCache>,
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
+        ping_cache_stats: &mut PingCacheStats,
     ) -> Result<HashMap<ContactInfo, Vec<CrdsFilter>>, CrdsGossipError> {
         self.pull.new_pull_request(
             thread_pool,
@@ -230,6 +231,7 @@ impl CrdsGossip {
             ping_cache,
             pings,
             socket_addr_space,
+            ping_cache_stats,
         )
     }
 

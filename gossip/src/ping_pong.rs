@@ -18,6 +18,11 @@ use {
 
 const PING_PONG_HASH_PREFIX: &[u8] = "SOLANA_PING_PONG".as_bytes();
 
+#[derive(Default)]
+pub struct PingCacheStats {
+    pub pings_rate_limited: usize,
+}
+
 #[derive(AbiExample, Debug, Deserialize, Serialize)]
 pub struct Ping<T> {
     from: Pubkey,
@@ -192,6 +197,7 @@ impl PingCache {
         now: Instant,
         node: (Pubkey, SocketAddr),
         mut pingf: F,
+        stats: &mut PingCacheStats,
     ) -> Option<Ping<T>>
     where
         T: Serialize,
@@ -199,7 +205,10 @@ impl PingCache {
     {
         match self.pings.peek(&node) {
             // Rate limit consecutive pings sent to a remote node.
-            Some(t) if now.saturating_duration_since(*t) < self.rate_limit_delay => None,
+            Some(t) if now.saturating_duration_since(*t) < self.rate_limit_delay => {
+                stats.pings_rate_limited += 1;
+                None
+            }
             _ => {
                 let ping = pingf()?;
                 let token = serialize(&ping.token).ok()?;
@@ -229,6 +238,7 @@ impl PingCache {
         now: Instant,
         node: (Pubkey, SocketAddr),
         pingf: F,
+        stats: &mut PingCacheStats,
     ) -> (bool, Option<Ping<T>>)
     where
         T: Serialize,
@@ -248,7 +258,7 @@ impl PingCache {
             }
         };
         let ping = if should_ping {
-            self.maybe_ping(now, node, pingf)
+            self.maybe_ping(now, node, pingf, stats)
         } else {
             None
         };
@@ -350,7 +360,7 @@ mod tests {
             .map(|(keypair, socket)| {
                 let node = (keypair.pubkey(), *socket);
                 let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
-                let (check, ping) = cache.check(now, node, pingf);
+                let (check, ping) = cache.check(now, node, pingf, &mut PingCacheStats::default());
                 assert!(!check);
                 assert_eq!(seen_nodes.insert(node), ping.is_some());
                 ping
@@ -365,7 +375,8 @@ mod tests {
                     // Already have a recent ping packets for nodes, so no new
                     // ping packet will be generated.
                     let node = (keypair.pubkey(), *socket);
-                    let (check, ping) = cache.check(now, node, panic_ping);
+                    let (check, ping) =
+                        cache.check(now, node, panic_ping, &mut PingCacheStats::default());
                     assert!(check);
                     assert!(ping.is_none());
                 }
@@ -383,7 +394,7 @@ mod tests {
         // All nodes now have a recent pong packet.
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
-            let (check, ping) = cache.check(now, node, panic_ping);
+            let (check, ping) = cache.check(now, node, panic_ping, &mut PingCacheStats::default());
             assert!(check);
             assert!(ping.is_none());
         }
@@ -395,7 +406,7 @@ mod tests {
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
             let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
-            let (check, ping) = cache.check(now, node, pingf);
+            let (check, ping) = cache.check(now, node, pingf, &mut PingCacheStats::default());
             assert!(check);
             assert_eq!(seen_nodes.insert(node), ping.is_some());
         }
@@ -405,9 +416,11 @@ mod tests {
         // packet pending response. So no new ping packet will be created.
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
-            let (check, ping) = cache.check(now, node, panic_ping);
+            let mut stats = PingCacheStats::default();
+            let (check, ping) = cache.check(now, node, panic_ping, &mut stats);
             assert!(check);
             assert!(ping.is_none());
+            assert_eq!(stats.pings_rate_limited, 1);
         }
 
         let now = now + ttl;
@@ -418,7 +431,7 @@ mod tests {
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
             let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
-            let (check, ping) = cache.check(now, node, pingf);
+            let (check, ping) = cache.check(now, node, pingf, &mut PingCacheStats::default());
             if seen_nodes.insert(node) {
                 assert!(check);
                 assert!(ping.is_some());
@@ -433,9 +446,11 @@ mod tests {
         // created, so no new one will be created.
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
-            let (check, ping) = cache.check(now, node, panic_ping);
+            let mut stats = PingCacheStats::default();
+            let (check, ping) = cache.check(now, node, panic_ping, &mut stats);
             assert!(!check);
             assert!(ping.is_none());
+            assert_eq!(stats.pings_rate_limited, 1);
         }
 
         let now = now + ttl / 64;
@@ -445,7 +460,7 @@ mod tests {
         for (keypair, socket) in &remote_nodes {
             let node = (keypair.pubkey(), *socket);
             let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
-            let (check, ping) = cache.check(now, node, pingf);
+            let (check, ping) = cache.check(now, node, pingf, &mut PingCacheStats::default());
             assert!(!check);
             assert_eq!(seen_nodes.insert(node), ping.is_some());
         }

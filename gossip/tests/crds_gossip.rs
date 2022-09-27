@@ -14,7 +14,7 @@ use {
         crds_gossip_pull::{ProcessPullStats, CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS},
         crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
         crds_value::{CrdsData, CrdsValue, CrdsValueLabel},
-        ping_pong::PingCache,
+        ping_pong::{PingCache, PingCacheStats},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
@@ -506,6 +506,7 @@ fn network_run_pull(
                             from.ping_cache.deref(),
                             &mut pings,
                             &SocketAddrSpace::Unspecified,
+                            &mut PingCacheStats::default(),
                         )
                         .unwrap_or_default();
                     let from_pubkey = from.keypair.pubkey();

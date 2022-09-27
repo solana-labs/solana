@@ -20,7 +20,7 @@ use {
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
-        ping_pong::PingCache,
+        ping_pong::{PingCache, PingCacheStats},
     },
     itertools::Itertools,
     lru::LruCache,
@@ -231,6 +231,7 @@ impl CrdsGossipPull {
         ping_cache: &Mutex<PingCache>,
         pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
+        ping_cache_stats: &mut PingCacheStats,
     ) -> Result<HashMap<ContactInfo, Vec<CrdsFilter>>, CrdsGossipError> {
         // Gossip peers and respective sampling weights.
         let peers = self.pull_options(
@@ -252,7 +253,7 @@ impl CrdsGossipPull {
                 .into_iter()
                 .filter_map(|(weight, peer)| {
                     let node = (peer.id, peer.gossip);
-                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    let (check, ping) = ping_cache.check(now, node, &mut pingf, ping_cache_stats);
                     if let Some(ping) = ping {
                         pings.push((peer.gossip, ping));
                     }
@@ -1027,6 +1028,7 @@ pub(crate) mod tests {
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
+                &mut PingCacheStats::default(),
             ),
             Err(CrdsGossipError::NoPeers)
         );
@@ -1048,6 +1050,7 @@ pub(crate) mod tests {
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
+                &mut PingCacheStats::default(),
             ),
             Err(CrdsGossipError::NoPeers)
         );
@@ -1074,6 +1077,7 @@ pub(crate) mod tests {
             &ping_cache,
             &mut pings,
             &SocketAddrSpace::Unspecified,
+            &mut PingCacheStats::default(),
         );
         let peers: Vec<_> = req.unwrap().into_keys().collect();
         assert_eq!(peers, vec![new.contact_info().unwrap().clone()]);
@@ -1097,6 +1101,7 @@ pub(crate) mod tests {
             &ping_cache,
             &mut pings,
             &SocketAddrSpace::Unspecified,
+            &mut PingCacheStats::default(),
         );
         // Even though the offline node should have higher weight, we shouldn't request from it
         // until we receive a ping.
@@ -1156,6 +1161,7 @@ pub(crate) mod tests {
                     &ping_cache,
                     &mut pings,
                     &SocketAddrSpace::Unspecified,
+                    &mut PingCacheStats::default(),
                 )
                 .unwrap();
             requests.into_keys()
@@ -1240,6 +1246,7 @@ pub(crate) mod tests {
             &Mutex::new(ping_cache),
             &mut pings,
             &SocketAddrSpace::Unspecified,
+            &mut PingCacheStats::default(),
         );
 
         let dest_crds = RwLock::<Crds>::default();
@@ -1344,6 +1351,7 @@ pub(crate) mod tests {
             &Mutex::new(ping_cache),
             &mut pings,
             &SocketAddrSpace::Unspecified,
+            &mut PingCacheStats::default(),
         );
 
         let dest_crds = RwLock::<Crds>::default();
@@ -1433,6 +1441,7 @@ pub(crate) mod tests {
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
+                &mut PingCacheStats::default(),
             );
             let filters = req.unwrap().into_values().flatten();
             let filters: Vec<_> = filters.into_iter().map(|f| (caller.clone(), f)).collect();
