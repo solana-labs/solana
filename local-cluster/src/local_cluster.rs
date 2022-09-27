@@ -43,8 +43,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_thin_client::thin_client::ThinClient,
     solana_tpu_client::connection_cache::{
-        ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
-        DEFAULT_TPU_USE_QUIC,
+        ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE,
     },
     solana_vote_program::{
         vote_instruction,
@@ -107,7 +106,7 @@ impl Default for ClusterConfig {
             poh_config: PohConfig::default(),
             skip_warmup_slots: false,
             additional_accounts: vec![],
-            tpu_use_quic: DEFAULT_TPU_USE_QUIC,
+            tpu_use_quic: true,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
         }
     }
@@ -276,9 +275,8 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
+            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            DEFAULT_TPU_ENABLE_UDP,
         )
         .expect("assume successful validator start");
 
@@ -302,10 +300,7 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
-            connection_cache: match config.tpu_use_quic {
-                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(config.tpu_connection_pool_size)),
-            },
+            connection_cache: Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis
@@ -476,9 +471,8 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
+            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            DEFAULT_TPU_ENABLE_UDP,
         )
         .expect("assume successful validator start");
 
@@ -837,9 +831,8 @@ impl Cluster for LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            DEFAULT_TPU_USE_QUIC,
+            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            DEFAULT_TPU_ENABLE_UDP,
         )
         .expect("assume successful validator start");
         cluster_validator_info.validator = Some(restarted_node);

@@ -383,7 +383,6 @@ impl Validator {
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
         tpu_connection_pool_size: usize,
-        tpu_enable_udp: bool,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -747,16 +746,13 @@ impl Validator {
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
 
-        let connection_cache = match use_quic {
-            true => {
-                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
-                connection_cache
-                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
-                    .expect("Failed to update QUIC client certificates");
-                connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
-                Arc::new(connection_cache)
-            }
-            false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+        let connection_cache = {
+            let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+            connection_cache
+                .update_client_certificate(&identity_keypair, node.info.gossip.ip())
+                .expect("Failed to update QUIC client certificates");
+            connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
+            Arc::new(connection_cache)
         };
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
@@ -1026,7 +1022,6 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
-            tpu_enable_udp,
         );
 
         datapoint_info!(
@@ -2179,7 +2174,7 @@ mod tests {
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         solana_tpu_client::connection_cache::{
-            DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         },
         std::{fs::remove_dir_all, thread, time::Duration},
     };
@@ -2214,9 +2209,9 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            DEFAULT_TPU_USE_QUIC,
+            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            DEFAULT_TPU_ENABLE_UDP,
+            false,
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2299,9 +2294,9 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    DEFAULT_TPU_USE_QUIC,
+                    true,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
-                    DEFAULT_TPU_ENABLE_UDP,
+                    false,
                 )
                 .expect("assume successful validator start")
             })

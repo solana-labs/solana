@@ -30,7 +30,6 @@ use {
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
     thiserror::Error,
@@ -551,7 +550,7 @@ impl Default for CliConfig<'_> {
                 u64::from_str(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS).unwrap(),
             ),
             address_labels: HashMap::new(),
-            use_quic: !DEFAULT_TPU_ENABLE_UDP,
+            use_quic: true,
         }
     }
 }

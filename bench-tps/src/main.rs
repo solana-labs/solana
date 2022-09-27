@@ -51,10 +51,7 @@ fn create_client(
             CommitmentConfig::confirmed(),
         )),
         ExternalClientType::ThinClient => {
-            let connection_cache = match use_quic {
-                true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
-                false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
-            };
+            let connection_cache = Arc::new(ConnectionCache::new(tpu_connection_pool_size));
 
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
@@ -107,10 +104,7 @@ fn create_client(
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = match use_quic {
-                true => ConnectionCache::new(tpu_connection_pool_size),
-                false => ConnectionCache::with_udp(tpu_connection_pool_size),
-            };
+            let connection_cache = ConnectionCache::new(tpu_connection_pool_size);
 
             Arc::new(
                 TpuClient::new_with_connection_cache(

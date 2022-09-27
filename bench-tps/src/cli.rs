@@ -7,7 +7,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE},
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -81,7 +81,7 @@ impl Default for Config {
             target_slots_per_epoch: 0,
             target_node: None,
             external_client_type: ExternalClientType::default(),
-            use_quic: DEFAULT_TPU_USE_QUIC,
+            use_quic: true,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             use_randomized_compute_unit_price: false,
             use_durable_nonce: false,

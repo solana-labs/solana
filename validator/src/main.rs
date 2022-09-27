@@ -71,7 +71,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+        DEFAULT_TPU_CONNECTION_POOL_SIZE,
     },
     solana_validator::{
         admin_rpc_service,
@@ -2448,7 +2448,7 @@ pub fn main() {
     let tpu_enable_udp = if matches.is_present("tpu_enable_udp") {
         true
     } else {
-        DEFAULT_TPU_ENABLE_UDP
+        false
     };
 
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
@@ -3242,7 +3242,6 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
-        tpu_enable_udp,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

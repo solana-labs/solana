@@ -30,14 +30,8 @@ use {
 // Should be non-zero
 static MAX_CONNECTIONS: usize = 1024;
 
-/// Used to decide whether the TPU and underlying connection cache should use
-/// QUIC connections.
-pub const DEFAULT_TPU_USE_QUIC: bool = true;
-
 /// Default TPU connection pool size per remote address
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
-
-pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 
 #[derive(Default)]
 pub struct ConnectionCacheStats {
@@ -235,7 +229,6 @@ pub struct ConnectionCache {
     connection_pool_size: usize,
     tpu_udp_socket: Arc<UdpSocket>,
     client_certificate: Arc<QuicClientCertificate>,
-    use_quic: bool,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     maybe_client_pubkey: Option<Pubkey>,
 }
@@ -270,7 +263,6 @@ impl ConnectionCache {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
-            use_quic: true,
             connection_pool_size,
             ..Self::default()
         }
@@ -298,22 +290,8 @@ impl ConnectionCache {
         self.maybe_client_pubkey = Some(*client_pubkey);
     }
 
-    pub fn with_udp(connection_pool_size: usize) -> Self {
-        // The minimum pool size is 1.
-        let connection_pool_size = 1.max(connection_pool_size);
-        Self {
-            use_quic: false,
-            connection_pool_size,
-            ..Self::default()
-        }
-    }
-
-    pub fn use_quic(&self) -> bool {
-        self.use_quic
-    }
-
     fn create_endpoint(&self, force_use_udp: bool) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic() && !force_use_udp {
+        if !force_use_udp {
             Some(Arc::new(QuicLazyInitializedEndpoint::new(
                 self.client_certificate.clone(),
             )))
@@ -366,7 +344,7 @@ impl ConnectionCache {
                 });
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
-            let connection = if !self.use_quic() || force_use_udp {
+            let connection = if force_use_udp {
                 BaseTpuConnection::Udp(self.tpu_udp_socket.clone())
             } else {
                 BaseTpuConnection::Quic(Arc::new(QuicClient::new(
@@ -428,11 +406,9 @@ impl ConnectionCache {
         let map = self.map.read().unwrap();
         get_connection_map_lock_measure.stop();
 
-        let port_offset = if self.use_quic() { QUIC_PORT_OFFSET } else { 0 };
-
         let port = addr
             .port()
-            .checked_add(port_offset)
+            .checked_add(QUIC_PORT_OFFSET)
             .unwrap_or_else(|| addr.port());
         let force_use_udp = port == addr.port();
         let addr = SocketAddr::new(addr.ip(), port);
@@ -571,7 +547,6 @@ impl Default for ConnectionCache {
                 certificates: certs,
                 key: priv_key,
             }),
-            use_quic: DEFAULT_TPU_USE_QUIC,
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
         }
@@ -685,11 +660,7 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let connection_cache = ConnectionCache::default();
-        let port_offset = if connection_cache.use_quic() {
-            QUIC_PORT_OFFSET
-        } else {
-            0
-        };
+
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
@@ -704,7 +675,7 @@ mod tests {
             addrs.iter().for_each(|a| {
                 let port = a
                     .port()
-                    .checked_add(port_offset)
+                    .checked_add(QUIC_PORT_OFFSET)
                     .unwrap_or_else(|| a.port());
                 let addr = &SocketAddr::new(a.ip(), port);
 
