@@ -1,3 +1,7 @@
+#[cfg(target_arch = "x86")]
+use core::arch::x86::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
+#[cfg(target_arch = "x86_64")]
+use core::arch::x86_64::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
@@ -14,11 +18,6 @@ use {
     },
     sys_info::{Error, LoadAvg},
 };
-
-#[cfg(target_arch = "x86")]
-use core::arch::x86::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
-#[cfg(target_arch = "x86_64")]
-use core::arch::x86_64::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
 
 const MS_PER_S: u64 = 1_000;
 const MS_PER_M: u64 = MS_PER_S * 60;
