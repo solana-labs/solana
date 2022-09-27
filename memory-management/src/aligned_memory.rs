@@ -124,27 +124,14 @@ impl<const ALIGN: usize> AlignedMemory<ALIGN> {
         Ok(())
     }
 
-    /// Write one byte into the memory.
+    /// Write a generic type T into the memory.
     ///
     /// # Safety
     ///
     /// Unsafe since it assumes that there is enough capacity.
-    pub unsafe fn write_u8_unchecked(&mut self, value: u8) {
+    pub unsafe fn write_unchecked<T>(&mut self, value: T) {
         let pos = self.mem.len();
-        let new_len = pos.saturating_add(mem::size_of::<u8>());
-        debug_assert!(new_len <= self.align_offset.saturating_add(self.max_len));
-        self.mem.set_len(new_len);
-        *self.mem.get_unchecked_mut(pos) = value;
-    }
-
-    /// Write one u64 into the memory.
-    ///
-    /// # Safety
-    ///
-    /// Unsafe since it assumes that there is enough capacity.
-    pub unsafe fn write_u64_unchecked(&mut self, value: u64) {
-        let pos = self.mem.len();
-        let new_len = pos.saturating_add(mem::size_of::<u64>());
+        let new_len = pos.saturating_add(mem::size_of::<T>());
         debug_assert!(new_len <= self.align_offset.saturating_add(self.max_len));
         self.mem.set_len(new_len);
         ptr::write_unaligned(
@@ -247,9 +234,9 @@ mod tests {
 
         let mut aligned_memory = AlignedMemory::<ALIGN>::with_capacity_zeroed(15);
         unsafe {
-            aligned_memory.write_u8_unchecked(42);
+            aligned_memory.write_unchecked::<u8>(42);
             assert_eq!(aligned_memory.len(), 1);
-            aligned_memory.write_u64_unchecked(0xCAFEBADDDEADCAFE);
+            aligned_memory.write_unchecked::<u64>(0xCAFEBADDDEADCAFE);
             assert_eq!(aligned_memory.len(), 9);
             aligned_memory.fill_write(3, 0).unwrap();
             aligned_memory.write_all_unchecked(b"foo");
@@ -276,22 +263,11 @@ mod tests {
     #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "<= self.align_offset.saturating_add(self.max_len)")]
-    fn test_write_u8_unchecked_debug_assert() {
-        let mut aligned_memory = AlignedMemory::<8>::with_capacity(1);
-        unsafe {
-            aligned_memory.write_u8_unchecked(42);
-            aligned_memory.write_u8_unchecked(24);
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    #[test]
-    #[should_panic(expected = "<= self.align_offset.saturating_add(self.max_len)")]
-    fn test_write_u64_unchecked_debug_assert() {
+    fn test_write_unchecked_debug_assert() {
         let mut aligned_memory = AlignedMemory::<8>::with_capacity(15);
         unsafe {
-            aligned_memory.write_u64_unchecked(42);
-            aligned_memory.write_u64_unchecked(24);
+            aligned_memory.write_unchecked::<u64>(42);
+            aligned_memory.write_unchecked::<u64>(24);
         }
     }
 
