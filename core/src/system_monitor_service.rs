@@ -16,23 +16,9 @@ use {
 };
 
 #[cfg(target_arch = "x86")]
-use {
-    core::arch::x86::{
-        CpuidResult,
-        __cpuid,
-        __cpuid_count,
-        __get_cpuid_max,
-    },
-};
+use core::arch::x86::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
 #[cfg(target_arch = "x86_64")]
-use {
-    core::arch::x86_64::{
-        CpuidResult,
-        __cpuid,
-        __cpuid_count,
-        __get_cpuid_max,
-    },
-};
+use core::arch::x86_64::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
 
 const MS_PER_S: u64 = 1_000;
 const MS_PER_M: u64 = MS_PER_S * 60;
@@ -709,7 +695,7 @@ impl SystemMonitorService {
         })
     }
 
-/*
+    /*
     fn string_append_u32_as_char(&mut string: String, val: u32)
     {
         let mut v = val;
@@ -725,18 +711,22 @@ impl SystemMonitorService {
         let cpuid_0 = __cpuid(0);
 
         let max_leaf = cpuid_0.eax;
-        let max_subleaf_7 =
-            if 7 <= max_leaf {
-                __get_cpuid_max(7).1
-            }
-            else {
-                0
-            };
+        let max_subleaf_7 = if 7 <= max_leaf {
+            __get_cpuid_max(7).1
+        } else {
+            0
+        };
 
         let mut manufacturer = String::from("");
-        for i in 0..4 { manufacturer.push((cpuid_0.ebx >> (i*8)) as u8 as char); };
-        for i in 0..4 { manufacturer.push((cpuid_0.edx >> (i*8)) as u8 as char); };
-        for i in 0..4 { manufacturer.push((cpuid_0.ecx >> (i*8)) as u8 as char); };
+        for i in 0..4 {
+            manufacturer.push((cpuid_0.ebx >> (i * 8)) as u8 as char);
+        }
+        for i in 0..4 {
+            manufacturer.push((cpuid_0.edx >> (i * 8)) as u8 as char);
+        }
+        for i in 0..4 {
+            manufacturer.push((cpuid_0.ecx >> (i * 8)) as u8 as char);
+        }
 
         let cpuid_1 = if 1 <= max_leaf {
             __cpuid(1)
@@ -768,7 +758,7 @@ impl SystemMonitorService {
                 edx: 0,
             }
         };
-        let cpuid_7_0 = if 7 <= max_leaf  {
+        let cpuid_7_0 = if 7 <= max_leaf {
             __cpuid_count(7, 0)
         } else {
             CpuidResult {
@@ -825,7 +815,9 @@ impl SystemMonitorService {
         }
 
         #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
-        unsafe { Self::report_cpuid_values(); };
+        unsafe {
+            Self::report_cpuid_values();
+        };
     }
 
     #[cfg(target_os = "linux")]
