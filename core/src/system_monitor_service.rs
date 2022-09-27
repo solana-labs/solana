@@ -15,13 +15,32 @@ use {
     sys_info::{Error, LoadAvg},
 };
 
+#[cfg(target_arch = "x86")]
+use {
+    core::arch::x86::{
+        CpuidResult,
+        __cpuid,
+        __cpuid_count,
+        __get_cpuid_max,
+    },
+};
+#[cfg(target_arch = "x86_64")]
+use {
+    core::arch::x86_64::{
+        CpuidResult,
+        __cpuid,
+        __cpuid_count,
+        __get_cpuid_max,
+    },
+};
+
 const MS_PER_S: u64 = 1_000;
 const MS_PER_M: u64 = MS_PER_S * 60;
 const MS_PER_H: u64 = MS_PER_M * 60;
 const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
-const SAMPLE_INTERVAL_CPU_MS: u64 = MS_PER_S;
+const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
 const SAMPLE_INTERVAL_DISK_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -690,6 +709,108 @@ impl SystemMonitorService {
         })
     }
 
+/*
+    fn string_append_u32_as_char(&mut string: String, val: u32)
+    {
+        let mut v = val;
+
+        for _i in 0..4 {
+            string.push(v as u8 as char);
+            v >>= 8;
+        };
+    }*/
+
+    #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
+    unsafe fn report_cpuid_values() {
+        let cpuid_0 = __cpuid(0);
+
+        let max_leaf = cpuid_0.eax;
+        let max_subleaf_7 =
+            if 7 <= max_leaf {
+                __get_cpuid_max(7).1
+            }
+            else {
+                0
+            };
+
+        let mut manufacturer = String::from("");
+        for i in 0..4 { manufacturer.push((cpuid_0.ebx >> (i*8)) as u8 as char); };
+        for i in 0..4 { manufacturer.push((cpuid_0.edx >> (i*8)) as u8 as char); };
+        for i in 0..4 { manufacturer.push((cpuid_0.ecx >> (i*8)) as u8 as char); };
+
+        let cpuid_1 = if 1 <= max_leaf {
+            __cpuid(1)
+        } else {
+            CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            }
+        };
+        let cpuid_2 = if 2 <= max_leaf {
+            __cpuid(2)
+        } else {
+            CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            }
+        };
+        let cpuid_4 = if 4 <= max_leaf {
+            __cpuid(4)
+        } else {
+            CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            }
+        };
+        let cpuid_7_0 = if 7 <= max_leaf  {
+            __cpuid_count(7, 0)
+        } else {
+            CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            }
+        };
+        let cpuid_7_1 = if 7 <= max_leaf && 1 <= max_subleaf_7 {
+            __cpuid_count(7, 1)
+        } else {
+            CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            }
+        };
+
+        datapoint_info!(
+            "cpuid-values",
+            ("manufacturer_id", manufacturer, String),
+            ("cpuid_1_eax", cpuid_1.eax as i64, i64),
+            ("cpuid_1_ebx", cpuid_1.ebx as i64, i64),
+            ("cpuid_1_ecx", cpuid_1.ecx as i64, i64),
+            ("cpuid_1_edx", cpuid_1.edx as i64, i64),
+            ("cpuid_2_eax", cpuid_2.eax as i64, i64),
+            ("cpuid_2_ebx", cpuid_2.ebx as i64, i64),
+            ("cpuid_2_ecx", cpuid_2.ecx as i64, i64),
+            ("cpuid_2_edx", cpuid_2.edx as i64, i64),
+            ("cpuid_4_eax", cpuid_4.eax as i64, i64),
+            ("cpuid_4_ebx", cpuid_4.ebx as i64, i64),
+            ("cpuid_4_ecx", cpuid_4.ecx as i64, i64),
+            ("cpuid_4_edx", cpuid_4.edx as i64, i64),
+            ("cpuid_7_0_ebx", cpuid_7_0.ebx as i64, i64),
+            ("cpuid_7_0_ecx", cpuid_7_0.ecx as i64, i64),
+            ("cpuid_7_0_edx", cpuid_7_0.edx as i64, i64),
+            ("cpuid_7_1_eax", cpuid_7_1.eax as i64, i64),
+        );
+    }
+
     fn report_cpu_stats() {
         if let Ok(info) = Self::cpu_info() {
             datapoint_info!(
@@ -702,6 +823,9 @@ impl SystemMonitorService {
                 ("total_num_threads", info.num_threads as i64, i64),
             )
         }
+
+        #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
+        unsafe { Self::report_cpuid_values(); };
     }
 
     #[cfg(target_os = "linux")]
