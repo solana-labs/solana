@@ -6941,6 +6941,11 @@ impl Bank {
             return false;
         }
 
+        // EAH calculations are skipped during warmup
+        if self.slot() < self.epoch_schedule().first_normal_slot {
+            return false;
+        }
+
         let stop_slot = epoch_accounts_hash::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }

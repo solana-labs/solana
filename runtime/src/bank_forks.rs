@@ -612,6 +612,11 @@ impl BankForks {
             return false;
         }
 
+        // EAH calculations are skipped during warmup
+        if bank.slot() < bank.epoch_schedule().first_normal_slot {
+            return false;
+        }
+
         let start_slot = epoch_accounts_hash::calculation_start(bank);
         bank.slot() > self.last_accounts_hash_slot
             && bank.parent_slot() < start_slot
