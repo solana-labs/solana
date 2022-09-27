@@ -4010,10 +4010,11 @@ impl Bank {
     pub fn simulate_transaction(
         &self,
         transaction: SanitizedTransaction,
+        state_account_overrides: AccountOverrides,
     ) -> TransactionSimulationResult {
         assert!(self.is_frozen(), "simulation bank must be frozen");
 
-        self.simulate_transaction_unchecked(transaction)
+        self.simulate_transaction_unchecked(transaction, state_account_overrides)
     }
 
     /// Run transactions against a bank without committing the results; does not check if the bank
@@ -4021,10 +4022,14 @@ impl Bank {
     pub fn simulate_transaction_unchecked(
         &self,
         transaction: SanitizedTransaction,
+        state_account_overrides: AccountOverrides,
     ) -> TransactionSimulationResult {
         let account_keys = transaction.message().account_keys();
         let number_of_accounts = account_keys.len();
-        let account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+        let mut account_overrides = self.get_account_overrides_for_simulation(&account_keys);
+        account_overrides
+            .accounts
+            .extend(state_account_overrides.accounts);
         let batch = self.prepare_simulation_batch(transaction);
         let mut timings = ExecuteTimings::default();
 

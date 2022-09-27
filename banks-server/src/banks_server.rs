@@ -7,6 +7,7 @@ use {
         TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
     },
     solana_runtime::{
+        account_overrides::AccountOverrides,
         bank::{Bank, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
@@ -178,7 +179,7 @@ fn simulate_transaction(
         post_simulation_accounts: _,
         units_consumed,
         return_data,
-    } = bank.simulate_transaction_unchecked(sanitized_transaction);
+    } = bank.simulate_transaction_unchecked(sanitized_transaction, AccountOverrides::default());
     let simulation_details = TransactionSimulationDetails {
         logs,
         units_consumed,

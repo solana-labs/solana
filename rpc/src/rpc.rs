@@ -3288,7 +3288,7 @@ pub mod rpc_accounts {
 // Full RPC interface that an API node is expected to provide
 // (rpc_minimal should also be provided by an API node)
 pub mod rpc_full {
-    use super::*;
+    use {super::*, solana_runtime::account_overrides::AccountOverrides};
     #[rpc]
     pub trait Full {
         type Metadata;
@@ -3349,6 +3349,14 @@ pub mod rpc_full {
             data: String,
             config: Option<RpcSimulateTransactionConfig>,
         ) -> Result<RpcResponse<RpcSimulateTransactionResult>>;
+
+        #[rpc(meta, name = "simulateTransactions")]
+        fn simulate_transactions(
+            &self,
+            meta: Self::Metadata,
+            data: Vec<String>,
+            config: Option<RpcSimulateTransactionConfig>,
+        ) -> Result<RpcResponse<Vec<RpcSimulateTransactionResult>>>;
 
         #[rpc(meta, name = "minimumLedgerSlot")]
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot>;
@@ -3696,7 +3704,7 @@ pub mod rpc_full {
                     post_simulation_accounts: _,
                     units_consumed,
                     return_data,
-                } = preflight_bank.simulate_transaction(transaction)
+                } = preflight_bank.simulate_transaction(transaction, AccountOverrides::default())
                 {
                     match err {
                         TransactionError::BlockhashNotFound => {
@@ -3782,7 +3790,7 @@ pub mod rpc_full {
                 post_simulation_accounts,
                 units_consumed,
                 return_data,
-            } = bank.simulate_transaction(transaction);
+            } = bank.simulate_transaction(transaction, AccountOverrides::default());
 
             let accounts = if let Some(config_accounts) = config_accounts {
                 let accounts_encoding = config_accounts
@@ -3836,6 +3844,136 @@ pub mod rpc_full {
                     return_data: return_data.map(|return_data| return_data.into()),
                 },
             ))
+        }
+
+        fn simulate_transactions(
+            &self,
+            meta: Self::Metadata,
+            data: Vec<String>,
+            config: Option<RpcSimulateTransactionConfig>,
+        ) -> Result<RpcResponse<Vec<RpcSimulateTransactionResult>>> {
+            debug!("simulate_transactions rpc request received");
+            let RpcSimulateTransactionConfig {
+                sig_verify,
+                replace_recent_blockhash,
+                commitment,
+                encoding,
+                accounts: config_accounts,
+                min_context_slot,
+            } = config.unwrap_or_default();
+            let tx_encoding = encoding.unwrap_or(UiTransactionEncoding::Base58);
+            let binary_encoding = tx_encoding.into_binary_encoding().ok_or_else(|| {
+                Error::invalid_params(format!(
+                    "unsupported encoding: {}. Supported encodings: base58, base64",
+                    tx_encoding
+                ))
+            })?;
+
+            let mut unsanitized_txs = data
+                .into_iter()
+                .map(|serialized| {
+                    let (_, unsanitized_tx) = decode_and_deserialize::<VersionedTransaction>(
+                        serialized,
+                        binary_encoding,
+                    )?;
+                    Ok(unsanitized_tx)
+                })
+                .collect::<Result<Vec<VersionedTransaction>>>()?;
+
+            let bank = &*meta.get_bank_with_config(RpcContextConfig {
+                commitment,
+                min_context_slot,
+            })?;
+            if replace_recent_blockhash {
+                if sig_verify {
+                    return Err(Error::invalid_params(
+                        "sigVerify may not be used with replaceRecentBlockhash",
+                    ));
+                }
+                for tx in unsanitized_txs.iter_mut() {
+                    tx.message.set_recent_blockhash(bank.last_blockhash());
+                }
+            }
+
+            let transactions: Vec<SanitizedTransaction> = unsanitized_txs
+                .into_iter()
+                .map(|unsanitized_tx| sanitize_transaction(unsanitized_tx, bank))
+                .collect::<Result<Vec<SanitizedTransaction>>>()?;
+
+            if sig_verify {
+                for transaction in transactions.iter() {
+                    verify_transaction(&transaction, &bank.feature_set)?;
+                }
+            }
+            // TODO:(leo)
+            let number_of_accounts = transactions[0].message().account_keys().len();
+
+            let mut overrides = AccountOverrides::default();
+            let mut rpc_simulation_results = Vec::with_capacity(transactions.len());
+            for transaction in transactions.into_iter() {
+                let TransactionSimulationResult {
+                    result,
+                    logs,
+                    post_simulation_accounts,
+                    units_consumed,
+                    return_data,
+                } = bank.simulate_transaction(transaction, overrides);
+                let accounts = if let Some(ref config_accounts) = config_accounts {
+                    let accounts_encoding = config_accounts
+                        .encoding
+                        .unwrap_or(UiAccountEncoding::Base64);
+
+                    if accounts_encoding == UiAccountEncoding::Binary
+                        || accounts_encoding == UiAccountEncoding::Base58
+                    {
+                        return Err(Error::invalid_params("base58 encoding not supported"));
+                    }
+
+                    if config_accounts.addresses.len() > number_of_accounts {
+                        return Err(Error::invalid_params(format!(
+                            "Too many accounts provided; max {}",
+                            number_of_accounts
+                        )));
+                    }
+
+                    if result.is_err() {
+                        Some(vec![None; config_accounts.addresses.len()])
+                    } else {
+                        Some(
+                            config_accounts
+                                .addresses
+                                .iter()
+                                .map(|address_str| {
+                                    let address = verify_pubkey(address_str)?;
+                                    post_simulation_accounts
+                                        .iter()
+                                        .find(|(key, _account)| key == &address)
+                                        .map(|(pubkey, account)| {
+                                            encode_account(account, pubkey, accounts_encoding, None)
+                                        })
+                                        .transpose()
+                                })
+                                .collect::<Result<Vec<_>>>()?,
+                        )
+                    }
+                } else {
+                    None
+                };
+                rpc_simulation_results.push(RpcSimulateTransactionResult {
+                    err: result.err(),
+                    logs: Some(logs),
+                    accounts,
+                    units_consumed: Some(units_consumed),
+                    return_data: return_data.map(|return_data| return_data.into()),
+                });
+
+                overrides = AccountOverrides::default();
+                for (pubkey, account) in post_simulation_accounts.into_iter() {
+                    overrides.set_account(&pubkey, Some(account));
+                }
+            }
+
+            Ok(new_response(bank, rpc_simulation_results))
         }
 
         fn minimum_ledger_slot(&self, meta: Self::Metadata) -> Result<Slot> {
@@ -6039,6 +6177,103 @@ pub mod tests {
             "id": 1,
         });
 
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rpc_simulate_transactions() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
+        let recent_blockhash = bank.confirmed_last_blockhash();
+        let RpcHandler {
+            ref meta, ref io, ..
+        } = rpc;
+
+        let bob_pubkey = solana_sdk::pubkey::new_rand();
+        let mut tx = system_transaction::transfer(
+            &rpc.mint_keypair,
+            &bob_pubkey,
+            rent_exempt_amount,
+            recent_blockhash,
+        );
+        let tx_serialized_encoded = bs58::encode(serialize(&tx).unwrap()).into_string();
+        tx.signatures[0] = Signature::default();
+
+        // Simulation bank must be frozen
+        bank.freeze();
+
+        // Two of the same transfer transactions
+        let req = format!(
+            r#"{{"jsonrpc":"2.0",
+                 "id":1,
+                 "method":"simulateTransactions",
+                 "params":[
+                   ["{}", "{}"],
+                   {{
+                     "sigVerify": true,
+                     "accounts": {{
+                       "encoding": "jsonParsed",
+                       "addresses": ["{}", "{}"]
+                     }}
+                   }}
+                 ]
+            }}"#,
+            tx_serialized_encoded,
+            tx_serialized_encoded,
+            solana_sdk::pubkey::new_rand(),
+            bob_pubkey,
+        );
+        let res = io.handle_request_sync(&req, meta.clone());
+        let expected_logs = [
+            "Program 11111111111111111111111111111111 invoke [1]",
+            "Program 11111111111111111111111111111111 success",
+        ];
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value": [
+                    {
+                        "accounts": [
+                            null,
+                            {
+                                "data": ["", "base64"],
+                                "executable": false,
+                                "owner": "11111111111111111111111111111111",
+                                "lamports": rent_exempt_amount,
+                                "rentEpoch": 0
+                            }
+                        ],
+                        "err":null,
+                        "logs": expected_logs,
+                        "returnData":null,
+                        "unitsConsumed":0
+                    },
+                    {
+                        "accounts": [
+                            null,
+                            {
+                                "data": ["", "base64"],
+                                "executable": false,
+                                "owner": "11111111111111111111111111111111",
+                                "lamports": rent_exempt_amount * 2,
+                                "rentEpoch": 0
+                            }
+                        ],
+                        "err":null,
+                        "logs": expected_logs,
+                        "returnData":null,
+                        "unitsConsumed":0
+                    }
+                ]
+            },
+            "id": 1,
+        });
         let expected: Response =
             serde_json::from_value(expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
