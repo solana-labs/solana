@@ -127,10 +127,13 @@ pub struct GossipStats {
     pub(crate) new_push_requests: Counter,
     pub(crate) new_push_requests_num: Counter,
     pub(crate) packets_received_count: Counter,
+    pub(crate) packets_received_ping_messages_count: Counter,
+    pub(crate) packets_received_pong_messages_count: Counter,
     pub(crate) packets_received_prune_messages_count: Counter,
     pub(crate) packets_received_pull_requests_count: Counter,
     pub(crate) packets_received_pull_responses_count: Counter,
     pub(crate) packets_received_push_messages_count: Counter,
+    pub(crate) packets_received_unknown_count: Counter,
     pub(crate) packets_received_verified_count: Counter,
     pub(crate) packets_sent_gossip_requests_count: Counter,
     pub(crate) packets_sent_prune_messages_count: Counter,
@@ -455,6 +458,16 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         (
+            "packets_received_ping_messages_count",
+            stats.packets_received_ping_messages_count.clear(),
+            i64
+        ),
+        (
+            "packets_received_pong_messages_count",
+            stats.packets_received_pong_messages_count.clear(),
+            i64
+        ),
+        (
             "packets_received_prune_messages_count",
             stats.packets_received_prune_messages_count.clear(),
             i64
@@ -472,6 +485,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "packets_received_push_messages_count",
             stats.packets_received_push_messages_count.clear(),
+            i64
+        ),
+        (
+            "packets_received_unknown_count",
+            stats.packets_received_unknown_count.clear(),
             i64
         ),
         (
