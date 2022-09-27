@@ -77,17 +77,12 @@ impl FetchStage {
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
     ) -> Self {
-        let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
         let tpu_vote_sockets = tpu_vote_sockets.into_iter().map(Arc::new).collect();
         Self::new_multi_socket(
-            tx_sockets,
-            tpu_forwards_sockets,
             tpu_vote_sockets,
             exit,
             sender,
             vote_sender,
-            forward_sender,
             forward_receiver,
             poh_recorder,
             coalesce_ms,
@@ -139,13 +134,10 @@ impl FetchStage {
 
     #[allow(clippy::too_many_arguments)]
     fn new_multi_socket(
-        tpu_sockets: Vec<Arc<UdpSocket>>,
-        tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
         sender: &PacketBatchSender,
         vote_sender: &PacketBatchSender,
-        forward_sender: &PacketBatchSender,
         forward_receiver: PacketBatchReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
