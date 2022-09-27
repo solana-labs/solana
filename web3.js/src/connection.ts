@@ -2711,6 +2711,7 @@ export class Connection {
     this._rpcWebSocket = new RpcWebSocketClient(this._rpcWsEndpoint, {
       autoconnect: false,
       max_reconnects: Infinity,
+      headers: httpHeaders,
     });
     this._rpcWebSocket.on('open', this._wsOnOpen.bind(this));
     this._rpcWebSocket.on('error', this._wsOnError.bind(this));
