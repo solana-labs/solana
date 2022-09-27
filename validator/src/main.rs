@@ -1234,14 +1234,6 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
-            Arg::with_name("tpu_use_quic")
-                .long("tpu-use-quic")
-                .takes_value(false)
-                .hidden(true)
-                .conflicts_with("tpu_disable_quic")
-                .help("Use QUIC to send transactions."),
-        )
-        .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
                 .takes_value(false)
@@ -2444,7 +2436,6 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
-    let tpu_use_quic = !matches.is_present("tpu_disable_quic");
     let tpu_enable_udp = if matches.is_present("tpu_enable_udp") {
         true
     } else {
@@ -3240,7 +3231,6 @@ pub fn main() {
         should_check_duplicate_instance,
         start_progress,
         socket_addr_space,
-        tpu_use_quic,
         tpu_connection_pool_size,
     )
     .unwrap_or_else(|e| {

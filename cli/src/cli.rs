@@ -502,7 +502,6 @@ pub struct CliConfig<'a> {
     pub send_transaction_config: RpcSendTransactionConfig,
     pub confirm_transaction_initial_timeout: Duration,
     pub address_labels: HashMap<String, String>,
-    pub use_quic: bool,
 }
 
 impl CliConfig<'_> {
@@ -550,7 +549,6 @@ impl Default for CliConfig<'_> {
                 u64::from_str(DEFAULT_CONFIRM_TX_TIMEOUT_SECONDS).unwrap(),
             ),
             address_labels: HashMap::new(),
-            use_quic: true,
         }
     }
 }

@@ -202,7 +202,6 @@ pub fn parse_args<'a>(
         config.address_labels
     };
 
-    let use_quic = matches.is_present("use_quic");
 
     Ok((
         CliConfig {
@@ -222,7 +221,6 @@ pub fn parse_args<'a>(
             },
             confirm_transaction_initial_timeout,
             address_labels,
-            use_quic,
         },
         signers,
     ))

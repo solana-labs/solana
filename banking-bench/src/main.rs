@@ -341,7 +341,6 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
-        let tpu_use_quic = matches.is_present("tpu_use_quic");
         let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,

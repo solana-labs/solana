@@ -381,7 +381,6 @@ impl Validator {
         should_check_duplicate_instance: bool,
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
-        use_quic: bool,
         tpu_connection_pool_size: usize,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
@@ -2209,9 +2208,7 @@ mod tests {
             true, // should_check_duplicate_instance
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
-            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            false,
         )
         .expect("assume successful validator start");
         assert_eq!(

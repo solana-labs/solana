@@ -450,7 +450,7 @@ fn test_rpc_subscriptions() {
     }
 }
 
-fn run_tpu_send_transaction(tpu_use_quic: bool) {
+fn run_tpu_send_transaction() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let test_validator =
@@ -485,14 +485,10 @@ fn run_tpu_send_transaction(tpu_use_quic: bool) {
     }
 }
 
-#[test]
-fn test_tpu_send_transaction() {
-    run_tpu_send_transaction(/*tpu_use_quic*/ false)
-}
 
 #[test]
 fn test_tpu_send_transaction_with_quic() {
-    run_tpu_send_transaction(/*tpu_use_quic*/ true)
+    run_tpu_send_transaction()
 }
 
 #[test]

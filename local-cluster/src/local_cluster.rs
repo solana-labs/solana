@@ -85,7 +85,6 @@ pub struct ClusterConfig {
     pub cluster_type: ClusterType,
     pub poh_config: PohConfig,
     pub additional_accounts: Vec<(Pubkey, AccountSharedData)>,
-    pub tpu_use_quic: bool,
     pub tpu_connection_pool_size: usize,
 }
 
@@ -106,7 +105,6 @@ impl Default for ClusterConfig {
             poh_config: PohConfig::default(),
             skip_warmup_slots: false,
             additional_accounts: vec![],
-            tpu_use_quic: true,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
         }
     }
@@ -275,7 +273,6 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
         )
         .expect("assume successful validator start");
@@ -471,7 +468,6 @@ impl LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
         )
         .expect("assume successful validator start");
@@ -831,7 +827,6 @@ impl Cluster for LocalCluster {
             true, // should_check_duplicate_instance
             Arc::new(RwLock::new(ValidatorStartProgress::default())),
             socket_addr_space,
-            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
         )
         .expect("assume successful validator start");

@@ -815,7 +815,6 @@ impl TestValidator {
             true, // should_check_duplicate_instance
             config.start_progress.clone(),
             socket_addr_space,
-            true,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
         )?);
 
