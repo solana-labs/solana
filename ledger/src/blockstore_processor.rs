@@ -8,7 +8,6 @@ use {
     crossbeam_channel::Sender,
     itertools::Itertools,
     log::*,
-    rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
@@ -489,7 +488,6 @@ fn execute_batches(
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
-    randomize: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
 ) -> Result<()> {
@@ -521,7 +519,6 @@ pub fn process_entries_for_tests(
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
-        randomize,
         None,
         transaction_status_sender,
         replay_vote_sender,
@@ -535,12 +532,10 @@ pub fn process_entries_for_tests(
     result
 }
 
-// Note: If randomize is true this will shuffle entries' transactions in-place.
 #[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
-    randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -552,7 +547,6 @@ fn process_entries_with_callback(
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
-    let mut rng = thread_rng();
     let cost_model = CostModel::new();
 
     for ReplayEntry {
@@ -587,17 +581,8 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = if randomize {
-                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
-                        transactions.drain(..).zip(starting_index..).collect();
-                    transactions_and_indexes.shuffle(&mut rng);
-                    let (txs, indexes): (Vec<_>, Vec<_>) =
-                        transactions_and_indexes.into_iter().unzip();
-                    *transactions = txs;
-                    indexes
-                } else {
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
-                };
+                let transaction_indexes =
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect();
 
                 loop {
                     // try to lock the accounts
@@ -1230,7 +1215,6 @@ fn confirm_slot_entries(
             let process_result = process_entries_with_callback(
                 bank,
                 &mut replay_entries,
-                true, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
@@ -2546,7 +2530,7 @@ pub mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries_for_tests(&bank, slot_entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank, slot_entries, None, None).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2740,7 +2724,7 @@ pub mod tests {
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![tick], true, None, None),
+            process_entries_for_tests(&bank, vec![tick], None, None),
             Ok(())
         );
         assert_eq!(bank.tick_height(), 1);
@@ -2775,7 +2759,7 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_1, entry_2], None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2834,7 +2818,6 @@ pub mod tests {
             process_entries_for_tests(
                 &bank,
                 vec![entry_1_to_mint, entry_2_to_3_mint_to_1],
-                false,
                 None,
                 None,
             ),
@@ -2906,7 +2889,6 @@ pub mod tests {
         assert!(process_entries_for_tests(
             &bank,
             vec![entry_1_to_mint.clone(), entry_2_to_3_mint_to_1.clone()],
-            false,
             None,
             None,
         )
@@ -3018,7 +3000,6 @@ pub mod tests {
                 entry_2_to_3_and_1_to_mint,
                 entry_conflict_itself,
             ],
-            false,
             None,
             None,
         )
@@ -3068,7 +3049,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_1, entry_2], None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -3129,7 +3110,7 @@ pub mod tests {
             })
             .collect();
         assert_eq!(
-            process_entries_for_tests(&bank, entries, true, None, None),
+            process_entries_for_tests(&bank, entries, None, None),
             Ok(())
         );
     }
@@ -3192,7 +3173,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            process_entries_for_tests(&bank, vec![entry], None, None),
             Ok(())
         );
         bank.squash();
@@ -3252,13 +3233,7 @@ pub mod tests {
             system_transaction::transfer(&keypair1, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(
-                &bank,
-                vec![entry_1, tick, entry_2.clone()],
-                true,
-                None,
-                None
-            ),
+            process_entries_for_tests(&bank, vec![entry_1, tick, entry_2.clone()], None, None),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -3269,7 +3244,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_3], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_3], None, None),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -3349,7 +3324,7 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1_to_mint], false, None, None),
+            process_entries_for_tests(&bank, vec![entry_1_to_mint], None, None),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3549,7 +3524,7 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries_for_tests(&bank, entries, true, None, None).expect("paying failed");
+            process_entries_for_tests(&bank, entries, None, None).expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -3572,7 +3547,7 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries_for_tests(&bank, entries, true, None, None).expect("refunding failed");
+            process_entries_for_tests(&bank, entries, None, None).expect("refunding failed");
 
             // advance to next block
             process_entries_for_tests(
@@ -3580,7 +3555,6 @@ pub mod tests {
                 (0..bank.ticks_per_slot())
                     .map(|_| next_entry_mut(&mut hash, 1, vec![]))
                     .collect::<Vec<_>>(),
-                true,
                 None,
                 None,
             )
@@ -3625,7 +3599,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_for_tests(&bank0, entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank0, entries, None, None).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3792,8 +3766,7 @@ pub mod tests {
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
-        let _ =
-            process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
+        let _ = process_entries_for_tests(&bank1, vec![entry], None, Some(&replay_vote_sender));
         let signatures: BTreeSet<_> = replay_vote_receiver
             .try_iter()
             .map(|(.., signature)| signature)
@@ -4243,7 +4216,6 @@ pub mod tests {
         if let TransactionStatusMessage::Batch(batch) = batch {
             assert_eq!(batch.transactions.len(), 2);
             assert_eq!(batch.transaction_indexes.len(), 2);
-            // Assert contains instead of the actual vec due to randomize
             assert!(batch.transaction_indexes.contains(&0));
             assert!(batch.transaction_indexes.contains(&1));
         } else {
@@ -4289,7 +4261,6 @@ pub mod tests {
         if let TransactionStatusMessage::Batch(batch) = batch {
             assert_eq!(batch.transactions.len(), 3);
             assert_eq!(batch.transaction_indexes.len(), 3);
-            // Assert contains instead of the actual vec due to randomize
             assert!(batch.transaction_indexes.contains(&2));
             assert!(batch.transaction_indexes.contains(&3));
             assert!(batch.transaction_indexes.contains(&4));

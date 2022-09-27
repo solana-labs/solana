@@ -298,7 +298,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 }
 
 fn simulate_process_entries(
-    randomize_txs: bool,
     mint_keypair: &Keypair,
     mut tx_vector: Vec<VersionedTransaction>,
     genesis_config: &GenesisConfig,
@@ -331,11 +330,11 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
+    process_entries_for_tests(&bank, vec![entry], None, None).unwrap();
 }
 
 #[allow(clippy::same_item_push)]
-fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
+fn bench_process_entries(bencher: &mut Bencher) {
     // entropy multiplier should be big enough to provide sufficient entropy
     // but small enough to not take too much time while executing the test.
     let entropy_multiplier: usize = 25;
@@ -360,7 +359,6 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
 
     bencher.iter(|| {
         simulate_process_entries(
-            randomize_txs,
             &mint_keypair,
             tx_vector.clone(),
             &genesis_config,
@@ -373,10 +371,5 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
 
 #[bench]
 fn bench_process_entries_without_order_shuffeling(bencher: &mut Bencher) {
-    bench_process_entries(false, bencher);
-}
-
-#[bench]
-fn bench_process_entries_with_order_shuffeling(bencher: &mut Bencher) {
-    bench_process_entries(true, bencher);
+    bench_process_entries(bencher);
 }
