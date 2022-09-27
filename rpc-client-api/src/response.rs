@@ -374,7 +374,7 @@ pub struct RpcVoteAccountInfo {
     /// Whether this account is staked for the current epoch
     pub epoch_vote_account: bool,
 
-    /// History of how many credits earned by the end of each epoch
+    /// Latest history of earned credits for up to `MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY` epochs
     ///   each tuple is (Epoch, credits, prev_credits)
     pub epoch_credits: Vec<(Epoch, u64, u64)>,
 
