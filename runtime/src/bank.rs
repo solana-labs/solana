@@ -3185,6 +3185,10 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
+        debug!("freeze slot {}", self.slot);
+        let builtins = builtins::get();
+        assert!(self.check_builtins_exist(&builtins));
+
         // This lock prevents any new commits from BankingStage
         // `process_and_record_transactions_locked()` from coming
         // in after the last tick is observed. This is because in
@@ -3361,7 +3365,10 @@ impl Bank {
                     if native_loader::check_id(account.owner()) {
                         Some(account)
                     } else {
-                        // malicious account is pre-occupying at program_id
+                        info!(
+                            "malicious account {:?} is pre-occupying at program_id {}",
+                            account, program_id
+                        );
                         self.burn_and_purge_account(program_id, account);
                         None
                     }
@@ -6387,6 +6394,34 @@ impl Bank {
 
     pub fn accounts(&self) -> Arc<Accounts> {
         self.rc.accounts.clone()
+    }
+
+    ///  Check builtins all exist.
+    pub fn check_builtins_exist(&self, builtins: &Builtins) -> bool {
+        let mut all_exist = true;
+        for builtin in &builtins.genesis_builtins {
+            if let Some(_account) = self.get_account_with_fixed_root(&builtin.id) {
+            } else {
+                all_exist = false;
+                break;
+            }
+        }
+        all_exist
+    }
+
+    pub fn add_builtins(&mut self, builtins: &Builtins) {
+        for builtin in &builtins.genesis_builtins {
+            self.add_builtin(
+                &builtin.name,
+                &builtin.id,
+                builtin.process_instruction_with_context,
+            );
+        }
+        for precompile in get_precompiles() {
+            if precompile.feature.is_none() {
+                self.add_precompile(&precompile.program_id);
+            }
+        }
     }
 
     fn finish_init(

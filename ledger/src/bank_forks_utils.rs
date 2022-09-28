@@ -15,7 +15,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
-        snapshot_utils,
+        snapshot_utils::{self, SnapshotFrom},
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{
@@ -97,22 +97,26 @@ pub fn load_bank_forks(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
         );
-        let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
-        fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
-            .expect("Couldn't create snapshot directory");
-
-        if snapshot_utils::get_highest_full_snapshot_archive_info(
-            &snapshot_config.full_snapshot_archives_dir,
-        )
-        .is_some()
-        {
+        if snapshot_config.snapshot_from == SnapshotFrom::File {
             true
         } else {
-            warn!(
-                "No snapshot package found in directory: {:?}; will load from genesis",
-                &snapshot_config.full_snapshot_archives_dir
-            );
-            false
+            let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
+            fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
+                .expect("Couldn't create snapshot directory");
+
+            if snapshot_utils::get_highest_full_snapshot_archive_info(
+                &snapshot_config.full_snapshot_archives_dir,
+            )
+            .is_some()
+            {
+                true
+            } else {
+                warn!(
+                    "No snapshot package found in directory: {:?}; will load from genesis",
+                    &snapshot_config.full_snapshot_archives_dir
+                );
+                false
+            }
         }
     } else {
         info!("Snapshots disabled; will load from genesis");
@@ -199,11 +203,9 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
-        snapshot_utils::bank_from_latest_snapshot_archives(
+    let file_ret = if snapshot_config.snapshot_from == SnapshotFrom::File {
+        match snapshot_utils::bank_from_latest_snapshot_files(
             &snapshot_config.bank_snapshots_dir,
-            &snapshot_config.full_snapshot_archives_dir,
-            &snapshot_config.incremental_snapshot_archives_dir,
             &account_paths,
             genesis_config,
             &process_options.runtime_config,
@@ -218,10 +220,46 @@ fn bank_forks_from_snapshot(
             process_options.accounts_db_skip_shrink,
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
-            accounts_update_notifier,
+            accounts_update_notifier.clone(),
             exit,
-        )
-        .expect("Load from snapshot failed");
+        ) {
+            Ok(good_ret) => Some(good_ret),
+            Err(err) => {
+                info!("Failed to constuct the bank from the snaphot files.  Error: {err}.  Fall back to using the archives.");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+        match file_ret {
+            Some(good_ret) => good_ret,
+            None => snapshot_utils::bank_from_latest_snapshot_archives(
+                &snapshot_config.bank_snapshots_dir,
+                &snapshot_config.full_snapshot_archives_dir,
+                &snapshot_config.incremental_snapshot_archives_dir,
+                &account_paths,
+                genesis_config,
+                &process_options.runtime_config,
+                process_options.debug_keys.clone(),
+                Some(&crate::builtins::get(
+                    process_options.runtime_config.bpf_jit,
+                )),
+                process_options.account_indexes.clone(),
+                process_options.accounts_db_caching_enabled,
+                process_options.limit_load_slot_count_from_snapshot,
+                process_options.shrink_ratio,
+                process_options.accounts_db_test_hash_calculation,
+                process_options.accounts_db_skip_shrink,
+                process_options.verify_index,
+                process_options.accounts_db_config.clone(),
+                accounts_update_notifier,
+                exit,
+            )
+            .expect("Load from snapshot failed"),
+        };
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);

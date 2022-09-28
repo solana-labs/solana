@@ -370,7 +370,7 @@ impl AppendVec {
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(initial_len),
             file_size: size as u64,
-            remove_on_drop: true,
+            remove_on_drop: false,
         }
     }
 
@@ -435,10 +435,14 @@ impl AppendVec {
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let new = Self::new_from_file_unchecked(path, current_len)?;
+        let new = Self::new_from_file_unchecked(&path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
+            error!(
+                "The appendvec at path {} is not santitized",
+                path.as_ref().display()
+            );
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "incorrect layout/length/data",
@@ -478,7 +482,7 @@ impl AppendVec {
             append_lock: Mutex::new(()),
             current_len: AtomicUsize::new(current_len),
             file_size,
-            remove_on_drop: true,
+            remove_on_drop: false,
         })
     }
 

@@ -1028,17 +1028,20 @@ fn load_bank_forks(
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
 ) -> Result<(Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>), BlockstoreProcessorError> {
-    let bank_snapshots_dir = blockstore
-        .ledger_path()
-        .join(if blockstore.is_primary_access() {
+    let arg_snapshot_from_file = arg_matches.is_present("snapshot_from_file");
+    let bank_snapshots_dir = blockstore.ledger_path().join(
+        if blockstore.is_primary_access() || arg_snapshot_from_file {
             "snapshot"
         } else {
             "snapshot.ledger-tool"
-        });
+        },
+    );
 
     let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
         None
+    } else if arg_snapshot_from_file {
+        Some(SnapshotConfig::new_from_file(bank_snapshots_dir))
     } else {
         let full_snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
@@ -1081,7 +1084,7 @@ fn load_bank_forks(
             exit(1);
         }
         account_paths.split(',').map(PathBuf::from).collect()
-    } else if blockstore.is_primary_access() {
+    } else if blockstore.is_primary_access() || arg_snapshot_from_file {
         vec![blockstore.ledger_path().join("accounts")]
     } else {
         let non_primary_accounts_path = blockstore.ledger_path().join("accounts.ledger-tool");
@@ -1091,11 +1094,10 @@ fn load_bank_forks(
         );
 
         if non_primary_accounts_path.exists() {
-            info!("Clearing {:?}", non_primary_accounts_path);
-            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
-            move_and_async_delete_path(&non_primary_accounts_path);
-            measure_time.stop();
-            info!("done. {}", measure_time);
+            info!(
+                "Skip clearing {}, to save the snapshot unpacking work.",
+                non_primary_accounts_path.display()
+            );
         }
 
         vec![non_primary_accounts_path]
@@ -1304,6 +1306,10 @@ fn main() {
         .long("no-snapshot")
         .takes_value(false)
         .help("Do not start from a local snapshot if present");
+    let snapshot_from_file = Arg::with_name("snapshot_from_file")
+        .long("snapshot-from-file")
+        .takes_value(false)
+        .help("construct initial bank state from files instead of archives");
     let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
         .long("no-bpf-jit")
         .takes_value(false)
@@ -1765,6 +1771,7 @@ fn main() {
             SubCommand::with_name("verify")
             .about("Verify the ledger")
             .arg(&no_snapshot_arg)
+            .arg(&snapshot_from_file)
             .arg(&account_paths_arg)
             .arg(&accounts_index_path_arg)
             .arg(&halt_at_slot_arg)
@@ -1805,6 +1812,7 @@ fn main() {
             SubCommand::with_name("graph")
             .about("Create a Graphviz rendering of the ledger")
             .arg(&no_snapshot_arg)
+            .arg(&snapshot_from_file)
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
@@ -1834,6 +1842,7 @@ fn main() {
             SubCommand::with_name("create-snapshot")
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
+            .arg(&snapshot_from_file)
             .arg(&account_paths_arg)
             .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)

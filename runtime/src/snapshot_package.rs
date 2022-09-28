@@ -36,6 +36,8 @@ pub struct AccountsPackage {
     pub package_type: AccountsPackageType,
     pub slot: Slot,
     pub block_height: Slot,
+    //pub slot_deltas: Option<Vec<BankSlotDelta>>, // TBD will remove this parameter?
+    //pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
     pub expected_capitalization: u64,
     pub accounts_hash_for_testing: Option<AccountsHash>,
@@ -59,7 +61,7 @@ impl AccountsPackage {
         bank: &Bank,
         bank_snapshot_info: &BankSnapshotInfo,
         bank_snapshots_dir: impl AsRef<Path>,
-        slot_deltas: Vec<BankSlotDelta>,
+        slot_deltas: Option<Vec<BankSlotDelta>>,
         full_snapshot_archives_dir: impl AsRef<Path>,
         incremental_snapshot_archives_dir: impl AsRef<Path>,
         snapshot_storages: SnapshotStorages,
@@ -92,11 +94,17 @@ impl AccountsPackage {
                 .path()
                 .join(bank_snapshot_info.slot.to_string());
             fs::create_dir_all(&snapshot_hardlink_dir)?;
-            let file_name =
+            let snapshot_file_name =
                 snapshot_utils::path_to_file_name_str(&bank_snapshot_info.snapshot_path)?;
             fs::hard_link(
                 &bank_snapshot_info.snapshot_path,
-                snapshot_hardlink_dir.join(file_name),
+                &snapshot_hardlink_dir.join(snapshot_file_name),
+            )?;
+            let status_cache_file_name =
+                snapshot_utils::path_to_file_name_str(&bank_snapshot_info.status_cache_path)?;
+            fs::hard_link(
+                &bank_snapshot_info.status_cache_path,
+                &snapshot_links.path().join(status_cache_file_name),
             )?;
         }
 
@@ -167,6 +175,8 @@ impl AccountsPackage {
             package_type: AccountsPackageType::AccountsHashVerifier,
             slot: Slot::default(),
             block_height: Slot::default(),
+            //slot_deltas: Some(Vec::default()),
+            //snapshot_links: TempDir::new().unwrap(),
             snapshot_storages: SnapshotStorages::default(),
             expected_capitalization: u64::default(),
             accounts_hash_for_testing: Option::default(),
@@ -237,7 +247,6 @@ pub enum AccountsPackageType {
 pub struct SnapshotPackage {
     pub snapshot_archive_info: SnapshotArchiveInfo,
     pub block_height: Slot,
-    pub slot_deltas: Vec<BankSlotDelta>,
     pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
     pub snapshot_version: SnapshotVersion,
@@ -293,8 +302,9 @@ impl SnapshotPackage {
                 archive_format: snapshot_info.archive_format,
             },
             block_height: accounts_package.block_height,
-            slot_deltas: snapshot_info.slot_deltas,
-            snapshot_links: snapshot_info.snapshot_links,
+            //slot_deltas: snapshot_info.slot_deltas,
+            //snapshot_links: snapshot_info.snapshot_links,
+            snapshot_links: accounts_package.snapshot_links,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,

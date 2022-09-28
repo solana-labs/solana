@@ -1,5 +1,5 @@
 use {
-    crate::snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+    crate::snapshot_utils::{self, ArchiveFormat, SnapshotFrom, SnapshotVersion},
     solana_sdk::clock::Slot,
     std::path::PathBuf,
 };
@@ -41,8 +41,11 @@ pub struct SnapshotConfig {
     /// This is the `debug_verify` parameter to use when calling `update_accounts_hash()`
     pub accounts_hash_debug_verify: bool,
 
-    // Thread niceness adjustment for snapshot packager service
+    /// Thread niceness adjustment for snapshot packager service
     pub packager_thread_niceness_adj: i8,
+
+    /// The snapshot source
+    pub snapshot_from: SnapshotFrom,
 }
 
 impl Default for SnapshotConfig {
@@ -64,6 +67,7 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             accounts_hash_debug_verify: false,
             packager_thread_niceness_adj: 0,
+            snapshot_from: SnapshotFrom::Archive,
         }
     }
 }
@@ -75,6 +79,18 @@ impl SnapshotConfig {
         Self {
             usage: SnapshotUsage::LoadOnly,
             ..Self::default()
+        }
+    }
+
+    /// This is to construct the initial bank state from the directory files, not from the archives.
+    pub fn new_from_file(bank_snapshots_dir: PathBuf) -> Self {
+        Self {
+            bank_snapshots_dir,
+            snapshot_from: SnapshotFrom::File,
+            archive_format: ArchiveFormat::None,
+            // The archive related fields are not used.  The clean way is to make them optional, set to None.
+            // Not sure if it is worth the work.
+            ..Self::new_load_only()
         }
     }
 
