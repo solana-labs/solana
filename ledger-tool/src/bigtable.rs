@@ -7,7 +7,6 @@ use {
     crossbeam_channel::unbounded,
     futures::stream::FuturesUnordered,
     log::{debug, error, info},
-    num_cpus,
     serde_json::json,
     solana_clap_utils::{
         input_parsers::pubkey_of,
