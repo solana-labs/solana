@@ -247,6 +247,10 @@ impl HashStats {
     }
 }
 
+/// While scanning appendvecs, this is the info that needs to be extracted, de-duped, and sorted from what is stored in an append vec.
+/// Note this can be saved/loaded during hash calculation to a memory mapped file whose contents are
+/// [CalculateHashIntermediate]
+#[repr(C)]
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
 pub struct CalculateHashIntermediate {
     pub hash: Hash,
