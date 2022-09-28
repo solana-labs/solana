@@ -126,6 +126,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5d78ce20460b82d3fa150275ed9d55e21064fc7951177baacf86a145c4a4b1f"
 
 [[package]]
+name = "array-bytes"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ad284aeb45c13f2fb4f084de4a420ebf447423bdf9386c0540ce33cb3ef4b8c"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4238,6 +4244,17 @@ dependencies = [
 name = "solana-bpf-rust-alloc"
 version = "1.15.0"
 dependencies = [
+ "solana-program 1.15.0",
+]
+
+[[package]]
+name = "solana-bpf-rust-big-mod_exp"
+version = "1.15.0"
+dependencies = [
+ "array-bytes",
+ "num-bigint 0.4.3",
+ "serde",
+ "serde_json",
  "solana-program 1.15.0",
 ]
 

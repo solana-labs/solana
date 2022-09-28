@@ -477,6 +477,7 @@ extern crate self as solana_program;
 pub mod account_info;
 pub mod address_lookup_table_account;
 pub(crate) mod atomic_u64;
+pub mod big_mod_exp;
 pub mod blake3;
 pub mod borsh;
 pub mod bpf_loader;
