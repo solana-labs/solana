@@ -13,8 +13,8 @@ source scripts/read-cargo-variable.sh
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
 cargo="$solana_dir"/cargo
-cargo_build_bpf="$solana_dir"/cargo-build-bpf
-cargo_test_bpf="$solana_dir"/cargo-test-bpf
+cargo_build_sbf="$solana_dir"/cargo-build-sbf
+cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
 mkdir -p target/downstream-projects
 cd target/downstream-projects
@@ -30,7 +30,7 @@ example_helloworld() {
     patch_crates_io_solana src/program-rust/Cargo.toml "$solana_dir"
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path src/program-rust/Cargo.toml
 
     # TODO: Build src/program-c/...
@@ -68,7 +68,7 @@ spl() {
     ./patch.crates-io.sh "$solana_dir"
 
     for program in "${PROGRAMS[@]}"; do
-      $cargo_test_bpf --manifest-path "$program"/Cargo.toml
+      $cargo_test_sbf --manifest-path "$program"/Cargo.toml
     done
 
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
@@ -98,7 +98,7 @@ exclude = [
 EOF
     $cargo build
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
     $cargo test \

@@ -48,7 +48,7 @@ impl Default for Config<'_> {
                 .expect("Unable to get parent directory")
                 .to_path_buf()
                 .join("sdk")
-                .join("bpf"),
+                .join("sbf"),
             sbf_out_dir: None,
             sbf_tools_version: "(unknown)",
             dump: false,
@@ -526,7 +526,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     install_if_missing(
         config,
         package,
-        "https://github.com/solana-labs/bpf-tools/releases/download",
+        "https://github.com/solana-labs/sbf-tools/releases/download",
         sbf_tools_download_file_name,
         &target_path,
     )
