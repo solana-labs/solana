@@ -50,7 +50,7 @@ pub async fn recv_mmsg_exact(
         let res = recv_mmsg(socket, &mut packets[first..]).await?;
         remaining -= res;
     }
-    Ok(total)
+    Ok(packets.len())
 }
 
 #[cfg(test)]
