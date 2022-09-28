@@ -431,7 +431,7 @@ impl LedgerStorage {
                 app_profile_id,
                 endpoint,
                 timeout,
-            )?
+            )?,
         })
     }
 
