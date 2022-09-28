@@ -177,40 +177,40 @@ test-stable-perf)
 test-local-cluster)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture
   fi
   exit 0
   ;;
 test-local-cluster-flakey)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture
   fi
   exit 0
   ;;
 test-local-cluster-slow-1)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture
   fi
   exit 0
   ;;
 test-local-cluster-slow-2)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
   if need_to_generate_test_result; then
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
-    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
+    _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture
   fi
   exit 0
   ;;
