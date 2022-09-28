@@ -25,7 +25,7 @@ const MS_PER_H: u64 = MS_PER_M * 60;
 const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
-const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
+const SAMPLE_INTERVAL_CPU_MS: u64 = MS_PER_S;
 const SAMPLE_INTERVAL_DISK_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -694,110 +694,85 @@ impl SystemMonitorService {
         })
     }
 
-    /*
-    fn string_append_u32_as_char(&mut string: String, val: u32)
-    {
-        let mut v = val;
-
-        for _i in 0..4 {
-            string.push(v as u8 as char);
-            v >>= 8;
-        };
-    }*/
-
     #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
-    unsafe fn report_cpuid_values() {
-        let cpuid_0 = __cpuid(0);
+    fn report_cpuid_values() {
+        unsafe {
+            let cpuid_mfr = __cpuid(0);
+            let cpuid_empty = CpuidResult {
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 0,
+            };
 
-        let max_leaf = cpuid_0.eax;
-        let max_subleaf_7 = if 7 <= max_leaf {
-            __get_cpuid_max(7).1
-        } else {
-            0
-        };
+            let max_leaf = cpuid_mfr.eax;
+            let max_subleaf_7 = if 7 <= max_leaf {
+                __get_cpuid_max(7).1
+            } else {
+                0
+            };
 
-        let mut manufacturer = String::from("");
-        for i in 0..4 {
-            manufacturer.push((cpuid_0.ebx >> (i * 8)) as u8 as char);
-        }
-        for i in 0..4 {
-            manufacturer.push((cpuid_0.edx >> (i * 8)) as u8 as char);
-        }
-        for i in 0..4 {
-            manufacturer.push((cpuid_0.ecx >> (i * 8)) as u8 as char);
-        }
+            let mfr_id: i64 = if cpuid_mfr.ebx == 0x756e6547
+                && cpuid_mfr.edx == 0x49656e69
+                && cpuid_mfr.ecx == 0x6c65746e
+            {
+                1 // GenuineIntel
+            } else if cpuid_mfr.ebx == 0x68747541
+                && cpuid_mfr.edx == 0x69746e65
+                && cpuid_mfr.ecx == 0x444d4163
+            {
+                2 // AuthenticAMD
+            } else {
+                3 // anything else
+            };
 
-        let cpuid_1 = if 1 <= max_leaf {
-            __cpuid(1)
-        } else {
-            CpuidResult {
-                eax: 0,
-                ebx: 0,
-                ecx: 0,
-                edx: 0,
-            }
-        };
-        let cpuid_2 = if 2 <= max_leaf {
-            __cpuid(2)
-        } else {
-            CpuidResult {
-                eax: 0,
-                ebx: 0,
-                ecx: 0,
-                edx: 0,
-            }
-        };
-        let cpuid_4 = if 4 <= max_leaf {
-            __cpuid(4)
-        } else {
-            CpuidResult {
-                eax: 0,
-                ebx: 0,
-                ecx: 0,
-                edx: 0,
-            }
-        };
-        let cpuid_7_0 = if 7 <= max_leaf {
-            __cpuid_count(7, 0)
-        } else {
-            CpuidResult {
-                eax: 0,
-                ebx: 0,
-                ecx: 0,
-                edx: 0,
-            }
-        };
-        let cpuid_7_1 = if 7 <= max_leaf && 1 <= max_subleaf_7 {
-            __cpuid_count(7, 1)
-        } else {
-            CpuidResult {
-                eax: 0,
-                ebx: 0,
-                ecx: 0,
-                edx: 0,
-            }
-        };
+            let cpuid_processor = if 1 <= max_leaf {
+                __cpuid(1)
+            } else {
+                cpuid_empty
+            };
+            let cpuid_cache = if 2 <= max_leaf {
+                __cpuid(2)
+            } else {
+                cpuid_empty
+            };
+            let cpuid_topology = if 4 <= max_leaf {
+                __cpuid(4)
+            } else {
+                cpuid_empty
+            };
+            let cpuid_extended_0 = if 7 <= max_leaf {
+                __cpuid_count(7, 0)
+            } else {
+                cpuid_empty
+            };
+            let cpuid_extended_1 = if 7 <= max_leaf && 1 <= max_subleaf_7 {
+                __cpuid_count(7, 1)
+            } else {
+                cpuid_empty
+            };
 
-        datapoint_info!(
-            "cpuid-values",
-            ("manufacturer_id", manufacturer, String),
-            ("cpuid_1_eax", cpuid_1.eax as i64, i64),
-            ("cpuid_1_ebx", cpuid_1.ebx as i64, i64),
-            ("cpuid_1_ecx", cpuid_1.ecx as i64, i64),
-            ("cpuid_1_edx", cpuid_1.edx as i64, i64),
-            ("cpuid_2_eax", cpuid_2.eax as i64, i64),
-            ("cpuid_2_ebx", cpuid_2.ebx as i64, i64),
-            ("cpuid_2_ecx", cpuid_2.ecx as i64, i64),
-            ("cpuid_2_edx", cpuid_2.edx as i64, i64),
-            ("cpuid_4_eax", cpuid_4.eax as i64, i64),
-            ("cpuid_4_ebx", cpuid_4.ebx as i64, i64),
-            ("cpuid_4_ecx", cpuid_4.ecx as i64, i64),
-            ("cpuid_4_edx", cpuid_4.edx as i64, i64),
-            ("cpuid_7_0_ebx", cpuid_7_0.ebx as i64, i64),
-            ("cpuid_7_0_ecx", cpuid_7_0.ecx as i64, i64),
-            ("cpuid_7_0_edx", cpuid_7_0.edx as i64, i64),
-            ("cpuid_7_1_eax", cpuid_7_1.eax as i64, i64),
-        );
+            datapoint_info!(
+                "cpuid-values",
+                ("manufacturer_id", mfr_id, i64),
+                ("cpuid_processor_eax", i64::from(cpuid_processor.eax), i64),
+                ("cpuid_processor_ebx", i64::from(cpuid_processor.ebx), i64),
+                ("cpuid_processor_ecx", i64::from(cpuid_processor.ecx), i64),
+                ("cpuid_processor_edx", i64::from(cpuid_processor.edx), i64),
+                ("cpuid_cache_eax", i64::from(cpuid_cache.eax), i64),
+                ("cpuid_cache_ebx", i64::from(cpuid_cache.ebx), i64),
+                ("cpuid_cache_ecx", i64::from(cpuid_cache.ecx), i64),
+                ("cpuid_cache_edx", i64::from(cpuid_cache.edx), i64),
+                ("cpuid_topology_eax", i64::from(cpuid_topology.eax), i64),
+                ("cpuid_topology_ebx", i64::from(cpuid_topology.ebx), i64),
+                ("cpuid_topology_ecx", i64::from(cpuid_topology.ecx), i64),
+                ("cpuid_topology_edx", i64::from(cpuid_topology.edx), i64),
+                ("cpuid_extended_0_ebx", i64::from(cpuid_extended_0.ebx), i64),
+                ("cpuid_extended_0_ecx", i64::from(cpuid_extended_0.ecx), i64),
+                ("cpuid_extended_0_edx", i64::from(cpuid_extended_0.edx), i64),
+                ("cpuid_extended_1_eax", i64::from(cpuid_extended_1.eax), i64),
+            );
+        };
     }
 
     fn report_cpu_stats() {
@@ -814,9 +789,7 @@ impl SystemMonitorService {
         }
 
         #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
-        unsafe {
-            Self::report_cpuid_values();
-        };
+        Self::report_cpuid_values();
     }
 
     #[cfg(target_os = "linux")]
