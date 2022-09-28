@@ -231,7 +231,7 @@ impl AggregateCommitmentService {
                 commitment
                     .entry(ancestors[ancestors_index])
                     .or_insert_with(BlockCommitment::default)
-                    .increase_confirmation_stake(vote.confirmation_count as usize, lamports);
+                    .increase_confirmation_stake(vote.confirmation_count() as usize, lamports);
                 ancestors_index += 1;
 
                 if ancestors_index == ancestors.len() {

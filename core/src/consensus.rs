@@ -346,20 +346,15 @@ impl Tower {
 
             if start_root != vote_state.root_slot {
                 if let Some(root) = start_root {
-                    let vote = Lockout {
-                        confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                        slot: root,
-                    };
+                    let vote =
+                        Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
                     trace!("ROOT: {}", vote.slot);
                     bank_weight += vote.lockout() as u128 * voted_stake as u128;
                     vote_slots.insert(vote.slot);
                 }
             }
             if let Some(root) = vote_state.root_slot {
-                let vote = Lockout {
-                    confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-                    slot: root,
-                };
+                let vote = Lockout::new_with_confirmation_count(root, MAX_LOCKOUT_HISTORY as u32);
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
                 vote_slots.insert(vote.slot);
             }
@@ -523,7 +518,7 @@ impl Tower {
     /// Used for tests
     pub fn increase_lockout(&mut self, confirmation_count_increase: u32) {
         for vote in self.vote_state.votes.iter_mut() {
-            vote.confirmation_count += confirmation_count_increase;
+            vote.increase_confirmation_count(confirmation_count_increase);
         }
     }
 
@@ -989,10 +984,10 @@ impl Tower {
                     "fork_stake slot: {}, vote slot: {}, lockout: {} fork_stake: {} total_stake: {}",
                     slot, vote.slot, lockout, fork_stake, total_stake
                 );
-                if vote.confirmation_count as usize > self.threshold_depth {
+                if vote.confirmation_count() as usize > self.threshold_depth {
                     for old_vote in &self.vote_state.votes {
                         if old_vote.slot == vote.slot
-                            && old_vote.confirmation_count == vote.confirmation_count
+                            && old_vote.confirmation_count() == vote.confirmation_count()
                         {
                             return true;
                         }
@@ -1548,7 +1543,7 @@ pub mod test {
         for i in 1..5 {
             assert_eq!(tower.vote_state.votes[i - 1].slot as usize, i);
             assert_eq!(
-                tower.vote_state.votes[i - 1].confirmation_count as usize,
+                tower.vote_state.votes[i - 1].confirmation_count() as usize,
                 6 - i
             );
         }
@@ -2158,10 +2153,7 @@ pub mod test {
             tower.record_vote(i as u64, Hash::default());
             ancestors.insert(i as u64, (0..i as u64).collect());
         }
-        let root = Lockout {
-            confirmation_count: MAX_LOCKOUT_HISTORY as u32,
-            slot: 0,
-        };
+        let root = Lockout::new_with_confirmation_count(0, MAX_LOCKOUT_HISTORY as u32);
         let root_weight = root.lockout() as u128;
         let vote_account_expected_weight = tower
             .vote_state
@@ -2318,9 +2310,9 @@ pub mod test {
         assert!(!tower.is_locked_out(4, &ancestors));
         tower.record_vote(4, Hash::default());
         assert_eq!(tower.vote_state.votes[0].slot, 0);
-        assert_eq!(tower.vote_state.votes[0].confirmation_count, 2);
+        assert_eq!(tower.vote_state.votes[0].confirmation_count(), 2);
         assert_eq!(tower.vote_state.votes[1].slot, 4);
-        assert_eq!(tower.vote_state.votes[1].confirmation_count, 1);
+        assert_eq!(tower.vote_state.votes[1].confirmation_count(), 1);
     }
 
     #[test]
@@ -2507,9 +2499,8 @@ pub mod test {
         let mut tower = Tower::new_for_tests(1, 0.67);
         let slots = if num_votes > 0 {
             { 0..num_votes }
-                .map(|i| Lockout {
-                    slot: i as u64,
-                    confirmation_count: (num_votes as u32) - (i as u32),
+                .map(|i| {
+                    Lockout::new_with_confirmation_count(i as u64, (num_votes as u32) - (i as u32))
                 })
                 .collect()
         } else {

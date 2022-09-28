@@ -1540,7 +1540,7 @@ impl From<&Lockout> for CliLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
             slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count,
+            confirmation_count: lockout.confirmation_count(),
         }
     }
 }

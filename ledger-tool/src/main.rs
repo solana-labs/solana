@@ -667,7 +667,8 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                             .iter()
                             .map(|vote| format!(
                                 "slot {} (conf={})",
-                                vote.slot, vote.confirmation_count
+                                vote.slot,
+                                vote.confirmation_count()
                             ))
                             .collect::<Vec<_>>()
                             .join("\n")
@@ -726,7 +727,7 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
                     vote_state
                         .votes
                         .iter()
-                        .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
+                        .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count()))
                         .collect::<Vec<_>>()
                         .join("\n")
                 ));

@@ -550,6 +550,10 @@ pub mod alt_bn128_syscall_enabled {
     solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128");
 }
 
+pub mod timely_vote_credits {
+    solana_sdk::declare_id!("Dq8BsQXXxvJfpSgzsD4YM3ydNwAbVwKQXgTy7HNTm5hE");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -682,6 +686,7 @@ lazy_static! {
         (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (alt_bn128_syscall_enabled::id(), "add alt_bn128 syscalls"),
+        (timely_vote_credits::id(), "use timeliness of votes in determining credits to award"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

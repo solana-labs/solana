@@ -31,6 +31,14 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
+// Number of slots of grace period for which maximum vote credits are awarded - votes landing within this number of
+// slots of the slot that is being voted on are awarded full credits.
+pub const VOTE_CREDITS_GRACE_SLOTS: u32 = 3;
+
+// Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within
+// the grace period. After that grace period, vote credits are reduced.
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u32 = 12;
+
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct Vote {
@@ -59,7 +67,7 @@ impl Vote {
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
 pub struct Lockout {
     pub slot: Slot,
-    pub confirmation_count: u32,
+    confirmation_count: u32,
 }
 
 impl Lockout {
@@ -70,9 +78,49 @@ impl Lockout {
         }
     }
 
+    pub fn new_with_confirmation_count(slot: Slot, confirmation_count: u32) -> Self {
+        Self {
+            slot,
+            confirmation_count,
+        }
+    }
+
     // The number of slots for which this vote is locked
     pub fn lockout(&self) -> u64 {
-        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count)
+        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count())
+    }
+
+    // The number of credits to award for this lockout at the time that it is rooted.  It is a function of the "vote
+    // latency" that was stored in the Lockout at the time that the Vote or VoteStateUpdate instruction that created
+    // this Lockout was processed.  At that time, the difference between each newly voted-on slot and the slot in
+    // which the vote actually landed is used to calculate the vote latency, which is then used later when credits are
+    // to be awarded for the vote to compute the number of credits to award.
+    pub fn credits(&self) -> u32 {
+        let latency = self.confirmation_count.checked_shr(24).unwrap();
+
+        // If latency is 0, this means that the Lockout was created and stored from a software version that did not
+        // store vote latencies; in this case, 1 credit is awarded
+        if latency == 0 {
+            1
+        } else {
+            match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
+                None | Some(0) => {
+                    // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
+                    VOTE_CREDITS_MAXIMUM_PER_SLOT
+                }
+
+                Some(diff) => {
+                    // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
+                    // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
+                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
+                        // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
+                        None | Some(0) => 1,
+
+                        Some(credits) => credits,
+                    }
+                }
+            }
+        }
     }
 
     // The last slot at which a vote is still locked out. Validators should not
@@ -86,12 +134,48 @@ impl Lockout {
     pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
         self.last_locked_out_slot() >= slot
     }
+
+    pub fn confirmation_count(&self) -> u32 {
+        self.confirmation_count & 0x00FFFFFF
+    }
+
+    // Sets vote latency for this lockout given that the vote instruction in which the Lockout was created was the
+    // given slot.  vote_latency is clamped to the range [0, 255] to allow it to be stored in 1 byte.
+    pub fn set_vote_latency(&mut self, voted_in_slot: Slot) {
+        let vote_latency = voted_in_slot.saturating_sub(self.slot) as u32;
+
+        self.confirmation_count = std::cmp::min(vote_latency, 255_u32)
+            .checked_shl(24)
+            .unwrap()
+            | self.confirmation_count();
+    }
+
+    // This is called to update the vote latency for a Lockout when the vote latency is calculated after the Lockout
+    // is created
+    pub fn copy_vote_latency(&mut self, from: &Lockout) {
+        self.confirmation_count =
+            (from.confirmation_count & 0xFF000000) | self.confirmation_count();
+    }
+
+    // This is called to set the vote latency to zero
+    pub fn zero_vote_latency(&mut self) {
+        self.confirmation_count &= 0x00FFFFFF;
+    }
+
+    pub fn increase_confirmation_count(&mut self, confirmation_count_increase: u32) {
+        self.confirmation_count = (self.confirmation_count & 0xFF000000)
+            | (self
+                .confirmation_count()
+                .checked_add(confirmation_count_increase)
+                .unwrap())
+    }
 }
 
 #[frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteStateUpdate {
-    /// The proposed tower
+    /// The proposed tower, without vote latencies stored in Lockouts.  Vote latencies are set on the local
+    /// vote state according to locally calculated latencies.
     pub lockouts: VecDeque<Lockout>,
     /// The proposed root
     pub root: Option<Slot>,
@@ -349,7 +433,12 @@ impl VoteState {
         }
     }
 
-    pub fn process_next_vote_slot(&mut self, next_vote_slot: Slot, epoch: Epoch) {
+    pub fn process_next_vote_slot(
+        &mut self,
+        next_vote_slot: Slot,
+        epoch: Epoch,
+        voted_in_slot: Option<Slot>,
+    ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
             .last_voted_slot()
@@ -358,7 +447,10 @@ impl VoteState {
             return;
         }
 
-        let vote = Lockout::new(next_vote_slot);
+        let mut vote = Lockout::new(next_vote_slot);
+        if let Some(voted_in_slot) = voted_in_slot {
+            vote.set_vote_latency(voted_in_slot);
+        }
 
         self.pop_expired_votes(next_vote_slot);
 
@@ -367,7 +459,7 @@ impl VoteState {
             let vote = self.votes.pop_front().unwrap();
             self.root_slot = Some(vote.slot);
 
-            self.increment_credits(epoch, 1);
+            self.increment_credits(epoch, vote.credits() as u64);
         }
         self.votes.push_back(vote);
         self.double_lockouts();
@@ -544,8 +636,8 @@ impl VoteState {
         for (i, v) in self.votes.iter_mut().enumerate() {
             // Don't increase the lockout for this vote until we get more confirmations
             // than the max number of confirmations this vote has seen
-            if stack_depth > i + v.confirmation_count as usize {
-                v.confirmation_count += 1;
+            if stack_depth > i + v.confirmation_count() as usize {
+                v.increase_confirmation_count(1);
             }
         }
     }
@@ -616,7 +708,7 @@ pub mod serde_compact_vote_state_update {
                     None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
                     Some(offset) => offset,
                 };
-                let confirmation_count = match u8::try_from(lockout.confirmation_count) {
+                let confirmation_count = match u8::try_from(lockout.confirmation_count()) {
                     Ok(confirmation_count) => confirmation_count,
                     Err(_) => {
                         return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
