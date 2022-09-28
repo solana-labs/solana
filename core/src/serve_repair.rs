@@ -155,6 +155,8 @@ struct ServeRepairStats {
     total_dropped_response_packets: usize,
     total_response_packets: usize,
     total_response_bytes: usize,
+    requested_response_bytes_staked: usize,
+    requested_response_bytes_unstaked: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -185,9 +187,9 @@ struct ServeRepairStats {
 struct RepairBudget {
     last_update: Instant,
     epoch_staked_nodes: Option<Arc<HashMap<Pubkey, u64>>>,
-    staked_node_used: HashMap<Pubkey, /*bytes*/ u64>, // max entries capped to number of `epoch_staked_nodes`
-    staked_budget: u64,                               // num bytes budget reserved for staked nodes
-    shared_budget: u64, // num bytes budget for unstaked nodes or overflow for staked nodes
+    staked_node_request: HashMap<Pubkey, /*bytes*/ u64>, // max entries capped to number of `epoch_staked_nodes`
+    staked_budget: u64,  // num bytes budget reserved for staked nodes
+    shared_budget: u64,  // num bytes budget for unstaked nodes or overflow for staked nodes
     staked_request: u64, // num bytes requested by staked nodes
 }
 
@@ -206,31 +208,37 @@ impl RepairBudget {
         Self {
             last_update: Instant::now(),
             epoch_staked_nodes: staked_nodes,
-            staked_node_used: HashMap::default(),
+            staked_node_request: HashMap::default(),
             staked_budget: Self::MAX_STAKED_BYTES_PER_INTERVAL,
             shared_budget: Self::MAX_BYTES_PER_INTERVAL - Self::MAX_STAKED_BYTES_PER_INTERVAL,
             staked_request: 0,
         }
     }
 
-    fn take(&mut self, id: &Pubkey, bytes: u64) -> bool {
+    fn take(&mut self, id: &Pubkey, bytes: u64, stats: &mut ServeRepairStats) -> bool {
         let staked = self
             .epoch_staked_nodes
             .as_ref()
             .map(|staked_nodes| staked_nodes.contains_key(id))
             .unwrap_or_default();
         if staked {
+            stats.requested_response_bytes_staked = stats
+                .requested_response_bytes_staked
+                .saturating_add(bytes as usize);
             self.staked_request = self.staked_request.saturating_add(bytes);
-            let node_used = self.staked_node_used.entry(*id).or_default();
-            let requested_node_usage = node_used.saturating_add(bytes);
-            if requested_node_usage <= Self::MAX_STAKED_NODE_BYTES_PER_INTERVAL
+            let node_requested = self.staked_node_request.entry(*id).or_default();
+            *node_requested = node_requested.saturating_add(bytes);
+            if *node_requested <= Self::MAX_STAKED_NODE_BYTES_PER_INTERVAL
                 && bytes <= self.staked_budget
             {
-                *node_used = requested_node_usage;
                 self.staked_budget -= bytes;
                 return true;
             }
             // fall through to try shared budget
+        } else {
+            stats.requested_response_bytes_unstaked = stats
+                .requested_response_bytes_unstaked
+                .saturating_add(bytes as usize);
         }
         if bytes <= self.shared_budget {
             self.shared_budget -= bytes;
@@ -247,7 +255,7 @@ impl RepairBudget {
             // `MAX_STAKED_BYTES_PER_INTERVAL` to reserve budget for unstaked nodes.
             let staked_budget = self.staked_request.min(Self::MAX_STAKED_BYTES_PER_INTERVAL);
             self.epoch_staked_nodes = staked_nodes;
-            self.staked_node_used = HashMap::default();
+            self.staked_node_request = HashMap::default();
             self.staked_budget = staked_budget;
             self.shared_budget = Self::MAX_BYTES_PER_INTERVAL - staked_budget;
             self.staked_request = 0;
@@ -605,6 +613,16 @@ impl ServeRepair {
             ),
             ("total_response_packets", stats.total_response_packets, i64),
             ("total_response_bytes", stats.total_response_bytes, i64),
+            (
+                "requested_response_bytes_staked",
+                stats.requested_response_bytes_staked,
+                i64
+            ),
+            (
+                "requested_response_bytes_unstaked",
+                stats.requested_response_bytes_unstaked,
+                i64
+            ),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
@@ -789,7 +807,7 @@ impl ServeRepair {
                 // Pong is exempt as it does not generate a response
                 0
             } else {
-                if !repair_budget.take(&request_sender, GOOD_FAITH_CHARGE) {
+                if !repair_budget.take(&request_sender, GOOD_FAITH_CHARGE, stats) {
                     stats.dropped_requests_outbound_bandwidth += 1;
                     continue;
                 }
@@ -808,6 +826,7 @@ impl ServeRepair {
             if repair_budget.take(
                 &request_sender,
                 (num_response_bytes as u64).saturating_sub(precharge),
+                stats,
             ) && response_sender.send(rsp).is_ok()
             {
                 stats.total_response_bytes += num_response_bytes;
