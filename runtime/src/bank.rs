@@ -212,7 +212,7 @@ fn record_transaction_timings(
         let (sender, receiver) = crossbeam_channel::unbounded::<TransactionTimings>();
         let _handle = std::thread::Builder::new()
             .name("solTxTimings".into())
-            .spawn(move || {
+            .spawn(move || loop {
                 while let Ok(transaction_timings) =
                     receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
@@ -223,7 +223,7 @@ fn record_transaction_timings(
                         ("index", transaction_timings.transaction_index, i64),
                         ("thread", transaction_timings.thread_name, String),
                         ("signature", &format!("{}", transaction_timings.sig), String),
-                        ("account_locks_in_json", "{}", String),
+                        ("account_locks_in_json", "{}", String), // todo
                         (
                             "status",
                             format!(
@@ -247,7 +247,7 @@ fn record_transaction_timings(
         sender
             .send_buffered(TransactionTimings {
                 slot,
-                transaction_index: 0,
+                transaction_index: 0, // todo
                 sig,
                 cu,
                 execution_result: Some(execution_result.clone().map(|_| ())),
