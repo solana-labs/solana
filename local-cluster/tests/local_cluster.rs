@@ -499,8 +499,10 @@ fn test_snapshot_download() {
         .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
-    let full_snapshot_archive_info =
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
+        full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
     trace!("found: {}", full_snapshot_archive_info.path().display());
 
     // Download the snapshot, then boot a validator from it.
@@ -628,6 +630,7 @@ fn test_incremental_snapshot_download() {
         .wait_for_next_incremental_snapshot(
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
         );
     trace!(
         "found: {} and {}",
@@ -793,6 +796,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             leader_snapshot_test_config
                 .incremental_snapshot_archives_dir
                 .path(),
+            Some(Duration::from_secs(5 * 60)),
         );
     info!(
         "Found snapshots:\n\tfull snapshot: {}\n\tincremental snapshot: {}",
@@ -1259,8 +1263,10 @@ fn test_snapshot_restart_tower() {
         .unwrap()
         .full_snapshot_archives_dir;
 
-    let full_snapshot_archive_info =
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
+        full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -1446,7 +1452,10 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+        cluster.wait_for_next_full_snapshot(
+            full_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
+        );
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point

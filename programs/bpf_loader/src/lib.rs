@@ -187,6 +187,7 @@ pub fn create_executor(
         enable_elf_vaddr: false,
         reject_rodata_stack_overlap: false,
         new_elf_parser: false,
+        aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
