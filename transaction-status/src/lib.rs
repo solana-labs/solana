@@ -646,6 +646,37 @@ impl From<VersionedConfirmedBlock> for ConfirmedBlock {
     }
 }
 
+impl TryFrom<ConfirmedBlock> for VersionedConfirmedBlock {
+    type Error = &'static str;
+
+    fn try_from(block: ConfirmedBlock) -> Result<Self, Self::Error> {
+        let expected_transaction_count = block.transactions.len();
+
+        let txs: Vec<_> = block
+            .transactions
+            .into_iter()
+            .filter_map(|tx| match tx {
+                TransactionWithStatusMeta::MissingMetadata(_) => None,
+                TransactionWithStatusMeta::Complete(tx) => Some(tx),
+            })
+            .collect();
+
+        if txs.len() != expected_transaction_count {
+            return Err("some transactions miss");
+        }
+
+        Ok(Self {
+            previous_blockhash: block.previous_blockhash,
+            blockhash: block.blockhash,
+            parent_slot: block.parent_slot,
+            transactions: txs,
+            rewards: block.rewards,
+            block_time: block.block_time,
+            block_height: block.block_height,
+        })
+    }
+}
+
 impl ConfirmedBlock {
     pub fn encode_with_options(
         self,
