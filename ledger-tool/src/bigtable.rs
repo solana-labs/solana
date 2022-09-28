@@ -393,7 +393,7 @@ impl CopyArgs {
 
 async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let from_slot = args.from_slot;
-    let to_slot = args.to_slot.unwrap_or_else(|| from_slot + 1);
+    let to_slot = args.to_slot.unwrap_or(from_slot + 1);
     debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
 
     let source_bigtable = {
