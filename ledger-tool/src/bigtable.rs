@@ -6,7 +6,7 @@ use {
     },
     crossbeam_channel::unbounded,
     futures::stream::FuturesUnordered,
-    log::{debug, info},
+    log::{debug, error, info},
     num_cpus,
     serde_json::json,
     solana_clap_utils::{
@@ -26,7 +26,7 @@ use {
     solana_storage_bigtable::CredentialType,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, EncodeError, TransactionDetails,
-        UiTransactionEncoding,
+        UiTransactionEncoding, VersionedConfirmedBlock,
     },
     std::{
         cmp::min,
@@ -35,7 +35,7 @@ use {
         process::exit,
         result::Result,
         str::FromStr,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{atomic::AtomicBool, Arc, Mutex},
     },
 };
 
@@ -339,6 +339,18 @@ pub async fn transaction_history(
 struct CopyArgs {
     from_slot: Slot,
     to_slot: Option<Slot>,
+
+    source_is_emulator: bool,
+    source_instance_name: String,
+    source_app_profile_id: String,
+    source_credential_path: Option<String>,
+    source_endpoint: Option<String>,
+
+    destination_is_emulator: bool,
+    destination_instance_name: String,
+    destination_app_profile_id: String,
+    destination_credential_path: Option<String>,
+    destination_endpoint: Option<String>,
 }
 
 impl CopyArgs {
@@ -346,6 +358,31 @@ impl CopyArgs {
         CopyArgs {
             from_slot: value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0),
             to_slot: value_t!(arg_matches, "ending_slot", Slot).ok(),
+
+            source_is_emulator: arg_matches.is_present("source_is_emulator"),
+            source_instance_name: value_t_or_exit!(arg_matches, "source_instance_name", String),
+            source_app_profile_id: value_t_or_exit!(arg_matches, "source_app_profile_id", String),
+            source_credential_path: value_t!(arg_matches, "source_credential_path", String).ok(),
+            source_endpoint: value_t!(arg_matches, "source_endpoint", String).ok(),
+
+            destination_is_emulator: arg_matches.is_present("destination_is_emulator"),
+            destination_instance_name: value_t_or_exit!(
+                arg_matches,
+                "destination_instance_name",
+                String
+            ),
+            destination_app_profile_id: value_t_or_exit!(
+                arg_matches,
+                "destination_app_profile_id",
+                String
+            ),
+            destination_credential_path: value_t!(
+                arg_matches,
+                "destination_credential_path",
+                String
+            )
+            .ok(),
+            destination_endpoint: value_t!(arg_matches, "destination_endpoint", String).ok(),
         }
     }
 }
@@ -355,6 +392,80 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let to_slot = args.to_slot.unwrap_or_else(|| from_slot + 1);
     debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
 
+    let source_bigtable = {
+        if args.source_is_emulator {
+            match solana_storage_bigtable::LedgerStorage::new_for_emulator(
+                &args.source_instance_name,
+                &args.source_app_profile_id,
+                &args.source_endpoint.unwrap(),
+                None,
+            ) {
+                Ok(bigtable) => bigtable,
+                Err(err) => {
+                    error!("Failed to connect to source bigtable: {:?}", err);
+                    return Err(Box::new(err));
+                }
+            }
+        } else {
+            match solana_storage_bigtable::LedgerStorage::new_with_config(
+                solana_storage_bigtable::LedgerStorageConfig {
+                    read_only: true,
+                    timeout: None,
+                    credential_type: CredentialType::Filepath(Some(
+                        args.source_credential_path.unwrap(),
+                    )),
+                    instance_name: args.source_instance_name,
+                    app_profile_id: args.source_app_profile_id,
+                },
+            )
+            .await
+            {
+                Ok(bigtable) => bigtable,
+                Err(err) => {
+                    error!("Failed to connect to source bigtable: {:?}", err);
+                    return Err(Box::new(err));
+                }
+            }
+        }
+    };
+
+    let destination_bigtable = {
+        if args.destination_is_emulator {
+            match solana_storage_bigtable::LedgerStorage::new_for_emulator(
+                &args.destination_instance_name,
+                &args.destination_app_profile_id,
+                &args.destination_endpoint.unwrap(),
+                None,
+            ) {
+                Ok(bigtable) => bigtable,
+                Err(err) => {
+                    error!("Failed to connect to destination bigtable: {:?}", err);
+                    return Err(Box::new(err));
+                }
+            }
+        } else {
+            match solana_storage_bigtable::LedgerStorage::new_with_config(
+                solana_storage_bigtable::LedgerStorageConfig {
+                    read_only: true,
+                    timeout: None,
+                    credential_type: CredentialType::Filepath(Some(
+                        args.destination_credential_path.unwrap(),
+                    )),
+                    instance_name: args.destination_instance_name,
+                    app_profile_id: args.destination_app_profile_id,
+                },
+            )
+            .await
+            {
+                Ok(bigtable) => bigtable,
+                Err(err) => {
+                    error!("Failed to connect to destination bigtable: {:?}", err);
+                    return Err(Box::new(err));
+                }
+            }
+        }
+    };
+
     let (s, r) = unbounded::<u64>();
     for i in from_slot..to_slot {
         s.send(i).unwrap();
@@ -362,12 +473,60 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let workers = min(to_slot - from_slot, num_cpus::get().try_into().unwrap());
     debug!("worker num: {}", workers);
+
+    let success_slots = Arc::new(Mutex::new(vec![]));
+    let block_not_found_slots = Arc::new(Mutex::new(vec![]));
+    let failed_slots = Arc::new(Mutex::new(vec![]));
+
     let tasks = (0..workers)
         .map(|i| {
             let r = r.clone();
+            let source_bigtable_clone = source_bigtable.clone();
+            let destination_bigtable_clone = destination_bigtable.clone();
+
+            let success_slots_clone = Arc::clone(&success_slots);
+            let block_not_found_slots_clone = Arc::clone(&block_not_found_slots);
+            let failed_slots_clone = Arc::clone(&failed_slots);
             tokio::spawn(async move {
                 while let Ok(slot) = r.try_recv() {
                     debug!("worker {}: received slot {}", i, slot);
+
+                    let confirmed_block =
+                        match source_bigtable_clone.get_confirmed_block(slot).await {
+                            Ok(block) => match VersionedConfirmedBlock::try_from(block) {
+                                Ok(block) => block,
+                                Err(err) => {
+                                    debug!("failed to convert confirmed block to versioned confirmed block, slot: {}, err: {}", slot, err);
+                                    failed_slots_clone.lock().unwrap().push(slot);
+                                    continue;
+                                }
+                            },
+                            Err(solana_storage_bigtable::Error::BlockNotFound(slot)) => {
+                                debug!("block not found, slot: {}", slot);
+                                block_not_found_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
+                            Err(err) => {
+                                debug!("failed to get confirmed block, slot: {}, err: {}", slot, err);
+                                failed_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
+                        };
+
+                    match destination_bigtable_clone
+                        .upload_confirmed_block(slot, confirmed_block)
+                        .await
+                    {
+                        Ok(()) => {
+                            debug!("write a block to slot: {}", slot);
+                            success_slots_clone.lock().unwrap().push(slot);
+                        }
+                        Err(err) => {
+                            debug!("failed to write a block to slot: {}, err: {}", slot, err);
+                            failed_slots_clone.lock().unwrap().push(slot);
+                            continue;
+                        }
+                    }
                 }
 
                 debug!("worker {}: exit", i);
@@ -376,6 +535,23 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
         .collect::<FuturesUnordered<_>>();
 
     futures::future::join_all(tasks).await;
+
+    let mut success_slots = success_slots.lock().unwrap();
+    success_slots.sort();
+    let mut block_not_found_slots = block_not_found_slots.lock().unwrap();
+    block_not_found_slots.sort();
+    let mut failed_slots = failed_slots.lock().unwrap();
+    failed_slots.sort();
+    debug!("success slots: {:?}", success_slots);
+    debug!("blocks not found slots: {:?}", block_not_found_slots);
+    debug!("failed slots: {:?}", failed_slots);
+
+    println!(
+        "success: {}, block not found: {}, failed: {}",
+        success_slots.len(),
+        block_not_found_slots.len(),
+        failed_slots.len(),
+    );
 
     Ok(())
 }
@@ -632,6 +808,92 @@ impl BigTableSubCommand for App<'_, '_> {
                 .subcommand(
                     SubCommand::with_name("copy")
                         .about("copy blocks from a bigtable to another bigtable")
+                        .arg(
+                            Arg::with_name("source_credential_path")
+                                .long("source-credential-path")
+                                .value_name("SOURCE_CREDENTIAL_PATH")
+                                .takes_value(true)
+                                .help(
+                                    "Source bigtable creds path. (could be readonly)",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("source_endpoint")
+                                .long("source-endpoint")
+                                .value_name("SOURCE_ENDPOINT")
+                                .takes_value(true)
+                                .help(
+                                    "Source bigtable endpoint.",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("source_is_emulator")
+                            .long("source-is-emulator")
+                            .value_name("SOURCE_IS_EMULATOR")
+                            .takes_value(false)
+                            .help(
+                                "Source bigtable is an emulator",
+                            ),
+                        )
+                        .arg(
+                            Arg::with_name("source_instance_name")
+                                .long("source-instance-name")
+                                .takes_value(true)
+                                .value_name("SOURCE_INSTANCE_NAME")
+                                .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
+                                .help("Source bigtable instance name")
+                        )
+                        .arg(
+                            Arg::with_name("source_app_profile_id")
+                                .long("source-app-profile-id")
+                                .takes_value(true)
+                                .value_name("SOURCE_APP_PROFILE_ID")
+                                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
+                                .help("Source bigtable app profile id")
+                        )
+                        .arg(
+                            Arg::with_name("destination_credential_path")
+                                .long("destination-credential-path")
+                                .value_name("DESTINATION_CREDENTIAL_PATH")
+                                .takes_value(true)
+                                .help(
+                                    "Destination bigtable creds path. (should be writable)",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("destination_endpoint")
+                                .long("destination-endpoint")
+                                .value_name("DESTINATION_ENDPOINT")
+                                .takes_value(true)
+                                .help(
+                                    "Destination bigtable endpoint",
+                                ),
+                        )
+                        .arg(
+                            Arg::with_name("destination_is_emulator")
+                            .long("destination-is-emulator")
+                            .value_name("DESTINATION_IS_EMULATOR")
+                            .takes_value(false)
+                            .help(
+                                "Destination is an emulator",
+                            ),
+                        )
+                        .arg(
+                            Arg::with_name("destination_instance_name")
+                                .long("destination-instance-name")
+                                .takes_value(true)
+                                .value_name("DESTINATION_INSTANCE_NAME")
+                                .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
+                                .help("Destination bigtable instance name")
+                        )
+                        .arg(
+                            Arg::with_name("destination_app_profile_id")
+                                .long("destination-app-profile-id")
+                                .takes_value(true)
+                                .value_name("DESTINATION_APP_PROFILE_ID")
+                                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
+                                .help("Destination bigtable app profile id")
+                        )
                         .arg(
                             Arg::with_name("starting_slot")
                                 .long("starting-slot")
