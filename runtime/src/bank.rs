@@ -6883,6 +6883,8 @@ impl Bank {
             // for this value to be `Some`.
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            } else {
+                warn!("bank {}: epoch_accounts_hash was None but should have been included in this bank's hash!", self.slot());
             }
         }
 
