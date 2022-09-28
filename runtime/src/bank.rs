@@ -197,7 +197,7 @@ fn record_transaction_timings(
         Option<crossbeam_channel::Sender<TransactionTimings>>,
     > = once_cell::sync::OnceCell::new();
     let maybe_sender = INSTANCE.get_or_init(|| {
-        let enable = std::env::var("TRANSACTION_TIMINGS").is_ok();
+        let enable = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
         if !enable {
             return None;
         }
