@@ -6936,9 +6936,7 @@ impl Bank {
             return false;
         }
 
-        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
-        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
-        let stop_slot = first_slot_in_epoch + stop_offset;
+        let stop_slot = epoch_accounts_hash::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }
 
