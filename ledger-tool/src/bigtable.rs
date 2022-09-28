@@ -351,6 +351,8 @@ struct CopyArgs {
     destination_app_profile_id: String,
     destination_credential_path: Option<String>,
     destination_endpoint: Option<String>,
+
+    force: bool,
 }
 
 impl CopyArgs {
@@ -383,6 +385,8 @@ impl CopyArgs {
             )
             .ok(),
             destination_endpoint: value_t!(arg_matches, "destination_endpoint", String).ok(),
+
+            force: arg_matches.is_present("force"),
         }
     }
 }
@@ -475,6 +479,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     debug!("worker num: {}", workers);
 
     let success_slots = Arc::new(Mutex::new(vec![]));
+    let skip_slots = Arc::new(Mutex::new(vec![]));
     let block_not_found_slots = Arc::new(Mutex::new(vec![]));
     let failed_slots = Arc::new(Mutex::new(vec![]));
 
@@ -485,11 +490,27 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
             let destination_bigtable_clone = destination_bigtable.clone();
 
             let success_slots_clone = Arc::clone(&success_slots);
+            let skip_slots_clone = Arc::clone(&skip_slots);
             let block_not_found_slots_clone = Arc::clone(&block_not_found_slots);
             let failed_slots_clone = Arc::clone(&failed_slots);
             tokio::spawn(async move {
                 while let Ok(slot) = r.try_recv() {
                     debug!("worker {}: received slot {}", i, slot);
+
+                    if !args.force {
+                        match destination_bigtable_clone.get_confirmed_block(slot).await {
+                            Ok(_) => {
+                                skip_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
+                            Err(solana_storage_bigtable::Error::BlockNotFound(_)) => {}
+                            Err(err) => {
+                                debug!("failed to get confirmed block from destination, slot: {}, err: {}", slot, err);
+                                failed_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
+                        };
+                    }
 
                     let confirmed_block =
                         match source_bigtable_clone.get_confirmed_block(slot).await {
@@ -538,6 +559,8 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut success_slots = success_slots.lock().unwrap();
     success_slots.sort();
+    let mut skip_slots = skip_slots.lock().unwrap();
+    skip_slots.sort();
     let mut block_not_found_slots = block_not_found_slots.lock().unwrap();
     block_not_found_slots.sort();
     let mut failed_slots = failed_slots.lock().unwrap();
@@ -547,8 +570,9 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     debug!("failed slots: {:?}", failed_slots);
 
     println!(
-        "success: {}, block not found: {}, failed: {}",
+        "success: {}, skip: {}, block not found: {}, failed: {}",
         success_slots.len(),
+        skip_slots.len(),
         block_not_found_slots.len(),
         failed_slots.len(),
     );
@@ -912,6 +936,15 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .value_name("END_SLOT")
                                 .takes_value(true)
                                 .help("Stop copying at this slot [default: starting-slot + 1]"),
+                        )
+                        .arg(
+                            Arg::with_name("force")
+                            .long("force")
+                            .value_name("FORCE")
+                            .takes_value(false)
+                            .help(
+                                "still upload whole block to destination although the block existed",
+                            ),
                         )
                 ),
         )
