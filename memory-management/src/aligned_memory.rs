@@ -2,6 +2,19 @@
 
 use std::{mem, ptr};
 
+/// Scalar types, aka "plain old data"
+pub trait Pod {}
+
+impl Pod for bool {}
+impl Pod for u8 {}
+impl Pod for u16 {}
+impl Pod for u32 {}
+impl Pod for u64 {}
+impl Pod for i8 {}
+impl Pod for i16 {}
+impl Pod for i32 {}
+impl Pod for i64 {}
+
 /// Provides u8 slices at a specified alignment
 #[derive(Debug, PartialEq, Eq)]
 pub struct AlignedMemory<const ALIGN: usize> {
@@ -129,7 +142,7 @@ impl<const ALIGN: usize> AlignedMemory<ALIGN> {
     /// # Safety
     ///
     /// Unsafe since it assumes that there is enough capacity.
-    pub unsafe fn write_unchecked<T>(&mut self, value: T) {
+    pub unsafe fn write_unchecked<T: Pod>(&mut self, value: T) {
         let pos = self.mem.len();
         let new_len = pos.saturating_add(mem::size_of::<T>());
         debug_assert!(new_len <= self.align_offset.saturating_add(self.max_len));
