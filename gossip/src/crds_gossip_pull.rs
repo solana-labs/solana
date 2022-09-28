@@ -42,7 +42,7 @@ use {
         iter::{repeat, repeat_with},
         net::SocketAddr,
         sync::{
-            atomic::{AtomicI64, AtomicUsize, Ordering},
+            atomic::{AtomicUsize, Ordering},
             Mutex, RwLock,
         },
         time::{Duration, Instant},
@@ -514,11 +514,11 @@ impl CrdsGossipPull {
             now.saturating_sub(msg_timeout)..now.saturating_add(msg_timeout);
         let dropped_requests = AtomicUsize::default();
         let total_skipped = AtomicUsize::default();
-        let output_size_limit = output_size_limit.try_into().unwrap_or(i64::MAX);
-        let output_size_limit = AtomicI64::new(output_size_limit);
+        let output_size_limit = AtomicUsize::new(output_size_limit);
         let crds = crds.read().unwrap();
         let apply_filter = |caller: &CrdsValue, filter: &CrdsFilter| {
-            if output_size_limit.load(Ordering::Relaxed) <= 0 {
+            let size_remaining = output_size_limit.load(Ordering::Acquire);
+            if size_remaining == 0 {
                 return Vec::default();
             }
             let caller_wallclock = caller.wallclock();
@@ -537,13 +537,34 @@ impl CrdsGossipPull {
                     !filter.filter_contains(&entry.value_hash)
                 }
             };
-            let out: Vec<_> = crds
+            let mut out: Vec<_> = crds
                 .filter_bitmask(filter.mask, filter.mask_bits)
                 .filter(pred)
                 .map(|entry| entry.value.clone())
-                .take(output_size_limit.load(Ordering::Relaxed).max(0) as usize)
+                .take(size_remaining)
                 .collect();
-            output_size_limit.fetch_sub(out.len() as i64, Ordering::Relaxed);
+
+            let out_size = out.len();
+            let mut size_remaining = output_size_limit.load(Ordering::Acquire);
+            loop {
+                if size_remaining == 0 {
+                    return Vec::default();
+                }
+
+                let truncated_size = out_size.min(size_remaining);
+                match output_size_limit.compare_exchange_weak(
+                    size_remaining,
+                    size_remaining.saturating_sub(truncated_size),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                ) {
+                    Ok(_) => {
+                        out = out.into_iter().take(truncated_size).collect();
+                        break;
+                    }
+                    Err(s) => size_remaining = s,
+                }
+            }
             out
         };
         let ret: Vec<_> = thread_pool.install(|| {
