@@ -172,6 +172,7 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    recv_batching_us: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -485,6 +486,7 @@ impl ServeRepair {
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
+        let recv_start = Instant::now();
         while let Ok(mut more) = requests_receiver.try_recv() {
             total_requests += more.len();
             if total_requests <= MAX_REQUESTS_PER_ITERATION
@@ -493,6 +495,7 @@ impl ServeRepair {
                 reqs_v.push(more);
             }
         }
+        stats.recv_batching_us += recv_start.elapsed().as_micros() as u64;
         stats.total_requests += total_requests;
 
         let root_bank = self.bank_forks.read().unwrap().root_bank();
@@ -561,6 +564,7 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("recv_batching_us", stats.recv_batching_us, i64),
         );
 
         *stats = ServeRepairStats::default();
