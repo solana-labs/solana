@@ -569,6 +569,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let mut failed_slots = failed_slots.lock().unwrap();
     failed_slots.sort();
     debug!("success slots: {:?}", success_slots);
+    debug!("skip slots: {:?}", skip_slots);
     debug!("blocks not found slots: {:?}", block_not_found_slots);
     debug!("failed slots: {:?}", failed_slots);
 
