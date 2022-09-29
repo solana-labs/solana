@@ -604,6 +604,12 @@ pub struct Reward {
 
 pub type Rewards = Vec<Reward>;
 
+#[derive(Debug, Error)]
+pub enum ConvertBlockError {
+    #[error("transactions missing after converted, before: {0}, after: {1}")]
+    TransactionsMissing(usize, usize),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConfirmedBlock {
     pub previous_blockhash: String,
@@ -647,7 +653,7 @@ impl From<VersionedConfirmedBlock> for ConfirmedBlock {
 }
 
 impl TryFrom<ConfirmedBlock> for VersionedConfirmedBlock {
-    type Error = &'static str;
+    type Error = ConvertBlockError;
 
     fn try_from(block: ConfirmedBlock) -> Result<Self, Self::Error> {
         let expected_transaction_count = block.transactions.len();
@@ -662,7 +668,7 @@ impl TryFrom<ConfirmedBlock> for VersionedConfirmedBlock {
             .collect();
 
         if txs.len() != expected_transaction_count {
-            return Err("some transactions miss");
+            return Err(ConvertBlockError::TransactionsMissing(expected_transaction_count, txs.len()));
         }
 
         Ok(Self {
