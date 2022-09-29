@@ -1420,7 +1420,8 @@ impl Scheduler<ExecuteTimings> {
 
                 let mut cumulative_timings = ExecuteTimings::default();
 
-                while let Ok(r) = retired_ee_receiver.recv()
+                loop {
+                while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
@@ -1464,6 +1465,7 @@ impl Scheduler<ExecuteTimings> {
                             checkpoint.wait_for_restart(Some(std::mem::take(&mut cumulative_timings)));
                         },
                     }
+                }
                 }
                 todo!();
 

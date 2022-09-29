@@ -1720,7 +1720,7 @@ impl ScheduleStage {
                            executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                            processed_count = processed_count.checked_add(1).unwrap();
                            Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                           to_next_stage.send(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                           to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                        } else {
                            assert_eq!(from_exec.len(), 0);
                            from_exec_disconnected = true;
@@ -1924,7 +1924,7 @@ impl ScheduleStage {
                             &mut provisioning_tracker_count,
                         );
                         to_next_stage
-                            .send(ExaminablePayload(Flushable::Payload((
+                            .send_buffered(ExaminablePayload(Flushable::Payload((
                                 processed_execution_environment,
                                 extra,
                             ))))
