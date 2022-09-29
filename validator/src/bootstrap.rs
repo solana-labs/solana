@@ -1126,7 +1126,7 @@ fn download_snapshots(
             None => 0,
         },
     ) {
-        Some(nis) => Some(nis),
+        Some(newer_incremental_snapshot) => Some(newer_incremental_snapshot),
         None => incremental_snapshot_hash,
     };
 

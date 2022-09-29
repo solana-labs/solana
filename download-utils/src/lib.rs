@@ -343,66 +343,13 @@ pub fn check_for_newer_incremental_snapshot(
 ) -> Option<(u64, Hash)> {
     let incremental_redirect_url =
         &format!("http://{}{}", rpc_addr, INCREMENTAL_SNAPSHOT_REQUEST_PATH);
-    let response = reqwest::blocking::get(incremental_redirect_url);
-    let response = match response {
-        Ok(r) => r,
-        Err(_e) => {
-            return None;
-        }
-    };
-
-    let incremental_snapshot_url = String::from_str(response.url().path());
-    let incremental_snapshot_url = match incremental_snapshot_url {
-        Ok(url) => url,
-        Err(_e) => {
-            return None;
-        }
-    };
-
-    // Expected URL format: /incremental-snapshot-<full slot>-<incremental slot>-<incremental slot hash>.tar.zst
-    // eg: "/incremental-snapshot-152074294-152089382-BqBphVi1gnim96v6xXim7xq1L2PDFX3aDjd1Nn7SbRFM.tar.zst"
-    let re = Regex::new(r"incremental-snapshot-([0-9]*)-([0-9]*)-(\w*)\.").unwrap();
-    let captures = re.captures(incremental_snapshot_url.as_str());
-    let captures = match captures {
-        Some(c) => c,
-        None => {
-            return None;
-        }
-    };
-    let full_slot = captures.get(1).map(|m| m.as_str().parse::<u64>());
-    let full_slot = match full_slot {
-        Some(s) => match s {
-            Ok(s) => s,
-            Err(_e) => {
-                return None;
-            }
-        },
-        None => {
-            return None;
-        }
-    };
-
-    let recent_inc_slot = captures.get(2).map(|m| m.as_str().parse::<u64>());
-    let recent_inc_slot = match recent_inc_slot {
-        Some(s) => match s {
-            Ok(s) => s,
-            Err(_e) => {
-                return None;
-            }
-        },
-        None => {
-            return None;
-        }
-    };
-
-    let recent_inc_hash = captures.get(3).map_or("", |m| m.as_str());
-    let recent_inc_hash = Hash::from_str(recent_inc_hash);
-    let recent_inc_hash = match recent_inc_hash {
-        Ok(ih) => ih,
-        Err(_e) => {
-            return None;
-        }
-    };
+    let response = reqwest::blocking::get(incremental_redirect_url).ok()?;
+    let incremental_snapshot_url = String::from_str(response.url().path()).ok()?;
+    let (full_slot, recent_inc_slot, recent_inc_hash, _format) =
+        snapshot_utils::parse_incremental_snapshot_archive_filename(
+            &incremental_snapshot_url.as_str(),
+        )
+        .ok()?;
 
     if full_snapshot_slot == full_slot && recent_inc_slot > incremental_snapshot_slot {
         Some((recent_inc_slot, recent_inc_hash))

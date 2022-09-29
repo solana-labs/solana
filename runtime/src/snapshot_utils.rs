@@ -1422,7 +1422,7 @@ pub(crate) fn parse_full_snapshot_archive_filename(
 }
 
 /// Parse an incremental snapshot archive filename into its base Slot, actual Slot, Hash, and Archive Format
-pub(crate) fn parse_incremental_snapshot_archive_filename(
+pub fn parse_incremental_snapshot_archive_filename(
     archive_filename: &str,
 ) -> Result<(Slot, Slot, Hash, ArchiveFormat)> {
     lazy_static! {
