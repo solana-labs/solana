@@ -6883,6 +6883,8 @@ impl Bank {
             // for this value to be `Some`.
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
                 hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            } else {
+                warn!("bank {}: epoch_accounts_hash was None but should have been included in this bank's hash!", self.slot());
             }
         }
 
@@ -6936,9 +6938,7 @@ impl Bank {
             return false;
         }
 
-        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
-        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
-        let stop_slot = first_slot_in_epoch + stop_offset;
+        let stop_slot = epoch_accounts_hash::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }
 
