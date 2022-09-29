@@ -2,15 +2,26 @@ import React from "react";
 
 import { AddressLookupTableAccount, PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
+import { AddressLookupTableAccountInfo } from "validators/accounts/address-lookup-table";
 
-export function LookupTableEntriesCard({
-  lookupTableAccountData,
-}: {
-  lookupTableAccountData: Uint8Array;
-}) {
+export function LookupTableEntriesCard(
+  params:
+    | {
+        parsedLookupTable: AddressLookupTableAccountInfo;
+      }
+    | {
+        lookupTableAccountData: Uint8Array;
+      }
+) {
   const lookupTableState = React.useMemo(() => {
-    return AddressLookupTableAccount.deserialize(lookupTableAccountData);
-  }, [lookupTableAccountData]);
+    if ("lookupTableAccountData" in params) {
+      return AddressLookupTableAccount.deserialize(
+        params.lookupTableAccountData
+      );
+    } else {
+      return params.parsedLookupTable;
+    }
+  }, [params]);
 
   return (
     <div className="card">
