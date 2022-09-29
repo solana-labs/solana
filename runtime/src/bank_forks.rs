@@ -296,6 +296,13 @@ impl BankForks {
                 "sending epoch accounts hash request, slot: {}",
                 eah_bank.slot()
             );
+            eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_in_flight(eah_bank.slot());
+
             self.last_accounts_hash_slot = eah_bank.slot();
             let squash_timing = eah_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
@@ -304,16 +311,6 @@ impl BankForks {
             total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
             is_root_bank_squashed = eah_bank.slot() == root;
-
-            // Clear any existing EAH before requesting a new one
-            _ = eah_bank
-                .rc
-                .accounts
-                .accounts_db
-                .epoch_accounts_hash
-                .lock()
-                .unwrap()
-                .take();
 
             accounts_background_request_sender
                 .send_snapshot_request(SnapshotRequest {
