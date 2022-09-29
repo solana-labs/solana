@@ -251,13 +251,12 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service =
-            Some(WarmQuicCacheService::new(
-                connection_cache.clone(),
-                cluster_info.clone(),
-                poh_recorder.clone(),
-                exit.clone(),
-            ));
+        let warm_quic_cache_service = Some(WarmQuicCacheService::new(
+            connection_cache.clone(),
+            cluster_info.clone(),
+            poh_recorder.clone(),
+            exit.clone(),
+        ));
         let (cost_update_sender, cost_update_receiver) = unbounded();
         let cost_update_service =
             CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);

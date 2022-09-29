@@ -44,9 +44,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE,
-    },
+    solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,

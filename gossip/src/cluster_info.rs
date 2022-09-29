@@ -2731,8 +2731,6 @@ pub struct Sockets {
     pub ip_echo: Option<TcpListener>,
     pub tvu: Vec<UdpSocket>,
     pub tvu_forwards: Vec<UdpSocket>,
-    pub tpu: Vec<UdpSocket>,
-    pub tpu_forwards: Vec<UdpSocket>,
     pub tpu_vote: Vec<UdpSocket>,
     pub broadcast: Vec<UdpSocket>,
     pub repair: UdpSocket,
@@ -2801,8 +2799,6 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
-                tpu: vec![tpu],
-                tpu_forwards: vec![tpu_forwards],
                 tpu_vote: vec![tpu_vote],
                 broadcast,
                 repair,
@@ -2845,9 +2841,9 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
+        let ((tpu_port, _tpu), (_tpu_quic_port, tpu_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
-        let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
+        let ((tpu_forwards_port, _tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
             bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
@@ -2883,8 +2879,6 @@ impl Node {
                 ip_echo: Some(ip_echo),
                 tvu: vec![tvu],
                 tvu_forwards: vec![tvu_forwards],
-                tpu: vec![tpu],
-                tpu_forwards: vec![tpu_forwards],
                 tpu_vote: vec![tpu_vote],
                 broadcast: vec![broadcast],
                 repair,
@@ -2913,7 +2907,7 @@ impl Node {
         let (tvu_forwards_port, tvu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu_forwards multi_bind");
 
-        let (tpu_port, tpu_sockets) =
+        let (tpu_port, _tpu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 32).expect("tpu multi_bind");
 
         let (_tpu_port_quic, tpu_quic) = Self::bind(
@@ -2921,7 +2915,7 @@ impl Node {
             (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
         );
 
-        let (tpu_forwards_port, tpu_forwards_sockets) =
+        let (tpu_forwards_port, _tpu_forwards_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tpu_forwards multi_bind");
 
         let (_tpu_forwards_port_quic, tpu_forwards_quic) = Self::bind(
@@ -2969,8 +2963,6 @@ impl Node {
                 gossip,
                 tvu: tvu_sockets,
                 tvu_forwards: tvu_forwards_sockets,
-                tpu: tpu_sockets,
-                tpu_forwards: tpu_forwards_sockets,
                 tpu_vote: tpu_vote_sockets,
                 broadcast,
                 repair,

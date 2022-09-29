@@ -485,7 +485,6 @@ fn run_tpu_send_transaction() {
     }
 }
 
-
 #[test]
 fn test_tpu_send_transaction_with_quic() {
     run_tpu_send_transaction()

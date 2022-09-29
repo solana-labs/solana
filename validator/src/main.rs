@@ -70,9 +70,7 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE,
-    },
+    solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -1238,12 +1236,6 @@ pub fn main() {
                 .long("tpu-disable-quic")
                 .takes_value(false)
                 .help("Do not use QUIC to send transactions."),
-        )
-        .arg(
-            Arg::with_name("tpu_enable_udp")
-                .long("tpu-enable-udp")
-                .takes_value(false)
-                .help("Enable UDP for receiving/sending transactions."),
         )
         .arg(
             Arg::with_name("disable_quic_servers")
@@ -2436,11 +2428,6 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
-    let tpu_enable_udp = if matches.is_present("tpu_enable_udp") {
-        true
-    } else {
-        false
-    };
 
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 

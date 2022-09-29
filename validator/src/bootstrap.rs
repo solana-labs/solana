@@ -65,11 +65,9 @@ fn verify_reachable_ports(
         udp_sockets.push(&node.sockets.serve_repair);
     }
     if ContactInfo::is_valid_address(&node.info.tpu, socket_addr_space) {
-        udp_sockets.extend(node.sockets.tpu.iter());
         udp_sockets.push(&node.sockets.tpu_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tpu_forwards, socket_addr_space) {
-        udp_sockets.extend(node.sockets.tpu_forwards.iter());
         udp_sockets.push(&node.sockets.tpu_forwards_quic);
     }
     if ContactInfo::is_valid_address(&node.info.tpu_vote, socket_addr_space) {

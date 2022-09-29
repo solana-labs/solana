@@ -7,7 +7,7 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE},
+    solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 

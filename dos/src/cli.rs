@@ -58,7 +58,6 @@ pub struct DosClientParameters {
     #[clap(flatten)]
     pub transaction_params: TransactionParams,
 
-
     #[clap(long, default_value = "16384", help = "Size of the transactions batch")]
     pub send_batch_size: usize,
 }

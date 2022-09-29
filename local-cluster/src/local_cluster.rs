@@ -42,9 +42,7 @@ use {
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
     solana_streamer::socket::SocketAddrSpace,
     solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::connection_cache::{
-        ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE,
-    },
+    solana_tpu_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_vote_program::{
         vote_instruction,
         vote_state::{self, VoteInit},

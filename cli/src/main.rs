@@ -202,7 +202,6 @@ pub fn parse_args<'a>(
         config.address_labels
     };
 
-
     Ok((
         CliConfig {
             command,
