@@ -24,7 +24,6 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
-    solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
@@ -170,8 +169,6 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
-    receive_repair_request_us: u64,
-    handle_repair_request_us: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -459,7 +456,6 @@ impl ServeRepair {
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
-        let mut receive_repair_request_elapsed = Measure::start("receive_repair_request");
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
@@ -469,17 +465,15 @@ impl ServeRepair {
             total_requests += more.len();
             if total_requests > MAX_REQUESTS_PER_ITERATION {
                 dropped_requests += more.len();
+                break;
             } else {
                 reqs_v.push(more);
             }
         }
-        receive_repair_request_elapsed.stop();
-        stats.receive_repair_request_us += receive_repair_request_elapsed.as_us();
 
         stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
-        let mut handle_repair_request_elapsed = Measure::start("handle_repair_request");
         let root_bank = self.bank_forks.read().unwrap().root_bank();
         for reqs in reqs_v {
             self.handle_packets(
@@ -493,8 +487,6 @@ impl ServeRepair {
                 data_budget,
             );
         }
-        handle_repair_request_elapsed.stop();
-        stats.handle_repair_request_us += handle_repair_request_elapsed.as_us();
         Ok(())
     }
 
@@ -548,17 +540,6 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
-            ("err_id_mismatch", stats.err_id_mismatch, i64),
-            (
-                "receive_repair_request_us",
-                stats.receive_repair_request_us as i64,
-                i64
-            ),
-            (
-                "handle_repair_request_us",
-                stats.handle_repair_request_us as i64,
-                i64
-            ),
         );
 
         *stats = ServeRepairStats::default();
