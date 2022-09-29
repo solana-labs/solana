@@ -1961,6 +1961,7 @@ impl ScheduleStage {
             assert!(!select_skipped || executing_queue_count > 0);
         }
         if let Some(checkpoint) = &maybe_checkpoint {
+            // wake up the receiver thread immediately by not using .send_buffered!
             to_next_stage
                 .send(ExaminablePayload(Flushable::Flush(std::sync::Arc::clone(
                     checkpoint,
