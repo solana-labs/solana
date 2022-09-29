@@ -53,7 +53,7 @@ jobs:
           target: ${{ matrix.target }}
       - name: Install cargo-ndk
         if: ${{ matrix.platform == 'android' }}
-        run: cargo install cargo-ndk
+        run: cargo install cargo-ndk@2.11.0
       - name: Install NDK 21
         if: ${{ matrix.platform == 'android' }}
         run: |
