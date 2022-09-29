@@ -362,7 +362,7 @@ pub fn check_for_newer_incremental_snapshot(
     // Expected URL format: /incremental-snapshot-<full slot>-<incremental slot>-<incremental slot hash>.tar.zst
     // eg: "/incremental-snapshot-152074294-152089382-BqBphVi1gnim96v6xXim7xq1L2PDFX3aDjd1Nn7SbRFM.tar.zst"
     let re = Regex::new(r"incremental-snapshot-([0-9]*)-([0-9]*)-(\w*)\.").unwrap();
-    let captures = re.captures(&incremental_snapshot_url.as_str());
+    let captures = re.captures(incremental_snapshot_url.as_str());
     let captures = match captures {
         Some(c) => c,
         None => {
@@ -405,8 +405,8 @@ pub fn check_for_newer_incremental_snapshot(
     };
 
     if full_snapshot_slot == full_slot && recent_inc_slot > incremental_snapshot_slot {
-        return Some((recent_inc_slot, recent_inc_hash));
+        Some((recent_inc_slot, recent_inc_hash))
     } else {
-        return None;
+        None
     }
 }
