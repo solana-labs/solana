@@ -54,6 +54,7 @@ use {
         },
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
+        big_mod_exp,
     },
     std::{
         alloc::Layout,
@@ -366,6 +367,13 @@ pub fn register_syscalls(
         b"sol_log_data",
         SyscallLogData::init,
         SyscallLogData::call,
+    )?;
+
+    // Big mod exp
+    syscall_registry.register_syscall_by_name(
+        b"sol_big_mod_exp",
+        SyscallBigModExp::init,
+        SyscallBigModExp::call,
     )?;
 
     Ok(syscall_registry)
@@ -1885,6 +1893,110 @@ declare_syscall!(
         &mut self,
         updates_addr: u64,
         updates_count: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context.get_compute_meter().consume(
+                budget.syscall_base_cost.saturating_add(
+                    budget
+                        .account_property_update_cost
+                        .saturating_mul(updates_count)
+                )
+            ),
+            result
+        );
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = question_mark!(
+            transaction_context
+                .get_current_instruction_context()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+        let updates = question_mark!(
+            translate_slice_mut::<AccountPropertyUpdate>(
+                memory_mapping,
+                updates_addr,
+                updates_count,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+        *result = Ok(0);
+        for update in updates.iter() {
+            let mut borrowed_account = question_mark!(
+                instruction_context
+                    .try_borrow_instruction_account(
+                        transaction_context,
+                        update.instruction_account_index,
+                    )
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+            let attribute =
+                unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
+            match attribute {
+                TransactionContextAttribute::TransactionAccountOwner => {
+                    let owner_pubkey = question_mark!(
+                        translate_type_mut::<Pubkey>(
+                            memory_mapping,
+                            update.value,
+                            invoke_context.get_check_aligned()
+                        ),
+                        result
+                    );
+                    question_mark!(
+                        borrowed_account
+                            .set_owner(&owner_pubkey.to_bytes())
+                            .map_err(SyscallError::InstructionError),
+                        result
+                    );
+                }
+                TransactionContextAttribute::TransactionAccountLamports => question_mark!(
+                    borrowed_account
+                        .set_lamports(update.value)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                TransactionContextAttribute::TransactionAccountData => question_mark!(
+                    borrowed_account
+                        .set_data_length(update.value as usize)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                TransactionContextAttribute::TransactionAccountIsExecutable => question_mark!(
+                    borrowed_account
+                        .set_executable(update.value != 0)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                _ => {
+                    *result = Err(SyscallError::InvalidAttribute.into());
+                    return;
+                }
+            }
+        }
+    }
+);
+
+declare_syscall!(
+    /// Big integer modular exponentiation
+    SyscallBigModExp,
+    fn call(
+        &mut self,
+        params: u64,
+        result: u64,
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,

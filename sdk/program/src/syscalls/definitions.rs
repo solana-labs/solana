@@ -66,6 +66,7 @@ define_syscall!(fn sol_curve_validate_point(curve_id: u64, point: *const u8, res
 define_syscall!(fn sol_curve_group_op(curve_id: u64, op_id: u64, left_point: *const u8, right_point: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_multiscalar_mul(curve_id: u64, scalars: *const u8, points: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64);
+define_syscall!(fn sol_big_mod_exp(params: *const u8, result: *mut u8) -> u64);
 
 #[cfg(target_feature = "static-syscalls")]
 pub const fn sys_hash(name: &str) -> usize {
