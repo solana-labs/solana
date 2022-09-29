@@ -3,7 +3,6 @@ use {
     console::Emoji,
     indicatif::{ProgressBar, ProgressStyle},
     log::*,
-    regex::Regex,
     solana_rpc::rpc_service::INCREMENTAL_SNAPSHOT_REQUEST_PATH,
     solana_runtime::{
         snapshot_package::SnapshotType,
