@@ -5106,7 +5106,9 @@ dependencies = [
  "console",
  "indicatif",
  "log",
+ "regex",
  "reqwest",
+ "solana-rpc",
  "solana-runtime",
  "solana-sdk 1.15.0",
 ]

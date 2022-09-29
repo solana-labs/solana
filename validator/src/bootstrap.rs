@@ -3,7 +3,9 @@ use {
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
-    solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
+    solana_download_utils::{
+        check_for_newer_incremental_snapshot, download_snapshot_archive, DownloadProgressRecord,
+    },
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -1115,19 +1117,32 @@ fn download_snapshots(
         )?;
     }
 
-    // Check and see if we've already got the incremental snapshot; if not, download it
-    if let Some(incremental_snapshot_hash) = incremental_snapshot_hash {
+    // If the full snapshot download took more than a few minutes there is probably a newer incremental snapshot
+    let newest_known_incremental_snapshot = match check_for_newer_incremental_snapshot(
+        rpc_contact_info.rpc,
+        full_snapshot_hash.0,
+        match incremental_snapshot_hash {
+            Some(inc) => inc.0,
+            None => 0,
+        },
+    ) {
+        Some(nis) => Some(nis),
+        None => incremental_snapshot_hash,
+    };
+
+    // Check if we've already got the incremental snapshot; if not, download it
+    if let Some(newest_known_incremental_snapshot) = newest_known_incremental_snapshot {
         if snapshot_utils::get_incremental_snapshot_archives(incremental_snapshot_archives_dir)
             .into_iter()
             .any(|snapshot_archive| {
-                snapshot_archive.slot() == incremental_snapshot_hash.0
-                    && snapshot_archive.hash() == &incremental_snapshot_hash.1
+                snapshot_archive.slot() == newest_known_incremental_snapshot.0
+                    && snapshot_archive.hash() == &newest_known_incremental_snapshot.1
                     && snapshot_archive.base_slot() == full_snapshot_hash.0
             })
         {
             info!(
                 "Incremental snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
-                incremental_snapshot_hash.0, incremental_snapshot_hash.1
+                newest_known_incremental_snapshot.0, newest_known_incremental_snapshot.1
             );
         } else {
             download_snapshot(
@@ -1141,7 +1156,7 @@ fn download_snapshots(
                 maximum_snapshot_download_abort,
                 download_abort_count,
                 rpc_contact_info,
-                incremental_snapshot_hash,
+                newest_known_incremental_snapshot,
                 SnapshotType::IncrementalSnapshot(full_snapshot_hash.0),
             )?;
         }
