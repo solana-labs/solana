@@ -1430,7 +1430,7 @@ impl Scheduler<ExecuteTimings> {
 
                                 datapoint_info_at!(
                                     ee.finish_time.unwrap(),
-                                    "individual_tx_stats",
+                                    "transaction_timings",
                                     ("slot", ee.slot, i64),
                                     ("index", ee.transaction_index, i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
