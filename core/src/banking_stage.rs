@@ -92,7 +92,7 @@ const MAX_NUM_TRANSACTIONS_PER_BATCH: usize = 64;
 const NUM_VOTE_PROCESSING_THREADS: u32 = 2;
 const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
-const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
+pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
@@ -384,6 +384,8 @@ pub struct FilterForwardingResults {
     pub(crate) total_forwardable_packets: usize,
     pub(crate) total_tracer_packets_in_buffer: usize,
     pub(crate) total_forwardable_tracer_packets: usize,
+    pub(crate) total_packet_conversion_us: u64,
+    pub(crate) total_filter_packets_us: u64,
 }
 
 impl BankingStage {
@@ -956,9 +958,20 @@ impl BankingStage {
             buffered_packet_batches,
             &mut forward_packet_batches_by_accounts,
             UNPROCESSED_BUFFER_STEP_SIZE,
-            slot_metrics_tracker,
-            banking_stage_stats,
         );
+        slot_metrics_tracker.increment_transactions_from_packets_us(
+            filter_forwarding_result.total_packet_conversion_us,
+        );
+        banking_stage_stats.packet_conversion_elapsed.fetch_add(
+            filter_forwarding_result.total_packet_conversion_us,
+            Ordering::Relaxed,
+        );
+        banking_stage_stats
+            .filter_pending_packets_elapsed
+            .fetch_add(
+                filter_forwarding_result.total_filter_packets_us,
+                Ordering::Relaxed,
+            );
 
         forward_packet_batches_by_accounts
             .iter_batches()
@@ -1026,12 +1039,12 @@ impl BankingStage {
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         batch_size: usize,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        banking_stage_stats: &BankingStageStats,
     ) -> FilterForwardingResults {
         let mut total_forwardable_tracer_packets: usize = 0;
         let mut total_tracer_packets_in_buffer: usize = 0;
         let mut total_forwardable_packets: usize = 0;
+        let mut total_packet_conversion_us: u64 = 0;
+        let mut total_filter_packets_us: u64 = 0;
         let mut dropped_tx_before_forwarding_count: usize = 0;
 
         let mut original_priority_queue = Self::swap_priority_queue(buffered_packet_batches);
@@ -1068,19 +1081,29 @@ impl BankingStage {
                     );
 
                     if accepting_packets {
-                        let (sanitized_transactions, transaction_to_packet_indexes) =
+                        let (
+                            (sanitized_transactions, transaction_to_packet_indexes),
+                            packet_conversion_time,
+                        ): ((Vec<SanitizedTransaction>, Vec<usize>), _) = measure!(
                             Self::sanitize_unforwarded_packets(
                                 buffered_packet_batches,
                                 &packets_to_process,
                                 bank,
-                                slot_metrics_tracker,
-                                banking_stage_stats,
-                            );
+                            ),
+                            "sanitize_packet",
+                        );
+                        saturating_add_assign!(
+                            total_packet_conversion_us,
+                            packet_conversion_time.as_us()
+                        );
 
-                        let forwardable_transaction_indexes = Self::filter_invalid_transactions(
-                            &sanitized_transactions,
-                            bank,
-                            banking_stage_stats,
+                        let (forwardable_transaction_indexes, filter_packets_time) = measure!(
+                            Self::filter_invalid_transactions(&sanitized_transactions, bank,),
+                            "filter_packets",
+                        );
+                        saturating_add_assign!(
+                            total_filter_packets_us,
+                            filter_packets_time.as_us()
                         );
 
                         for forwardable_transaction_index in &forwardable_transaction_indexes {
@@ -1132,6 +1155,8 @@ impl BankingStage {
             total_forwardable_packets,
             total_tracer_packets_in_buffer,
             total_forwardable_tracer_packets,
+            total_packet_conversion_us,
+            total_filter_packets_us,
         }
     }
 
@@ -1151,15 +1176,10 @@ impl BankingStage {
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         packets_to_process: &[Rc<ImmutableDeserializedPacket>],
         bank: &Arc<Bank>,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        banking_stage_stats: &BankingStageStats,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         // Get ref of ImmutableDeserializedPacket
         let deserialized_packets = packets_to_process.iter().map(|p| &**p);
-        let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
-            (Vec<SanitizedTransaction>, Vec<usize>),
-            _,
-        ) = measure!(
+        let (transactions, transaction_to_packet_indexes): (Vec<SanitizedTransaction>, Vec<usize>) =
             deserialized_packets
                 .enumerate()
                 .filter_map(|(packet_index, deserialized_packet)| {
@@ -1175,16 +1195,9 @@ impl BankingStage {
                         None
                     }
                 })
-                .unzip(),
-            "sanitize_packet",
-        );
+                .unzip();
 
         // report metrics
-        let packet_conversion_us = packet_conversion_time.as_us();
-        slot_metrics_tracker.increment_transactions_from_packets_us(packet_conversion_us);
-        banking_stage_stats
-            .packet_conversion_elapsed
-            .fetch_add(packet_conversion_us, Ordering::Relaxed);
         inc_new_counter_info!("banking_stage-packet_conversion", 1);
         let unsanitized_packets_filtered_count =
             packets_to_process.len().saturating_sub(transactions.len());
@@ -1200,21 +1213,10 @@ impl BankingStage {
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
         bank: &Arc<Bank>,
-        banking_stage_stats: &BankingStageStats,
     ) -> Vec<usize> {
-        let (results, filter_invalid_transactions_time) = measure!(
-            {
-                let filter = vec![Ok(()); transactions.len()];
-                Self::bank_check_transactions(bank, transactions, &filter)
-            },
-            "filter_invalid_transactions"
-        );
-
+        let filter = vec![Ok(()); transactions.len()];
+        let results = Self::bank_check_transactions(bank, transactions, &filter);
         // report metrics
-        let filter_invalid_transactions_us = filter_invalid_transactions_time.as_us();
-        banking_stage_stats
-            .filter_pending_packets_elapsed
-            .fetch_add(filter_invalid_transactions_us, Ordering::Relaxed);
         let filtered_out_transactions_count = transactions.len().saturating_sub(results.len());
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
@@ -3510,13 +3512,12 @@ mod tests {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
                 total_forwardable_tracer_packets,
+                ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
-                &mut LeaderSlotMetricsTracker::new(1),
-                &BankingStageStats::default(),
             );
             assert_eq!(total_forwardable_packets, 256);
             assert_eq!(total_tracer_packets_in_buffer, 256);
@@ -3552,13 +3553,12 @@ mod tests {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
                 total_forwardable_tracer_packets,
+                ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
-                &mut LeaderSlotMetricsTracker::new(1),
-                &BankingStageStats::default(),
             );
             assert_eq!(
                 total_forwardable_packets,
@@ -3585,13 +3585,12 @@ mod tests {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
                 total_forwardable_tracer_packets,
+                ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
-                &mut LeaderSlotMetricsTracker::new(1),
-                &BankingStageStats::default(),
             );
             assert_eq!(
                 total_forwardable_packets,
