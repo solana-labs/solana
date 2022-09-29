@@ -35,8 +35,8 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-            self, remove_deprecated_request_unit_ix, return_none_for_zero_lamport_accounts,
-            use_default_units_in_fee_calculation, FeatureSet,
+            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
+            FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -258,12 +258,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
-        let load_zero_lamports =
-            if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
-                LoadZeroLamports::None
-            } else {
-                LoadZeroLamports::SomeWithZeroLamportAccount
-            };
+        let load_zero_lamports = LoadZeroLamports::None;
 
         // Copy all the accounts
         let message = tx.message();
