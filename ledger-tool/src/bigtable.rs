@@ -395,6 +395,10 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let to_slot = args.to_slot.unwrap_or(from_slot);
     debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
 
+    if from_slot > to_slot {
+        return Err("starting slot should be less than or equal to ending slot")?;
+    }
+
     let source_bigtable = {
         if args.source_is_emulator {
             match solana_storage_bigtable::LedgerStorage::new_for_emulator(
