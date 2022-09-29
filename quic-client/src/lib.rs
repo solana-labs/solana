@@ -42,8 +42,7 @@ impl ConnectionPool for QuicPool {
             connections: vec![],
             endpoint: config.create_endpoint(),
         };
-        let connection = Arc::new(pool.create_pool_entry(config, addr));
-        pool.connections.push(connection);
+        pool.add_connection(config, addr);
         pool
     }
 

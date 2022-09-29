@@ -29,8 +29,7 @@ impl ConnectionPool for UdpPool {
         let mut pool = Self {
             connections: vec![],
         };
-        let connection = Arc::new(pool.create_pool_entry(config, addr));
-        pool.connections.push(connection);
+        pool.add_connection(config, addr);
         pool
     }
 
