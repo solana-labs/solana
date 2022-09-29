@@ -456,37 +456,49 @@ impl ServeRepair {
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
-        let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
-        let mut total_requests = reqs_v[0].len();
+        let mut total_requests = 0;
+        let root_bank = self.bank_forks.read().unwrap().root_bank();
 
-        let mut dropped_requests = 0;
-        while let Ok(more) = requests_receiver.try_recv() {
-            total_requests += more.len();
+        // process first batch from the channel with timeout
+        let reqs = requests_receiver.recv_timeout(timeout)?;
+        total_requests += reqs.len();
+        self.handle_packets(
+            ping_cache,
+            recycler,
+            blockstore,
+            reqs,
+            response_sender,
+            &root_bank,
+            stats,
+            data_budget,
+        );
+
+        // process additional batches in the channel up to MAX_REQUESTS_PER_ITERATION
+        while let Ok(reqs) = requests_receiver.try_recv() {
+            total_requests += reqs.len();
             if total_requests > MAX_REQUESTS_PER_ITERATION {
-                dropped_requests += more.len();
                 break;
             } else {
-                reqs_v.push(more);
+                self.handle_packets(
+                    ping_cache,
+                    recycler,
+                    blockstore,
+                    reqs,
+                    response_sender,
+                    &root_bank,
+                    stats,
+                    data_budget,
+                );
             }
         }
 
-        stats.dropped_requests_load_shed += dropped_requests;
-        stats.total_requests += total_requests;
-
-        let root_bank = self.bank_forks.read().unwrap().root_bank();
-        for reqs in reqs_v {
-            self.handle_packets(
-                ping_cache,
-                recycler,
-                blockstore,
-                reqs,
-                response_sender,
-                &root_bank,
-                stats,
-                data_budget,
-            );
+        // discard excessive packets in the channel
+        while let Ok(reqs) = requests_receiver.try_recv() {
+            total_requests += reqs.len();
+            stats.dropped_requests_load_shed += reqs.len();
         }
+
         Ok(())
     }
 
