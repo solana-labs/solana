@@ -392,7 +392,7 @@ impl CopyArgs {
 
 async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     let from_slot = args.from_slot;
-    let to_slot = args.to_slot.unwrap_or(from_slot + 1);
+    let to_slot = args.to_slot.unwrap_or(from_slot);
     debug!("from_slot: {}, to_slot: {}", from_slot, to_slot);
 
     let source_bigtable = {
@@ -470,11 +470,11 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let (s, r) = unbounded::<u64>();
-    for i in from_slot..to_slot {
+    for i in from_slot..=to_slot {
         s.send(i).unwrap();
     }
 
-    let workers = min(to_slot - from_slot, num_cpus::get().try_into().unwrap());
+    let workers = min(to_slot - from_slot + 1, num_cpus::get().try_into().unwrap());
     debug!("worker num: {}", workers);
 
     let success_slots = Arc::new(Mutex::new(vec![]));
@@ -934,7 +934,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .validator(is_slot)
                                 .value_name("END_SLOT")
                                 .takes_value(true)
-                                .help("Stop copying at this slot [default: starting-slot + 1]"),
+                                .help("Stop copying at this slot (including, START_SLOT ..= END_SLOT)"),
                         )
                         .arg(
                             Arg::with_name("force")
