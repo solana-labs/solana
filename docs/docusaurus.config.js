@@ -45,6 +45,9 @@ module.exports = {
     },
   },
   themeConfig: {
+    prism: {
+      additionalLanguages: ["rust"],
+    },
     navbar: {
       logo: {
         alt: "Solana Logo",
@@ -89,7 +92,6 @@ module.exports = {
             {
               href: "https://spl.solana.com",
               label: "Solana Program Library »",
-              position: "left",
             },
           ],
         },
@@ -116,6 +118,7 @@ module.exports = {
     algolia: {
       // This API key is "search-only" and safe to be published
       apiKey: "d58e0d68c875346d52645d68b13f3ac0",
+      appId: "d58e0d68c875346d52645d68b13f3ac0",
       indexName: "solana",
       contextualSearch: true,
     },

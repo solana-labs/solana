@@ -1,7 +1,7 @@
 import React from "react";
 import Layout from "@theme/Layout";
 import DocSidebar from "@theme/DocSidebar";
-import ThemeClassNames from "@docusaurus/theme-classic/lib/theme/DocPage/styles.module.css";
+import ThemeClassNames from "@docusaurus/theme-classic/lib/theme/DocPage/Layout/styles.module.css";
 import sidebar from "../sidebars";
 
 function CardLayout({
