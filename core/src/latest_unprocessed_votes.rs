@@ -3,6 +3,7 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
+        unprocessed_packet_batches,
     },
     itertools::Itertools,
     rand::{thread_rng, Rng},
@@ -243,11 +244,12 @@ impl LatestUnprocessedVotes {
     /// Votes from validators with 0 stakes are ignored
     pub fn get_and_insert_forwardable_packets(
         &self,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
-            &forward_packet_batches_by_accounts.current_bank,
+            &bank,
             self.latest_votes_per_pubkey.read().unwrap().keys(),
         )
         .collect_vec();
@@ -260,16 +262,29 @@ impl LatestUnprocessedVotes {
                 if let Some(lock) = self.get_entry(pubkey) {
                     let mut vote = lock.write().unwrap();
                     if !vote.is_vote_taken() && !vote.is_forwarded() {
-                        if forward_packet_batches_by_accounts
-                            .add_packet(vote.vote.as_ref().unwrap().clone())
+                        let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
+                        if let Some(sanitized_vote_transaction) =
+                            unprocessed_packet_batches::transaction_from_deserialized_packet(
+                                &deserialized_vote_packet,
+                                &bank.feature_set,
+                                bank.vote_only_bank(),
+                                bank.as_ref(),
+                            )
                         {
-                            vote.forwarded = true;
+                            if forward_packet_batches_by_accounts.try_add_packet(
+                                &sanitized_vote_transaction,
+                                deserialized_vote_packet,
+                            ) {
+                                vote.forwarded = true;
+                            } else {
+                                // To match behavior of regular transactions we stop
+                                // forwarding votes as soon as one fails
+                                continue_forwarding = false;
+                            }
+                            return true;
                         } else {
-                            // To match behavior of regular transactions we stop
-                            // forwarding votes as soon as one fails
-                            continue_forwarding = false;
+                            return false;
                         }
-                        return true;
                     }
                 }
                 false
@@ -573,10 +588,9 @@ mod tests {
     #[test]
     fn test_forwardable_packets() {
         let latest_unprocessed_votes = LatestUnprocessedVotes::new();
+        let bank = Arc::new(Bank::default_for_tests());
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(Arc::new(
-                Bank::default_for_tests(),
-            ));
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         let keypair_a = ValidatorVoteKeypairs::new_rand();
         let keypair_b = ValidatorVoteKeypairs::new_rand();
@@ -588,7 +602,7 @@ mod tests {
 
         // Don't forward 0 stake accounts
         let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
         assert_eq!(0, forwarded);
         assert_eq!(
             0,
@@ -606,11 +620,13 @@ mod tests {
         .genesis_config;
         let bank = Bank::new_for_tests(&config);
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(Arc::new(bank));
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Don't forward votes from gossip
-        let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            Arc::new(bank),
+            &mut forward_packet_batches_by_accounts,
+        );
 
         assert_eq!(0, forwarded);
         assert_eq!(
@@ -629,11 +645,13 @@ mod tests {
         .genesis_config;
         let bank = Arc::new(Bank::new_for_tests(&config));
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(bank.clone());
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Forward from TPU
-        let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            bank.clone(),
+            &mut forward_packet_batches_by_accounts,
+        );
 
         assert_eq!(1, forwarded);
         assert_eq!(
@@ -646,9 +664,9 @@ mod tests {
 
         // Don't forward again
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(bank);
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
         let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 
         assert_eq!(0, forwarded);
         assert_eq!(
