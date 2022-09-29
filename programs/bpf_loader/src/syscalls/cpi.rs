@@ -24,13 +24,13 @@ type TranslatedAccounts<'a> = Vec<(IndexOfAccount, Option<CallerAccount<'a>>)>;
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>>;
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError>;
     fn translate_instruction(
         &self,
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError<BpfError>>;
+    ) -> Result<Instruction, EbpfError>;
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
@@ -39,7 +39,7 @@ trait SyscallInvokeSigned<'a, 'b> {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>>;
+    ) -> Result<TranslatedAccounts<'c>, EbpfError>;
     fn translate_signers(
         &self,
         program_id: &Pubkey,
@@ -47,7 +47,7 @@ trait SyscallInvokeSigned<'a, 'b> {
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError<BpfError>>;
+    ) -> Result<Vec<Pubkey>, EbpfError>;
 }
 
 declare_syscall!(
@@ -61,7 +61,7 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         *result = call(
             self,
@@ -76,7 +76,7 @@ declare_syscall!(
 );
 
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
@@ -87,7 +87,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError<BpfError>> {
+    ) -> Result<Instruction, EbpfError> {
         let ix = translate_type::<Instruction>(
             memory_mapping,
             addr,
@@ -139,7 +139,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
+    ) -> Result<TranslatedAccounts<'c>, EbpfError> {
         let account_infos = translate_slice::<AccountInfo>(
             memory_mapping,
             account_infos_addr,
@@ -157,7 +157,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                     invoke_context.get_check_aligned(),
                 )
             })
-            .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
+            .collect::<Result<Vec<_>, EbpfError>>()?;
 
         let translate = |account_info: &AccountInfo, invoke_context: &InvokeContext| {
             // Translate the account from user space
@@ -241,7 +241,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
+    ) -> Result<Vec<Pubkey>, EbpfError> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<&[&[u8]]>(
@@ -279,7 +279,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                             invoke_context.get_check_size(),
                         )
                     })
-                    .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
+                    .collect::<Result<Vec<_>, EbpfError>>()?;
                 let signer = Pubkey::create_program_address(&seeds, program_id)
                     .map_err(SyscallError::BadSeeds)?;
                 signers.push(signer);
@@ -355,7 +355,7 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         *result = call(
             self,
@@ -370,7 +370,7 @@ declare_syscall!(
 );
 
 impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
-    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError<BpfError>> {
+    fn get_context_mut(&self) -> Result<RefMut<&'a mut InvokeContext<'b>>, EbpfError> {
         self.invoke_context
             .try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed.into())
@@ -381,7 +381,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         addr: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<Instruction, EbpfError<BpfError>> {
+    ) -> Result<Instruction, EbpfError> {
         let ix_c = translate_type::<SolInstruction>(
             memory_mapping,
             addr,
@@ -439,7 +439,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                     is_writable: meta_c.is_writable,
                 })
             })
-            .collect::<Result<Vec<AccountMeta>, EbpfError<BpfError>>>()?;
+            .collect::<Result<Vec<AccountMeta>, EbpfError>>()?;
 
         Ok(Instruction {
             program_id: *program_id,
@@ -456,7 +456,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
-    ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
+    ) -> Result<TranslatedAccounts<'c>, EbpfError> {
         let account_infos = translate_slice::<SolAccountInfo>(
             memory_mapping,
             account_infos_addr,
@@ -474,7 +474,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                     invoke_context.get_check_aligned(),
                 )
             })
-            .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
+            .collect::<Result<Vec<_>, EbpfError>>()?;
 
         let translate = |account_info: &SolAccountInfo, invoke_context: &InvokeContext| {
             // Translate the account from user space
@@ -557,7 +557,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &InvokeContext,
-    ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
+    ) -> Result<Vec<Pubkey>, EbpfError> {
         if signers_seeds_len > 0 {
             let signers_seeds = translate_slice::<SolSignerSeedsC>(
                 memory_mapping,
@@ -596,11 +596,11 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
                                 invoke_context.get_check_size(),
                             )
                         })
-                        .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
+                        .collect::<Result<Vec<_>, EbpfError>>()?;
                     Pubkey::create_program_address(&seeds_bytes, program_id)
                         .map_err(|err| SyscallError::BadSeeds(err).into())
                 })
-                .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?)
+                .collect::<Result<Vec<_>, EbpfError>>()?)
         } else {
             Ok(vec![])
         }
@@ -614,9 +614,9 @@ fn get_translated_accounts<'a, T, F>(
     account_infos: &[T],
     invoke_context: &mut InvokeContext,
     do_translate: F,
-) -> Result<TranslatedAccounts<'a>, EbpfError<BpfError>>
+) -> Result<TranslatedAccounts<'a>, EbpfError>
 where
-    F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError<BpfError>>,
+    F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
@@ -686,9 +686,9 @@ where
                         .set_data_from_slice(caller_account.data)
                         .map_err(SyscallError::InstructionError)?,
                     Err(err) if callee_account.get_data() != caller_account.data => {
-                        return Err(EbpfError::UserError(BpfError::SyscallError(
+                        return Err(EbpfError::UserError(Box::new(BpfError::SyscallError(
                             SyscallError::InstructionError(err),
-                        )));
+                        ))));
                     }
                     _ => {}
                 }
@@ -764,7 +764,7 @@ fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
     invoke_context: &mut InvokeContext,
-) -> Result<(), EbpfError<BpfError>> {
+) -> Result<(), EbpfError> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
@@ -803,7 +803,7 @@ fn check_instruction_size(
 fn check_account_infos(
     num_account_infos: usize,
     invoke_context: &mut InvokeContext,
-) -> Result<(), EbpfError<BpfError>> {
+) -> Result<(), EbpfError> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
@@ -850,7 +850,7 @@ fn check_authorized_program(
     program_id: &Pubkey,
     instruction_data: &[u8],
     invoke_context: &InvokeContext,
-) -> Result<(), EbpfError<BpfError>> {
+) -> Result<(), EbpfError> {
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
@@ -876,7 +876,7 @@ fn call<'a, 'b: 'a>(
     signers_seeds_addr: u64,
     signers_seeds_len: u64,
     memory_mapping: &mut MemoryMapping,
-) -> Result<u64, EbpfError<BpfError>> {
+) -> Result<u64, EbpfError> {
     let mut invoke_context = syscall.get_context_mut()?;
     invoke_context
         .get_compute_meter()

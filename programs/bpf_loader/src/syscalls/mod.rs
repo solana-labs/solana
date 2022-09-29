@@ -125,17 +125,17 @@ pub enum SyscallError {
     #[error("InvalidAttribute")]
     InvalidAttribute,
 }
-impl From<SyscallError> for EbpfError<BpfError> {
+impl From<SyscallError> for EbpfError {
     fn from(error: SyscallError) -> Self {
-        EbpfError::UserError(error.into())
+        EbpfError::UserError(Box::<BpfError>::new(error.into()))
     }
 }
 
 trait SyscallConsume {
-    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BpfError>>;
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError>;
 }
 impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
-    fn consume(&mut self, amount: u64) -> Result<(), EbpfError<BpfError>> {
+    fn consume(&mut self, amount: u64) -> Result<(), EbpfError> {
         self.try_borrow_mut()
             .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
             .consume(amount)
@@ -157,7 +157,7 @@ macro_rules! register_feature_gated_syscall {
 pub fn register_syscalls(
     invoke_context: &mut InvokeContext,
     disable_deploy_of_alloc_free_syscall: bool,
-) -> Result<SyscallRegistry, EbpfError<BpfError>> {
+) -> Result<SyscallRegistry, EbpfError> {
     let blake3_syscall_enabled = invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id());
@@ -372,11 +372,11 @@ pub fn register_syscalls(
 }
 
 pub fn bind_syscall_context_objects<'a, 'b>(
-    vm: &mut EbpfVm<'a, RequisiteVerifier, BpfError, crate::ThisInstructionMeter>,
+    vm: &mut EbpfVm<'a, RequisiteVerifier, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory<HOST_ALIGN>,
     orig_account_lengths: Vec<usize>,
-) -> Result<(), EbpfError<BpfError>> {
+) -> Result<(), EbpfError> {
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -411,8 +411,8 @@ fn translate(
     access_type: AccessType,
     vm_addr: u64,
     len: u64,
-) -> Result<u64, EbpfError<BpfError>> {
-    memory_mapping.map::<BpfError>(access_type, vm_addr, len)
+) -> Result<u64, EbpfError> {
+    memory_mapping.map(access_type, vm_addr, len)
 }
 
 fn translate_type_inner<'a, T>(
@@ -420,7 +420,7 @@ fn translate_type_inner<'a, T>(
     access_type: AccessType,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a mut T, EbpfError<BpfError>> {
+) -> Result<&'a mut T, EbpfError> {
     let host_addr = translate(memory_mapping, access_type, vm_addr, size_of::<T>() as u64)?;
 
     if check_aligned && (host_addr as *mut T as usize).wrapping_rem(align_of::<T>()) != 0 {
@@ -432,14 +432,14 @@ fn translate_type_mut<'a, T>(
     memory_mapping: &MemoryMapping,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a mut T, EbpfError<BpfError>> {
+) -> Result<&'a mut T, EbpfError> {
     translate_type_inner::<T>(memory_mapping, AccessType::Store, vm_addr, check_aligned)
 }
 fn translate_type<'a, T>(
     memory_mapping: &MemoryMapping,
     vm_addr: u64,
     check_aligned: bool,
-) -> Result<&'a T, EbpfError<BpfError>> {
+) -> Result<&'a T, EbpfError> {
     translate_type_inner::<T>(memory_mapping, AccessType::Load, vm_addr, check_aligned)
         .map(|value| &*value)
 }
@@ -451,7 +451,7 @@ fn translate_slice_inner<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a mut [T], EbpfError<BpfError>> {
+) -> Result<&'a mut [T], EbpfError> {
     if len == 0 {
         return Ok(&mut []);
     }
@@ -474,7 +474,7 @@ fn translate_slice_mut<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a mut [T], EbpfError<BpfError>> {
+) -> Result<&'a mut [T], EbpfError> {
     translate_slice_inner::<T>(
         memory_mapping,
         AccessType::Store,
@@ -490,7 +490,7 @@ fn translate_slice<'a, T>(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-) -> Result<&'a [T], EbpfError<BpfError>> {
+) -> Result<&'a [T], EbpfError> {
     translate_slice_inner::<T>(
         memory_mapping,
         AccessType::Load,
@@ -510,8 +510,8 @@ fn translate_string_and_do(
     len: u64,
     check_aligned: bool,
     check_size: bool,
-    work: &mut dyn FnMut(&str) -> Result<u64, EbpfError<BpfError>>,
-) -> Result<u64, EbpfError<BpfError>> {
+    work: &mut dyn FnMut(&str) -> Result<u64, EbpfError>,
+) -> Result<u64, EbpfError> {
     let buf = translate_slice::<u8>(memory_mapping, addr, len, check_aligned, check_size)?;
     let i = match buf.iter().position(|byte| *byte == 0) {
         Some(i) => i,
@@ -536,11 +536,11 @@ macro_rules! declare_syscall {
         impl<'a, 'b> $name<'a, 'b> {
             pub fn init(
                 invoke_context: SyscallContext<'a, 'b>,
-            ) -> Box<(dyn SyscallObject<BpfError> + 'a)> {
+            ) -> Box<(dyn SyscallObject + 'a)> {
                 Box::new(Self { invoke_context })
             }
         }
-        impl<'a, 'b> SyscallObject<BpfError> for $name<'a, 'b> {
+        impl<'a, 'b> SyscallObject for $name<'a, 'b> {
             $call
         }
     };
@@ -560,7 +560,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let _ = question_mark!(
             self.invoke_context
@@ -584,7 +584,7 @@ declare_syscall!(
         column: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -621,7 +621,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -673,7 +673,7 @@ fn translate_and_check_program_address_inputs<'a>(
     memory_mapping: &mut MemoryMapping,
     check_aligned: bool,
     check_size: bool,
-) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError<BpfError>> {
+) -> Result<(Vec<&'a [u8]>, &'a Pubkey), EbpfError> {
     let untranslated_seeds = translate_slice::<&[&u8]>(
         memory_mapping,
         seeds_addr,
@@ -698,7 +698,7 @@ fn translate_and_check_program_address_inputs<'a>(
                 check_size,
             )
         })
-        .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
+        .collect::<Result<Vec<_>, EbpfError>>()?;
     let program_id = translate_type::<Pubkey>(memory_mapping, program_id_addr, check_aligned)?;
     Ok((seeds, program_id))
 }
@@ -714,7 +714,7 @@ declare_syscall!(
         address_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -772,7 +772,7 @@ declare_syscall!(
         address_addr: u64,
         bump_seed_addr: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -848,7 +848,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -932,7 +932,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1016,7 +1016,7 @@ declare_syscall!(
         result_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1130,7 +1130,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
 
@@ -1204,7 +1204,7 @@ declare_syscall!(
         right_input_addr: u64,
         result_point_addr: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
@@ -1466,7 +1466,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1550,7 +1550,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let mut invoke_context = question_mark!(
             self.invoke_context
@@ -1625,7 +1625,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1712,7 +1712,7 @@ declare_syscall!(
         data_addr: u64,
         accounts_addr: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1857,7 +1857,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1889,7 +1889,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -1989,9 +1989,7 @@ mod tests {
     use {
         super::*,
         solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
-        solana_rbpf::{
-            ebpf::HOST_ALIGN, memory_region::MemoryRegion, user_error::UserError, vm::Config,
-        },
+        solana_rbpf::{ebpf::HOST_ALIGN, memory_region::MemoryRegion, vm::Config},
         solana_sdk::{
             account::AccountSharedData,
             bpf_loader,
@@ -2053,11 +2051,8 @@ mod tests {
         let data = vec![0u8; LENGTH as usize];
         let addr = data.as_ptr() as u64;
         let config = Config::default();
-        let memory_mapping = MemoryMapping::new::<UserError>(
-            vec![MemoryRegion::new_readonly(&data, START)],
-            &config,
-        )
-        .unwrap();
+        let memory_mapping =
+            MemoryMapping::new(vec![MemoryRegion::new_readonly(&data, START)], &config).unwrap();
 
         let cases = vec![
             (true, START, 0, addr),
@@ -2093,7 +2088,7 @@ mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let addr = &pubkey as *const _ as u64;
         let config = Config::default();
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2122,8 +2117,7 @@ mod tests {
             vm_gap_shift: 63,
             is_writable: false,
         };
-        let mut memory_mapping =
-            MemoryMapping::new::<UserError>(vec![memory_region.clone()], &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(vec![memory_region.clone()], &config).unwrap();
         let translated_instruction =
             translate_type::<Instruction>(&memory_mapping, 0x100000000, true).unwrap();
         assert_eq!(instruction, *translated_instruction);
@@ -2134,7 +2128,7 @@ mod tests {
             .position(|memory_region| memory_region.vm_addr == 0x100000000)
             .unwrap();
         memory_mapping
-            .replace_region::<BpfError>(memory_region_index, memory_region)
+            .replace_region(memory_region_index, memory_region)
             .unwrap();
         assert!(translate_type::<Instruction>(&memory_mapping, 0x100000000, true).is_err());
     }
@@ -2147,7 +2141,7 @@ mod tests {
         assert_eq!(0x1 as *const u8, data.as_ptr());
         let addr = good_data.as_ptr() as *const _ as u64;
         let config = Config::default();
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2166,7 +2160,7 @@ mod tests {
         // u8
         let mut data = vec![1u8, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2200,7 +2194,7 @@ mod tests {
         // u64
         let mut data = vec![1u64, 2, 3, 4, 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2224,7 +2218,7 @@ mod tests {
         // Pubkeys
         let mut data = vec![solana_sdk::pubkey::new_rand(); 5];
         let addr = data.as_ptr() as *const _ as u64;
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2248,7 +2242,7 @@ mod tests {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let config = Config::default();
-        let memory_mapping = MemoryMapping::new::<UserError>(
+        let memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2286,8 +2280,8 @@ mod tests {
             bpf_loader::id(),
         );
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let mut result: Result<u64, EbpfError> = Ok(0);
         SyscallAbort::call(
             &mut SyscallAbort {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
@@ -2319,7 +2313,7 @@ mod tests {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2337,7 +2331,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(string.len() as u64 - 1);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_panic.call(
             0x100000000,
             string.len() as u64,
@@ -2347,12 +2341,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
 
         syscall_panic
             .invoke_context
@@ -2360,7 +2354,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(string.len() as u64);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_panic.call(
             0x100000000,
             string.len() as u64,
@@ -2388,7 +2382,7 @@ mod tests {
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2406,7 +2400,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(400 - 1);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_log.call(
             0x100000001, // AccessViolation
             string.len() as u64,
@@ -2417,7 +2411,7 @@ mod tests {
             &mut result,
         );
         assert_access_violation!(result, 0x100000001, string.len() as u64);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_log.call(
             0x100000000,
             string.len() as u64 * 2, // AccessViolation
@@ -2429,7 +2423,7 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000000, string.len() as u64 * 2);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_log.call(
             0x100000000,
             string.len() as u64,
@@ -2440,7 +2434,7 @@ mod tests {
             &mut result,
         );
         result.unwrap();
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_log.call(
             0x100000000,
             string.len() as u64,
@@ -2450,12 +2444,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
 
         assert_eq!(
             syscall_sol_log
@@ -2489,8 +2483,8 @@ mod tests {
             .borrow_mut()
             .mock_set_remaining(cost);
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(vec![], &config).unwrap();
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_log_u64.call(1, 2, 3, 4, 5, &mut memory_mapping, &mut result);
         result.unwrap();
 
@@ -2522,7 +2516,7 @@ mod tests {
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
         let addr = pubkey.as_ref().first().unwrap() as *const _ as u64;
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: addr,
                 vm_addr: 0x100000000,
@@ -2534,7 +2528,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_pubkey.call(
             0x100000001, // AccessViolation
             32,
@@ -2552,14 +2546,14 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(1);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_pubkey.call(100, 32, 0, 0, 0, &mut memory_mapping, &mut result);
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
 
         syscall_sol_pubkey
             .invoke_context
@@ -2567,7 +2561,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &mut memory_mapping, &mut result);
         result.unwrap();
 
@@ -2596,7 +2590,7 @@ mod tests {
                 bpf_loader::id(),
             );
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
                     MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
@@ -2617,13 +2611,13 @@ mod tests {
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             assert_ne!(result.unwrap(), 0);
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(u64::MAX, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
@@ -2637,7 +2631,7 @@ mod tests {
                 bpf_loader::id(),
             );
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
                     MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
@@ -2659,11 +2653,11 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             for _ in 0..100 {
-                let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+                let mut result: Result<u64, EbpfError> = Ok(0);
                 syscall.call(1, 0, 0, 0, 0, &mut memory_mapping, &mut result);
                 assert_ne!(result.unwrap(), 0);
             }
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
@@ -2677,7 +2671,7 @@ mod tests {
                 bpf_loader::id(),
             );
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
                     MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
@@ -2699,11 +2693,11 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
             for _ in 0..12 {
-                let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+                let mut result: Result<u64, EbpfError> = Ok(0);
                 syscall.call(1, 0, 0, 0, 0, &mut memory_mapping, &mut result);
                 assert_ne!(result.unwrap(), 0);
             }
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             assert_eq!(result.unwrap(), 0);
         }
@@ -2719,7 +2713,7 @@ mod tests {
             );
             let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let config = Config::default();
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![
                     MemoryRegion::new_readonly(&[], ebpf::MM_PROGRAM_START),
                     MemoryRegion::new_writable_gapped(&mut [], ebpf::MM_STACK_START, 4096),
@@ -2740,7 +2734,7 @@ mod tests {
             let mut syscall = SyscallAllocFree {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(
                 size_of::<T>() as u64,
                 0,
@@ -2790,7 +2784,7 @@ mod tests {
         let ro_len = bytes_to_hash.len() as u64;
         let ro_va = 0x100000000;
         let rw_va = 0x200000000;
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: bytes_to_hash.as_ptr() as *const _ as u64,
@@ -2842,13 +2836,13 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(ro_va, ro_len, rw_va, 0, 0, &mut memory_mapping, &mut result);
         result.unwrap();
 
         let hash_local = hashv(&[bytes1.as_ref(), bytes2.as_ref()]).to_bytes();
         assert_eq!(hash_result, hash_local);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             ro_va - 1, // AccessViolation
             ro_len,
@@ -2859,7 +2853,7 @@ mod tests {
             &mut result,
         );
         assert_access_violation!(result, ro_va - 1, 32);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             ro_va,
             ro_len + 1, // AccessViolation
@@ -2870,7 +2864,7 @@ mod tests {
             &mut result,
         );
         assert_access_violation!(result, ro_va, 48);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             ro_va,
             ro_len,
@@ -2883,12 +2877,12 @@ mod tests {
         assert_access_violation!(result, rw_va - 1, HASH_BYTES as u64);
 
         syscall.call(ro_va, ro_len, rw_va, 0, 0, &mut memory_mapping, &mut result);
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
     }
 
     #[test]
@@ -2915,7 +2909,7 @@ mod tests {
         ];
         let invalid_bytes_va = 0x200000000;
 
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: valid_bytes.as_ptr() as *const _ as u64,
@@ -2949,7 +2943,7 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             valid_bytes_va,
@@ -2961,7 +2955,7 @@ mod tests {
         );
         assert_eq!(0, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             invalid_bytes_va,
@@ -2973,7 +2967,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             valid_bytes_va,
@@ -2983,12 +2977,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
     }
 
     #[test]
@@ -3015,7 +3009,7 @@ mod tests {
         ];
         let invalid_bytes_va = 0x200000000;
 
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: valid_bytes.as_ptr() as *const _ as u64,
@@ -3049,7 +3043,7 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             valid_bytes_va,
@@ -3061,7 +3055,7 @@ mod tests {
         );
         assert_eq!(0, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             invalid_bytes_va,
@@ -3073,7 +3067,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             valid_bytes_va,
@@ -3083,12 +3077,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
     }
 
     #[test]
@@ -3128,7 +3122,7 @@ mod tests {
         let result_point: [u8; 32] = [0; 32];
         let result_point_va = 0x500000000;
 
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: left_point.as_ptr() as *const _ as u64,
@@ -3189,7 +3183,7 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             ADD,
@@ -3207,7 +3201,7 @@ mod tests {
         ];
         assert_eq!(expected_sum, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             ADD,
@@ -3219,7 +3213,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             SUB,
@@ -3237,7 +3231,7 @@ mod tests {
         ];
         assert_eq!(expected_difference, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             SUB,
@@ -3249,7 +3243,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             MUL,
@@ -3267,7 +3261,7 @@ mod tests {
         ];
         assert_eq!(expected_product, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             MUL,
@@ -3279,7 +3273,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_EDWARDS,
             MUL,
@@ -3289,12 +3283,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
     }
 
     #[test]
@@ -3334,7 +3328,7 @@ mod tests {
         let result_point: [u8; 32] = [0; 32];
         let result_point_va = 0x500000000;
 
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: left_point.as_ptr() as *const _ as u64,
@@ -3395,7 +3389,7 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             ADD,
@@ -3413,7 +3407,7 @@ mod tests {
         ];
         assert_eq!(expected_sum, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             ADD,
@@ -3425,7 +3419,7 @@ mod tests {
         );
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             SUB,
@@ -3443,7 +3437,7 @@ mod tests {
         ];
         assert_eq!(expected_difference, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             SUB,
@@ -3456,7 +3450,7 @@ mod tests {
 
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             MUL,
@@ -3474,7 +3468,7 @@ mod tests {
         ];
         assert_eq!(expected_product, result_point);
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             MUL,
@@ -3487,7 +3481,7 @@ mod tests {
 
         assert_eq!(1, result.unwrap());
 
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall.call(
             CURVE25519_RISTRETTO,
             MUL,
@@ -3497,12 +3491,12 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(
-            Err(EbpfError::UserError(BpfError::SyscallError(
+        assert!(matches!(
+            result,
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-            ))),
-            result
-        );
+            ),
+        ));
     }
 
     fn create_filled_type<T: Default>(zero_init: bool) -> T {
@@ -3574,7 +3568,7 @@ mod tests {
             let got_clock = Clock::default();
             let got_clock_va = 0x100000000;
 
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![MemoryRegion {
                     host_addr: &got_clock as *const _ as u64,
                     vm_addr: got_clock_va,
@@ -3589,7 +3583,7 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
 
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(got_clock_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_clock, src_clock);
@@ -3608,7 +3602,7 @@ mod tests {
             let got_epochschedule = EpochSchedule::default();
             let got_epochschedule_va = 0x100000000;
 
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![MemoryRegion {
                     host_addr: &got_epochschedule as *const _ as u64,
                     vm_addr: got_epochschedule_va,
@@ -3623,7 +3617,7 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
 
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(
                 got_epochschedule_va,
                 0,
@@ -3651,7 +3645,7 @@ mod tests {
             let got_fees = Fees::default();
             let got_fees_va = 0x100000000;
 
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![MemoryRegion {
                     host_addr: &got_fees as *const _ as u64,
                     vm_addr: got_fees_va,
@@ -3666,7 +3660,7 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
 
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(got_fees_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_fees, src_fees);
@@ -3681,7 +3675,7 @@ mod tests {
             let got_rent = create_filled_type::<Rent>(true);
             let got_rent_va = 0x100000000;
 
-            let mut memory_mapping = MemoryMapping::new::<UserError>(
+            let mut memory_mapping = MemoryMapping::new(
                 vec![MemoryRegion {
                     host_addr: &got_rent as *const _ as u64,
                     vm_addr: got_rent_va,
@@ -3696,7 +3690,7 @@ mod tests {
                 invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
             };
 
-            let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+            let mut result: Result<u64, EbpfError> = Ok(0);
             syscall.call(got_rent_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
             result.unwrap();
             assert_eq!(got_rent, src_rent);
@@ -3712,8 +3706,8 @@ mod tests {
     fn call_program_address_common(
         seeds: &[&[u8]],
         program_id: &Pubkey,
-        syscall: &mut dyn SyscallObject<BpfError>,
-    ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
+        syscall: &mut dyn SyscallObject,
+    ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;
         const ADDRESS_VA: u64 = 0x300000000;
@@ -3770,7 +3764,7 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut memory_mapping = MemoryMapping::new::<UserError>(regions, &config).unwrap();
+        let mut memory_mapping = MemoryMapping::new(regions, &config).unwrap();
 
         let mut result = Ok(0);
         syscall.call(
@@ -3790,7 +3784,7 @@ mod tests {
         invoke_context: &mut InvokeContext,
         seeds: &[&[u8]],
         address: &Pubkey,
-    ) -> Result<Pubkey, EbpfError<BpfError>> {
+    ) -> Result<Pubkey, EbpfError> {
         let mut syscall = SyscallCreateProgramAddress {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
         };
@@ -3802,7 +3796,7 @@ mod tests {
         invoke_context: &mut InvokeContext,
         seeds: &[&[u8]],
         address: &Pubkey,
-    ) -> Result<(Pubkey, u8), EbpfError<BpfError>> {
+    ) -> Result<(Pubkey, u8), EbpfError> {
         let mut syscall = SyscallTryFindProgramAddress {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
         };
@@ -3856,7 +3850,7 @@ mod tests {
         const END_OFFSET: usize = ACCOUNTS_OFFSET + std::mem::size_of::<AccountInfo>() * 4;
         let mut memory = [0u8; END_OFFSET];
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![MemoryRegion {
                 host_addr: memory.as_mut_ptr() as u64,
                 vm_addr: VM_BASE_ADDRESS,
@@ -3904,7 +3898,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(syscall_base_cost);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_get_processed_sibling_instruction.call(
             0,
             VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
@@ -3914,7 +3908,7 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(result, Ok(1));
+        assert_eq!(result.unwrap(), 1);
         {
             let transaction_context = &syscall_get_processed_sibling_instruction
                 .invoke_context
@@ -3943,6 +3937,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(syscall_base_cost);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_get_processed_sibling_instruction.call(
             1,
             VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
@@ -3952,7 +3947,7 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(result, Ok(0));
+        assert_eq!(result.unwrap(), 0);
     }
 
     #[test]
@@ -4045,7 +4040,7 @@ mod tests {
         const VM_ADDRESS_KEYS: u64 = 0x100000000;
         const VM_ADDRESS_UPDATES_LIST: u64 = 0x200000000;
         let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new::<UserError>(
+        let mut memory_mapping = MemoryMapping::new(
             vec![
                 MemoryRegion {
                     host_addr: keys.as_ptr() as u64,
@@ -4072,7 +4067,7 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
-        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        let mut result: Result<u64, EbpfError> = Ok(0);
         syscall_set_account_properties.call(
             VM_ADDRESS_UPDATES_LIST,
             updates_list.len() as u64,
@@ -4082,7 +4077,7 @@ mod tests {
             &mut memory_mapping,
             &mut result,
         );
-        assert_eq!(result, Ok(0));
+        assert_eq!(result.unwrap(), 0);
         {
             let transaction_context = &syscall_set_account_properties
                 .invoke_context
@@ -4116,19 +4111,22 @@ mod tests {
         let address = bpf_loader_upgradeable::id();
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
-        let result = create_program_address(&mut invoke_context, &[exceeded_seed], &address);
-        assert_eq!(
-            result,
-            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
-        );
-        assert_eq!(
+        assert!(matches!(
+            create_program_address(&mut invoke_context, &[exceeded_seed], &address),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
+        assert!(matches!(
             create_program_address(
                 &mut invoke_context,
                 &[b"short_seed", exceeded_seed],
                 &address,
             ),
-            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
-        );
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
         let max_seed = &[0; MAX_SEED_LEN];
         assert!(create_program_address(&mut invoke_context, &[max_seed], &address).is_ok());
         let exceeded_seeds: &[&[u8]] = &[
@@ -4169,34 +4167,38 @@ mod tests {
             &[16],
             &[17],
         ];
-        assert_eq!(
+        assert!(matches!(
             create_program_address(&mut invoke_context, max_seeds, &address),
-            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
+        assert_eq!(
+            create_program_address(&mut invoke_context, &[b"", &[1]], &address).unwrap(),
+            "BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"
+                .parse()
+                .unwrap(),
         );
         assert_eq!(
-            create_program_address(&mut invoke_context, &[b"", &[1]], &address),
-            Ok("BwqrghZA2htAcqq8dzP1WDAhTXYTYWj7CHxF5j7TDBAe"
+            create_program_address(&mut invoke_context, &["☉".as_ref(), &[0]], &address).unwrap(),
+            "13yWmRpaTR4r5nAktwLqMpRNr28tnVUZw26rTvPSSB19"
                 .parse()
-                .unwrap())
+                .unwrap(),
         );
         assert_eq!(
-            create_program_address(&mut invoke_context, &["☉".as_ref(), &[0]], &address),
-            Ok("13yWmRpaTR4r5nAktwLqMpRNr28tnVUZw26rTvPSSB19"
+            create_program_address(&mut invoke_context, &[b"Talking", b"Squirrels"], &address)
+                .unwrap(),
+            "2fnQrngrQT4SeLcdToJAD96phoEjNL2man2kfRLCASVk"
                 .parse()
-                .unwrap())
-        );
-        assert_eq!(
-            create_program_address(&mut invoke_context, &[b"Talking", b"Squirrels"], &address),
-            Ok("2fnQrngrQT4SeLcdToJAD96phoEjNL2man2kfRLCASVk"
-                .parse()
-                .unwrap())
+                .unwrap(),
         );
         let public_key = Pubkey::from_str("SeedPubey1111111111111111111111111111111111").unwrap();
         assert_eq!(
-            create_program_address(&mut invoke_context, &[public_key.as_ref(), &[1]], &address),
-            Ok("976ymqVnfE32QFe6NfGDctSvVa36LWnvYxhU6G2232YL"
+            create_program_address(&mut invoke_context, &[public_key.as_ref(), &[1]], &address)
+                .unwrap(),
+            "976ymqVnfE32QFe6NfGDctSvVa36LWnvYxhU6G2232YL"
                 .parse()
-                .unwrap())
+                .unwrap(),
         );
         assert_ne!(
             create_program_address(&mut invoke_context, &[b"Talking", b"Squirrels"], &address)
@@ -4207,13 +4209,12 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(0);
-        assert_eq!(
+        assert!(matches!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address),
-            Err(
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-                    .into()
-            )
-        );
+            ),
+        ));
     }
 
     #[test]
@@ -4266,23 +4267,24 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
-        assert_eq!(
+        assert!(matches!(
             try_find_program_address(&mut invoke_context, seeds, &address),
-            Err(
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
-                    .into()
-            )
-        );
+            ),
+        ));
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
         invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost * (max_tries - 1));
-        assert_eq!(
+        assert!(matches!(
             try_find_program_address(&mut invoke_context, &[exceeded_seed], &address),
-            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
-        );
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
         let exceeded_seeds: &[&[u8]] = &[
             &[1],
             &[2],
@@ -4306,10 +4308,12 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost * (max_tries - 1));
-        assert_eq!(
+        assert!(matches!(
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
-            Err(SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded).into())
-        );
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
     }
 
     #[test]

@@ -55,7 +55,7 @@ use {
         create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::register_syscalls,
-        BpfError, ThisInstructionMeter,
+        ThisInstructionMeter,
     },
     solana_program_runtime::invoke_context::with_mock_invoke_context,
     solana_rbpf::{
@@ -241,7 +241,7 @@ fn run_program(name: &str) -> u64 {
             reject_broken_elfs: true,
             ..Config::default()
         };
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             &data,
             config,
             register_syscalls(invoke_context, true /* no sol_alloc_free */).unwrap(),
@@ -249,12 +249,11 @@ fn run_program(name: &str) -> u64 {
         .unwrap();
 
         #[allow(unused_mut)]
-        let mut verified_executable = VerifiedExecutable::<
-            RequisiteVerifier,
-            BpfError,
-            ThisInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let mut verified_executable =
+            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
 
         let run_program_iterations = {
             #[cfg(target_arch = "x86_64")]

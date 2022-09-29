@@ -80,7 +80,7 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError<BpfError>) -> InstructionError {
+fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError) -> InstructionError {
     ic_msg!(invoke_context, "{}", e);
     InstructionError::InvalidAccountData
 }
@@ -201,7 +201,7 @@ pub fn create_executor(
         )?;
         create_executor_metrics.program_id = programdata.get_key().to_string();
         let mut load_elf_time = Measure::start("load_elf_time");
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             programdata
                 .get_data()
                 .get(programdata_offset..)
@@ -220,10 +220,8 @@ pub fn create_executor(
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let mut verify_code_time = Measure::start("verify_code_time");
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
-            executable,
-        )
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
+            .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
@@ -289,11 +287,11 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the BPF virtual machine
 pub fn create_vm<'a, 'b>(
-    program: &'a VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
+    program: &'a VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, ThisInstructionMeter>, EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     let _ = invoke_context.get_compute_meter().borrow_mut().consume(
@@ -1281,7 +1279,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    verified_executable: VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
+    verified_executable: VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
     use_jit: bool,
 }
 
@@ -1388,9 +1386,22 @@ impl Executor for BpfExecutor {
                 }
                 Err(error) => {
                     let error = match error {
-                        EbpfError::UserError(BpfError::SyscallError(
-                            SyscallError::InstructionError(error),
-                        )) => error,
+                        /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
+                            SyscallError::InstructionError(instruction_error),
+                        ) = user_error.downcast_ref::<BpfError>().unwrap() => instruction_error.clone(),*/
+                        EbpfError::UserError(user_error)
+                            if matches!(
+                                user_error.downcast_ref::<BpfError>().unwrap(),
+                                BpfError::SyscallError(SyscallError::InstructionError(_)),
+                            ) =>
+                        {
+                            match user_error.downcast_ref::<BpfError>().unwrap() {
+                                BpfError::SyscallError(SyscallError::InstructionError(
+                                    instruction_error,
+                                )) => instruction_error.clone(),
+                                _ => unreachable!(),
+                            }
+                        }
                         err => {
                             ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
                             InstructionError::ProgramFailedToComplete
@@ -1536,19 +1547,18 @@ mod tests {
             "entrypoint",
         )
         .unwrap();
-        let executable = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
+        let executable = Executable::<TestInstructionMeter>::from_text_bytes(
             program,
             config,
             syscall_registry,
             bpf_functions,
         )
         .unwrap();
-        let verified_executable = VerifiedExecutable::<
-            TautologyVerifier,
-            BpfError,
-            TestInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let verified_executable =
+            VerifiedExecutable::<TautologyVerifier, TestInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
         let mut vm = EbpfVm::new(&verified_executable, &mut [], vec![input_region]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };

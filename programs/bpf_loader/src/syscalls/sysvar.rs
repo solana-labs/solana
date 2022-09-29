@@ -6,7 +6,7 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     check_aligned: bool,
     memory_mapping: &mut MemoryMapping,
     invoke_context: &mut InvokeContext,
-) -> Result<u64, EbpfError<BpfError>> {
+) -> Result<u64, EbpfError> {
     invoke_context.get_compute_meter().consume(
         invoke_context
             .get_compute_budget()
@@ -32,7 +32,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let mut invoke_context = question_mark!(
             self.invoke_context
@@ -61,7 +61,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let mut invoke_context = question_mark!(
             self.invoke_context
@@ -90,7 +90,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let mut invoke_context = question_mark!(
             self.invoke_context
@@ -122,7 +122,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let mut invoke_context = question_mark!(
             self.invoke_context

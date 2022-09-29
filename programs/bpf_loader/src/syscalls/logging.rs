@@ -11,7 +11,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -54,7 +54,7 @@ declare_syscall!(
         arg4: u64,
         arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -87,7 +87,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -118,7 +118,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -153,7 +153,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context

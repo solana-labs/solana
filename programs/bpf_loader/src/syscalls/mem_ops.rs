@@ -3,7 +3,7 @@ use {super::*, crate::declare_syscall};
 fn mem_op_consume<'a, 'b>(
     invoke_context: &Ref<&'a mut InvokeContext<'b>>,
     n: u64,
-) -> Result<(), EbpfError<BpfError>> {
+) -> Result<(), EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let cost = compute_budget
         .mem_op_base_cost
@@ -22,7 +22,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -89,7 +89,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -137,7 +137,7 @@ declare_syscall!(
         cmp_result_addr: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
@@ -212,7 +212,7 @@ declare_syscall!(
         _arg4: u64,
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
+        result: &mut Result<u64, EbpfError>,
     ) {
         let invoke_context = question_mark!(
             self.invoke_context
