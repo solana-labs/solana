@@ -346,7 +346,7 @@ pub fn check_for_newer_incremental_snapshot(
     let incremental_snapshot_url = String::from_str(response.url().path()).ok()?;
     let (full_slot, recent_inc_slot, recent_inc_hash, _format) =
         snapshot_utils::parse_incremental_snapshot_archive_filename(
-            &incremental_snapshot_url.as_str(),
+            incremental_snapshot_url.as_str(),
         )
         .ok()?;
 
