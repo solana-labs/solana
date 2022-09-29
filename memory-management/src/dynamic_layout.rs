@@ -1,4 +1,5 @@
 //! Dynamic memory layout containers
+use crate::is_memory_aligned;
 
 /// An array of equally spaced values
 #[derive(Clone)]
@@ -23,6 +24,11 @@ impl<'a, T> DynamicLayoutArray<'a, T> {
         debug_assert!(element_count < std::u32::MAX as usize);
         debug_assert!(values_stride <= std::u32::MAX as usize);
         debug_assert!(start_offset <= std::u32::MAX as usize);
+        debug_assert!(is_memory_aligned(
+            self.as_ptr() as usize,
+            std::mem::align_of::<T>(),
+        ));
+        debug_assert!(is_memory_aligned(values_stride, std::mem::align_of::<T>()));
     }
 
     pub fn initialize_as_consecutive(&mut self, start_offset: usize, element_count: usize) {
