@@ -465,6 +465,7 @@ impl ServeRepair {
             total_requests += more.len();
             if total_requests > MAX_REQUESTS_PER_ITERATION {
                 dropped_requests += more.len();
+                break;
             } else {
                 reqs_v.push(more);
             }
