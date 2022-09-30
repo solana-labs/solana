@@ -370,7 +370,7 @@ impl ThreadLocalUnprocessedPackets {
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         self.filter_and_forward_with_account_limits(
-            &bank,
+            bank,
             forward_packet_batches_by_accounts,
             UNPROCESSED_BUFFER_STEP_SIZE,
         )

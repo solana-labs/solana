@@ -235,7 +235,7 @@ impl LatestUnprocessedVotes {
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
-            &bank,
+            bank,
             self.latest_votes_per_pubkey.read().unwrap().keys(),
         )
         .collect_vec();
