@@ -68,9 +68,15 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
             let mut num_evictions = 0;
             let mut get_connection_cache_eviction_measure =
                 Measure::start("get_connection_cache_eviction_measure");
+            let existing_index = map.get_index_of(addr);
             while map.len() >= MAX_CONNECTIONS {
                 let mut rng = thread_rng();
                 let n = rng.gen_range(0, MAX_CONNECTIONS);
+                if let Some(index) = existing_index {
+                    if n == index {
+                        continue;
+                    }
+                }
                 map.swap_remove_index(n);
                 num_evictions += 1;
             }
