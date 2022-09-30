@@ -6,7 +6,7 @@ use {
         cost_tracker::{CostTracker, CostTrackerError},
     },
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
-    std::rc::Rc,
+    std::sync::Arc,
 };
 
 /// `ForwardBatch` to have half of default cost_tracker limits, as smaller batch
@@ -27,7 +27,7 @@ pub struct ForwardBatch {
     cost_tracker: CostTracker,
     // `forwardable_packets` keeps forwardable packets in a vector in its
     // original fee prioritized order
-    forwardable_packets: Vec<Rc<ImmutableDeserializedPacket>>,
+    forwardable_packets: Vec<Arc<ImmutableDeserializedPacket>>,
 }
 
 impl Default for ForwardBatch {
@@ -59,7 +59,7 @@ impl ForwardBatch {
         &mut self,
         write_lock_accounts: &[Pubkey],
         compute_units: u64,
-        immutable_packet: Rc<ImmutableDeserializedPacket>,
+        immutable_packet: Arc<ImmutableDeserializedPacket>,
     ) -> Result<u64, CostTrackerError> {
         let res = self.cost_tracker.try_add_requested_cus(
             write_lock_accounts,
@@ -125,7 +125,7 @@ impl ForwardPacketBatchesByAccounts {
     pub fn try_add_packet(
         &mut self,
         sanitized_transaction: &SanitizedTransaction,
-        packet: Rc<ImmutableDeserializedPacket>,
+        packet: Arc<ImmutableDeserializedPacket>,
     ) -> bool {
         if self.accepting_packets {
             // get write_lock_accounts
@@ -164,7 +164,7 @@ impl ForwardPacketBatchesByAccounts {
         &mut self,
         write_lock_accounts: &[Pubkey],
         compute_units: u64,
-        immutable_packet: Rc<ImmutableDeserializedPacket>,
+        immutable_packet: Arc<ImmutableDeserializedPacket>,
     ) -> bool {
         for forward_batch in self.forward_batches.iter_mut() {
             if forward_batch
