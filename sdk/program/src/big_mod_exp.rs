@@ -44,9 +44,8 @@ pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
             )
         };
 
+        // TODO: check result?
         // match result {
-        //     0 => Ok(Secp256k1Pubkey::new(&pubkey_buffer)),
-        //     error => Err(Secp256k1RecoverError::from(error)),
         // }
 
         return_value
