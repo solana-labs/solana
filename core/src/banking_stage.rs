@@ -438,7 +438,7 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its blockhash is registered with the bank.
-        let data_budget = Arc::new(DataBudget::default());
+        let data_budget = Arc::new(DataBudget::new(10000));
         let batch_limit =
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Many banks that process transactions in parallel.
@@ -4132,7 +4132,7 @@ mod tests {
 
             let test_cases = vec![
                 ("budget-restricted", DataBudget::restricted(), 0),
-                ("budget-available", DataBudget::default(), 1),
+                ("budget-available", DataBudget::new(0), 1),
             ];
 
             let connection_cache = ConnectionCache::default();
@@ -4269,7 +4269,7 @@ mod tests {
                     &poh_recorder,
                     &socket,
                     hold,
-                    &DataBudget::default(),
+                    &DataBudget::new(0),
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
                     &connection_cache,

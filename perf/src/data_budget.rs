@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-#[derive(Default)]
 pub struct DataBudget {
     // Amount of bytes we have in the budget to send.
     bytes: AtomicUsize,
@@ -10,6 +9,14 @@ pub struct DataBudget {
 }
 
 impl DataBudget {
+    /// Create a data budget with initial byte size
+    pub fn new(init_bytes: usize) -> Self {
+        Self {
+            bytes: AtomicUsize::new(init_bytes),
+            last_timestamp_ms: AtomicU64::default(),
+        }
+    }
+
     /// Create a data budget with max bytes, used for tests
     pub fn restricted() -> Self {
         Self {
@@ -99,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_data_budget() {
-        let budget = DataBudget::default();
+        let budget = DataBudget::new(0);
         assert!(!budget.take(1)); // budget = 0.
 
         assert_eq!(budget.update(1000, |bytes| bytes + 5), 5); // budget updates to 5.

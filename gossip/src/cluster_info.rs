@@ -408,7 +408,7 @@ impl ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair: RwLock::new(keypair),
             entrypoints: RwLock::default(),
-            outbound_budget: DataBudget::default(),
+            outbound_budget: DataBudget::new(10000),
             my_contact_info: RwLock::new(contact_info),
             ping_cache: Mutex::new(PingCache::new(
                 GOSSIP_PING_CACHE_TTL,
