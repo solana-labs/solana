@@ -32,28 +32,28 @@ struct CacheHashDataFile {
 }
 
 impl CacheHashDataFile {
-    /// get '&mut T' from cache file [ix]
-    fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        let item_slice = self.get_slice_internal::<T>(ix);
+    /// get '&mut EntryType' from cache file [ix]
+    fn get_mut(&mut self, ix: u64) -> &mut EntryType {
+        let item_slice = self.get_slice_internal(ix);
         unsafe {
-            let item = item_slice.as_ptr() as *mut T;
+            let item = item_slice.as_ptr() as *mut EntryType;
             &mut *item
         }
     }
 
-    /// get '&T' from cache file [ix]
-    fn get<T: Sized>(&self, ix: u64) -> &T {
+    /// get '&EntryType' from cache file [ix]
+    fn get(&self, ix: u64) -> &EntryType {
         // get cache file[ix..]
-        let slice = self.get_slice::<T>(ix);
+        let slice = self.get_slice(ix);
         // return [0]
         &slice[0]
     }
 
-    /// get '&[T]' from cache file [ix..]
-    fn get_slice<T: Sized>(&self, ix: u64) -> &[T] {
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+    /// get '&[EntryType]' from cache file [ix..]
+    fn get_slice(&self, ix: u64) -> &[EntryType] {
+        let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<T>();
+        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
         assert!(
             remaining_elements > 0,
             "ix: {ix}, remaining_elements: {remaining_elements}, capacity: {}",
@@ -61,15 +61,22 @@ impl CacheHashDataFile {
         );
 
         unsafe {
-            let item = item_slice.as_ptr() as *const T;
+            let item = item_slice.as_ptr() as *const EntryType;
             std::slice::from_raw_parts(item, remaining_elements)
         }
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal<T: Sized>(&self, ix: u64) -> &[u8] {
+    /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
+    fn get_element_offset_byte(&self, ix: u64) -> usize {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
-        let end = start + std::mem::size_of::<T>();
+        debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
+        start
+    }
+
+    /// get the bytes representing cache file [ix]
+    fn get_slice_internal(&self, ix: u64) -> &[u8] {
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
         assert!(
             end <= self.capacity as usize,
             "end: {}, capacity: {}, ix: {}, cell size: {}",
@@ -138,7 +145,7 @@ impl MappedCacheFile {
     ) {
         let mut m2 = Measure::start("decode");
         for i in 0..self.entries {
-            let d = self.cache_file.get::<EntryType>(i as u64);
+            let d = self.cache_file.get(i as u64);
             let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
             assert!(
                 pubkey_to_bin_index >= start_bin_index,
@@ -268,6 +275,14 @@ impl CacheHashData {
         }
 
         let cell_size = std::mem::size_of::<EntryType>() as u64;
+        unsafe {
+            assert_eq!(
+                mmap.align_to::<EntryType>().0.len(),
+                0,
+                "mmap is not aligned"
+            );
+        }
+        assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
         let mut cache_file = CacheHashDataFile {
             mmap,
             cell_size,
@@ -363,7 +378,7 @@ impl CacheHashData {
         let mut i = 0;
         data.iter().for_each(|x| {
             x.iter().for_each(|item| {
-                let d = cache_file.get_mut::<EntryType>(i as u64);
+                let d = cache_file.get_mut(i as u64);
                 i += 1;
                 *d = item.clone();
             })
