@@ -213,10 +213,11 @@ fn run_bank_forks_snapshot_n<F>(
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let pending_accounts_package = PendingAccountsPackage::default();
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        pending_accounts_package: pending_accounts_package.clone(),
     };
     for slot in 1..=last_slot {
         let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -230,6 +231,13 @@ fn run_bank_forks_snapshot_n<F>(
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash();
             snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
+
+            // Clear out any pending accounts package.  Since `set_root()` can trigger an Epoch
+            // Accounts Hash request, we must ensure that there is not already a pending EAH
+            // accounts package, otherwise ABS will panic when trying to submit a second EAH
+            // accounts package.  The most straight forward way is to clear the pending accounts
+            // package every time.
+            pending_accounts_package.lock().unwrap().take();
         }
     }
 

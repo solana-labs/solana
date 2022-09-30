@@ -4,11 +4,12 @@ use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
+        epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
-    solana_sdk::{clock::Slot, hash::Hash, timing},
+    solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
@@ -273,7 +274,55 @@ impl BankForks {
         let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
-        if let Some(bank) = banks.iter().find(|bank| {
+
+        // handle epoch accounts hash
+        // go through all the banks, oldest first
+        // find the newest bank where we should do EAH
+        // NOTE: Instead of filter-collect-assert, `.find()` could be used instead.  Once
+        // sufficient testing guarantees only one bank will ever request an EAH, change to
+        // `.find()`.
+        let eah_banks: Vec<_> = banks
+            .iter()
+            .filter(|&&bank| self.should_request_epoch_accounts_hash(bank))
+            .collect();
+        assert!(
+            eah_banks.len() <= 1,
+            "At most one bank should request an epoch accounts hash calculation! num banks: {}, bank slots: {:?}",
+            eah_banks.len(),
+            eah_banks.iter().map(|bank| bank.slot()).collect::<Vec<_>>(),
+        );
+        if let Some(eah_bank) = eah_banks.first() {
+            debug!(
+                "sending epoch accounts hash request, slot: {}",
+                eah_bank.slot()
+            );
+            self.last_accounts_hash_slot = eah_bank.slot();
+            let squash_timing = eah_bank.squash();
+            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
+            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            is_root_bank_squashed = eah_bank.slot() == root;
+
+            // Clear any existing EAH before requesting a new one
+            _ = eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash
+                .lock()
+                .unwrap()
+                .take();
+
+            accounts_background_request_sender
+                .send_snapshot_request(SnapshotRequest {
+                    snapshot_root_bank: Arc::clone(eah_bank),
+                    status_cache_slot_deltas: Vec::default(),
+                    request_type: SnapshotRequestType::EpochAccountsHash,
+                })
+                .expect("send epoch accounts hash request");
+        } else if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
                 && bank.block_height() % self.accounts_hash_interval_slots == 0
         }) {
@@ -315,6 +364,9 @@ impl BankForks {
             snapshot_time.stop();
             total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
+
+        drop(eah_banks);
+
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
@@ -549,6 +601,22 @@ impl BankForks {
     pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: u64) {
         self.accounts_hash_interval_slots = accounts_interval_slots;
     }
+
+    /// Determine if this bank should request an epoch accounts hash
+    #[must_use]
+    fn should_request_epoch_accounts_hash(&self, bank: &Bank) -> bool {
+        if !bank
+            .feature_set
+            .is_active(&feature_set::epoch_accounts_hash::id())
+        {
+            return false;
+        }
+
+        let start_slot = epoch_accounts_hash::calculation_start(bank);
+        bank.slot() > self.last_accounts_hash_slot
+            && bank.parent_slot() < start_slot
+            && bank.slot() >= start_slot
+    }
 }
 
 #[cfg(test)]
@@ -563,10 +631,10 @@ mod tests {
         },
         solana_sdk::{
             clock::UnixTimestamp,
+            epoch_schedule::EpochSchedule,
             hash::Hash,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
-            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_vote_program::vote_state::BlockTimestamp,
     };
