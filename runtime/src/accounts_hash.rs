@@ -44,12 +44,10 @@ pub struct CalcAccountsHashConfig<'a> {
     /// verify every hash in append vec/write cache with a recalculated hash
     /// this option will be removed
     pub check_hash: bool,
-    /// 'ancestors' is used to get storages and also used if 'use_write_cache' is true to
-    /// get account data from the write cache
+    /// 'ancestors' is used to get storages
     pub ancestors: Option<&'a Ancestors>,
     /// does hash calc need to consider account data that exists in the write cache?
     /// if so, 'ancestors' will be used for this purpose as well as storages.
-    pub use_write_cache: bool,
     pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact

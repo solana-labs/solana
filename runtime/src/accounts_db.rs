@@ -6715,7 +6715,6 @@ impl AccountsDb {
             slot,
             ancestors,
             None,
-            false,
             epoch_schedule,
             rent_collector,
             false,
@@ -6731,7 +6730,6 @@ impl AccountsDb {
             slot,
             ancestors,
             None,
-            false,
             &EpochSchedule::default(),
             &RentCollector::default(),
             false,
@@ -6935,9 +6933,8 @@ impl AccountsDb {
                 // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
                 // Single cached slots get cached and full chunks get cached.
                 // chunks that don't divide evenly would include some cached append vecs that are no longer part of this range and some that are, so we have to ignore caching on non-evenly dividing chunks.
-                let eligible_for_caching = !config.use_write_cache
-                    && (single_cached_slot
-                        || end_exclusive.saturating_sub(start) == MAX_ITEMS_PER_CHUNK);
+                let eligible_for_caching = single_cached_slot
+                    || end_exclusive.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
 
                 if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
@@ -6954,7 +6951,6 @@ impl AccountsDb {
                     .saturating_sub(slots_per_epoch);
 
                 let mut file_name = String::default();
-                // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
                 if (should_cache_hash_data && eligible_for_caching)
                     || config.store_detailed_debug_info_on_failure
                 {
@@ -7033,30 +7029,6 @@ impl AccountsDb {
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
                     scanner.set_slot(slot);
-                    let valid_slot = sub_storages.is_some();
-                    if config.use_write_cache {
-                        let ancestors = config.ancestors.as_ref().unwrap();
-                        if let Some(slot_cache) = self.accounts_cache.slot_cache(slot) {
-                            if valid_slot
-                                || ancestors.contains_key(&slot)
-                                || self.accounts_index.is_alive_root(slot)
-                            {
-                                let keys = slot_cache.get_all_pubkeys();
-                                for key in keys {
-                                    if scanner.filter(&key) {
-                                        if let Some(cached_account) = slot_cache.get_cloned(&key) {
-                                            let mut accessor = LoadedAccountAccessor::Cached(Some(
-                                                Cow::Owned(cached_account),
-                                            ));
-                                            let account = accessor.get_loaded_account().unwrap();
-                                            scanner.found_account(&account);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
                     }
@@ -7118,7 +7090,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         if !use_index {
-            if !config.use_write_cache && self.accounts_cache.contains_any_slots(slot) {
+            if self.accounts_cache.contains_any_slots(slot) {
                 // this indicates a race condition
                 inc_new_counter_info!("accounts_hash_items_in_write_cache", 1);
             }
@@ -7181,7 +7153,6 @@ impl AccountsDb {
         slot: Slot,
         ancestors: &Ancestors,
         expected_capitalization: Option<u64>,
-        can_cached_slot_be_unflushed: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         is_startup: bool,
@@ -7197,7 +7168,6 @@ impl AccountsDb {
                     use_bg_thread_pool: !is_startup,
                     check_hash,
                     ancestors: Some(ancestors),
-                    use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
                     store_detailed_debug_info_on_failure: false,
@@ -7346,11 +7316,6 @@ impl AccountsDb {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
-        assert!(
-            !(config.store_detailed_debug_info_on_failure && config.use_write_cache),
-            "cannot accurately capture all data for debugging if accounts cache is being used"
-        );
-
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
@@ -7452,7 +7417,6 @@ impl AccountsDb {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
-        can_cached_slot_be_unflushed: bool,
         enable_rehashing: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
@@ -7462,7 +7426,6 @@ impl AccountsDb {
             test_hash_calculation,
             epoch_schedule,
             rent_collector,
-            can_cached_slot_be_unflushed,
             false,
             false,
             enable_rehashing,
@@ -7479,7 +7442,6 @@ impl AccountsDb {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
-        can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
         store_hash_raw_data_for_debug: bool,
         enable_rehashing: bool,
@@ -7499,7 +7461,6 @@ impl AccountsDb {
                     use_bg_thread_pool: !is_startup,
                     check_hash,
                     ancestors: Some(ancestors),
-                    use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
                     store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
@@ -11777,7 +11738,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             )
             .unwrap();
@@ -12109,7 +12069,6 @@ pub mod tests {
                 use_bg_thread_pool: false,
                 check_hash: false,
                 ancestors: None,
-                use_write_cache: false,
                 epoch_schedule: &EPOCH_SCHEDULE,
                 rent_collector: &RENT_COLLECTOR,
                 store_detailed_debug_info_on_failure: false,
@@ -12183,7 +12142,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Ok(_)
@@ -12198,7 +12156,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Err(MissingBankHash)
@@ -12222,7 +12179,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Err(MismatchedBankHash)
@@ -12252,7 +12208,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Ok(_)
@@ -12275,14 +12230,13 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, true,),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), true,),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -12309,7 +12263,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Ok(_)
@@ -12354,7 +12307,6 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             ),
             Err(MismatchedBankHash)
@@ -12975,7 +12927,6 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
-                    false,
                     true,
                 )
                 .unwrap();
@@ -12989,7 +12940,6 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
-                    false,
                     true,
                 )
                 .unwrap();

@@ -218,7 +218,6 @@ impl SnapshotRequestHandler {
                             use_bg_thread_pool: true,
                             check_hash,
                             ancestors: None,
-                            use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
                             store_detailed_debug_info_on_failure: false,
