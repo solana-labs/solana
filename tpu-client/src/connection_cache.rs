@@ -690,7 +690,7 @@ mod tests {
 
         let port = addr
             .port()
-            .checked_add(port_offset)
+            .checked_add(QUIC_PORT_OFFSET)
             .unwrap_or_else(|| addr.port());
         let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
         let map = connection_cache.map.read().unwrap();

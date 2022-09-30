@@ -3086,6 +3086,7 @@ mod tests {
         std::{
             iter::repeat_with,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddrV4},
+            slice::from_ref,
             sync::Arc,
         },
     };
@@ -3152,8 +3153,6 @@ mod tests {
                     ip_echo: None,
                     tvu: vec![],
                     tvu_forwards: vec![],
-                    tpu: vec![],
-                    tpu_forwards: vec![],
                     tpu_vote: vec![],
                     broadcast: vec![],
                     repair: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -3589,7 +3588,8 @@ RPC Enabled Nodes: 1"#;
         check_socket(&node.sockets.repair, ip, range);
 
         check_sockets(&node.sockets.tvu, ip, range);
-        check_sockets(&node.sockets.tpu, ip, range);
+        //todo: is this right?
+        check_sockets(from_ref(&node.sockets.tpu_quic), ip, range);
     }
 
     #[test]

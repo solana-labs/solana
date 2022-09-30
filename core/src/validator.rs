@@ -2287,9 +2287,7 @@ mod tests {
                     true, // should_check_duplicate_instance
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
-                    true,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
-                    false,
                 )
                 .expect("assume successful validator start")
             })
