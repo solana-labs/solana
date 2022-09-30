@@ -293,7 +293,6 @@ fn test_epoch_accounts_hash() {
                         use_bg_thread_pool: false,
                         check_hash: false,
                         ancestors: Some(&bank.ancestors),
-                        use_write_cache: true,
                         epoch_schedule: bank.epoch_schedule(),
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
