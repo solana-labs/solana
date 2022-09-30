@@ -554,6 +554,7 @@ impl CrdsGossipPull {
                 .collect()
         });
 
+        stats.output_size.add_relaxed(ret.len() as u64);
         stats.output_overshoot.add_relaxed(
             (ret.len() as i64 - output_size_limit0 as i64)
                 .max(0)

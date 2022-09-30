@@ -179,6 +179,7 @@ pub struct GossipStats {
     pub(crate) tvu_peers: Counter,
     pub(crate) verify_gossip_packets_time: Counter,
     pub(crate) window_request_loopback: Counter,
+    pub(crate) output_size: Counter,
     pub(crate) output_overshoot: Counter,
 }
 
@@ -324,6 +325,7 @@ pub(crate) fn submit_gossip_stats(
             stats.push_response_count.clear(),
             i64
         ),
+        ("output_filter_size", stats.output_size.clear(), i64),
         (
             "output_filter_overshoot",
             stats.output_overshoot.clear(),
