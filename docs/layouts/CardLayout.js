@@ -1,7 +1,8 @@
 import React from "react";
 import Layout from "@theme/Layout";
 import DocSidebar from "@theme/DocSidebar";
-import ThemeClassNames from "@docusaurus/theme-classic/lib/theme/DocPage/Layout/styles.module.css";
+import SidebarStyles from "@docusaurus/theme-classic/lib/theme/DocPage/Layout/Sidebar/styles.module.css";
+import DocPageStyles from "@docusaurus/theme-classic/lib/theme/DocPage/Layout/styles.module.css";
 import sidebar from "../sidebars";
 
 function CardLayout({
@@ -20,14 +21,14 @@ function CardLayout({
   // return the page layout, ready to go
   return (
     <Layout title={title} description={description}>
-      <div className={ThemeClassNames.docPage}>
+      <div className={DocPageStyles.docPage}>
         {sidebarItems?.length > 0 && (
-          <aside className={ThemeClassNames.docSidebarContainer}>
+          <aside className={SidebarStyles.docSidebarContainer}>
             <DocSidebar sidebar={sidebarItems} path={path}></DocSidebar>
           </aside>
         )}
 
-        <main className={ThemeClassNames.docPage}>{children}</main>
+        <main className={DocPageStyles.docPage}>{children}</main>
       </div>
     </Layout>
   );
