@@ -1,7 +1,7 @@
 use {
     crate::{
         leader_slot_banking_stage_timing_metrics::*,
-        unprocessed_transaction_storage::InsertPacketBatchesSummary,
+        unprocessed_transaction_storage::InsertPacketBatchSummary,
     },
     solana_poh::poh_recorder::BankStart,
     solana_runtime::transaction_error_metrics::*,
@@ -336,14 +336,10 @@ impl VotePacketCountMetrics {
     fn report(&self, id: u32, slot: Slot) {
         datapoint_info!(
             "banking_stage-vote_packet_counts",
-            ("id", id as i64, i64),
-            ("slot", slot as i64, i64),
-            (
-                "dropped_gossip_votes",
-                self.dropped_gossip_votes as i64,
-                i64
-            ),
-            ("dropped_tpu_votes", self.dropped_tpu_votes as i64, i64)
+            ("id", id, i64),
+            ("slot", slot, i64),
+            ("dropped_gossip_votes", self.dropped_gossip_votes, i64),
+            ("dropped_tpu_votes", self.dropped_tpu_votes, i64)
         );
     }
 }
@@ -538,7 +534,7 @@ impl LeaderSlotMetricsTracker {
 
     pub(crate) fn accumulate_insert_packet_batches_summary(
         &mut self,
-        insert_packet_batches_summary: &InsertPacketBatchesSummary,
+        insert_packet_batches_summary: &InsertPacketBatchSummary,
     ) {
         self.increment_exceeded_buffer_limit_dropped_packets_count(
             insert_packet_batches_summary.num_dropped_packets as u64,

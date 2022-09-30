@@ -623,7 +623,7 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn processing_function(
+    fn do_process_packets(
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -748,7 +748,7 @@ impl BankingStage {
             bank,
             num_packets_to_process_per_iteration,
             |packets_to_process| {
-                Self::processing_function(
+                Self::do_process_packets(
                     max_tx_ingestion_ns,
                     poh_recorder,
                     slot_metrics_tracker,
@@ -1997,6 +1997,7 @@ impl BankingStage {
         banking_stage_stats
             .newly_buffered_packets_count
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
+        // TODO: One of these metrics can be deleted (duplicate)
         banking_stage_stats
             .current_buffered_packet_batches_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
