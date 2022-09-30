@@ -514,6 +514,7 @@ impl CrdsGossipPull {
             now.saturating_sub(msg_timeout)..now.saturating_add(msg_timeout);
         let dropped_requests = AtomicUsize::default();
         let total_skipped = AtomicUsize::default();
+        let output_size_limit0 = output_size_limit;
         let output_size_limit = output_size_limit.try_into().unwrap_or(i64::MAX);
         let output_size_limit = AtomicI64::new(output_size_limit);
         let crds = crds.read().unwrap();
@@ -552,6 +553,13 @@ impl CrdsGossipPull {
                 .map(|(caller, filter)| apply_filter(caller, filter))
                 .collect()
         });
+
+        stats.output_overshoot.add_relaxed(
+            (ret.len() as i64 - output_size_limit0 as i64)
+                .max(0)
+                .try_into()
+                .unwrap_or(0),
+        );
         stats
             .filter_crds_values_dropped_requests
             .add_relaxed(dropped_requests.into_inner() as u64);
