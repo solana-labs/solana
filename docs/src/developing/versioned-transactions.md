@@ -1,7 +1,8 @@
 ---
 title: Versioned Transactions
 description: ""
-keywords: ""
+# keywords:
+#   -
 ---
 
 [Versioned Transactions](./versioned-transactions.md) are the new transaction format that allow for additional functionality in the Solana runtime, including [Address Lookup Tables](./lookup-tables.md).

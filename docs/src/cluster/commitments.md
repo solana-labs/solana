@@ -1,7 +1,13 @@
 ---
 title: Commitment Status
 description: "Processed, confirmed, and finalized. Learn the differences between the different commitment statuses on the Solana blockchain."
-keywords: processed, confirmed, finalized, stake level, block, blockhash,
+keywords:
+  - processed
+  - confirmed
+  - finalized
+  - stake level
+  - block
+  - blockhash,
 ---
 
 The [commitment](./../terminology.md#commitment) metric gives clients a standard measure of the network confirmation for the block. Clients can then use this information to derive their own measures of commitment.

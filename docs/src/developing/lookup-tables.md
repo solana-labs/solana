@@ -1,7 +1,8 @@
 ---
 title: Address Lookup Tables
 description: ""
-keywords: ""
+# keywords:
+# -
 ---
 
 Address Lookup Tables, commonly referred to as "_lookup tables_" or "_ALTs_" for short, allow developers to create a collection of related addresses to efficiently load more addresses in a single transaction.

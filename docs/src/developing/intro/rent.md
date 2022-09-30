@@ -1,7 +1,8 @@
 ---
 title: What is rent?
 description: "Rent: the small fee Solana accounts incur to store data on the blockchain. Accounts with >2 years of rent are rent exempt and do not pay the periodic fee."
-keywords: ""
+# keywords:
+# -
 ---
 
 The fee every Solana Account to store data on the blockchain is called "_rent_". This _time and space_ based fee is required to keep an account, and its therefore its data, alive on the blockchain since [clusters](../../cluster/overview.md) must actively maintain this data.

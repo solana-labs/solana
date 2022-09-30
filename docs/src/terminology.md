@@ -1,7 +1,12 @@
 ---
 title: Terminology
-description: "Learn the essential terminology used thoughtout the Solana blockchain and development models."
-keywords: "terms, dictionary, definitions, define, programming models"
+description: "Learn the essential terminology used throughout the Solana blockchain and development models."
+keywords:
+  - terms
+  - dictionary
+  - definitions
+  - define
+  - programming models
 ---
 
 The following terms are used throughout the Solana documentation and development ecosystem.
@@ -259,7 +264,7 @@ See also [rent exempt](#rent-exempt) below. Learn more about rent here: [What is
 
 ## rent exempt
 
-Accounts that maintain more than 2 years with of rent payments in their account are considered "*rent exempt*" and will not incur the [collection of rent](../src/developing/intro/rent.md#collecting-rent).
+Accounts that maintain more than 2 years with of rent payments in their account are considered "_rent exempt_" and will not incur the [collection of rent](../src/developing/intro/rent.md#collecting-rent).
 
 ## root
 
