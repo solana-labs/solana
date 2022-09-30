@@ -554,6 +554,9 @@ impl CrdsGossipPull {
                 .collect()
         });
 
+        stats
+            .output_size_limit_room
+            .add_relaxed((output_size_limit.load(Ordering::Acquire) as i64).max(0) as u64);
         stats.output_size.add_relaxed(ret.len() as u64);
         stats.output_overshoot.add_relaxed(
             (ret.len() as i64 - output_size_limit0 as i64)
