@@ -453,7 +453,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
         } else {
             match solana_storage_bigtable::LedgerStorage::new_with_config(
                 solana_storage_bigtable::LedgerStorageConfig {
-                    read_only: true,
+                    read_only: false,
                     timeout: None,
                     credential_type: CredentialType::Filepath(Some(
                         args.destination_credential_path.unwrap(),
