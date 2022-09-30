@@ -1027,9 +1027,9 @@ pub mod tests {
     }
 
     fn for_rest(
-        original: Vec<CalculateHashIntermediate>,
+        original: &[CalculateHashIntermediate],
     ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
-        vec![vec![original]]
+        vec![vec![original.to_vec()]]
     }
 
     #[test]
@@ -1051,7 +1051,7 @@ pub mod tests {
 
         let accounts_hash = AccountsHash::default();
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(account_maps.clone()),
+            for_rest(&account_maps),
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
@@ -1067,7 +1067,7 @@ pub mod tests {
         account_maps.insert(0, val);
 
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(account_maps.clone()),
+            for_rest(&account_maps),
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
@@ -1083,7 +1083,7 @@ pub mod tests {
         account_maps.insert(1, val);
 
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(account_maps),
+            for_rest(&account_maps),
             &mut HashStats::default(),
             true,
             PreviousPass::default(),
@@ -1099,6 +1099,10 @@ pub mod tests {
 
     fn zero_range() -> usize {
         0
+    }
+
+    fn empty_data() -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+        vec![vec![vec![]]]
     }
 
     #[test]
@@ -1129,7 +1133,7 @@ pub mod tests {
             if pass == 0 {
                 // first pass that is not last and is empty
                 let result = accounts_index.rest_of_hash_calculation(
-                    vec![vec![vec![]]],
+                    empty_data(),
                     &mut HashStats::default(),
                     false, // not last pass
                     previous_pass,
@@ -1144,7 +1148,7 @@ pub mod tests {
             }
 
             let result = accounts_index.rest_of_hash_calculation(
-                for_rest(account_maps.clone()),
+                for_rest(&account_maps),
                 &mut HashStats::default(),
                 false, // not last pass
                 previous_pass,
@@ -1163,7 +1167,7 @@ pub mod tests {
             let accounts_index = AccountsHash::default();
             if pass == 2 {
                 let result = accounts_index.rest_of_hash_calculation(
-                    vec![vec![vec![]]],
+                    empty_data(),
                     &mut HashStats::default(),
                     false,
                     previous_pass,
@@ -1177,7 +1181,7 @@ pub mod tests {
             }
 
             let result = accounts_index.rest_of_hash_calculation(
-                vec![vec![vec![]]],
+                empty_data(),
                 &mut HashStats::default(),
                 true, // finally, last pass
                 previous_pass,
@@ -1210,7 +1214,7 @@ pub mod tests {
         account_maps.push(val);
         let accounts_hash = AccountsHash::default();
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(vec![account_maps[0].clone()]),
+            for_rest(&[account_maps[0].clone()]),
             &mut HashStats::default(),
             false, // not last pass
             PreviousPass::default(),
@@ -1225,7 +1229,7 @@ pub mod tests {
         assert_eq!(previous_pass.lamports, account_maps[0].lamports);
 
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(vec![account_maps[1].clone()]),
+            for_rest(&[account_maps[1].clone()]),
             &mut HashStats::default(),
             false, // not last pass
             previous_pass,
@@ -1244,7 +1248,7 @@ pub mod tests {
         assert_eq!(previous_pass.lamports, total_lamports_expected);
 
         let result = accounts_hash.rest_of_hash_calculation(
-            vec![vec![vec![]]],
+            empty_data(),
             &mut HashStats::default(),
             true,
             previous_pass,
@@ -1296,7 +1300,7 @@ pub mod tests {
 
         // first 4097 hashes (1 left over)
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(chunk),
+            for_rest(&chunk),
             &mut HashStats::default(),
             false, // not last pass
             PreviousPass::default(),
@@ -1341,7 +1345,7 @@ pub mod tests {
 
         // second 4097 hashes (2 left over)
         let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(chunk),
+            for_rest(&chunk),
             &mut HashStats::default(),
             false, // not last pass
             previous_pass,
@@ -1369,7 +1373,7 @@ pub mod tests {
         );
 
         let result = accounts_hash.rest_of_hash_calculation(
-            vec![vec![vec![]]],
+            empty_data(),
             &mut HashStats::default(),
             true,
             previous_pass,
