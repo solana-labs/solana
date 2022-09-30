@@ -538,11 +538,11 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                         .await
                     {
                         Ok(()) => {
-                            debug!("write a block to slot: {}", slot);
+                            debug!("wrote block: {}", slot);
                             success_slots_clone.lock().unwrap().push(slot);
                         }
                         Err(err) => {
-                            debug!("failed to write a block to slot: {}, err: {}", slot, err);
+                            debug!("write failed, slot: {}, err: {}", slot, err);
                             failed_slots_clone.lock().unwrap().push(slot);
                             continue;
                         }
@@ -831,7 +831,7 @@ impl BigTableSubCommand for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("copy")
-                        .about("copy blocks from a bigtable to another bigtable")
+                        .about("Copy blocks from a Bigtable to another Bigtable")
                         .arg(
                             Arg::with_name("source_credential_path")
                                 .long("source-credential-path")
@@ -839,7 +839,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .conflicts_with("emulated_source")
                                 .help(
-                                    "Source bigtable creds path. (could be readonly)",
+                                    "Source Bigtable credential filepath (credential may be readonly)",
                                 ),
                         )
                         .arg(
@@ -858,7 +858,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("SOURCE_INSTANCE_NAME")
                                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                                .help("Source bigtable instance name")
+                                .help("Source Bigtable instance name")
                         )
                         .arg(
                             Arg::with_name("source_app_profile_id")
@@ -866,7 +866,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("SOURCE_APP_PROFILE_ID")
                                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                                .help("Source bigtable app profile id")
+                                .help("Source Bigtable app profile id")
                         )
                         .arg(
                             Arg::with_name("destination_credential_path")
@@ -875,7 +875,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .conflicts_with("emulated_destination")
                                 .help(
-                                    "Destination bigtable creds path. (should be writable)",
+                                    "Destination Bigtable credential filepath (credential must have Bigtable write permissions)",
                                 ),
                         )
                         .arg(
@@ -894,7 +894,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("DESTINATION_INSTANCE_NAME")
                                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
-                                .help("Destination bigtable instance name")
+                                .help("Destination Bigtable instance name")
                         )
                         .arg(
                             Arg::with_name("destination_app_profile_id")
@@ -902,7 +902,7 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .takes_value(true)
                                 .value_name("DESTINATION_APP_PROFILE_ID")
                                 .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                                .help("Destination bigtable app profile id")
+                                .help("Destination Bigtable app profile id")
                         )
                         .arg(
                             Arg::with_name("starting_slot")
@@ -929,7 +929,7 @@ impl BigTableSubCommand for App<'_, '_> {
                             .value_name("FORCE")
                             .takes_value(false)
                             .help(
-                                "still upload whole block to destination although the block existed",
+                                "Force copy of blocks already present in destination Bigtable instance",
                             ),
                         )
                 ),
