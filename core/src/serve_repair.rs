@@ -456,7 +456,7 @@ impl ServeRepair {
     ) -> Result<()> {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
-        const MAX_REQUESTS_PER_ITERATION: usize = 1024;
+        const MAX_REQUESTS_PER_ITERATION: usize = 10000;
         let mut total_requests = 0;
         let root_bank = self.bank_forks.read().unwrap().root_bank();
 
