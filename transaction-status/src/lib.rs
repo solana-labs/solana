@@ -668,7 +668,10 @@ impl TryFrom<ConfirmedBlock> for VersionedConfirmedBlock {
             .collect();
 
         if txs.len() != expected_transaction_count {
-            return Err(ConvertBlockError::TransactionsMissing(expected_transaction_count, txs.len()));
+            return Err(ConvertBlockError::TransactionsMissing(
+                expected_transaction_count,
+                txs.len(),
+            ));
         }
 
         Ok(Self {
