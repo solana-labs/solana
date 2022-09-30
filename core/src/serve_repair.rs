@@ -171,6 +171,7 @@ struct ServeRepairStats {
     err_unsigned: usize,
     err_id_mismatch: usize,
     receive_repair_request_us: u64,
+    receive_repair_request2_us: u64,
     handle_repair_request_us: u64,
 }
 
@@ -464,6 +465,7 @@ impl ServeRepair {
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
 
+        let mut receive_repair_request_elapsed2 = Measure::start("receive_repair_request");
         let mut dropped_requests = 0;
         while let Ok(more) = requests_receiver.try_recv() {
             total_requests += more.len();
@@ -473,6 +475,9 @@ impl ServeRepair {
                 reqs_v.push(more);
             }
         }
+        receive_repair_request_elapsed2.stop();
+        stats.receive_repair_request2_us += receive_repair_request_elapsed2.as_us();
+
         receive_repair_request_elapsed.stop();
         stats.receive_repair_request_us += receive_repair_request_elapsed.as_us();
 
@@ -552,6 +557,11 @@ impl ServeRepair {
             (
                 "receive_repair_request_us",
                 stats.receive_repair_request_us as i64,
+                i64
+            ),
+            (
+                "receive_repair_request2_us",
+                stats.receive_repair_request2_us as i64,
                 i64
             ),
             (
