@@ -1,9 +1,3 @@
-pub mod prelude {
-    pub use crate::big_mod_exp::{
-        big_mod_exp
-    };
-}
-
 #[repr(C)]
 pub struct BigModExpParams{
     pub base: *const u8,
@@ -45,7 +39,7 @@ pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
         // let result = unsafe {
         unsafe {
             crate::syscalls::sol_big_mod_exp(
-                &param as *const_ as *const u8,
+                &param as *const _ as *const u8,
                 return_value.as_mut_slice() as *mut _ as *mut u8,
             )
         };

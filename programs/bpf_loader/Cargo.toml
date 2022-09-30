@@ -21,6 +21,7 @@ solana-sdk = { path = "../../sdk", version = "=1.15.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.15.0" }
 solana_rbpf = "=0.2.32"
 thiserror = "1.0"
+num-bigint = "0.4.3"
 
 [dev-dependencies]
 rand = "0.7.3"

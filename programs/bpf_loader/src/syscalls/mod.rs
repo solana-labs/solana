@@ -54,7 +54,7 @@ use {
         },
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
-        big_mod_exp,
+        big_mod_exp::{BigModExpParams, big_mod_exp},
     },
     std::{
         alloc::Layout,
@@ -66,6 +66,7 @@ use {
         sync::Arc,
     },
     thiserror::Error as ThisError,
+    num_bigint::BigUint,
 };
 
 mod cpi;
@@ -1996,7 +1997,7 @@ declare_syscall!(
     fn call(
         &mut self,
         params: u64,
-        result: u64,
+        return_value: u64,
         _arg3: u64,
         _arg4: u64,
         _arg5: u64,
@@ -2013,84 +2014,78 @@ declare_syscall!(
         question_mark!(
             invoke_context.get_compute_meter().consume(
                 budget.syscall_base_cost.saturating_add(
-                    budget
-                        .account_property_update_cost
-                        .saturating_mul(updates_count)
+                    budget.big_modular_exponentiation_cost
                 )
             ),
             result
         );
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = question_mark!(
-            transaction_context
-                .get_current_instruction_context()
-                .map_err(SyscallError::InstructionError),
-            result
-        );
-        let updates = question_mark!(
-            translate_slice_mut::<AccountPropertyUpdate>(
+
+        let params = &question_mark!(
+            translate_slice::<BigModExpParams>(
                 memory_mapping,
-                updates_addr,
-                updates_count,
+                params,
+                1,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        )[0];
+
+        let base = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                params.base as *const _ as * const u8 as u64,
+                params.base_len,
                 invoke_context.get_check_aligned(),
                 invoke_context.get_check_size(),
             ),
             result
         );
+
+        let exponent = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                params.exponent as *const _ as * const u8 as u64,
+                params.exponent_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let modulus = question_mark!(
+            translate_slice::<u8>(
+                memory_mapping,
+                params.modulus as *const _ as * const u8 as u64,
+                params.modulus_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let base = BigUint::from_bytes_be(base);
+        let exponent = BigUint::from_bytes_be(exponent);
+        let modulus = BigUint::from_bytes_be(modulus);
+        let res = base.modpow(&exponent, &modulus);
+        let res = res.to_bytes_be();
+        let mut value = vec![0_u8; params.modulus_len as usize - res.len()];
+        value.extend(res);
+
+
+        let return_value = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                return_value,
+                params.modulus_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
+            ),
+            result
+        );
+        return_value.copy_from_slice(value.as_slice());
+
         *result = Ok(0);
-        for update in updates.iter() {
-            let mut borrowed_account = question_mark!(
-                instruction_context
-                    .try_borrow_instruction_account(
-                        transaction_context,
-                        update.instruction_account_index,
-                    )
-                    .map_err(SyscallError::InstructionError),
-                result
-            );
-            let attribute =
-                unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
-            match attribute {
-                TransactionContextAttribute::TransactionAccountOwner => {
-                    let owner_pubkey = question_mark!(
-                        translate_type_mut::<Pubkey>(
-                            memory_mapping,
-                            update.value,
-                            invoke_context.get_check_aligned()
-                        ),
-                        result
-                    );
-                    question_mark!(
-                        borrowed_account
-                            .set_owner(&owner_pubkey.to_bytes())
-                            .map_err(SyscallError::InstructionError),
-                        result
-                    );
-                }
-                TransactionContextAttribute::TransactionAccountLamports => question_mark!(
-                    borrowed_account
-                        .set_lamports(update.value)
-                        .map_err(SyscallError::InstructionError),
-                    result
-                ),
-                TransactionContextAttribute::TransactionAccountData => question_mark!(
-                    borrowed_account
-                        .set_data_length(update.value as usize)
-                        .map_err(SyscallError::InstructionError),
-                    result
-                ),
-                TransactionContextAttribute::TransactionAccountIsExecutable => question_mark!(
-                    borrowed_account
-                        .set_executable(update.value != 0)
-                        .map_err(SyscallError::InstructionError),
-                    result
-                ),
-                _ => {
-                    *result = Err(SyscallError::InvalidAttribute.into());
-                    return;
-                }
-            }
-        }
     }
 );
 
