@@ -504,7 +504,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                             }
                             Err(solana_storage_bigtable::Error::BlockNotFound(_)) => {}
                             Err(err) => {
-                                debug!("failed to get confirmed block from destination, slot: {}, err: {}", slot, err);
+                                error!("failed to get confirmed block from destination, slot: {}, err: {}", slot, err);
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
@@ -516,7 +516,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                             Ok(block) => match VersionedConfirmedBlock::try_from(block) {
                                 Ok(block) => block,
                                 Err(err) => {
-                                    debug!("failed to convert confirmed block to versioned confirmed block, slot: {}, err: {}", slot, err);
+                                    error!("failed to convert confirmed block to versioned confirmed block, slot: {}, err: {}", slot, err);
                                     failed_slots_clone.lock().unwrap().push(slot);
                                     continue;
                                 }
@@ -527,7 +527,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                                 continue;
                             }
                             Err(err) => {
-                                debug!("failed to get confirmed block, slot: {}, err: {}", slot, err);
+                                error!("failed to get confirmed block, slot: {}, err: {}", slot, err);
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
@@ -542,7 +542,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                             success_slots_clone.lock().unwrap().push(slot);
                         }
                         Err(err) => {
-                            debug!("write failed, slot: {}, err: {}", slot, err);
+                            error!("write failed, slot: {}, err: {}", slot, err);
                             failed_slots_clone.lock().unwrap().push(slot);
                             continue;
                         }
