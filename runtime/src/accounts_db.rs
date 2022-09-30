@@ -6950,8 +6950,7 @@ impl AccountsDb {
                     .end
                     .saturating_sub(slots_per_epoch);
 
-                let mut file_name = String::default();
-                if (should_cache_hash_data && eligible_for_caching)
+                let file_name = if (should_cache_hash_data && eligible_for_caching)
                     || config.store_detailed_debug_info_on_failure
                 {
                     let mut load_from_cache = true;
@@ -6972,10 +6971,12 @@ impl AccountsDb {
                                 load_from_cache = false;
                                 break;
                             }
-                            let storage_file = sub_storages.first().unwrap().accounts.get_path();
+                            let append_vec = sub_storages.first().unwrap();
+                            // check written_bytes here. This is necessary for tests and removes a potential for false positives.
+                            append_vec.written_bytes().hash(&mut hasher);
+                            let storage_file = append_vec.accounts.get_path();
                             slot.hash(&mut hasher);
                             storage_file.hash(&mut hasher);
-                            // check alive_bytes, etc. here?
                             let amod = std::fs::metadata(storage_file);
                             if amod.is_err() {
                                 load_from_cache = false;
@@ -6998,7 +6999,7 @@ impl AccountsDb {
                         // we have a hash value for all the storages in this slot
                         // so, build a file name:
                         let hash = hasher.finish();
-                        file_name = format!(
+                        let file_name = format!(
                             "{}.{}.{}.{}.{}",
                             start, end_exclusive, bin_range.start, bin_range.end, hash
                         );
@@ -7018,6 +7019,9 @@ impl AccountsDb {
                         scanner.set_accum(retval);
 
                         // fall through and load normally - we failed to load
+                        file_name
+                    } else {
+                        String::default()
                     }
                 } else {
                     for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
@@ -7025,7 +7029,8 @@ impl AccountsDb {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
                     }
-                }
+                    String::default()
+                };
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
                     scanner.set_slot(slot);
@@ -7188,6 +7193,7 @@ impl AccountsDb {
         bank_hash_info.snapshot_hash = hash;
     }
 
+    /// scan 'storage', return a vec of 'CacheHashDataFile', one per pass
     fn scan_snapshot_stores_with_cache(
         &self,
         cache_hash_data: &CacheHashData,
@@ -7340,6 +7346,7 @@ impl AccountsDb {
                     },
                 };
 
+                // get raw data by scanning
                 let result = self.scan_snapshot_stores_with_cache(
                     &cache_hash_data,
                     storages,
@@ -7350,6 +7357,7 @@ impl AccountsDb {
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
+                // turn raw data into merkel tree hashes and sum of lamports
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
