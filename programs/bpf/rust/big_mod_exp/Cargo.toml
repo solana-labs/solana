@@ -1,5 +1,5 @@
 [package]
-name = "solana-bpf-rust-big-mod_exp"
+name = "solana-bpf-rust-big-mod-exp"
 version = "1.15.0"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
