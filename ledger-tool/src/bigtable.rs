@@ -339,17 +339,15 @@ struct CopyArgs {
     from_slot: Slot,
     to_slot: Option<Slot>,
 
-    source_is_emulator: bool,
     source_instance_name: String,
     source_app_profile_id: String,
+    emulated_source: Option<String>,
     source_credential_path: Option<String>,
-    source_endpoint: Option<String>,
 
-    destination_is_emulator: bool,
     destination_instance_name: String,
     destination_app_profile_id: String,
+    emulated_destination: Option<String>,
     destination_credential_path: Option<String>,
-    destination_endpoint: Option<String>,
 
     force: bool,
 }
@@ -360,13 +358,11 @@ impl CopyArgs {
             from_slot: value_t!(arg_matches, "starting_slot", Slot).unwrap_or(0),
             to_slot: value_t!(arg_matches, "ending_slot", Slot).ok(),
 
-            source_is_emulator: arg_matches.is_present("source_is_emulator"),
             source_instance_name: value_t_or_exit!(arg_matches, "source_instance_name", String),
             source_app_profile_id: value_t_or_exit!(arg_matches, "source_app_profile_id", String),
             source_credential_path: value_t!(arg_matches, "source_credential_path", String).ok(),
-            source_endpoint: value_t!(arg_matches, "source_endpoint", String).ok(),
+            emulated_source: value_t!(arg_matches, "emulated_source", String).ok(),
 
-            destination_is_emulator: arg_matches.is_present("destination_is_emulator"),
             destination_instance_name: value_t_or_exit!(
                 arg_matches,
                 "destination_instance_name",
@@ -383,7 +379,7 @@ impl CopyArgs {
                 String
             )
             .ok(),
-            destination_endpoint: value_t!(arg_matches, "destination_endpoint", String).ok(),
+            emulated_destination: value_t!(arg_matches, "emulated_destination", String).ok(),
 
             force: arg_matches.is_present("force"),
         }
@@ -400,11 +396,11 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let source_bigtable = {
-        if args.source_is_emulator {
+        if let Some(endpoint) = args.emulated_source {
             match solana_storage_bigtable::LedgerStorage::new_for_emulator(
                 &args.source_instance_name,
                 &args.source_app_profile_id,
-                &args.source_endpoint.unwrap(),
+                &endpoint,
                 None,
             ) {
                 Ok(bigtable) => bigtable,
@@ -437,11 +433,11 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let destination_bigtable = {
-        if args.destination_is_emulator {
+        if let Some(endpoint) = args.emulated_destination {
             match solana_storage_bigtable::LedgerStorage::new_for_emulator(
                 &args.destination_instance_name,
                 &args.destination_app_profile_id,
-                &args.destination_endpoint.unwrap(),
+                &endpoint,
                 None,
             ) {
                 Ok(bigtable) => bigtable,
@@ -841,27 +837,20 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("source-credential-path")
                                 .value_name("SOURCE_CREDENTIAL_PATH")
                                 .takes_value(true)
+                                .conflicts_with("emulated_source")
                                 .help(
                                     "Source bigtable creds path. (could be readonly)",
                                 ),
                         )
                         .arg(
-                            Arg::with_name("source_endpoint")
-                                .long("source-endpoint")
-                                .value_name("SOURCE_ENDPOINT")
+                            Arg::with_name("emulated_source")
+                                .long("emulated-source")
+                                .value_name("EMULATED_SOURCE")
                                 .takes_value(true)
+                                .conflicts_with("source_credential_path")
                                 .help(
-                                    "Source bigtable endpoint.",
+                                    "Source Bigtable emulated source",
                                 ),
-                        )
-                        .arg(
-                            Arg::with_name("source_is_emulator")
-                            .long("source-is-emulator")
-                            .value_name("SOURCE_IS_EMULATOR")
-                            .takes_value(false)
-                            .help(
-                                "Source bigtable is an emulator",
-                            ),
                         )
                         .arg(
                             Arg::with_name("source_instance_name")
@@ -884,27 +873,20 @@ impl BigTableSubCommand for App<'_, '_> {
                                 .long("destination-credential-path")
                                 .value_name("DESTINATION_CREDENTIAL_PATH")
                                 .takes_value(true)
+                                .conflicts_with("emulated_destination")
                                 .help(
                                     "Destination bigtable creds path. (should be writable)",
                                 ),
                         )
                         .arg(
-                            Arg::with_name("destination_endpoint")
-                                .long("destination-endpoint")
-                                .value_name("DESTINATION_ENDPOINT")
+                            Arg::with_name("emulated_destination")
+                                .long("emulated-destination")
+                                .value_name("EMULATED_DESTINATION")
                                 .takes_value(true)
+                                .conflicts_with("destination_credential_path")
                                 .help(
-                                    "Destination bigtable endpoint",
+                                    "Destination Bigtable emulated destination",
                                 ),
-                        )
-                        .arg(
-                            Arg::with_name("destination_is_emulator")
-                            .long("destination-is-emulator")
-                            .value_name("DESTINATION_IS_EMULATOR")
-                            .takes_value(false)
-                            .help(
-                                "Destination is an emulator",
-                            ),
                         )
                         .arg(
                             Arg::with_name("destination_instance_name")
