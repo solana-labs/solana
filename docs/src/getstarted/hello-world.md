@@ -18,7 +18,7 @@ For this "hello world" quickstart guide, we will use [Solana Playground](https:/
 
 [Solana Playground](https://beta.solpg.io) is browser based application that will let you write, build, and deploy on chain Solana programs. All from your browser. No installation needed.
 
-It is a great developer resources for getting started with Solana development, especially on Windows.
+It is a great developer resource for getting started with Solana development, especially on Windows.
 
 ### Import our example project
 
@@ -156,7 +156,7 @@ Here we create a new transaction and add a single `instruction` to it:
 // create an empty transaction
 const transaction = new web3.Transaction();
 
-// add a single instruction to the transaction
+// add a hello world program instruction to the transaction
 transaction.add(
   new web3.TransactionInstruction({
     keys: [],
@@ -170,24 +170,22 @@ Each `instruction` must include all the keys involved in the operation and the p
 With our transaction created, we can submit it to the cluster:
 
 ```js
-// set required fields for the transaction
-transaction.feePayer = pg.wallet.publicKey;
-transaction.recentBlockhash = (
-  await pg.connection.getLatestBlockhash()
-).blockhash;
-
-// sign the transaction
-await pg.wallet.signTransaction(transaction);
-
 // send the transaction to the Solana cluster
 console.log("Sending transaction...");
-const txHash = await pg.connection.sendRawTransaction(transaction.serialize());
+const txHash = await web3.sendAndConfirmTransaction(
+  pg.connection,
+  transaction,
+  [pg.wallet.keypair]
+);
 console.log("Transaction sent with hash:", txHash);
 ```
 
-### Run our application
+> Note:
+> The first signer in the signers array is the transaction fee payer by default. We are signing with our keypair `pg.wallet.keypair`.
 
-With our client application written, you can run the code via the same `run` command.
+### Run the application
+
+With the client application written, you can run the code via the same `run` command.
 
 Once your application completes, you will see output similar to this:
 
@@ -195,14 +193,14 @@ Once your application completes, you will see output similar to this:
 Running client...
   client.ts:
     My address: GkxZRRNPfaUfL9XdYVfKF3rWjMcj5md6b6mpRoWpURwP
-    My balance: 4.83784172 SOL
+    My balance: 5.7254472 SOL
     Sending transaction...
     Transaction sent with hash: 2Ra7D9JoqeNsax9HmNq6MB4qWtKPGcLwoqQ27mPYsPFh3h8wignvKB2mWZVvdzCyTnp7CEZhfg2cEpbavib9mCcq
 ```
 
-### Get the transaction logs
+### Get transaction logs
 
-There are many ways to get transaction logs for Solana programs. We will be using `solana-cli` directly in playground to get the information about any transaction:
+We will be using `solana-cli` directly in playground to get the information about any transaction:
 
 ```sh
 solana confirm -v <TRANSACTION_HASH>
