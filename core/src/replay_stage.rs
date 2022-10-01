@@ -5644,7 +5644,7 @@ pub(crate) mod tests {
         assert_eq!(vote_fork.unwrap(), 4);
         assert_eq!(reset_fork.unwrap(), 4);
 
-        // Record the vote for 5
+        // Record the vote for 5 which is not on the heaviest fork.
         tower.record_bank_vote(
             &bank_forks.read().unwrap().get(5).unwrap(),
             &Pubkey::default(),

@@ -863,7 +863,7 @@ impl HeaviestSubtreeForkChoice {
                     Some(false) => None,
                     None => {
                         if !tower.is_stray_last_vote() {
-                            // Unless last vote is stray and stale, self.bast_slot(last_voted_slot) must return
+                            // Unless last vote is stray and stale, self.is_candidate(last_voted_slot_hash) must return
                             // Some(_), justifying to panic! here.
                             // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
                             // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
