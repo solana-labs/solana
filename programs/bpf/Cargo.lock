@@ -4074,6 +4074,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "solana-address-lookup-table-program",
  "solana-config-program",
  "solana-sdk 1.14.4",
  "solana-vote-program",
