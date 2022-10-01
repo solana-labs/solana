@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        connection_cache::ConnectionCacheStats,
+        connection_cache_stats::ConnectionCacheStats,
         nonblocking::{
             quic_client::{
                 QuicClient, QuicLazyInitializedEndpoint,
