@@ -5352,49 +5352,49 @@ pub mod tests {
             .drain(shreds_per_slot..2 * shreds_per_slot)
             .collect_vec();
         blockstore.insert_shreds(shreds1, None, false).unwrap();
-        let s1 = blockstore.meta(1).unwrap().unwrap();
-        assert!(s1.next_slots.is_empty());
+        let meta1 = blockstore.meta(1).unwrap().unwrap();
+        assert!(meta1.next_slots.is_empty());
         // Slot 1 is not trunk because slot 0 hasn't been inserted yet
-        assert!(!s1.is_connected);
-        assert_eq!(s1.parent_slot, Some(0));
-        assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
+        assert!(!meta1.is_connected);
+        assert_eq!(meta1.parent_slot, Some(0));
+        assert_eq!(meta1.last_index, Some(shreds_per_slot as u64 - 1));
 
         // 2) Write to the second slot
         let shreds2 = shreds
             .drain(shreds_per_slot..2 * shreds_per_slot)
             .collect_vec();
         blockstore.insert_shreds(shreds2, None, false).unwrap();
-        let s2 = blockstore.meta(2).unwrap().unwrap();
-        assert!(s2.next_slots.is_empty());
+        let meta2 = blockstore.meta(2).unwrap().unwrap();
+        assert!(meta2.next_slots.is_empty());
         // Slot 2 is not trunk because slot 0 hasn't been inserted yet
-        assert!(!s2.is_connected);
-        assert_eq!(s2.parent_slot, Some(1));
-        assert_eq!(s2.last_index, Some(shreds_per_slot as u64 - 1));
+        assert!(!meta2.is_connected);
+        assert_eq!(meta2.parent_slot, Some(1));
+        assert_eq!(meta2.last_index, Some(shreds_per_slot as u64 - 1));
 
         // Check the first slot again, it should chain to the second slot,
         // but still isn't part of the trunk
-        let s1 = blockstore.meta(1).unwrap().unwrap();
-        assert_eq!(s1.next_slots, vec![2]);
-        assert!(!s1.is_connected);
-        assert_eq!(s1.parent_slot, Some(0));
-        assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
+        let meta1 = blockstore.meta(1).unwrap().unwrap();
+        assert_eq!(meta1.next_slots, vec![2]);
+        assert!(!meta1.is_connected);
+        assert_eq!(meta1.parent_slot, Some(0));
+        assert_eq!(meta1.last_index, Some(shreds_per_slot as u64 - 1));
 
         // 3) Write to the zeroth slot, check that every slot
         // is now part of the trunk
         blockstore.insert_shreds(shreds, None, false).unwrap();
-        for i in 0..3 {
-            let s = blockstore.meta(i).unwrap().unwrap();
+        for slot in 0..3 {
+            let meta = blockstore.meta(slot).unwrap().unwrap();
             // The last slot will not chain to any other slots
-            if i != 2 {
-                assert_eq!(s.next_slots, vec![i + 1]);
+            if slot != 2 {
+                assert_eq!(meta.next_slots, vec![slot + 1]);
             }
-            if i == 0 {
-                assert_eq!(s.parent_slot, Some(0));
+            if slot == 0 {
+                assert_eq!(meta.parent_slot, Some(0));
             } else {
-                assert_eq!(s.parent_slot, Some(i - 1));
+                assert_eq!(meta.parent_slot, Some(slot - 1));
             }
-            assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
-            assert!(s.is_connected);
+            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            assert!(meta.is_connected);
         }
     }
 
@@ -5437,25 +5437,25 @@ pub mod tests {
         blockstore.insert_shreds(slots, None, false).unwrap();
 
         // Check metadata
-        for i in 0..num_slots {
+        for slot in 0..num_slots {
             // If "i" is the index of a slot we just inserted, then next_slots should be empty
             // for slot "i" because no slots chain to that slot, because slot i + 1 is missing.
             // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
             // slots we just inserted will chain to that gap, so next_slots for that orphan slot
             // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
-            let s = blockstore.meta(i as u64).unwrap().unwrap();
-            if i % 2 == 0 {
-                assert_eq!(s.next_slots, vec![i as u64 + 1]);
-                assert_eq!(s.parent_slot, None);
+            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+            if slot % 2 == 0 {
+                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
+                assert_eq!(meta.parent_slot, None);
             } else {
-                assert!(s.next_slots.is_empty());
-                assert_eq!(s.parent_slot, Some(i - 1));
+                assert!(meta.next_slots.is_empty());
+                assert_eq!(meta.parent_slot, Some(slot - 1));
             }
 
-            if i == 0 {
-                assert!(s.is_connected);
+            if slot == 0 {
+                assert!(meta.is_connected);
             } else {
-                assert!(!s.is_connected);
+                assert!(!meta.is_connected);
             }
         }
 
@@ -5464,23 +5464,23 @@ pub mod tests {
             .insert_shreds(missing_slots, None, false)
             .unwrap();
 
-        for i in 0..num_slots {
+        for slot in 0..num_slots {
             // Check that all the slots chain correctly once the missing slots
             // have been filled
-            let s = blockstore.meta(i as u64).unwrap().unwrap();
-            if i != num_slots - 1 {
-                assert_eq!(s.next_slots, vec![i as u64 + 1]);
+            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+            if slot != num_slots - 1 {
+                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
             } else {
-                assert!(s.next_slots.is_empty());
+                assert!(meta.next_slots.is_empty());
             }
 
-            if i == 0 {
-                assert_eq!(s.parent_slot, Some(0));
+            if slot == 0 {
+                assert_eq!(meta.parent_slot, Some(0));
             } else {
-                assert_eq!(s.parent_slot, Some(i - 1));
+                assert_eq!(meta.parent_slot, Some(slot - 1));
             }
-            assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
-            assert!(s.is_connected);
+            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            assert!(meta.is_connected);
         }
     }
 
@@ -5513,29 +5513,26 @@ pub mod tests {
         }
 
         // Check metadata
-        for i in 0..num_slots {
-            let s = blockstore.meta(i as u64).unwrap().unwrap();
+        for slot in 0..num_slots {
+            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
             // The last slot will not chain to any other slots
-            if i as u64 != num_slots - 1 {
-                assert_eq!(s.next_slots, vec![i as u64 + 1]);
+            if slot as u64 != num_slots - 1 {
+                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
             } else {
-                assert!(s.next_slots.is_empty());
+                assert!(meta.next_slots.is_empty());
             }
 
-            if i == 0 {
-                assert_eq!(s.parent_slot, Some(0));
+            // Ensure that each slot has their parent correct
+            // Additionally, slot 0 should be the only connected slot
+            if slot == 0 {
+                assert_eq!(meta.parent_slot, Some(0));
+                assert!(meta.is_connected);
             } else {
-                assert_eq!(s.parent_slot, Some(i - 1));
+                assert_eq!(meta.parent_slot, Some(slot - 1));
+                assert!(!meta.is_connected);
             }
 
-            assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
-
-            // Other than slot 0, no slots should be part of the trunk
-            if i != 0 {
-                assert!(!s.is_connected);
-            } else {
-                assert!(s.is_connected);
-            }
+            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
         }
 
         // Iteratively finish every 3rd slot, and check that all slots up to and including
@@ -5545,26 +5542,26 @@ pub mod tests {
                 let shred = missing_shreds.remove(0);
                 blockstore.insert_shreds(vec![shred], None, false).unwrap();
 
-                for i in 0..num_slots {
-                    let s = blockstore.meta(i as u64).unwrap().unwrap();
-                    if i != num_slots - 1 {
-                        assert_eq!(s.next_slots, vec![i as u64 + 1]);
+                for slot in 0..num_slots {
+                    let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+                    if slot != num_slots - 1 {
+                        assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
                     } else {
-                        assert!(s.next_slots.is_empty());
+                        assert!(meta.next_slots.is_empty());
                     }
-                    if i <= slot_index as u64 + 3 {
-                        assert!(s.is_connected);
+                    if slot <= slot_index as u64 + 3 {
+                        assert!(meta.is_connected);
                     } else {
-                        assert!(!s.is_connected);
-                    }
-
-                    if i == 0 {
-                        assert_eq!(s.parent_slot, Some(0));
-                    } else {
-                        assert_eq!(s.parent_slot, Some(i - 1));
+                        assert!(!meta.is_connected);
                     }
 
-                    assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
+                    if slot == 0 {
+                        assert_eq!(meta.parent_slot, Some(0));
+                    } else {
+                        assert_eq!(meta.parent_slot, Some(slot - 1));
+                    }
+
+                    assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
                 }
             }
         }

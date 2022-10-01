@@ -1158,7 +1158,10 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    /// Adds a \[`from`, `to`\] range to delete to the given write batch
+    /// Adds a \[`from`, `to`\] range that deletes all entries between the `from` slot
+    /// and `to` slot inclusively.  If `from` slot and `to` slot are the same, then all
+    /// entries in that slot will be removed.
+    ///
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,

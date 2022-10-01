@@ -11,7 +11,6 @@ use {
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
-        rc::Rc,
         sync::Arc,
     },
 };
@@ -20,14 +19,14 @@ use {
 /// SanitizedTransaction
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeserializedPacket {
-    immutable_section: Rc<ImmutableDeserializedPacket>,
+    immutable_section: Arc<ImmutableDeserializedPacket>,
     pub forwarded: bool,
 }
 
 impl DeserializedPacket {
     pub fn from_immutable_section(immutable_section: ImmutableDeserializedPacket) -> Self {
         Self {
-            immutable_section: Rc::new(immutable_section),
+            immutable_section: Arc::new(immutable_section),
             forwarded: false,
         }
     }
@@ -51,12 +50,12 @@ impl DeserializedPacket {
         let immutable_section = ImmutableDeserializedPacket::new(packet, priority_details)?;
 
         Ok(Self {
-            immutable_section: Rc::new(immutable_section),
+            immutable_section: Arc::new(immutable_section),
             forwarded: false,
         })
     }
 
-    pub fn immutable_section(&self) -> &Rc<ImmutableDeserializedPacket> {
+    pub fn immutable_section(&self) -> &Arc<ImmutableDeserializedPacket> {
         &self.immutable_section
     }
 }
@@ -80,7 +79,7 @@ impl Ord for DeserializedPacket {
 /// to pick proper packets to add to the block.
 #[derive(Debug, Default)]
 pub struct UnprocessedPacketBatches {
-    pub packet_priority_queue: MinMaxHeap<Rc<ImmutableDeserializedPacket>>,
+    pub packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket>>,
     pub message_hash_to_transaction: HashMap<Hash, DeserializedPacket>,
     batch_limit: usize,
 }
@@ -164,41 +163,13 @@ impl UnprocessedPacketBatches {
         self.message_hash_to_transaction.iter_mut().map(|(_k, v)| v)
     }
 
-    /// Iterates DeserializedPackets in descending priority (max-first) order,
-    /// calls FnMut for each DeserializedPacket.
-    pub fn iter_desc<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut DeserializedPacket) -> bool,
-    {
-        let mut packet_priority_queue_clone = self.packet_priority_queue.clone();
-
-        for immutable_packet in packet_priority_queue_clone.drain_desc() {
-            match self
-                .message_hash_to_transaction
-                .entry(*immutable_packet.message_hash())
-            {
-                Entry::Vacant(_vacant_entry) => {
-                    panic!(
-                        "entry {} must exist to be consistent with `packet_priority_queue`",
-                        immutable_packet.message_hash()
-                    );
-                }
-                Entry::Occupied(mut occupied_entry) => {
-                    if !f(occupied_entry.get_mut()) {
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&mut DeserializedPacket) -> bool,
     {
         // TODO: optimize this only when number of packets
         // with outdated blockhash is high
-        let new_packet_priority_queue: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = self
+        let new_packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket>> = self
             .packet_priority_queue
             .drain()
             .filter(|immutable_packet| {
@@ -304,6 +275,12 @@ impl UnprocessedPacketBatches {
     pub fn capacity(&self) -> usize {
         self.packet_priority_queue.capacity()
     }
+
+    pub fn is_forwarded(&self, immutable_packet: &ImmutableDeserializedPacket) -> bool {
+        self.message_hash_to_transaction
+            .get(immutable_packet.message_hash())
+            .map_or(true, |p| p.forwarded)
+    }
 }
 
 pub fn deserialize_packets<'a>(
@@ -340,7 +317,6 @@ pub fn transaction_from_deserialized_packet(
     if votes_only && !deserialized_packet.is_simple_vote() {
         return None;
     }
-
     let tx = SanitizedTransaction::try_new(
         deserialized_packet.transaction().clone(),
         *deserialized_packet.message_hash(),

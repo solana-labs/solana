@@ -22,7 +22,14 @@ humantime = "2.0.1"
 log = "0.4.17"
 num-traits = "0.2"
 pretty-hex = "0.3.0"
-reqwest = { version = "0.11.12", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+reqwest = { version = "0.11.12", default-features = false, features = [
+	"blocking",
+	"brotli",
+	"deflate",
+	"gzip",
+	"rustls-tls",
+	"json"
+] }
 semver = "1.0.14"
 serde = "1.0.144"
 serde_derive = "1.0.103"
@@ -47,7 +54,7 @@ solana-tpu-client = { path = "../tpu-client", version = "=1.15.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 solana-version = { path = "../version", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-solana_rbpf = "=0.2.32"
+solana_rbpf = "=0.2.33"
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"

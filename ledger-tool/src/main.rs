@@ -32,7 +32,7 @@ use {
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-            LedgerColumnOptions, ShredStorageType,
+            LedgerColumnOptions, ShredStorageType, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -871,14 +871,11 @@ fn open_blockstore_with_temporary_primary_access(
 }
 
 fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once the
-    // rocksdb options can be constructed via load_options_file() as the
-    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
-    // could affect the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(
-        ledger_path,
-        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    ) {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // temporary use of MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES could
+    // affect the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES) {
         Some(s) => s,
         None => {
             warn!("{}", warn_message);
@@ -1277,10 +1274,6 @@ use jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
-/// The default size for data and coding shred column families in FIFO compaction.
-/// u64::MAX as the default value means it won't delete any files by default.
-const DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {

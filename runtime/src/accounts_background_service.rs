@@ -164,11 +164,11 @@ impl SnapshotRequestHandler {
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
-                    request_type: _request_type,
+                    request_type,
                 } = snapshot_request;
 
-                // we should not rely on the state of this validator until startup verification is complete
-                assert!(snapshot_root_bank.is_startup_verification_complete());
+                // we should not rely on the state of this validator until startup verification is complete (unless handling an EAH request)
+                assert!(snapshot_root_bank.is_startup_verification_complete() || request_type == SnapshotRequestType::EpochAccountsHash);
 
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
@@ -218,7 +218,6 @@ impl SnapshotRequestHandler {
                             use_bg_thread_pool: true,
                             check_hash,
                             ancestors: None,
-                            use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
                             store_detailed_debug_info_on_failure: false,
