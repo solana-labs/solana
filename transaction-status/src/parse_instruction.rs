@@ -1,6 +1,7 @@
 use {
     crate::{
         extract_memos::{spl_memo_id_v1, spl_memo_id_v3},
+        parse_address_lookup_table::parse_address_lookup_table,
         parse_associated_token::{parse_associated_token, spl_associated_token_id},
         parse_bpf_loader::{parse_bpf_loader, parse_bpf_upgradeable_loader},
         parse_stake::parse_stake,
@@ -23,6 +24,7 @@ use {
 };
 
 lazy_static! {
+    static ref ADDRESS_LOOKUP_PROGRAM_ID: Pubkey = solana_address_lookup_table_program::id();
     static ref ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey = spl_associated_token_id();
     static ref BPF_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader::id();
     static ref BPF_UPGRADEABLE_LOADER_PROGRAM_ID: Pubkey = solana_sdk::bpf_loader_upgradeable::id();
@@ -33,6 +35,10 @@ lazy_static! {
     static ref VOTE_PROGRAM_ID: Pubkey = solana_vote_program::id();
     static ref PARSABLE_PROGRAM_IDS: HashMap<Pubkey, ParsableProgram> = {
         let mut m = HashMap::new();
+        m.insert(
+            *ADDRESS_LOOKUP_PROGRAM_ID,
+            ParsableProgram::AddressLookupTable,
+        );
         m.insert(
             *ASSOCIATED_TOKEN_PROGRAM_ID,
             ParsableProgram::SplAssociatedTokenAccount,
@@ -89,6 +95,7 @@ pub struct ParsedInstructionEnum {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableProgram {
+    AddressLookupTable,
     SplAssociatedTokenAccount,
     SplMemo,
     SplToken,
@@ -108,6 +115,9 @@ pub fn parse(
         .get(program_id)
         .ok_or(ParseInstructionError::ProgramNotParsable)?;
     let parsed_json = match program_name {
+        ParsableProgram::AddressLookupTable => {
+            serde_json::to_value(parse_address_lookup_table(instruction, account_keys)?)?
+        }
         ParsableProgram::SplAssociatedTokenAccount => {
             serde_json::to_value(parse_associated_token(instruction, account_keys)?)?
         }
