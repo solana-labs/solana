@@ -5606,6 +5606,140 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_unconfirmed_duplicate_slots_and_lockouts_for_non_heaviest_fork() {
+        /*
+            Build fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /    \
+            slot 2    |
+               |      |
+            slot 3    |
+               |      |
+            slot 4    |
+                    slot 5
+        */
+        let forks = tr(0) / (tr(1) / (tr(2) / (tr(3) / (tr(4)))) / tr(5));
+
+        let mut vote_simulator = VoteSimulator::new(1);
+        vote_simulator.fill_bank_forks(forks, &HashMap::<Pubkey, Vec<u64>>::new(), true);
+        let (bank_forks, mut progress) = (vote_simulator.bank_forks, vote_simulator.progress);
+        let ledger_path = get_tmp_ledger_path!();
+        let blockstore = Arc::new(
+            Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
+        );
+        let mut tower = Tower::new_for_tests(8, 0.67);
+
+        // All forks have same weight so heaviest bank to vote/reset on should be the tip of
+        // the fork with the lower slot
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+        );
+        assert_eq!(vote_fork.unwrap(), 4);
+        assert_eq!(reset_fork.unwrap(), 4);
+
+        // Record the vote for 5
+        tower.record_bank_vote(
+            &bank_forks.read().unwrap().get(5).unwrap(),
+            &Pubkey::default(),
+        );
+
+        // 4 should be the heaviest slot, but should not be votable
+        // because of lockout. 5 is the heaviest slot on the same fork of the last vote.
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+        );
+        assert!(vote_fork.is_none());
+        assert_eq!(reset_fork.unwrap(), 5);
+
+        // Mark 5 as duplicate, 4 should be the heaviest slot, but should not be votable
+        // because of lockout
+        blockstore.store_duplicate_slot(5, vec![], vec![]).unwrap();
+        let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
+        let bank5_hash = bank_forks.read().unwrap().bank_hash(5).unwrap();
+        assert_ne!(bank5_hash, Hash::default());
+        let duplicate_state = DuplicateState::new_from_state(
+            5,
+            &gossip_duplicate_confirmed_slots,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            || progress.is_dead(5).unwrap_or(false),
+            || Some(bank5_hash),
+        );
+        let (ancestor_hashes_replay_update_sender, _ancestor_hashes_replay_update_receiver) =
+            unbounded();
+        check_slot_agrees_with_cluster(
+            5,
+            bank_forks.read().unwrap().root(),
+            &blockstore,
+            &mut duplicate_slots_tracker,
+            &mut epoch_slots_frozen_slots,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut DuplicateSlotsToRepair::default(),
+            &ancestor_hashes_replay_update_sender,
+            SlotStateUpdate::Duplicate(duplicate_state),
+        );
+
+        // 4 should be the heaviest slot, but should not be votable
+        // because of lockout. 5 is no longer valid due to it being a duplicate.
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+        );
+        assert!(vote_fork.is_none());
+        assert!(reset_fork.is_none());
+
+        // If slot 5 is marked as confirmed, it becomes the heaviest bank on same slot again
+        let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        gossip_duplicate_confirmed_slots.insert(5, bank5_hash);
+        let duplicate_confirmed_state = DuplicateConfirmedState::new_from_state(
+            bank5_hash,
+            || progress.is_dead(5).unwrap_or(false),
+            || Some(bank5_hash),
+        );
+        check_slot_agrees_with_cluster(
+            5,
+            bank_forks.read().unwrap().root(),
+            &blockstore,
+            &mut duplicate_slots_tracker,
+            &mut epoch_slots_frozen_slots,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut duplicate_slots_to_repair,
+            &ancestor_hashes_replay_update_sender,
+            SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
+        );
+        // The confirmed hash is detected in `progress`, which means
+        // it's confirmation on the replayed block. This means we have
+        // the right version of the block, so `duplicate_slots_to_repair`
+        // should be empty
+        assert!(duplicate_slots_to_repair.is_empty());
+        let (vote_fork, reset_fork) = run_compute_and_select_forks(
+            &bank_forks,
+            &mut progress,
+            &mut tower,
+            &mut vote_simulator.heaviest_subtree_fork_choice,
+            &mut vote_simulator.latest_validator_votes_for_frozen_banks,
+        );
+        // Should now pick 5 the heaviest fork from last vote again.
+        assert!(vote_fork.is_none());
+        assert_eq!(reset_fork.unwrap(), 5);
+    }
+
+    #[test]
     fn test_unconfirmed_duplicate_slots_and_lockouts() {
         /*
             Build fork structure:
@@ -6778,7 +6912,6 @@ pub(crate) mod tests {
         );
         let (heaviest_bank, heaviest_bank_on_same_fork) = heaviest_subtree_fork_choice
             .select_forks(&frozen_banks, tower, progress, ancestors, bank_forks);
-        assert!(heaviest_bank_on_same_fork.is_none());
         let SelectVoteAndResetForkResult {
             vote_bank,
             reset_bank,
