@@ -118,7 +118,7 @@ pub fn builtin_process_instruction(
     let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
     // Serialize entrypoint parameters with BPF ABI
-    let (mut parameter_bytes, _account_lengths) = serialize_parameters(
+    let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
             .transaction_context

@@ -224,16 +224,6 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let (parameter_bytes, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
-            true, // should_cap_ix_accounts
-        )
-        .unwrap();
-
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
@@ -278,11 +268,21 @@ fn run_program(name: &str) -> u64 {
             transaction_context
                 .set_return_data(caller, Vec::new())
                 .unwrap();
-            let mut parameter_bytes = parameter_bytes.clone();
+
+            let (parameter_bytes, regions, account_lengths) = serialize_parameters(
+                invoke_context.transaction_context,
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()
+                    .unwrap(),
+                true, // should_cap_ix_accounts
+            )
+            .unwrap();
+
             {
                 let mut vm = create_vm(
                     &verified_executable,
-                    parameter_bytes.as_slice_mut(),
+                    regions,
                     account_lengths.clone(),
                     invoke_context,
                 )

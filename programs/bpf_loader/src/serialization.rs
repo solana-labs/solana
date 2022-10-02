@@ -2,7 +2,11 @@
 
 use {
     byteorder::{ByteOrder, LittleEndian},
-    solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
+    solana_rbpf::{
+        aligned_memory::AlignedMemory,
+        ebpf::{HOST_ALIGN, MM_INPUT_START},
+        memory_region::MemoryRegion,
+    },
     solana_sdk::{
         bpf_loader_deprecated,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, NON_DUP_MARKER},
@@ -29,7 +33,7 @@ pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     should_cap_ix_accounts: bool,
-) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<usize>), InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
     if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
@@ -66,7 +70,7 @@ pub fn serialize_parameters(
     } else {
         serialize_parameters_aligned(transaction_context, instruction_context, accounts)
     }
-    .map(|buffer| (buffer, account_lengths))
+    .map(|(buffer, regions)| (buffer, regions, account_lengths))
 }
 
 pub fn deserialize_parameters(
@@ -100,7 +104,7 @@ fn serialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
-) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for account in &accounts {
@@ -154,7 +158,8 @@ fn serialize_parameters_unaligned(
         );
     }
 
-    Ok(v)
+    let regions = vec![MemoryRegion::new_writable(v.as_slice_mut(), MM_INPUT_START)];
+    Ok((v, regions))
 }
 
 pub fn deserialize_parameters_unaligned(
@@ -211,7 +216,7 @@ fn serialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
-) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for account in &accounts {
@@ -281,7 +286,9 @@ fn serialize_parameters_aligned(
                 .as_ref(),
         );
     }
-    Ok(v)
+
+    let regions = vec![MemoryRegion::new_writable(v.as_slice_mut(), MM_INPUT_START)];
+    Ok((v, regions))
 }
 
 pub fn deserialize_parameters_aligned(
@@ -510,7 +517,7 @@ mod tests {
                 continue;
             }
 
-            let (mut serialized, _account_lengths) = serialization_result.unwrap();
+            let (mut serialized, _regions, _account_lengths) = serialization_result.unwrap();
             let (de_program_id, de_accounts, de_instruction_data) =
                 unsafe { deserialize(serialized.as_slice_mut().first_mut().unwrap() as *mut u8) };
             assert_eq!(de_program_id, &program_id);
@@ -650,7 +657,7 @@ mod tests {
 
         // check serialize_parameters_aligned
 
-        let (mut serialized, account_lengths) = serialize_parameters(
+        let (mut serialized, _regions, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
             true,
@@ -726,7 +733,7 @@ mod tests {
             .borrow_mut()
             .set_owner(bpf_loader_deprecated::id());
 
-        let (mut serialized, account_lengths) = serialize_parameters(
+        let (mut serialized, _regions, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
             true,
