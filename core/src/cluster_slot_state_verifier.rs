@@ -778,6 +778,25 @@ pub(crate) fn check_slot_agrees_with_cluster(
                 return;
             }
         }
+
+        datapoint_info!(
+            "duplicate_confirmed",
+            ("slot", slot, i64),
+            (
+                "duplicate_confirmed_hash",
+                state.duplicate_confirmed_hash.to_string(),
+                String
+            ),
+            (
+                "my_hash",
+                state
+                    .bank_status
+                    .bank_hash()
+                    .unwrap_or_default()
+                    .to_string(),
+                String
+            ),
+        );
     }
 
     if let SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) = &slot_state_update {
