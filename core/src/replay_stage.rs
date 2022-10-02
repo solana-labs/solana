@@ -5630,7 +5630,7 @@ pub(crate) mod tests {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
-        let mut tower = Tower::new_for_tests(8, 0.67);
+        let mut tower = Tower::new_for_tests(8, 2.0 / 3.0);
 
         // All forks have same weight so heaviest bank to vote/reset on should be the tip of
         // the fork with the lower slot
@@ -5651,7 +5651,7 @@ pub(crate) mod tests {
         );
 
         // 4 should be the heaviest slot, but should not be votable
-        // because of lockout. 5 is the heaviest slot on the same fork of the last vote.
+        // because of lockout. 5 is the heaviest slot on the same fork as the last vote.
         let (vote_fork, reset_fork) = run_compute_and_select_forks(
             &bank_forks,
             &mut progress,
@@ -5660,10 +5660,9 @@ pub(crate) mod tests {
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
         );
         assert!(vote_fork.is_none());
-        assert_eq!(reset_fork.unwrap(), 5);
+        assert_eq!(reset_fork, Some(5));
 
-        // Mark 5 as duplicate, 4 should be the heaviest slot, but should not be votable
-        // because of lockout
+        // Mark 5 as duplicate
         blockstore.store_duplicate_slot(5, vec![], vec![]).unwrap();
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
@@ -5734,7 +5733,7 @@ pub(crate) mod tests {
             &mut vote_simulator.heaviest_subtree_fork_choice,
             &mut vote_simulator.latest_validator_votes_for_frozen_banks,
         );
-        // Should now pick 5 the heaviest fork from last vote again.
+        // Should now pick 5 as the heaviest fork from last vote again.
         assert!(vote_fork.is_none());
         assert_eq!(reset_fork.unwrap(), 5);
     }
