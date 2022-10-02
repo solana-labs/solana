@@ -854,16 +854,19 @@ impl HeaviestSubtreeForkChoice {
         );
     }
 
+    // If the last voted fork has an invalid ancestor, this method will return
+    // an invalid heaviest slot. This is intentional because validators should
+    // continue building on an invalid fork in case it was already confirmed the
+    // cluster and should be marked as valid.
     fn heaviest_slot_on_same_voted_fork(&self, tower: &Tower) -> Option<SlotHashKey> {
         tower
             .last_voted_slot_hash()
             .and_then(|last_voted_slot_hash| {
-                match self.is_candidate(&last_voted_slot_hash) {
-                    Some(true) => self.best_slot(&last_voted_slot_hash),
-                    Some(false) => None,
+                match self.best_slot(&last_voted_slot_hash) {
+                    Some(best_slot) => Some(best_slot),
                     None => {
                         if !tower.is_stray_last_vote() {
-                            // Unless last vote is stray and stale, self.is_candidate(last_voted_slot_hash) must return
+                            // Unless last vote is stray and stale, self.best_slot(last_voted_slot_hash) must return
                             // Some(_), justifying to panic! here.
                             // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
                             // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
