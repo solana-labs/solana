@@ -9625,6 +9625,11 @@ pub mod tests {
         SortedStorages::new(input)
     }
 
+    /// helper method. Refactoring will soon make this comparison more complicated.
+    fn assert_scan(result: Vec<BinnedHashData>, expected: Vec<BinnedHashData>) {
+        assert_eq!(result, expected);
+    }
+
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
         solana_logger::setup();
@@ -9646,7 +9651,7 @@ pub mod tests {
                 false,
             )
             .unwrap();
-        assert_eq!(result, vec![vec![raw_expected.clone()]]);
+        assert_scan(result, vec![vec![raw_expected.clone()]]);
 
         let bins = 2;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -9667,7 +9672,7 @@ pub mod tests {
         expected[0].push(raw_expected[1].clone());
         expected[bins - 1].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected[3].clone());
-        assert_eq!(result, vec![expected]);
+        assert_scan(result, vec![expected]);
 
         let bins = 4;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -9688,7 +9693,7 @@ pub mod tests {
         expected[1].push(raw_expected[1].clone());
         expected[2].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected[3].clone());
-        assert_eq!(result, vec![expected]);
+        assert_scan(result, vec![expected]);
 
         let bins = 256;
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -9709,7 +9714,7 @@ pub mod tests {
         expected[127].push(raw_expected[1].clone());
         expected[128].push(raw_expected[2].clone());
         expected[bins - 1].push(raw_expected.last().unwrap().clone());
-        assert_eq!(result, vec![expected]);
+        assert_scan(result, vec![expected]);
     }
 
     #[test]
@@ -9768,7 +9773,7 @@ pub mod tests {
         let mut expected = vec![Vec::new(); half_bins];
         expected[0].push(raw_expected[0].clone());
         expected[0].push(raw_expected[1].clone());
-        assert_eq!(result, vec![expected]);
+        assert_scan(result, vec![expected]);
 
         // just the second bin of 2
         let accounts_db = AccountsDb::new_single_for_tests();
@@ -9789,7 +9794,7 @@ pub mod tests {
         let starting_bin_index = 0;
         expected[starting_bin_index].push(raw_expected[2].clone());
         expected[starting_bin_index].push(raw_expected[3].clone());
-        assert_eq!(result, vec![expected]);
+        assert_scan(result, vec![expected]);
 
         // 1 bin at a time of 4
         let bins = 4;
@@ -9810,7 +9815,7 @@ pub mod tests {
                 .unwrap();
             let mut expected = vec![Vec::new(); 1];
             expected[0].push(expected_item.clone());
-            assert_eq!(result, vec![expected]);
+            assert_scan(result, vec![expected]);
         }
 
         let bins = 256;
@@ -10017,13 +10022,13 @@ pub mod tests {
             &HashStats::default(),
         );
         assert_eq!(calls.load(Ordering::Relaxed), 1);
-        assert_eq!(
+        assert_scan(
             result,
             vec![vec![vec![CalculateHashIntermediate::new(
                 Hash::default(),
                 expected,
-                pubkey
-            )]]]
+                pubkey,
+            )]]],
         );
     }
 
