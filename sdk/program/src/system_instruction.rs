@@ -389,8 +389,10 @@ pub enum SystemInstruction {
 ///
 /// # Examples
 ///
-/// These examples create a new account, allocate some space, transfer it the
-/// minimum lamports for rent exemption, and assign it to the system program.
+/// These examples use a single invocation of
+/// [`SystemInstruction::CreateAccount`] to create a new account, allocate some
+/// space, transfer it the minimum lamports for rent exemption, and assign it to
+/// the system program,
 ///
 /// The `payer` and `new_account` are signers.
 ///
@@ -564,10 +566,6 @@ pub fn create_account_with_seed(
 ///
 /// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
 /// [invoked]: crate::program::invoke
-///
-/// Account creation typically involves three steps: [`allocate`] space,
-/// [`transfer`] lamports for rent, [`assign`] to its owning program. The
-/// [`create_account`] function does all three at once.
 ///
 /// # Required signers
 ///
@@ -763,10 +761,6 @@ pub fn assign_with_seed(
 ///
 /// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
 /// [invoked]: crate::program::invoke
-///
-/// Account creation typically involves three steps: [`allocate`] space,
-/// [`transfer`] lamports for rent, [`assign`] to its owning program. The
-/// [`create_account`] function does all three at once.
 ///
 /// # Required signers
 ///
@@ -969,9 +963,8 @@ pub fn transfer_with_seed(
 /// [`Transaction`]: https://docs.rs/solana-sdk/latest/solana_sdk/transaction/struct.Transaction.html
 /// [invoked]: crate::program::invoke
 ///
-/// Account creation typically involves three steps: [`allocate`] space,
-/// [`transfer`] lamports for rent, [`assign`] to its owning program. The
-/// [`create_account`] function does all three at once.
+/// The transaction will fail if the account already has size greater than 0,
+/// or if the requested size is greater than [`MAX_PERMITTED_DATA_LENGTH`].
 ///
 /// # Required signers
 ///
@@ -980,7 +973,7 @@ pub fn transfer_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assigns the account to another program.
+/// balance for rent exemption, and assign the account to another program.
 ///
 /// The `payer` and `new_account` are signers.
 ///
