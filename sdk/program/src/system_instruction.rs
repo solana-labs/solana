@@ -8,11 +8,10 @@
 //!
 //! Account creation typically involves three steps: [`allocate`] space,
 //! [`transfer`] lamports for rent, [`assign`] to its owning program. The
-//! [`create_account`] function does all three at once. All accounts must
-//! contain enough lamports to pay [rent], or to be [rent exempt], or else they
-//! will be deleted at the end of the slot.
+//! [`create_account`] function does all three at once. All new accounts must
+//! contain enough lamports to be [rent exempt], or else the creation
+//! instruction will fail.
 //!
-//! [rent]: https://docs.solana.com/implemented-proposals/rent
 //! [rent exempt]: https://docs.solana.com/developing/programming-model/accounts#rent-exemption
 //!
 //! The accounts created by the system program can either be user-controlled,
@@ -177,7 +176,7 @@ pub fn instruction_to_nonce_error(
     }
 }
 
-/// Maximum permitted size of data (10 MiB).
+/// Maximum permitted size of account data (10 MiB).
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
 /// Maximum permitted size of new allocations per transaction, in bytes.
@@ -577,7 +576,7 @@ pub fn create_account_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assigns the account to another program.
+/// balance for rent exemption, and assign the account to another program.
 ///
 /// The `payer` and `new_account` are signers.
 ///
@@ -776,7 +775,7 @@ pub fn assign_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assigns the account to another program.
+/// balance for rent exemption, and assign the account to another program.
 ///
 /// The `payer` and `new_account` are signers.
 ///
