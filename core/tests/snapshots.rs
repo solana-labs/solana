@@ -591,6 +591,16 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
             snapshot_test_config
                 .bank_forks
                 .set_root(current_bank.slot(), &request_sender, None);
+
+            // Since the accounts background services are not runnning, EpochAccountsHash
+            // calculation requests will not be handled. To prevent banks from hanging during
+            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Invalid.
+            current_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_invalid_for_tests();
         }
 
         let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
