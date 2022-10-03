@@ -685,12 +685,31 @@ fn test_bank_forks_incremental_snapshot(
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
+    let pending_accounts_package = PendingAccountsPackage::default();
+    let exit = Arc::new(AtomicBool::new(false));
+    let node_id = Arc::new(Keypair::new());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
+        Arc::clone(&node_id),
+        SocketAddrSpace::Unspecified,
+    ));
+    let accounts_hash_verifier = AccountsHashVerifier::new(
+        Arc::clone(&pending_accounts_package),
+        None,
+        &exit,
+        &cluster_info,
+        None,
+        false,
+        0,
+        Some(snapshot_test_config.snapshot_config.clone()),
+    );
+
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender);
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        pending_accounts_package,
     };
 
     let mut last_full_snapshot_slot = None;
@@ -761,6 +780,8 @@ fn test_bank_forks_incremental_snapshot(
             .unwrap();
         }
     }
+    exit.store(true, Ordering::Relaxed);
+    accounts_hash_verifier.join().unwrap();
 }
 
 fn make_full_snapshot_archive(
