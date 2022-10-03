@@ -302,8 +302,13 @@ pub fn create_vm<'a, 'b>(
     let mut heap =
         AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
-    let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;
+    let vm = EbpfVm::new(
+        program,
+        invoke_context,
+        heap.as_slice_mut(),
+        vec![parameter_region],
+    )?;
+    syscalls::bind_syscall_context_objects(invoke_context, heap, orig_account_lengths)?;
     Ok(vm)
 }
 
@@ -1563,7 +1568,8 @@ mod tests {
             )
             .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        let mut vm = EbpfVm::new(&verified_executable, &mut [], vec![input_region]).unwrap();
+        let mut vm =
+            EbpfVm::new(&verified_executable, &mut (), &mut [], vec![input_region]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();

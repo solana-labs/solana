@@ -23,8 +23,7 @@ use {
         ebpf::{self, HOST_ALIGN},
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
-        verifier::RequisiteVerifier,
-        vm::{EbpfVm, ProgramResult, SyscallRegistry},
+        vm::{ProgramResult, SyscallRegistry},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -294,7 +293,6 @@ pub fn register_syscalls(
 }
 
 pub fn bind_syscall_context_objects<'a, 'b>(
-    vm: &mut EbpfVm<'a, RequisiteVerifier, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
     heap: AlignedMemory<HOST_ALIGN>,
     orig_account_lengths: Vec<usize>,
@@ -321,8 +319,6 @@ pub fn bind_syscall_context_objects<'a, 'b>(
             Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
         )
         .map_err(SyscallError::InstructionError)?;
-
-    vm.bind_syscall_context_object(invoke_context);
 
     Ok(())
 }
