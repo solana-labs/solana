@@ -2906,11 +2906,13 @@ impl ReplayStage {
     /// reasons.
     ///
     /// If `heaviest_bank_on_same_voted_fork` is `None` due to that fork no
-    /// longer being valid to vote on. It's possible that a validator will not
+    /// longer being valid to vote on, it's possible that a validator will not
     /// be able to reset away from the invalid fork that they last voted on. To
     /// resolve this scenario, validators need to wait until they can create a
-    /// switch proof for another fork or until the invalid fork to be marked
-    /// valid again because it was confirmed by the cluster.
+    /// switch proof for another fork or until the invalid fork is be marked
+    /// valid again if it was confirmed by the cluster.
+    /// Until this is resolved, leaders will build each of their
+    /// blocks from the last reset bank on the invalid fork.
     pub fn select_vote_and_reset_forks(
         heaviest_bank: &Arc<Bank>,
         // Should only be None if there was no previous vote
