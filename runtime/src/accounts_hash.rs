@@ -1,5 +1,6 @@
 use {
     crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, rent_collector::RentCollector},
+    core::ops::Range,
     log::*,
     rayon::prelude::*,
     solana_measure::measure::Measure,
@@ -689,6 +690,55 @@ impl AccountsHash {
         balance
             .try_into()
             .expect("overflow is detected while summing capitalization")
+    }
+
+    /// return references to cache hash data, grouped by bin, sourced from 'sorted_data_by_pubkey',
+    /// which is probably a mmapped file.
+    #[allow(dead_code)]
+    fn get_binned_data<'a>(
+        sorted_data_by_pubkey: &'a Vec<&'a [CalculateHashIntermediate]>,
+        bins: usize,
+        bin_range: &Range<usize>,
+    ) -> Vec<Vec<&'a [CalculateHashIntermediate]>> {
+        // get slices per bin from each slice
+        use crate::pubkey_bins::PubkeyBinCalculator24;
+        let binner = PubkeyBinCalculator24::new(bins);
+        sorted_data_by_pubkey
+            .par_iter()
+            .map(|all_bins| {
+                let mut last_start_index = 0;
+                let mut result = Vec::with_capacity(bin_range.len());
+                let mut current_bin = bin_range.start;
+                let max_inclusive = all_bins.len();
+                for i in 0..=max_inclusive {
+                    let this_bin = if i != max_inclusive {
+                        let entry = &all_bins[i];
+                        let this_bin = binner.bin_from_pubkey(&entry.pubkey);
+                        if this_bin == current_bin {
+                            // this pk is in the same bin as we're currently investigating, so keep iterating
+                            continue;
+                        }
+                        this_bin
+                    } else {
+                        // we exhausted the source data, so 'this bin' is now the end (exclusive) bin
+                        // this case exists to handle the +1 case
+                        bin_range.end
+                    };
+                    // we found the first pubkey in the bin after the bin we were investigating
+                    // or we passed the end of the input list.
+                    // So, the bin we were investigating is now complete.
+                    result.push(&all_bins[last_start_index..i]);
+                    last_start_index = i;
+                    ((current_bin + 1)..this_bin).for_each(|_| {
+                        // the source data could contain a pubey from bin 1, then bin 5, skipping the bins in between.
+                        // In that case, fill in 2..5 with empty
+                        result.push(&all_bins[0..0]); // empty slice
+                    });
+                    current_bin = this_bin;
+                }
+                result
+            })
+            .collect::<Vec<_>>()
     }
 
     fn de_dup_and_eliminate_zeros<'a>(
@@ -2064,5 +2114,43 @@ pub mod tests {
             &mut HashStats::default(),
             2, // accounts above are in 2 groups
         );
+    }
+
+    #[test]
+    fn test_get_binned_data() {
+        let data = [CalculateHashIntermediate::new(
+            Hash::default(),
+            1,
+            Pubkey::new(&[1u8; 32]),
+        )];
+        let data2 = vec![&data[..]];
+        let bins = 1;
+        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        assert_eq!(result, vec![vec![&data[..]]]);
+        let bins = 2;
+        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        assert_eq!(result, vec![vec![&data[..], &data[0..0]]]);
+        let data = [CalculateHashIntermediate::new(
+            Hash::default(),
+            1,
+            Pubkey::new(&[255u8; 32]),
+        )];
+        let data2 = vec![&data[..]];
+        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
+        let data = [
+            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[254u8; 32])),
+            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[255u8; 32])),
+        ];
+        let data2 = vec![&data[..]];
+        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
+        let data = [
+            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[1u8; 32])),
+            CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[255u8; 32])),
+        ];
+        let data2 = vec![&data[..]];
+        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        assert_eq!(result, vec![vec![&data[0..1], &data[1..2]]]);
     }
 }
