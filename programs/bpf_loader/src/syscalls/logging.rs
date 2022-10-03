@@ -4,7 +4,7 @@ declare_syscall!(
     /// Log a user's info message
     SyscallLog,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         addr: u64,
         len: u64,
         _arg3: u64,
@@ -12,10 +12,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context
             .get_compute_budget()
             .syscall_base_cost
@@ -41,7 +37,7 @@ declare_syscall!(
     /// Log 5 64-bit values
     SyscallLogU64,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         arg1: u64,
         arg2: u64,
         arg3: u64,
@@ -49,10 +45,6 @@ declare_syscall!(
         arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context.get_compute_budget().log_64_units;
         invoke_context.get_compute_meter().consume(cost)?;
 
@@ -71,7 +63,7 @@ declare_syscall!(
     /// Log current compute consumption
     SyscallLogBpfComputeUnits,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         _arg1: u64,
         _arg2: u64,
         _arg3: u64,
@@ -79,10 +71,6 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context.get_compute_budget().syscall_base_cost;
         invoke_context.get_compute_meter().consume(cost)?;
 
@@ -99,7 +87,7 @@ declare_syscall!(
     /// Log 5 64-bit values
     SyscallLogPubkey,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         pubkey_addr: u64,
         _arg2: u64,
         _arg3: u64,
@@ -107,10 +95,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
         invoke_context.get_compute_meter().consume(cost)?;
 
@@ -128,7 +112,7 @@ declare_syscall!(
     /// Log data handling
     SyscallLogData,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         addr: u64,
         len: u64,
         _arg3: u64,
@@ -136,10 +120,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let budget = invoke_context.get_compute_budget();
 
         invoke_context

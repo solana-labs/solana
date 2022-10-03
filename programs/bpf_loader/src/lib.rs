@@ -1351,7 +1351,10 @@ impl Executor for BpfExecutor {
                 let mut trace_buffer = Vec::<u8>::new();
                 let analysis =
                     Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
-                vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
+                vm.get_program_environment()
+                    .tracer
+                    .write(&mut trace_buffer, &analysis)
+                    .unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }

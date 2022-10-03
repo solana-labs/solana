@@ -1,9 +1,6 @@
 use {super::*, crate::declare_syscall};
 
-fn mem_op_consume<'a, 'b>(
-    invoke_context: &Ref<&'a mut InvokeContext<'b>>,
-    n: u64,
-) -> Result<(), EbpfError> {
+fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let cost = compute_budget
         .mem_op_base_cost
@@ -15,7 +12,7 @@ declare_syscall!(
     /// memcpy
     SyscallMemcpy,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         dst_addr: u64,
         src_addr: u64,
         n: u64,
@@ -23,11 +20,7 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        mem_op_consume(&invoke_context, n)?;
+        mem_op_consume(invoke_context, n)?;
 
         let do_check_physical_overlapping = invoke_context
             .feature_set
@@ -72,7 +65,7 @@ declare_syscall!(
     /// memmove
     SyscallMemmove,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         dst_addr: u64,
         src_addr: u64,
         n: u64,
@@ -80,11 +73,7 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        mem_op_consume(&invoke_context, n)?;
+        mem_op_consume(invoke_context, n)?;
 
         let dst = translate_slice_mut::<u8>(
             memory_mapping,
@@ -111,7 +100,7 @@ declare_syscall!(
     /// memcmp
     SyscallMemcmp,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         s1_addr: u64,
         s2_addr: u64,
         n: u64,
@@ -119,11 +108,7 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        mem_op_consume(&invoke_context, n)?;
+        mem_op_consume(invoke_context, n)?;
 
         let s1 = translate_slice::<u8>(
             memory_mapping,
@@ -173,7 +158,7 @@ declare_syscall!(
     /// memset
     SyscallMemset,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         s_addr: u64,
         c: u64,
         n: u64,
@@ -181,11 +166,7 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-        mem_op_consume(&invoke_context, n)?;
+        mem_op_consume(invoke_context, n)?;
 
         let s = translate_slice_mut::<u8>(
             memory_mapping,

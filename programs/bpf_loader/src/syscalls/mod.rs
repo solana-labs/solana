@@ -24,7 +24,7 @@ use {
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         verifier::RequisiteVerifier,
-        vm::{EbpfVm, ProgramResult, SyscallObject, SyscallRegistry},
+        vm::{EbpfVm, ProgramResult, SyscallRegistry},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -56,7 +56,7 @@ use {
     },
     std::{
         alloc::Layout,
-        cell::{Ref, RefCell, RefMut},
+        cell::RefCell,
         mem::{align_of, size_of},
         rc::Rc,
         slice::from_raw_parts_mut,
@@ -144,9 +144,9 @@ impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
 }
 
 macro_rules! register_feature_gated_syscall {
-    ($syscall_registry:expr, $is_feature_active:expr, $name:expr, $init:expr, $call:expr $(,)?) => {
+    ($syscall_registry:expr, $is_feature_active:expr, $name:expr, $call:expr $(,)?) => {
         if $is_feature_active {
-            $syscall_registry.register_syscall_by_name($name, $init, $call)
+            $syscall_registry.register_syscall_by_name($name, $call)
         } else {
             Ok(())
         }
@@ -171,72 +171,43 @@ pub fn register_syscalls(
     let mut syscall_registry = SyscallRegistry::default();
 
     // Abort
-    syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::init, SyscallAbort::call)?;
+    syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::call)?;
 
     // Panic
-    syscall_registry.register_syscall_by_name(
-        b"sol_panic_",
-        SyscallPanic::init,
-        SyscallPanic::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_panic_", SyscallPanic::call)?;
 
     // Logging
-    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::init, SyscallLog::call)?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_64_",
-        SyscallLogU64::init,
-        SyscallLogU64::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_compute_units_",
-        SyscallLogBpfComputeUnits::init,
-        SyscallLogBpfComputeUnits::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_pubkey",
-        SyscallLogPubkey::init,
-        SyscallLogPubkey::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
 
     // Program defined addresses (PDA)
     syscall_registry.register_syscall_by_name(
         b"sol_create_program_address",
-        SyscallCreateProgramAddress::init,
         SyscallCreateProgramAddress::call,
     )?;
     syscall_registry.register_syscall_by_name(
         b"sol_try_find_program_address",
-        SyscallTryFindProgramAddress::init,
         SyscallTryFindProgramAddress::call,
     )?;
 
     // Sha256
-    syscall_registry.register_syscall_by_name(
-        b"sol_sha256",
-        SyscallSha256::init,
-        SyscallSha256::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
 
     // Keccak256
-    syscall_registry.register_syscall_by_name(
-        b"sol_keccak256",
-        SyscallKeccak256::init,
-        SyscallKeccak256::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
 
     // Secp256k1 Recover
-    syscall_registry.register_syscall_by_name(
-        b"sol_secp256k1_recover",
-        SyscallSecp256k1Recover::init,
-        SyscallSecp256k1Recover::call,
-    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
 
     // Blake3
     register_feature_gated_syscall!(
         syscall_registry,
         blake3_syscall_enabled,
         b"sol_blake3",
-        SyscallBlake3::init,
         SyscallBlake3::call,
     )?;
 
@@ -247,125 +218,77 @@ pub fn register_syscalls(
         syscall_registry,
         curve25519_syscall_enabled,
         b"sol_curve_validate_point",
-        SyscallCurvePointValidation::init,
         SyscallCurvePointValidation::call,
     )?;
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
         b"sol_curve_group_op",
-        SyscallCurveGroupOps::init,
         SyscallCurveGroupOps::call,
     )?;
 
     // Sysvars
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_clock_sysvar",
-        SyscallGetClockSysvar::init,
-        SyscallGetClockSysvar::call,
-    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
     syscall_registry.register_syscall_by_name(
         b"sol_get_epoch_schedule_sysvar",
-        SyscallGetEpochScheduleSysvar::init,
         SyscallGetEpochScheduleSysvar::call,
     )?;
     register_feature_gated_syscall!(
         syscall_registry,
         !disable_fees_sysvar,
         b"sol_get_fees_sysvar",
-        SyscallGetFeesSysvar::init,
         SyscallGetFeesSysvar::call,
     )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_rent_sysvar",
-        SyscallGetRentSysvar::init,
-        SyscallGetRentSysvar::call,
-    )?;
+    syscall_registry
+        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
     // Memory ops
-    syscall_registry.register_syscall_by_name(
-        b"sol_memcpy_",
-        SyscallMemcpy::init,
-        SyscallMemcpy::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memmove_",
-        SyscallMemmove::init,
-        SyscallMemmove::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memcmp_",
-        SyscallMemcmp::init,
-        SyscallMemcmp::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_memset_",
-        SyscallMemset::init,
-        SyscallMemset::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
+    syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
 
     if is_abi_v2 {
         // Set account attributes
         syscall_registry.register_syscall_by_name(
             b"sol_set_account_attributes",
-            SyscallSetAccountProperties::init,
             SyscallSetAccountProperties::call,
         )?;
     } else {
         // Processed sibling instructions
         syscall_registry.register_syscall_by_name(
             b"sol_get_processed_sibling_instruction",
-            SyscallGetProcessedSiblingInstruction::init,
             SyscallGetProcessedSiblingInstruction::call,
         )?;
 
         // Stack height
-        syscall_registry.register_syscall_by_name(
-            b"sol_get_stack_height",
-            SyscallGetStackHeight::init,
-            SyscallGetStackHeight::call,
-        )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
 
         // Return data
-        syscall_registry.register_syscall_by_name(
-            b"sol_set_return_data",
-            SyscallSetReturnData::init,
-            SyscallSetReturnData::call,
-        )?;
-        syscall_registry.register_syscall_by_name(
-            b"sol_get_return_data",
-            SyscallGetReturnData::init,
-            SyscallGetReturnData::call,
-        )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
 
         // Cross-program invocation
-        syscall_registry.register_syscall_by_name(
-            b"sol_invoke_signed_c",
-            SyscallInvokeSignedC::init,
-            SyscallInvokeSignedC::call,
-        )?;
-        syscall_registry.register_syscall_by_name(
-            b"sol_invoke_signed_rust",
-            SyscallInvokeSignedRust::init,
-            SyscallInvokeSignedRust::call,
-        )?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+        syscall_registry
+            .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
         // Memory allocator
         register_feature_gated_syscall!(
             syscall_registry,
             !disable_deploy_of_alloc_free_syscall,
             b"sol_alloc_free_",
-            SyscallAllocFree::init,
             SyscallAllocFree::call,
         )?;
     }
 
     // Log data
-    syscall_registry.register_syscall_by_name(
-        b"sol_log_data",
-        SyscallLogData::init,
-        SyscallLogData::call,
-    )?;
+    syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
 
     Ok(syscall_registry)
 }
@@ -399,8 +322,7 @@ pub fn bind_syscall_context_objects<'a, 'b>(
         )
         .map_err(SyscallError::InstructionError)?;
 
-    let invoke_context = Rc::new(RefCell::new(invoke_context));
-    vm.bind_syscall_context_objects(invoke_context)?;
+    vm.bind_syscall_context_object(invoke_context);
 
     Ok(())
 }
@@ -523,26 +445,15 @@ fn translate_string_and_do(
     }
 }
 
-type SyscallContext<'a, 'b> = Rc<RefCell<&'a mut InvokeContext<'b>>>;
-
 #[macro_export]
 macro_rules! declare_syscall {
     ($(#[$attr:meta])* $name:ident, $inner_call:item) => {
         $(#[$attr])*
-        pub struct $name<'a, 'b> {
-            pub(crate) invoke_context: SyscallContext<'a, 'b>,
-        }
-        impl<'a, 'b> $name<'a, 'b> {
-            pub fn init(
-                invoke_context: SyscallContext<'a, 'b>,
-            ) -> Box<(dyn SyscallObject + 'a)> {
-                Box::new(Self { invoke_context })
-            }
+        pub struct $name {}
+        impl $name {
             $inner_call
-        }
-        impl<'a, 'b> SyscallObject for $name<'a, 'b> {
-            fn call(
-                &mut self,
+            pub fn call(
+                invoke_context: &mut InvokeContext,
                 arg_a: u64,
                 arg_b: u64,
                 arg_c: u64,
@@ -551,8 +462,9 @@ macro_rules! declare_syscall {
                 memory_mapping: &mut MemoryMapping,
                 result: &mut ProgramResult,
             ) {
-                let converted_result: ProgramResult =
-                    self.inner_call(arg_a, arg_b, arg_c, arg_d, arg_e, memory_mapping).into();
+                let converted_result: ProgramResult = Self::inner_call(
+                    invoke_context, arg_a, arg_b, arg_c, arg_d, arg_e, memory_mapping,
+                ).into();
                 *result = converted_result;
             }
         }
@@ -566,7 +478,7 @@ declare_syscall!(
     /// Causes the BPF program to be halted immediately
     SyscallAbort,
     fn inner_call(
-        &mut self,
+        _invoke_context: &mut InvokeContext,
         _arg1: u64,
         _arg2: u64,
         _arg3: u64,
@@ -574,9 +486,6 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        self.invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         Err(SyscallError::Abort.into())
     }
 );
@@ -586,7 +495,7 @@ declare_syscall!(
     /// Causes the BPF program to be halted immediately
     SyscallPanic,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         file: u64,
         len: u64,
         line: u64,
@@ -594,10 +503,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         invoke_context.get_compute_meter().consume(len)?;
 
         translate_string_and_do(
@@ -620,7 +525,7 @@ declare_syscall!(
     /// to the VM to use for enforcement.
     SyscallAllocFree,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         size: u64,
         free_addr: u64,
         _arg3: u64,
@@ -628,10 +533,6 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let allocator = invoke_context
             .get_allocator()
             .map_err(SyscallError::InstructionError)?;
@@ -703,7 +604,7 @@ declare_syscall!(
     /// Create a program address
     SyscallCreateProgramAddress,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         seeds_addr: u64,
         seeds_len: u64,
         program_id_addr: u64,
@@ -711,10 +612,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
@@ -751,7 +648,7 @@ declare_syscall!(
     /// Create a program address
     SyscallTryFindProgramAddress,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         seeds_addr: u64,
         seeds_len: u64,
         program_id_addr: u64,
@@ -759,10 +656,6 @@ declare_syscall!(
         bump_seed_addr: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
@@ -814,7 +707,7 @@ declare_syscall!(
     /// SHA256
     SyscallSha256,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         vals_addr: u64,
         vals_len: u64,
         result_addr: u64,
@@ -822,10 +715,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -883,7 +772,7 @@ declare_syscall!(
     // Keccak256
     SyscallKeccak256,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         vals_addr: u64,
         vals_len: u64,
         result_addr: u64,
@@ -891,10 +780,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -952,7 +837,7 @@ declare_syscall!(
     /// secp256k1_recover
     SyscallSecp256k1Recover,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         hash_addr: u64,
         recovery_id_val: u64,
         signature_addr: u64,
@@ -960,10 +845,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let cost = invoke_context.get_compute_budget().secp256k1_recover_cost;
         invoke_context.get_compute_meter().consume(cost)?;
 
@@ -1048,7 +929,7 @@ declare_syscall!(
     // Currently, only curve25519 Edwards and Ristretto representations are supported
     SyscallCurvePointValidation,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         curve_id: u64,
         point_addr: u64,
         _arg3: u64,
@@ -1057,12 +938,6 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         use solana_zk_token_sdk::curve25519::{curve_syscall_traits::*, edwards, ristretto};
-
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
         match curve_id {
             CURVE25519_EDWARDS => {
                 let cost = invoke_context
@@ -1111,7 +986,7 @@ declare_syscall!(
     // Currently, only curve25519 Edwards and Ristretto representations are supported
     SyscallCurveGroupOps,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         curve_id: u64,
         group_op: u64,
         left_input_addr: u64,
@@ -1122,12 +997,6 @@ declare_syscall!(
         use solana_zk_token_sdk::curve25519::{
             curve_syscall_traits::*, edwards, ristretto, scalar,
         };
-
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
         match curve_id {
             CURVE25519_EDWARDS => match group_op {
                 ADD => {
@@ -1316,7 +1185,7 @@ declare_syscall!(
     // Blake3
     SyscallBlake3,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         vals_addr: u64,
         vals_len: u64,
         result_addr: u64,
@@ -1324,10 +1193,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let compute_budget = invoke_context.get_compute_budget();
         if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
@@ -1385,7 +1250,7 @@ declare_syscall!(
     /// Set return data
     SyscallSetReturnData,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         addr: u64,
         len: u64,
         _arg3: u64,
@@ -1393,10 +1258,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let mut invoke_context = self
-            .invoke_context
-            .try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let budget = invoke_context.get_compute_budget();
 
         let cost = if invoke_context
@@ -1449,7 +1310,7 @@ declare_syscall!(
     /// Get return data
     SyscallGetReturnData,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         return_data_addr: u64,
         mut length: u64,
         program_id_addr: u64,
@@ -1457,10 +1318,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let budget = invoke_context.get_compute_budget();
 
         invoke_context
@@ -1520,7 +1377,7 @@ declare_syscall!(
     /// Get a processed sigling instruction
     SyscallGetProcessedSiblingInstruction,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         index: u64,
         meta_addr: u64,
         program_id_addr: u64,
@@ -1528,10 +1385,6 @@ declare_syscall!(
         accounts_addr: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let budget = invoke_context.get_compute_budget();
 
         invoke_context
@@ -1640,7 +1493,7 @@ declare_syscall!(
     /// Get current call stack height
     SyscallGetStackHeight,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         _arg1: u64,
         _arg2: u64,
         _arg3: u64,
@@ -1648,11 +1501,6 @@ declare_syscall!(
         _arg5: u64,
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
-
         let budget = invoke_context.get_compute_budget();
 
         invoke_context
@@ -1667,7 +1515,7 @@ declare_syscall!(
     /// Update the properties of accounts
     SyscallSetAccountProperties,
     fn inner_call(
-        &mut self,
+        invoke_context: &mut InvokeContext,
         updates_addr: u64,
         updates_count: u64,
         _arg3: u64,
@@ -1675,10 +1523,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let invoke_context = self
-            .invoke_context
-            .try_borrow()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?;
         let budget = invoke_context.get_compute_budget();
 
         invoke_context.get_compute_meter().consume(
@@ -1745,7 +1589,11 @@ mod tests {
     use {
         super::*,
         solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
-        solana_rbpf::{ebpf::HOST_ALIGN, memory_region::MemoryRegion, vm::Config},
+        solana_rbpf::{
+            ebpf::HOST_ALIGN,
+            memory_region::MemoryRegion,
+            vm::{Config, SyscallFunction},
+        },
         solana_sdk::{
             account::AccountSharedData,
             bpf_loader,
@@ -2040,9 +1888,7 @@ mod tests {
         let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
         let mut result = ProgramResult::Ok(0);
         SyscallAbort::call(
-            &mut SyscallAbort {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            },
+            &mut invoke_context,
             0,
             0,
             0,
@@ -2063,9 +1909,6 @@ mod tests {
             program_id,
             bpf_loader::id(),
         );
-        let mut syscall_panic = SyscallPanic {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
@@ -2082,14 +1925,13 @@ mod tests {
         )
         .unwrap();
 
-        syscall_panic
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(string.len() as u64 - 1);
         let mut result = ProgramResult::Ok(0);
-        syscall_panic.call(
+        SyscallPanic::call(
+            &mut invoke_context,
             0x100000000,
             string.len() as u64,
             42,
@@ -2105,14 +1947,13 @@ mod tests {
             ),
         ));
 
-        syscall_panic
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(string.len() as u64);
         let mut result = ProgramResult::Ok(0);
-        syscall_panic.call(
+        SyscallPanic::call(
+            &mut invoke_context,
             0x100000000,
             string.len() as u64,
             42,
@@ -2132,9 +1973,6 @@ mod tests {
             program_id,
             bpf_loader::id(),
         );
-        let mut syscall_sol_log = SyscallLog {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let string = "Gaggablaghblagh!";
         let addr = string.as_ptr() as *const _ as u64;
@@ -2151,14 +1989,13 @@ mod tests {
         )
         .unwrap();
 
-        syscall_sol_log
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(400 - 1);
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_log.call(
+        SyscallLog::call(
+            &mut invoke_context,
             0x100000001, // AccessViolation
             string.len() as u64,
             0,
@@ -2169,7 +2006,8 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000001, string.len() as u64);
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_log.call(
+        SyscallLog::call(
+            &mut invoke_context,
             0x100000000,
             string.len() as u64 * 2, // AccessViolation
             0,
@@ -2181,7 +2019,8 @@ mod tests {
         assert_access_violation!(result, 0x100000000, string.len() as u64 * 2);
 
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_log.call(
+        SyscallLog::call(
+            &mut invoke_context,
             0x100000000,
             string.len() as u64,
             0,
@@ -2192,7 +2031,8 @@ mod tests {
         );
         result.unwrap();
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_log.call(
+        SyscallLog::call(
+            &mut invoke_context,
             0x100000000,
             string.len() as u64,
             0,
@@ -2209,9 +2049,7 @@ mod tests {
         ));
 
         assert_eq!(
-            syscall_sol_log
-                .invoke_context
-                .borrow()
+            invoke_context
                 .get_log_collector()
                 .unwrap()
                 .borrow()
@@ -2229,26 +2067,28 @@ mod tests {
             bpf_loader::id(),
         );
         let cost = invoke_context.get_compute_budget().log_64_units;
-        let mut syscall_sol_log_u64 = SyscallLogU64 {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
-        syscall_sol_log_u64
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
         let config = Config::default();
         let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_log_u64.call(1, 2, 3, 4, 5, &mut memory_mapping, &mut result);
+        SyscallLogU64::call(
+            &mut invoke_context,
+            1,
+            2,
+            3,
+            4,
+            5,
+            &mut memory_mapping,
+            &mut result,
+        );
         result.unwrap();
 
         assert_eq!(
-            syscall_sol_log_u64
-                .invoke_context
-                .borrow()
+            invoke_context
                 .get_log_collector()
                 .unwrap()
                 .borrow()
@@ -2266,9 +2106,6 @@ mod tests {
             bpf_loader::id(),
         );
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
-        let mut syscall_sol_pubkey = SyscallLogPubkey {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let pubkey = Pubkey::from_str("MoqiU1vryuCGQSxFKA1SZ316JdLEFFhoAu6cKUNk7dN").unwrap();
         let addr = pubkey.as_ref().first().unwrap() as *const _ as u64;
@@ -2286,7 +2123,8 @@ mod tests {
         .unwrap();
 
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_pubkey.call(
+        SyscallLogPubkey::call(
+            &mut invoke_context,
             0x100000001, // AccessViolation
             32,
             0,
@@ -2297,14 +2135,21 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000001, 32);
 
-        syscall_sol_pubkey
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(1);
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_pubkey.call(100, 32, 0, 0, 0, &mut memory_mapping, &mut result);
+        SyscallLogPubkey::call(
+            &mut invoke_context,
+            100,
+            32,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
         assert!(matches!(
             result,
             ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
@@ -2312,20 +2157,25 @@ mod tests {
             ),
         ));
 
-        syscall_sol_pubkey
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
         let mut result = ProgramResult::Ok(0);
-        syscall_sol_pubkey.call(0x100000000, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+        SyscallLogPubkey::call(
+            &mut invoke_context,
+            0x100000000,
+            0,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
         result.unwrap();
 
         assert_eq!(
-            syscall_sol_pubkey
-                .invoke_context
-                .borrow()
+            invoke_context
                 .get_log_collector()
                 .unwrap()
                 .borrow()
@@ -2365,17 +2215,41 @@ mod tests {
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
                 .unwrap();
-            let mut syscall = SyscallAllocFree {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
             let mut result = ProgramResult::Ok(0);
-            syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallAllocFree::call(
+                &mut invoke_context,
+                100,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             assert_ne!(result.unwrap(), 0);
             let mut result = ProgramResult::Ok(0);
-            syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallAllocFree::call(
+                &mut invoke_context,
+                100,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             assert_eq!(result.unwrap(), 0);
             let mut result = ProgramResult::Ok(0);
-            syscall.call(u64::MAX, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallAllocFree::call(
+                &mut invoke_context,
+                u64::MAX,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             assert_eq!(result.unwrap(), 0);
         }
 
@@ -2406,16 +2280,31 @@ mod tests {
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
                 .unwrap();
-            let mut syscall = SyscallAllocFree {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
             for _ in 0..100 {
                 let mut result = ProgramResult::Ok(0);
-                syscall.call(1, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+                SyscallAllocFree::call(
+                    &mut invoke_context,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    &mut memory_mapping,
+                    &mut result,
+                );
                 assert_ne!(result.unwrap(), 0);
             }
             let mut result = ProgramResult::Ok(0);
-            syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallAllocFree::call(
+                &mut invoke_context,
+                100,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             assert_eq!(result.unwrap(), 0);
         }
 
@@ -2446,16 +2335,31 @@ mod tests {
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
                 .unwrap();
-            let mut syscall = SyscallAllocFree {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
             for _ in 0..12 {
                 let mut result = ProgramResult::Ok(0);
-                syscall.call(1, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+                SyscallAllocFree::call(
+                    &mut invoke_context,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    &mut memory_mapping,
+                    &mut result,
+                );
                 assert_ne!(result.unwrap(), 0);
             }
             let mut result = ProgramResult::Ok(0);
-            syscall.call(100, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallAllocFree::call(
+                &mut invoke_context,
+                100,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             assert_eq!(result.unwrap(), 0);
         }
 
@@ -2488,11 +2392,9 @@ mod tests {
                     Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
                 )
                 .unwrap();
-            let mut syscall = SyscallAllocFree {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
             let mut result = ProgramResult::Ok(0);
-            syscall.call(
+            SyscallAllocFree::call(
+                &mut invoke_context,
                 size_of::<T>() as u64,
                 0,
                 0,
@@ -2589,18 +2491,25 @@ mod tests {
                     ))
                     * 4,
             );
-        let mut syscall = SyscallSha256 {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(ro_va, ro_len, rw_va, 0, 0, &mut memory_mapping, &mut result);
+        SyscallSha256::call(
+            &mut invoke_context,
+            ro_va,
+            ro_len,
+            rw_va,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
         result.unwrap();
 
         let hash_local = hashv(&[bytes1.as_ref(), bytes2.as_ref()]).to_bytes();
         assert_eq!(hash_result, hash_local);
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallSha256::call(
+            &mut invoke_context,
             ro_va - 1, // AccessViolation
             ro_len,
             rw_va,
@@ -2611,7 +2520,8 @@ mod tests {
         );
         assert_access_violation!(result, ro_va - 1, 32);
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallSha256::call(
+            &mut invoke_context,
             ro_va,
             ro_len + 1, // AccessViolation
             rw_va,
@@ -2622,7 +2532,8 @@ mod tests {
         );
         assert_access_violation!(result, ro_va, 48);
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallSha256::call(
+            &mut invoke_context,
             ro_va,
             ro_len,
             rw_va - 1, // AccessViolation
@@ -2633,7 +2544,16 @@ mod tests {
         );
         assert_access_violation!(result, rw_va - 1, HASH_BYTES as u64);
 
-        syscall.call(ro_va, ro_len, rw_va, 0, 0, &mut memory_mapping, &mut result);
+        SyscallSha256::call(
+            &mut invoke_context,
+            ro_va,
+            ro_len,
+            rw_va,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
         assert!(matches!(
             result,
             ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
@@ -2696,12 +2616,10 @@ mod tests {
                     .curve25519_edwards_validate_point_cost)
                     * 2,
             );
-        let mut syscall = SyscallCurvePointValidation {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             valid_bytes_va,
             0,
@@ -2713,7 +2631,8 @@ mod tests {
         assert_eq!(0, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             invalid_bytes_va,
             0,
@@ -2725,7 +2644,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             valid_bytes_va,
             0,
@@ -2796,12 +2716,10 @@ mod tests {
                     .curve25519_ristretto_validate_point_cost)
                     * 2,
             );
-        let mut syscall = SyscallCurvePointValidation {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             valid_bytes_va,
             0,
@@ -2813,7 +2731,8 @@ mod tests {
         assert_eq!(0, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             invalid_bytes_va,
             0,
@@ -2825,7 +2744,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurvePointValidation::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             valid_bytes_va,
             0,
@@ -2936,12 +2856,10 @@ mod tests {
                         .curve25519_edwards_multiply_cost)
                     * 2,
             );
-        let mut syscall = SyscallCurveGroupOps {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             ADD,
             left_point_va,
@@ -2959,7 +2877,8 @@ mod tests {
         assert_eq!(expected_sum, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             ADD,
             invalid_point_va,
@@ -2971,7 +2890,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             SUB,
             left_point_va,
@@ -2989,7 +2909,8 @@ mod tests {
         assert_eq!(expected_difference, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             SUB,
             invalid_point_va,
@@ -3001,7 +2922,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             MUL,
             scalar_va,
@@ -3019,7 +2941,8 @@ mod tests {
         assert_eq!(expected_product, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             MUL,
             scalar_va,
@@ -3031,7 +2954,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_EDWARDS,
             MUL,
             scalar_va,
@@ -3142,12 +3066,10 @@ mod tests {
                         .curve25519_ristretto_multiply_cost)
                     * 2,
             );
-        let mut syscall = SyscallCurveGroupOps {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             ADD,
             left_point_va,
@@ -3165,7 +3087,8 @@ mod tests {
         assert_eq!(expected_sum, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             ADD,
             invalid_point_va,
@@ -3177,7 +3100,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             SUB,
             left_point_va,
@@ -3195,7 +3119,8 @@ mod tests {
         assert_eq!(expected_difference, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             SUB,
             invalid_point_va,
@@ -3208,7 +3133,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             MUL,
             scalar_va,
@@ -3226,7 +3152,8 @@ mod tests {
         assert_eq!(expected_product, result_point);
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             MUL,
             scalar_va,
@@ -3239,7 +3166,8 @@ mod tests {
         assert_eq!(1, result.unwrap());
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        SyscallCurveGroupOps::call(
+            &mut invoke_context,
             CURVE25519_RISTRETTO,
             MUL,
             scalar_va,
@@ -3336,12 +3264,18 @@ mod tests {
                 &config,
             )
             .unwrap();
-            let mut syscall = SyscallGetClockSysvar {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
 
             let mut result = ProgramResult::Ok(0);
-            syscall.call(got_clock_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallGetClockSysvar::call(
+                &mut invoke_context,
+                got_clock_va,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             result.unwrap();
             assert_eq!(got_clock, src_clock);
 
@@ -3370,12 +3304,10 @@ mod tests {
                 &config,
             )
             .unwrap();
-            let mut syscall = SyscallGetEpochScheduleSysvar {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
 
             let mut result = ProgramResult::Ok(0);
-            syscall.call(
+            SyscallGetEpochScheduleSysvar::call(
+                &mut invoke_context,
                 got_epochschedule_va,
                 0,
                 0,
@@ -3413,12 +3345,18 @@ mod tests {
                 &config,
             )
             .unwrap();
-            let mut syscall = SyscallGetFeesSysvar {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
 
             let mut result = ProgramResult::Ok(0);
-            syscall.call(got_fees_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallGetFeesSysvar::call(
+                &mut invoke_context,
+                got_fees_va,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             result.unwrap();
             assert_eq!(got_fees, src_fees);
 
@@ -3443,12 +3381,18 @@ mod tests {
                 &config,
             )
             .unwrap();
-            let mut syscall = SyscallGetRentSysvar {
-                invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-            };
 
             let mut result = ProgramResult::Ok(0);
-            syscall.call(got_rent_va, 0, 0, 0, 0, &mut memory_mapping, &mut result);
+            SyscallGetRentSysvar::call(
+                &mut invoke_context,
+                got_rent_va,
+                0,
+                0,
+                0,
+                0,
+                &mut memory_mapping,
+                &mut result,
+            );
             result.unwrap();
             assert_eq!(got_rent, src_rent);
 
@@ -3460,10 +3404,11 @@ mod tests {
         }
     }
 
-    fn call_program_address_common(
+    fn call_program_address_common<'a, 'b: 'a>(
+        invoke_context: &'a mut InvokeContext<'b>,
         seeds: &[&[u8]],
         program_id: &Pubkey,
-        syscall: &mut dyn SyscallObject,
+        syscall: SyscallFunction<&'a mut InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;
@@ -3524,7 +3469,8 @@ mod tests {
         let mut memory_mapping = MemoryMapping::new(regions, &config).unwrap();
 
         let mut result = ProgramResult::Ok(0);
-        syscall.call(
+        syscall(
+            invoke_context,
             SEEDS_VA,
             seeds.len() as u64,
             PROGRAM_ID_VA,
@@ -3541,10 +3487,12 @@ mod tests {
         seeds: &[&[u8]],
         address: &Pubkey,
     ) -> Result<Pubkey, EbpfError> {
-        let mut syscall = SyscallCreateProgramAddress {
-            invoke_context: Rc::new(RefCell::new(invoke_context)),
-        };
-        let (address, _) = call_program_address_common(seeds, address, &mut syscall)?;
+        let (address, _) = call_program_address_common(
+            invoke_context,
+            seeds,
+            address,
+            SyscallCreateProgramAddress::call,
+        )?;
         Ok(address)
     }
 
@@ -3553,10 +3501,12 @@ mod tests {
         seeds: &[&[u8]],
         address: &Pubkey,
     ) -> Result<(Pubkey, u8), EbpfError> {
-        let mut syscall = SyscallTryFindProgramAddress {
-            invoke_context: Rc::new(RefCell::new(invoke_context)),
-        };
-        call_program_address_common(seeds, address, &mut syscall)
+        call_program_address_common(
+            invoke_context,
+            seeds,
+            address,
+            SyscallTryFindProgramAddress::call,
+        )
     }
 
     #[test]
@@ -3594,9 +3544,7 @@ mod tests {
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         let syscall_base_cost = invoke_context.get_compute_budget().syscall_base_cost;
-        let mut syscall_get_processed_sibling_instruction = SyscallGetProcessedSiblingInstruction {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
+
         const VM_BASE_ADDRESS: u64 = 0x100000000;
         const META_OFFSET: usize = 0;
         const PROGRAM_ID_OFFSET: usize =
@@ -3648,14 +3596,13 @@ mod tests {
         )
         .unwrap();
 
-        syscall_get_processed_sibling_instruction
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(syscall_base_cost);
         let mut result = ProgramResult::Ok(0);
-        syscall_get_processed_sibling_instruction.call(
+        SyscallGetProcessedSiblingInstruction::call(
+            &mut invoke_context,
             0,
             VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
             VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
@@ -3666,10 +3613,7 @@ mod tests {
         );
         assert_eq!(result.unwrap(), 1);
         {
-            let transaction_context = &syscall_get_processed_sibling_instruction
-                .invoke_context
-                .borrow()
-                .transaction_context;
+            let transaction_context = &invoke_context.transaction_context;
             assert_eq!(processed_sibling_instruction.data_len, 1);
             assert_eq!(processed_sibling_instruction.accounts_len, 1);
             assert_eq!(
@@ -3687,14 +3631,13 @@ mod tests {
             );
         }
 
-        syscall_get_processed_sibling_instruction
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(syscall_base_cost);
         let mut result = ProgramResult::Ok(0);
-        syscall_get_processed_sibling_instruction.call(
+        SyscallGetProcessedSiblingInstruction::call(
+            &mut invoke_context,
             1,
             VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
             VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
@@ -3790,9 +3733,7 @@ mod tests {
                     .account_property_update_cost
                     .saturating_mul(updates_list.len() as u64),
             );
-        let mut syscall_set_account_properties = SyscallSetAccountProperties {
-            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
-        };
+
         const VM_ADDRESS_KEYS: u64 = 0x100000000;
         const VM_ADDRESS_UPDATES_LIST: u64 = 0x200000000;
         let config = Config::default();
@@ -3817,14 +3758,13 @@ mod tests {
         )
         .unwrap();
 
-        syscall_set_account_properties
-            .invoke_context
-            .borrow_mut()
+        invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(cost);
         let mut result = ProgramResult::Ok(0);
-        syscall_set_account_properties.call(
+        SyscallSetAccountProperties::call(
+            &mut invoke_context,
             VM_ADDRESS_UPDATES_LIST,
             updates_list.len() as u64,
             0,
@@ -3835,10 +3775,7 @@ mod tests {
         );
         assert_eq!(result.unwrap(), 0);
         {
-            let transaction_context = &syscall_set_account_properties
-                .invoke_context
-                .borrow()
-                .transaction_context;
+            let transaction_context = &invoke_context.transaction_context;
             let account = transaction_context
                 .get_account_at_index(2)
                 .unwrap()

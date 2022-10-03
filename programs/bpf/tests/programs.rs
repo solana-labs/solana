@@ -299,7 +299,10 @@ fn run_program(name: &str) -> u64 {
                 instruction_count = vm.get_total_instruction_count();
                 if config.enable_instruction_tracing {
                     if i == 1 {
-                        if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                        if !Tracer::compare(
+                            tracer.as_ref().unwrap(),
+                            &vm.get_program_environment().tracer,
+                        ) {
                             let analysis =
                                 Analysis::from_executable(verified_executable.get_executable())
                                     .unwrap();
@@ -311,7 +314,8 @@ fn run_program(name: &str) -> u64 {
                                 .write(&mut stdout.lock(), &analysis)
                                 .unwrap();
                             println!("TRACE (jit):");
-                            vm.get_tracer()
+                            vm.get_program_environment()
+                                .tracer
                                 .write(&mut stdout.lock(), &analysis)
                                 .unwrap();
                             assert!(false);
@@ -329,7 +333,7 @@ fn run_program(name: &str) -> u64 {
                             trace!("BPF Program Instruction Trace:\n{}", trace_string);
                         }
                     }
-                    tracer = Some(vm.get_tracer().clone());
+                    tracer = Some(vm.get_program_environment().tracer.clone());
                 }
             }
             assert!(match deserialize_parameters(
