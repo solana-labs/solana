@@ -103,6 +103,22 @@ struct CpuInfo {
     num_threads: u64,
 }
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+enum CpuManufacturer {
+    Other,
+    Intel,
+    AMD,
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+// The value passed into cpuid via eax, to control what the result means
+enum CpuidParamValue {
+    Processor = 1,
+    Cache = 2,
+    Topology = 4,
+    Extended = 7,
+}
+
 #[derive(Default)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 // These stats are aggregated across all storage devices excluding internal loopbacks.
@@ -694,8 +710,15 @@ impl SystemMonitorService {
         })
     }
 
-    #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn report_cpuid_values() {
+        const CPUID_MANUFACTURER_EBX_INTEL: u32 = 0x756e6547;
+        const CPUID_MANUFACTURER_EDX_INTEL: u32 = 0x49656e69;
+        const CPUID_MANUFACTURER_ECX_INTEL: u32 = 0x6c65746e;
+        const CPUID_MANUFACTURER_EBX_AMD: u32 = 0x68747541;
+        const CPUID_MANUFACTURER_EDX_AMD: u32 = 0x69746e65;
+        const CPUID_MANUFACTURER_ECX_AMD: u32 = 0x444d4163;
+
         unsafe {
             let cpuid_mfr = __cpuid(0);
             let cpuid_empty = CpuidResult {
@@ -712,41 +735,41 @@ impl SystemMonitorService {
                 0
             };
 
-            let mfr_id: i64 = if cpuid_mfr.ebx == 0x756e6547
-                && cpuid_mfr.edx == 0x49656e69
-                && cpuid_mfr.ecx == 0x6c65746e
+            let mfr_id: i64 = if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_INTEL
+                && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_INTEL
+                && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_INTEL
             {
-                1 // GenuineIntel
-            } else if cpuid_mfr.ebx == 0x68747541
-                && cpuid_mfr.edx == 0x69746e65
-                && cpuid_mfr.ecx == 0x444d4163
+                CpuManufacturer::Intel // GenuineIntel
+            } else if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_AMD
+                && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_AMD
+                && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_AMD
             {
-                2 // AuthenticAMD
+                CpuManufacturer::AMD // AuthenticAMD
             } else {
-                3 // anything else
+                CpuManufacturer::Other // anything else
             };
 
-            let cpuid_processor = if 1 <= max_leaf {
+            let cpuid_processor = if CpuidParamValue::Processor <= max_leaf {
                 __cpuid(1)
             } else {
                 cpuid_empty
             };
-            let cpuid_cache = if 2 <= max_leaf {
+            let cpuid_cache = if CpuidParamValue::Cache <= max_leaf {
                 __cpuid(2)
             } else {
                 cpuid_empty
             };
-            let cpuid_topology = if 4 <= max_leaf {
+            let cpuid_topology = if CpuidParamValue::Topology <= max_leaf {
                 __cpuid(4)
             } else {
                 cpuid_empty
             };
-            let cpuid_extended_0 = if 7 <= max_leaf {
+            let cpuid_extended_0 = if CpuidParamValue::Extended <= max_leaf {
                 __cpuid_count(7, 0)
             } else {
                 cpuid_empty
             };
-            let cpuid_extended_1 = if 7 <= max_leaf && 1 <= max_subleaf_7 {
+            let cpuid_extended_1 = if CpuidParamValue::Extended <= max_leaf && 1 <= max_subleaf_7 {
                 __cpuid_count(7, 1)
             } else {
                 cpuid_empty
@@ -788,7 +811,7 @@ impl SystemMonitorService {
             )
         }
 
-        #[cfg(any(target_arch = "x86_64", target_arch = "x86_64"))]
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Self::report_cpuid_values();
     }
 
