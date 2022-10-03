@@ -14,6 +14,7 @@ extern crate solana_metrics;
 
 use {
     crate::{
+        allocator_bump::BpfAllocator,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
@@ -28,7 +29,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_INPUT_START},
+        ebpf::{HOST_ALIGN, MM_HEAP_START, MM_INPUT_START},
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
@@ -42,9 +43,10 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
-            enable_bpf_loader_extend_program_ix, error_on_syscall_bpf_function_hash_collisions,
-            limit_max_instruction_trace_length, reject_callx_r10,
+            check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
+            disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
+            error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
+            reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -308,7 +310,27 @@ pub fn create_vm<'a, 'b>(
         heap.as_slice_mut(),
         vec![parameter_region],
     )?;
-    syscalls::bind_syscall_context_objects(invoke_context, heap, orig_account_lengths)?;
+    let check_aligned = bpf_loader_deprecated::id()
+        != invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                instruction_context
+                    .try_borrow_last_program_account(invoke_context.transaction_context)
+            })
+            .map(|program_account| *program_account.get_owner())
+            .map_err(SyscallError::InstructionError)?;
+    let check_size = invoke_context
+        .feature_set
+        .is_active(&check_slice_translation_size::id());
+    invoke_context
+        .set_syscall_context(
+            check_aligned,
+            check_size,
+            orig_account_lengths,
+            Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START))),
+        )
+        .map_err(SyscallError::InstructionError)?;
     Ok(vm)
 }
 

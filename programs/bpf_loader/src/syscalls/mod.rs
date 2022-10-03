@@ -11,7 +11,7 @@ pub use self::{
 };
 #[allow(deprecated)]
 use {
-    crate::{allocator_bump::BpfAllocator, BpfError},
+    crate::BpfError,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
@@ -19,8 +19,6 @@ use {
         timings::ExecuteTimings,
     },
     solana_rbpf::{
-        aligned_memory::AlignedMemory,
-        ebpf::{self, HOST_ALIGN},
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         vm::{ProgramResult, SyscallRegistry},
@@ -31,11 +29,11 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
-            disable_fees_sysvar, enable_early_verification_of_account_modifications,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
+            self, blake3_syscall_enabled, check_physical_overlapping, curve25519_syscall_enabled,
+            disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
+            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
+            syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -290,37 +288,6 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
 
     Ok(syscall_registry)
-}
-
-pub fn bind_syscall_context_objects<'a, 'b>(
-    invoke_context: &'a mut InvokeContext<'b>,
-    heap: AlignedMemory<HOST_ALIGN>,
-    orig_account_lengths: Vec<usize>,
-) -> Result<(), EbpfError> {
-    let check_aligned = bpf_loader_deprecated::id()
-        != invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .and_then(|instruction_context| {
-                instruction_context
-                    .try_borrow_last_program_account(invoke_context.transaction_context)
-            })
-            .map(|program_account| *program_account.get_owner())
-            .map_err(SyscallError::InstructionError)?;
-    let check_size = invoke_context
-        .feature_set
-        .is_active(&check_slice_translation_size::id());
-
-    invoke_context
-        .set_syscall_context(
-            check_aligned,
-            check_size,
-            orig_account_lengths,
-            Rc::new(RefCell::new(BpfAllocator::new(heap, ebpf::MM_HEAP_START))),
-        )
-        .map_err(SyscallError::InstructionError)?;
-
-    Ok(())
 }
 
 fn translate(
@@ -1584,9 +1551,11 @@ mod tests {
     use solana_sdk::sysvar::fees::Fees;
     use {
         super::*,
+        crate::BpfAllocator,
         solana_program_runtime::{invoke_context::InvokeContext, sysvar_cache::SysvarCache},
         solana_rbpf::{
-            ebpf::HOST_ALIGN,
+            aligned_memory::AlignedMemory,
+            ebpf::{self, HOST_ALIGN},
             memory_region::MemoryRegion,
             vm::{Config, SyscallFunction},
         },
