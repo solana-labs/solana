@@ -64,7 +64,8 @@ impl<'a> CalcAccountsHashConfig<'a> {
     pub fn get_should_cache_hash_data() -> bool {
         // when we are skipping rewrites, we cannot rely on the cached data from old append vecs, so we have to disable caching for now
         // skipping rewrites is not enabled in this branch. It requires a cli argument.
-        true
+        // However, there appears to be a race condition bug in this somehow. So, disabling for now.
+        false
     }
 }
 
