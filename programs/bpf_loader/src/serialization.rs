@@ -17,7 +17,7 @@ use {
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
     },
-    std::mem::size_of,
+    std::{mem, mem::size_of},
 };
 
 /// Maximum number of instruction accounts that can be serialized into the
@@ -27,6 +27,92 @@ const MAX_INSTRUCTION_ACCOUNTS: u8 = NON_DUP_MARKER;
 enum SerializeAccount<'a> {
     Account(IndexOfAccount, BorrowedAccount<'a>),
     Duplicate(IndexOfAccount),
+}
+
+struct Serializer {
+    pub buffer: AlignedMemory<HOST_ALIGN>,
+    regions: Vec<MemoryRegion>,
+    vaddr: u64,
+    region_start: usize,
+    aligned: bool,
+}
+
+impl Serializer {
+    fn new(size: usize, start_addr: u64, aligned: bool) -> Serializer {
+        Serializer {
+            buffer: AlignedMemory::with_capacity(size),
+            regions: Vec::new(),
+            region_start: 0,
+            vaddr: start_addr,
+            aligned,
+        }
+    }
+
+    fn fill_write(&mut self, num: usize, value: u8) -> std::io::Result<()> {
+        self.buffer.fill_write(num, value)
+    }
+
+    fn write_u8(&mut self, value: u8) {
+        unsafe {
+            self.buffer.write_u8_unchecked(value);
+        }
+    }
+
+    fn write_u64(&mut self, value: u64) {
+        self.debug_assert_alignment::<u64>();
+        unsafe {
+            self.buffer.write_u64_unchecked(value);
+        }
+    }
+
+    fn write_all(&mut self, value: &[u8]) {
+        unsafe {
+            self.buffer.write_all_unchecked(value);
+        }
+    }
+
+    fn write_account(&mut self, account: &BorrowedAccount<'_>) -> Result<(), InstructionError> {
+        self.write_all(account.get_data());
+
+        if self.aligned {
+            let align_offset =
+                (account.get_data().len() as *const u8).align_offset(BPF_ALIGN_OF_U128);
+            self.fill_write(MAX_PERMITTED_DATA_INCREASE + align_offset, 0)
+                .map_err(|_| InstructionError::InvalidArgument)?;
+        }
+
+        Ok(())
+    }
+
+    fn push_region(&mut self) {
+        let range = self.region_start..self.buffer.len();
+        let region = MemoryRegion::new_writable(
+            self.buffer.as_slice_mut().get_mut(range.clone()).unwrap(),
+            self.vaddr,
+        );
+        self.regions.push(region);
+        self.region_start = range.end;
+        self.vaddr += range.len() as u64;
+    }
+
+    fn finish(mut self) -> (AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>) {
+        self.push_region();
+        debug_assert_eq!(self.region_start, self.buffer.len());
+        (self.buffer, self.regions)
+    }
+
+    fn debug_assert_alignment<T>(&self) {
+        debug_assert!(
+            !self.aligned
+                || self
+                    .buffer
+                    .as_slice()
+                    .as_ptr_range()
+                    .end
+                    .align_offset(mem::align_of::<T>())
+                    == 0
+        );
+    }
 }
 
 pub fn serialize_parameters(
@@ -127,39 +213,38 @@ fn serialize_parameters_unaligned(
     size += size_of::<u64>() // instruction data len
          + instruction_context.get_instruction_data().len() // instruction data
          + size_of::<Pubkey>(); // program id
-    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
-    unsafe {
-        v.write_u64_unchecked((accounts.len() as u64).to_le());
-        for account in accounts {
-            match account {
-                SerializeAccount::Duplicate(position) => v.write_u8_unchecked(position as u8),
-                SerializeAccount::Account(_, account) => {
-                    v.write_u8_unchecked(NON_DUP_MARKER);
-                    v.write_u8_unchecked(account.is_signer() as u8);
-                    v.write_u8_unchecked(account.is_writable() as u8);
-                    v.write_all_unchecked(account.get_key().as_ref());
-                    v.write_u64_unchecked(account.get_lamports().to_le());
-                    v.write_u64_unchecked((account.get_data().len() as u64).to_le());
-                    v.write_all_unchecked(account.get_data());
-                    v.write_all_unchecked(account.get_owner().as_ref());
-                    v.write_u8_unchecked(account.is_executable() as u8);
-                    v.write_u64_unchecked((account.get_rent_epoch() as u64).to_le());
-                }
-            };
-        }
-        v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
-        v.write_all_unchecked(instruction_context.get_instruction_data());
-        v.write_all_unchecked(
-            instruction_context
-                .try_borrow_last_program_account(transaction_context)?
-                .get_key()
-                .as_ref(),
-        );
+    let mut s = Serializer::new(size, MM_INPUT_START, false);
+
+    s.write_u64((accounts.len() as u64).to_le());
+    for account in accounts {
+        match account {
+            SerializeAccount::Duplicate(position) => s.write_u8(position as u8),
+            SerializeAccount::Account(_, account) => {
+                s.write_u8(NON_DUP_MARKER);
+                s.write_u8(account.is_signer() as u8);
+                s.write_u8(account.is_writable() as u8);
+                s.write_all(account.get_key().as_ref());
+                s.write_u64(account.get_lamports().to_le());
+                s.write_u64((account.get_data().len() as u64).to_le());
+                s.write_account(&account)
+                    .map_err(|_| InstructionError::InvalidArgument)?;
+                s.write_all(account.get_owner().as_ref());
+                s.write_u8(account.is_executable() as u8);
+                s.write_u64((account.get_rent_epoch() as u64).to_le());
+            }
+        };
     }
+    s.write_u64((instruction_context.get_instruction_data().len() as u64).to_le());
+    s.write_all(instruction_context.get_instruction_data());
+    s.write_all(
+        instruction_context
+            .try_borrow_last_program_account(transaction_context)?
+            .get_key()
+            .as_ref(),
+    );
 
-    let regions = vec![MemoryRegion::new_writable(v.as_slice_mut(), MM_INPUT_START)];
-    Ok((v, regions))
+    Ok(s.finish())
 }
 
 pub fn deserialize_parameters_unaligned(
@@ -243,52 +328,43 @@ fn serialize_parameters_aligned(
     size += size_of::<u64>() // data len
     + instruction_context.get_instruction_data().len()
     + size_of::<Pubkey>(); // program id;
-    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
-    unsafe {
-        // Serialize into the buffer
+    let mut s = Serializer::new(size, MM_INPUT_START, true);
 
-        v.write_u64_unchecked((accounts.len() as u64).to_le());
-        for account in accounts {
-            match account {
-                SerializeAccount::Account(_, borrowed_account) => {
-                    v.write_u8_unchecked(NON_DUP_MARKER);
-                    v.write_u8_unchecked(borrowed_account.is_signer() as u8);
-                    v.write_u8_unchecked(borrowed_account.is_writable() as u8);
-                    v.write_u8_unchecked(borrowed_account.is_executable() as u8);
-                    v.write_all_unchecked(&[0u8, 0, 0, 0]);
-                    v.write_all_unchecked(borrowed_account.get_key().as_ref());
-                    v.write_all_unchecked(borrowed_account.get_owner().as_ref());
-                    v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
-                    v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
-                    v.write_all_unchecked(borrowed_account.get_data());
-                    v.fill_write(
-                        MAX_PERMITTED_DATA_INCREASE
-                            + (borrowed_account.get_data().len() as *const u8)
-                                .align_offset(BPF_ALIGN_OF_U128),
-                        0,
-                    )
+    // Serialize into the buffer
+    s.write_u64((accounts.len() as u64).to_le());
+    for account in accounts {
+        match account {
+            SerializeAccount::Account(_, borrowed_account) => {
+                s.write_u8(NON_DUP_MARKER);
+                s.write_u8(borrowed_account.is_signer() as u8);
+                s.write_u8(borrowed_account.is_writable() as u8);
+                s.write_u8(borrowed_account.is_executable() as u8);
+                s.write_all(&[0u8, 0, 0, 0]);
+                s.write_all(borrowed_account.get_key().as_ref());
+                s.write_all(borrowed_account.get_owner().as_ref());
+                s.write_u64(borrowed_account.get_lamports().to_le());
+                s.write_u64((borrowed_account.get_data().len() as u64).to_le());
+                s.write_account(&borrowed_account)
                     .map_err(|_| InstructionError::InvalidArgument)?;
-                    v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
-                }
-                SerializeAccount::Duplicate(position) => {
-                    v.write_u8_unchecked(position as u8);
-                    v.write_all_unchecked(&[0u8, 0, 0, 0, 0, 0, 0]);
-                }
-            };
-        }
-        v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
-        v.write_all_unchecked(instruction_context.get_instruction_data());
-        v.write_all_unchecked(
-            instruction_context
-                .try_borrow_last_program_account(transaction_context)?
-                .get_key()
-                .as_ref(),
-        );
+                s.write_u64((borrowed_account.get_rent_epoch() as u64).to_le());
+            }
+            SerializeAccount::Duplicate(position) => {
+                s.write_u8(position as u8);
+                s.write_all(&[0u8, 0, 0, 0, 0, 0, 0]);
+            }
+        };
     }
+    s.write_u64((instruction_context.get_instruction_data().len() as u64).to_le());
+    s.write_all(instruction_context.get_instruction_data());
+    s.write_all(
+        instruction_context
+            .try_borrow_last_program_account(transaction_context)?
+            .get_key()
+            .as_ref(),
+    );
 
-    let regions = vec![MemoryRegion::new_writable(v.as_slice_mut(), MM_INPUT_START)];
-    Ok((v, regions))
+    Ok(s.finish())
 }
 
 pub fn deserialize_parameters_aligned(
