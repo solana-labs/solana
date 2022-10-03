@@ -87,7 +87,6 @@ fn insert_test_shreds(ledger_path: &Path, ending_slot: u64) {
 }
 
 fn ledger_tool_copy_test(src_shred_compaction: &str, dst_shred_compaction: &str) {
-    const TEST_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
     let genesis_config = create_genesis_config(100).genesis_config;
 
     let (ledger_path, _blockhash) = match src_shred_compaction {
@@ -101,10 +100,9 @@ fn ledger_tool_copy_test(src_shred_compaction: &str, dst_shred_compaction: &str)
 
     let target_ledger_path = get_tmp_ledger_path_auto_delete!();
     if dst_shred_compaction == "fifo" {
-        let rocksdb_fifo_path = target_ledger_path.path().join(
-            ShredStorageType::rocks_fifo(TEST_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)
-                .blockstore_directory(),
-        );
+        let rocksdb_fifo_path = target_ledger_path
+            .path()
+            .join(ShredStorageType::rocks_fifo(None).blockstore_directory());
         fs::create_dir_all(rocksdb_fifo_path).unwrap();
     }
     let target_ledger_path = target_ledger_path.path().to_str().unwrap();

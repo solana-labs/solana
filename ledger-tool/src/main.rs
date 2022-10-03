@@ -33,7 +33,6 @@ use {
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-            MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -875,9 +874,9 @@ fn open_blockstore_with_temporary_primary_access(
 fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
-    // temporary use of MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES could
-    // affect the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES) {
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
             warn!("{}", warn_message);

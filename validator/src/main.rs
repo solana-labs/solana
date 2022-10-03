@@ -28,7 +28,6 @@ use {
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
-        MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -392,19 +391,18 @@ fn hash_validator(hash: String) -> Result<(), String> {
         .map_err(|e| format!("{:?}", e))
 }
 
-/// Returns the default shred storage size (include both data and coding
+/// Returns the default fifo shred storage size (include both data and coding
 /// shreds) based on the validator config.
-fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> u64 {
+fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
     // The max shred size is around 1228 bytes.
     // Here we reserve a little bit more than that to give extra storage for FIFO
     // to prevent it from purging data that have not yet being marked as obsoleted
     // by LedgerCleanupService.
     const RESERVED_BYTES_PER_SHRED: u64 = 1500;
-    match vc.max_ledger_shreds {
+    vc.max_ledger_shreds.map(|max_ledger_shreds| {
         // x2 as we have data shred and coding shred.
-        Some(max_ledger_shreds) => max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2,
-        None => MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    }
+        max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2
+    })
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
@@ -3055,11 +3053,11 @@ pub fn main() {
                     None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
                         &validator_config,
                     )),
-                    Some(_) => ShredStorageType::rocks_fifo(value_t_or_exit!(
+                    Some(_) => ShredStorageType::rocks_fifo(Some(value_t_or_exit!(
                         matches,
                         "rocksdb_fifo_shred_storage_size",
                         u64
-                    )),
+                    ))),
                 },
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
