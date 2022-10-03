@@ -31,8 +31,9 @@ use {
         blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
-            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-            LedgerColumnOptions, ShredStorageType, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
+            ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+            MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -2310,8 +2311,7 @@ fn main() {
                      the default RocksLevel will be used. \
                      If you want to use FIFO shred_storage_type on an empty target_db, \
                      create {} foldar the specified target_db directory.",
-                        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-                            .blockstore_directory()
+                        BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
                     ),
                 );
 

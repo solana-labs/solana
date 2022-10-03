@@ -718,7 +718,7 @@ impl Tower {
 
                 // `heaviest_subtree_fork_choice` entries are not cleaned by duplicate block purging/rollback logic,
                 // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
-                // being a duplicate because `ancestors`/`descendants`/`progress` structurs may be missing this slot due
+                // being a duplicate because `ancestors`/`descendants`/`progress` structures may be missing this slot due
                 // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
                 //
                 // TODO: Handle if the last vote is on a dupe, and then we restart. The dupe won't be in
