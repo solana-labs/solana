@@ -53,7 +53,7 @@ trait SyscallInvokeSigned<'a, 'b> {
 declare_syscall!(
     /// Cross-program invocation called from Rust
     SyscallInvokeSignedRust,
-    fn call(
+    fn inner_call(
         &mut self,
         instruction_addr: u64,
         account_infos_addr: u64,
@@ -61,9 +61,8 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError>,
-    ) {
-        *result = call(
+    ) -> Result<u64, EbpfError> {
+        call(
             self,
             instruction_addr,
             account_infos_addr,
@@ -71,7 +70,7 @@ declare_syscall!(
             signers_seeds_addr,
             signers_seeds_len,
             memory_mapping,
-        );
+        )
     }
 );
 
@@ -347,7 +346,7 @@ struct SolSignerSeedsC {
 declare_syscall!(
     /// Cross-program invocation called from C
     SyscallInvokeSignedC,
-    fn call(
+    fn inner_call(
         &mut self,
         instruction_addr: u64,
         account_infos_addr: u64,
@@ -355,9 +354,8 @@ declare_syscall!(
         signers_seeds_addr: u64,
         signers_seeds_len: u64,
         memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError>,
-    ) {
-        *result = call(
+    ) -> Result<u64, EbpfError> {
+        call(
             self,
             instruction_addr,
             account_infos_addr,
@@ -365,7 +363,7 @@ declare_syscall!(
             signers_seeds_addr,
             signers_seeds_len,
             memory_mapping,
-        );
+        )
     }
 );
 

@@ -34,7 +34,7 @@ use {
         memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter, VerifiedExecutable},
+        vm::{Config, EbpfVm, InstructionMeter, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -1362,7 +1362,7 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
             match result {
-                Ok(status) if status != SUCCESS => {
+                ProgramResult::Ok(status) if status != SUCCESS => {
                     let error: InstructionError = if (status
                         == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
                         && !invoke_context
@@ -1384,7 +1384,7 @@ impl Executor for BpfExecutor {
                     stable_log::program_failure(&log_collector, &program_id, &error);
                     Err(error)
                 }
-                Err(error) => {
+                ProgramResult::Err(error) => {
                     let error = match error {
                         /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
                             SyscallError::InstructionError(instruction_error),
