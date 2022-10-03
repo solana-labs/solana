@@ -44,7 +44,7 @@ fn get_config() -> Config {
         .about(crate_description!())
         .version(solana_version::version!())
         .after_help("ADDITIONAL HELP:
-        To receive a Slack, Discord and/or Telegram notification on sanity failure,
+        To receive a Slack, Discord, PagerDuty and/or Telegram notification on sanity failure,
         define environment variables before running `solana-watchtower`:
 
         export SLACK_WEBHOOK=...
@@ -54,6 +54,10 @@ fn get_config() -> Config {
 
         export TELEGRAM_BOT_TOKEN=...
         export TELEGRAM_CHAT_ID=...
+
+        PagerDuty requires an Integration Key from the Events API v2 (Add this integration to your PagerDuty service to get this)
+
+        export PAGERDUTY_INTEGRATION_KEY=...
 
         To receive a Twilio SMS notification on failure, having a Twilio account,
         and a sending number owned by that account,
