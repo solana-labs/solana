@@ -2975,11 +2975,13 @@ impl ReplayStage {
                     info!(
                         "Waiting to switch vote to {},
                         resetting to slot {:?} for now,
-                        switch_proof_stake: {},
-                        total_stake: {}",
+                        switch proof stake: {},
+                        threshold stake: {},
+                        total stake: {}",
                         heaviest_bank.slot(),
                         reset_bank.as_ref().map(|b| b.slot()),
                         switch_proof_stake,
+                        total_stake as f64 * SWITCH_FORK_THRESHOLD,
                         total_stake
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
