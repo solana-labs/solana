@@ -88,6 +88,14 @@ impl Manager {
             _ => None,
         }
     }
+
+    /// **FOR TESTS ONLY**
+    /// Set the state to Invalid
+    /// This is needed by tests that do not fully startup all the accounts background services.
+    /// **FOR TESTS ONLY**
+    pub fn set_invalid_for_tests(&self) {
+        *self.state.lock().unwrap() = State::Invalid;
+    }
 }
 
 /// The EpochAccountsHash is calculated in the background via AccountsBackgroundService.  This enum
