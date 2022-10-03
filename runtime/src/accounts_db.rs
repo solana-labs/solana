@@ -1336,6 +1336,14 @@ impl PurgeStats {
     }
 }
 
+struct SplitAncientStorages {
+    ancient_slot_count: Slot,
+    ancient_slots: Vec<Slot>,
+    slot0: Slot,
+    first_boundary: Slot,
+    width: Slot,
+}
+
 #[derive(Debug, Default)]
 struct FlushStats {
     num_flushed: usize,
@@ -6857,22 +6865,18 @@ impl AccountsDb {
         }
     }
 
-    /// Scan through all the account storage in parallel
-    fn scan_account_storage_no_bank<S>(
+    /// When calculating accounts hash, we break the slots/storages into chunks that remain the same during an entire epoch.
+    /// a slot is in this chunk of slots:
+    /// start:         (slot / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK
+    /// end_exclusive: start + MAX_ITEMS_PER_CHUNK
+    /// So a slot remains in the same chunk whenever it is included in the accounts hash.
+    /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
+    /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
+    fn split_storages_ancient(
         &self,
-        cache_hash_data: &CacheHashData,
         config: &CalcAccountsHashConfig<'_>,
         snapshot_storages: &SortedStorages,
-        scanner: S,
-        bin_range: &Range<usize>,
-        bin_calculator: &PubkeyBinCalculator24,
-        stats: &HashStats,
-    ) -> Vec<BinnedHashData>
-    where
-        S: AppendVecScan,
-    {
-        let start_bin_index = bin_range.start;
-
+    ) -> SplitAncientStorages {
         // any ancient append vecs should definitely be cached
         // We need to break the ranges into:
         // 1. individual ancient append vecs (may be empty)
@@ -6894,6 +6898,41 @@ impl AccountsDb {
             ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
 
         let width = max_slot_inclusive - slot0 + 1;
+
+        SplitAncientStorages {
+            ancient_slot_count,
+            ancient_slots,
+            slot0,
+            first_boundary,
+            width,
+        }
+    }
+
+    /// Scan through all the account storage in parallel
+    fn scan_account_storage_no_bank<S>(
+        &self,
+        cache_hash_data: &CacheHashData,
+        config: &CalcAccountsHashConfig<'_>,
+        snapshot_storages: &SortedStorages,
+        scanner: S,
+        bin_range: &Range<usize>,
+        bin_calculator: &PubkeyBinCalculator24,
+        stats: &HashStats,
+    ) -> Vec<BinnedHashData>
+    where
+        S: AppendVecScan,
+    {
+        let SplitAncientStorages {
+            ancient_slot_count,
+            ancient_slots,
+            slot0,
+            first_boundary,
+            width,
+        } = self.split_storages_ancient(config, snapshot_storages);
+
+        let range = snapshot_storages.range();
+        let start_bin_index = bin_range.start;
+
         // 2 is for 2 special chunks - unaligned slots at the beginning and end
         let chunks = ancient_slot_count + 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
         (0..chunks)
