@@ -2,6 +2,8 @@
 use core::arch::x86::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::{CpuidResult, __cpuid, __cpuid_count, __get_cpuid_max};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
@@ -104,20 +106,30 @@ struct CpuInfo {
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[derive(IntoPrimitive)]
+#[repr(i64)]
 enum CpuManufacturer {
     Other,
     Intel,
-    AMD,
+    Amd,
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[derive(TryFromPrimitive, PartialEq, PartialOrd)]
+#[repr(u32)]
 // The value passed into cpuid via eax, to control what the result means
 enum CpuidParamValue {
+    Manufacturer = 0,
     Processor = 1,
     Cache = 2,
+    SerialNumber = 3,
     Topology = 4,
+    Unsupported = 5,
+    ThermalAndPower = 6,
     Extended = 7,
 }
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+const CPUID_PARAM_MAX_SUPPORTED_VALUE: u32 = 7;
 
 #[derive(Default)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -728,25 +740,26 @@ impl SystemMonitorService {
                 edx: 0,
             };
 
-            let max_leaf = cpuid_mfr.eax;
-            let max_subleaf_7 = if 7 <= max_leaf {
-                __get_cpuid_max(7).1
-            } else {
-                0
+            let max_leaf = match CpuidParamValue::try_from(std::cmp::min(
+                cpuid_mfr.eax,
+                CPUID_PARAM_MAX_SUPPORTED_VALUE,
+            )) {
+                Ok(val) => val,
+                Err(_err) => CpuidParamValue::Manufacturer,
             };
 
             let mfr_id: i64 = if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_INTEL
                 && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_INTEL
                 && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_INTEL
             {
-                CpuManufacturer::Intel // GenuineIntel
+                CpuManufacturer::Intel.into() // GenuineIntel
             } else if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_AMD
                 && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_AMD
                 && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_AMD
             {
-                CpuManufacturer::AMD // AuthenticAMD
+                CpuManufacturer::Amd.into() // AuthenticAMD
             } else {
-                CpuManufacturer::Other // anything else
+                CpuManufacturer::Other.into() // anything else
             };
 
             let cpuid_processor = if CpuidParamValue::Processor <= max_leaf {
@@ -769,8 +782,12 @@ impl SystemMonitorService {
             } else {
                 cpuid_empty
             };
-            let cpuid_extended_1 = if CpuidParamValue::Extended <= max_leaf && 1 <= max_subleaf_7 {
-                __cpuid_count(7, 1)
+            let cpuid_extended_1 = if CpuidParamValue::Extended <= max_leaf {
+                if 1 <= __get_cpuid_max(7).1 {
+                    __cpuid_count(7, 1)
+                } else {
+                    cpuid_empty
+                }
             } else {
                 cpuid_empty
             };
