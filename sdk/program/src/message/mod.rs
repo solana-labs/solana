@@ -44,10 +44,11 @@ pub mod legacy;
 #[path = ""]
 mod non_bpf_modules {
     mod account_keys;
+    mod address_loader;
     mod sanitized;
     mod versions;
 
-    pub use {account_keys::*, sanitized::*, versions::*};
+    pub use {account_keys::*, address_loader::*, sanitized::*, versions::*};
 }
 
 use compiled_keys::*;
