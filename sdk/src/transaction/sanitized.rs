@@ -1,12 +1,13 @@
 #![cfg(feature = "full")]
 
+pub use crate::message::{AddressLoader, SimpleAddressLoader};
 use {
     super::SanitizedVersionedTransaction,
     crate::{
         hash::Hash,
         message::{
             legacy,
-            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            v0::{self, LoadedAddresses},
             LegacyMessage, SanitizedMessage, VersionedMessage,
         },
         precompiles::verify_if_precompile,
@@ -41,25 +42,6 @@ pub struct TransactionAccountLocks<'a> {
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
-}
-
-pub trait AddressLoader: Clone {
-    fn load_addresses(self, lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses>;
-}
-
-#[derive(Clone)]
-pub enum SimpleAddressLoader {
-    Disabled,
-    Enabled(LoadedAddresses),
-}
-
-impl AddressLoader for SimpleAddressLoader {
-    fn load_addresses(self, _lookups: &[MessageAddressTableLookup]) -> Result<LoadedAddresses> {
-        match self {
-            Self::Disabled => Err(TransactionError::AddressLookupTableNotFound),
-            Self::Enabled(loaded_addresses) => Ok(loaded_addresses),
-        }
-    }
 }
 
 /// Type that represents whether the transaction message has been precomputed or
