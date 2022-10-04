@@ -1336,12 +1336,19 @@ impl PurgeStats {
     }
 }
 
+/// results from 'split_storages_ancient'
+#[derive(Debug, Default, PartialEq)]
 struct SplitAncientStorages {
+    /// # ancient slots
     ancient_slot_count: Slot,
+    /// the specific ancient slots
     ancient_slots: Vec<Slot>,
-    slot0: Slot,
-    first_boundary: Slot,
-    width: Slot,
+    /// lowest slot that is not an ancient append vec
+    first_non_ancient_slot: Slot,
+    /// slot # of beginning of first full chunk starting at the first non ancient slot
+    first_chunk_start: Slot,
+    /// # non-ancient slots to scan
+    non_ancient_slot_count: Slot,
 }
 
 #[derive(Debug, Default)]
@@ -6893,18 +6900,19 @@ impl AccountsDb {
             .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
         let ancient_slot_count = ancient_slots.len() as Slot;
-        let slot0 = std::cmp::max(range.start, one_epoch_old_slot);
-        let first_boundary =
-            ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
+        let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
+        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
+            / MAX_ITEMS_PER_CHUNK)
+            * MAX_ITEMS_PER_CHUNK;
 
-        let width = max_slot_inclusive - slot0 + 1;
+        let non_ancient_slot_count = max_slot_inclusive - first_non_ancient_slot + 1;
 
         SplitAncientStorages {
             ancient_slot_count,
             ancient_slots,
-            slot0,
-            first_boundary,
-            width,
+            first_non_ancient_slot,
+            first_chunk_start,
+            non_ancient_slot_count,
         }
     }
 
@@ -6925,16 +6933,17 @@ impl AccountsDb {
         let SplitAncientStorages {
             ancient_slot_count,
             ancient_slots,
-            slot0,
-            first_boundary,
-            width,
+            first_non_ancient_slot,
+            first_chunk_start,
+            non_ancient_slot_count,
         } = self.split_storages_ancient(config, snapshot_storages);
 
         let range = snapshot_storages.range();
         let start_bin_index = bin_range.start;
 
         // 2 is for 2 special chunks - unaligned slots at the beginning and end
-        let chunks = ancient_slot_count + 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
+        let chunks =
+            ancient_slot_count + 2 + (non_ancient_slot_count as Slot / MAX_ITEMS_PER_CHUNK);
         (0..chunks)
             .into_par_iter()
             .map(|mut chunk| {
@@ -6948,14 +6957,14 @@ impl AccountsDb {
                     (false, {
                         chunk -= ancient_slot_count;
                         if chunk == 0 {
-                            if slot0 == first_boundary {
+                            if first_non_ancient_slot == first_chunk_start {
                                 return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
                             }
                             // otherwise first chunk is not 'full'
-                            (slot0, first_boundary)
+                            (first_non_ancient_slot, first_chunk_start)
                         } else {
                             // normal chunk in the middle or at the end
-                            let start = first_boundary + MAX_ITEMS_PER_CHUNK * (chunk - 1);
+                            let start = first_chunk_start + MAX_ITEMS_PER_CHUNK * (chunk - 1);
                             let end_exclusive = start + MAX_ITEMS_PER_CHUNK;
                             (start, end_exclusive)
                         }
@@ -7083,8 +7092,13 @@ impl AccountsDb {
 
                     if result.is_err() {
                         info!(
-                            "FAILED_TO_SAVE: {}-{}, {}, first_boundary: {}, {:?}, error: {:?}",
-                            range.start, range.end, width, first_boundary, file_name, result,
+                            "FAILED_TO_SAVE: {}-{}, {}, first_chunk_start: {}, {:?}, error: {:?}",
+                            range.start,
+                            range.end,
+                            non_ancient_slot_count,
+                            first_chunk_start,
+                            file_name,
+                            result,
                         );
                     }
                 }
