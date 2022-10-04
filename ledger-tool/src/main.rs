@@ -216,13 +216,14 @@ fn output_slot(
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 2 {
-                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
+            if verbose_level >= 1 {
+                println!("  {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
+                    meta.next_slots,
                     entries.len(),
                     is_full,
                 );
