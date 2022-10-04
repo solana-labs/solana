@@ -723,7 +723,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // If these intervals change, also make sure to change the loop timers accordingly.
     let accounts_hash_interval = 3;
     let incremental_snapshot_interval = accounts_hash_interval * 3;
-    let full_snapshot_interval = incremental_snapshot_interval * 3;
+    let full_snapshot_interval = incremental_snapshot_interval * 5;
 
     let num_account_paths = 3;
     let leader_snapshot_test_config = SnapshotValidatorConfig::new(
