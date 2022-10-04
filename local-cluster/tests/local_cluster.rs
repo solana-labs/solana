@@ -1408,7 +1408,7 @@ fn test_snapshots_blockstore_floor() {
 #[serial]
 fn test_snapshots_restart_validity() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let snapshot_interval_slots = 10;
+    let snapshot_interval_slots = 100;
     let num_account_paths = 1;
     let mut snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
