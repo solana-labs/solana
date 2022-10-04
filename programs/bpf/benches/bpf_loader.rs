@@ -31,6 +31,7 @@ use {
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::Pubkey,
+        rent::Rent,
         signature::{Keypair, Signer},
     },
     std::{env, fs::File, io::Read, mem, path::PathBuf, sync::Arc},
@@ -100,7 +101,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
         invoke_context
             .get_compute_meter()
             .borrow_mut()
@@ -216,7 +217,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 fn bench_create_vm(bencher: &mut Bencher) {
     let elf = load_elf("noop").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
         const BUDGET: u64 = 200_000;
         invoke_context
             .get_compute_meter()
@@ -264,7 +265,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let elf = load_elf("tuner").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, true, |invoke_context| {
         const BUDGET: u64 = 200_000;
         invoke_context
             .get_compute_meter()
