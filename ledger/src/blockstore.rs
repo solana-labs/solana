@@ -3788,9 +3788,10 @@ fn traverse_children_mut<F>(
 where
     F: Fn(&mut SlotMeta) -> bool,
 {
-    let mut next_slots: Vec<(u64, Rc<RefCell<SlotMeta>>)> = vec![(slot, slot_meta.clone())];
+    let mut next_slots: VecDeque<(u64, Rc<RefCell<SlotMeta>>)> =
+        vec![(slot, slot_meta.clone())].into();
     while !next_slots.is_empty() {
-        let (_, current_slot) = next_slots.pop().unwrap();
+        let (_, current_slot) = next_slots.pop_front().unwrap();
         // Check whether we should explore the children of this slot
         if slot_function(&mut current_slot.borrow_mut()) {
             let current_slot = &RefCell::borrow(&*current_slot);
@@ -3801,7 +3802,7 @@ where
                     passed_visisted_slots,
                     *next_slot_index,
                 )?;
-                next_slots.push((*next_slot_index, next_slot));
+                next_slots.push_back((*next_slot_index, next_slot));
             }
         }
     }
