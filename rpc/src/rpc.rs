@@ -64,7 +64,7 @@ use {
         feature_set::{self, nonce_must_be_writable},
         fee_calculator::FeeCalculator,
         hash::Hash,
-        message::{Message, SanitizedMessage},
+        message::SanitizedMessage,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
@@ -2158,6 +2158,7 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(&bank, is_valid))
     }
 
+<<<<<<< HEAD
     fn get_fee_for_message(
         &self,
         message: &SanitizedMessage,
@@ -2166,6 +2167,28 @@ impl JsonRpcRequestProcessor {
         let bank = self.get_bank_with_config(config)?;
         let fee = bank.get_fee_for_message(message);
         Ok(new_response(&bank, fee))
+=======
+    fn get_stake_minimum_delegation(&self, config: RpcContextConfig) -> Result<RpcResponse<u64>> {
+        let bank = self.get_bank_with_config(config)?;
+        let stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+        Ok(new_response(&bank, stake_minimum_delegation))
+    }
+
+    fn get_recent_prioritization_fees(
+        &self,
+        pubkeys: Vec<Pubkey>,
+    ) -> Result<Vec<RpcPrioritizationFee>> {
+        Ok(self
+            .prioritization_fee_cache
+            .get_prioritization_fees(&pubkeys)
+            .into_iter()
+            .map(|(slot, prioritization_fee)| RpcPrioritizationFee {
+                slot,
+                prioritization_fee,
+            })
+            .collect())
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
     }
 }
 
@@ -3255,7 +3278,10 @@ pub mod rpc_accounts {
 // Full RPC interface that an API node is expected to provide
 // (rpc_minimal should also be provided by an API node)
 pub mod rpc_full {
-    use super::*;
+    use {
+        super::*,
+        solana_sdk::message::{SanitizedVersionedMessage, VersionedMessage},
+    };
     #[rpc]
     pub trait Full {
         type Metadata;
@@ -3956,12 +3982,21 @@ pub mod rpc_full {
             config: Option<RpcContextConfig>,
         ) -> Result<RpcResponse<Option<u64>>> {
             debug!("get_fee_for_message rpc request received");
-            let (_, message) =
-                decode_and_deserialize::<Message>(data, TransactionBinaryEncoding::Base64)?;
-            let sanitized_message = SanitizedMessage::try_from(message).map_err(|err| {
-                Error::invalid_params(format!("invalid transaction message: {}", err))
-            })?;
-            meta.get_fee_for_message(&sanitized_message, config.unwrap_or_default())
+            let (_, message) = decode_and_deserialize::<VersionedMessage>(
+                data,
+                TransactionBinaryEncoding::Base64,
+            )?;
+            let bank = &*meta.get_bank_with_config(config.unwrap_or_default())?;
+            let sanitized_versioned_message = SanitizedVersionedMessage::try_from(message)
+                .map_err(|err| {
+                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                })?;
+            let sanitized_message = SanitizedMessage::try_new(sanitized_versioned_message, bank)
+                .map_err(|err| {
+                    Error::invalid_params(format!("invalid transaction message: {}", err))
+                })?;
+            let fee = bank.get_fee_for_message(&sanitized_message);
+            Ok(new_response(bank, fee))
         }
     }
 }
@@ -4565,10 +4600,18 @@ pub mod tests {
         solana_sdk::{
             account::{Account, WritableAccount},
             clock::MAX_RECENT_BLOCKHASHES,
+<<<<<<< HEAD
             fee_calculator::DEFAULT_BURN_PERCENT,
+=======
+            compute_budget::ComputeBudgetInstruction,
+            fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
             hash::{hash, Hash},
             instruction::InstructionError,
-            message::{v0, v0::MessageAddressTableLookup, MessageHeader, VersionedMessage},
+            message::{
+                v0::{self, MessageAddressTableLookup},
+                Message, MessageHeader, VersionedMessage,
+            },
             nonce::{self, state::DurableNonce},
             rpc_port,
             signature::{Keypair, Signer},
@@ -4599,7 +4642,8 @@ pub mod tests {
         std::{borrow::Cow, collections::HashMap},
     };
 
-    const TEST_MINT_LAMPORTS: u64 = 1_000_000;
+    const TEST_MINT_LAMPORTS: u64 = 1_000_000_000;
+    const TEST_SIGNATURE_FEE: u64 = 5_000;
     const TEST_SLOTS_PER_EPOCH: u64 = DELINQUENT_VALIDATOR_SLOT_DISTANCE + 1;
 
     fn create_test_request(method: &str, params: Option<serde_json::Value>) -> serde_json::Value {
@@ -4744,8 +4788,12 @@ pub mod tests {
             let keypair3 = Keypair::new();
             let bank = self.working_bank();
             let rent_exempt_amount = bank.get_minimum_balance_for_rent_exemption(0);
-            bank.transfer(rent_exempt_amount, mint_keypair, &keypair2.pubkey())
-                .unwrap();
+            bank.transfer(
+                rent_exempt_amount + TEST_SIGNATURE_FEE,
+                mint_keypair,
+                &keypair2.pubkey(),
+            )
+            .unwrap();
 
             let (entries, signatures) = create_test_transaction_entries(
                 vec![&self.mint_keypair, &keypair1, &keypair2, &keypair3],
@@ -5373,7 +5421,7 @@ pub mod tests {
             "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
             "value":{
                 "owner": "11111111111111111111111111111111",
-                "lamports": 1_000_000,
+                "lamports": TEST_MINT_LAMPORTS,
                 "data": "",
                 "executable": false,
                 "rentEpoch": 0
@@ -5450,7 +5498,7 @@ pub mod tests {
         let expected = json!([
             {
                 "owner": "11111111111111111111111111111111",
-                "lamports": 1_000_000,
+                "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base64"],
                 "executable": false,
                 "rentEpoch": 0
@@ -5482,7 +5530,7 @@ pub mod tests {
         let expected = json!([
             {
                 "owner": "11111111111111111111111111111111",
-                "lamports": 1_000_000,
+                "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base58"],
                 "executable": false,
                 "rentEpoch": 0
@@ -6063,7 +6111,7 @@ pub mod tests {
                 "value":{
                     "blockhash": recent_blockhash.to_string(),
                     "feeCalculator": {
-                        "lamportsPerSignature": 0,
+                        "lamportsPerSignature": TEST_SIGNATURE_FEE,
                     }
                 },
             },
@@ -6092,7 +6140,7 @@ pub mod tests {
                 "value": {
                     "blockhash": recent_blockhash.to_string(),
                     "feeCalculator": {
-                        "lamportsPerSignature": 0,
+                        "lamportsPerSignature": TEST_SIGNATURE_FEE,
                     },
                     "lastValidSlot": MAX_RECENT_BLOCKHASHES,
                     "lastValidBlockHeight": MAX_RECENT_BLOCKHASHES,
@@ -6172,9 +6220,9 @@ pub mod tests {
                 "value":{
                     "feeRateGovernor": {
                         "burnPercent": DEFAULT_BURN_PERCENT,
-                        "maxLamportsPerSignature": 0,
-                        "minLamportsPerSignature": 0,
-                        "targetLamportsPerSignature": 0,
+                        "maxLamportsPerSignature": TEST_SIGNATURE_FEE,
+                        "minLamportsPerSignature": TEST_SIGNATURE_FEE,
+                        "targetLamportsPerSignature": TEST_SIGNATURE_FEE,
                         "targetSignaturesPerSlot": 0
                     }
                 },
@@ -6440,6 +6488,7 @@ pub mod tests {
         genesis_config.rent.exemption_threshold = 2.0;
         genesis_config.epoch_schedule =
             EpochSchedule::custom(TEST_SLOTS_PER_EPOCH, TEST_SLOTS_PER_EPOCH, false);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(TEST_SIGNATURE_FEE, 0);
 
         let bank = Bank::new_for_tests(&genesis_config);
         (
@@ -8430,8 +8479,239 @@ pub mod tests {
         assert_eq!(
             sanitize_transaction(versioned_tx, SimpleAddressLoader::Disabled).unwrap_err(),
             Error::invalid_params(
-                "invalid transaction: Transaction loads an address table account that doesn't exist".to_string(),
+                "invalid transaction: Transaction version is unsupported".to_string(),
             )
         );
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_rpc_get_stake_minimum_delegation() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let expected_stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+
+        let request = create_test_request("getStakeMinimumDelegation", None);
+        let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
+        let actual_stake_minimum_delegation = response.value;
+
+        assert_eq!(
+            actual_stake_minimum_delegation,
+            expected_stake_minimum_delegation
+        );
+    }
+
+    #[test]
+    fn test_get_fee_for_message() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        // Slot hashes is necessary for processing versioned txs.
+        bank.set_sysvar_for_tests(&SlotHashes::default());
+        // Correct blockhash is needed because fees are specific to blockhashes
+        let recent_blockhash = bank.last_blockhash();
+
+        {
+            let legacy_msg = VersionedMessage::Legacy(Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                recent_blockhash,
+                account_keys: vec![Pubkey::new_unique()],
+                ..Message::default()
+            });
+
+            let request = create_test_request(
+                "getFeeForMessage",
+                Some(json!([base64::encode(&serialize(&legacy_msg).unwrap())])),
+            );
+            let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
+            assert_eq!(response.value, TEST_SIGNATURE_FEE);
+        }
+
+        {
+            let v0_msg = VersionedMessage::V0(v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 1,
+                    ..MessageHeader::default()
+                },
+                recent_blockhash,
+                account_keys: vec![Pubkey::new_unique()],
+                ..v0::Message::default()
+            });
+
+            let request = create_test_request(
+                "getFeeForMessage",
+                Some(json!([base64::encode(&serialize(&v0_msg).unwrap())])),
+            );
+            let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
+            assert_eq!(response.value, TEST_SIGNATURE_FEE);
+        }
+    }
+
+    #[test]
+    fn test_rpc_get_recent_prioritization_fees() {
+        fn wait_for_cache_blocks(cache: &PrioritizationFeeCache, num_blocks: usize) {
+            while cache.available_block_count() < num_blocks {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+
+        fn assert_fee_vec_eq(
+            expected: &mut Vec<RpcPrioritizationFee>,
+            actual: &mut Vec<RpcPrioritizationFee>,
+        ) {
+            expected.sort_by(|a, b| a.slot.partial_cmp(&b.slot).unwrap());
+            actual.sort_by(|a, b| a.slot.partial_cmp(&b.slot).unwrap());
+            assert_eq!(expected, actual);
+        }
+
+        let rpc = RpcHandler::start();
+        assert_eq!(
+            rpc.get_prioritization_fee_cache().available_block_count(),
+            0
+        );
+        let slot0 = rpc.working_bank().slot();
+        let account0 = Pubkey::new_unique();
+        let account1 = Pubkey::new_unique();
+        let account2 = Pubkey::new_unique();
+        let price0 = 42;
+        let transactions = vec![
+            Transaction::new_unsigned(Message::new(
+                &[
+                    system_instruction::transfer(&account0, &account1, 1),
+                    ComputeBudgetInstruction::set_compute_unit_price(price0),
+                ],
+                Some(&account0),
+            )),
+            Transaction::new_unsigned(Message::new(
+                &[system_instruction::transfer(&account0, &account2, 1)],
+                Some(&account0),
+            )),
+        ];
+        rpc.update_prioritization_fee_cache(transactions);
+        let cache = rpc.get_prioritization_fee_cache();
+        cache.finalize_priority_fee(slot0);
+        wait_for_cache_blocks(cache, 1);
+
+        let request = create_test_request("getRecentPrioritizationFees", None);
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![RpcPrioritizationFee {
+                slot: slot0,
+                prioritization_fee: 0,
+            }],
+        );
+
+        let request = create_test_request(
+            "getRecentPrioritizationFees",
+            Some(json!([[account1.to_string()]])),
+        );
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![RpcPrioritizationFee {
+                slot: slot0,
+                prioritization_fee: price0,
+            }],
+        );
+
+        let request = create_test_request(
+            "getRecentPrioritizationFees",
+            Some(json!([[account2.to_string()]])),
+        );
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![RpcPrioritizationFee {
+                slot: slot0,
+                prioritization_fee: 0,
+            }],
+        );
+
+        rpc.advance_bank_to_confirmed_slot(1);
+        let slot1 = rpc.working_bank().slot();
+        let price1 = 11;
+        let transactions = vec![
+            Transaction::new_unsigned(Message::new(
+                &[
+                    system_instruction::transfer(&account0, &account2, 1),
+                    ComputeBudgetInstruction::set_compute_unit_price(price1),
+                ],
+                Some(&account0),
+            )),
+            Transaction::new_unsigned(Message::new(
+                &[system_instruction::transfer(&account0, &account1, 1)],
+                Some(&account0),
+            )),
+        ];
+        rpc.update_prioritization_fee_cache(transactions);
+        let cache = rpc.get_prioritization_fee_cache();
+        cache.finalize_priority_fee(slot1);
+        wait_for_cache_blocks(cache, 2);
+
+        let request = create_test_request("getRecentPrioritizationFees", None);
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcPrioritizationFee {
+                    slot: slot0,
+                    prioritization_fee: 0,
+                },
+                RpcPrioritizationFee {
+                    slot: slot1,
+                    prioritization_fee: 0,
+                },
+            ],
+        );
+
+        let request = create_test_request(
+            "getRecentPrioritizationFees",
+            Some(json!([[account1.to_string()]])),
+        );
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcPrioritizationFee {
+                    slot: slot0,
+                    prioritization_fee: price0,
+                },
+                RpcPrioritizationFee {
+                    slot: slot1,
+                    prioritization_fee: 0,
+                },
+            ],
+        );
+
+        let request = create_test_request(
+            "getRecentPrioritizationFees",
+            Some(json!([[account2.to_string()]])),
+        );
+        let mut response: Vec<RpcPrioritizationFee> =
+            parse_success_result(rpc.handle_request_sync(request));
+        assert_fee_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcPrioritizationFee {
+                    slot: slot0,
+                    prioritization_fee: 0,
+                },
+                RpcPrioritizationFee {
+                    slot: slot1,
+                    prioritization_fee: price1,
+                },
+            ],
+        );
+    }
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
 }

@@ -17,10 +17,17 @@ use {
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         http_sender::HttpSender,
         mock_sender::MockSender,
+<<<<<<< HEAD:client/src/nonblocking/rpc_client.rs
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_config::{RpcAccountInfoConfig, *},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
+=======
+        rpc_client::{
+            GetConfirmedSignaturesForAddress2Config, RpcClientConfig, SerializableMessage,
+            SerializableTransaction,
+        },
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217)):rpc-client/src/nonblocking/rpc_client.rs
         rpc_sender::*,
         spinner,
     },
@@ -39,10 +46,13 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        message::Message,
         pubkey::Pubkey,
         signature::Signature,
+<<<<<<< HEAD:client/src/nonblocking/rpc_client.rs
         transaction::{self, uses_durable_nonce, Transaction},
+=======
+        transaction,
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217)):rpc-client/src/nonblocking/rpc_client.rs
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -5276,28 +5286,20 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
-    pub async fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
-        if self.get_node_version().await? < semver::Version::new(1, 9, 0) {
-            let fee_calculator = self
-                .get_fee_calculator_for_blockhash(&message.recent_blockhash)
-                .await?
-                .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()))?;
-            Ok(fee_calculator
-                .lamports_per_signature
-                .saturating_mul(message.header.num_required_signatures as u64))
-        } else {
-            let serialized_encoded =
-                serialize_and_encode::<Message>(message, UiTransactionEncoding::Base64)?;
-            let result = self
-                .send::<Response<Option<u64>>>(
-                    RpcRequest::GetFeeForMessage,
-                    json!([serialized_encoded, self.commitment()]),
-                )
-                .await?;
-            result
-                .value
-                .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
-        }
+    pub async fn get_fee_for_message(
+        &self,
+        message: &impl SerializableMessage,
+    ) -> ClientResult<u64> {
+        let serialized_encoded = serialize_and_encode(message, UiTransactionEncoding::Base64)?;
+        let result = self
+            .send::<Response<Option<u64>>>(
+                RpcRequest::GetFeeForMessage,
+                json!([serialized_encoded, self.commitment()]),
+            )
+            .await?;
+        result
+            .value
+            .ok_or_else(|| ClientErrorKind::Custom("Invalid blockhash".to_string()).into())
     }
 
     pub async fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {
