@@ -1,6 +1,5 @@
 use {
     super::Bank,
-    crate::accounts_db::LoadZeroLamports,
     solana_address_lookup_table_program::error::AddressLookupError,
     solana_sdk::{
         message::v0::{LoadedAddresses, MessageAddressTableLookup},
@@ -17,8 +16,6 @@ impl AddressLoader for &Bank {
             return Err(TransactionError::UnsupportedVersion);
         }
 
-        let load_zero_lamports = LoadZeroLamports::None;
-
         let slot_hashes = self
             .sysvar_cache
             .read()
@@ -33,7 +30,6 @@ impl AddressLoader for &Bank {
                     &self.ancestors,
                     address_table_lookup,
                     &slot_hashes,
-                    load_zero_lamports,
                 )
             })
             .collect::<Result<_, AddressLookupError>>()?)
