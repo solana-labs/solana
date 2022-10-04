@@ -4604,12 +4604,7 @@ pub mod tests {
         solana_sdk::{
             account::{Account, WritableAccount},
             clock::MAX_RECENT_BLOCKHASHES,
-<<<<<<< HEAD
-            fee_calculator::DEFAULT_BURN_PERCENT,
-=======
-            compute_budget::ComputeBudgetInstruction,
             fee_calculator::{FeeRateGovernor, DEFAULT_BURN_PERCENT},
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
             hash::{hash, Hash},
             instruction::InstructionError,
             message::{
@@ -8427,8 +8422,6 @@ pub mod tests {
             expected_stake_minimum_delegation
         );
     }
-<<<<<<< HEAD
-=======
 
     #[test]
     fn test_get_fee_for_message() {
@@ -8477,168 +8470,4 @@ pub mod tests {
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
         }
     }
-
-    #[test]
-    fn test_rpc_get_recent_prioritization_fees() {
-        fn wait_for_cache_blocks(cache: &PrioritizationFeeCache, num_blocks: usize) {
-            while cache.available_block_count() < num_blocks {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-        }
-
-        fn assert_fee_vec_eq(
-            expected: &mut Vec<RpcPrioritizationFee>,
-            actual: &mut Vec<RpcPrioritizationFee>,
-        ) {
-            expected.sort_by(|a, b| a.slot.partial_cmp(&b.slot).unwrap());
-            actual.sort_by(|a, b| a.slot.partial_cmp(&b.slot).unwrap());
-            assert_eq!(expected, actual);
-        }
-
-        let rpc = RpcHandler::start();
-        assert_eq!(
-            rpc.get_prioritization_fee_cache().available_block_count(),
-            0
-        );
-        let slot0 = rpc.working_bank().slot();
-        let account0 = Pubkey::new_unique();
-        let account1 = Pubkey::new_unique();
-        let account2 = Pubkey::new_unique();
-        let price0 = 42;
-        let transactions = vec![
-            Transaction::new_unsigned(Message::new(
-                &[
-                    system_instruction::transfer(&account0, &account1, 1),
-                    ComputeBudgetInstruction::set_compute_unit_price(price0),
-                ],
-                Some(&account0),
-            )),
-            Transaction::new_unsigned(Message::new(
-                &[system_instruction::transfer(&account0, &account2, 1)],
-                Some(&account0),
-            )),
-        ];
-        rpc.update_prioritization_fee_cache(transactions);
-        let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot0);
-        wait_for_cache_blocks(cache, 1);
-
-        let request = create_test_request("getRecentPrioritizationFees", None);
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![RpcPrioritizationFee {
-                slot: slot0,
-                prioritization_fee: 0,
-            }],
-        );
-
-        let request = create_test_request(
-            "getRecentPrioritizationFees",
-            Some(json!([[account1.to_string()]])),
-        );
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![RpcPrioritizationFee {
-                slot: slot0,
-                prioritization_fee: price0,
-            }],
-        );
-
-        let request = create_test_request(
-            "getRecentPrioritizationFees",
-            Some(json!([[account2.to_string()]])),
-        );
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![RpcPrioritizationFee {
-                slot: slot0,
-                prioritization_fee: 0,
-            }],
-        );
-
-        rpc.advance_bank_to_confirmed_slot(1);
-        let slot1 = rpc.working_bank().slot();
-        let price1 = 11;
-        let transactions = vec![
-            Transaction::new_unsigned(Message::new(
-                &[
-                    system_instruction::transfer(&account0, &account2, 1),
-                    ComputeBudgetInstruction::set_compute_unit_price(price1),
-                ],
-                Some(&account0),
-            )),
-            Transaction::new_unsigned(Message::new(
-                &[system_instruction::transfer(&account0, &account1, 1)],
-                Some(&account0),
-            )),
-        ];
-        rpc.update_prioritization_fee_cache(transactions);
-        let cache = rpc.get_prioritization_fee_cache();
-        cache.finalize_priority_fee(slot1);
-        wait_for_cache_blocks(cache, 2);
-
-        let request = create_test_request("getRecentPrioritizationFees", None);
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![
-                RpcPrioritizationFee {
-                    slot: slot0,
-                    prioritization_fee: 0,
-                },
-                RpcPrioritizationFee {
-                    slot: slot1,
-                    prioritization_fee: 0,
-                },
-            ],
-        );
-
-        let request = create_test_request(
-            "getRecentPrioritizationFees",
-            Some(json!([[account1.to_string()]])),
-        );
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![
-                RpcPrioritizationFee {
-                    slot: slot0,
-                    prioritization_fee: price0,
-                },
-                RpcPrioritizationFee {
-                    slot: slot1,
-                    prioritization_fee: 0,
-                },
-            ],
-        );
-
-        let request = create_test_request(
-            "getRecentPrioritizationFees",
-            Some(json!([[account2.to_string()]])),
-        );
-        let mut response: Vec<RpcPrioritizationFee> =
-            parse_success_result(rpc.handle_request_sync(request));
-        assert_fee_vec_eq(
-            &mut response,
-            &mut vec![
-                RpcPrioritizationFee {
-                    slot: slot0,
-                    prioritization_fee: 0,
-                },
-                RpcPrioritizationFee {
-                    slot: slot1,
-                    prioritization_fee: price1,
-                },
-            ],
-        );
-    }
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
 }

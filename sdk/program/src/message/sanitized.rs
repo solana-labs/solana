@@ -67,9 +67,7 @@ impl SanitizedMessage {
         address_loader: impl AddressLoader,
     ) -> Result<Self, SanitizeMessageError> {
         Ok(match sanitized_msg.message {
-            VersionedMessage::Legacy(message) => {
-                SanitizedMessage::Legacy(LegacyMessage::new(message))
-            }
+            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
