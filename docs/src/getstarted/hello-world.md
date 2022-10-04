@@ -18,7 +18,7 @@ For this "hello world" quickstart guide, we will use [Solana Playground](https:/
 
 [Solana Playground](https://beta.solpg.io) is browser based application that will let you write, build, and deploy on chain Solana programs. All from your browser. No installation needed.
 
-It is a great developer resources for getting started with Solana development, especially on Windows.
+It is a great developer resource for getting started with Solana development, especially on Windows.
 
 ### Import our example project
 
@@ -102,6 +102,12 @@ You can click the "Deploy" button to deploy your first program to the Solana blo
 
 After each deployment, you will see your Playground Wallet balance change. By default, Solana Playground will automatically request SOL airdrops on your behalf to ensure your wallet has enough SOL to cover the cost of deployment.
 
+> Note:
+> If you need more SOL, you can airdrop more by typing airdrop command in the playground terminal:
+```sh
+solana airdrop 2
+```
+
 ![Build and deploy your Solana program to the blockchain](/img/quickstarts/solana-get-started-build-and-deploy.png)
 
 ### Find your program id
@@ -118,90 +124,29 @@ You have successfully setup, built, and deployed a Solana program using the Rust
 
 Once you have successfully deployed a Solana program to the blockchain, you will want to be able to interact with that program.
 
-Like most developers creating dApps and websites, we will interact with our on chain program using JavaScript inside a NodeJS application. Specifically, will use the open source [NPM package](https://www.npmjs.com/package/@solana/web3.js) `@solana/web3.js` to aid in our client application.
+Like most developers creating dApps and websites, we will interact with our on chain program using JavaScript. Specifically, will use the open source [NPM package](https://www.npmjs.com/package/@solana/web3.js) `@solana/web3.js` to aid in our client application.
 
 > **NOTE:**
 > This web3.js package is an abstraction layer on top of the [JSON RPC API](./../developing/clients/jsonrpc-api.md) that reduced the need for rewriting common boilerplate, helping to simplify your client side application code.
 
-### Initialize a new Node project
+### Initialize client
 
-For a simple client application for our on chain program, create a new folder for the Node project to live:
-
-```bash
-mkdir hello_world && cd hello_world
-```
-
-Initialize a new Node project on you local computer:
+We will be using Solana Playground for the client generation. Create a client folder by running `run` command in the playground terminal:
 
 ```bash
-npm init -y
-# or
-yarn init -y
+run
 ```
 
-To easily interact with the Solana blockchain, add the [`@solana/web3.js`](../developing/clients/javascript-api.md) package to your Node project:
+We have created `client` folder and a default `client.ts`. This is where we will work for the rest of our `hello world` program.
 
-```bash
-npm i @solana/web3.js
-# or
-yarn add @solana/web3.js
-```
+### Playground globals
 
-Create a new file named `app.js` and open it in your favorite code editor. This is where we will work for the rest of our `hello world` program.
+In playground, there are many utilities that are globally available for us to use without installing or setting up anything. Most important ones for our `hello world` program are `web3` for `@solana/web3.js` and `pg` for Solana Playground utilities.
 
-### Connect to the cluster
+> Note:
+> You can go over all of the available globals by pressing `CTRL+SPACE` (or `CMD+SPACE` on macOS) inside the editor.
 
-Import the `@solana/web3.js` library into your project so we can use all the JSON RPC helper functions that are built into it:
-
-```js
-// import the Solana web3.js library
-const web3 = require("@solana/web3.js");
-```
-
-We will also define the `SOLANA_CLUSTER` your program was deployed as well as the `PROGRAM_ID` of your new program:
-
-```js
-// define our program ID and cluster to interact with
-const SOLANA_CLUSTER = "devnet";
-const PROGRAM_ID = "5AQaXHRKmoZMuBem544ELfEAN2qe2y9PU8nnezvpgeP7";
-```
-
-Next we will need to create a `connection` to the specific cluster we deployed our program to:
-
-```js
-// create a new connection to the Solana blockchain
-const connection = new web3.Connection(web3.clusterApiUrl(SOLANA_CLUSTER));
-```
-
-### Create and fund a wallet for testing
-
-In order to submit [transactions](../developing/programming-model/transactions.md) to a Solana cluster, you will need to have a wallet that will pay for the cost of execution. For simplicity, we will generate a dummy "throw away" wallet (and fund it with SOL) for our sample `hello_world` program named `payer`
-
-```js
-// create a "throw away" wallet for testing
-let payer = web3.Keypair.generate();
-console.log("Generated payer address:", payer.publicKey.toBase58());
-
-// fund the "throw away" wallet via an airdrop
-console.log("Requesting airdrop...");
-let airdropSignature = await connection.requestAirdrop(
-  payer.publicKey,
-  web3.LAMPORTS_PER_SOL,
-);
-
-// wait for the airdrop to be completed
-await connection.confirmTransaction(airdropSignature);
-
-// log the signature to the console
-console.log(
-  "Airdrop submitted:",
-  `https://explorer.solana.com/tx/${airdropSignature}?cluster=${SOLANA_CLUSTER}`,
-);
-```
-
-> You will notice that we are logging a URL of the Solana Explorer to the console. This will help us view our transaction on the blockchain when we run our Node application.
-
-### Create and send a transaction
+### Call the program
 
 To execute your on chain program, you must send a [transaction](../developing/programming-model/transactions.md) to it. Each transaction submitted to the Solana blockchain contains a listing of instructions (and the program's that instruction will interact with).
 
@@ -211,65 +156,59 @@ Here we create a new transaction and add a single `instruction` to it:
 // create an empty transaction
 const transaction = new web3.Transaction();
 
-// add a single instruction to the transaction
+// add a hello world program instruction to the transaction
 transaction.add(
   new web3.TransactionInstruction({
-    keys: [
-      {
-        pubkey: payer.publicKey,
-        isSigner: true,
-        isWritable: false,
-      },
-      {
-        pubkey: web3.SystemProgram.programId,
-        isSigner: false,
-        isWritable: false,
-      },
-    ],
-    programId: new web3.PublicKey(PROGRAM_ID),
-  }),
+    keys: [],
+    programId: new web3.PublicKey(pg.PROGRAM_ID),
+  })
 );
 ```
 
-Each `instruction` must include all the keys involved in the operation and the program ID we want to execute. In this example, our `keys` contain the `payer` (that we created earlier to pay for the execution) and the [System Program](../developing/runtime-facilities/programs#system-program) (which is required for all program execution).
+Each `instruction` must include all the keys involved in the operation and the program ID we want to execute. In this example `keys` is empty because our program only logs `hello world` and doesn't need any accounts.
 
-With our transaction created, we can submit it to the cluster (via our `connection`):
+With our transaction created, we can submit it to the cluster:
 
 ```js
-// submit the transaction to the cluster
+// send the transaction to the Solana cluster
 console.log("Sending transaction...");
-let txid = await web3.sendAndConfirmTransaction(connection, transaction, [
-  payer,
-]);
-console.log(
-  "Transaction submitted:",
-  `https://explorer.solana.com/tx/${txid}?cluster=${SOLANA_CLUSTER}`,
+const txHash = await web3.sendAndConfirmTransaction(
+  pg.connection,
+  transaction,
+  [pg.wallet.keypair]
 );
+console.log("Transaction sent with hash:", txHash);
 ```
 
-### Run our application
+> Note:
+> The first signer in the signers array is the transaction fee payer by default. We are signing with our keypair `pg.wallet.keypair`.
 
-With our Node application written, you can run the code via the command line:
+### Run the application
 
-```bash
-node app.js
+With the client application written, you can run the code via the same `run` command.
+
+Once your application completes, you will see output similar to this:
+
+```sh
+Running client...
+  client.ts:
+    My address: GkxZRRNPfaUfL9XdYVfKF3rWjMcj5md6b6mpRoWpURwP
+    My balance: 5.7254472 SOL
+    Sending transaction...
+    Transaction sent with hash: 2Ra7D9JoqeNsax9HmNq6MB4qWtKPGcLwoqQ27mPYsPFh3h8wignvKB2mWZVvdzCyTnp7CEZhfg2cEpbavib9mCcq
 ```
 
-Once your Node application completes, you will see output similar to this:
+### Get transaction logs
 
-```bash
-Generated payer address: 8fBnnMz2SLBcmrsrvWBAt91kSPAWRTkjbrVPJqDcxq2s
-Requesting airdrop...
-Airdrop complete: https://explorer.solana.com/tx/38EXqADsgAj1yNpcTDRwC66HooW1d9mk9PMnPP9V8JbsokZPuWZhP3W9EaixXhPFoBXVQk1NQ2otCs5W1ukt73Hc?cluster=devnet
-Sending transaction...
-Transaction submitted: https://explorer.solana.com/tx/3gv6uAkyDoLZR94hcMf3fDiwnDNN9rrdXos9rmMmok2xJtaW9NKehYKqSspxVH2HpAK7WHfRYQfsyuzr9gguzf2j?cluster=devnet
+We will be using `solana-cli` directly in playground to get the information about any transaction:
+
+```sh
+solana confirm -v <TRANSACTION_HASH>
 ```
 
-> View this example transaction on Solana explorer: https://explorer.solana.com/tx/3gv6uAkyDoLZR94hcMf3fDiwnDNN9rrdXos9rmMmok2xJtaW9NKehYKqSspxVH2HpAK7WHfRYQfsyuzr9gguzf2j?cluster=devnet
+Change `<TRANSACTION_HASH>` with the hash you received from calling `hello world` program.
 
-Using the Solana explorer link for your "submitted transaction", you can view the message our program logged on chain, via `msg!("Hello, world!")`, in the "**Program Instruction Logs**" section of the Solana Explorer.
-
-![View the on chain instruction logs via Solana explorer](/img/quickstarts/solana-get-started-view-logs-on-explorer.png)
+You should see `Hello, world!` in the **Log Messages** section of the output. 🎉
 
 #### Congratulations!!!
 
