@@ -2769,6 +2769,8 @@ fn main() {
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
+                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
+                    run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),

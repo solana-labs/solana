@@ -716,6 +716,9 @@ pub struct ProcessOptions {
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
     pub on_halt_store_hash_raw_data_for_debug: bool,
+    /// true if after processing the contents of the blockstore at startup, we should run an accounts hash calc
+    /// This is useful for debugging.
+    pub run_final_accounts_hash_calc: bool,
 }
 
 pub fn test_process_blockstore(
@@ -1551,7 +1554,9 @@ fn load_frozen_forks(
             )?;
 
             if slot >= halt_at_slot {
-                run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                if opts.run_final_accounts_hash_calc {
+                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                }
                 break;
             }
         }
