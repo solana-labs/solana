@@ -106,7 +106,7 @@ impl TryFrom<legacy::Message> for SanitizedMessage {
 
 impl SanitizedMessage {
     /// Create a sanitized message from a sanitized versioned message.
-    /// If the input message uses address tables, attempt to lookup the
+    /// If the input message uses address tables, attempt to look up the
     /// address for each table index.
     pub fn try_new(
         sanitized_msg: SanitizedVersionedMessage,
