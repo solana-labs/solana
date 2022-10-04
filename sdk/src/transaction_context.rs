@@ -866,6 +866,7 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn make_data_mut(&mut self) {
         // if the account is still shared, it means this is the first time we're
         // about to write into it. Make the account mutable by copying it in a
