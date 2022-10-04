@@ -34,7 +34,7 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        message::Message,
+        message::{v0, Message as LegacyMessage},
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
@@ -60,6 +60,12 @@ impl RpcClientConfig {
         }
     }
 }
+
+/// Trait used to add support for versioned messages to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableMessage: Serialize {}
+impl SerializableMessage for LegacyMessage {}
+impl SerializableMessage for v0::Message {}
 
 /// Trait used to add support for versioned transactions to RPC APIs while
 /// retaining backwards compatibility
@@ -4123,8 +4129,13 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
+<<<<<<< HEAD:client/src/rpc_client.rs
     pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
         self.invoke(self.rpc_client.get_fee_for_message(message))
+=======
+    pub fn get_fee_for_message(&self, message: &impl SerializableMessage) -> ClientResult<u64> {
+        self.invoke((self.rpc_client.as_ref()).get_fee_for_message(message))
+>>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217)):rpc-client/src/rpc_client.rs
     }
 
     pub fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {
