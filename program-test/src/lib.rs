@@ -15,6 +15,7 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
@@ -1129,11 +1130,29 @@ impl ProgramTestContext {
                 pre_warp_slot,
             ))
         };
-        bank_forks.set_root(
-            pre_warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(pre_warp_slot),
-        );
+
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+
+        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
+
+        // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
+        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not
+        // hang in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        snapshot_request_receiver
+            .try_iter()
+            .filter(|snapshot_request| {
+                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+            })
+            .for_each(|snapshot_request| {
+                snapshot_request
+                    .snapshot_root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .epoch_accounts_hash_manager
+                    .set_invalid_for_tests();
+            });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
