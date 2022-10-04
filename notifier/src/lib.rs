@@ -1,4 +1,4 @@
-/// To activate Slack, Discord and/or Telegram notifications, define these environment variables
+/// To activate Slack, Discord, PagerDuty and/or Telegram notifications, define these environment variables
 /// before using the `Notifier`
 /// ```bash
 /// export SLACK_WEBHOOK=...
@@ -9,6 +9,12 @@
 /// ```bash
 /// export TELEGRAM_BOT_TOKEN=...
 /// export TELEGRAM_CHAT_ID=...
+/// ```
+///
+/// PagerDuty requires an Integration Key from the Events API v2 (Add this integration to your PagerDuty service to get this)
+///
+/// ```bash
+/// export PAGERDUTY_INTEGRATION_KEY=...
 /// ```
 ///
 /// To receive a Twilio SMS notification on failure, having a Twilio account,
@@ -80,6 +86,7 @@ fn get_twilio_config() -> Result<Option<TwilioWebHook>, String> {
 enum NotificationType {
     Discord(String),
     Slack(String),
+    PagerDuty(String),
     Telegram(TelegramWebHook),
     Twilio(TwilioWebHook),
     Log(Level),
@@ -105,6 +112,9 @@ impl Notifier {
         }
         if let Ok(webhook) = env::var(format!("{}SLACK_WEBHOOK", env_prefix)) {
             notifiers.push(NotificationType::Slack(webhook));
+        }
+        if let Ok(routing_key) = env::var(format!("{}PAGERDUTY_INTEGRATION_KEY", env_prefix)) {
+            notifiers.push(NotificationType::PagerDuty(routing_key));
         }
 
         if let (Ok(bot_token), Ok(chat_id)) = (
@@ -177,6 +187,14 @@ impl Notifier {
                     let data = json!({ "text": msg });
                     if let Err(err) = self.client.post(webhook).json(&data).send() {
                         warn!("Failed to send Slack message: {:?}", err);
+                    }
+                }
+                NotificationType::PagerDuty(routing_key) => {
+                    let data = json!({"payload":{"summary":msg,"source":"solana-watchtower","severity":"critical"},"routing_key":routing_key,"event_action":"trigger"});
+                    let url = "https://events.pagerduty.com/v2/enqueue";
+
+                    if let Err(err) = self.client.post(url).json(&data).send() {
+                        warn!("Failed to send PagerDuty alert: {:?}", err);
                     }
                 }
 
