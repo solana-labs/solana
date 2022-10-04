@@ -34,8 +34,6 @@ done
 
 # shellcheck disable=2207
 Cargo_tomls=($(find . -mindepth 2 -name Cargo.toml "${not_paths[@]}"))
-# shellcheck disable=2207
-markdownFiles=($(find . -name "*.md" "${not_paths[@]}"))
 
 # Collect the name of all the internal crates
 crates=()
@@ -137,15 +135,6 @@ for Cargo_toml in "${Cargo_tomls[@]}"; do
       "
     )
   done
-done
-
-# Update all the documentation references
-for file in "${markdownFiles[@]}"; do
-  # Set new crate version
-  (
-    set -x
-    sed -i "$file" -e "s/$currentVersion/$newVersion/g"
-  )
 done
 
 # Update cargo lock files
