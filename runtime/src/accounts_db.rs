@@ -1329,7 +1329,7 @@ impl PurgeStats {
 #[derive(Debug, Default, PartialEq)]
 struct SplitAncientStorages {
     /// # ancient slots
-    ancient_slot_count: Slot,
+    ancient_slot_count: usize,
     /// the specific ancient slots
     ancient_slots: Vec<Slot>,
     /// lowest slot that is not an ancient append vec
@@ -1337,7 +1337,9 @@ struct SplitAncientStorages {
     /// slot # of beginning of first full chunk starting at the first non ancient slot
     first_chunk_start: Slot,
     /// # non-ancient slots to scan
-    non_ancient_slot_count: Slot,
+    non_ancient_slot_count: usize,
+    /// # chunks to use to iterate the storages
+    chunk_count: usize,
 }
 
 #[derive(Debug, Default)]
@@ -6883,13 +6885,17 @@ impl AccountsDb {
             .iter_range(&(range.start..one_epoch_old_slot))
             .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
-        let ancient_slot_count = ancient_slots.len() as Slot;
+        let ancient_slot_count = ancient_slots.len();
         let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
         let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
             / MAX_ITEMS_PER_CHUNK)
             * MAX_ITEMS_PER_CHUNK;
 
-        let non_ancient_slot_count = max_slot_inclusive - first_non_ancient_slot + 1;
+        let non_ancient_slot_count = (max_slot_inclusive - first_non_ancient_slot + 1) as usize;
+
+        // 2 is for 2 special chunks - unaligned slots at the beginning and end
+        let chunk_count =
+            ancient_slot_count + 2 + non_ancient_slot_count / (MAX_ITEMS_PER_CHUNK as usize);
 
         SplitAncientStorages {
             ancient_slot_count,
@@ -6897,10 +6903,14 @@ impl AccountsDb {
             first_non_ancient_slot,
             first_chunk_start,
             non_ancient_slot_count,
+            chunk_count,
         }
     }
 
-    /// Scan through all the account storage in parallel
+    /// Scan through all the account storage in parallel.
+    /// Returns a Vec of cache data. At this level, the vector is ordered from older slots to newer slots.
+    ///   A single pubkey could be in multiple entries. The pubkey found int the latest entry is the one to use.
+    /// Each entry in the Vec contains data binned by pubkey according to the various binning parameters.
     fn scan_account_storage_no_bank<S>(
         &self,
         cache_hash_data: &CacheHashData,
@@ -6920,15 +6930,12 @@ impl AccountsDb {
             first_non_ancient_slot,
             first_chunk_start,
             non_ancient_slot_count,
+            chunk_count,
         } = self.split_storages_ancient(config, snapshot_storages);
 
         let range = snapshot_storages.range();
         let start_bin_index = bin_range.start;
-
-        // 2 is for 2 special chunks - unaligned slots at the beginning and end
-        let chunks =
-            ancient_slot_count + 2 + (non_ancient_slot_count as Slot / MAX_ITEMS_PER_CHUNK);
-        (0..chunks)
+        (0..chunk_count)
             .into_par_iter()
             .map(|mut chunk| {
                 let mut scanner = scanner.clone();
@@ -6948,7 +6955,8 @@ impl AccountsDb {
                             (first_non_ancient_slot, first_chunk_start)
                         } else {
                             // normal chunk in the middle or at the end
-                            let start = first_chunk_start + MAX_ITEMS_PER_CHUNK * (chunk - 1);
+                            let start =
+                                first_chunk_start + MAX_ITEMS_PER_CHUNK * ((chunk as Slot) - 1);
                             let end_exclusive = start + MAX_ITEMS_PER_CHUNK;
                             (start, end_exclusive)
                         }
@@ -6963,7 +6971,6 @@ impl AccountsDb {
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
                     || config.store_detailed_debug_info_on_failure;
 
-                // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
                 // Single cached slots get cached and full chunks get cached.
                 // chunks that don't divide evenly would include some cached append vecs that are no longer part of this range and some that are, so we have to ignore caching on non-evenly dividing chunks.
                 let eligible_for_caching = single_cached_slot
@@ -6987,7 +6994,7 @@ impl AccountsDb {
                     || config.store_detailed_debug_info_on_failure
                 {
                     let mut load_from_cache = true;
-                    let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
 
                     for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                         if bin_range.start == 0 && slot < one_epoch_old {
