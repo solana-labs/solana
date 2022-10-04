@@ -1302,7 +1302,7 @@ fn test_snapshot_restart_tower() {
 fn test_snapshots_blockstore_floor() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 1 snapshotting leader
-    let snapshot_interval_slots = 10;
+    let snapshot_interval_slots = 100;
     let num_account_paths = 4;
 
     let leader_snapshot_test_config =
