@@ -6880,7 +6880,7 @@ impl AccountsDb {
 
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
-            .iter_range(range.start..one_epoch_old_slot)
+            .iter_range(&(range.start..one_epoch_old_slot))
             .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
         let ancient_slot_count = ancient_slots.len() as Slot;
@@ -6958,6 +6958,7 @@ impl AccountsDb {
                 if start == end_exclusive {
                     return scanner.scanning_complete();
                 }
+                let range_this_chunk = start..end_exclusive;
 
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
                     || config.store_detailed_debug_info_on_failure;
@@ -6988,7 +6989,7 @@ impl AccountsDb {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                         if bin_range.start == 0 && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
@@ -7033,7 +7034,11 @@ impl AccountsDb {
                         let hash = hasher.finish();
                         let file_name = format!(
                             "{}.{}.{}.{}.{}",
-                            start, end_exclusive, bin_range.start, bin_range.end, hash
+                            range_this_chunk.start,
+                            range_this_chunk.end,
+                            bin_range.start,
+                            bin_range.end,
+                            hash
                         );
                         let mut retval = scanner.get_accum();
                         if eligible_for_caching
@@ -7056,7 +7061,7 @@ impl AccountsDb {
                         String::default()
                     }
                 } else {
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                         if bin_range.start == 0 && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
@@ -7064,7 +7069,7 @@ impl AccountsDb {
                     String::default()
                 };
 
-                for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                     scanner.set_slot(slot);
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
@@ -7106,7 +7111,7 @@ impl AccountsDb {
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
         let in_epoch_range_start = max.saturating_sub(sub);
-        for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
+        for (slot, storages) in storages.iter_range(&(..in_epoch_range_start)) {
             if let Some(storages) = storages {
                 storages.iter().for_each(|store| {
                     if !is_ancient(&store.accounts) {
