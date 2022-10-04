@@ -33,7 +33,6 @@ use {
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-            MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -216,13 +215,14 @@ fn output_slot(
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 2 {
-                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
+            if verbose_level >= 1 {
+                println!("  {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
+                    meta.next_slots,
                     entries.len(),
                     is_full,
                 );
@@ -874,9 +874,9 @@ fn open_blockstore_with_temporary_primary_access(
 fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
-    // temporary use of MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES could
-    // affect the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES) {
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
             warn!("{}", warn_message);
@@ -2769,6 +2769,8 @@ fn main() {
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
+                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
+                    run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),

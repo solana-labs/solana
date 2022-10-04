@@ -142,11 +142,10 @@ pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
 pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
 impl ShredStorageType {
-    /// Returns ShredStorageType::RocksFifo where the specified
-    /// `shred_storage_size` is equally allocated to shred_data_cf_size
-    /// and shred_code_cf_size.
-    pub fn rocks_fifo(shred_storage_size: u64) -> ShredStorageType {
-        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(shred_storage_size))
+    /// Returns a ShredStorageType::RocksFifo, see BlockstoreRocksFifoOptions
+    /// for more details on how `max_shred_storage_size` is interpreted.
+    pub fn rocks_fifo(max_shred_storage_size: Option<u64>) -> ShredStorageType {
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(max_shred_storage_size))
     }
 
     /// The directory under `ledger_path` to the underlying blockstore.
@@ -163,7 +162,7 @@ impl ShredStorageType {
     /// None will be returned if the ShredStorageType cannot be inferred.
     pub fn from_ledger_path(
         ledger_path: &Path,
-        fifo_shred_storage_size: u64,
+        max_fifo_shred_storage_size: Option<u64>,
     ) -> Option<ShredStorageType> {
         let mut result: Option<ShredStorageType> = None;
 
@@ -180,7 +179,7 @@ impl ShredStorageType {
         {
             if result.is_none() {
                 result = Some(ShredStorageType::RocksFifo(
-                    BlockstoreRocksFifoOptions::new(fifo_shred_storage_size),
+                    BlockstoreRocksFifoOptions::new(max_fifo_shred_storage_size),
                 ));
             } else {
                 result = None;
@@ -215,10 +214,22 @@ pub struct BlockstoreRocksFifoOptions {
 pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
 
 impl BlockstoreRocksFifoOptions {
-    fn new(shred_storage_size: u64) -> Self {
-        Self {
-            shred_data_cf_size: shred_storage_size / 2,
-            shred_code_cf_size: shred_storage_size / 2,
+    /// Returns a BlockstoreRocksFifoOptions where the specified
+    /// `max_shred_storage_size` is equally split between shred_data_cf_size
+    /// and shred_code_cf_size. A `None` value for `max_shred_storage_size`
+    /// will (functionally) allow unbounded growth in these two columns. Once
+    /// a column's total size exceeds the configured value, the oldest file(s)
+    /// will be purged to get back within the limit.
+    fn new(max_shred_storage_size: Option<u64>) -> Self {
+        match max_shred_storage_size {
+            Some(size) => Self {
+                shred_data_cf_size: size / 2,
+                shred_code_cf_size: size / 2,
+            },
+            None => Self {
+                shred_data_cf_size: MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+                shred_code_cf_size: MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+            },
         }
     }
 
