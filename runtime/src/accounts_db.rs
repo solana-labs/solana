@@ -6901,7 +6901,7 @@ impl AccountsDb {
             .collect::<Vec<_>>();
         let ancient_slot_count = ancient_slots.len() as Slot;
         let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
-        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
+        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK.saturating_sub(1))
             / MAX_ITEMS_PER_CHUNK)
             * MAX_ITEMS_PER_CHUNK;
 
