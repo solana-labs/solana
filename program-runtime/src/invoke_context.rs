@@ -998,27 +998,26 @@ pub fn prepare_mock_invoke_context(
 pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     loader_id: Pubkey,
     account_size: usize,
+    is_writable: bool,
     mut callback: F,
 ) -> R {
     let program_indices = vec![0, 1];
+    let program_key = Pubkey::new_unique();
     let transaction_accounts = vec![
         (
             loader_id,
             AccountSharedData::new(0, 0, &native_loader::id()),
         ),
+        (program_key, AccountSharedData::new(1, 0, &loader_id)),
         (
             Pubkey::new_unique(),
-            AccountSharedData::new(1, 0, &loader_id),
-        ),
-        (
-            Pubkey::new_unique(),
-            AccountSharedData::new(2, account_size, &Pubkey::new_unique()),
+            AccountSharedData::new(2, account_size, &program_key),
         ),
     ];
     let instruction_accounts = vec![AccountMeta {
         pubkey: transaction_accounts.get(2).unwrap().0,
         is_signer: false,
-        is_writable: false,
+        is_writable,
     }];
     let preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);

@@ -223,7 +223,7 @@ fn run_program(name: &str) -> u64 {
     let mut data = vec![];
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 0, |invoke_context| {
+    with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
         let (parameter_bytes, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             invoke_context
