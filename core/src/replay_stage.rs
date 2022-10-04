@@ -2486,6 +2486,11 @@ impl ReplayStage {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
                 }
                 bank.freeze();
+                datapoint_info!(
+                    "bank_frozen",
+                    ("slot", bank_slot, i64),
+                    ("hash", bank.hash().to_string(), String),
+                );
                 // report cost tracker stats
                 cost_update_sender
                     .send(CostUpdate::FrozenBank { bank: bank.clone() })
@@ -2953,7 +2958,7 @@ impl ReplayStage {
             );
 
             match switch_fork_decision {
-                SwitchForkDecision::FailedSwitchThreshold(_, _) => {
+                SwitchForkDecision::FailedSwitchThreshold(switch_proof_stake, total_stake) => {
                     let reset_bank = heaviest_bank_on_same_voted_fork;
                     // If we can't switch and our last vote was on a non-duplicate/confirmed slot, then
                     // reset to the the next votable bank on the same fork as our last vote,
@@ -2977,9 +2982,16 @@ impl ReplayStage {
                     // then there will be no blocks to include the votes for slot 4, and the network halts
                     // because 90% of validators can't vote
                     info!(
-                        "Waiting to switch vote to {}, resetting to slot {:?} for now",
+                        "Waiting to switch vote to {},
+                        resetting to slot {:?} for now,
+                        switch proof stake: {},
+                        threshold stake: {},
+                        total stake: {}",
                         heaviest_bank.slot(),
                         reset_bank.as_ref().map(|b| b.slot()),
+                        switch_proof_stake,
+                        total_stake as f64 * SWITCH_FORK_THRESHOLD,
+                        total_stake
                     );
                     failure_reasons.push(HeaviestForkFailures::FailedSwitchThreshold(
                         heaviest_bank.slot(),
