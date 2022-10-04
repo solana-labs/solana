@@ -157,7 +157,8 @@ struct ServeRepairStats {
     dropped_requests_load_shed: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
-    total_response_bytes: usize,
+    total_response_bytes_staked: usize,
+    total_response_bytes_unstaked: usize,
     handle_requests_staked: usize,
     handle_requests_unstaked: usize,
     processed: usize,
@@ -530,7 +531,16 @@ impl ServeRepair {
             ),
             ("processed", stats.processed, i64),
             ("total_response_packets", stats.total_response_packets, i64),
-            ("total_response_bytes", stats.total_response_bytes, i64),
+            (
+                "total_response_bytes_staked",
+                stats.total_response_bytes_staked,
+                i64
+            ),
+            (
+                "total_response_bytes_unstaked",
+                stats.total_response_bytes_unstaked,
+                i64
+            ),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
@@ -687,9 +697,8 @@ impl ServeRepair {
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
 
-        let mut budget_exhausted = false;
         // iter over the packets
-        for packet in packet_batch.iter() {
+        for (i, packet) in packet_batch.iter().enumerate() {
             let request: RepairProtocol = match packet.deserialize_slice(..) {
                 Ok(request) => request,
                 Err(_) => {
@@ -702,15 +711,9 @@ impl ServeRepair {
                 .as_ref()
                 .map(|nodes| nodes.contains_key(request.sender()))
                 .unwrap_or_default();
-            if staked {
-                stats.handle_requests_staked += 1;
-            } else {
-                stats.handle_requests_unstaked += 1;
-            }
-
-            if budget_exhausted {
-                stats.dropped_requests_outbound_bandwidth += 1;
-                continue;
+            match staked {
+                true => stats.handle_requests_staked += 1,
+                false => stats.handle_requests_unstaked += 1,
             }
 
             if request.sender() == &my_id {
@@ -736,12 +739,15 @@ impl ServeRepair {
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
-                stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
+                match staked {
+                    true => stats.total_response_bytes_staked += num_response_bytes,
+                    false => stats.total_response_bytes_unstaked += num_response_bytes,
+                }
             } else {
-                stats.dropped_requests_outbound_bandwidth += 1;
+                stats.dropped_requests_outbound_bandwidth += packet_batch.len() - i;
                 stats.total_dropped_response_packets += num_response_packets;
-                budget_exhausted = true;
+                break;
             }
         }
     }
