@@ -24,13 +24,15 @@ pub struct Header {
     count: usize,
 }
 
-pub(crate) struct CacheHashDataFile {
-    cell_size: u64,
+const HEADER_SIZE: usize = std::mem::size_of::<Header>();
+const CELL_SIZE: usize = std::mem::size_of::<EntryType>();
+
+pub(crate) struct CacheHashDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize> {
     mmap: MmapMut,
     capacity: u64,
 }
 
-impl CacheHashDataFile {
+impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SIZE, HEADER_SIZE> {
     /// return a slice of a reference to all the cache hash data from the mmapped file
     pub(crate) fn get_cache_hash_data(&self) -> &[EntryType] {
         self.get_slice(0)
@@ -75,7 +77,7 @@ impl CacheHashDataFile {
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
-        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
+        let remaining_elements = item_slice.len() / CELL_SIZE;
         unsafe {
             let item = item_slice.as_ptr() as *const EntryType;
             std::slice::from_raw_parts(item, remaining_elements)
@@ -84,7 +86,7 @@ impl CacheHashDataFile {
 
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
     fn get_element_offset_byte(&self, ix: u64) -> usize {
-        let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
+        let start = (ix as usize) * CELL_SIZE + HEADER_SIZE;
         debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
         start
     }
@@ -92,21 +94,21 @@ impl CacheHashDataFile {
     /// get the bytes representing cache file [ix]
     fn get_slice_internal(&self, ix: u64) -> &[u8] {
         let start = self.get_element_offset_byte(ix);
-        let end = start + std::mem::size_of::<EntryType>();
+        let end = start + CELL_SIZE;
         assert!(
             end <= self.capacity as usize,
             "end: {}, capacity: {}, ix: {}, cell size: {}",
             end,
             self.capacity,
             ix,
-            self.cell_size
+            CELL_SIZE
         );
         &self.mmap[start..end]
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
         let start = 0_usize;
-        let end = start + std::mem::size_of::<Header>();
+        let end = start + HEADER_SIZE;
         let item_slice: &[u8] = &self.mmap[start..end];
         unsafe {
             let item = item_slice.as_ptr() as *mut Header;
@@ -222,7 +224,7 @@ impl CacheHashData {
     pub(crate) fn load_map<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    ) -> Result<CacheHashDataFile<CELL_SIZE, HEADER_SIZE>, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.map(file_name, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
@@ -234,19 +236,18 @@ impl CacheHashData {
         &self,
         file_name: &P,
         stats: &mut CacheHashDataStats,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    ) -> Result<CacheHashDataFile<CELL_SIZE, HEADER_SIZE>, std::io::Error> {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFile::load_map(&path)?;
+        let mmap = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE>::load_map(&path)?;
         m1.stop();
         stats.read_us = m1.as_us();
-        let header_size = std::mem::size_of::<Header>() as u64;
-        if file_len < header_size {
+
+        if file_len < HEADER_SIZE as u64 {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
 
-        let cell_size = std::mem::size_of::<EntryType>() as u64;
         unsafe {
             assert_eq!(
                 mmap.align_to::<EntryType>().0.len(),
@@ -254,16 +255,12 @@ impl CacheHashData {
                 "mmap is not aligned"
             );
         }
-        assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
-        let mut cache_file = CacheHashDataFile {
-            mmap,
-            cell_size,
-            capacity: 0,
-        };
+        assert_eq!((CELL_SIZE) % std::mem::size_of::<u64>(), 0);
+        let mut cache_file = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE> { mmap, capacity: 0 };
         let header = cache_file.get_header_mut();
         let entries = header.count;
 
-        let capacity = cell_size * (entries as u64) + header_size;
+        let capacity = (CELL_SIZE as u64) * (entries as u64) + (HEADER_SIZE as u64);
         if file_len < capacity {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
@@ -271,7 +268,7 @@ impl CacheHashData {
         assert_eq!(
             capacity, file_len,
             "expected: {}, len on disk: {} {:?}, entries: {}, cell_size: {}",
-            capacity, file_len, path, entries, cell_size
+            capacity, file_len, path, entries, CELL_SIZE,
         );
 
         stats.total_entries = entries;
@@ -309,23 +306,18 @@ impl CacheHashData {
         if create {
             let _ignored = remove_file(&cache_path);
         }
-        let cell_size = std::mem::size_of::<EntryType>() as u64;
         let mut m1 = Measure::start("create save");
         let entries = data
             .iter()
             .map(|x: &Vec<EntryType>| x.len())
             .collect::<Vec<_>>();
         let entries = entries.iter().sum::<usize>();
-        let capacity = cell_size * (entries as u64) + std::mem::size_of::<Header>() as u64;
+        let capacity = (CELL_SIZE as u64) * (entries as u64) + HEADER_SIZE as u64;
 
-        let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
+        let mmap = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE>::new_map(&cache_path, capacity)?;
         m1.stop();
         stats.create_save_us += m1.as_us();
-        let mut cache_file = CacheHashDataFile {
-            mmap,
-            cell_size,
-            capacity,
-        };
+        let mut cache_file = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE> { mmap, capacity };
 
         let mut header = cache_file.get_header_mut();
         header.count = entries;
