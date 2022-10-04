@@ -524,6 +524,7 @@ pub fn deserialize_parameters_aligned(
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use {
         super::*,
