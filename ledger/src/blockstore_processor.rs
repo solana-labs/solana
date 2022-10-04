@@ -1398,6 +1398,10 @@ fn load_frozen_forks(
     let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
     let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
     if bank_forks.read().unwrap().root() != halt_at_slot {
+        let mut set_root_us = 0;
+        let mut root_retain_us = 0;
+        let mut process_single_slot_us = 0;
+        let mut voting_us = 0;
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
@@ -1406,7 +1410,7 @@ fn load_frozen_forks(
                 let secs = last_status_report.elapsed().as_secs() as f32;
                 last_status_report = Instant::now();
                 info!(
-                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}, set_root_us={set_root_us}, root_retain_us={root_retain_us}, process_single_slot_us:{process_single_slot_us}, voting_us: {voting_us}",
                     slot,
                     root,
                     slots_elapsed,
@@ -1415,10 +1419,15 @@ fn load_frozen_forks(
                 );
                 slots_elapsed = 0;
                 txs = 0;
+                set_root_us = 0;
+                root_retain_us = 0;
+                process_single_slot_us = 0;
+                voting_us = 0;
             }
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
+            let mut m = Measure::start("process_single_slot");
             let bank = bank_forks.write().unwrap().insert(bank);
             if process_single_slot(
                 blockstore,
@@ -1442,6 +1451,10 @@ fn load_frozen_forks(
             // have errored above
             assert!(bank.is_frozen());
             all_banks.insert(bank.slot(), bank.clone());
+            m.stop();
+            process_single_slot_us += m.as_us();
+
+            let mut m = Measure::start("voting");
 
             // If we've reached the last known root in blockstore, start looking
             // for newer cluster confirmed roots
@@ -1496,7 +1509,11 @@ fn load_frozen_forks(
                 }
             };
 
+            m.stop();
+            voting_us += m.as_us();
+
             if let Some(new_root_bank) = new_root_bank {
+                let mut m = Measure::start("set_root");
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
@@ -1505,11 +1522,16 @@ fn load_frozen_forks(
                     accounts_background_request_sender,
                     None,
                 );
+                m.stop();
+                set_root_us += m.as_us();
 
                 // Filter out all non descendants of the new root
+                let mut m = Measure::start("filter pending slots");
                 pending_slots
                     .retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(&root));
                 all_banks.retain(|_, bank| bank.ancestors.contains_key(&root));
+                m.stop();
+                root_retain_us += m.as_us();
             }
 
             slots_elapsed += 1;
