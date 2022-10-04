@@ -17,7 +17,7 @@ use {
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
     },
-    std::{mem, mem::size_of},
+    std::mem::{self, size_of},
 };
 
 /// Maximum number of instruction accounts that can be serialized into the
@@ -35,16 +35,18 @@ struct Serializer {
     vaddr: u64,
     region_start: usize,
     aligned: bool,
+    copy_account_data: bool,
 }
 
 impl Serializer {
-    fn new(size: usize, start_addr: u64, aligned: bool) -> Serializer {
+    fn new(size: usize, start_addr: u64, aligned: bool, copy_account_data: bool) -> Serializer {
         Serializer {
             buffer: AlignedMemory::with_capacity(size),
             regions: Vec::new(),
             region_start: 0,
             vaddr: start_addr,
             aligned,
+            copy_account_data,
         }
     }
 
@@ -75,17 +77,46 @@ impl Serializer {
         }
     }
 
-    fn write_account(&mut self, account: &BorrowedAccount<'_>) -> Result<(), InstructionError> {
-        self.write_all(account.get_data());
+    fn write_account(&mut self, account: &mut BorrowedAccount<'_>) -> Result<(), InstructionError> {
+        if self.copy_account_data {
+            self.write_all(account.get_data());
+        } else {
+            self.push_account_region(account);
+        }
 
         if self.aligned {
             let align_offset =
                 (account.get_data().len() as *const u8).align_offset(BPF_ALIGN_OF_U128);
-            self.fill_write(MAX_PERMITTED_DATA_INCREASE + align_offset, 0)
-                .map_err(|_| InstructionError::InvalidArgument)?;
+            if self.copy_account_data {
+                self.fill_write(MAX_PERMITTED_DATA_INCREASE + align_offset, 0)
+                    .map_err(|_| InstructionError::InvalidArgument)?;
+            } else {
+                // The deserialization code is going to align the vm_addr to
+                // BPF_ALIGN_OF_U128. Always add one BPF_ALIGN_OF_U128 worth of
+                // padding and shift the start of the next region, so that once
+                // vm_addr is aligned, the corresponding host_addr is aligned
+                // too.
+                self.fill_write(MAX_PERMITTED_DATA_INCREASE + BPF_ALIGN_OF_U128, 0)
+                    .map_err(|_| InstructionError::InvalidArgument)?;
+                self.region_start += BPF_ALIGN_OF_U128.saturating_sub(align_offset);
+            }
         }
 
         Ok(())
+    }
+
+    fn push_account_region(&mut self, account: &mut BorrowedAccount<'_>) {
+        self.push_region();
+        let account_len = account.get_data().len();
+        if account_len > 0 {
+            let region = if let Ok(data) = account.get_data_mut() {
+                MemoryRegion::new_writable(data, self.vaddr)
+            } else {
+                MemoryRegion::new_readonly(account.get_data(), self.vaddr)
+            };
+            self.vaddr += region.len;
+            self.regions.push(region);
+        }
     }
 
     fn push_region(&mut self) {
@@ -235,21 +266,20 @@ fn serialize_parameters_unaligned(
          + instruction_context.get_instruction_data().len() // instruction data
          + size_of::<Pubkey>(); // program id
 
-    let mut s = Serializer::new(size, MM_INPUT_START, false);
+    let mut s = Serializer::new(size, MM_INPUT_START, false, copy_account_data);
 
     s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
             SerializeAccount::Duplicate(position) => s.write(position as u8),
-            SerializeAccount::Account(_, account) => {
+            SerializeAccount::Account(_, mut account) => {
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(account.is_signer() as u8);
                 s.write::<u8>(account.is_writable() as u8);
                 s.write_all(account.get_key().as_ref());
                 s.write::<u64>(account.get_lamports().to_le());
                 s.write::<u64>((account.get_data().len() as u64).to_le());
-                s.write_account(&account)
-                    .map_err(|_| InstructionError::InvalidArgument)?;
+                s.write_account(&mut account)?;
                 s.write_all(account.get_owner().as_ref());
                 s.write::<u8>(account.is_executable() as u8);
                 s.write::<u64>((account.get_rent_epoch()).to_le());
@@ -357,13 +387,13 @@ fn serialize_parameters_aligned(
     + instruction_context.get_instruction_data().len()
     + size_of::<Pubkey>(); // program id;
 
-    let mut s = Serializer::new(size, MM_INPUT_START, true);
+    let mut s = Serializer::new(size, MM_INPUT_START, true, copy_account_data);
 
     // Serialize into the buffer
     s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
-            SerializeAccount::Account(_, borrowed_account) => {
+            SerializeAccount::Account(_, mut borrowed_account) => {
                 s.write::<u8>(NON_DUP_MARKER);
                 s.write::<u8>(borrowed_account.is_signer() as u8);
                 s.write::<u8>(borrowed_account.is_writable() as u8);
@@ -373,9 +403,8 @@ fn serialize_parameters_aligned(
                 s.write_all(borrowed_account.get_owner().as_ref());
                 s.write::<u64>(borrowed_account.get_lamports().to_le());
                 s.write::<u64>((borrowed_account.get_data().len() as u64).to_le());
-                s.write_account(&borrowed_account)
-                    .map_err(|_| InstructionError::InvalidArgument)?;
-                s.write::<u64>((borrowed_account.get_rent_epoch()).to_le());
+                s.write_account(&mut borrowed_account)?;
+                s.write::<u64>((borrowed_account.get_rent_epoch() as u64).to_le());
             }
             SerializeAccount::Duplicate(position) => {
                 s.write::<u8>(position as u8);
@@ -459,6 +488,8 @@ pub fn deserialize_parameters_aligned(
                 }
                 start += *pre_len; // data
             } else {
+                // See Serializer::write_account() as to why we have this
+                // padding before the realloc region here.
                 start += BPF_ALIGN_OF_U128.saturating_sub(alignment_offset);
                 let data = buffer
                     .get(start..start + MAX_PERMITTED_DATA_INCREASE)

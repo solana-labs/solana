@@ -30,6 +30,7 @@ use {
         big_mod_exp::{big_mod_exp, BigModExpParams},
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+        feature_set::bpf_account_data_direct_mapping,
         feature_set::FeatureSet,
         feature_set::{
             self, blake3_syscall_enabled, check_syscall_outputs_do_not_overlap,
@@ -174,7 +175,7 @@ pub fn create_loader<'a>(
         enable_elf_vaddr: false,
         reject_rodata_stack_overlap: false,
         new_elf_parser: feature_set.is_active(&switch_to_new_elf_parser::id()),
-        aligned_memory_mapping: true,
+        aligned_memory_mapping: !feature_set.is_active(&bpf_account_data_direct_mapping::id()),
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
 
