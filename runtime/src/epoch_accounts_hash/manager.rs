@@ -102,12 +102,12 @@ impl Manager {
 /// is used to track the state of that calculation, and queried when saving the EAH into a Bank.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
-    /// On boot, and if the snapshot does not already contain an EAH, the initial state of the EAH
-    /// is invalid.  Since an EAH calculation has not yet been requested, the Bank should not wait
-    /// for one to complete.
+    /// On startup from genesis/slot0, the initial state of the EAH is invalid since one has not
+    /// yet been requested.  This state should only really occur for tests and new clusters; not
+    /// for established running clusters.
     Invalid,
-    /// An EAH calculation has been requested (for `Slot`) and is in flight.  The Bank that should save the EAH
-    /// must wait until the calculation has completed.
+    /// An EAH calculation has been requested (for `Slot`) and is in flight.  The Bank that should
+    /// save the EAH must wait until the calculation has completed.
     InFlight(Slot),
     /// The EAH calculation is complete (for `Slot`) and the EAH value is valid to read/use.
     Valid(EpochAccountsHash, Slot),
