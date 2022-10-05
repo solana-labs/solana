@@ -30,12 +30,12 @@ pub struct Header {
 }
 const HEADER_SIZE: usize = std::mem::size_of::<Header>();
 
-pub(crate) struct CacheHashDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize> {
+pub(crate) struct CacheDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize> {
     mmap: MmapMut,
     capacity: u64,
 }
 
-impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SIZE, HEADER_SIZE> {
+impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheDataFile<CELL_SIZE, HEADER_SIZE> {
     /// return a slice of a reference to all the cache hash data from the mmapped file
     pub(crate) fn get_cache_hash_data(&self) -> &[EntryType] {
         self.get_slice(0)
@@ -79,7 +79,7 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
     }
 
     /// get '&mut [EntryType]' from cache file [ix..]
-    fn get_slice_mut(&self, ix: u64) -> &mut [EntryType] {
+    fn get_slice_mut(&mut self, ix: u64) -> &mut [EntryType] {
         let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
         let remaining_elements = item_slice.len() / CELL_SIZE;
@@ -133,6 +133,8 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
 }
+
+pub type CacheHashDataFile = CacheDataFile<CELL_SIZE, HEADER_SIZE>;
 
 pub type PreExistingCacheFiles = HashSet<String>;
 pub struct CacheHashData {
@@ -214,7 +216,7 @@ impl CacheHashData {
     pub(crate) fn load_map<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
-    ) -> Result<CacheHashDataFile<CELL_SIZE, HEADER_SIZE>, std::io::Error> {
+    ) -> Result<CacheHashDataFile, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.map(file_name, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
@@ -226,7 +228,7 @@ impl CacheHashData {
         &self,
         file_name: &P,
         stats: &mut CacheHashDataStats,
-    ) -> Result<CacheHashDataFile<CELL_SIZE, HEADER_SIZE>, std::io::Error> {
+    ) -> Result<CacheHashDataFile, std::io::Error> {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
@@ -246,7 +248,7 @@ impl CacheHashData {
             );
         }
         assert_eq!((CELL_SIZE) % std::mem::size_of::<u64>(), 0);
-        let mut cache_file = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE> { mmap, capacity: 0 };
+        let mut cache_file = CacheHashDataFile { mmap, capacity: 0 };
         let header = cache_file.get_header_mut();
         let entries = header.count;
 
@@ -319,7 +321,7 @@ impl CacheHashData {
         let mut i = 0;
 
         let cache = cache_file.get_slice_mut(0_u64);
-        for item in data.into_iter().flatten() {
+        for item in data.iter().flatten() {
             cache[i] = item.clone();
             i += 1;
         }
