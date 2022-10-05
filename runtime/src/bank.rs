@@ -6901,7 +6901,7 @@ impl Bank {
             self.last_blockhash(),
             self.capitalization(),
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
-                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash)
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
             } else {
                 "".to_string()
             }
