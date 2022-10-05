@@ -6870,7 +6870,7 @@ impl Bank {
         ]);
 
         let epoch_accounts_hash = self.should_include_epoch_accounts_hash().then(|| {
-            let epoch_accounts_hash = self.wait_for_epoch_accounts_hash();
+            let epoch_accounts_hash = self.wait_get_epoch_accounts_hash();
             hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
             epoch_accounts_hash
         });
@@ -6931,16 +6931,16 @@ impl Bank {
 
     /// If the epoch accounts hash should be included in this Bank, then fetch it.  If the EAH
     /// calculation has not completed yet, this fn will block until it does complete.
-    fn wait_for_epoch_accounts_hash(&self) -> EpochAccountsHash {
+    fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
         let (epoch_accounts_hash, measure) = measure!(self
             .rc
             .accounts
             .accounts_db
             .epoch_accounts_hash_manager
-            .get_epoch_accounts_hash());
+            .wait_get_epoch_accounts_hash());
 
         datapoint_info!(
-            "bank-wait_for_epoch_accounts_hash",
+            "bank-wait_get_epoch_accounts_hash",
             ("slot", self.slot() as i64, i64),
             (
                 "epoch_accounts_hash",

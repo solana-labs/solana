@@ -63,7 +63,7 @@ impl Manager {
     /// Get the epoch accounts hash
     ///
     /// If an EAH calculation is in-flight, then this call will block until it completes.
-    pub fn get_epoch_accounts_hash(&self) -> EpochAccountsHash {
+    pub fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
         let mut state = self.state.lock().unwrap();
         loop {
             match &*state {
