@@ -1357,15 +1357,31 @@ impl SplitAncientStorages {
         // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
-        let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
 
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
             .iter_range(&(range.start..one_epoch_old_slot))
             .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
-        let ancient_slot_count = ancient_slots.len();
         let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
+        Self::new_with_ancient_info(range, ancient_slots, first_non_ancient_slot)
+    }
+
+    /// create once ancient slots have been identified
+    /// This is easier to test, removing SortedStorges as a type to deal with here.
+    fn new_with_ancient_info(
+        range: &Range<Slot>,
+        ancient_slots: Vec<Slot>,
+        first_non_ancient_slot: Slot,
+    ) -> Self {
+        if range.is_empty() {
+            // Corner case mainly for tests, but gives us a consistent base case. Makes more sense to return default here than anything else.
+            // caller is asking to split for empty set of slots
+            return SplitAncientStorages::default();
+        }
+
+        let max_slot_inclusive = range.end.saturating_sub(1);
+        let ancient_slot_count = ancient_slots.len();
         let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
             / MAX_ITEMS_PER_CHUNK)
             * MAX_ITEMS_PER_CHUNK;
