@@ -29,9 +29,6 @@ pub enum UnprocessedTransactionStorage {
     LocalTransactionStorage(ThreadLocalUnprocessedPackets),
 }
 
-unsafe impl Send for UnprocessedTransactionStorage {}
-unsafe impl Sync for UnprocessedTransactionStorage {}
-
 #[derive(Debug)]
 pub struct ThreadLocalUnprocessedPackets {
     unprocessed_packet_batches: UnprocessedPacketBatches,
