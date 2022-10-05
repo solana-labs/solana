@@ -92,3 +92,6 @@ extern crate serde_derive;
 
 #[macro_use]
 extern crate solana_frozen_abi_macro;
+
+#[macro_use]
+extern crate static_assertions;

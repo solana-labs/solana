@@ -10,6 +10,7 @@ use {
         collections::HashSet,
         fs::{self, remove_file, OpenOptions},
         io::{Seek, SeekFrom, Write},
+        marker::PhantomData,
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
     },
@@ -30,61 +31,36 @@ pub struct Header {
 }
 const HEADER_SIZE: usize = std::mem::size_of::<Header>();
 
-pub(crate) struct CacheDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize> {
+pub struct CacheDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize, T> {
     mmap: MmapMut,
     capacity: u64,
+    phantom: PhantomData<T>,
 }
 
-impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheDataFile<CELL_SIZE, HEADER_SIZE> {
+impl<const CELL_SIZE: usize, const HEADER_SIZE: usize, T> CacheDataFile<CELL_SIZE, HEADER_SIZE, T> {
     /// return a slice of a reference to all the cache hash data from the mmapped file
-    pub(crate) fn get_cache_hash_data(&self) -> &[EntryType] {
+    pub(crate) fn get_cache_hash_data(&self) -> &[T] {
         self.get_slice(0)
     }
 
-    /// Populate 'accumulator' from entire contents of the cache file.
-    pub(crate) fn load_all(
-        &self,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
-        stats: &mut CacheHashDataStats,
-    ) {
-        let mut m2 = Measure::start("decode");
-        let slices = self.get_cache_hash_data();
-        for d in slices {
-            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
-            assert!(
-                pubkey_to_bin_index >= start_bin_index,
-                "{}, {}",
-                pubkey_to_bin_index,
-                start_bin_index
-            ); // this would indicate we put a pubkey in too high of a bin
-            pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
-        }
-
-        m2.stop();
-        stats.decode_us += m2.as_us();
-    }
-
-    /// get '&[EntryType]' from cache file [ix..]
-    fn get_slice(&self, ix: u64) -> &[EntryType] {
+    /// get '&[T]' from cache file [ix..]
+    fn get_slice(&self, ix: u64) -> &[T] {
         let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
         let remaining_elements = item_slice.len() / CELL_SIZE;
         unsafe {
-            let item = item_slice.as_ptr() as *const EntryType;
+            let item = item_slice.as_ptr() as *const T;
             std::slice::from_raw_parts(item, remaining_elements)
         }
     }
 
-    /// get '&mut [EntryType]' from cache file [ix..]
-    fn get_slice_mut(&mut self, ix: u64) -> &mut [EntryType] {
+    /// get '&mut [T]' from cache file [ix..]
+    fn get_slice_mut(&mut self, ix: u64) -> &mut [T] {
         let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
         let remaining_elements = item_slice.len() / CELL_SIZE;
         unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
+            let item = item_slice.as_ptr() as *mut T;
             std::slice::from_raw_parts_mut(item, remaining_elements)
         }
     }
@@ -134,7 +110,37 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheDataFile<CELL_SIZE, 
     }
 }
 
-pub type CacheHashDataFile = CacheDataFile<CELL_SIZE, HEADER_SIZE>;
+pub(crate) type CacheHashDataFile = CacheDataFile<CELL_SIZE, HEADER_SIZE, EntryType>;
+
+impl<const CELL_SIZE: usize, const HEADER_SIZE: usize>
+    CacheDataFile<CELL_SIZE, HEADER_SIZE, EntryType>
+{
+    /// Populate 'accumulator' from entire contents of the cache file.
+    pub(crate) fn load_all(
+        &self,
+        accumulator: &mut SavedType,
+        start_bin_index: usize,
+        bin_calculator: &PubkeyBinCalculator24,
+        stats: &mut CacheHashDataStats,
+    ) {
+        let mut m2 = Measure::start("decode");
+        let slices = self.get_cache_hash_data();
+        for d in slices {
+            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
+            assert!(
+                pubkey_to_bin_index >= start_bin_index,
+                "{}, {}",
+                pubkey_to_bin_index,
+                start_bin_index
+            ); // this would indicate we put a pubkey in too high of a bin
+            pubkey_to_bin_index -= start_bin_index;
+            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+        }
+
+        m2.stop();
+        stats.decode_us += m2.as_us();
+    }
+}
 
 pub type PreExistingCacheFiles = HashSet<String>;
 pub struct CacheHashData {
@@ -232,7 +238,7 @@ impl CacheHashData {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE>::load_map(&path)?;
+        let mmap = CacheHashDataFile::load_map(&path)?;
         m1.stop();
         stats.read_us = m1.as_us();
 
@@ -247,8 +253,12 @@ impl CacheHashData {
                 "mmap is not aligned"
             );
         }
-        assert_eq!((CELL_SIZE) % std::mem::size_of::<u64>(), 0);
-        let mut cache_file = CacheHashDataFile { mmap, capacity: 0 };
+        const_assert_eq!((CELL_SIZE) % std::mem::size_of::<u64>(), 0);
+        let mut cache_file = CacheHashDataFile {
+            mmap,
+            capacity: 0,
+            phantom: PhantomData,
+        };
         let header = cache_file.get_header_mut();
         let entries = header.count;
 
@@ -306,10 +316,14 @@ impl CacheHashData {
         let entries = entries.iter().sum::<usize>();
         let capacity = (CELL_SIZE as u64) * (entries as u64) + HEADER_SIZE as u64;
 
-        let mmap = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE>::new_map(&cache_path, capacity)?;
+        let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
         m1.stop();
         stats.create_save_us += m1.as_us();
-        let mut cache_file = CacheHashDataFile::<CELL_SIZE, HEADER_SIZE> { mmap, capacity };
+        let mut cache_file = CacheHashDataFile {
+            mmap,
+            capacity,
+            phantom: PhantomData,
+        };
 
         let mut header = cache_file.get_header_mut();
         header.count = entries;
