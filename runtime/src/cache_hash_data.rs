@@ -19,7 +19,6 @@ use {
 
 pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
-pub type SavedTypeSlice = [Vec<EntryType>];
 
 const CELL_SIZE: usize = std::mem::size_of::<EntryType>();
 const CELL_ALIGNMENT: usize = std::mem::align_of::<EntryType>();
@@ -151,7 +150,10 @@ impl CacheDataFile<Header, EntryType> {
 }
 
 pub type PreExistingCacheFiles = HashSet<String>;
-pub struct CacheData<H, T> {
+pub struct CacheData<H, T>
+where
+    T: Clone,
+{
     cache_folder: PathBuf,
     pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
     pub stats: Arc<Mutex<CacheHashDataStats>>,
@@ -159,19 +161,22 @@ pub struct CacheData<H, T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<H, T> Constants<H, T> for CacheData<H, T> {}
+impl<H, T> Constants<H, T> for CacheData<H, T> where T: Clone {}
 
-impl<H, T> Drop for CacheData<H, T> {
+impl<H, T> Drop for CacheData<H, T>
+where
+    T: Clone,
+{
     fn drop(&mut self) {
         self.delete_old_cache_files();
         self.stats.lock().unwrap().report();
     }
 }
 
-impl<H, T> CacheData<H, T> {
-    type SavedType = Vec<Vec<T>>;
-    type SavedTypeSlice = [Vec<T>];
-
+impl<H, T> CacheData<H, T>
+where
+    T: Clone,
+{
     pub fn new<P: AsRef<Path> + std::fmt::Debug>(parent_folder: &P) -> CacheData<H, T> {
         let cache_folder = Self::get_cache_root_path(parent_folder);
 
@@ -288,29 +293,9 @@ impl<H, T> CacheData<H, T> {
 
         Ok(cache_file)
     }
-}
-
-/// Specialization for CacheHashData
-impl CacheData<Header, EntryType> {
-    /// load from 'file_name' into 'accumulator'
-    pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
-        &self,
-        file_name: &P,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
-    ) -> Result<(), std::io::Error> {
-        let mut m = Measure::start("overall");
-        let cache_file = self.load_map(file_name)?;
-        let mut stats = CacheHashDataStats::default();
-        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
-        m.stop();
-        self.stats.lock().unwrap().load_us += m.as_us();
-        Ok(())
-    }
 
     /// save 'data' to 'file_name'
-    pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
+    pub fn save(&self, file_name: &Path, data: &[Vec<T>]) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
@@ -320,7 +305,7 @@ impl CacheData<Header, EntryType> {
     fn save_internal(
         &self,
         file_name: &Path,
-        data: &SavedTypeSlice,
+        data: &[Vec<T>],
         stats: &mut CacheHashDataStats,
     ) -> Result<(), std::io::Error> {
         let mut m = Measure::start("save");
@@ -330,17 +315,14 @@ impl CacheData<Header, EntryType> {
             let _ignored = remove_file(&cache_path);
         }
         let mut m1 = Measure::start("create save");
-        let entries = data
-            .iter()
-            .map(|x: &Vec<EntryType>| x.len())
-            .collect::<Vec<_>>();
+        let entries = data.iter().map(|x: &Vec<T>| x.len()).collect::<Vec<_>>();
         let entries = entries.iter().sum::<usize>();
         let capacity = (CELL_SIZE as u64) * (entries as u64) + HEADER_SIZE as u64;
 
-        let mmap = CacheHashDataFile::new_map(&cache_path, capacity)?;
+        let mmap = CacheDataFile::<H, T>::new_map(&cache_path, capacity)?;
         m1.stop();
         stats.create_save_us += m1.as_us();
-        let mut cache_file = CacheHashDataFile {
+        let mut cache_file = CacheDataFile::<H, T> {
             mmap,
             capacity,
             phantom_h: PhantomData,
@@ -367,6 +349,26 @@ impl CacheData<Header, EntryType> {
         m.stop();
         stats.save_us += m.as_us();
         stats.saved_to_cache += 1;
+        Ok(())
+    }
+}
+
+/// Specialization for CacheHashData
+impl CacheData<Header, EntryType> {
+    /// load from 'file_name' into 'accumulator'
+    pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
+        &self,
+        file_name: &P,
+        accumulator: &mut SavedType,
+        start_bin_index: usize,
+        bin_calculator: &PubkeyBinCalculator24,
+    ) -> Result<(), std::io::Error> {
+        let mut m = Measure::start("overall");
+        let cache_file = self.load_map(file_name)?;
+        let mut stats = CacheHashDataStats::default();
+        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
+        m.stop();
+        self.stats.lock().unwrap().load_us += m.as_us();
         Ok(())
     }
 }
