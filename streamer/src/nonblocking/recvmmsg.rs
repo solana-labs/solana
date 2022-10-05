@@ -9,6 +9,8 @@ use {
     tokio::net::UdpSocket,
 };
 
+/// Pulls some packets from the socket into the specified container
+/// returning how many packets were read
 pub async fn recv_mmsg(
     socket: &UdpSocket,
     packets: &mut [Packet],
@@ -34,6 +36,21 @@ pub async fn recv_mmsg(
         i += 1;
     }
     Ok(i)
+}
+
+/// Reads the exact number of packets required to fill `packets`
+pub async fn recv_mmsg_exact(
+    socket: &UdpSocket,
+    packets: &mut [Packet],
+) -> io::Result</*num packets:*/ usize> {
+    let total = packets.len();
+    let mut remaining = total;
+    while remaining != 0 {
+        let first = total - remaining;
+        let res = recv_mmsg(socket, &mut packets[first..]).await?;
+        remaining -= res;
+    }
+    Ok(packets.len())
 }
 
 #[cfg(test)]
@@ -63,8 +80,8 @@ mod tests {
             sender.send_to(&data[..], &addr).await.unwrap();
         }
 
-        let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
+        let mut packets = vec![Packet::default(); sent];
+        let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(sent, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -90,17 +107,18 @@ mod tests {
         }
 
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
+        let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
             assert_eq!(packet.meta.socket_addr(), saddr);
         }
 
+        let mut packets = vec![Packet::default(); sent - TEST_NUM_MSGS];
         packets
             .iter_mut()
             .for_each(|pkt| pkt.meta = Meta::default());
-        let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
+        let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(sent - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
@@ -119,7 +137,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_recv_mmsg_multi_iter_timeout() {
+    async fn test_recv_mmsg_exact_multi_iter_timeout() {
         let reader = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
@@ -132,7 +150,7 @@ mod tests {
 
         let start = Instant::now();
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
-        let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
+        let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
             assert_eq!(packet.meta.size, PACKET_DATA_SIZE);
