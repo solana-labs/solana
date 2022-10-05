@@ -1106,21 +1106,21 @@ impl BankingStage {
                         }
                     }
 
-                    let (still_accepting_packets, acceptabled_packet_indexes) =
-                        Self::add_filtered_packets_to_forward_buffer(
-                            forward_buffer,
-                            &packets_to_process,
-                            &sanitized_transactions,
-                            &transaction_to_packet_indexes,
-                            &forwardable_transaction_indexes,
-                            &mut dropped_tx_before_forwarding_count,
-                        );
-                    accepting_packets = still_accepting_packets;
+                    let accepted_packet_indexes = Self::add_filtered_packets_to_forward_buffer(
+                        forward_buffer,
+                        &packets_to_process,
+                        &sanitized_transactions,
+                        &transaction_to_packet_indexes,
+                        &forwardable_transaction_indexes,
+                        &mut dropped_tx_before_forwarding_count,
+                    );
+                    accepting_packets =
+                        accepted_packet_indexes.len() == forwardable_transaction_indexes.len();
 
-                    Self::mark_accepted_packets_as_forwarded(
+                    UnprocessedPacketBatches::mark_accepted_packets_as_forwarded(
                         buffered_packet_batches,
                         &packets_to_process,
-                        &acceptabled_packet_indexes,
+                        &accepted_packet_indexes,
                     );
 
                     Self::collect_retained_packets(
@@ -1241,24 +1241,6 @@ impl BankingStage {
             .collect_vec()
     }
 
-    fn mark_accepted_packets_as_forwarded(
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
-        accepted_packet_indexes: &[usize],
-    ) {
-        accepted_packet_indexes
-            .iter()
-            .for_each(|accepted_packet_index| {
-                let accepted_packet = packets_to_process[*accepted_packet_index].clone();
-                if let Some(deserialized_packet) = buffered_packet_batches
-                    .message_hash_to_transaction
-                    .get_mut(accepted_packet.message_hash())
-                {
-                    deserialized_packet.forwarded = true;
-                }
-            });
-    }
-
     fn collect_retained_packets(
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
@@ -1297,8 +1279,7 @@ impl BankingStage {
     }
 
     /// try to add filtered forwardable and valid packets to forward buffer;
-    /// returns if forward buffer is still accepting packets, and vector of
-    /// packet indexes of those were added to forward buffer.
+    /// returns vector of packet indexes that were accepted for forwarding.
     fn add_filtered_packets_to_forward_buffer(
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
@@ -1306,9 +1287,8 @@ impl BankingStage {
         transaction_to_packet_indexes: &[usize],
         forwardable_transaction_indexes: &[usize],
         dropped_tx_before_forwarding_count: &mut usize,
-    ) -> (bool, Vec<usize>) {
+    ) -> Vec<usize> {
         let mut added_packets_count: usize = 0;
-        let mut accepting_packets = true;
         let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
         for forwardable_transaction_index in forwardable_transaction_indexes {
             let sanitized_transaction = &transactions[*forwardable_transaction_index];
@@ -1316,9 +1296,8 @@ impl BankingStage {
                 transaction_to_packet_indexes[*forwardable_transaction_index];
             let immutable_deserialized_packet =
                 packets_to_process[forwardable_packet_index].clone();
-            accepting_packets =
-                forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet);
-            if !accepting_packets {
+            if !forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet)
+            {
                 break;
             }
             accepted_packet_indexes.push(forwardable_packet_index);
@@ -1331,7 +1310,7 @@ impl BankingStage {
             forwardable_transaction_indexes.len() - added_packets_count
         );
 
-        (accepting_packets, accepted_packet_indexes)
+        accepted_packet_indexes
     }
 
     #[allow(clippy::too_many_arguments)]
