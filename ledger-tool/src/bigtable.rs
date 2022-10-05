@@ -397,79 +397,25 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
         return Err("starting slot should be less than or equal to ending slot")?;
     }
 
-    let source_bigtable = {
-        if let Some(endpoint) = args.emulated_source {
-            match solana_storage_bigtable::LedgerStorage::new_for_emulator(
-                &args.source_instance_name,
-                &args.source_app_profile_id,
-                &endpoint,
-                None,
-            ) {
-                Ok(bigtable) => bigtable,
-                Err(err) => {
-                    error!("Failed to connect to source bigtable: {:?}", err);
-                    return Err(Box::new(err));
-                }
-            }
-        } else {
-            match solana_storage_bigtable::LedgerStorage::new_with_config(
-                solana_storage_bigtable::LedgerStorageConfig {
-                    read_only: true,
-                    timeout: None,
-                    credential_type: CredentialType::Filepath(Some(
-                        args.source_credential_path.unwrap(),
-                    )),
-                    instance_name: args.source_instance_name,
-                    app_profile_id: args.source_app_profile_id,
-                },
-            )
-            .await
-            {
-                Ok(bigtable) => bigtable,
-                Err(err) => {
-                    error!("Failed to connect to source bigtable: {:?}", err);
-                    return Err(Box::new(err));
-                }
-            }
-        }
-    };
+    let source_bigtable = get_bigtable(GetBigtableArgs {
+        read_only: true,
+        instance_name: args.source_instance_name,
+        app_profile_id: args.source_app_profile_id,
+        timeout: None,
+        emulated_source: args.emulated_source,
+        crediential_path: args.source_credential_path,
+    })
+    .await?;
 
-    let destination_bigtable = {
-        if let Some(endpoint) = args.emulated_destination {
-            match solana_storage_bigtable::LedgerStorage::new_for_emulator(
-                &args.destination_instance_name,
-                &args.destination_app_profile_id,
-                &endpoint,
-                None,
-            ) {
-                Ok(bigtable) => bigtable,
-                Err(err) => {
-                    error!("Failed to connect to destination bigtable: {:?}", err);
-                    return Err(Box::new(err));
-                }
-            }
-        } else {
-            match solana_storage_bigtable::LedgerStorage::new_with_config(
-                solana_storage_bigtable::LedgerStorageConfig {
-                    read_only: false,
-                    timeout: None,
-                    credential_type: CredentialType::Filepath(Some(
-                        args.destination_credential_path.unwrap(),
-                    )),
-                    instance_name: args.destination_instance_name,
-                    app_profile_id: args.destination_app_profile_id,
-                },
-            )
-            .await
-            {
-                Ok(bigtable) => bigtable,
-                Err(err) => {
-                    error!("Failed to connect to destination bigtable: {:?}", err);
-                    return Err(Box::new(err));
-                }
-            }
-        }
-    };
+    let destination_bigtable = get_bigtable(GetBigtableArgs {
+        read_only: false,
+        instance_name: args.destination_instance_name,
+        app_profile_id: args.destination_app_profile_id,
+        timeout: None,
+        emulated_source: args.emulated_destination,
+        crediential_path: args.destination_credential_path,
+    })
+    .await?;
 
     let (s, r) = unbounded::<u64>();
     for i in from_slot..=to_slot {
@@ -586,6 +532,39 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+struct GetBigtableArgs {
+    read_only: bool,
+    instance_name: String,
+    app_profile_id: String,
+    timeout: Option<std::time::Duration>,
+    emulated_source: Option<String>,
+    crediential_path: Option<String>,
+}
+
+async fn get_bigtable(
+    args: GetBigtableArgs,
+) -> solana_storage_bigtable::Result<solana_storage_bigtable::LedgerStorage> {
+    if let Some(endpoint) = args.emulated_source {
+        solana_storage_bigtable::LedgerStorage::new_for_emulator(
+            &args.instance_name,
+            &args.app_profile_id,
+            &endpoint,
+            args.timeout,
+        )
+    } else {
+        solana_storage_bigtable::LedgerStorage::new_with_config(
+            solana_storage_bigtable::LedgerStorageConfig {
+                read_only: args.read_only,
+                timeout: args.timeout,
+                credential_type: CredentialType::Filepath(Some(args.crediential_path.unwrap())),
+                instance_name: args.instance_name,
+                app_profile_id: args.app_profile_id,
+            },
+        )
+        .await
+    }
 }
 
 pub trait BigTableSubCommand {
