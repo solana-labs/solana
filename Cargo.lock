@@ -5588,6 +5588,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-memory-management"
+version = "1.15.0"
+
+[[package]]
 name = "solana-merkle-root-bench"
 version = "1.15.0"
 dependencies = [
