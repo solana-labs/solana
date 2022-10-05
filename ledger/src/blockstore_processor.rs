@@ -18,7 +18,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::AbsRequestSender,
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -56,7 +56,10 @@ use {
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering::Relaxed},
+            Arc, Mutex, RwLock,
+        },
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -727,6 +730,35 @@ pub fn test_process_blockstore(
     opts: &ProcessOptions,
     exit: &Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
+    // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
+    // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
+    // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let bg_exit = Arc::new(AtomicBool::new(false));
+    let bg_thread = {
+        let exit = Arc::clone(&bg_exit);
+        std::thread::spawn(move || {
+            while !exit.load(Relaxed) {
+                snapshot_request_receiver
+                    .try_iter()
+                    .filter(|snapshot_request| {
+                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                    })
+                    .for_each(|snapshot_request| {
+                        snapshot_request
+                            .snapshot_root_bank
+                            .rc
+                            .accounts
+                            .accounts_db
+                            .epoch_accounts_hash_manager
+                            .set_invalid_for_tests();
+                    });
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        })
+    };
+
     let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
         blockstore,
@@ -738,6 +770,7 @@ pub fn test_process_blockstore(
         None,
         exit,
     );
+
     process_blockstore_from_root(
         blockstore,
         &bank_forks,
@@ -745,9 +778,13 @@ pub fn test_process_blockstore(
         opts,
         None,
         None,
-        &AbsRequestSender::default(),
+        &abs_request_sender,
     )
     .unwrap();
+
+    bg_exit.store(true, Relaxed);
+    bg_thread.join().unwrap();
+
     (bank_forks, leader_schedule_cache)
 }
 

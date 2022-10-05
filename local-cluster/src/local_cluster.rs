@@ -27,7 +27,6 @@ use {
         clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
-        feature_set,
         genesis_config::{ClusterType, GenesisConfig},
         message::Message,
         poh_config::PohConfig,
@@ -257,11 +256,6 @@ impl LocalCluster {
                 },
             ),
         );
-
-        // Do not enable Epoch Accounts Hash in local-cluster tests yet
-        genesis_config
-            .accounts
-            .remove(&feature_set::epoch_accounts_hash::id());
 
         let (leader_ledger_path, _blockhash) = create_new_tmp_ledger!(&genesis_config);
         let leader_contact_info = leader_node.info.clone();

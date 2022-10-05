@@ -296,6 +296,13 @@ impl BankForks {
                 "sending epoch accounts hash request, slot: {}",
                 eah_bank.slot()
             );
+            eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_in_flight(eah_bank.slot());
+
             self.last_accounts_hash_slot = eah_bank.slot();
             let squash_timing = eah_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
@@ -304,16 +311,6 @@ impl BankForks {
             total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
             is_root_bank_squashed = eah_bank.slot() == root;
-
-            // Clear any existing EAH before requesting a new one
-            _ = eah_bank
-                .rc
-                .accounts
-                .accounts_db
-                .epoch_accounts_hash
-                .lock()
-                .unwrap()
-                .take();
 
             accounts_background_request_sender
                 .send_snapshot_request(SnapshotRequest {
@@ -637,6 +634,7 @@ mod tests {
             signature::{Keypair, Signer},
         },
         solana_vote_program::vote_state::BlockTimestamp,
+        std::{sync::atomic::Ordering::Relaxed, time::Duration},
     };
 
     #[test]
@@ -734,9 +732,38 @@ mod tests {
         let slots_in_epoch = 32;
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
 
+        // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
+        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
+        // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let bg_exit = Arc::new(AtomicBool::new(false));
+        let bg_thread = {
+            let exit = Arc::clone(&bg_exit);
+            std::thread::spawn(move || {
+                while !exit.load(Relaxed) {
+                    snapshot_request_receiver
+                        .try_iter()
+                        .filter(|snapshot_request| {
+                            snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                        })
+                        .for_each(|snapshot_request| {
+                            snapshot_request
+                                .snapshot_root_bank
+                                .rc
+                                .accounts
+                                .accounts_db
+                                .epoch_accounts_hash_manager
+                                .set_invalid_for_tests();
+                        });
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            })
+        };
+
         let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
-        bank_forks0.set_root(0, &AbsRequestSender::default(), None);
+        bank_forks0.set_root(0, &abs_request_sender, None);
 
         let bank1 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
@@ -768,7 +795,7 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &AbsRequestSender::default(), None);
+            bank_forks0.set_root(slot, &abs_request_sender, None);
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
@@ -782,6 +809,9 @@ mod tests {
         info!("child0.ancestors: {:?}", child1.ancestors);
         info!("child1.ancestors: {:?}", child2.ancestors);
         assert_eq!(child1.hash(), child2.hash());
+
+        bg_exit.store(true, Relaxed);
+        bg_thread.join().unwrap();
     }
 
     fn make_hash_map(data: Vec<(Slot, Vec<Slot>)>) -> HashMap<Slot, HashSet<Slot>> {

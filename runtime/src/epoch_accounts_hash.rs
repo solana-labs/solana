@@ -16,6 +16,9 @@ use {
     },
 };
 
+mod manager;
+pub use manager::Manager as EpochAccountsHashManager;
+
 /// The EpochAccountsHash holds the result after calculating the accounts hash once per epoch
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy)]
 pub struct EpochAccountsHash(Hash);
@@ -29,7 +32,7 @@ impl AsRef<Hash> for EpochAccountsHash {
 impl EpochAccountsHash {
     /// Make an EpochAccountsHash from a regular accounts hash
     #[must_use]
-    pub fn new(accounts_hash: Hash) -> Self {
+    pub const fn new(accounts_hash: Hash) -> Self {
         Self(accounts_hash)
     }
 }

@@ -45,7 +45,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
-        epoch_accounts_hash::EpochAccountsHash,
+        epoch_accounts_hash::EpochAccountsHashManager,
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
@@ -1198,7 +1198,7 @@ pub struct AccountsDb {
     /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
-    pub epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
+    pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 }
 
 #[derive(Debug, Default)]
@@ -2087,7 +2087,7 @@ impl AccountsDb {
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
-            epoch_accounts_hash: Mutex::new(None),
+            epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
 

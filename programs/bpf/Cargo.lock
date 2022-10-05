@@ -5264,6 +5264,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "chrono-humanize",
+ "crossbeam-channel",
  "log",
  "serde",
  "solana-banks-client",
