@@ -4,12 +4,15 @@
 #[cfg(all(not(target_os = "solana"), debug_assertions))]
 use crate::signature::Signature;
 #[cfg(not(target_os = "solana"))]
-use crate::{
-    account::WritableAccount,
-    rent::Rent,
-    system_instruction::{
-        MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+use {
+    crate::{
+        account::WritableAccount,
+        rent::Rent,
+        system_instruction::{
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+        },
     },
+    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
 };
 use {
     crate::{
@@ -17,7 +20,6 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
     },
-    solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
     std::{
         cell::{RefCell, RefMut},
         collections::HashSet,
