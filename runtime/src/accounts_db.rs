@@ -7662,6 +7662,10 @@ impl AccountsDb {
         skipped_rewrites: &Rewrites,
     ) {
         let mut skipped_rewrites = skipped_rewrites.read().unwrap().clone();
+        if skipped_rewrites.is_empty() {
+            // if there are no skipped rewrites, then there is nothing futher to do
+            return;
+        }
         hashes.iter().for_each(|(key, _)| {
             skipped_rewrites.remove(key);
         });
