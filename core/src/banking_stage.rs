@@ -1297,7 +1297,8 @@ impl BankingStage {
     }
 
     /// try to add filtered forwardable and valid packets to forward buffer;
-    /// returns if forward_buffer is still accepting packets, and how many packets added.
+    /// returns if forward buffer is still accepting packets, and vector of
+    /// packet indexes of those were added to forward buffer.
     fn add_filtered_packets_to_forward_buffer(
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
