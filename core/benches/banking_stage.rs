@@ -97,7 +97,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 std::u128::MAX,
                 &poh_recorder,
                 &mut transaction_buffer,
-                None,
+                &None,
                 &s,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
