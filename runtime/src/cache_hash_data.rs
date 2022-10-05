@@ -341,10 +341,9 @@ impl CacheHashData {
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
 
-        let s = cache_file.get_slice_mut(0_u64);
-
+        let cache = cache_file.get_slice_mut(0_u64);
         for item in data.into_iter().flatten() {
-            s[i] = item.clone();
+            cache[i] = item.clone();
             i += 1;
         }
         assert_eq!(i, entries);
