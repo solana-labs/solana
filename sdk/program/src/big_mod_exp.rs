@@ -1,3 +1,5 @@
+use num_traits::{One, Zero};
+
 #[repr(C)]
 pub struct BigModExpParams{
     pub base: *const u8,
@@ -13,10 +15,16 @@ pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
     #[cfg(not(target_os = "solana"))]
     {
         use num_bigint::BigUint;
+
         let modulus_len = modulus.len();
         let base = BigUint::from_bytes_be(base);
         let exponent = BigUint::from_bytes_be(exponent);
         let modulus = BigUint::from_bytes_be(modulus);
+
+        if modulus.is_zero() || modulus.is_one() {
+            return vec![0_u8; modulus_len];
+        }
+
         let ret_int = base.modpow(&exponent, &modulus);
         let ret_int = ret_int.to_bytes_be();
         let mut return_value = vec![0_u8; modulus_len - ret_int.len()];

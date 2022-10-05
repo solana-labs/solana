@@ -67,6 +67,7 @@ use {
     },
     thiserror::Error as ThisError,
     num_bigint::BigUint,
+    num_traits::{One, Zero},
 };
 
 mod cpi;
@@ -2067,11 +2068,17 @@ declare_syscall!(
         let base = BigUint::from_bytes_be(base);
         let exponent = BigUint::from_bytes_be(exponent);
         let modulus = BigUint::from_bytes_be(modulus);
-        let res = base.modpow(&exponent, &modulus);
-        let res = res.to_bytes_be();
-        let mut value = vec![0_u8; params.modulus_len as usize - res.len()];
-        value.extend(res);
 
+        let value = if modulus.is_zero() || modulus.is_one() {
+            vec![0_u8; params.modulus_len as usize]
+        }
+        else{
+            let res = base.modpow(&exponent, &modulus);
+            let res = res.to_bytes_be();
+            let mut value = vec![0_u8; params.modulus_len as usize - res.len()];
+            value.extend(res);
+            value
+        };
 
         let return_value = question_mark!(
             translate_slice_mut::<u8>(
