@@ -5668,6 +5668,7 @@ dependencies = [
  "log",
  "reqwest",
  "serde_json",
+ "solana-sdk 1.15.0",
 ]
 
 [[package]]

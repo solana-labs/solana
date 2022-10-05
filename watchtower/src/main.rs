@@ -10,7 +10,7 @@ use {
     },
     solana_cli_output::display::format_labeled_address,
     solana_metrics::{datapoint_error, datapoint_info},
-    solana_notifier::Notifier,
+    solana_notifier::{NotificationType, Notifier},
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{client_error, response::RpcVoteAccountStatus},
     solana_sdk::{
@@ -244,6 +244,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let mut last_notification_msg = "".into();
     let mut num_consecutive_failures = 0;
     let mut last_success = Instant::now();
+    let mut incident = Hash::new_unique();
 
     loop {
         let failure = match get_cluster_info(&config, &rpc_client) {
@@ -373,7 +374,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             if num_consecutive_failures > config.unhealthy_threshold {
                 datapoint_info!("watchtower-sanity", ("ok", false, bool));
                 if last_notification_msg != notification_msg {
-                    notifier.send(&notification_msg);
+                    notifier.send(&notification_msg, &NotificationType::Trigger { incident });
                 }
                 datapoint_error!(
                     "watchtower-sanity-failure",
@@ -399,14 +400,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     humantime::format_duration(alarm_duration)
                 );
                 info!("{}", all_clear_msg);
-                notifier.send(&format!(
-                    "solana-watchtower{}: {}",
-                    config.name_suffix, all_clear_msg
-                ));
+                notifier.send(
+                    &format!("solana-watchtower{}: {}", config.name_suffix, all_clear_msg),
+                    &NotificationType::Resolve { incident },
+                );
             }
             last_notification_msg = "".into();
             last_success = Instant::now();
             num_consecutive_failures = 0;
+            incident = Hash::new_unique();
         }
         sleep(config.interval);
     }
