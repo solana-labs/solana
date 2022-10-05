@@ -22,6 +22,7 @@ pub type SavedTypeSlice = [Vec<EntryType>];
 const CELL_SIZE: usize = std::mem::size_of::<EntryType>();
 const CELL_ALIGNMENT: usize = std::mem::align_of::<EntryType>();
 
+// NOTE: if change the layout of Headers, i.e. add or remove fields, you MUST ensure that size_of::<Header>() is equal or a multiple of CELL_ALIGNMENT
 #[repr(C)]
 pub struct Header {
     count: usize,
