@@ -86,6 +86,17 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
         }
     }
 
+    /// get '&mut [EntryType]' from cache file [ix..]
+    fn get_slice_mut(&self, ix: u64) -> &mut [EntryType] {
+        let start = self.get_element_offset_byte(ix);
+        let item_slice: &[u8] = &self.mmap[start..];
+        let remaining_elements = item_slice.len() / CELL_SIZE;
+        unsafe {
+            let item = item_slice.as_ptr() as *mut EntryType;
+            std::slice::from_raw_parts_mut(item, remaining_elements)
+        }
+    }
+
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
     fn get_element_offset_byte(&self, ix: u64) -> usize {
         let start = (ix as usize) * CELL_SIZE + HEADER_SIZE;
@@ -329,13 +340,13 @@ impl CacheHashData {
 
         let mut m2 = Measure::start("write_to_mmap");
         let mut i = 0;
-        data.iter().for_each(|x| {
-            x.iter().for_each(|item| {
-                let d = cache_file.get_mut(i as u64);
-                i += 1;
-                *d = item.clone();
-            })
-        });
+
+        let s = cache_file.get_slice_mut(0_u64);
+
+        for item in data.into_iter().flatten() {
+            s[i] = item.clone();
+            i += 1;
+        }
         assert_eq!(i, entries);
         m2.stop();
         stats.write_to_mmap_us += m2.as_us();
