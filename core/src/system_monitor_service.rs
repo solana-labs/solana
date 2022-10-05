@@ -115,7 +115,7 @@ enum CpuManufacturer {
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[derive(TryFromPrimitive, PartialEq, PartialOrd)]
+#[derive(IntoPrimitive, TryFromPrimitive, PartialEq, PartialOrd)]
 #[repr(u32)]
 // The value passed into cpuid via eax, to control what the result means
 enum CpuidParamValue {
@@ -748,43 +748,43 @@ impl SystemMonitorService {
                 Err(_err) => CpuidParamValue::Manufacturer,
             };
 
-            let mfr_id: i64 = if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_INTEL
+            let mfr_id = if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_INTEL
                 && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_INTEL
                 && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_INTEL
             {
-                CpuManufacturer::Intel.into() // GenuineIntel
+                CpuManufacturer::Intel // GenuineIntel
             } else if cpuid_mfr.ebx == CPUID_MANUFACTURER_EBX_AMD
                 && cpuid_mfr.edx == CPUID_MANUFACTURER_EDX_AMD
                 && cpuid_mfr.ecx == CPUID_MANUFACTURER_ECX_AMD
             {
-                CpuManufacturer::Amd.into() // AuthenticAMD
+                CpuManufacturer::Amd // AuthenticAMD
             } else {
-                CpuManufacturer::Other.into() // anything else
+                CpuManufacturer::Other // anything else
             };
 
             let cpuid_processor = if CpuidParamValue::Processor <= max_leaf {
-                __cpuid(1)
+                __cpuid(CpuidParamValue::Processor.into())
             } else {
                 cpuid_empty
             };
             let cpuid_cache = if CpuidParamValue::Cache <= max_leaf {
-                __cpuid(2)
+                __cpuid(CpuidParamValue::Cache.into())
             } else {
                 cpuid_empty
             };
             let cpuid_topology = if CpuidParamValue::Topology <= max_leaf {
-                __cpuid(4)
+                __cpuid(CpuidParamValue::Topology.into())
             } else {
                 cpuid_empty
             };
             let cpuid_extended_0 = if CpuidParamValue::Extended <= max_leaf {
-                __cpuid_count(7, 0)
+                __cpuid_count(CpuidParamValue::Extended.into(), 0)
             } else {
                 cpuid_empty
             };
             let cpuid_extended_1 = if CpuidParamValue::Extended <= max_leaf {
-                if 1 <= __get_cpuid_max(7).1 {
-                    __cpuid_count(7, 1)
+                if 1 <= __get_cpuid_max(CpuidParamValue::Extended.into()).1 {
+                    __cpuid_count(CpuidParamValue::Extended.into(), 1)
                 } else {
                     cpuid_empty
                 }
@@ -794,7 +794,7 @@ impl SystemMonitorService {
 
             datapoint_info!(
                 "cpuid-values",
-                ("manufacturer_id", mfr_id, i64),
+                ("manufacturer_id", i64::from(mfr_id), i64),
                 ("cpuid_processor_eax", i64::from(cpuid_processor.eax), i64),
                 ("cpuid_processor_ebx", i64::from(cpuid_processor.ebx), i64),
                 ("cpuid_processor_ecx", i64::from(cpuid_processor.ecx), i64),
