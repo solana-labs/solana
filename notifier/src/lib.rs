@@ -95,14 +95,8 @@ enum NotificationChannel {
 
 #[derive(Clone)]
 pub enum NotificationType {
-    Trigger(String),
-    Resolve(String),
-}
-
-impl Default for NotificationType {
-    fn default() -> Self {
-        NotificationType::Trigger(Hash::new_unique().to_string())
-    }
+    Trigger { incident: Hash },
+    Resolve { incident: Hash },
 }
 
 pub struct Notifier {
@@ -203,16 +197,16 @@ impl Notifier {
                     }
                 }
                 NotificationChannel::PagerDuty(routing_key) => {
-                    let action = match notification_type {
-                        NotificationType::Trigger(_) => String::from("trigger"),
-                        NotificationType::Resolve(_) => String::from("resolve"),
+                    let event_action = match notification_type {
+                        NotificationType::Trigger { incident: _ } => String::from("trigger"),
+                        NotificationType::Resolve { incident: _ } => String::from("resolve"),
                     };
                     let dedup_key = match notification_type {
-                        NotificationType::Trigger(ref dk) => dk.clone(),
-                        NotificationType::Resolve(ref dk) => dk.clone(),
+                        NotificationType::Trigger { ref incident } => incident.clone().to_string(),
+                        NotificationType::Resolve { ref incident } => incident.clone().to_string(),
                     };
 
-                    let data = json!({"payload":{"summary":msg,"source":"solana-watchtower","severity":"critical"},"routing_key":routing_key,"event_action":action,"dedup_key":dedup_key});
+                    let data = json!({"payload":{"summary":msg,"source":"solana-watchtower","severity":"critical"},"routing_key":routing_key,"event_action":event_action,"dedup_key":dedup_key});
                     let url = "https://events.pagerduty.com/v2/enqueue";
 
                     if let Err(err) = self.client.post(url).json(&data).send() {
