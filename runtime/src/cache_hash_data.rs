@@ -66,15 +66,6 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
         stats.decode_us += m2.as_us();
     }
 
-    /// get '&mut EntryType' from cache file [ix]
-    fn get_mut(&mut self, ix: u64) -> &mut EntryType {
-        let item_slice = self.get_slice_internal(ix);
-        unsafe {
-            let item = item_slice.as_ptr() as *mut EntryType;
-            &mut *item
-        }
-    }
-
     /// get '&[EntryType]' from cache file [ix..]
     fn get_slice(&self, ix: u64) -> &[EntryType] {
         let start = self.get_element_offset_byte(ix);
@@ -102,21 +93,6 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
         let start = (ix as usize) * CELL_SIZE + HEADER_SIZE;
         debug_assert_eq!(start % CELL_ALIGNMENT, 0);
         start
-    }
-
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal(&self, ix: u64) -> &[u8] {
-        let start = self.get_element_offset_byte(ix);
-        let end = start + CELL_SIZE;
-        assert!(
-            end <= self.capacity as usize,
-            "end: {}, capacity: {}, ix: {}, cell size: {}",
-            end,
-            self.capacity,
-            ix,
-            CELL_SIZE
-        );
-        &self.mmap[start..end]
     }
 
     fn get_header_mut(&mut self) -> &mut Header {
