@@ -834,6 +834,7 @@ impl Accounts {
         ignore_mismatch: bool,
         store_detailed_debug_info: bool,
         enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -845,6 +846,7 @@ impl Accounts {
             ignore_mismatch,
             store_detailed_debug_info,
             enable_rehashing,
+            use_bg_thread_pool,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
