@@ -1,4 +1,5 @@
 //! Cached data for hashing accounts
+//!
 use {
     crate::{
         accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats,
@@ -31,13 +32,21 @@ pub struct Header {
 }
 const HEADER_SIZE: usize = std::mem::size_of::<Header>();
 
-pub struct CacheDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize, T> {
-    mmap: MmapMut,
-    capacity: u64,
-    phantom: PhantomData<T>,
+trait Constants<H, T> {
+    const HEADER_SIZE: usize = std::mem::size_of::<H>();
+    const CELL_SIZE: usize = std::mem::size_of::<T>();
+    const CELL_ALIGNMENT: usize = std::mem::align_of::<T>();
 }
 
-impl<const CELL_SIZE: usize, const HEADER_SIZE: usize, T> CacheDataFile<CELL_SIZE, HEADER_SIZE, T> {
+pub struct CacheDataFile<H, T> {
+    mmap: MmapMut,
+    capacity: u64,
+    phantom_h: PhantomData<H>,
+    phantom_t: PhantomData<T>,
+}
+impl<H, T> Constants<H, T> for CacheDataFile<H, T> {}
+
+impl<H, T> CacheDataFile<H, T> {
     /// return a slice of a reference to all the cache hash data from the mmapped file
     pub(crate) fn get_cache_hash_data(&self) -> &[T] {
         self.get_slice(0)
@@ -110,11 +119,10 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize, T> CacheDataFile<CELL_SIZ
     }
 }
 
-pub(crate) type CacheHashDataFile = CacheDataFile<CELL_SIZE, HEADER_SIZE, EntryType>;
+pub(crate) type CacheHashDataFile = CacheDataFile<Header, EntryType>;
 
-impl<const CELL_SIZE: usize, const HEADER_SIZE: usize>
-    CacheDataFile<CELL_SIZE, HEADER_SIZE, EntryType>
-{
+/// Specialization for CacheHashDataFile
+impl CacheDataFile<Header, EntryType> {
     /// Populate 'accumulator' from entire contents of the cache file.
     pub(crate) fn load_all(
         &self,
@@ -143,30 +151,39 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize>
 }
 
 pub type PreExistingCacheFiles = HashSet<String>;
-pub struct CacheHashData {
+pub struct CacheData<H, T> {
     cache_folder: PathBuf,
     pre_existing_cache_files: Arc<Mutex<PreExistingCacheFiles>>,
     pub stats: Arc<Mutex<CacheHashDataStats>>,
+    phantom_h: PhantomData<H>,
+    phantom_t: PhantomData<T>,
 }
 
-impl Drop for CacheHashData {
+impl<H, T> Constants<H, T> for CacheData<H, T> {}
+
+impl<H, T> Drop for CacheData<H, T> {
     fn drop(&mut self) {
         self.delete_old_cache_files();
         self.stats.lock().unwrap().report();
     }
 }
 
-impl CacheHashData {
-    pub fn new<P: AsRef<Path> + std::fmt::Debug>(parent_folder: &P) -> CacheHashData {
+impl<H, T> CacheData<H, T> {
+    type SavedType = Vec<Vec<T>>;
+    type SavedTypeSlice = [Vec<T>];
+
+    pub fn new<P: AsRef<Path> + std::fmt::Debug>(parent_folder: &P) -> CacheData<H, T> {
         let cache_folder = Self::get_cache_root_path(parent_folder);
 
         std::fs::create_dir_all(cache_folder.clone())
             .unwrap_or_else(|_| panic!("error creating cache dir: {:?}", cache_folder));
 
-        let result = CacheHashData {
+        let result = CacheData {
             cache_folder,
             pre_existing_cache_files: Arc::new(Mutex::new(PreExistingCacheFiles::default())),
             stats: Arc::new(Mutex::new(CacheHashDataStats::default())),
+            phantom_h: PhantomData,
+            phantom_t: PhantomData,
         };
 
         result.get_cache_files();
@@ -201,28 +218,11 @@ impl CacheHashData {
         parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
-    /// load from 'file_name' into 'accumulator'
-    pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
-        &self,
-        file_name: &P,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
-    ) -> Result<(), std::io::Error> {
-        let mut m = Measure::start("overall");
-        let cache_file = self.load_map(file_name)?;
-        let mut stats = CacheHashDataStats::default();
-        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
-        m.stop();
-        self.stats.lock().unwrap().load_us += m.as_us();
-        Ok(())
-    }
-
     /// map 'file_name' into memory
     pub(crate) fn load_map<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    ) -> Result<CacheDataFile<H, T>, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.map(file_name, &mut stats);
         self.stats.lock().unwrap().merge(&stats);
@@ -234,11 +234,11 @@ impl CacheHashData {
         &self,
         file_name: &P,
         stats: &mut CacheHashDataStats,
-    ) -> Result<CacheHashDataFile, std::io::Error> {
+    ) -> Result<CacheDataFile<H, T>, std::io::Error> {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
-        let mmap = CacheHashDataFile::load_map(&path)?;
+        let mmap = CacheDataFile::<H, T>::load_map(&path)?;
         m1.stop();
         stats.read_us = m1.as_us();
 
@@ -254,10 +254,11 @@ impl CacheHashData {
             );
         }
         const_assert_eq!((CELL_SIZE) % std::mem::size_of::<u64>(), 0);
-        let mut cache_file = CacheHashDataFile {
+        let mut cache_file = CacheDataFile {
             mmap,
             capacity: 0,
-            phantom: PhantomData,
+            phantom_h: PhantomData,
+            phantom_t: PhantomData,
         };
         let header = cache_file.get_header_mut();
         let entries = header.count;
@@ -286,6 +287,26 @@ impl CacheHashData {
         stats.entries_loaded_from_cache += entries;
 
         Ok(cache_file)
+    }
+}
+
+/// Specialization for CacheHashData
+impl CacheData<Header, EntryType> {
+    /// load from 'file_name' into 'accumulator'
+    pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
+        &self,
+        file_name: &P,
+        accumulator: &mut SavedType,
+        start_bin_index: usize,
+        bin_calculator: &PubkeyBinCalculator24,
+    ) -> Result<(), std::io::Error> {
+        let mut m = Measure::start("overall");
+        let cache_file = self.load_map(file_name)?;
+        let mut stats = CacheHashDataStats::default();
+        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
+        m.stop();
+        self.stats.lock().unwrap().load_us += m.as_us();
+        Ok(())
     }
 
     /// save 'data' to 'file_name'
@@ -322,7 +343,8 @@ impl CacheHashData {
         let mut cache_file = CacheHashDataFile {
             mmap,
             capacity,
-            phantom: PhantomData,
+            phantom_h: PhantomData,
+            phantom_t: PhantomData,
         };
 
         let mut header = cache_file.get_header_mut();
@@ -348,6 +370,8 @@ impl CacheHashData {
         Ok(())
     }
 }
+
+pub(crate) type CacheHashData = CacheData<Header, EntryType>;
 
 #[cfg(test)]
 pub mod tests {
