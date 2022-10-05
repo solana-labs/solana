@@ -350,6 +350,7 @@ struct CopyArgs {
     destination_credential_path: Option<String>,
 
     force: bool,
+    dry_run: bool,
 }
 
 impl CopyArgs {
@@ -382,6 +383,7 @@ impl CopyArgs {
             emulated_destination: value_t!(arg_matches, "emulated_destination", String).ok(),
 
             force: arg_matches.is_present("force"),
+            dry_run: arg_matches.is_present("dry_run"),
         }
     }
 }
@@ -533,18 +535,23 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                             }
                         };
 
-                    match destination_bigtable_clone
-                        .upload_confirmed_block(slot, confirmed_block)
-                        .await
-                    {
-                        Ok(()) => {
-                            debug!("wrote block: {}", slot);
-                            success_slots_clone.lock().unwrap().push(slot);
-                        }
-                        Err(err) => {
-                            error!("write failed, slot: {}, err: {}", slot, err);
-                            failed_slots_clone.lock().unwrap().push(slot);
-                            continue;
+                    if args.dry_run {
+                        debug!("will write block: {}", slot);
+                        success_slots_clone.lock().unwrap().push(slot);
+                    } else {
+                        match destination_bigtable_clone
+                            .upload_confirmed_block(slot, confirmed_block)
+                            .await
+                        {
+                            Ok(()) => {
+                                debug!("wrote block: {}", slot);
+                                success_slots_clone.lock().unwrap().push(slot);
+                            }
+                            Err(err) => {
+                                error!("write failed, slot: {}, err: {}", slot, err);
+                                failed_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
                         }
                     }
                 }
@@ -564,6 +571,7 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
     block_not_found_slots.sort();
     let mut failed_slots = failed_slots.lock().unwrap();
     failed_slots.sort();
+
     debug!("success slots: {:?}", success_slots);
     debug!("skip slots: {:?}", skip_slots);
     debug!("blocks not found slots: {:?}", block_not_found_slots);
@@ -930,6 +938,15 @@ impl BigTableSubCommand for App<'_, '_> {
                             .takes_value(false)
                             .help(
                                 "Force copy of blocks already present in destination Bigtable instance",
+                            ),
+                        )
+                        .arg(
+                            Arg::with_name("dry_run")
+                            .long("dry-run")
+                            .value_name("DRY_RUN")
+                            .takes_value(false)
+                            .help(
+                                "Dry run. It won't upload any blocks",
                             ),
                         )
                 ),
