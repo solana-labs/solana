@@ -19,13 +19,15 @@ pub type EntryType = CalculateHashIntermediate;
 pub type SavedType = Vec<Vec<EntryType>>;
 pub type SavedTypeSlice = [Vec<EntryType>];
 
+const CELL_SIZE: usize = std::mem::size_of::<EntryType>();
+const CELL_ALIGNMENT: usize = std::mem::align_of::<EntryType>();
+
 #[repr(C)]
 pub struct Header {
     count: usize,
+    _align: [u8; CELL_ALIGNMENT - std::mem::size_of::<usize>()],
 }
-
 const HEADER_SIZE: usize = std::mem::size_of::<Header>();
-const CELL_SIZE: usize = std::mem::size_of::<EntryType>();
 
 pub(crate) struct CacheHashDataFile<const CELL_SIZE: usize, const HEADER_SIZE: usize> {
     mmap: MmapMut,
@@ -87,7 +89,7 @@ impl<const CELL_SIZE: usize, const HEADER_SIZE: usize> CacheHashDataFile<CELL_SI
     /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
     fn get_element_offset_byte(&self, ix: u64) -> usize {
         let start = (ix as usize) * CELL_SIZE + HEADER_SIZE;
-        debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
+        debug_assert_eq!(start % CELL_ALIGNMENT, 0);
         start
     }
 
