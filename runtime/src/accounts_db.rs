@@ -1342,6 +1342,51 @@ struct SplitAncientStorages {
     chunk_count: usize,
 }
 
+impl SplitAncientStorages {
+    /// When calculating accounts hash, we break the slots/storages into chunks that remain the same during an entire epoch.
+    /// a slot is in this chunk of slots:
+    /// start:         (slot / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK
+    /// end_exclusive: start + MAX_ITEMS_PER_CHUNK
+    /// So a slot remains in the same chunk whenever it is included in the accounts hash.
+    /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
+    /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
+    fn new(one_epoch_old_slot: Slot, snapshot_storages: &SortedStorages) -> Self {
+        // any ancient append vecs should definitely be cached
+        // We need to break the ranges into:
+        // 1. individual ancient append vecs (may be empty)
+        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
+        // 3. evenly divided full chunks in the middle
+        // 4. unevenly divided chunk of most recent slots (may be empty)
+        let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
+
+        let range = snapshot_storages.range();
+        let ancient_slots = snapshot_storages
+            .iter_range(&(range.start..one_epoch_old_slot))
+            .filter_map(|(slot, storages)| storages.map(|_| slot))
+            .collect::<Vec<_>>();
+        let ancient_slot_count = ancient_slots.len();
+        let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
+        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
+            / MAX_ITEMS_PER_CHUNK)
+            * MAX_ITEMS_PER_CHUNK;
+
+        let non_ancient_slot_count = (max_slot_inclusive - first_non_ancient_slot + 1) as usize;
+
+        // 2 is for 2 special chunks - unaligned slots at the beginning and end
+        let chunk_count =
+            ancient_slot_count + 2 + non_ancient_slot_count / (MAX_ITEMS_PER_CHUNK as usize);
+
+        Self {
+            ancient_slot_count,
+            ancient_slots,
+            first_non_ancient_slot,
+            first_chunk_start,
+            non_ancient_slot_count,
+            chunk_count,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct FlushStats {
     num_flushed: usize,
@@ -6858,55 +6903,6 @@ impl AccountsDb {
         }
     }
 
-    /// When calculating accounts hash, we break the slots/storages into chunks that remain the same during an entire epoch.
-    /// a slot is in this chunk of slots:
-    /// start:         (slot / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK
-    /// end_exclusive: start + MAX_ITEMS_PER_CHUNK
-    /// So a slot remains in the same chunk whenever it is included in the accounts hash.
-    /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
-    /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
-    fn split_storages_ancient(
-        &self,
-        config: &CalcAccountsHashConfig<'_>,
-        snapshot_storages: &SortedStorages,
-    ) -> SplitAncientStorages {
-        // any ancient append vecs should definitely be cached
-        // We need to break the ranges into:
-        // 1. individual ancient append vecs (may be empty)
-        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
-        // 3. evenly divided full chunks in the middle
-        // 4. unevenly divided chunk of most recent slots (may be empty)
-        let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        let one_epoch_old_slot =
-            self.get_one_epoch_old_slot_for_hash_calc_scan(max_slot_inclusive, config);
-
-        let range = snapshot_storages.range();
-        let ancient_slots = snapshot_storages
-            .iter_range(&(range.start..one_epoch_old_slot))
-            .filter_map(|(slot, storages)| storages.map(|_| slot))
-            .collect::<Vec<_>>();
-        let ancient_slot_count = ancient_slots.len();
-        let first_non_ancient_slot = std::cmp::max(range.start, one_epoch_old_slot);
-        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
-            / MAX_ITEMS_PER_CHUNK)
-            * MAX_ITEMS_PER_CHUNK;
-
-        let non_ancient_slot_count = (max_slot_inclusive - first_non_ancient_slot + 1) as usize;
-
-        // 2 is for 2 special chunks - unaligned slots at the beginning and end
-        let chunk_count =
-            ancient_slot_count + 2 + non_ancient_slot_count / (MAX_ITEMS_PER_CHUNK as usize);
-
-        SplitAncientStorages {
-            ancient_slot_count,
-            ancient_slots,
-            first_non_ancient_slot,
-            first_chunk_start,
-            non_ancient_slot_count,
-            chunk_count,
-        }
-    }
-
     /// Scan through all the account storage in parallel.
     /// Returns a Vec of cache data. At this level, the vector is ordered from older slots to newer slots.
     ///   A single pubkey could be in multiple entries. The pubkey found int the latest entry is the one to use.
@@ -6931,7 +6927,13 @@ impl AccountsDb {
             first_chunk_start,
             non_ancient_slot_count,
             chunk_count,
-        } = self.split_storages_ancient(config, snapshot_storages);
+        } = SplitAncientStorages::new(
+            self.get_one_epoch_old_slot_for_hash_calc_scan(
+                snapshot_storages.max_slot_inclusive(),
+                config,
+            ),
+            snapshot_storages,
+        );
 
         let range = snapshot_storages.range();
         let start_bin_index = bin_range.start;
