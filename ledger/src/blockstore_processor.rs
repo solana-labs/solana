@@ -867,11 +867,12 @@ pub fn process_blockstore_from_root(
     let mut timing = ExecuteTimings::default();
 
     // Iterate and replay slots from blockstore starting from `start_slot`
+    let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
     {
-        load_frozen_forks(
+        num_slots_processed = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -906,6 +907,7 @@ pub fn process_blockstore_from_root(
             i64
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
+        ("num_slots_processed", num_slots_processed, i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
     );
 
@@ -1411,11 +1413,14 @@ fn load_frozen_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
     accounts_background_request_sender: &AbsRequestSender,
-) -> result::Result<(), BlockstoreProcessorError> {
+) -> result::Result<u64, BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
+    // The total number of slots processed
+    let mut total_slots_elapsed = 0;
+    // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
@@ -1575,6 +1580,7 @@ fn load_frozen_forks(
             }
 
             slots_elapsed += 1;
+            total_slots_elapsed += 1;
 
             trace!(
                 "Bank for {}slot {} is complete",
@@ -1604,7 +1610,7 @@ fn load_frozen_forks(
         );
     }
 
-    Ok(())
+    Ok(total_slots_elapsed)
 }
 
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
