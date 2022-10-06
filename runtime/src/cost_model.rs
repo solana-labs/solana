@@ -4,12 +4,17 @@
 //!
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
+
+use solana_program_runtime::compute_budget::{
+    ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+};
 use {
     crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
     solana_sdk::{
-        instruction::CompiledInstruction, program_utils::limited_deserialize, pubkey::Pubkey,
-        system_instruction::SystemInstruction, system_program, transaction::SanitizedTransaction,
+        compute_budget, instruction::CompiledInstruction, program_utils::limited_deserialize,
+        pubkey::Pubkey, system_instruction::SystemInstruction, system_program,
+        transaction::SanitizedTransaction,
     },
 };
 
@@ -166,18 +171,26 @@ impl CostModel {
             // to keep the same behavior, look for builtin first
             if let Some(builtin_cost) = BUILT_IN_INSTRUCTION_COSTS.get(program_id) {
                 builtin_costs = builtin_costs.saturating_add(*builtin_cost);
-            } else {
-                let instruction_cost = self.find_instruction_cost(program_id);
-                trace!(
-                    "instruction {:?} has cost of {}",
-                    instruction,
-                    instruction_cost
-                );
-                bpf_costs = bpf_costs.saturating_add(instruction_cost);
+            } else if !compute_budget::check_id(program_id) {
+                bpf_costs = bpf_costs.saturating_add(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT.into());
             }
             data_bytes_len_total =
                 data_bytes_len_total.saturating_add(instruction.data.len() as u64);
         }
+
+        // calculate bpf cost based on compute budget instructions
+        let mut budget = ComputeBudget::default();
+        let result = budget.process_instructions(
+            transaction.message().program_instructions_iter(),
+            true,
+            false, /*not support request_units_deprecated*/
+        );
+
+        // if tx contained user-space instructions and a more accurate estimate available correct it
+        if bpf_costs > 0 && result.is_ok() {
+            bpf_costs = budget.compute_unit_limit
+        }
+
         tx_cost.builtins_execution_cost = builtin_costs;
         tx_cost.bpf_execution_cost = bpf_costs;
         tx_cost.data_bytes_cost = data_bytes_len_total / INSTRUCTION_DATA_BYTES_COST;
@@ -239,6 +252,10 @@ impl CostModel {
 
 #[cfg(test)]
 mod tests {
+    use solana_sdk::compute_budget::{self, ComputeBudgetInstruction};
+
+    use crate::inline_spl_token;
+
     use {
         super::*,
         crate::{
@@ -368,6 +385,66 @@ mod tests {
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
         assert_eq!(3, tx_cost.data_bytes_cost);
+    }
+
+    #[test]
+    fn test_cost_model_token_transaction() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        let instructions = vec![CompiledInstruction::new(3, &(), vec![1, 2, 0])];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&mint_keypair],
+            &[
+                solana_sdk::pubkey::new_rand(),
+                solana_sdk::pubkey::new_rand(),
+            ],
+            start_hash,
+            vec![inline_spl_token::id()],
+            instructions,
+        );
+        let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
+        debug!("token_transaction {:?}", token_transaction);
+
+        let testee = CostModel::default();
+        let mut tx_cost = TransactionCost::default();
+        testee.get_transaction_cost(&mut tx_cost, &token_transaction);
+        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(200_000, tx_cost.bpf_execution_cost);
+        assert_eq!(0, tx_cost.data_bytes_cost);
+    }
+
+    #[test]
+    fn test_cost_model_compute_budget_transaction() {
+        let (mint_keypair, start_hash) = test_setup();
+
+        let instructions = vec![
+            CompiledInstruction::new(3, &(), vec![1, 2, 0]),
+            CompiledInstruction::new_from_raw_parts(
+                4,
+                ComputeBudgetInstruction::SetComputeUnitLimit(12_345)
+                    .pack()
+                    .unwrap(),
+                vec![],
+            ),
+        ];
+        let tx = Transaction::new_with_compiled_instructions(
+            &[&mint_keypair],
+            &[
+                solana_sdk::pubkey::new_rand(),
+                solana_sdk::pubkey::new_rand(),
+            ],
+            start_hash,
+            vec![inline_spl_token::id(), compute_budget::id()],
+            instructions,
+        );
+        let token_transaction = SanitizedTransaction::from_transaction_for_tests(tx);
+
+        let testee = CostModel::default();
+        let mut tx_cost = TransactionCost::default();
+        testee.get_transaction_cost(&mut tx_cost, &token_transaction);
+        assert_eq!(0, tx_cost.builtins_execution_cost);
+        assert_eq!(12_345, tx_cost.bpf_execution_cost);
+        assert_eq!(1, tx_cost.data_bytes_cost);
     }
 
     #[test]

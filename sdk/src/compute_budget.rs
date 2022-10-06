@@ -56,4 +56,9 @@ impl ComputeBudgetInstruction {
     pub fn set_compute_unit_price(micro_lamports: u64) -> Instruction {
         Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
     }
+
+    /// Serialize Instruction using borsh
+    pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
+        self.try_to_vec()
+    }
 }
