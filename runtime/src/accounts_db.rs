@@ -1334,7 +1334,7 @@ struct SplitAncientStorages {
     ancient_slots: Vec<Slot>,
     /// lowest slot that is not an ancient append vec
     first_non_ancient_slot: Slot,
-    /// slot # of beginning of first full chunk starting at the first non ancient slot
+    /// slot # of beginning of first aligned chunk starting from the first non ancient slot
     first_chunk_start: Slot,
     /// # non-ancient slots to scan
     non_ancient_slot_count: usize,
@@ -1461,7 +1461,7 @@ impl SplitAncientStorages {
     /// return the range of slots in that chunk
     /// None indicates the range is empty for that chunk.
     fn get_slot_range(&self, chunk: usize) -> Option<Range<Slot>> {
-        let range = if chunk < self.ancient_slot_count {
+        let range = if self.is_chunk_ancient(chunk) {
             // ancient append vecs are handled individually
             let slot = self.ancient_slots[chunk];
             Range {
@@ -16344,19 +16344,25 @@ pub mod tests {
     }
 
     /// test function to make sure the split range covers exactly every slot in the original range
-    fn verify_all_slots_covered_exactly_once(splitter: &SplitAncientStorages, range: &Range<Slot>) {
+    fn verify_all_slots_covered_exactly_once(
+        splitter: &SplitAncientStorages,
+        overall_range: &Range<Slot>,
+    ) {
         // verify all slots covered exactly once
         let result = get_all_slot_ranges(splitter);
-        let mut expected = range.start;
+        let mut expected = overall_range.start;
         result.iter().for_each(|range| {
             if let Some(range) = range {
+                assert!(
+                    overall_range.start == range.start || range.start % MAX_ITEMS_PER_CHUNK == 0
+                );
                 for slot in range.clone() {
                     assert_eq!(slot, expected);
                     expected += 1;
                 }
             }
         });
-        assert_eq!(expected, range.end);
+        assert_eq!(expected, overall_range.end);
     }
 
     /// new splitter for test
@@ -16431,8 +16437,8 @@ pub mod tests {
         assert_eq!(
             result,
             [
-                Some(1..MAX_ITEMS_PER_CHUNK),
-                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + 1),
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + offset),
                 None
             ]
         );
@@ -16547,7 +16553,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_split_storages_splitter_broken() {
+    fn test_split_storages_splitter_large_offset() {
         solana_logger::setup();
         // 1 full chunk - 1, mis-aligned by 2 at big offset
         // huge offset
@@ -16582,7 +16588,7 @@ pub mod tests {
                     for reduced_items in [0, 1, 2] {
                         for added_items in [0, 1, 2] {
                             // this will verify the entire range correctly
-                            let _ = new_splitter2(
+                            _ = new_splitter2(
                                 offset * offset_multiplier,
                                 (full_chunks * MAX_ITEMS_PER_CHUNK + added_items)
                                     .saturating_sub(reduced_items),
