@@ -6753,7 +6753,11 @@ pub mod tests {
         let response = parse_failure_response(rpc.handle_request_sync(request));
         let expected = (
             JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
-            String::from("Transaction version (0) is not supported"),
+            String::from(
+                "Transaction version (0) is not supported by the requesting client. \
+                Please try the request again with the following configuration parameter: \
+                \"maxSupportedTransactionVersion\": 0",
+            ),
         );
         assert_eq!(response, expected);
     }
