@@ -42,16 +42,17 @@ use {
 };
 
 struct TestEnvironment {
+    /// NOTE: The fields are arranged to ensure they are dropped in the correct order.
+    /// - BankForks must be dropped before BackgroundServices
+    /// - BackgroundServices must be dropped before the TempDirs
+    /// - SnapshotConfig should be dropped before the TempDirs
     bank_forks: Arc<RwLock<BankForks>>,
-
+    background_services: BackgroundServices,
     genesis_config_info: GenesisConfigInfo,
+    _snapshot_config: SnapshotConfig,
     _bank_snapshots_dir: TempDir,
     _full_snapshot_archives_dir: TempDir,
     _incremental_snapshot_archives_dir: TempDir,
-    _snapshot_config: SnapshotConfig,
-
-    // NOTE: This field must come after bank_forks because it must be dropped after
-    background_services: BackgroundServices,
 }
 
 impl TestEnvironment {
