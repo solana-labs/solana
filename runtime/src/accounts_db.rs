@@ -1190,6 +1190,7 @@ pub struct AccountsDb {
     /// Used to disable logging dead slots during removal.
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
+    last_add_root_log: AtomicInterval,
 }
 
 #[derive(Debug, Default)]
@@ -1994,6 +1995,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
+            last_add_root_log: AtomicInterval::default(),
         }
     }
 
@@ -8066,6 +8068,10 @@ impl AccountsDb {
             }
         }
         store_time.stop();
+
+        if self.last_add_root_log.should_update(10_000) {
+            datapoint_info!("add_root", ("root", slot, i64));
+        }
 
         AccountsAddRootTiming {
             index_us: index_time.as_us(),
