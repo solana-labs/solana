@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "bpf"))]
+#[cfg(not(target_arch = "bpf"))]
 use solana_program::message::AddressLoaderError;
 use thiserror::Error;
 
