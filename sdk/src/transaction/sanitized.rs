@@ -6,14 +6,8 @@ use {
     crate::{
         hash::Hash,
         message::{
-<<<<<<< HEAD
-            v0::{self, LoadedAddresses, MessageAddressTableLookup},
-            SanitizedMessage, VersionedMessage,
-=======
-            legacy,
             v0::{self, LoadedAddresses},
-            LegacyMessage, SanitizedMessage, VersionedMessage,
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
+            SanitizedMessage, VersionedMessage,
         },
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
