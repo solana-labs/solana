@@ -33,7 +33,7 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        message::{v0, Message as LegacyMessage},
+        message::Message,
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, Transaction},
@@ -60,45 +60,6 @@ impl RpcClientConfig {
     }
 }
 
-<<<<<<< HEAD:client/src/rpc_client.rs
-=======
-/// Trait used to add support for versioned messages to RPC APIs while
-/// retaining backwards compatibility
-pub trait SerializableMessage: Serialize {}
-impl SerializableMessage for LegacyMessage {}
-impl SerializableMessage for v0::Message {}
-
-/// Trait used to add support for versioned transactions to RPC APIs while
-/// retaining backwards compatibility
-pub trait SerializableTransaction: Serialize {
-    fn get_signature(&self) -> &Signature;
-    fn get_recent_blockhash(&self) -> &Hash;
-    fn uses_durable_nonce(&self) -> bool;
-}
-impl SerializableTransaction for Transaction {
-    fn get_signature(&self) -> &Signature {
-        &self.signatures[0]
-    }
-    fn get_recent_blockhash(&self) -> &Hash {
-        &self.message.recent_blockhash
-    }
-    fn uses_durable_nonce(&self) -> bool {
-        uses_durable_nonce(self).is_some()
-    }
-}
-impl SerializableTransaction for VersionedTransaction {
-    fn get_signature(&self) -> &Signature {
-        &self.signatures[0]
-    }
-    fn get_recent_blockhash(&self) -> &Hash {
-        self.message.recent_blockhash()
-    }
-    fn uses_durable_nonce(&self) -> bool {
-        self.uses_durable_nonce()
-    }
-}
-
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217)):rpc-client/src/rpc_client.rs
 #[derive(Debug, Default)]
 pub struct GetConfirmedSignaturesForAddress2Config {
     pub before: Option<Signature>,
@@ -4074,13 +4035,8 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
-<<<<<<< HEAD:client/src/rpc_client.rs
     pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
         self.invoke(self.rpc_client.get_fee_for_message(message))
-=======
-    pub fn get_fee_for_message(&self, message: &impl SerializableMessage) -> ClientResult<u64> {
-        self.invoke((self.rpc_client.as_ref()).get_fee_for_message(message))
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217)):rpc-client/src/rpc_client.rs
     }
 
     pub fn get_new_latest_blockhash(&self, blockhash: &Hash) -> ClientResult<Hash> {

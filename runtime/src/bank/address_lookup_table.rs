@@ -3,17 +3,12 @@ use {
     crate::accounts_db::LoadZeroLamports,
     solana_address_lookup_table_program::error::AddressLookupError,
     solana_sdk::{
-<<<<<<< HEAD
         feature_set::return_none_for_zero_lamport_accounts,
-        message::v0::{LoadedAddresses, MessageAddressTableLookup},
-        transaction::{AddressLoader, Result as TransactionResult, TransactionError},
-=======
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             AddressLoaderError,
         },
         transaction::AddressLoader,
->>>>>>> ddf95c181 (RPC: Support versioned txs in getFeeForMessage API (#28217))
     },
 };
 
