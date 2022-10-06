@@ -15,6 +15,7 @@ import {
 import { FetchStatus } from "providers/cache";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorCard } from "components/common/ErrorCard";
+import { displayTimestampUtc } from "utils/date";
 
 export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   const address = pubkey.toBase58();
@@ -56,7 +57,7 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
       return (
         <tr key={signature}>
           <td>
-            <Signature signature={signature} link truncate />
+            <Signature signature={signature} link truncateChars={60} />
           </td>
 
           <td className="w-1">
@@ -64,9 +65,16 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
           </td>
 
           {hasTimestamps && (
-            <td className="text-muted">
-              {blockTime ? <Moment date={blockTime * 1000} fromNow /> : "---"}
-            </td>
+            <>
+              <td className="text-muted">
+                {blockTime ? <Moment date={blockTime * 1000} fromNow /> : "---"}
+              </td>
+              <td className="text-muted">
+                {blockTime
+                  ? displayTimestampUtc(blockTime * 1000, true)
+                  : "---"}
+              </td>
+            </>
           )}
 
           <td>
@@ -90,8 +98,13 @@ export function TransactionHistoryCard({ pubkey }: { pubkey: PublicKey }) {
           <thead>
             <tr>
               <th className="text-muted w-1">Transaction Signature</th>
-              <th className="text-muted w-1">Slot</th>
-              {hasTimestamps && <th className="text-muted w-1">Age</th>}
+              <th className="text-muted w-1">Block</th>
+              {hasTimestamps && (
+                <>
+                  <th className="text-muted w-1">Age</th>
+                  <th className="text-muted w-1">Timestamp</th>
+                </>
+              )}
               <th className="text-muted">Result</th>
             </tr>
           </thead>
