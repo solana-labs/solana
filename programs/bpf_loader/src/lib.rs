@@ -14,6 +14,7 @@ extern crate solana_metrics;
 
 use {
     crate::{
+        allocator_bump::BpfAllocator,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
@@ -28,13 +29,13 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_INPUT_START},
+        ebpf::{HOST_ALIGN, MM_HEAP_START, MM_INPUT_START},
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter, VerifiedExecutable},
+        vm::{Config, EbpfVm, InstructionMeter, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -42,9 +43,10 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
-            enable_bpf_loader_extend_program_ix, error_on_syscall_bpf_function_hash_collisions,
-            limit_max_instruction_trace_length, reject_callx_r10,
+            check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
+            disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
+            error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
+            reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -80,7 +82,7 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError<BpfError>) -> InstructionError {
+fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError) -> InstructionError {
     ic_msg!(invoke_context, "{}", e);
     InstructionError::InvalidAccountData
 }
@@ -201,7 +203,7 @@ pub fn create_executor(
         )?;
         create_executor_metrics.program_id = programdata.get_key().to_string();
         let mut load_elf_time = Measure::start("load_elf_time");
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             programdata
                 .get_data()
                 .get(programdata_offset..)
@@ -220,10 +222,8 @@ pub fn create_executor(
     .map_err(|e| map_ebpf_error(invoke_context, e))?;
     let mut verify_code_time = Measure::start("verify_code_time");
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
-            executable,
-        )
-        .map_err(|e| map_ebpf_error(invoke_context, e))?;
+        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
+            .map_err(|e| map_ebpf_error(invoke_context, e))?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
@@ -289,11 +289,11 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the BPF virtual machine
 pub fn create_vm<'a, 'b>(
-    program: &'a VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
+    program: &'a VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
     parameter_bytes: &mut [u8],
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, ThisInstructionMeter>, EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     let _ = invoke_context.get_compute_meter().borrow_mut().consume(
@@ -304,8 +304,33 @@ pub fn create_vm<'a, 'b>(
     let mut heap =
         AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
-    let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
-    syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;
+    let vm = EbpfVm::new(
+        program,
+        invoke_context,
+        heap.as_slice_mut(),
+        vec![parameter_region],
+    )?;
+    let check_aligned = bpf_loader_deprecated::id()
+        != invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .and_then(|instruction_context| {
+                instruction_context
+                    .try_borrow_last_program_account(invoke_context.transaction_context)
+            })
+            .map(|program_account| *program_account.get_owner())
+            .map_err(SyscallError::InstructionError)?;
+    let check_size = invoke_context
+        .feature_set
+        .is_active(&check_slice_translation_size::id());
+    invoke_context
+        .set_syscall_context(
+            check_aligned,
+            check_size,
+            orig_account_lengths,
+            Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START))),
+        )
+        .map_err(SyscallError::InstructionError)?;
     Ok(vm)
 }
 
@@ -1281,7 +1306,7 @@ impl InstructionMeter for ThisInstructionMeter {
 
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    verified_executable: VerifiedExecutable<RequisiteVerifier, BpfError, ThisInstructionMeter>,
+    verified_executable: VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
     use_jit: bool,
 }
 
@@ -1353,7 +1378,10 @@ impl Executor for BpfExecutor {
                 let mut trace_buffer = Vec::<u8>::new();
                 let analysis =
                     Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
-                vm.get_tracer().write(&mut trace_buffer, &analysis).unwrap();
+                vm.get_program_environment()
+                    .tracer
+                    .write(&mut trace_buffer, &analysis)
+                    .unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
                 trace!("BPF Program Instruction Trace:\n{}", trace_string);
             }
@@ -1364,7 +1392,7 @@ impl Executor for BpfExecutor {
                 stable_log::program_return(&log_collector, &program_id, return_data);
             }
             match result {
-                Ok(status) if status != SUCCESS => {
+                ProgramResult::Ok(status) if status != SUCCESS => {
                     let error: InstructionError = if (status
                         == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
                         && !invoke_context
@@ -1386,11 +1414,24 @@ impl Executor for BpfExecutor {
                     stable_log::program_failure(&log_collector, &program_id, &error);
                     Err(error)
                 }
-                Err(error) => {
+                ProgramResult::Err(error) => {
                     let error = match error {
-                        EbpfError::UserError(BpfError::SyscallError(
-                            SyscallError::InstructionError(error),
-                        )) => error,
+                        /*EbpfError::UserError(user_error) if let BpfError::SyscallError(
+                            SyscallError::InstructionError(instruction_error),
+                        ) = user_error.downcast_ref::<BpfError>().unwrap() => instruction_error.clone(),*/
+                        EbpfError::UserError(user_error)
+                            if matches!(
+                                user_error.downcast_ref::<BpfError>().unwrap(),
+                                BpfError::SyscallError(SyscallError::InstructionError(_)),
+                            ) =>
+                        {
+                            match user_error.downcast_ref::<BpfError>().unwrap() {
+                                BpfError::SyscallError(SyscallError::InstructionError(
+                                    instruction_error,
+                                )) => instruction_error.clone(),
+                                _ => unreachable!(),
+                            }
+                        }
                         err => {
                             ic_logger_msg!(log_collector, "Program failed to complete: {}", err);
                             InstructionError::ProgramFailedToComplete
@@ -1536,21 +1577,21 @@ mod tests {
             "entrypoint",
         )
         .unwrap();
-        let executable = Executable::<BpfError, TestInstructionMeter>::from_text_bytes(
+        let executable = Executable::<TestInstructionMeter>::from_text_bytes(
             program,
             config,
             syscall_registry,
             bpf_functions,
         )
         .unwrap();
-        let verified_executable = VerifiedExecutable::<
-            TautologyVerifier,
-            BpfError,
-            TestInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let verified_executable =
+            VerifiedExecutable::<TautologyVerifier, TestInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        let mut vm = EbpfVm::new(&verified_executable, &mut [], vec![input_region]).unwrap();
+        let mut vm =
+            EbpfVm::new(&verified_executable, &mut (), &mut [], vec![input_region]).unwrap();
         let mut instruction_meter = TestInstructionMeter { remaining: 10 };
         vm.execute_program_interpreted(&mut instruction_meter)
             .unwrap();
