@@ -3,7 +3,7 @@
 use {
     byteorder::{ByteOrder, LittleEndian},
     solana_rbpf::{
-        aligned_memory::AlignedMemory,
+        aligned_memory::{AlignedMemory, Pod},
         ebpf::{HOST_ALIGN, MM_INPUT_START},
         memory_region::MemoryRegion,
     },
@@ -52,20 +52,24 @@ impl Serializer {
         self.buffer.fill_write(num, value)
     }
 
-    fn write_u8(&mut self, value: u8) {
+    pub fn write<T: Pod>(&mut self, value: T) {
+        self.debug_assert_alignment::<T>();
+        // Safety:
+        // in serialize_parameters_(aligned|unaligned) first we compute the
+        // required size then we write into the newly allocated buffer. There's
+        // no need to check bounds at every write.
+        //
+        // AlignedMemory::write_unchecked _does_ debug_assert!() that the capacity
+        // is enough, so in the unlikely case we introduce a bug in the size
+        // computation, tests will abort.
         unsafe {
-            self.buffer.write_u8_unchecked(value);
-        }
-    }
-
-    fn write_u64(&mut self, value: u64) {
-        self.debug_assert_alignment::<u64>();
-        unsafe {
-            self.buffer.write_u64_unchecked(value);
+            self.buffer.write_unchecked(value);
         }
     }
 
     fn write_all(&mut self, value: &[u8]) {
+        // Safety:
+        // see write() - the buffer is guaranteed to be large enough
         unsafe {
             self.buffer.write_all_unchecked(value);
         }
@@ -216,26 +220,26 @@ fn serialize_parameters_unaligned(
 
     let mut s = Serializer::new(size, MM_INPUT_START, false);
 
-    s.write_u64((accounts.len() as u64).to_le());
+    s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
-            SerializeAccount::Duplicate(position) => s.write_u8(position as u8),
+            SerializeAccount::Duplicate(position) => s.write(position as u8),
             SerializeAccount::Account(_, account) => {
-                s.write_u8(NON_DUP_MARKER);
-                s.write_u8(account.is_signer() as u8);
-                s.write_u8(account.is_writable() as u8);
+                s.write::<u8>(NON_DUP_MARKER);
+                s.write::<u8>(account.is_signer() as u8);
+                s.write::<u8>(account.is_writable() as u8);
                 s.write_all(account.get_key().as_ref());
-                s.write_u64(account.get_lamports().to_le());
-                s.write_u64((account.get_data().len() as u64).to_le());
+                s.write::<u64>(account.get_lamports().to_le());
+                s.write::<u64>((account.get_data().len() as u64).to_le());
                 s.write_account(&account)
                     .map_err(|_| InstructionError::InvalidArgument)?;
                 s.write_all(account.get_owner().as_ref());
-                s.write_u8(account.is_executable() as u8);
-                s.write_u64((account.get_rent_epoch() as u64).to_le());
+                s.write::<u8>(account.is_executable() as u8);
+                s.write::<u64>((account.get_rent_epoch() as u64).to_le());
             }
         };
     }
-    s.write_u64((instruction_context.get_instruction_data().len() as u64).to_le());
+    s.write::<u64>((instruction_context.get_instruction_data().len() as u64).to_le());
     s.write_all(instruction_context.get_instruction_data());
     s.write_all(
         instruction_context
@@ -332,30 +336,30 @@ fn serialize_parameters_aligned(
     let mut s = Serializer::new(size, MM_INPUT_START, true);
 
     // Serialize into the buffer
-    s.write_u64((accounts.len() as u64).to_le());
+    s.write::<u64>((accounts.len() as u64).to_le());
     for account in accounts {
         match account {
             SerializeAccount::Account(_, borrowed_account) => {
-                s.write_u8(NON_DUP_MARKER);
-                s.write_u8(borrowed_account.is_signer() as u8);
-                s.write_u8(borrowed_account.is_writable() as u8);
-                s.write_u8(borrowed_account.is_executable() as u8);
+                s.write::<u8>(NON_DUP_MARKER);
+                s.write::<u8>(borrowed_account.is_signer() as u8);
+                s.write::<u8>(borrowed_account.is_writable() as u8);
+                s.write::<u8>(borrowed_account.is_executable() as u8);
                 s.write_all(&[0u8, 0, 0, 0]);
                 s.write_all(borrowed_account.get_key().as_ref());
                 s.write_all(borrowed_account.get_owner().as_ref());
-                s.write_u64(borrowed_account.get_lamports().to_le());
-                s.write_u64((borrowed_account.get_data().len() as u64).to_le());
+                s.write::<u64>(borrowed_account.get_lamports().to_le());
+                s.write::<u64>((borrowed_account.get_data().len() as u64).to_le());
                 s.write_account(&borrowed_account)
                     .map_err(|_| InstructionError::InvalidArgument)?;
-                s.write_u64((borrowed_account.get_rent_epoch() as u64).to_le());
+                s.write::<u64>((borrowed_account.get_rent_epoch() as u64).to_le());
             }
             SerializeAccount::Duplicate(position) => {
-                s.write_u8(position as u8);
+                s.write::<u8>(position as u8);
                 s.write_all(&[0u8, 0, 0, 0, 0, 0, 0]);
             }
         };
     }
-    s.write_u64((instruction_context.get_instruction_data().len() as u64).to_le());
+    s.write::<u64>((instruction_context.get_instruction_data().len() as u64).to_le());
     s.write_all(instruction_context.get_instruction_data());
     s.write_all(
         instruction_context
