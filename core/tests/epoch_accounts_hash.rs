@@ -211,17 +211,11 @@ impl Drop for BackgroundServices {
         info!("Stopping background services...");
         self.exit.store(true, Ordering::Relaxed);
 
-        unsafe { ManuallyDrop::take(&mut self.accounts_background_service) }
-            .join()
-            .expect("stop ABS");
-
-        unsafe { ManuallyDrop::take(&mut self.accounts_hash_verifier) }
-            .join()
-            .expect("stop AHV");
-
-        unsafe { ManuallyDrop::take(&mut self.snapshot_packager_service) }
-            .join()
-            .expect("stop SPS");
+        // Join the background threads, and ignore any errors.
+        // SAFETY: We do not use any of the `ManuallyDrop` fields again, so `.take()` is OK here.
+        _ = unsafe { ManuallyDrop::take(&mut self.accounts_background_service) }.join();
+        _ = unsafe { ManuallyDrop::take(&mut self.accounts_hash_verifier) }.join();
+        _ = unsafe { ManuallyDrop::take(&mut self.snapshot_packager_service) }.join();
 
         info!("Stopping background services... DONE");
     }
