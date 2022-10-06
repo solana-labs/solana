@@ -99,6 +99,7 @@ pub(crate) fn configure_server(
 fn rt() -> Runtime {
     Builder::new_multi_thread()
         .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
+        .thread_name("quic-server")
         .enable_all()
         .build()
         .unwrap()
