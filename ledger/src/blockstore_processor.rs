@@ -689,14 +689,18 @@ pub fn process_blockstore_from_root(
 
     let mut timing = ExecuteTimings::default();
     // Iterate and replay slots from blockstore starting from `start_slot`
+<<<<<<< HEAD
 
     let mut last_full_snapshot_slot = None;
 
+=======
+    let mut num_slots_processed = 0;
+>>>>>>> 9e8f21ec2 (Add metric to track number of slots processed in load_frozen_forks() (#28247))
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
     {
-        load_frozen_forks(
+        num_slots_processed = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -737,10 +741,21 @@ pub fn process_blockstore_from_root(
     datapoint_info!(
         "process_blockstore_from_root",
         ("total_time_us", processing_time.as_micros(), i64),
+<<<<<<< HEAD
         ("frozen_banks", bank_forks.frozen_banks().len(), i64),
         ("slot", bank_forks.root(), i64),
         ("forks", bank_forks.banks().len(), i64),
         ("calculate_capitalization_us", time_cap.as_us(), i64),
+=======
+        (
+            "frozen_banks",
+            bank_forks.read().unwrap().frozen_banks().len(),
+            i64
+        ),
+        ("slot", bank_forks.read().unwrap().root(), i64),
+        ("num_slots_processed", num_slots_processed, i64),
+        ("forks", bank_forks.read().unwrap().banks().len(), i64),
+>>>>>>> 9e8f21ec2 (Add metric to track number of slots processed in load_frozen_forks() (#28247))
     );
 
     info!("ledger processing timing: {:?}", timing);
@@ -1130,14 +1145,22 @@ fn load_frozen_forks(
     snapshot_config: Option<&SnapshotConfig>,
     accounts_package_sender: AccountsPackageSender,
     timing: &mut ExecuteTimings,
+<<<<<<< HEAD
     last_full_snapshot_slot: &mut Option<Slot>,
     pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> result::Result<(), BlockstoreProcessorError> {
+=======
+    accounts_background_request_sender: &AbsRequestSender,
+) -> result::Result<u64, BlockstoreProcessorError> {
+>>>>>>> 9e8f21ec2 (Add metric to track number of slots processed in load_frozen_forks() (#28247))
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut last_free = Instant::now();
     let mut pending_slots = vec![];
+    // The total number of slots processed
+    let mut total_slots_elapsed = 0;
+    // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
@@ -1325,6 +1348,7 @@ fn load_frozen_forks(
             }
 
             slots_elapsed += 1;
+            total_slots_elapsed += 1;
 
             trace!(
                 "Bank for {}slot {} is complete",
@@ -1348,7 +1372,7 @@ fn load_frozen_forks(
         }
     }
 
-    Ok(())
+    Ok(total_slots_elapsed)
 }
 
 // `roots` is sorted largest to smallest by root slot
