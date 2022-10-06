@@ -45,6 +45,18 @@ const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
+const CONNECTION_CLOSE_CODE_DROP_ENTRY: u32 = 1;
+const CONNECTION_CLOSE_REASON_DROP_ENTRY: &[u8] = b"drop";
+
+const CONNECTION_CLOSE_CODE_DISALLOWED: u32 = 2;
+const CONNECTION_CLOSE_REASON_DISALLOWED: &[u8] = b"disallowed";
+
+const CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT: u32 = 3;
+const CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT: &[u8] = b"invalid_stream_count";
+
+const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
+const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -298,6 +310,10 @@ fn handle_and_cache_new_connection(
             Err(ConnectionHandlerError::ConnectionAddError)
         }
     } else {
+        connection.close(
+            CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT.into(),
+            CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT,
+        );
         params
             .stats
             .connection_add_failed_invalid_stream_count
@@ -323,7 +339,10 @@ fn prune_unstaked_connections_and_add_new_connection(
             params,
         )
     } else {
-        new_connection.connection.close(0u32.into(), &[0u8]);
+        new_connection.connection.close(
+            CONNECTION_CLOSE_CODE_DISALLOWED.into(),
+            CONNECTION_CLOSE_REASON_DISALLOWED,
+        );
         Err(ConnectionHandlerError::ConnectionAddError)
     }
 }
@@ -708,7 +727,10 @@ impl ConnectionEntry {
 impl Drop for ConnectionEntry {
     fn drop(&mut self) {
         if let Some(conn) = self.connection.take() {
-            conn.close(0u32.into(), &[0u8]);
+            conn.close(
+                CONNECTION_CLOSE_CODE_DROP_ENTRY.into(),
+                CONNECTION_CLOSE_REASON_DROP_ENTRY,
+            );
         }
         self.exit.store(true, Ordering::Relaxed);
     }
@@ -844,6 +866,12 @@ impl ConnectionTable {
             self.total_size += 1;
             Some((last_update, exit))
         } else {
+            if let Some(connection) = connection {
+                connection.close(
+                    CONNECTION_CLOSE_CODE_TOO_MANY.into(),
+                    CONNECTION_CLOSE_REASON_TOO_MANY,
+                );
+            }
             None
         }
     }
