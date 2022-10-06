@@ -7033,24 +7033,26 @@ impl AccountsDb {
                 {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    bin_range.start.hash(&mut hasher);
+                    bin_range.end.hash(&mut hasher);
+                    let is_first_scan_pass = bin_range.start == 0;
 
+                    // calculate hash representing all storages in this chunk
                     for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
-                        if bin_range.start == 0 && slot < one_epoch_old {
+                        if is_first_scan_pass && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
-                        bin_range.start.hash(&mut hasher);
-                        bin_range.end.hash(&mut hasher);
                         if let Some(sub_storages) = sub_storages {
                             if sub_storages.len() > 1
                                 && !config.store_detailed_debug_info_on_failure
                             {
-                                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to cache this slot.
-                                // However, if we're just dumping detailed debug info, we don't care, so store anyway.
+                                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
+                                // However, if we're just dumping detailed debug info store anyway.
                                 load_from_cache = false;
                                 break;
                             }
+                            // hash info about this storage
                             let append_vec = sub_storages.first().unwrap();
-                            // check written_bytes here. This is necessary for tests and removes a potential for false positives.
                             append_vec.written_bytes().hash(&mut hasher);
                             let storage_file = append_vec.accounts.get_path();
                             slot.hash(&mut hasher);
