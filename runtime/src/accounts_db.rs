@@ -7513,6 +7513,7 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
             slot,
@@ -7524,6 +7525,7 @@ impl AccountsDb {
             false,
             false,
             enable_rehashing,
+            use_bg_thread_pool,
         )
     }
 
@@ -7540,20 +7542,19 @@ impl AccountsDb {
         ignore_mismatch: bool,
         store_hash_raw_data_for_debug: bool,
         enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let use_index = false;
         let check_hash = false; // this will not be supported anymore
-                                // interesting to consider this
-        let is_startup = true;
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
                 test_hash_calculation,
                 slot,
                 CalcAccountsHashConfig {
-                    use_bg_thread_pool: !is_startup,
+                    use_bg_thread_pool,
                     check_hash,
                     ancestors: Some(ancestors),
                     epoch_schedule,
@@ -11843,6 +11844,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             )
             .unwrap();
     }
@@ -12247,6 +12249,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12261,6 +12264,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MissingBankHash)
         );
@@ -12284,6 +12288,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MismatchedBankHash)
         );
@@ -12313,6 +12318,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12335,12 +12341,13 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), true,),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), true, false,),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -12368,6 +12375,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12412,6 +12420,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MismatchedBankHash)
         );
@@ -13032,6 +13041,7 @@ pub mod tests {
                     &EpochSchedule::default(),
                     &RentCollector::default(),
                     true,
+                    false,
                 )
                 .unwrap();
 
@@ -13045,6 +13055,7 @@ pub mod tests {
                     &EpochSchedule::default(),
                     &RentCollector::default(),
                     true,
+                    false,
                 )
                 .unwrap();
 

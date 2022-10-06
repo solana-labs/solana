@@ -7010,6 +7010,8 @@ impl Bank {
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
                             enable_rehashing,
+                            // true to run using bg thread pool
+                            true,
                         );
                         accounts_
                             .accounts_db
@@ -7031,6 +7033,8 @@ impl Bank {
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
                 enable_rehashing,
+                // fg is waiting for this to run, so we can use the fg thread pool
+                false,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
