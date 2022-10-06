@@ -738,7 +738,7 @@ fn get_peer_snapshot_hashes(
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes =
         get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
-    if known_validators.is_some() {
+    if let Some(known_validators) = known_validators {
         let known_snapshot_hashes = get_snapshot_hashes_from_known_validators(
             cluster_info,
             known_validators,
@@ -771,7 +771,7 @@ type KnownSnapshotHashes = HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>;
 /// This applies to both full and incremental snapshot hashes.
 fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
-    known_validators: Option<&HashSet<Pubkey>>,
+    known_validators: &HashSet<Pubkey>,
     incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
@@ -790,19 +790,66 @@ fn get_snapshot_hashes_from_known_validators(
             .map(|hashes| (hashes.base, hashes.hashes))
     };
 
+    if !do_known_validators_have_all_snapshot_hashes(
+        known_validators,
+        get_full_snapshot_hashes_for_node,
+        get_incremental_snapshot_hashes_for_node,
+        incremental_snapshot_fetch,
+    ) {
+        debug!(
+            "Not all snapshot hashes have been discovered from known validators. \
+            This likely means the gossip tables are not fully populated. \
+            We will sleep and retry..."
+        );
+        return KnownSnapshotHashes::default();
+    }
+
+    build_known_snapshot_hashes(
+        known_validators,
+        get_full_snapshot_hashes_for_node,
+        get_incremental_snapshot_hashes_for_node,
+        incremental_snapshot_fetch,
+    )
+}
+
+/// Check if we can discover all snapshot hashes for all the known validators.
+///
+/// This is a work-around to ensure the gossip tables are populated enough so that the bootstrap
+/// process will download both full and incremental snapshots.  If the incremental snapshot hashes
+/// are not yet populated from gossip, then it is possible (and has been seen often) to only
+/// discover full snapshots—and ones that are very old (up to 25,000 slots)—but *not* discover any
+/// of their associated incremental snapshots.
+///
+/// This function will return false if we do not yet have snapshot hashes from any known validator;
+/// and true otherwise.
+fn do_known_validators_have_all_snapshot_hashes<'a, F1, F2>(
+    known_validators: impl IntoIterator<Item = &'a Pubkey>,
+    get_full_snapshot_hashes_for_node: F1,
+    get_incremental_snapshot_hashes_for_node: F2,
+    incremental_snapshot_fetch: bool,
+) -> bool
+where
+    F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
+    F2: Fn(&'a Pubkey) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)>,
+{
+    let node_has_full_snapshot_hashes = |node| !get_full_snapshot_hashes_for_node(node).is_empty();
+    let node_has_incremental_snapshot_hashes = |node| {
+        get_incremental_snapshot_hashes_for_node(node)
+            .map(|(_, hashes)| !hashes.is_empty())
+            .unwrap_or(false)
+    };
+
+    // Does this node have all the snapshot hashes?
+    // If incremental snapshots are disabled, only check for full snapshot hashes; otherwise check
+    // for both full and incremental snapshot hashes.
+    let node_has_all_snapshot_hashes = |node| {
+        node_has_full_snapshot_hashes(node)
+            && (!incremental_snapshot_fetch || node_has_incremental_snapshot_hashes(node))
+    };
+
     known_validators
-        .map(|known_validators| {
-            build_known_snapshot_hashes(
-                known_validators,
-                get_full_snapshot_hashes_for_node,
-                get_incremental_snapshot_hashes_for_node,
-                incremental_snapshot_fetch,
-            )
-        })
-        .unwrap_or_else(|| {
-            trace!("No known validators, so no known snapshot hashes");
-            KnownSnapshotHashes::new()
-        })
+        .into_iter()
+        .all(node_has_all_snapshot_hashes)
 }
 
 /// Build the known snapshot hashes from a set of nodes.
