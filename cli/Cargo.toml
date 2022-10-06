@@ -26,9 +26,9 @@ reqwest = { version = "0.11.11", default-features = false, features = ["blocking
 semver = "1.0.10"
 serde = "1.0.138"
 serde_derive = "1.0.103"
-<<<<<<< HEAD
 serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.14.6" }
+solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.14.6" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.14.6" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.14.6" }
 solana-cli-config = { path = "../cli-config", version = "=1.14.6" }
@@ -44,26 +44,6 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.14.6
 solana-version = { path = "../version", version = "=1.14.6" }
 solana-vote-program = { path = "../programs/vote", version = "=1.14.6" }
 solana_rbpf = "=0.2.31"
-=======
-serde_json = "1.0.83"
-solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
-solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.12.0" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.12.0" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.12.0" }
-solana-cli-config = { path = "../cli-config", version = "=1.12.0" }
-solana-cli-output = { path = "../cli-output", version = "=1.12.0" }
-solana-client = { path = "../client", version = "=1.12.0" }
-solana-config-program = { path = "../programs/config", version = "=1.12.0" }
-solana-faucet = { path = "../faucet", version = "=1.12.0" }
-solana-logger = { path = "../logger", version = "=1.12.0" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.12.0" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.12.0" }
-solana-sdk = { path = "../sdk", version = "=1.12.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.12.0" }
-solana-version = { path = "../version", version = "=1.12.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
-solana_rbpf = "=0.2.32"
->>>>>>> d8380e4d4 (cli: Add subcommands for address lookup tables (#27123))
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"
