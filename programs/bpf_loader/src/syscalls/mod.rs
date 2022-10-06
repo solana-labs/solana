@@ -54,7 +54,7 @@ use {
         },
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
-        big_mod_exp::{BigModExpParams, big_mod_exp},
+        big_mod_exp::BigModExpParams,
     },
     std::{
         alloc::Layout,
