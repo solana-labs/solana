@@ -1339,7 +1339,10 @@ struct SplitAncientStorages {
     /// # non-ancient slots to scan
     non_ancient_slot_count: usize,
     /// # chunks to use to iterate the storages
+    /// all ancient chunks, the special 0 and last chunks for non-full chunks, and all the 'full' chunks of normal slots
     chunk_count: usize,
+    /// start and end(exclusive) of normal (non-ancient) slots to be scanned
+    normal_slot_range: Range<Slot>,
 }
 
 impl SplitAncientStorages {
@@ -1351,13 +1354,14 @@ impl SplitAncientStorages {
     /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
     /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
     fn new(one_epoch_old_slot: Slot, snapshot_storages: &SortedStorages) -> Self {
+        let range = snapshot_storages.range();
+
         // any ancient append vecs should definitely be cached
         // We need to break the ranges into:
         // 1. individual ancient append vecs (may be empty)
         // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
         // 3. evenly divided full chunks in the middle
         // 4. unevenly divided chunk of most recent slots (may be empty)
-        let range = snapshot_storages.range();
         let ancient_slots = Self::get_ancient_slots(one_epoch_old_slot, snapshot_storages);
 
         let first_non_ancient_slot = ancient_slots
@@ -1408,18 +1412,82 @@ impl SplitAncientStorages {
 
         let non_ancient_slot_count = (max_slot_inclusive - first_non_ancient_slot + 1) as usize;
 
+        let normal_slot_range = Range {
+            start: first_non_ancient_slot,
+            end: range.end,
+        };
+
         // 2 is for 2 special chunks - unaligned slots at the beginning and end
         let chunk_count =
             ancient_slot_count + 2 + non_ancient_slot_count / (MAX_ITEMS_PER_CHUNK as usize);
 
-        Self {
+        SplitAncientStorages {
             ancient_slot_count,
             ancient_slots,
             first_non_ancient_slot,
             first_chunk_start,
             non_ancient_slot_count,
             chunk_count,
+            normal_slot_range,
         }
+    }
+
+    /// given 'normal_chunk', return the starting slot of that chunk in the normal/non-ancient range
+    /// a normal_chunk is 0<=normal_chunk<=non_ancient_chunk_count
+    /// non_ancient_chunk_count is chunk_count-ancient_slot_count
+    fn get_starting_slot_from_normal_chunk(&self, normal_chunk: usize) -> Slot {
+        if normal_chunk == 0 {
+            self.normal_slot_range.start
+        } else {
+            assert!(
+                normal_chunk.saturating_add(self.ancient_slot_count) < self.chunk_count,
+                "out of bounds: {}, {}",
+                normal_chunk,
+                self.chunk_count
+            );
+
+            let normal_chunk = normal_chunk.saturating_sub(1);
+            (self.first_chunk_start + MAX_ITEMS_PER_CHUNK * (normal_chunk as Slot))
+                .max(self.normal_slot_range.start)
+        }
+    }
+
+    /// ancient slots are the first chunks
+    fn is_chunk_ancient(&self, chunk: usize) -> bool {
+        chunk < self.ancient_slot_count
+    }
+
+    /// given chunk in 0<=chunk<self.chunk_count
+    /// return the range of slots in that chunk
+    /// None indicates the range is empty for that chunk.
+    fn get_slot_range(&self, chunk: usize) -> Option<Range<Slot>> {
+        let range = if chunk < self.ancient_slot_count {
+            // ancient append vecs are handled individually
+            let slot = self.ancient_slots[chunk];
+            Range {
+                start: slot,
+                end: slot + 1,
+            }
+        } else {
+            // normal chunks are after ancient chunks
+            let normal_chunk = chunk - self.ancient_slot_count;
+            if normal_chunk == 0 {
+                // first slot
+                Range {
+                    start: self.normal_slot_range.start,
+                    end: self.first_chunk_start.min(self.normal_slot_range.end),
+                }
+            } else {
+                // normal full chunk or the last chunk
+                let first_slot = self.get_starting_slot_from_normal_chunk(normal_chunk);
+                Range {
+                    start: first_slot,
+                    end: (first_slot + MAX_ITEMS_PER_CHUNK).min(self.normal_slot_range.end),
+                }
+            }
+        };
+        // return empty range as None
+        (!range.is_empty()).then_some(range)
     }
 }
 
@@ -6956,14 +7024,7 @@ impl AccountsDb {
     where
         S: AppendVecScan,
     {
-        let SplitAncientStorages {
-            ancient_slot_count,
-            ancient_slots,
-            first_non_ancient_slot,
-            first_chunk_start,
-            non_ancient_slot_count,
-            chunk_count,
-        } = SplitAncientStorages::new(
+        let splitter = SplitAncientStorages::new(
             self.get_one_epoch_old_slot_for_hash_calc_scan(
                 snapshot_storages.max_slot_inclusive(),
                 config,
@@ -6973,46 +7034,27 @@ impl AccountsDb {
 
         let range = snapshot_storages.range();
         let start_bin_index = bin_range.start;
-        (0..chunk_count)
+
+        (0..splitter.chunk_count)
             .into_par_iter()
-            .map(|mut chunk| {
+            .map(|chunk| {
                 let mut scanner = scanner.clone();
-                // calculate start, end_exclusive
-                let (single_cached_slot, (start, mut end_exclusive)) = if chunk < ancient_slot_count
-                {
-                    let ancient_slot = ancient_slots[chunk as usize];
-                    (true, (ancient_slot, ancient_slot + 1))
-                } else {
-                    (false, {
-                        chunk -= ancient_slot_count;
-                        if chunk == 0 {
-                            if first_non_ancient_slot == first_chunk_start {
-                                return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
-                            }
-                            // otherwise first chunk is not 'full'
-                            (first_non_ancient_slot, first_chunk_start)
-                        } else {
-                            // normal chunk in the middle or at the end
-                            let start =
-                                first_chunk_start + MAX_ITEMS_PER_CHUNK * ((chunk as Slot) - 1);
-                            let end_exclusive = start + MAX_ITEMS_PER_CHUNK;
-                            (start, end_exclusive)
-                        }
-                    })
-                };
-                end_exclusive = std::cmp::min(end_exclusive, range.end);
-                if start == end_exclusive {
+
+                let range_this_chunk = splitter.get_slot_range(chunk);
+
+                if range_this_chunk.is_none() {
                     return scanner.scanning_complete();
                 }
-                let range_this_chunk = start..end_exclusive;
+                let range_this_chunk = range_this_chunk.unwrap();
 
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
                     || config.store_detailed_debug_info_on_failure;
 
                 // Single cached slots get cached and full chunks get cached.
                 // chunks that don't divide evenly would include some cached append vecs that are no longer part of this range and some that are, so we have to ignore caching on non-evenly dividing chunks.
-                let eligible_for_caching = single_cached_slot
-                    || end_exclusive.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
+                let eligible_for_caching = splitter.is_chunk_ancient(chunk)
+                    || range_this_chunk.end.saturating_sub(range_this_chunk.start)
+                        == MAX_ITEMS_PER_CHUNK;
 
                 if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
@@ -7131,8 +7173,8 @@ impl AccountsDb {
                             "FAILED_TO_SAVE: {}-{}, {}, first_chunk_start: {}, {:?}, error: {:?}",
                             range.start,
                             range.end,
-                            non_ancient_slot_count,
-                            first_chunk_start,
+                            splitter.non_ancient_slot_count,
+                            splitter.first_chunk_start,
                             file_name,
                             result,
                         );
@@ -16270,6 +16312,286 @@ pub mod tests {
             .is_empty());
         assert_eq!(0, remaining_stores);
         assert!(db.dirty_stores.is_empty());
+    }
+
+    #[test]
+    fn test_split_storages_ancient_chunks() {
+        let storages = SortedStorages::empty();
+        assert_eq!(storages.max_slot_inclusive(), 0);
+        let result = SplitAncientStorages::new(0, &storages);
+        assert_eq!(result, SplitAncientStorages::default());
+    }
+
+    /// get all the ranges the splitter produces
+    fn get_all_slot_ranges(splitter: &SplitAncientStorages) -> Vec<Option<Range<Slot>>> {
+        (0..splitter.chunk_count)
+            .map(|chunk| {
+                assert_eq!(
+                    splitter.get_starting_slot_from_normal_chunk(chunk),
+                    if chunk == 0 {
+                        splitter.normal_slot_range.start
+                    } else {
+                        (splitter.first_chunk_start + ((chunk as Slot) - 1) * MAX_ITEMS_PER_CHUNK)
+                            .max(splitter.normal_slot_range.start)
+                    },
+                    "chunk: {chunk}, num_chunks: {}, splitter: {:?}",
+                    splitter.chunk_count,
+                    splitter,
+                );
+                splitter.get_slot_range(chunk)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// test function to make sure the split range covers exactly every slot in the original range
+    fn verify_all_slots_covered_exactly_once(splitter: &SplitAncientStorages, range: &Range<Slot>) {
+        // verify all slots covered exactly once
+        let result = get_all_slot_ranges(splitter);
+        let mut expected = range.start;
+        result.iter().for_each(|range| {
+            if let Some(range) = range {
+                for slot in range.clone() {
+                    assert_eq!(slot, expected);
+                    expected += 1;
+                }
+            }
+        });
+        assert_eq!(expected, range.end);
+    }
+
+    /// new splitter for test
+    /// without any ancient append vecs
+    fn new_splitter(range: &Range<Slot>) -> SplitAncientStorages {
+        let splitter =
+            SplitAncientStorages::new_with_ancient_info(range, Vec::default(), range.start);
+
+        verify_all_slots_covered_exactly_once(&splitter, range);
+
+        splitter
+    }
+
+    /// new splitter for test
+    /// without any ancient append vecs
+    fn new_splitter2(start: Slot, count: Slot) -> SplitAncientStorages {
+        new_splitter(&Range {
+            start,
+            end: start + count,
+        })
+    }
+
+    #[test]
+    fn test_split_storages_splitter_simple() {
+        let plus_1 = MAX_ITEMS_PER_CHUNK + 1;
+        let plus_2 = plus_1 + 1;
+
+        // starting at 0 is aligned with beginning, so 1st chunk is unnecessary since beginning slot starts at boundary
+        // second chunk is the final chunk, which is not full (does not have 2500 entries)
+        let splitter = new_splitter2(0, 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(0..1), None]);
+
+        // starting at 1 is not aligned with beginning, but since we don't have enough for a full chunk, it gets returned in the last chunk
+        let splitter = new_splitter2(1, 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(1..2), None]);
+
+        // 1 full chunk, aligned
+        let splitter = new_splitter2(0, MAX_ITEMS_PER_CHUNK);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(0..MAX_ITEMS_PER_CHUNK), None, None]);
+
+        // 1 full chunk + 1, aligned
+        let splitter = new_splitter2(0, plus_1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(0..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_1),
+                None
+            ]
+        );
+
+        // 1 full chunk + 2, aligned
+        let splitter = new_splitter2(0, plus_2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(0..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_2),
+                None
+            ]
+        );
+
+        // 1 full chunk, mis-aligned by 1
+        let offset = 1;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(1..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + 1),
+                None
+            ]
+        );
+
+        // starting at 1 is not aligned with beginning
+        let offset = 1;
+        let splitter = new_splitter2(offset, plus_1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_1 + offset),
+                None
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 2 full chunks, aligned
+        let offset = 0;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                None,
+                None
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 2 full chunks + 1, mis-aligned
+        let offset = 1;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 2 + offset),
+                None,
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 3 full chunks - 1, mis-aligned by 2
+        // we need ALL the chunks here
+        let offset = 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 3 - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 3),
+                Some(MAX_ITEMS_PER_CHUNK * 3..MAX_ITEMS_PER_CHUNK * 3 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, mis-aligned by 2
+        // we need ALL the chunks here
+        let offset = 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, aligned at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [Some(offset..MAX_ITEMS_PER_CHUNK * 101 - 1), None,],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, mis-aligned by 2 at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100 + 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK * 101),
+                Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+    }
+
+    #[test]
+    fn test_split_storages_splitter_broken() {
+        solana_logger::setup();
+        // 1 full chunk - 1, mis-aligned by 2 at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100 + 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK * 101),
+                Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+    }
+
+    #[test]
+    fn test_split_storages_parametric_splitter() {
+        for offset_multiplier in [1, 1000] {
+            for offset in [
+                0,
+                1,
+                2,
+                MAX_ITEMS_PER_CHUNK - 2,
+                MAX_ITEMS_PER_CHUNK - 1,
+                MAX_ITEMS_PER_CHUNK,
+                MAX_ITEMS_PER_CHUNK + 1,
+            ] {
+                for full_chunks in [0, 1, 2, 3] {
+                    for reduced_items in [0, 1, 2] {
+                        for added_items in [0, 1, 2] {
+                            // this will verify the entire range correctly
+                            let _ = new_splitter2(
+                                offset * offset_multiplier,
+                                (full_chunks * MAX_ITEMS_PER_CHUNK + added_items)
+                                    .saturating_sub(reduced_items),
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
