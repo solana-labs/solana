@@ -43,6 +43,18 @@ const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
+const CONNECTION_CLOSE_CODE_DROP_ENTRY: u32 = 1;
+const CONNECTION_CLOSE_REASON_DROP_ENTRY: &[u8] = b"drop";
+
+const CONNECTION_CLOSE_CODE_DISALLOWED: u32 = 2;
+const CONNECTION_CLOSE_REASON_DISALLOWED: &[u8] = b"disallowed";
+
+const CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT: u32 = 3;
+const CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT: &[u8] = b"invalid_stream_count";
+
+const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
+const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -185,6 +197,198 @@ pub fn compute_max_allowed_uni_streams(
     }
 }
 
+<<<<<<< HEAD
+=======
+enum ConnectionHandlerError {
+    ConnectionAddError,
+    MaxStreamError,
+}
+
+struct NewConnectionHandlerParams {
+    packet_sender: Sender<PacketBatch>,
+    remote_pubkey: Option<Pubkey>,
+    stake: u64,
+    total_stake: u64,
+    max_connections_per_peer: usize,
+    stats: Arc<StreamStats>,
+    max_stake: u64,
+    min_stake: u64,
+}
+
+impl NewConnectionHandlerParams {
+    fn new_unstaked(
+        packet_sender: Sender<PacketBatch>,
+        max_connections_per_peer: usize,
+        stats: Arc<StreamStats>,
+    ) -> NewConnectionHandlerParams {
+        NewConnectionHandlerParams {
+            packet_sender,
+            remote_pubkey: None,
+            stake: 0,
+            total_stake: 0,
+            max_connections_per_peer,
+            stats,
+            max_stake: 0,
+            min_stake: 0,
+        }
+    }
+}
+
+fn handle_and_cache_new_connection(
+    new_connection: NewConnection,
+    mut connection_table_l: MutexGuard<ConnectionTable>,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    params: &NewConnectionHandlerParams,
+) -> Result<(), ConnectionHandlerError> {
+    let NewConnection {
+        connection,
+        uni_streams,
+        ..
+    } = new_connection;
+
+    if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
+        connection_table_l.peer_type,
+        params.stake,
+        params.total_stake,
+    ) as u64)
+    {
+        connection.set_max_concurrent_uni_streams(max_uni_streams);
+        let receive_window = compute_recieve_window(
+            params.max_stake,
+            params.min_stake,
+            connection_table_l.peer_type,
+            params.stake,
+        );
+
+        if let Ok(receive_window) = receive_window {
+            connection.set_receive_window(receive_window);
+        }
+
+        let remote_addr = connection.remote_address();
+
+        debug!(
+            "Peer type: {:?}, stake {}, total stake {}, max streams {} receive_window {:?} from peer {}",
+            connection_table_l.peer_type,
+            params.stake,
+            params.total_stake,
+            max_uni_streams.into_inner(),
+            receive_window,
+            remote_addr,
+        );
+
+        if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
+            ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
+            remote_addr.port(),
+            Some(connection),
+            params.stake,
+            timing::timestamp(),
+            params.max_connections_per_peer,
+        ) {
+            let peer_type = connection_table_l.peer_type;
+            drop(connection_table_l);
+            tokio::spawn(handle_connection(
+                uni_streams,
+                params.packet_sender.clone(),
+                remote_addr,
+                params.remote_pubkey,
+                last_update,
+                connection_table,
+                stream_exit,
+                params.stats.clone(),
+                params.stake,
+                peer_type,
+            ));
+            Ok(())
+        } else {
+            params
+                .stats
+                .connection_add_failed
+                .fetch_add(1, Ordering::Relaxed);
+            Err(ConnectionHandlerError::ConnectionAddError)
+        }
+    } else {
+        connection.close(
+            CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT.into(),
+            CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT,
+        );
+        params
+            .stats
+            .connection_add_failed_invalid_stream_count
+            .fetch_add(1, Ordering::Relaxed);
+        Err(ConnectionHandlerError::MaxStreamError)
+    }
+}
+
+fn prune_unstaked_connections_and_add_new_connection(
+    new_connection: NewConnection,
+    mut connection_table_l: MutexGuard<ConnectionTable>,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    max_connections: usize,
+    params: &NewConnectionHandlerParams,
+) -> Result<(), ConnectionHandlerError> {
+    let stats = params.stats.clone();
+    if max_connections > 0 {
+        prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
+        handle_and_cache_new_connection(
+            new_connection,
+            connection_table_l,
+            connection_table,
+            params,
+        )
+    } else {
+        new_connection.connection.close(
+            CONNECTION_CLOSE_CODE_DISALLOWED.into(),
+            CONNECTION_CLOSE_REASON_DISALLOWED,
+        );
+        Err(ConnectionHandlerError::ConnectionAddError)
+    }
+}
+
+/// Calculate the ratio for per connection receive window from a staked peer
+fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, stake: u64) -> u64 {
+    // Testing shows the maximum througput from a connection is achieved at receive_window =
+    // PACKET_DATA_SIZE * 10. Beyond that, there is not much gain. We linearly map the
+    // stake to the ratio range from QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO to
+    // QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO. Where the linear algebra of finding the ratio 'r'
+    // for stake 's' is,
+    // r(s) = a * s + b. Given the max_stake, min_stake, max_ratio, min_ratio, we can find
+    // a and b.
+
+    if stake > max_stake {
+        return QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
+    }
+
+    let max_ratio = QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
+    let min_ratio = QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO;
+    if max_stake > min_stake {
+        let a = (max_ratio - min_ratio) as f64 / (max_stake - min_stake) as f64;
+        let b = max_ratio as f64 - ((max_stake as f64) * a);
+        let ratio = (a * stake as f64) + b;
+        ratio.round() as u64
+    } else {
+        QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO
+    }
+}
+
+fn compute_recieve_window(
+    max_stake: u64,
+    min_stake: u64,
+    peer_type: ConnectionPeerType,
+    peer_stake: u64,
+) -> Result<VarInt, VarIntBoundsExceeded> {
+    match peer_type {
+        ConnectionPeerType::Unstaked => {
+            VarInt::from_u64((PACKET_DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO) as u64)
+        }
+        ConnectionPeerType::Staked => {
+            let ratio =
+                compute_receive_window_ratio_for_staked_node(max_stake, min_stake, peer_stake);
+            VarInt::from_u64((PACKET_DATA_SIZE as u64 * ratio) as u64)
+        }
+    }
+}
+
+>>>>>>> 56b9288f9 (Give better error code and reason for connection close)
 async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -551,7 +755,10 @@ impl ConnectionEntry {
 impl Drop for ConnectionEntry {
     fn drop(&mut self) {
         if let Some(conn) = self.connection.take() {
-            conn.close(0u32.into(), &[0u8]);
+            conn.close(
+                CONNECTION_CLOSE_CODE_DROP_ENTRY.into(),
+                CONNECTION_CLOSE_REASON_DROP_ENTRY,
+            );
         }
         self.exit.store(true, Ordering::Relaxed);
     }
@@ -687,6 +894,12 @@ impl ConnectionTable {
             self.total_size += 1;
             Some((last_update, exit))
         } else {
+            if let Some(connection) = connection {
+                connection.close(
+                    CONNECTION_CLOSE_CODE_TOO_MANY.into(),
+                    CONNECTION_CLOSE_REASON_TOO_MANY,
+                );
+            }
             None
         }
     }
