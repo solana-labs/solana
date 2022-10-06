@@ -118,8 +118,6 @@ impl<H, T> CacheDataFile<H, T> {
     }
 }
 
-pub(crate) type CacheHashDataFile = CacheDataFile<Header, EntryType>;
-
 /// Specialization for CacheHashDataFile
 impl CacheDataFile<Header, EntryType> {
     /// Populate 'accumulator' from entire contents of the cache file.
