@@ -1223,6 +1223,40 @@ where
         result
     }
 
+    pub fn multi_get_bytes(&self, keys: Vec<C::Index>) -> Vec<Result<Option<Vec<u8>>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(pinnable_slice.as_ref().to_vec())),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
+    }
+
     pub fn iter(
         &self,
         iterator_mode: IteratorMode<C::Index>,
