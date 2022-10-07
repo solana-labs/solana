@@ -4,6 +4,7 @@ use solana_sdk::{clock::Slot, saturating_add_assign};
 pub struct TransactionErrorMetrics {
     pub total: usize,
     pub account_in_use: usize,
+    pub too_many_account_locks: usize,
     pub account_loaded_twice: usize,
     pub account_not_found: usize,
     pub blockhash_not_found: usize,
@@ -18,6 +19,10 @@ pub struct TransactionErrorMetrics {
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
     pub invalid_rent_paying_account: usize,
+    pub would_exceed_max_block_cost_limit: usize,
+    pub would_exceed_max_account_cost_limit: usize,
+    pub would_exceed_max_vote_cost_limit: usize,
+    pub would_exceed_account_data_block_limit: usize,
 }
 
 impl TransactionErrorMetrics {
@@ -28,6 +33,7 @@ impl TransactionErrorMetrics {
     pub fn accumulate(&mut self, other: &TransactionErrorMetrics) {
         saturating_add_assign!(self.total, other.total);
         saturating_add_assign!(self.account_in_use, other.account_in_use);
+        saturating_add_assign!(self.too_many_account_locks, other.too_many_account_locks);
         saturating_add_assign!(self.account_loaded_twice, other.account_loaded_twice);
         saturating_add_assign!(self.account_not_found, other.account_not_found);
         saturating_add_assign!(self.blockhash_not_found, other.blockhash_not_found);
@@ -54,6 +60,22 @@ impl TransactionErrorMetrics {
             self.invalid_rent_paying_account,
             other.invalid_rent_paying_account
         );
+        saturating_add_assign!(
+            self.would_exceed_max_block_cost_limit,
+            other.would_exceed_max_block_cost_limit
+        );
+        saturating_add_assign!(
+            self.would_exceed_max_account_cost_limit,
+            other.would_exceed_max_account_cost_limit
+        );
+        saturating_add_assign!(
+            self.would_exceed_max_vote_cost_limit,
+            other.would_exceed_max_vote_cost_limit
+        );
+        saturating_add_assign!(
+            self.would_exceed_account_data_block_limit,
+            other.would_exceed_account_data_block_limit
+        );
     }
 
     pub fn report(&self, id: u32, slot: Slot) {
@@ -63,6 +85,11 @@ impl TransactionErrorMetrics {
             ("slot", slot as i64, i64),
             ("total", self.total as i64, i64),
             ("account_in_use", self.account_in_use as i64, i64),
+            (
+                "too_many_account_locks",
+                self.too_many_account_locks as i64,
+                i64
+            ),
             (
                 "account_loaded_twice",
                 self.account_loaded_twice as i64,
@@ -103,6 +130,26 @@ impl TransactionErrorMetrics {
             (
                 "invalid_rent_paying_account",
                 self.invalid_rent_paying_account as i64,
+                i64
+            ),
+            (
+                "would_exceed_max_block_cost_limit",
+                self.would_exceed_max_block_cost_limit as i64,
+                i64
+            ),
+            (
+                "would_exceed_max_account_cost_limit",
+                self.would_exceed_max_account_cost_limit as i64,
+                i64
+            ),
+            (
+                "would_exceed_max_vote_cost_limit",
+                self.would_exceed_max_vote_cost_limit as i64,
+                i64
+            ),
+            (
+                "would_exceed_account_data_block_limit",
+                self.would_exceed_account_data_block_limit as i64,
                 i64
             ),
         );
