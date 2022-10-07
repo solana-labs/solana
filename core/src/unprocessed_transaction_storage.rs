@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use {
     crate::{
         banking_stage::{self, BankingStage, FilterForwardingResults, ForwardOption},
@@ -8,6 +9,7 @@ use {
             self, LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
             VoteSource,
         },
+        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         unprocessed_packet_batches::{self, DeserializedPacket, UnprocessedPacketBatches},
     },
     itertools::Itertools,
@@ -178,17 +180,20 @@ impl UnprocessedTransactionStorage {
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
                 .filter_forwardable_packets_and_add_batches(
                     bank,
+                    slot_metrics_tracker,
                     forward_packet_batches_by_accounts,
                 ),
             Self::VoteStorage(vote_storage) => vote_storage
                 .filter_forwardable_packets_and_add_batches(
                     bank,
+                    slot_metrics_tracker,
                     forward_packet_batches_by_accounts,
                 ),
         }
@@ -257,6 +262,7 @@ impl VoteStorage {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
+        _slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
@@ -358,10 +364,12 @@ impl ThreadLocalUnprocessedPackets {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         BankingStage::filter_and_forward_with_account_limits(
             &bank,
+            slot_metrics_tracker,
             &mut self.unprocessed_packet_batches,
             forward_packet_batches_by_accounts,
             banking_stage::UNPROCESSED_BUFFER_STEP_SIZE,

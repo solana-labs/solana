@@ -954,6 +954,7 @@ impl BankingStage {
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = Self::filter_and_forward_with_account_limits(
             &current_bank,
+            slot_metrics_tracker,
             buffered_packet_batches,
             &mut forward_packet_batches_by_accounts,
             UNPROCESSED_BUFFER_STEP_SIZE,
@@ -1031,6 +1032,7 @@ impl BankingStage {
     /// Added valid and sanitized packets to forwarding queue.
     pub fn filter_and_forward_with_account_limits(
         bank: &Arc<Bank>,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         batch_size: usize,
@@ -1076,9 +1078,13 @@ impl BankingStage {
 
                 if accepting_packets {
                     let (
-                        (sanitized_transactions, transaction_to_packet_indexes),
+                        (
+                            sanitized_transactions,
+                            transaction_to_packet_indexes,
+                            sanitization_error_counters,
+                        ),
                         packet_conversion_time,
-                    ): ((Vec<SanitizedTransaction>, Vec<usize>), _) = measure!(
+                    ) = measure!(
                         Self::sanitize_unforwarded_packets(
                             buffered_packet_batches,
                             &packets_to_process,
@@ -1090,6 +1096,8 @@ impl BankingStage {
                         total_packet_conversion_us,
                         packet_conversion_time.as_us()
                     );
+                    slot_metrics_tracker
+                        .accumulate_transaction_errors(&sanitization_error_counters);
 
                     let (forwardable_transaction_indexes, filter_packets_time) = measure!(
                         Self::filter_invalid_transactions(&sanitized_transactions, bank,),
@@ -1175,20 +1183,26 @@ impl BankingStage {
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         bank: &Arc<Bank>,
-    ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
+    ) -> (
+        Vec<SanitizedTransaction>,
+        Vec<usize>,
+        TransactionErrorMetrics,
+    ) {
         // Get ref of ImmutableDeserializedPacket
+        let mut sanitization_error_counters = TransactionErrorMetrics::default();
         let deserialized_packets = packets_to_process.iter().map(|p| &**p);
         let (transactions, transaction_to_packet_indexes): (Vec<SanitizedTransaction>, Vec<usize>) =
             deserialized_packets
                 .enumerate()
                 .filter_map(|(packet_index, deserialized_packet)| {
                     if !buffered_packet_batches.is_forwarded(deserialized_packet) {
-                        unprocessed_packet_batches::transaction_from_deserialized_packet(
+                        unprocessed_packet_batches::transaction_from_deserialized_packet_with_error_counters(
                             deserialized_packet,
                             &bank.feature_set,
                             bank.vote_only_bank(),
                             bank.as_ref(),
                             bank.get_transaction_account_lock_limit(),
+                            &mut sanitization_error_counters,
                         )
                         .map(|transaction| (transaction, packet_index))
                     } else {
@@ -1206,7 +1220,11 @@ impl BankingStage {
             unsanitized_packets_filtered_count
         );
 
-        (transactions, transaction_to_packet_indexes)
+        (
+            transactions,
+            transaction_to_packet_indexes,
+            sanitization_error_counters,
+        )
     }
 
     /// Checks sanitized transactions against bank, returns valid transaction indexes
@@ -3520,6 +3538,7 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
+                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
@@ -3561,6 +3580,7 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
+                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
@@ -3593,6 +3613,7 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
+                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
