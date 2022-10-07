@@ -265,6 +265,7 @@ impl LatestUnprocessedVotes {
                                 &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),
+                                bank.get_transaction_account_lock_limit(),
                             )
                         {
                             if forward_packet_batches_by_accounts.try_add_packet(

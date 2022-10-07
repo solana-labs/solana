@@ -66,6 +66,7 @@ impl SanitizedTransaction {
         message_hash: Hash,
         is_simple_vote_tx: bool,
         address_loader: impl AddressLoader,
+        tx_account_lock_limit: usize,
     ) -> Result<Self> {
         let signatures = tx.signatures;
         let SanitizedVersionedMessage { message } = tx.message;
@@ -79,6 +80,9 @@ impl SanitizedTransaction {
                 SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
             }
         };
+
+        // Check that we can actually lock the accounts for this transaction
+        Self::validate_account_locks(&message, tx_account_lock_limit)?;
 
         Ok(Self {
             message,

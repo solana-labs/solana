@@ -185,8 +185,11 @@ mod tests {
         crate::unprocessed_packet_batches::{self, DeserializedPacket},
         solana_runtime::transaction_priority_details::TransactionPriorityDetails,
         solana_sdk::{
-            feature_set::FeatureSet, hash::Hash, signature::Keypair, system_transaction,
-            transaction::SimpleAddressLoader,
+            feature_set::FeatureSet,
+            hash::Hash,
+            signature::Keypair,
+            system_transaction,
+            transaction::{SimpleAddressLoader, MAX_TX_ACCOUNT_LOCKS},
         },
         std::sync::Arc,
     };
@@ -357,6 +360,7 @@ mod tests {
                 &Arc::new(FeatureSet::default()),
                 false, //votes_only,
                 SimpleAddressLoader::Disabled,
+                MAX_TX_ACCOUNT_LOCKS,
             )
             .unwrap();
             assert!(forward_packet_batches_by_accounts
@@ -377,6 +381,7 @@ mod tests {
                 &Arc::new(FeatureSet::default()),
                 false, //votes_only,
                 SimpleAddressLoader::Disabled,
+                MAX_TX_ACCOUNT_LOCKS,
             )
             .unwrap();
             assert!(!forward_packet_batches_by_accounts
@@ -397,6 +402,7 @@ mod tests {
                 &Arc::new(FeatureSet::default()),
                 false, //votes_only,
                 SimpleAddressLoader::Disabled,
+                MAX_TX_ACCOUNT_LOCKS,
             )
             .unwrap();
             assert!(!forward_packet_batches_by_accounts

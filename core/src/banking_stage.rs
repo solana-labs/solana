@@ -1188,6 +1188,7 @@ impl BankingStage {
                             &bank.feature_set,
                             bank.vote_only_bank(),
                             bank.as_ref(),
+                            bank.get_transaction_account_lock_limit(),
                         )
                         .map(|transaction| (transaction, packet_index))
                     } else {
@@ -2150,6 +2151,7 @@ impl BankingStage {
                         &bank.feature_set,
                         bank.vote_only_bank(),
                         bank.as_ref(),
+                        bank.get_transaction_account_lock_limit(),
                     )
                     .map(|transaction| (transaction, i))
                 })
