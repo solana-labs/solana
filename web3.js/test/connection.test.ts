@@ -91,7 +91,7 @@ const verifySignatureStatus = (
   return status;
 };
 
-describe.only('Connection', function () {
+describe('Connection', function () {
   let connection: Connection;
   beforeEach(() => {
     connection = new Connection(url);
