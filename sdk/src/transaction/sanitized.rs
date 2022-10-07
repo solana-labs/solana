@@ -58,6 +58,21 @@ impl From<Hash> for MessageHash {
 }
 
 impl SanitizedTransaction {
+    /// Create a sanitized transaction
+    pub fn new(
+        tx: SanitizedVersionedTransaction,
+        message: SanitizedMessage,
+        message_hash: Hash,
+        is_simple_vote_tx: bool,
+    ) -> Self {
+        Self {
+            message,
+            message_hash,
+            is_simple_vote_tx,
+            signatures: tx.signatures,
+        }
+    }
+
     /// Create a sanitized transaction from a sanitized versioned transaction.
     /// If the input transaction uses address tables, attempt to lookup the
     /// address for each table index.
@@ -278,7 +293,7 @@ impl SanitizedTransaction {
     }
 
     /// Validate a transaction message against locked accounts
-    fn validate_account_locks(
+    pub fn validate_account_locks(
         message: &SanitizedMessage,
         tx_account_lock_limit: usize,
     ) -> Result<()> {

@@ -2,11 +2,16 @@ use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+    solana_runtime::{
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_priority_details::TransactionPriorityDetails,
+    },
     solana_sdk::{
         feature_set,
         hash::Hash,
-        transaction::{AddressLoader, SanitizedTransaction, Transaction},
+        message::SanitizedMessage,
+        saturating_add_assign,
+        transaction::{AddressLoader, SanitizedTransaction, Transaction, TransactionError},
     },
     std::{
         cmp::Ordering,
@@ -325,25 +330,62 @@ pub fn transactions_to_deserialized_packets(
 // This function deserializes packets into transactions, computes the blake3 hash of transaction
 // messages, and verifies secp256k1 instructions. A list of sanitized transactions are returned
 // with their packet indexes.
-#[allow(clippy::needless_collect)]
 pub fn transaction_from_deserialized_packet(
     deserialized_packet: &ImmutableDeserializedPacket,
     feature_set: &Arc<feature_set::FeatureSet>,
     votes_only: bool,
     address_loader: impl AddressLoader,
+    tx_account_lock_limit: usize,
+    transaction_error_counters: &mut TransactionErrorMetrics,
 ) -> Option<SanitizedTransaction> {
     if votes_only && !deserialized_packet.is_simple_vote() {
         return None;
     }
-    let tx = SanitizedTransaction::try_new(
-        deserialized_packet.transaction().clone(),
-        *deserialized_packet.message_hash(),
-        deserialized_packet.is_simple_vote(),
+
+    // Check that the account locks are valid
+    let message = SanitizedMessage::try_new(
+        deserialized_packet.transaction().get_message().clone(),
         address_loader,
     )
     .ok()?;
+    match SanitizedTransaction::validate_account_locks(&message, tx_account_lock_limit) {
+        Err(TransactionError::AccountLoadedTwice) => {
+            saturating_add_assign!(transaction_error_counters.total, 1);
+            saturating_add_assign!(transaction_error_counters.account_loaded_twice, 1);
+        }
+        Err(TransactionError::TooManyAccountLocks) => {
+            saturating_add_assign!(transaction_error_counters.total, 1);
+            saturating_add_assign!(transaction_error_counters.too_many_account_locks, 1);
+        }
+        _ => {}
+    }
+
+    let tx = SanitizedTransaction::new(
+        deserialized_packet.transaction().clone(),
+        message,
+        *deserialized_packet.message_hash(),
+        deserialized_packet.is_simple_vote(),
+    );
+
     tx.verify_precompiles(feature_set).ok()?;
     Some(tx)
+}
+
+pub fn transaction_from_deserialized_packet_without_metrics(
+    deserialized_packet: &ImmutableDeserializedPacket,
+    feature_set: &Arc<feature_set::FeatureSet>,
+    votes_only: bool,
+    address_loader: impl AddressLoader,
+    tx_account_lock_limit: usize,
+) -> Option<SanitizedTransaction> {
+    transaction_from_deserialized_packet(
+        deserialized_packet,
+        feature_set,
+        votes_only,
+        address_loader,
+        tx_account_lock_limit,
+        &mut TransactionErrorMetrics::default(),
+    )
 }
 
 #[cfg(test)]
@@ -354,7 +396,7 @@ mod tests {
         solana_sdk::{
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{SimpleAddressLoader, Transaction},
+            transaction::{SimpleAddressLoader, Transaction, MAX_TX_ACCOUNT_LOCKS},
         },
         solana_vote_program::vote_transaction,
     };
@@ -529,22 +571,24 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(2, txs.count());
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(0, txs.count());
@@ -560,22 +604,24 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(2, txs.count());
@@ -591,22 +637,24 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
+                transaction_from_deserialized_packet_without_metrics(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());

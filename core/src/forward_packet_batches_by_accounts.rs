@@ -185,8 +185,11 @@ mod tests {
         crate::unprocessed_packet_batches::{self, DeserializedPacket},
         solana_runtime::transaction_priority_details::TransactionPriorityDetails,
         solana_sdk::{
-            feature_set::FeatureSet, hash::Hash, signature::Keypair, system_transaction,
-            transaction::SimpleAddressLoader,
+            feature_set::FeatureSet,
+            hash::Hash,
+            signature::Keypair,
+            system_transaction,
+            transaction::{SimpleAddressLoader, MAX_TX_ACCOUNT_LOCKS},
         },
         std::sync::Arc,
     };
@@ -352,13 +355,15 @@ mod tests {
         // assert it is added, and buffer still accepts more packets
         {
             let packet = build_deserialized_packet_for_test(10, &hot_account, requested_cu);
-            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
-                packet.immutable_section(),
-                &Arc::new(FeatureSet::default()),
-                false, //votes_only,
-                SimpleAddressLoader::Disabled,
-            )
-            .unwrap();
+            let tx =
+                unprocessed_packet_batches::transaction_from_deserialized_packet_without_metrics(
+                    packet.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    false, //votes_only,
+                    SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
+                )
+                .unwrap();
             assert!(forward_packet_batches_by_accounts
                 .try_add_packet(&tx, packet.immutable_section().clone()));
 
@@ -372,13 +377,15 @@ mod tests {
         {
             let packet =
                 build_deserialized_packet_for_test(100, &hot_account, 1 /*requested_cu*/);
-            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
-                packet.immutable_section(),
-                &Arc::new(FeatureSet::default()),
-                false, //votes_only,
-                SimpleAddressLoader::Disabled,
-            )
-            .unwrap();
+            let tx =
+                unprocessed_packet_batches::transaction_from_deserialized_packet_without_metrics(
+                    packet.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    false, //votes_only,
+                    SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
+                )
+                .unwrap();
             assert!(!forward_packet_batches_by_accounts
                 .try_add_packet(&tx, packet.immutable_section().clone()));
 
@@ -392,13 +399,15 @@ mod tests {
         {
             let packet =
                 build_deserialized_packet_for_test(100, &other_account, 1 /*requested_cu*/);
-            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
-                packet.immutable_section(),
-                &Arc::new(FeatureSet::default()),
-                false, //votes_only,
-                SimpleAddressLoader::Disabled,
-            )
-            .unwrap();
+            let tx =
+                unprocessed_packet_batches::transaction_from_deserialized_packet_without_metrics(
+                    packet.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    false, //votes_only,
+                    SimpleAddressLoader::Disabled,
+                    MAX_TX_ACCOUNT_LOCKS,
+                )
+                .unwrap();
             assert!(!forward_packet_batches_by_accounts
                 .try_add_packet(&tx, packet.immutable_section().clone()));
 

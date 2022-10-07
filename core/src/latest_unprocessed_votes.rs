@@ -260,11 +260,12 @@ impl LatestUnprocessedVotes {
                     if !vote.is_vote_taken() && !vote.is_forwarded() {
                         let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
                         if let Some(sanitized_vote_transaction) =
-                            unprocessed_packet_batches::transaction_from_deserialized_packet(
+                            unprocessed_packet_batches::transaction_from_deserialized_packet_without_metrics(
                                 &deserialized_vote_packet,
                                 &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),
+                                bank.get_transaction_account_lock_limit(),
                             )
                         {
                             if forward_packet_batches_by_accounts.try_add_packet(
