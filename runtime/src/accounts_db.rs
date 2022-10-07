@@ -145,6 +145,19 @@ pub enum StoreReclaims {
     Ignore,
 }
 
+/// specifies how to return zero lamport accounts from a load
+#[derive(Clone, Copy)]
+pub enum LoadZeroLamports {
+    /// return None if loaded account has zero lamports
+    None,
+    /// return Some(account with zero lamports) if loaded account has zero lamports
+    /// This used to be the only behavior.
+    /// Note that this is non-deterministic if clean is running asynchronously.
+    /// If a zero lamport account exists in the index, then Some is returned.
+    /// Once it is cleaned from the index, None is returned.
+    SomeWithZeroLamportAccountForTests,
+}
+
 // the current best way to add filler accounts is gradually.
 // In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
 // add filler accounts at the beginning, so that code path remains but won't execute at the moment.
@@ -4820,17 +4833,26 @@ impl AccountsDb {
         bank_hashes.insert(slot, new_hash_info);
     }
 
-    pub fn load(
+    pub(crate) fn load(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint)
+        self.do_load(ancestors, pubkey, None, load_hint, load_zero_lamports)
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            None,
+            LoadHint::Unspecified,
+            true,
+            // no return from this function, so irrelevant
+            LoadZeroLamports::None,
+        );
     }
 
     /// note this returns None for accounts with zero lamports
@@ -4839,8 +4861,12 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
-            .filter(|(account, _)| !account.is_zero_lamport())
+        self.load(
+            ancestors,
+            pubkey,
+            LoadHint::FixedMaxRoot,
+            LoadZeroLamports::None,
+        )
     }
 
     fn read_index_for_accessor_or_load_slow<'a>(
@@ -5159,8 +5185,16 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
+            false,
+            load_zero_lamports,
+        )
     }
 
     /// if 'load_into_read_cache_only', then return value is meaningless.
@@ -5172,6 +5206,7 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
         load_into_read_cache_only: bool,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
@@ -5186,6 +5221,11 @@ impl AccountsDb {
                 if !in_write_cache {
                     let result = self.read_only_accounts_cache.load(*pubkey, slot);
                     if let Some(account) = result {
+                        if matches!(load_zero_lamports, LoadZeroLamports::None)
+                            && account.is_zero_lamport()
+                        {
+                            return None;
+                        }
                         return Some((account, slot));
                     }
                 }
@@ -5213,6 +5253,9 @@ impl AccountsDb {
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
         let account = loaded_account.take_account();
+        if matches!(load_zero_lamports, LoadZeroLamports::None) && account.is_zero_lamport() {
+            return None;
+        }
 
         if self.caching_enabled && !is_cached {
             /*
@@ -9643,12 +9686,19 @@ pub mod tests {
             )
         }
 
+        /// used by tests only
         fn load_without_fixed_root(
             &self,
             ancestors: &Ancestors,
             pubkey: &Pubkey,
         ) -> Option<(AccountSharedData, Slot)> {
-            self.load(ancestors, pubkey, LoadHint::Unspecified)
+            self.load(
+                ancestors,
+                pubkey,
+                LoadHint::Unspecified,
+                // callers of this expect zero lamport accounts that exist to be returned as Some(empty)
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
+            )
         }
     }
 
@@ -14063,6 +14113,9 @@ pub mod tests {
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
 
+    /// a test that will accept either answer
+    pub const LOAD_ZERO_LAMPORTS_ANY_TESTS: LoadZeroLamports = LoadZeroLamports::None;
+
     #[test]
     fn test_flush_cache_clean() {
         let caching_enabled = true;
@@ -14092,6 +14145,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -14107,7 +14161,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &account_key,
                 Some(0),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS
             )
             .is_none());
     }
@@ -14191,7 +14246,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                load_hint
+                load_hint,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap()
             .0
@@ -14320,6 +14376,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
@@ -14333,6 +14390,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14347,6 +14405,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14359,7 +14418,8 @@ pub mod tests {
                 &scan_ancestors,
                 &account_key,
                 Some(max_scan_root),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS
             )
             .is_none());
     }
@@ -14523,7 +14583,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LOAD_ZERO_LAMPORTS_ANY_TESTS
                 )
                 .is_some());
         }
@@ -14551,7 +14612,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LOAD_ZERO_LAMPORTS_ANY_TESTS
                 )
                 .is_none());
         }
@@ -15084,7 +15146,15 @@ pub mod tests {
                         .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
-                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    let loaded_account = db
+                        .do_load(
+                            &ancestors,
+                            &pubkey,
+                            None,
+                            load_hint,
+                            LOAD_ZERO_LAMPORTS_ANY_TESTS,
+                        )
+                        .unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports(),
@@ -15439,7 +15509,8 @@ pub mod tests {
                     .load(
                         &Ancestors::from(vec![(*slot, 0)]),
                         &account_in_slot,
-                        LoadHint::FixedMaxRoot
+                        LoadHint::FixedMaxRoot,
+                        LOAD_ZERO_LAMPORTS_ANY_TESTS
                     )
                     .is_some());
                 // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`
