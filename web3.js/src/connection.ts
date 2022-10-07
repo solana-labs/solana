@@ -3424,7 +3424,7 @@ export class Connection {
         try {
           while (!done) {
             //we want to ignore sleep for the first call to resolve
-            //immediately if tx was confirmed before whole function run
+            //immediately if tx was confirmed before
             if (retryCount > 0) {
               await sleep(signatureStatusesPoolInterval);
             }
