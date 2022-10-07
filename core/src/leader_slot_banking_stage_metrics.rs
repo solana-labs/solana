@@ -109,6 +109,11 @@ struct LeaderSlotPacketCountMetrics {
     // `self.retrayble_errored_transaction_count`.
     account_lock_throttled_transactions_count: u64,
 
+    // total number of transactions that were excluded from the block because their write
+    // account locks exceed the limit.
+    // These transactions are not retried.
+    account_locks_limit_throttled_transactions_count: u64,
+
     // total number of transactions that were excluded from the block because they were too expensive
     // according to the cost model. These transactions are added back to the buffered queue and are
     // already counted in `self.retrayble_errored_transaction_count`.
@@ -205,6 +210,11 @@ impl LeaderSlotPacketCountMetrics {
             (
                 "account_lock_throttled_transactions_count",
                 self.account_lock_throttled_transactions_count as i64,
+                i64
+            ),
+            (
+                "account_locks_limit_throttled_transactions_count",
+                self.account_locks_limit_throttled_transactions_count as i64,
                 i64
             ),
             (
@@ -457,6 +467,13 @@ impl LeaderSlotMetricsTracker {
                     .packet_count_metrics
                     .account_lock_throttled_transactions_count,
                 error_counters.account_in_use as u64
+            );
+
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .account_locks_limit_throttled_transactions_count,
+                error_counters.too_many_account_locks as u64
             );
 
             saturating_add_assign!(
