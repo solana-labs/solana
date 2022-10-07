@@ -1190,6 +1190,21 @@ pub struct AccountsDb {
     /// Used to disable logging dead slots during removal.
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
+<<<<<<< HEAD
+=======
+
+    /// debug feature to scan every append vec and verify refcounts are equal
+    exhaustively_verify_refcounts: bool,
+
+    last_add_root_log: AtomicInterval,
+
+    /// the full accounts hash calculation as of a predetermined block height 'N'
+    /// to be included in the bank hash at a predetermined block height 'M'
+    /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
+    /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
+    /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
+    pub epoch_accounts_hash_manager: EpochAccountsHashManager,
+>>>>>>> 16853acf3 (log adding root every 10s (#28280))
 }
 
 #[derive(Debug, Default)]
@@ -1994,6 +2009,12 @@ impl AccountsDb {
             filler_account_suffix: None,
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
+<<<<<<< HEAD
+=======
+            exhaustively_verify_refcounts: false,
+            last_add_root_log: AtomicInterval::default(),
+            epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
+>>>>>>> 16853acf3 (log adding root every 10s (#28280))
         }
     }
 
@@ -8055,6 +8076,10 @@ impl AccountsDb {
             }
         }
         store_time.stop();
+
+        if self.last_add_root_log.should_update(10_000) {
+            datapoint_info!("add_root", ("root", slot, i64));
+        }
 
         AccountsAddRootTiming {
             index_us: index_time.as_us(),
