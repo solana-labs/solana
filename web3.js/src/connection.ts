@@ -3348,6 +3348,7 @@ export class Connection {
   confirmTransaction(
     strategy: BlockheightBasedTransactionConfirmationStrategy,
     commitment?: Commitment,
+    signatureStatusesPoolInterval?: number,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
   /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
@@ -3355,6 +3356,7 @@ export class Connection {
   confirmTransaction(
     strategy: TransactionSignature,
     commitment?: Commitment,
+    signatureStatusesPoolInterval?: number,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
   // eslint-disable-next-line no-dupe-class-members
@@ -3363,6 +3365,7 @@ export class Connection {
       | BlockheightBasedTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
+    signatureStatusesPoolInterval = 2000,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature: string;
 
@@ -3415,36 +3418,37 @@ export class Connection {
     const statusPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
-    }>(async (resolve, reject) => {
-      const retrySleep = 2000;
-      let retryCount = 0;
-      try {
-        while (!done) {
-          //we want to ignore sleep for the first call to resolve
-          //immediately if tx was confirmed before whole function run
-          if (retryCount > 0) {
-            await sleep(retrySleep);
+    }>((resolve, reject) => {
+      return (async () => {
+        let retryCount = 0;
+        try {
+          while (!done) {
+            //we want to ignore sleep for the first call to resolve
+            //immediately if tx was confirmed before whole function run
+            if (retryCount > 0) {
+              await sleep(signatureStatusesPoolInterval);
+            }
+            retryCount++;
+            const signatureStatuses = await this.getSignatureStatuses([
+              rawSignature,
+            ]);
+            const result = signatureStatuses && signatureStatuses.value[0];
+            if (result?.err) {
+              reject(result?.err);
+            }
+            if (result) {
+              const response = {
+                context: signatureStatuses.context,
+                value: result!,
+              };
+              done = true;
+              resolve({__type: TransactionStatus.PROCESSED, response});
+            }
           }
-          retryCount++;
-          const signatureStatuses = await this.getSignatureStatuses([
-            rawSignature,
-          ]);
-          const result = signatureStatuses && signatureStatuses.value[0];
-          if (result?.err) {
-            reject(result?.err);
-          }
-          if (result) {
-            const response = {
-              context: signatureStatuses.context,
-              value: result!,
-            };
-            done = true;
-            resolve({__type: TransactionStatus.PROCESSED, response});
-          }
+        } catch (err) {
+          reject(err);
         }
-      } catch (err) {
-        reject(err);
-      }
+      })();
     });
 
     const expiryPromise = new Promise<
