@@ -7,6 +7,7 @@ use {
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
     solana_perf::packet::PacketBatch,
+    solana_sdk::transaction::MAX_TX_ACCOUNT_LOCKS,
     std::time::{Duration, Instant},
 };
 
@@ -131,9 +132,20 @@ impl PacketDeserializer {
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {
-        packet_indexes.iter().filter_map(move |packet_index| {
-            ImmutableDeserializedPacket::new(packet_batch[*packet_index].clone(), None).ok()
-        })
+        packet_indexes
+            .iter()
+            .filter_map(move |packet_index| {
+                ImmutableDeserializedPacket::new(packet_batch[*packet_index].clone(), None).ok()
+            })
+            .filter(check_account_locks_limit)
+    }
+
+    fn check_account_locks_limit(packet: &ImmutableDeserializedPacket) -> bool {
+        let header = packet.transaction().get_message().message.header();
+        header.num_readonly_signed_accounts as usize
+            + header.num_readonly_unsigned_accounts as usize
+            + header.num_required_signatures as usize
+            <= MAX_TX_ACCOUNT_LOCKS
     }
 }
 
