@@ -303,3 +303,38 @@ impl SanitizedTransaction {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        crate::{
+            signer::keypair::Keypair,
+            system_transaction,
+            transaction::{SanitizedTransaction, TransactionError, MAX_TX_ACCOUNT_LOCKS},
+        },
+        solana_program::hash::Hash,
+    };
+
+    #[test]
+    fn test_from_legacy_duplicate_account() {
+        let mint_keypair = Keypair::new();
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let mut transaction =
+            system_transaction::transfer(&mint_keypair, &pubkey, 1, Hash::default());
+        transaction.message.account_keys.push(pubkey); // push duplicate account
+        let result =
+            SanitizedTransaction::try_from_legacy_transaction(transaction, MAX_TX_ACCOUNT_LOCKS);
+        assert!(matches!(result, Err(TransactionError::AccountLoadedTwice)));
+    }
+
+    #[test]
+    fn test_from_too_many_account_locks() {
+        let mint_keypair = Keypair::new();
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let transaction = system_transaction::transfer(&mint_keypair, &pubkey, 1, Hash::default());
+        let result = SanitizedTransaction::try_from_legacy_transaction(transaction, 2);
+        assert!(matches!(result, Err(TransactionError::TooManyAccountLocks)));
+    }
+}
