@@ -998,6 +998,13 @@ describe('Connection', function () {
           params: [mockSignature, {commitment: 'finalized'}],
           result: new Promise(() => {}),
         });
+
+        await mockRpcResponse({
+          method: 'getSignatureStatuses',
+          params: [[mockSignature]],
+          value: [null],
+          withContext: true,
+        });
         const timeoutPromise = connection.confirmTransaction(mockSignature);
 
         // Advance the clock past all waiting timers, notably the expiry timer.
@@ -1016,6 +1023,13 @@ describe('Connection', function () {
           method: 'signatureSubscribe',
           params: [mockSignature, {commitment: 'finalized'}],
           result: new Promise(() => {}), // Never resolve this = never get a response.
+        });
+
+        await mockRpcResponse({
+          method: 'getSignatureStatuses',
+          params: [[mockSignature]],
+          value: [null],
+          withContext: true,
         });
 
         const lastValidBlockHeight = 3;
