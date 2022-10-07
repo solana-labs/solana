@@ -2139,6 +2139,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
         // Convert packets to transactions
+        let mut sanitization_error_metrics = TransactionErrorMetrics::default();
         let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
             (Vec<SanitizedTransaction>, Vec<usize>),
             _,
@@ -2146,18 +2147,20 @@ impl BankingStage {
             deserialized_packets
                 .enumerate()
                 .filter_map(|(i, deserialized_packet)| {
-                    unprocessed_packet_batches::transaction_from_deserialized_packet(
+                    unprocessed_packet_batches::transaction_from_deserialized_packet_with_error_counters(
                         deserialized_packet,
                         &bank.feature_set,
                         bank.vote_only_bank(),
                         bank.as_ref(),
                         bank.get_transaction_account_lock_limit(),
+                        &mut sanitization_error_metrics,
                     )
                     .map(|transaction| (transaction, i))
                 })
                 .unzip(),
             "packet_conversion",
         );
+        slot_metrics_tracker.accumulate_transaction_errors(&sanitization_error_metrics);
 
         let packet_conversion_us = packet_conversion_time.as_us();
         slot_metrics_tracker.increment_transactions_from_packets_us(packet_conversion_us);

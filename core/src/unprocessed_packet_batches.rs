@@ -2,11 +2,15 @@ use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
+    solana_runtime::{
+        transaction_error_metrics::TransactionErrorMetrics,
+        transaction_priority_details::TransactionPriorityDetails,
+    },
     solana_sdk::{
         feature_set,
         hash::Hash,
-        transaction::{AddressLoader, SanitizedTransaction, Transaction},
+        saturating_add_assign,
+        transaction::{AddressLoader, SanitizedTransaction, Transaction, TransactionError},
     },
     std::{
         cmp::Ordering,
@@ -333,19 +337,54 @@ pub fn transaction_from_deserialized_packet(
     address_loader: impl AddressLoader,
     tx_account_lock_limit: usize,
 ) -> Option<SanitizedTransaction> {
+    transaction_from_deserialized_packet_with_error_counters(
+        deserialized_packet,
+        feature_set,
+        votes_only,
+        address_loader,
+        tx_account_lock_limit,
+        &mut TransactionErrorMetrics::default(),
+    )
+}
+
+// This function deserializes packets into transactions, computes the blake3 hash of transaction
+// messages, and verifies secp256k1 instructions. A list of sanitized transactions are returned
+// with their packet indexes.
+#[allow(clippy::needless_collect)]
+pub fn transaction_from_deserialized_packet_with_error_counters(
+    deserialized_packet: &ImmutableDeserializedPacket,
+    feature_set: &Arc<feature_set::FeatureSet>,
+    votes_only: bool,
+    address_loader: impl AddressLoader,
+    tx_account_lock_limit: usize,
+    transaction_error_counters: &mut TransactionErrorMetrics,
+) -> Option<SanitizedTransaction> {
     if votes_only && !deserialized_packet.is_simple_vote() {
         return None;
     }
-    let tx = SanitizedTransaction::try_new(
+    match SanitizedTransaction::try_new(
         deserialized_packet.transaction().clone(),
         *deserialized_packet.message_hash(),
         deserialized_packet.is_simple_vote(),
         address_loader,
         tx_account_lock_limit,
-    )
-    .ok()?;
-    tx.verify_precompiles(feature_set).ok()?;
-    Some(tx)
+    ) {
+        Ok(transaction) => {
+            transaction.verify_precompiles(feature_set).ok()?;
+            Some(transaction)
+        }
+        Err(TransactionError::AccountLoadedTwice) => {
+            saturating_add_assign!(transaction_error_counters.total, 1);
+            saturating_add_assign!(transaction_error_counters.account_loaded_twice, 1);
+            None
+        }
+        Err(TransactionError::TooManyAccountLocks) => {
+            saturating_add_assign!(transaction_error_counters.total, 1);
+            saturating_add_assign!(transaction_error_counters.too_many_account_locks, 1);
+            None
+        }
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]
