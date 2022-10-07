@@ -163,13 +163,13 @@ all_test_steps() {
   fi
   wait_step
 
-  # BPF test suite
+  # SBF test suite
   if affects \
              .rs$ \
              Cargo.lock$ \
              Cargo.toml$ \
              ^ci/rust-version.sh \
-             ^ci/test-stable-bpf.sh \
+             ^ci/test-stable-sbf.sh \
              ^ci/test-stable.sh \
              ^ci/test-local-cluster.sh \
              ^core/build.rs \
@@ -178,16 +178,16 @@ all_test_steps() {
              ^sdk/ \
       ; then
     cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-bpf.sh"
-    name: "stable-bpf"
+  - command: "ci/test-stable-sbf.sh"
+    name: "stable-sbf"
     timeout_in_minutes: 35
-    artifact_paths: "bpf-dumps.tar.bz2"
+    artifact_paths: "sbf-dumps.tar.bz2"
     agents:
       queue: "gcp"
 EOF
   else
     annotate --style info \
-      "Stable-BPF skipped as no relevant files were modified"
+      "Stable-SBF skipped as no relevant files were modified"
   fi
 
   # Perf test suite

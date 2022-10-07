@@ -1,2 +1,2 @@
-BPF_SDK := ../../../sdk/bpf/c
-include $(BPF_SDK)/bpf.mk
+SBF_SDK := ../../../sdk/sbf/c
+include $(SBF_SDK)/sbf.mk

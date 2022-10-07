@@ -28,8 +28,8 @@ _ "$cargo" build --manifest-path=keygen/Cargo.toml
 export PATH="$PWD/target/debug":$PATH
 
 # Clear the C dependency files, if dependency moves these files are not regenerated
-test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
-test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
+test -d target/debug/sbf && find target/debug/sbf -name '*.d' -delete
+test -d target/release/sbf && find target/release/sbf -name '*.d' -delete
 
 # Ensure all dependencies are built
 _ "$cargo" nightly build --release
@@ -57,7 +57,7 @@ _ "$cargo" nightly bench --manifest-path poh/Cargo.toml ${V:+--verbose} \
 _ "$cargo" nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
-# Run bpf benches
+# Run sbf benches
 _ "$cargo" nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verbose} --features=bpf_c \
   -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"
 

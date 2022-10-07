@@ -233,7 +233,7 @@ native machine code before execting it in the virtual machine.",
             &instruction_data,
         );
     invoke_context.push().unwrap();
-    let (mut parameter_bytes, account_lengths) = serialize_parameters(
+    let (_parameter_bytes, regions, account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
             .transaction_context
@@ -292,7 +292,7 @@ native machine code before execting it in the virtual machine.",
 
     let mut vm = create_vm(
         &verified_executable,
-        parameter_bytes.as_slice_mut(),
+        regions,
         account_lengths,
         &mut invoke_context,
     )

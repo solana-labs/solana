@@ -1,0 +1,11 @@
+/dependencies/criterion*
+/dependencies/hashbrown*
+/dependencies/llvm-native*
+/dependencies/rust-bpf-sysroot*
+/dependencies/bpf-tools*
+/dependencies/sbf-tools*
+/dependencies/xargo*
+/dependencies/bin*
+/dependencies/.crates.toml
+/dependencies/.crates2.json
+/syscalls.txt
