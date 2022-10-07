@@ -3415,7 +3415,7 @@ export class Connection {
       }
     });
 
-    const statusPromise = new Promise<{
+    const signatureStatusPoolPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
@@ -3505,7 +3505,7 @@ export class Connection {
     try {
       const outcome = await Promise.race([
         signaturePromise,
-        statusPromise,
+        signatureStatusPoolPromise,
         expiryPromise,
       ]);
       switch (outcome.__type) {
