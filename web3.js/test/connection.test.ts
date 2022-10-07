@@ -964,6 +964,25 @@ describe('Connection', function () {
           expect(result.value).to.have.property('err', null);
         }).timeout(60 * 1000);
 
+        it('confirms transactions that was already confirmed before', async () => {
+          let result = await connection.confirmTransaction(
+            {
+              signature,
+              ...latestBlockhash,
+            },
+            'processed',
+          );
+          let result2 = await connection.confirmTransaction(
+            {
+              signature,
+              ...latestBlockhash,
+            },
+            'processed',
+          );
+          expect(result.value).to.have.property('err', null);
+          expect(result2.value).to.have.property('err', null);
+        }).timeout(60 * 1000);
+
         it('throws when confirming using a blockhash whose last valid blockheight has passed', async () => {
           const confirmationPromise = connection.confirmTransaction({
             signature,
@@ -1013,6 +1032,37 @@ describe('Connection', function () {
         await expect(timeoutPromise).to.be.rejectedWith(
           TransactionExpiredTimeoutError,
         );
+      });
+
+      it('confirm transaction - by signature status', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise(() => {}),
+        });
+
+        await mockRpcResponse({
+          method: 'getSignatureStatuses',
+          params: [[mockSignature]],
+          value: [
+            {
+              slot: 0,
+              confirmations: 11,
+              status: {Ok: null},
+              err: null,
+            },
+          ],
+          withContext: true,
+        });
+        const promise = connection.confirmTransaction(mockSignature);
+
+        // Advance the clock past all waiting timers, notably the expiry timer.
+        clock.runAllAsync();
+
+        await expect(promise).not.to.be.rejected;
       });
 
       it('confirm transaction - block height exceeded', async () => {
