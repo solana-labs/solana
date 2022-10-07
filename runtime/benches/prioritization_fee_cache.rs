@@ -36,7 +36,7 @@ fn build_sanitized_transaction(
         Some(signer_account),
     ));
 
-    SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap()
+    SanitizedTransaction::from_transaction_for_tests(transaction)
 }
 
 #[bench]

@@ -3945,6 +3945,7 @@ impl Bank {
                     self,
                     self.feature_set
                         .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                    self.get_transaction_account_lock_limit(),
                 )
             })
             .collect::<Result<Vec<_>>>()?;
@@ -7133,6 +7134,7 @@ impl Bank {
                 self,
                 self.feature_set
                     .is_active(&feature_set::require_static_program_ids_in_transaction::ID),
+                self.get_transaction_account_lock_limit(),
             )
         }?;
 
@@ -18804,7 +18806,7 @@ pub(crate) mod tests {
             bank.last_blockhash(),
         );
         let num_accounts = tx.message().account_keys.len();
-        let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
+        let sanitized_tx = SanitizedTransaction::from_transaction_for_tests(tx);
         let mut error_counters = TransactionErrorMetrics::default();
         let loaded_txs = bank.rc.accounts.load_accounts(
             &bank.ancestors,

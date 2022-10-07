@@ -4058,6 +4058,7 @@ mod tests {
             Some(false),
             bank.as_ref(),
             true, // require_static_program_ids
+            bank.get_transaction_account_lock_limit(),
         )
         .unwrap();
 

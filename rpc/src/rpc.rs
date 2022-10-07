@@ -3643,7 +3643,11 @@ pub mod rpc_full {
                 min_context_slot,
             })?;
 
-            let transaction = sanitize_transaction(unsanitized_tx, preflight_bank)?;
+            let transaction = sanitize_transaction(
+                unsanitized_tx,
+                preflight_bank,
+                preflight_bank.get_transaction_account_lock_limit(),
+            )?;
             let signature = *transaction.signature();
 
             let mut last_valid_block_height = preflight_bank
@@ -3763,7 +3767,11 @@ pub mod rpc_full {
                     .set_recent_blockhash(bank.last_blockhash());
             }
 
-            let transaction = sanitize_transaction(unsanitized_tx, bank)?;
+            let transaction = sanitize_transaction(
+                unsanitized_tx,
+                bank,
+                bank.get_transaction_account_lock_limit(),
+            )?;
             if sig_verify {
                 verify_transaction(&transaction, &bank.feature_set)?;
             }
@@ -4507,6 +4515,7 @@ where
 fn sanitize_transaction(
     transaction: VersionedTransaction,
     address_loader: impl AddressLoader,
+    tx_account_lock_limit: usize,
 ) -> Result<SanitizedTransaction> {
     SanitizedTransaction::try_create(
         transaction,
@@ -4514,6 +4523,7 @@ fn sanitize_transaction(
         None,
         address_loader,
         true, // require_static_program_ids
+        tx_account_lock_limit,
     )
     .map_err(|err| Error::invalid_params(format!("invalid transaction: {}", err)))
 }
@@ -5009,7 +5019,7 @@ pub mod tests {
             let prioritization_fee_cache = &self.meta.prioritization_fee_cache;
             let transactions: Vec<_> = transactions
                 .into_iter()
-                .map(|tx| SanitizedTransaction::try_from_legacy_transaction(tx).unwrap())
+                .map(SanitizedTransaction::from_transaction_for_tests)
                 .collect();
             prioritization_fee_cache.update(bank, transactions.iter());
         }
@@ -8449,8 +8459,12 @@ pub mod tests {
                 .to_string(),
         );
         assert_eq!(
-            sanitize_transaction(unsanitary_versioned_tx, SimpleAddressLoader::Disabled)
-                .unwrap_err(),
+            sanitize_transaction(
+                unsanitary_versioned_tx,
+                SimpleAddressLoader::Disabled,
+                MAX_TX_ACCOUNT_LOCKS
+            )
+            .unwrap_err(),
             expect58
         );
     }
@@ -8470,7 +8484,12 @@ pub mod tests {
         };
 
         assert_eq!(
-            sanitize_transaction(versioned_tx, SimpleAddressLoader::Disabled).unwrap_err(),
+            sanitize_transaction(
+                versioned_tx,
+                SimpleAddressLoader::Disabled,
+                MAX_TX_ACCOUNT_LOCKS
+            )
+            .unwrap_err(),
             Error::invalid_params(
                 "invalid transaction: Transaction version is unsupported".to_string(),
             )

@@ -257,6 +257,7 @@ fn output_slot(
                     None,
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
+                    MAX_TX_ACCOUNT_LOCKS,
                 );
 
                 match sanitize_result {
@@ -1207,6 +1208,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                     None,
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
                 .map_err(|err| {
                     warn!("Failed to compute cost of transaction: {:?}", err);
@@ -1271,6 +1273,7 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use solana_sdk::transaction::MAX_TX_ACCOUNT_LOCKS;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]

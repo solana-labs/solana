@@ -343,6 +343,7 @@ pub(crate) mod tests {
             None,
             SimpleAddressLoader::Disabled,
             true, // require_static_program_ids
+            bank.get_transaction_account_lock_limit(),
         )
         .unwrap();
 

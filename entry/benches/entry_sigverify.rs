@@ -1,4 +1,6 @@
 #![feature(test)]
+
+use solana_sdk::transaction::MAX_TX_ACCOUNT_LOCKS;
 extern crate test;
 use {
     solana_entry::entry::{self, VerifyRecyclers},
@@ -41,6 +43,7 @@ fn bench_gpusigverify(bencher: &mut Bencher) {
                     None,
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             }?;
 
@@ -83,6 +86,7 @@ fn bench_cpusigverify(bencher: &mut Bencher) {
                     None,
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
+                    MAX_TX_ACCOUNT_LOCKS,
                 )
             }?;
 

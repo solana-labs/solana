@@ -101,6 +101,7 @@ impl SanitizedTransaction {
         is_simple_vote_tx: Option<bool>,
         address_loader: impl AddressLoader,
         require_static_program_ids: bool,
+        tx_account_lock_limit: usize,
     ) -> Result<Self> {
         tx.sanitize(require_static_program_ids)?;
 
@@ -127,6 +128,8 @@ impl SanitizedTransaction {
             ix_iter.next().map(|(program_id, _ix)| program_id) == Some(&crate::vote::program::id())
         });
 
+        Self::validate_account_locks(&message, tx_account_lock_limit)?;
+
         Ok(Self {
             message,
             message_hash,
@@ -135,12 +138,17 @@ impl SanitizedTransaction {
         })
     }
 
-    pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
+    pub fn try_from_legacy_transaction(
+        tx: Transaction,
+        tx_account_lock_limit: usize,
+    ) -> Result<Self> {
         tx.sanitize()?;
-
+        let message_hash = tx.message.hash();
+        let message = SanitizedMessage::Legacy(LegacyMessage::new(tx.message));
+        Self::validate_account_locks(&message, tx_account_lock_limit)?;
         Ok(Self {
-            message_hash: tx.message.hash(),
-            message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
+            message_hash,
+            message,
             is_simple_vote_tx: false,
             signatures: tx.signatures,
         })
@@ -148,7 +156,7 @@ impl SanitizedTransaction {
 
     /// Create a sanitized transaction from a legacy transaction. Used for tests only.
     pub fn from_transaction_for_tests(tx: Transaction) -> Self {
-        Self::try_from_legacy_transaction(tx).unwrap()
+        Self::try_from_legacy_transaction(tx, MAX_TX_ACCOUNT_LOCKS).unwrap()
     }
 
     /// Return the first signature for this transaction.

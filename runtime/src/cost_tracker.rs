@@ -330,6 +330,7 @@ mod tests {
             system_transaction,
             transaction::{
                 MessageHash, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
+                MAX_TX_ACCOUNT_LOCKS,
             },
         },
         solana_vote_program::vote_transaction,
@@ -402,6 +403,7 @@ mod tests {
             Some(true),
             SimpleAddressLoader::Disabled,
             true, // require_static_program_ids
+            MAX_TX_ACCOUNT_LOCKS,
         )
         .unwrap();
         let mut tx_cost = TransactionCost::new_with_capacity(1);

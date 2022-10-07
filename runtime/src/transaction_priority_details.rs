@@ -56,7 +56,7 @@ mod tests {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_instruction,
-            transaction::{Transaction, VersionedTransaction},
+            transaction::{Transaction, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS},
         },
     };
 
@@ -86,8 +86,7 @@ mod tests {
         );
 
         // assert for SanitizedTransaction
-        let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(),
             Some(TransactionPriorityDetails {
@@ -124,8 +123,7 @@ mod tests {
         );
 
         // assert for SanitizedTransaction
-        let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+        let sanitized_transaction = SanitizedTransaction::from_transaction_for_tests(transaction);
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(),
             Some(TransactionPriorityDetails {
@@ -163,7 +161,8 @@ mod tests {
 
         // assert for SanitizedTransaction
         let sanitized_transaction =
-            SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap();
+            SanitizedTransaction::try_from_legacy_transaction(transaction, MAX_TX_ACCOUNT_LOCKS)
+                .unwrap();
         assert_eq!(
             sanitized_transaction.get_transaction_priority_details(),
             Some(TransactionPriorityDetails {

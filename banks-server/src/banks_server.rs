@@ -162,8 +162,10 @@ fn simulate_transaction(
     bank: &Bank,
     transaction: Transaction,
 ) -> BanksTransactionResultWithSimulation {
-    let sanitized_transaction = match SanitizedTransaction::try_from_legacy_transaction(transaction)
-    {
+    let sanitized_transaction = match SanitizedTransaction::try_from_legacy_transaction(
+        transaction,
+        bank.get_transaction_account_lock_limit(),
+    ) {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),

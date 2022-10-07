@@ -915,6 +915,7 @@ mod tests {
             system_transaction,
             transaction::{
                 Result, SanitizedTransaction, SimpleAddressLoader, VersionedTransaction,
+                MAX_TX_ACCOUNT_LOCKS,
             },
         },
     };
@@ -1005,6 +1006,7 @@ mod tests {
                         None,
                         SimpleAddressLoader::Disabled,
                         true, // require_static_program_ids
+                        MAX_TX_ACCOUNT_LOCKS,
                     )
                 }?;
 
