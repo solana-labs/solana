@@ -3389,7 +3389,7 @@ export class Connection {
     let subscriptionId;
     let done = false;
 
-    const confirmationPromise = new Promise<{
+    const signaturePromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
@@ -3407,6 +3407,41 @@ export class Connection {
           },
           subscriptionCommitment,
         );
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    const statusPromise = new Promise<{
+      __type: TransactionStatus.PROCESSED;
+      response: RpcResponseAndContext<SignatureResult>;
+    }>(async (resolve, reject) => {
+      const retrySleep = 2000;
+      let retryCount = 0;
+      try {
+        while (!done) {
+          //we want to ignore sleep for the first call to resolve
+          //immediately if tx was confirmed before whole function run
+          if (retryCount > 0) {
+            await sleep(retrySleep);
+          }
+          retryCount++;
+          const signatureStatuses = await this.getSignatureStatuses([
+            rawSignature,
+          ]);
+          const result = signatureStatuses && signatureStatuses.value[0];
+          if (result?.err) {
+            reject(result?.err);
+          }
+          if (result) {
+            const response = {
+              context: signatureStatuses.context,
+              value: result!,
+            };
+            done = true;
+            resolve({__type: TransactionStatus.PROCESSED, response});
+          }
+        }
       } catch (err) {
         reject(err);
       }
@@ -3464,7 +3499,11 @@ export class Connection {
 
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      const outcome = await Promise.race([
+        signaturePromise,
+        statusPromise,
+        expiryPromise,
+      ]);
       switch (outcome.__type) {
         case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
           throw new TransactionExpiredBlockheightExceededError(rawSignature);
