@@ -4843,14 +4843,6 @@ impl AccountsDb {
             .filter(|(account, _)| !account.is_zero_lamport())
     }
 
-    pub fn load_without_fixed_root(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
-    ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::Unspecified)
-    }
-
     fn read_index_for_accessor_or_load_slow<'a>(
         &'a self,
         ancestors: &Ancestors,
@@ -9649,6 +9641,14 @@ pub mod tests {
                 },
                 None,
             )
+        }
+
+        fn load_without_fixed_root(
+            &self,
+            ancestors: &Ancestors,
+            pubkey: &Pubkey,
+        ) -> Option<(AccountSharedData, Slot)> {
+            self.load(ancestors, pubkey, LoadHint::Unspecified)
         }
     }
 
