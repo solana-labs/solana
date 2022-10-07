@@ -5110,22 +5110,35 @@ impl AccountsDb {
             // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
             if new_slot == slot && new_storage_location.is_store_id_equal(&storage_location) {
-                // Considering that we're failed to get accessor above and further that
+                inc_new_counter_info!("retry_to_get_account_accessor-panic", 1);
+                let message = format!(
+                    "Bad index entry detected ({}, {}, {:?}, {:?}, {:?}, {:?})",
+                    pubkey,
+                    slot,
+                    storage_location,
+                    load_hint,
+                    new_storage_location,
+                    self.accounts_index.get_account_read_entry(pubkey)
+                );
+                // Considering that we've failed to get accessor above and further that
                 // the index still returned the same (slot, store_id) tuple, offset must be same
                 // too.
-                assert!(new_storage_location.is_offset_equal(&storage_location));
+                assert!(
+                    new_storage_location.is_offset_equal(&storage_location),
+                    "{message}"
+                );
 
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
                 // not indicate being cached at this point.
-                assert!(!new_storage_location.is_cached());
+                assert!(!new_storage_location.is_cached(), "{message}");
 
                 // If this is not a cache entry, then this was a minor fork slot
                 // that had its storage entries cleaned up by purge_slots() but hasn't been
                 // cleaned yet. That means this must be rpc access and not replay/banking at the
                 // very least. Note that purge shouldn't occur even for RPC as caller must hold all
                 // of ancestor slots..
-                assert_eq!(load_hint, LoadHint::Unspecified);
+                assert_eq!(load_hint, LoadHint::Unspecified, "{message}");
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -5135,10 +5148,7 @@ impl AccountsDb {
                 // first of all.
                 // For details, see the comment in AccountIndex::do_checked_scan_accounts(),
                 // which is referring back here.
-                panic!(
-                    "Bad index entry detected ({}, {}, {:?}, {:?})",
-                    pubkey, slot, storage_location, load_hint
-                );
+                panic!("{message}");
             } else if fallback_to_slow_path {
                 // the above bad-index-entry check must had been checked first to retain the same
                 // behavior
