@@ -29,12 +29,19 @@ pub struct ReceivePacketResults {
 pub struct PacketDeserializer {
     /// Receiver for packet batches from sigverify stage
     packet_batch_receiver: BankingPacketReceiver,
+    /// Limit on the number of account locks a transaction can have
+    tx_account_lock_limit: usize,
 }
 
 impl PacketDeserializer {
-    pub fn new(packet_batch_receiver: BankingPacketReceiver) -> Self {
+    pub fn new(
+        packet_batch_receiver: BankingPacketReceiver,
+        runtime_config_tx_account_lock_limit: Option<usize>,
+    ) -> Self {
         Self {
             packet_batch_receiver,
+            tx_account_lock_limit: runtime_config_tx_account_lock_limit
+                .unwrap_or(MAX_TX_ACCOUNT_LOCKS),
         }
     }
 
@@ -49,6 +56,7 @@ impl PacketDeserializer {
         Ok(Self::deserialize_and_collect_packets(
             &packet_batches,
             sigverify_tracer_stats_option,
+            self.tx_account_lock_limit,
         ))
     }
 
@@ -56,6 +64,7 @@ impl PacketDeserializer {
     fn deserialize_and_collect_packets(
         packet_batches: &[PacketBatch],
         sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+        tx_account_lock_limit: usize,
     ) -> ReceivePacketResults {
         let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         let mut passed_sigverify_count: usize = 0;
@@ -67,7 +76,11 @@ impl PacketDeserializer {
             passed_sigverify_count += packet_indexes.len();
             failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
 
-            deserialized_packets.extend(Self::deserialize_packets(packet_batch, &packet_indexes));
+            deserialized_packets.extend(Self::deserialize_packets(
+                packet_batch,
+                &packet_indexes,
+                tx_account_lock_limit,
+            ));
         }
 
         ReceivePacketResults {
@@ -131,21 +144,34 @@ impl PacketDeserializer {
     fn deserialize_packets<'a>(
         packet_batch: &'a PacketBatch,
         packet_indexes: &'a [usize],
+        tx_account_lock_limit: usize,
     ) -> impl Iterator<Item = ImmutableDeserializedPacket> + 'a {
         packet_indexes
             .iter()
             .filter_map(move |packet_index| {
                 ImmutableDeserializedPacket::new(packet_batch[*packet_index].clone(), None).ok()
             })
-            .filter(check_account_locks_limit)
+            .filter(move |packet| Self::check_account_locks_limit(packet, tx_account_lock_limit))
     }
 
-    fn check_account_locks_limit(packet: &ImmutableDeserializedPacket) -> bool {
-        let header = packet.transaction().get_message().message.header();
-        header.num_readonly_signed_accounts as usize
-            + header.num_readonly_unsigned_accounts as usize
-            + header.num_required_signatures as usize
-            <= MAX_TX_ACCOUNT_LOCKS
+    fn check_account_locks_limit(
+        packet: &ImmutableDeserializedPacket,
+        tx_account_lock_limit: usize,
+    ) -> bool {
+        let message = &packet.transaction().get_message().message;
+        let num_static_accounts = message.static_account_keys().len();
+        let num_looked_up_accounts: usize = message
+            .address_table_lookups()
+            .iter()
+            .map(|address_table_lookup| {
+                address_table_lookup
+                    .iter()
+                    .map(|lookup| lookup.readonly_indexes.len() + lookup.writable_indexes.len())
+                    .sum::<usize>()
+            })
+            .sum();
+
+        num_static_accounts + num_looked_up_accounts <= tx_account_lock_limit
     }
 }
 
@@ -166,7 +192,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_and_collect_packets_empty() {
-        let results = PacketDeserializer::deserialize_and_collect_packets(&[], None);
+        let results =
+            PacketDeserializer::deserialize_and_collect_packets(&[], None, MAX_TX_ACCOUNT_LOCKS);
         assert_eq!(results.deserialized_packets.len(), 0);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 0);
@@ -179,7 +206,11 @@ mod tests {
         let packet_batches = to_packet_batches(&transactions, 1);
         assert_eq!(packet_batches.len(), 2);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let results = PacketDeserializer::deserialize_and_collect_packets(
+            &packet_batches,
+            None,
+            MAX_TX_ACCOUNT_LOCKS,
+        );
         assert_eq!(results.deserialized_packets.len(), 2);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 2);
@@ -193,7 +224,11 @@ mod tests {
         assert_eq!(packet_batches.len(), 2);
         packet_batches[0][0].meta.set_discard(true);
 
-        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        let results = PacketDeserializer::deserialize_and_collect_packets(
+            &packet_batches,
+            None,
+            MAX_TX_ACCOUNT_LOCKS,
+        );
         assert_eq!(results.deserialized_packets.len(), 1);
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 1);

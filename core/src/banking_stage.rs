@@ -458,7 +458,15 @@ impl BankingStage {
                     _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
                 };
 
-                let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
+                let runtime_config_tx_account_lock_limit = bank_forks
+                    .read()
+                    .unwrap()
+                    .root_bank()
+                    .get_runtime_config_transaction_account_lock_limit();
+                let mut packet_deserializer = PacketDeserializer::new(
+                    verified_receiver,
+                    runtime_config_tx_account_lock_limit,
+                );
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();

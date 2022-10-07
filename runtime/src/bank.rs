@@ -3918,6 +3918,11 @@ impl Bank {
         }
     }
 
+    /// Get the runtime configuration transaction account limit
+    pub fn get_runtime_config_transaction_account_lock_limit(&self) -> Option<usize> {
+        self.runtime_config.transaction_account_lock_limit
+    }
+
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
     pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
         let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
