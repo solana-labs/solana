@@ -252,12 +252,12 @@ that isn't necessary for tracking account balances. Set the "transactionDetails"
 parameter to speed up block fetching.
 
 ```bash
-curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
+curl https://api.devnet.solana.com -X POST -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0",
   "id": 1,
   "method": "getBlock",
   "params": [
-    148696677,
+    166974442,
     {
       "encoding": "jsonParsed",
       "maxSupportedTransactionVersion": 0,
@@ -271,26 +271,27 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
 {
   "jsonrpc": "2.0",
   "result": {
-    "blockHeight": 134239354,
-    "blockTime": 1662064341,
-    "blockhash": "AuPLyvFX2yA1aVFUqvFfyiB2Sxwu2McL8ALhwbU6w7er",
-    "parentSlot": 148696675,
-    "previousBlockhash": "AKu155zCvrgrPvcVBFyboAfY2GF33S3ZDkj2Pa8x19XM",
+    "blockHeight": 157201607,
+    "blockTime": 1665070281,
+    "blockhash": "HKhao674uvFc4wMK1Cm3UyuuGbKExdgPFjXQ5xtvsG3o",
+    "parentSlot": 166974441,
+    "previousBlockhash": "98CNLU4rsYa2HDUyp7PubU4DhwYJJhSX9v6pvE7SWsAo",
     "transactions": [
+      ... (omit)
       {
         "meta": {
           "err": null,
           "fee": 5000,
           "postBalances": [
-            7161091286,
-            2769675090,
-            1
+            1110663066,
+            1,
+            1040000000
           ],
           "postTokenBalances": [],
           "preBalances": [
-            8130576328,
-            1800195048,
-            1
+            1120668066,
+            1,
+            1030000000
           ],
           "preTokenBalances": [],
           "status": {
@@ -300,14 +301,8 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
         "transaction": {
           "accountKeys": [
             {
-              "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
+              "pubkey": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde",
               "signer": true,
-              "source": "transaction",
-              "writable": true
-            },
-            {
-              "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
-              "signer": false,
               "source": "transaction",
               "writable": true
             },
@@ -316,14 +311,21 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
               "signer": false,
               "source": "transaction",
               "writable": false
+            },
+            {
+              "pubkey": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
+              "signer": false,
+              "source": "lookupTable",
+              "writable": true
             }
           ],
           "signatures": [
-            "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs"
+            "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM"
           ]
         },
-        "version": "legacy"
-      }
+        "version": 0
+      },
+      ... (omit)
     ]
   },
   "id": 1
@@ -403,12 +405,12 @@ curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
   [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
 
 ```bash
-curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
+curl https://api.devnet.solana.com -X POST -H 'Content-Type: application/json' -d '{
   "jsonrpc":"2.0",
   "id":1,
   "method":"getTransaction",
   "params":[
-    "4Cswku8E9sm8TVZ4kP4iHbwCQygMDx78SXSURBkJuJAaXCbL9eYM8RPS2BDooLd5ftML4JjQrohe4deJrFkVzPBa",
+    "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM",
     {
       "encoding":"jsonParsed",
       "maxSupportedTransactionVersion":0
@@ -420,7 +422,7 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
 {
   "jsonrpc": "2.0",
   "result": {
-    "blockTime": 1660763773,
+    "blockTime": 1665070281,
     "meta": {
       "err": null,
       "fee": 5000,
@@ -430,15 +432,15 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
         "Program 11111111111111111111111111111111 success"
       ],
       "postBalances": [
-        2078778739,
+        1110663066,
         1,
-        26396753106
+        1040000000
       ],
       "postTokenBalances": [],
       "preBalances": [
-        2078783740,
+        1120668066,
         1,
-        26396753105
+        1030000000
       ],
       "preTokenBalances": [],
       "rewards": [],
@@ -446,7 +448,7 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
         "Ok": null
       }
     },
-    "slot": 155713260,
+    "slot": 166974442,
     "transaction": {
       "message": {
         "accountKeys": [
@@ -463,7 +465,7 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
             "writable": false
           },
           {
-            "pubkey": "2xNweLHLqrbx4zo1waDvgWJHgsUpPj8Y8icbAFeR4a8i",
+            "pubkey": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
             "signer": false,
             "source": "lookupTable",
             "writable": true
@@ -471,10 +473,10 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
         ],
         "addressTableLookups": [
           {
-            "accountKey": "3LZbwptsCkv5R5uu1GNZKiX9SoC6egNG8NXg9zH5ZVM9",
+            "accountKey": "4syr5pBaboZy4cZyF6sys82uGD7jEvoAP2ZMaoich4fZ",
             "readonlyIndexes": [],
             "writableIndexes": [
-              1
+              3
             ]
           }
         ],
@@ -482,8 +484,8 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
           {
             "parsed": {
               "info": {
-                "destination": "2xNweLHLqrbx4zo1waDvgWJHgsUpPj8Y8icbAFeR4a8i",
-                "lamports": 1,
+                "destination": "G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o",
+                "lamports": 10000000,
                 "source": "9aE476sH92Vz7DMPyq5WLPkrKWivxeuTKEFKd2sZZcde"
               },
               "type": "transfer"
@@ -492,10 +494,10 @@ curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
             "programId": "11111111111111111111111111111111"
           }
         ],
-        "recentBlockhash": "9nLh3gmVhyjrh68UeV1rafyo8BFNyZtHSRUUjZYikveh"
+        "recentBlockhash": "BhhivDNgoy4L5tLtHb1s3TP19uUXqKiy4FfUR34d93eT"
       },
       "signatures": [
-        "4Cswku8E9sm8TVZ4kP4iHbwCQygMDx78SXSURBkJuJAaXCbL9eYM8RPS2BDooLd5ftML4JjQrohe4deJrFkVzPBa"
+        "2CxNRsyRT7y88GBwvAB3hRg8wijMSZh3VNYXAdUesGSyvbRJbRR2q9G1KSEpQENmXHmmMLHiXumw4dp8CvzQMjrM"
       ]
     },
     "version": 0
