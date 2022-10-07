@@ -281,6 +281,24 @@ impl UnprocessedPacketBatches {
             .get(immutable_packet.message_hash())
             .map_or(true, |p| p.forwarded)
     }
+
+    pub fn mark_accepted_packets_as_forwarded(
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        accepted_packet_indexes: &[usize],
+    ) {
+        accepted_packet_indexes
+            .iter()
+            .for_each(|accepted_packet_index| {
+                let accepted_packet = packets_to_process[*accepted_packet_index].clone();
+                if let Some(deserialized_packet) = buffered_packet_batches
+                    .message_hash_to_transaction
+                    .get_mut(accepted_packet.message_hash())
+                {
+                    deserialized_packet.forwarded = true;
+                }
+            });
+    }
 }
 
 pub fn deserialize_packets<'a>(
