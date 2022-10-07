@@ -334,6 +334,12 @@ mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
 
         let transaction = system_transaction::transfer(&mint_keypair, &pubkey, 1, Hash::default());
+
+        // Up to tx_account_lock_limit is allowed (3 because of the system program for this tx)
+        let result = SanitizedTransaction::try_from_legacy_transaction(transaction.clone(), 3);
+        assert!(matches!(result, Ok(_)));
+
+        // One more than tx_account_lock_limit is not allowed
         let result = SanitizedTransaction::try_from_legacy_transaction(transaction, 2);
         assert!(matches!(result, Err(TransactionError::TooManyAccountLocks)));
     }

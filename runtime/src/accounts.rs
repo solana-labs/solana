@@ -1434,7 +1434,7 @@ mod tests {
             genesis_config::ClusterType,
             hash::Hash,
             instruction::{CompiledInstruction, InstructionError},
-            message::{Message, MessageHeader},
+            message::Message,
             nonce, nonce_account,
             rent::Rent,
             signature::{keypair_from_seed, signers::Signers, Keypair, Signer},
@@ -2515,87 +2515,6 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
         accounts.bank_hash_at(1, &Rewrites::default());
-    }
-
-    #[test]
-    fn test_lock_accounts_with_duplicates() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-        );
-
-        let keypair = Keypair::new();
-        let message = Message {
-            header: MessageHeader {
-                num_required_signatures: 1,
-                ..MessageHeader::default()
-            },
-            account_keys: vec![keypair.pubkey(), keypair.pubkey()],
-            ..Message::default()
-        };
-
-        let tx = new_sanitized_tx(&[&keypair], message, Hash::default());
-        let results = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
-        assert_eq!(results[0], Err(TransactionError::AccountLoadedTwice));
-    }
-
-    #[test]
-    fn test_lock_accounts_with_too_many_accounts() {
-        let accounts = Accounts::new_with_config_for_tests(
-            Vec::new(),
-            &ClusterType::Development,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-        );
-
-        let keypair = Keypair::new();
-
-        // Allow up to MAX_TX_ACCOUNT_LOCKS
-        {
-            let num_account_keys = MAX_TX_ACCOUNT_LOCKS;
-            let mut account_keys: Vec<_> = (0..num_account_keys)
-                .map(|_| Pubkey::new_unique())
-                .collect();
-            account_keys[0] = keypair.pubkey();
-            let message = Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    ..MessageHeader::default()
-                },
-                account_keys,
-                ..Message::default()
-            };
-
-            let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
-            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-            assert_eq!(results[0], Ok(()));
-            accounts.unlock_accounts(txs.iter(), &results);
-        }
-
-        // Disallow over MAX_TX_ACCOUNT_LOCKS
-        {
-            let num_account_keys = MAX_TX_ACCOUNT_LOCKS + 1;
-            let mut account_keys: Vec<_> = (0..num_account_keys)
-                .map(|_| Pubkey::new_unique())
-                .collect();
-            account_keys[0] = keypair.pubkey();
-            let message = Message {
-                header: MessageHeader {
-                    num_required_signatures: 1,
-                    ..MessageHeader::default()
-                },
-                account_keys,
-                ..Message::default()
-            };
-
-            let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
-            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
-            assert_eq!(results[0], Err(TransactionError::TooManyAccountLocks));
-        }
     }
 
     #[test]
