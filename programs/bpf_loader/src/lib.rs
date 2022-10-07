@@ -29,7 +29,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_HEAP_START, MM_INPUT_START},
+        ebpf::{HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
@@ -290,7 +290,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
 /// Create the BPF virtual machine
 pub fn create_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
-    parameter_bytes: &mut [u8],
+    regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
 ) -> Result<EbpfVm<'a, RequisiteVerifier, ThisInstructionMeter>, EbpfError> {
@@ -303,13 +303,8 @@ pub fn create_vm<'a, 'b>(
     );
     let mut heap =
         AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
-    let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
-    let vm = EbpfVm::new(
-        program,
-        invoke_context,
-        heap.as_slice_mut(),
-        vec![parameter_region],
-    )?;
+
+    let vm = EbpfVm::new(program, invoke_context, heap.as_slice_mut(), regions)?;
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -1331,7 +1326,7 @@ impl Executor for BpfExecutor {
         let program_id = *instruction_context.get_last_program_key(transaction_context)?;
 
         let mut serialize_time = Measure::start("serialize");
-        let (mut parameter_bytes, account_lengths) = serialize_parameters(
+        let (parameter_bytes, regions, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
             invoke_context
@@ -1345,7 +1340,7 @@ impl Executor for BpfExecutor {
         let execution_result = {
             let mut vm = match create_vm(
                 &self.verified_executable,
-                parameter_bytes.as_slice_mut(),
+                regions,
                 account_lengths,
                 invoke_context,
             ) {
@@ -1480,7 +1475,7 @@ mod tests {
         super::*,
         rand::Rng,
         solana_program_runtime::invoke_context::mock_process_instruction,
-        solana_rbpf::{verifier::Verifier, vm::SyscallRegistry},
+        solana_rbpf::{ebpf::MM_INPUT_START, verifier::Verifier, vm::SyscallRegistry},
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             account::{
