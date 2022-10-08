@@ -1765,15 +1765,15 @@ impl ScheduleStage {
                 } else {
                     loop {
                         match from_exec.try_recv() {
+                           Err(crossbeam_channel::TryRecvError::Empty) => {
+                               continue;
+                           },
                            Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                                processed_count = processed_count.checked_add(1).unwrap();
                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                                break;
-                           },
-                           Err(crossbeam_channel::TryRecvError::Empty) => {
-                               continue;
                            },
                            Err(crossbeam_channel::TryRecvError::Disconnected) => {
                                assert_eq!(from_exec.len(), 0);
