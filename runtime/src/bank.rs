@@ -1343,40 +1343,61 @@ impl Scheduler<ExecuteTimings> {
             let r = (if thx >= executing_thread_count { scheduled_high_ee_receiver } else { scheduled_ee_receiver});
             let s = (if thx >= executing_thread_count { scheduled_high_ee_sender } else { scheduled_ee_sender});
 
+            let mut observed_payload = false;
+
             loop {
             let mut maybe_ee = None;
 
-            let received = r.recv();
-            match received {
+            match r.recv() {
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                    loop {
-                        match r.try_recv() {
-                            Err(crossbeam_channel::TryRecvError::Empty) => {
-                                // let's spin
-                                continue;
-                            },
-                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
+                    if observed_payload {
+                        loop {
+                            match r.try_recv() {
+                                Err(crossbeam_channel::TryRecvError::Empty) => {
+                                    // let's spin
+                                    continue;
+                                },
+                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
+                                    s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
+                                    maybe_ee = Some(ee);
+                                    observed_payload = true;
+                                    break;
+                                }
+                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                                    unreachable!();
+                                }
+                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
+                                    checkpoint.wait_for_restart(None);
+                                    observed_payload = false;
+                                }
+                                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                                    continue;
+                                },
+                            }
+                        }
+                    } else {
+                        match r.recv() {
+                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => unreachable!(),
+                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                                 s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
                                 maybe_ee = Some(ee);
-                                break;
-                            }
-                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                                unreachable!();
-                            }
+                                observed_payload = true;
+                            },
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
                                 checkpoint.wait_for_restart(None);
+                                observed_payload = false;
                             }
-                            Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                                continue;
-                            },
+                            Err(_) => todo!(),
                         }
                     }
                 },
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                     maybe_ee = Some(ee);
+                    observed_payload = true;
                 },
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
                     checkpoint.wait_for_restart(None);
+                    observed_payload = false;
                 },
                 Err(_) => todo!(),
             }
