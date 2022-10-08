@@ -1338,11 +1338,19 @@ impl Scheduler<ExecuteTimings> {
             let r = (if thx >= executing_thread_count { scheduled_high_ee_receiver } else { scheduled_ee_receiver});
 
             loop {
+            let mut maybe_ee = None;
+
             let received = r.recv();
             match received {
             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
             },
             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
+                maybe_ee = Some(ee);
+            },
+            Err(_) => todo!(),
+            }
+
+            if let Some(ee) = maybe_ee {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
@@ -1405,8 +1413,6 @@ impl Scheduler<ExecuteTimings> {
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
-            },
-            Err(_) => todo!(),
             }
             }
             todo!();
