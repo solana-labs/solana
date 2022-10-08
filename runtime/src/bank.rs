@@ -1343,6 +1343,23 @@ impl Scheduler<ExecuteTimings> {
             let received = r.recv();
             match received {
             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                loop {
+                    match r.try_recv() {
+                        Err(crossbeam_channel::TryRecvError::Empty) => {
+                            continue;
+                        },
+                        Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
+                            maybe_ee = Some(ee);
+                            break;
+                        }
+                        Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                            unreachable!();
+                        }
+                        Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                            continue;
+                        },
+                    }
+                }
             },
             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                 maybe_ee = Some(ee);
