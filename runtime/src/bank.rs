@@ -1342,29 +1342,31 @@ impl Scheduler<ExecuteTimings> {
 
             let received = r.recv();
             match received {
-            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                loop {
-                    match r.try_recv() {
-                        Err(crossbeam_channel::TryRecvError::Empty) => {
-                            continue;
-                        },
-                        Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
-                            maybe_ee = Some(ee);
-                            break;
+                Ok(a = solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                    loop {
+                        match r.try_recv() {
+                            Err(crossbeam_channel::TryRecvError::Empty) => {
+                                // let's spin
+                                continue;
+                            },
+                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
+                                s.send(spin).unwrap(); 
+                                maybe_ee = Some(ee);
+                                break;
+                            }
+                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                                unreachable!();
+                            }
+                            Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                                continue;
+                            },
                         }
-                        Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                            unreachable!();
-                        }
-                        Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                            continue;
-                        },
                     }
-                }
-            },
-            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
-                maybe_ee = Some(ee);
-            },
-            Err(_) => todo!(),
+                },
+                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
+                    maybe_ee = Some(ee);
+                },
+                Err(_) => todo!(),
             }
 
             if let Some(mut ee) = maybe_ee {
@@ -1430,6 +1432,8 @@ impl Scheduler<ExecuteTimings> {
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+            } else {
+                unreachable!();
             }
             }
             todo!();

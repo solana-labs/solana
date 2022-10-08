@@ -1766,6 +1766,7 @@ impl ScheduleStage {
                     loop {
                         match from_exec.try_recv() {
                            Err(crossbeam_channel::TryRecvError::Empty) => {
+                               // let's spin
                                continue;
                            },
                            Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
