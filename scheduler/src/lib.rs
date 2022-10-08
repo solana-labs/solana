@@ -1770,6 +1770,7 @@ impl ScheduleStage {
                                processed_count = processed_count.checked_add(1).unwrap();
                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                               break;
                            },
                            Err(crossbeam_channel::TryRecvError::Empty) => {
                                continue;
