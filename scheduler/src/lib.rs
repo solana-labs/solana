@@ -1771,7 +1771,7 @@ impl ScheduleStage {
                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                            },
-                           Err(_) => {
+                           Err(TryRecvError::Disconnected) => {
                                assert_eq!(from_exec.len(), 0);
                                from_exec_disconnected = true;
                                info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
