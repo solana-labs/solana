@@ -1471,7 +1471,7 @@ impl Scheduler<ExecuteTimings> {
 
                 //ee.reindex_with_address_book();
                 info!("ex send begin");
-                processed_ee_sender.send_buffered(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+                processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
                 info!("ex send end");
             }
             }
