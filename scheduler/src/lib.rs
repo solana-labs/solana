@@ -2051,7 +2051,7 @@ impl ScheduleStage {
 }
 
 pub struct SchedulablePayload<C>(pub Flushable<TaskInQueue, C>);
-pub struct ExecutablePayload(pub SpinWaitable<Box<ExecutionEnvironment>>);
+pub struct ExecutablePayload<C>(pub SpinWaitable<Box<ExecutionEnvironment>, C>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
 
