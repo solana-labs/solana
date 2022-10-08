@@ -1768,6 +1768,7 @@ impl ScheduleStage {
                         match from_exec.try_recv() {
                            Err(crossbeam_channel::TryRecvError::Empty) => {
                                // let's spin
+                               std::thread::sleep(Duration::from_micros(2));
                                continue;
                            },
                            Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
