@@ -1327,6 +1327,7 @@ impl Scheduler<ExecuteTimings> {
 
         let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
+            let (scheduled_ee_sender, scheduled_high_ee_sender) = (scheduled_ee_sender.clone(), scheduled_high_ee_sender.clone());
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
@@ -1336,6 +1337,7 @@ impl Scheduler<ExecuteTimings> {
             }
 
             let r = (if thx >= executing_thread_count { scheduled_high_ee_receiver } else { scheduled_ee_receiver});
+            let s = (if thx >= executing_thread_count { scheduled_high_ee_sener } else { scheduled_ee_sender});
 
             loop {
             let mut maybe_ee = None;
