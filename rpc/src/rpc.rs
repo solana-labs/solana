@@ -4832,6 +4832,7 @@ pub mod tests {
         max_slots: Arc<MaxSlots>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        cost_model: Arc<RwLock<CostModel>>,
     }
 
     impl RpcHandler {
@@ -4861,6 +4862,7 @@ pub mod tests {
             let max_slots = Arc::new(MaxSlots::default());
             // note that this means that slot 0 will always be considered complete
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(0));
+            let cost_model = Arc::new(RwLock::new(CostModel::new()));
 
             let meta = JsonRpcRequestProcessor::new(
                 JsonRpcConfig {
@@ -4882,7 +4884,7 @@ pub mod tests {
                 Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 max_complete_transaction_status_slot.clone(),
                 Arc::new(PrioritizationFeeCache::default()),
-                Arc::new(RwLock::new(CostModel::new())),
+                cost_model.clone(),
             )
             .0;
 
@@ -4903,6 +4905,7 @@ pub mod tests {
                 max_slots,
                 max_complete_transaction_status_slot,
                 block_commitment_cache,
+                cost_model,
             }
         }
 
@@ -8638,6 +8641,99 @@ pub mod tests {
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
         }
+    }
+
+    #[test]
+    fn test_estimated_instrument_costs() {
+        let rpc = RpcHandler::start();
+        
+        fn assert_vec_eq(
+            actual: &mut Vec<RpcExecuteCostInfo>,
+            expected: &mut Vec<RpcExecuteCostInfo>,
+        ) {
+            actual.sort_by(|a,b| a.program_id.cmp(&b.program_id));
+            expected.sort_by(|a,b| a.program_id.cmp(&b.program_id));
+            assert_eq!(expected, actual);
+        }
+
+        fn add_program_cost(
+            rpc: &RpcHandler,
+            program_id: &Pubkey,
+            cost: u64,
+        ){
+            let mut write_lock = rpc.cost_model.write().unwrap();
+            write_lock.upsert_instruction_cost(program_id, cost);
+        }
+
+
+        let request = create_test_request("getEstimatedInstructionCosts", None);
+        let mut response: Vec<RpcExecuteCostInfo> = parse_success_result(rpc.handle_request_sync(request.clone()));
+        assert_vec_eq(
+            &mut response,
+            &mut vec![],
+        );
+
+        let program_id_1 = Pubkey::new_unique();
+        add_program_cost(&rpc, &program_id_1, 100_000);
+
+        response = parse_success_result(rpc.handle_request_sync(request.clone()));
+        assert_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcExecuteCostInfo {
+                    program_id: program_id_1.to_string(),
+                    cost : 100_000,
+                    occurence: 1,
+                }
+            ] 
+        );
+
+        add_program_cost(&rpc, &program_id_1, 10_000);
+        response = parse_success_result(rpc.handle_request_sync(request.clone()));
+        assert_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcExecuteCostInfo {
+                    program_id: program_id_1.to_string(),
+                    cost : 55_000,
+                    occurence: 2,
+                }
+            ] 
+        );
+
+        let request_for_program_1 = create_test_request("getEstimatedInstructionCost", Some(json!([program_id_1.to_string()])));
+        let response_single : RpcExecuteCostInfo = parse_success_result(rpc.handle_request_sync(request_for_program_1.clone()));
+        assert!(
+            response_single.eq(&RpcExecuteCostInfo{
+                program_id : program_id_1.to_string(),
+                cost: 55_000,
+                occurence: 2,
+            })
+        );
+        
+        let program_id_2 = Pubkey::new_unique();
+        let request_for_program_2 = create_test_request("getEstimatedInstructionCost", Some(json!([program_id_2.to_string()])));
+
+        let response_error = parse_failure_response(rpc.handle_request_sync(request_for_program_2.clone()));
+        assert!(response_error.1.eq("Cannot read the cost model table or program id not in the table"));
+        
+        add_program_cost(&rpc, &program_id_2, 10_000);
+        response = parse_success_result(rpc.handle_request_sync(request.clone()));
+        assert_vec_eq(
+            &mut response,
+            &mut vec![
+                RpcExecuteCostInfo {
+                    program_id: program_id_1.to_string(),
+                    cost : 55_000,
+                    occurence: 2,
+                },
+                RpcExecuteCostInfo {
+                    program_id: program_id_2.to_string(),
+                    cost : 10_000,
+                    occurence: 1,
+                }
+            ] 
+        );
     }
 
     #[test]
