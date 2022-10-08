@@ -1714,49 +1714,68 @@ impl ScheduleStage {
             let mut select_skipped = false;
 
             if !from_disconnected || executing_queue_count >= 1 {
-                crossbeam_channel::select! {
-                   recv(from_exec) -> maybe_from_exec => {
-                       if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
-                           executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                           processed_count = processed_count.checked_add(1).unwrap();
-                           Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                           to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
-                       } else {
-                           assert_eq!(from_exec.len(), 0);
-                           from_exec_disconnected = true;
-                           info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                           if from_disconnected {
-                               break;
-                           }
-                       }
-                   }
-                   recv(from_prev) -> maybe_from => {
-                       match maybe_from {
-                           Ok(SchedulablePayload(Flushable::Payload(task))) => {
-                               if maybe_start_time.is_none() {
-                                    info!("schedule_once:initial id_{:016x}", random_id);
-                                   maybe_start_time = Some(std::time::Instant::now());
-                                   last_time = maybe_start_time.clone();
-                               }
-                               //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                               channel_backed_runnable_queue.buffer(task);
-                           },
-                           Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
-                               assert_eq!(from_prev.len(), 0);
-                               assert!(!from_disconnected);
-                               from_disconnected = true;
-                               from_prev = never;
-                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               assert!(maybe_checkpoint.is_none());
-                               maybe_checkpoint = Some(checkpoint);
+                if !from_disconnected {
+                    crossbeam_channel::select! {
+                        recv(from_exec) -> maybe_from_exec => {
+                            if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
+                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                                processed_count = processed_count.checked_add(1).unwrap();
+                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                            } else {
+                                assert_eq!(from_exec.len(), 0);
+                                from_exec_disconnected = true;
+                                info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                                if from_disconnected {
+                                    break;
+                                }
+                            }
+                        }
+                        recv(from_prev) -> maybe_from => {
+                            match maybe_from {
+                                Ok(SchedulablePayload(Flushable::Payload(task))) => {
+                                    if maybe_start_time.is_none() {
+                                         info!("schedule_once:initial id_{:016x}", random_id);
+                                        maybe_start_time = Some(std::time::Instant::now());
+                                        last_time = maybe_start_time.clone();
+                                    }
+                                    //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                                    channel_backed_runnable_queue.buffer(task);
+                                },
+                                Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
+                                    assert_eq!(from_prev.len(), 0);
+                                    assert!(!from_disconnected);
+                                    from_disconnected = true;
+                                    from_prev = never;
+                                    trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                                    assert!(maybe_checkpoint.is_none());
+                                    maybe_checkpoint = Some(checkpoint);
+                                },
+                                Err(_) => {
+                                    assert_eq!(from_prev.len(), 0);
+                                    assert!(!from_disconnected);
+                                    assert!(maybe_checkpoint.is_none());
+                                    from_disconnected = true;
+                                    from_prev = never;
+                                    trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                                },
+                            }
+                        }
+                    }
+                } else {
+                    loop {
+                        match maybe_from_exec.try_recv() {
+                           Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
+                               executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                               processed_count = processed_count.checked_add(1).unwrap();
+                               Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                               to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                            },
                            Err(_) => {
-                               assert_eq!(from_prev.len(), 0);
-                               assert!(!from_disconnected);
-                               assert!(maybe_checkpoint.is_none());
-                               from_disconnected = true;
-                               from_prev = never;
-                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               assert_eq!(from_exec.len(), 0);
+                               from_exec_disconnected = true;
+                               info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               break;
                            },
                        }
                    }
