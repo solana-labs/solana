@@ -1764,7 +1764,7 @@ impl ScheduleStage {
                     }
                 } else {
                     loop {
-                        match maybe_from_exec.try_recv() {
+                        match from_exec.try_recv() {
                            Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                                processed_count = processed_count.checked_add(1).unwrap();
