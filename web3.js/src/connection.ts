@@ -3408,7 +3408,10 @@ export class Connection {
           subscriptionCommitment,
         );
 
-        this.getSignatureStatuses([rawSignature]).then(signatureStatuses => {
+        (async () => {
+          const signatureStatuses = await this.getSignatureStatuses([
+            rawSignature,
+          ]);
           const result = signatureStatuses && signatureStatuses.value[0];
           if (result?.err) {
             reject(result.err);
@@ -3421,7 +3424,7 @@ export class Connection {
             done = true;
             resolve({__type: TransactionStatus.PROCESSED, response});
           }
-        });
+        })();
       } catch (err) {
         reject(err);
       }
