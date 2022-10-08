@@ -1640,9 +1640,8 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let lane_count = self.executing_thread_handles.as_ref().unwrap().len();
 
-        let checkpoint = solana_scheduler::Checkpoint::new(3 + lane_count);
+        let checkpoint = solana_scheduler::Checkpoint::new(3);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -1650,17 +1649,6 @@ impl<C> Scheduler<C> {
                 solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
             ))
             .unwrap();
-        for i in 0..lane_count {
-            if i < lane_count/2 {
-                self.scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(
-                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint)),
-            )).unwrap();
-            } else {
-                self.scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(
-                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint)),
-            )).unwrap();
-            }
-        }
 
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
@@ -1669,6 +1657,21 @@ impl<C> Scheduler<C> {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
         }
+
+        let lane_count = self.executing_thread_handles.as_ref().unwrap().len();
+        let checkpoint_exec = solana_scheduler::Checkpoint::new(1 + lane_count);
+        for i in 0..lane_count {
+            if i < lane_count/2 {
+                self.scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(
+                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint_exec)),
+            )).unwrap();
+            } else {
+                self.scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(
+                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint_exec)),
+            )).unwrap();
+            }
+        }
+        checkpoint_exec.wait_for_restart(None);
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
