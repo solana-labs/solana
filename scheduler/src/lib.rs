@@ -1613,8 +1613,8 @@ impl ScheduleStage {
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
-        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<C>>,
-        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload<C>>>,
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
         never: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
@@ -1714,76 +1714,49 @@ impl ScheduleStage {
             let mut select_skipped = false;
 
             if !from_disconnected || executing_queue_count >= 1 {
-                if !from_disconnected {
-                    crossbeam_channel::select! {
-                        recv(from_exec) -> maybe_from_exec => {
-                            if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
-                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                                processed_count = processed_count.checked_add(1).unwrap();
-                                //info!("    sc blocking recv");
-                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
-                            } else {
-                                assert_eq!(from_exec.len(), 0);
-                                from_exec_disconnected = true;
-                                info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                                if from_disconnected {
-                                    break;
-                                }
-                            }
-                        }
-                        recv(from_prev) -> maybe_from => {
-                            match maybe_from {
-                                Ok(SchedulablePayload(Flushable::Payload(task))) => {
-                                    if maybe_start_time.is_none() {
-                                         info!("schedule_once:initial id_{:016x}", random_id);
-                                        maybe_start_time = Some(std::time::Instant::now());
-                                        last_time = maybe_start_time.clone();
-                                    }
-                                    //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                                    channel_backed_runnable_queue.buffer(task);
-                                },
-                                Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
-                                    assert_eq!(from_prev.len(), 0);
-                                    assert!(!from_disconnected);
-                                    from_disconnected = true;
-                                    from_prev = never;
-                                    trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                                    assert!(maybe_checkpoint.is_none());
-                                    maybe_checkpoint = Some(checkpoint);
-                                },
-                                Err(_) => {
-                                    assert_eq!(from_prev.len(), 0);
-                                    assert!(!from_disconnected);
-                                    assert!(maybe_checkpoint.is_none());
-                                    from_disconnected = true;
-                                    from_prev = never;
-                                    trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                                },
-                            }
-                        }
-                    }
-                } else {
-                    loop {
-                        match from_exec.try_recv() {
-                           Err(crossbeam_channel::TryRecvError::Empty) => {
-                               // let's spin
-                               //std::thread::sleep(std::time::Duration::from_micros(2));
-                               continue;
-                           },
-                           Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
-                               executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                               processed_count = processed_count.checked_add(1).unwrap();
-                               //info!("    sc spinning recv");
-                               Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                               to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                crossbeam_channel::select! {
+                   recv(from_exec) -> maybe_from_exec => {
+                       if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
+                           executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                           processed_count = processed_count.checked_add(1).unwrap();
+                           Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                           to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
+                       } else {
+                           assert_eq!(from_exec.len(), 0);
+                           from_exec_disconnected = true;
+                           info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                           if from_disconnected {
                                break;
+                           }
+                       }
+                   }
+                   recv(from_prev) -> maybe_from => {
+                       match maybe_from {
+                           Ok(SchedulablePayload(Flushable::Payload(task))) => {
+                               if maybe_start_time.is_none() {
+                                    info!("schedule_once:initial id_{:016x}", random_id);
+                                   maybe_start_time = Some(std::time::Instant::now());
+                                   last_time = maybe_start_time.clone();
+                               }
+                               //Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                               channel_backed_runnable_queue.buffer(task);
                            },
-                           Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                               assert_eq!(from_exec.len(), 0);
-                               from_exec_disconnected = true;
-                               info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
-                               todo!(); //break;
+                           Ok(SchedulablePayload(Flushable::Flush(checkpoint))) => {
+                               assert_eq!(from_prev.len(), 0);
+                               assert!(!from_disconnected);
+                               from_disconnected = true;
+                               from_prev = never;
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
+                               assert!(maybe_checkpoint.is_none());
+                               maybe_checkpoint = Some(checkpoint);
+                           },
+                           Err(_) => {
+                               assert_eq!(from_prev.len(), 0);
+                               assert!(!from_disconnected);
+                               assert!(maybe_checkpoint.is_none());
+                               from_disconnected = true;
+                               from_prev = never;
+                               trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), channel_backed_runnable_queue.task_count_hint(), contended_count, executing_queue_count, provisioning_tracker_count);
                            },
                        }
                    }
@@ -1835,12 +1808,10 @@ impl ScheduleStage {
                     );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        //info!("    sc send high begin");
                         to_high_execute_substage
                             .unwrap_or(to_execute_substage)
-                            .send(ExecutablePayload(SpinWaitable::Payload(ee)))
+                            .send(ExecutablePayload(ee))
                             .unwrap();
-                        //info!("    sc send high end");
                     }
                     debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
@@ -1886,9 +1857,7 @@ impl ScheduleStage {
                     );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        //info!("    sc send begin");
-                        to_execute_substage.send(ExecutablePayload(SpinWaitable::Payload(ee))).unwrap();
-                        //info!("    sc send end");
+                        to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
                     debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
@@ -1947,7 +1916,6 @@ impl ScheduleStage {
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         processed_count = processed_count.checked_add(1).unwrap();
-                        //info!("    sc pending recv");
                         Self::commit_processed_execution(
                             ast,
                             &mut processed_execution_environment,
@@ -2033,8 +2001,8 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<SchedulablePayload<C>>,
-        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<C>>,
-        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload<C>>>,
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
     ) -> Option<std::sync::Arc<Checkpoint<C>>> {
@@ -2059,11 +2027,11 @@ impl ScheduleStage {
 }
 
 pub struct SchedulablePayload<C>(pub Flushable<TaskInQueue, C>);
-pub struct ExecutablePayload<C>(pub SpinWaitable<Box<ExecutionEnvironment>, C>);
+pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
 
-pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar, bool);
+pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
 
 impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
@@ -2085,7 +2053,7 @@ impl<T> Checkpoint<T> {
         }
 
         if *self_remaining_threads == 0 {
-            assert!(self.2 || self_return_value.is_some());
+            assert!(self_return_value.is_some());
             drop(self_remaining_threads);
             self.1.notify_all();
             trace!(
@@ -2114,22 +2082,15 @@ impl<T> Checkpoint<T> {
         self_return_value.take().unwrap()
     }
 
-    pub fn new(remaining_threads: usize, no_restart_value: bool) -> std::sync::Arc<Self> {
+    pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None)),
             std::sync::Condvar::new(),
-            no_restart_value,
         ))
     }
 }
 
 pub enum Flushable<T, C> {
     Payload(T),
-    Flush(std::sync::Arc<Checkpoint<C>>),
-}
-
-pub enum SpinWaitable<T, C> {
-    Payload(T),
-    Spin,
     Flush(std::sync::Arc<Checkpoint<C>>),
 }

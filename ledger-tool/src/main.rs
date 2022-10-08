@@ -316,45 +316,44 @@ fn output_slot(
                     let send_metrics = std::env::var("SEND_METRICS").is_ok();
 
                     for step in 0.. {
-                        if let solana_scheduler::SpinWaitable::Payload(mut ee) = pre_execute_env_receiver.recv().unwrap().0 {
-                            if step % 1966 == 0 {
-                                error!("executing!: {} {}", step, pre_execute_env_receiver.len());
-                            }
-
-                            if send_metrics {
-                                let mut process_message_time = Measure::start("process_message_time");
-                                let sig = ee.task.tx.0.signature().to_string();
-                                trace!("execute substage: #{} {:#?}", step, &sig);
-                                std::thread::sleep(std::time::Duration::from_micros(
-                                    ee.cu.try_into().unwrap(),
-                                ));
-
-                                process_message_time.stop();
-                                let duration_with_overhead = process_message_time.as_us();
-
-                                datapoint_info!(
-                                    "individual_tx_stats",
-                                    ("slot", 33333, i64),
-                                    ("thread", current_thread_name, String),
-                                    ("signature", &sig, String),
-                                    ("account_locks_in_json", "{}", String),
-                                    ("status", "Ok", String),
-                                    ("duration", duration_with_overhead, i64),
-                                    ("compute_units", ee.cu, i64),
-                                );
-                            }
-
-                            /*
-                            muxed_sender
-                                .send(solana_scheduler::Multiplexed::FromExecute(ee))
-                                .unwrap();
-                            */
-                            // ee.reindex_with_address_book();
-                            todo!("contended_write_task_count");
-                            post_execute_env_sender
-                                .send(solana_scheduler::UnlockablePayload(ee, ()))
-                                .unwrap();
+                        let mut ee = pre_execute_env_receiver.recv().unwrap().0;
+                        if step % 1966 == 0 {
+                            error!("executing!: {} {}", step, pre_execute_env_receiver.len());
                         }
+
+                        if send_metrics {
+                            let mut process_message_time = Measure::start("process_message_time");
+                            let sig = ee.task.tx.0.signature().to_string();
+                            trace!("execute substage: #{} {:#?}", step, &sig);
+                            std::thread::sleep(std::time::Duration::from_micros(
+                                ee.cu.try_into().unwrap(),
+                            ));
+
+                            process_message_time.stop();
+                            let duration_with_overhead = process_message_time.as_us();
+
+                            datapoint_info!(
+                                "individual_tx_stats",
+                                ("slot", 33333, i64),
+                                ("thread", current_thread_name, String),
+                                ("signature", &sig, String),
+                                ("account_locks_in_json", "{}", String),
+                                ("status", "Ok", String),
+                                ("duration", duration_with_overhead, i64),
+                                ("compute_units", ee.cu, i64),
+                            );
+                        }
+
+                        /*
+                        muxed_sender
+                            .send(solana_scheduler::Multiplexed::FromExecute(ee))
+                            .unwrap();
+                        */
+                        // ee.reindex_with_address_book();
+                        todo!("contended_write_task_count");
+                        post_execute_env_sender
+                            .send(solana_scheduler::UnlockablePayload(ee, ()))
+                            .unwrap();
                     }
                 })
                 .unwrap();

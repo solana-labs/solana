@@ -1257,8 +1257,6 @@ struct Scheduler<C> {
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C>>>,
-    scheduled_ee_sender: crossbeam_channel::Sender<solana_scheduler::ExecutablePayload<C>>,
-    scheduled_high_ee_sender: crossbeam_channel::Sender<solana_scheduler::ExecutablePayload<C>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
@@ -1311,15 +1309,10 @@ impl Scheduler<ExecuteTimings> {
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
-
         let (scheduled_ee_sender, scheduled_ee_receiver) = crossbeam_channel::unbounded();
         let (scheduled_high_ee_sender, scheduled_high_ee_receiver) = crossbeam_channel::unbounded();
-        let (scheduled_ee_sender2, scheduled_high_ee_sender2) = (scheduled_ee_sender.clone(), scheduled_high_ee_sender.clone());
-        scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
-        scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
-
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
-        let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded::<solana_scheduler::ExaminablePayload<Box<ExecuteTimings>, _>>();
+        let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
         let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
@@ -1334,7 +1327,6 @@ impl Scheduler<ExecuteTimings> {
 
         let executing_thread_handles = (0..(executing_thread_count * 2)).map(|thx| {
             let (scheduled_ee_receiver, scheduled_high_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), scheduled_high_ee_receiver.clone(), processed_ee_sender.clone());
-            let (scheduled_ee_sender, scheduled_high_ee_sender) = (scheduled_ee_sender.clone(), scheduled_high_ee_sender.clone());
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
@@ -1343,72 +1335,7 @@ impl Scheduler<ExecuteTimings> {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            let r = (if thx >= executing_thread_count { scheduled_high_ee_receiver } else { scheduled_ee_receiver});
-            let s = (if thx >= executing_thread_count { scheduled_high_ee_sender } else { scheduled_ee_sender});
-
-            let mut observed_payload = false;
-
-            loop {
-            let mut maybe_ee = None;
-
-            match r.recv() {
-                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                    if observed_payload {
-                        loop {
-                            match r.try_recv() {
-                                Err(crossbeam_channel::TryRecvError::Empty) => {
-                                    // let's spin
-                                    continue;
-                                },
-                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
-                                    s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
-                                    maybe_ee = Some(ee);
-                                    observed_payload = true;
-                                    //info!("ex recv via spin");
-                                    break;
-                                }
-                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
-                                    unreachable!();
-                                }
-                                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
-                                    checkpoint.wait_for_restart(None);
-                                    observed_payload = false;
-                                }
-                                Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                                    continue;
-                                },
-                            }
-                        }
-                    } else {
-                        match r.recv() {
-                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => unreachable!(),
-                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
-                                s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
-                                maybe_ee = Some(ee);
-                                observed_payload = true;
-                                //info!("ex recv via initial spin");
-                            },
-                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
-                                checkpoint.wait_for_restart(None);
-                                observed_payload = false;
-                            }
-                            Err(_) => todo!(),
-                        }
-                    }
-                },
-                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
-                    maybe_ee = Some(ee);
-                    observed_payload = true;
-                    //info!("ex recv via blocking recv");
-                },
-                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
-                    checkpoint.wait_for_restart(None);
-                    observed_payload = false;
-                },
-                Err(_) => todo!(),
-            }
-
-            if let Some(mut ee) = maybe_ee {
+            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
@@ -1428,7 +1355,7 @@ impl Scheduler<ExecuteTimings> {
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
 
-                let mut timings = Box::new(Default::default());
+                let mut timings = Default::default();
                 let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
                     &batch,
                     MAX_PROCESSING_AGE,
@@ -1470,10 +1397,7 @@ impl Scheduler<ExecuteTimings> {
                 ee.execution_us = wall_time.as_us();
 
                 //ee.reindex_with_address_book();
-                //info!("ex send begin");
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
-                //info!("ex send end");
-            }
             }
             todo!();
 
@@ -1605,8 +1529,6 @@ impl Scheduler<ExecuteTimings> {
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
             transaction_sender: Some(transaction_sender),
-            scheduled_ee_sender: scheduled_ee_sender2,
-            scheduled_high_ee_sender: scheduled_high_ee_sender2,
             preloader,
             graceful_stop_initiated: Default::default(),
             collected_results,
@@ -1645,8 +1567,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-
-        let checkpoint = solana_scheduler::Checkpoint::new(3, false);
+        let checkpoint = solana_scheduler::Checkpoint::new(3);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -1661,21 +1582,6 @@ impl<C> Scheduler<C> {
             *self.bank.write().unwrap() = None;
             self.slot.store(0, std::sync::atomic::Ordering::SeqCst);
         }
-
-        let lane_count = self.executing_thread_handles.as_ref().unwrap().len();
-        let checkpoint_exec = solana_scheduler::Checkpoint::new(1 + lane_count, true);
-        for i in 0..lane_count {
-            if i < lane_count/2 {
-                self.scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(
-                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint_exec)),
-            )).unwrap();
-            } else {
-                self.scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(
-                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint_exec)),
-            )).unwrap();
-            }
-        }
-        checkpoint_exec.wait_for_restart(None);
 
         /*
         let executing_thread_duration_pairs: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
