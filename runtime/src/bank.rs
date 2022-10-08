@@ -1350,7 +1350,7 @@ impl Scheduler<ExecuteTimings> {
             Err(_) => todo!(),
             }
 
-            if let Some(ee) = maybe_ee {
+            if let Some(mut ee) = maybe_ee {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
