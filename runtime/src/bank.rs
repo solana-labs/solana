@@ -1314,6 +1314,7 @@ impl Scheduler<ExecuteTimings> {
 
         let (scheduled_ee_sender, scheduled_ee_receiver) = crossbeam_channel::unbounded();
         let (scheduled_high_ee_sender, scheduled_high_ee_receiver) = crossbeam_channel::unbounded();
+        let (scheduled_ee_sender2, scheduled_high_ee_sender2) = (scheduled_ee_sender.clone(), scheduled_high_ee_sender.clone());
         scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
         scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
 
@@ -1599,8 +1600,8 @@ impl Scheduler<ExecuteTimings> {
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
             transaction_sender: Some(transaction_sender),
-            scheduled_ee_sender,
-            scheduled_high_ee_sender,
+            scheduled_ee_sender: scheduled_ee_sender2,
+            scheduled_high_ee_sender: scheduled_high_ee_sender2,
             preloader,
             graceful_stop_initiated: Default::default(),
             collected_results,
