@@ -3993,6 +3993,14 @@ impl RpcClient {
         (self.rpc_client.as_ref()).get_transport_stats()
     }
 
+    pub fn get_estimated_instruction_costs(&self) -> ClientResult<Vec<RpcExecuteCostInfo>> {
+        self.invoke(self.rpc_client.get_estimated_instruction_costs())
+    }
+
+    pub fn get_estimated_instruction_cost(&self, program_id : Pubkey) -> ClientResult<RpcExecuteCostInfo> {
+        self.invoke(self.rpc_client.get_estimated_instruction_cost(program_id))
+    }
+
     fn invoke<T, F: std::future::Future<Output = ClientResult<T>>>(&self, f: F) -> ClientResult<T> {
         // `block_on()` panics if called within an asynchronous execution context. Whereas
         // `block_in_place()` only panics if called from a current_thread runtime, which is the

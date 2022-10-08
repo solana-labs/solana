@@ -113,6 +113,8 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
+    GetEstimatedInstructionCosts,
+    GetEstimatedInstructionCost,
 }
 
 #[allow(deprecated)]
@@ -188,6 +190,8 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetEstimatedInstructionCosts => "getEstimatedInstructionCosts",
+            RpcRequest::GetEstimatedInstructionCost => "getEstimatedInstructionCost",
         };
 
         write!(f, "{}", method)

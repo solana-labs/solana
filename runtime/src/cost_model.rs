@@ -4,6 +4,8 @@
 //!
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
+
+use crate::execute_cost_table::UiExecuteCostTable;
 use {
     crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
     log::*,
@@ -234,6 +236,14 @@ impl CostModel {
                 Self::calculate_account_data_size_on_instruction(program_id, instruction)
             })
             .sum()
+    }
+
+    pub fn get_ui_data(&self) -> UiExecuteCostTable {
+        self.instruction_execution_cost_table.get_ui_data()
+    }
+
+    pub fn get_ui_data_for_program(&self, program_id: Pubkey) -> Option<(u64, usize, u128)> {
+        self.instruction_execution_cost_table.get_ui_data_for_program(program_id)
     }
 }
 

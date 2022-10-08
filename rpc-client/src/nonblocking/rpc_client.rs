@@ -5316,6 +5316,18 @@ impl RpcClient {
         .into())
     }
 
+    #[allow(deprecated)]
+    pub async fn get_estimated_instruction_costs(&self) -> ClientResult<Vec<RpcExecuteCostInfo>> {
+        let result = self.send::<Response<Vec<RpcExecuteCostInfo>>>(RpcRequest::GetEstimatedInstructionCosts, json!([])).await?;
+        Ok(result.value)
+    }
+
+    #[allow(deprecated)]
+    pub async fn get_estimated_instruction_cost(&self, program_id : Pubkey) -> ClientResult<RpcExecuteCostInfo> {
+        let result = self.send::<Response<RpcExecuteCostInfo>>(RpcRequest::GetEstimatedInstructionCost, json!([program_id.to_string()])).await?;
+        Ok(result.value)
+    }
+
     pub async fn send<T>(&self, request: RpcRequest, params: Value) -> ClientResult<T>
     where
         T: serde::de::DeserializeOwned,

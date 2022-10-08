@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 /// ExecuteCostTable is aggregated by Cost Model, it keeps each program's
 /// average cost in its HashMap, with fixed capacity to avoid from growing
 /// unchecked.
@@ -152,6 +154,39 @@ impl ExecuteCostTable {
             .unwrap()
             .as_micros()
     }
+
+    pub fn get_ui_data(&self) -> UiExecuteCostTable {
+        UiExecuteCostTable{
+            data : self.table.iter().map( |x|
+                {
+                    let occurence = self.occurrences.get(x.0);
+                    match occurence {
+                        Some(y) => (*x.0, *x.1, y.0, y.1),
+                        None => (*x.0, *x.1, 0, 0),
+                    }
+                }
+            ).collect_vec()
+        }
+    }
+
+    pub fn get_ui_data_for_program(&self, program_id: Pubkey) -> Option<(u64, usize, u128)> {
+        let data = self.table.get(&program_id);
+        match data {
+            Some(cost) => {
+                let occurence = self.occurrences.get(&program_id);
+                match occurence {
+                    Some(occ) => Some((*cost, occ.0, occ.1)),
+                    None => Some((*cost, 0, 0))
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UiExecuteCostTable{
+    pub data : Vec<(Pubkey, u64, usize, u128)>, // this vector contains for tuple for (program_id, cost, occurence count, age)
 }
 
 #[cfg(test)]

@@ -762,6 +762,11 @@ impl Validator {
         // block min prioritization fee cache should be readable by RPC, and writable by validator
         // (for now, by replay stage)
         let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+        let mut cost_model = CostModel::default();
+        // initialize cost model with built-in instruction costs only
+        cost_model.initialize_cost_table(&[]);
+        let cost_model = Arc::new(RwLock::new(cost_model));
+
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
@@ -811,6 +816,7 @@ impl Validator {
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
                 prioritization_fee_cache.clone(),
+                cost_model.clone(),
             )?;
 
             (
@@ -923,11 +929,6 @@ impl Validator {
         );
 
         let vote_tracker = Arc::<VoteTracker>::default();
-        let mut cost_model = CostModel::default();
-        // initialize cost model with built-in instruction costs only
-        cost_model.initialize_cost_table(&[]);
-        let cost_model = Arc::new(RwLock::new(cost_model));
-
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
         let (gossip_verified_vote_hash_sender, gossip_verified_vote_hash_receiver) = unbounded();
