@@ -1337,7 +1337,7 @@ impl Scheduler<ExecuteTimings> {
 
             loop {
             let received = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()});
-            match recorded {
+            match received {
             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
