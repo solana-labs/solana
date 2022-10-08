@@ -1342,7 +1342,7 @@ impl Scheduler<ExecuteTimings> {
 
             let received = r.recv();
             match received {
-                Ok(a = solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
+                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
                     loop {
                         match r.try_recv() {
                             Err(crossbeam_channel::TryRecvError::Empty) => {
@@ -1350,7 +1350,7 @@ impl Scheduler<ExecuteTimings> {
                                 continue;
                             },
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
-                                s.send(spin).unwrap(); 
+                                s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap(); 
                                 maybe_ee = Some(ee);
                                 break;
                             }
