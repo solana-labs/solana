@@ -1428,7 +1428,7 @@ impl Scheduler<ExecuteTimings> {
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
 
-                let mut timings = Default::default();
+                let mut timings = Box::new(Default::default());
                 let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
                     &batch,
                     MAX_PROCESSING_AGE,
