@@ -2119,7 +2119,8 @@ pub enum Flushable<T, C> {
     Flush(std::sync::Arc<Checkpoint<C>>),
 }
 
-pub enum SpinWaitable<T> {
+pub enum SpinWaitable<T, C> {
     Payload(T),
     Spin,
+    Flush(std::sync::Arc<Checkpoint<C>>),
 }
