@@ -1363,6 +1363,9 @@ impl Scheduler<ExecuteTimings> {
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
                                 unreachable!();
                             }
+                            Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
+                                checkpoint.wait_for_restart(None);
+                            }
                             Err(crossbeam_channel::TryRecvError::Disconnected) => {
                                 continue;
                             },
@@ -1371,6 +1374,9 @@ impl Scheduler<ExecuteTimings> {
                 },
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                     maybe_ee = Some(ee);
+                },
+                Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
+                    checkpoint.wait_for_restart(None);
                 },
                 Err(_) => todo!(),
             }
@@ -1438,8 +1444,6 @@ impl Scheduler<ExecuteTimings> {
 
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
-            } else {
-                unreachable!();
             }
             }
             todo!();
