@@ -3389,7 +3389,7 @@ export class Connection {
     let subscriptionId;
     let done = false;
 
-    const signaturePromise = new Promise<{
+    const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
@@ -3479,7 +3479,7 @@ export class Connection {
 
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([signaturePromise, expiryPromise]);
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
       switch (outcome.__type) {
         case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
           throw new TransactionExpiredBlockheightExceededError(rawSignature);
