@@ -1613,7 +1613,7 @@ impl ScheduleStage {
         _runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload<C>>,
-        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<C>>,
         to_high_execute_substage: Option<&crossbeam_channel::Sender<ExecutablePayload<C>>>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<ExaminablePayload<T, C>>>, // assume nonblocking
