@@ -2055,7 +2055,7 @@ pub struct ExecutablePayload<C>(pub SpinWaitable<Box<ExecutionEnvironment>, C>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment>, pub T);
 pub struct ExaminablePayload<T, C>(pub Flushable<(Box<ExecutionEnvironment>, T), C>);
 
-pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar);
+pub struct Checkpoint<T>(std::sync::Mutex<(usize, Option<T>)>, std::sync::Condvar, bool);
 
 impl<T> Checkpoint<T> {
     pub fn wait_for_restart(&self, maybe_given_restart_value: Option<T>) {
@@ -2077,7 +2077,7 @@ impl<T> Checkpoint<T> {
         }
 
         if *self_remaining_threads == 0 {
-            assert!(self_return_value.is_some());
+            assert!(self.2 || self_return_value.is_some());
             drop(self_remaining_threads);
             self.1.notify_all();
             trace!(
@@ -2106,10 +2106,11 @@ impl<T> Checkpoint<T> {
         self_return_value.take().unwrap()
     }
 
-    pub fn new(remaining_threads: usize) -> std::sync::Arc<Self> {
+    pub fn new(remaining_threads: usize, no_restart_value: bool) -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self(
             std::sync::Mutex::new((remaining_threads, None)),
             std::sync::Condvar::new(),
+            no_restart_value,
         ))
     }
 }
