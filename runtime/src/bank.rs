@@ -1337,7 +1337,7 @@ impl Scheduler<ExecuteTimings> {
             }
 
             let r = (if thx >= executing_thread_count { scheduled_high_ee_receiver } else { scheduled_ee_receiver});
-            let s = (if thx >= executing_thread_count { scheduled_high_ee_sener } else { scheduled_ee_sender});
+            let s = (if thx >= executing_thread_count { scheduled_high_ee_sender } else { scheduled_ee_sender});
 
             loop {
             let mut maybe_ee = None;
