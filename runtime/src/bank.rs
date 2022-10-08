@@ -1319,7 +1319,7 @@ impl Scheduler<ExecuteTimings> {
         scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
 
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
-        let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
+        let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded::<usize>();
 
         let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
