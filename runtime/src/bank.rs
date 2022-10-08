@@ -1257,6 +1257,8 @@ struct Scheduler<C> {
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload<C>>>,
+    scheduled_ee_sender: crossbeam_channel::Sender<solana_scheduler::ExecutablePayload<C>>,
+    scheduled_high_ee_sender: crossbeam_channel::Sender<solana_scheduler::ExecutablePayload<C>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: AtomicBool,
     collected_results: Arc<std::sync::Mutex<Vec<Result<C>>>>,
@@ -1597,6 +1599,8 @@ impl Scheduler<ExecuteTimings> {
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
             transaction_sender: Some(transaction_sender),
+            scheduled_ee_sender,
+            scheduled_high_ee_sender,
             preloader,
             graceful_stop_initiated: Default::default(),
             collected_results,
@@ -1635,7 +1639,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(3);
+        let checkpoint = solana_scheduler::Checkpoint::new(3 + self.executing_thread_handles.len());
         self.transaction_sender
             .as_ref()
             .unwrap()
