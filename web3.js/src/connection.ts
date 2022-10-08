@@ -3348,7 +3348,6 @@ export class Connection {
   confirmTransaction(
     strategy: BlockheightBasedTransactionConfirmationStrategy,
     commitment?: Commitment,
-    signatureStatusesPoolInterval?: number,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
   /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
@@ -3356,7 +3355,6 @@ export class Connection {
   confirmTransaction(
     strategy: TransactionSignature,
     commitment?: Commitment,
-    signatureStatusesPoolInterval?: number,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
   // eslint-disable-next-line no-dupe-class-members
@@ -3365,7 +3363,6 @@ export class Connection {
       | BlockheightBasedTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
-    signatureStatusesPoolInterval = 2000,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature: string;
 
@@ -3410,45 +3407,24 @@ export class Connection {
           },
           subscriptionCommitment,
         );
+
+        this.getSignatureStatuses([rawSignature]).then(signatureStatuses => {
+          const result = signatureStatuses && signatureStatuses.value[0];
+          if (result?.err) {
+            reject(result.err);
+          }
+          if (result) {
+            const response = {
+              context: signatureStatuses.context,
+              value: result,
+            };
+            done = true;
+            resolve({__type: TransactionStatus.PROCESSED, response});
+          }
+        });
       } catch (err) {
         reject(err);
       }
-    });
-
-    const signatureStatusPoolPromise = new Promise<{
-      __type: TransactionStatus.PROCESSED;
-      response: RpcResponseAndContext<SignatureResult>;
-    }>((resolve, reject) => {
-      return (async () => {
-        let retryCount = 0;
-        try {
-          while (!done) {
-            //we want to ignore sleep for the first call to resolve
-            //immediately if tx was confirmed before
-            if (retryCount > 0) {
-              await sleep(signatureStatusesPoolInterval);
-            }
-            retryCount++;
-            const signatureStatuses = await this.getSignatureStatuses([
-              rawSignature,
-            ]);
-            const result = signatureStatuses && signatureStatuses.value[0];
-            if (result?.err) {
-              reject(result?.err);
-            }
-            if (result) {
-              const response = {
-                context: signatureStatuses.context,
-                value: result!,
-              };
-              done = true;
-              resolve({__type: TransactionStatus.PROCESSED, response});
-            }
-          }
-        } catch (err) {
-          reject(err);
-        }
-      })();
     });
 
     const expiryPromise = new Promise<
@@ -3503,11 +3479,7 @@ export class Connection {
 
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([
-        signaturePromise,
-        signatureStatusPoolPromise,
-        expiryPromise,
-      ]);
+      const outcome = await Promise.race([signaturePromise, expiryPromise]);
       switch (outcome.__type) {
         case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
           throw new TransactionExpiredBlockheightExceededError(rawSignature);
