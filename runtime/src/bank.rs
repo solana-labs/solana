@@ -1639,7 +1639,7 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(3 + self.executing_thread_handles.len());
+        let checkpoint = solana_scheduler::Checkpoint::new(3 + self.executing_thread_handles.unwrap().len());
         self.transaction_sender
             .as_ref()
             .unwrap()
