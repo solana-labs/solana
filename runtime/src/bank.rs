@@ -1361,9 +1361,10 @@ impl Scheduler<ExecuteTimings> {
                                     continue;
                                 },
                                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
-                                    s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
+                                    s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
                                     maybe_ee = Some(ee);
                                     observed_payload = true;
+                                    info!("ex recv via spin");
                                     break;
                                 }
                                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => {
@@ -1382,9 +1383,10 @@ impl Scheduler<ExecuteTimings> {
                         match r.recv() {
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => unreachable!(),
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
-                                s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
+                                s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
                                 maybe_ee = Some(ee);
                                 observed_payload = true;
+                                info!("ex recv via initial spin");
                             },
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
                                 checkpoint.wait_for_restart(None);
@@ -1397,6 +1399,7 @@ impl Scheduler<ExecuteTimings> {
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
                     maybe_ee = Some(ee);
                     observed_payload = true;
+                    info!("ex recv via blocking recv");
                 },
                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Flush(checkpoint))) => {
                     checkpoint.wait_for_restart(None);
@@ -1467,7 +1470,9 @@ impl Scheduler<ExecuteTimings> {
                 ee.execution_us = wall_time.as_us();
 
                 //ee.reindex_with_address_book();
+                info!("ex send begin");
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
+                info!("ex send end");
             }
             }
             todo!();
