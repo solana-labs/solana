@@ -1361,7 +1361,7 @@ impl Scheduler<ExecuteTimings> {
                                     continue;
                                 },
                                 Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(ee))) => {
-                                    s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
+                                    s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
                                     maybe_ee = Some(ee);
                                     observed_payload = true;
                                     info!("ex recv via spin");
@@ -1383,7 +1383,7 @@ impl Scheduler<ExecuteTimings> {
                         match r.recv() {
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)) => unreachable!(),
                             Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) => {
-                                s.send_buffered(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
+                                s.send(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Spin)).unwrap();
                                 maybe_ee = Some(ee);
                                 observed_payload = true;
                                 info!("ex recv via initial spin");
