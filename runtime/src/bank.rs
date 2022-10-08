@@ -1641,7 +1641,7 @@ impl<C> Scheduler<C> {
 
         //drop(transaction_sender);
 
-        let checkpoint = solana_scheduler::Checkpoint::new(3);
+        let checkpoint = solana_scheduler::Checkpoint::new(3, false);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -1658,7 +1658,7 @@ impl<C> Scheduler<C> {
         }
 
         let lane_count = self.executing_thread_handles.as_ref().unwrap().len();
-        let checkpoint_exec = solana_scheduler::Checkpoint::new(1 + lane_count);
+        let checkpoint_exec = solana_scheduler::Checkpoint::new(1 + lane_count, true);
         for i in 0..lane_count {
             if i < lane_count/2 {
                 self.scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(
