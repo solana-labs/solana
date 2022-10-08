@@ -1640,7 +1640,9 @@ impl<C> Scheduler<C> {
         //let transaction_sender = self.transaction_sender.take().unwrap();
 
         //drop(transaction_sender);
-        let checkpoint = solana_scheduler::Checkpoint::new(3 + self.executing_thread_handles.as_ref().unwrap().len());
+        let lane_count = self.executing_thread_handles.as_ref().unwrap().len();
+
+        let checkpoint = solana_scheduler::Checkpoint::new(3 + lane_count);
         self.transaction_sender
             .as_ref()
             .unwrap()
@@ -1648,6 +1650,18 @@ impl<C> Scheduler<C> {
                 solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
             ))
             .unwrap();
+        for i in 0..lane_count {
+            if i < lane_count/2 {
+                self.scheduled_ee_sender.send(solana_scheduler::ExecutablePayload(
+                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint)),
+            )).unwrap();
+            } else {
+                self.scheduled_high_ee_sender.send(solana_scheduler::ExecutablePayload(
+                solana_scheduler::SpinWaitable::Flush(std::sync::Arc::clone(&checkpoint)),
+            )).unwrap();
+            }
+        }
+
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
