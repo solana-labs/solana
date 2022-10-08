@@ -1402,6 +1402,7 @@ impl Scheduler<ExecuteTimings> {
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee, timings)).unwrap();
             },
+            Err(_) => todo!(),
             }
             }
             todo!();
