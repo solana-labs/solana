@@ -1649,7 +1649,6 @@ impl<C> Scheduler<C> {
                 solana_scheduler::Flushable::Flush(std::sync::Arc::clone(&checkpoint)),
             ))
             .unwrap();
-
         checkpoint.wait_for_restart(None);
         let r = checkpoint.take_restart_value();
         self.collected_results.lock().unwrap().push(Ok(r));
