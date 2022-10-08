@@ -1720,7 +1720,7 @@ impl ScheduleStage {
                             if let Ok(UnlockablePayload(mut processed_execution_environment, extra)) = maybe_from_exec {
                                 executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                                 processed_count = processed_count.checked_add(1).unwrap();
-                                info!("    sc blocking recv");
+                                //info!("    sc blocking recv");
                                 Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                                 to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                             } else {
@@ -1947,7 +1947,7 @@ impl ScheduleStage {
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         processed_count = processed_count.checked_add(1).unwrap();
-                        info!("    sc buffered recv");
+                        //info!("    sc pending recv");
                         Self::commit_processed_execution(
                             ast,
                             &mut processed_execution_environment,
