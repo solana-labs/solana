@@ -1335,7 +1335,7 @@ impl Scheduler<ExecuteTimings> {
                 thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
-            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
+            while let Ok(solana_scheduler::ExecutablePayload(solana_scheduler::SpinWaitable::Payload(mut ee))) = (if thx >= executing_thread_count { scheduled_high_ee_receiver.recv() } else { scheduled_ee_receiver.recv()}) {
                 let (mut wall_time, cpu_time) = (Measure::start("process_message_time"), cpu_time::ThreadTime::now());
 
                 let current_execute_clock = ee.task.execute_time();
