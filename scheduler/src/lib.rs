@@ -1768,13 +1768,13 @@ impl ScheduleStage {
                         match from_exec.try_recv() {
                            Err(crossbeam_channel::TryRecvError::Empty) => {
                                // let's spin
-                               std::thread::sleep(std::time::Duration::from_micros(2));
+                               //std::thread::sleep(std::time::Duration::from_micros(2));
                                continue;
                            },
                            Ok(UnlockablePayload(mut processed_execution_environment, extra)) => {
                                executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                                processed_count = processed_count.checked_add(1).unwrap();
-                                info!("    sc spinning recv");
+                               //info!("    sc spinning recv");
                                Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                                to_next_stage.send_buffered(ExaminablePayload(Flushable::Payload((processed_execution_environment, extra)))).unwrap();
                                break;
@@ -1835,12 +1835,12 @@ impl ScheduleStage {
                     );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        info!("    sc send high begin");
+                        //info!("    sc send high begin");
                         to_high_execute_substage
                             .unwrap_or(to_execute_substage)
                             .send(ExecutablePayload(SpinWaitable::Payload(ee)))
                             .unwrap();
-                        info!("    sc send high end");
+                        //info!("    sc send high end");
                     }
                     debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
@@ -1886,9 +1886,9 @@ impl ScheduleStage {
                     );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        info!("    sc send begin");
+                        //info!("    sc send begin");
                         to_execute_substage.send(ExecutablePayload(SpinWaitable::Payload(ee))).unwrap();
-                        info!("    sc send end");
+                        //info!("    sc send end");
                     }
                     debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}+{}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_high_execute_substage.map(|t| format!("{}", t.len())).unwrap_or("-".into()), to_execute_substage.len(), from_exec.len(), channel_backed_runnable_queue.task_count_hint(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
 
