@@ -132,11 +132,19 @@ pub fn process_instruction(
             let node_pubkey = transaction_context.get_key_of_account_at_index(
                 instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
-            vote_state::update_validator_identity(&mut me, node_pubkey, &signers)
+            vote_state::update_validator_identity(
+                &mut me,
+                node_pubkey,
+                &signers,
+                &invoke_context.feature_set,
+            )
         }
-        VoteInstruction::UpdateCommission(commission) => {
-            vote_state::update_commission(&mut me, commission, &signers)
-        }
+        VoteInstruction::UpdateCommission(commission) => vote_state::update_commission(
+            &mut me,
+            commission,
+            &signers,
+            &invoke_context.feature_set,
+        ),
         VoteInstruction::Vote(vote) | VoteInstruction::VoteSwitch(vote, _) => {
             let slot_hashes =
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
@@ -220,6 +228,7 @@ pub fn process_instruction(
                 &signers,
                 &rent_sysvar,
                 clock_if_feature_active.as_deref(),
+                &invoke_context.feature_set,
             )
         }
         VoteInstruction::AuthorizeChecked(vote_authorize) => {
@@ -263,7 +272,7 @@ mod tests {
                 vote_switch, withdraw, VoteInstruction,
             },
             vote_state::{
-                self, Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+                self, LandedVote, Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
                 VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate, VoteStateVersions,
             },
         },
@@ -480,7 +489,7 @@ mod tests {
         let lamports = vote_account.lamports();
         let mut vote_account_with_epoch_credits =
             AccountSharedData::new(lamports, vote_account_space, &id());
-        let versioned = VoteStateVersions::new_current(vote_state);
+        let versioned = VoteStateVersions::new(vote_state, true);
         vote_state::to(&versioned, &mut vote_account_with_epoch_credits);
 
         (vote_pubkey, vote_account_with_epoch_credits)
@@ -771,7 +780,10 @@ mod tests {
             .convert_to_current();
         assert_eq!(
             vote_state.votes,
-            vec![Lockout::new(*vote.slots.last().unwrap())]
+            vec![LandedVote {
+                latency: 0,
+                lockout: Lockout::new(*vote.slots.last().unwrap())
+            }]
         );
         assert_eq!(vote_state.credits(), 0);
 

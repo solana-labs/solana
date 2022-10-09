@@ -18,6 +18,7 @@ use {
 };
 
 mod vote_state_0_23_5;
+pub mod vote_state_1_10_40;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
 
@@ -33,11 +34,11 @@ const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
 // Number of slots of grace period for which maximum vote credits are awarded - votes landing within this number of
 // slots of the slot that is being voted on are awarded full credits.
-pub const VOTE_CREDITS_GRACE_SLOTS: u32 = 3;
+pub const VOTE_CREDITS_GRACE_SLOTS: u8 = 3;
 
 // Maximum number of credits to award for a vote; this number of credits is awarded to votes on slots that land within
 // the grace period. After that grace period, vote credits are reduced.
-pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u32 = 12;
+pub const VOTE_CREDITS_MAXIMUM_PER_SLOT: u8 = 10;
 
 #[frozen_abi(digest = "Ch2vVEwos2EjAVqSHCyJjnN2MNX1yrpapZTGhMSCjWUH")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
@@ -67,7 +68,7 @@ impl Vote {
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
 pub struct Lockout {
     pub slot: Slot,
-    confirmation_count: u32,
+    pub confirmation_count: u32,
 }
 
 impl Lockout {
@@ -78,49 +79,9 @@ impl Lockout {
         }
     }
 
-    pub fn new_with_confirmation_count(slot: Slot, confirmation_count: u32) -> Self {
-        Self {
-            slot,
-            confirmation_count,
-        }
-    }
-
     // The number of slots for which this vote is locked
     pub fn lockout(&self) -> u64 {
-        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count())
-    }
-
-    // The number of credits to award for this lockout at the time that it is rooted.  It is a function of the "vote
-    // latency" that was stored in the Lockout at the time that the Vote or VoteStateUpdate instruction that created
-    // this Lockout was processed.  At that time, the difference between each newly voted-on slot and the slot in
-    // which the vote actually landed is used to calculate the vote latency, which is then used later when credits are
-    // to be awarded for the vote to compute the number of credits to award.
-    pub fn credits(&self) -> u32 {
-        let latency = self.confirmation_count.checked_shr(24).unwrap();
-
-        // If latency is 0, this means that the Lockout was created and stored from a software version that did not
-        // store vote latencies; in this case, 1 credit is awarded
-        if latency == 0 {
-            1
-        } else {
-            match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
-                None | Some(0) => {
-                    // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
-                    VOTE_CREDITS_MAXIMUM_PER_SLOT
-                }
-
-                Some(diff) => {
-                    // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
-                    // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
-                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
-                        // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
-                        None | Some(0) => 1,
-
-                        Some(credits) => credits,
-                    }
-                }
-            }
-        }
+        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count)
     }
 
     // The last slot at which a vote is still locked out. Validators should not
@@ -134,48 +95,27 @@ impl Lockout {
     pub fn is_locked_out_at_slot(&self, slot: Slot) -> bool {
         self.last_locked_out_slot() >= slot
     }
+}
 
-    pub fn confirmation_count(&self) -> u32 {
-        self.confirmation_count & 0x00FFFFFF
-    }
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+pub struct LandedVote {
+    // Latency is the difference in slot number between the slot that was voted on (lockout.slot) and the
+    // slot in which the vote that added this Lockout landed.  For votes which were cast before versions of
+    // the validator software which recorded vote latencies, latency is recorded as 0.
+    pub latency: u8,
+    pub lockout: Lockout,
+}
 
-    // Sets vote latency for this lockout given that the vote instruction in which the Lockout was created was the
-    // given slot.  vote_latency is clamped to the range [0, 255] to allow it to be stored in 1 byte.
-    pub fn set_vote_latency(&mut self, voted_in_slot: Slot) {
-        let vote_latency = voted_in_slot.saturating_sub(self.slot) as u32;
-
-        self.confirmation_count = std::cmp::min(vote_latency, 255_u32)
-            .checked_shl(24)
-            .unwrap()
-            | self.confirmation_count();
-    }
-
-    // This is called to update the vote latency for a Lockout when the vote latency is calculated after the Lockout
-    // is created
-    pub fn copy_vote_latency(&mut self, from: &Lockout) {
-        self.confirmation_count =
-            (from.confirmation_count & 0xFF000000) | self.confirmation_count();
-    }
-
-    // This is called to set the vote latency to zero
-    pub fn zero_vote_latency(&mut self) {
-        self.confirmation_count &= 0x00FFFFFF;
-    }
-
-    pub fn increase_confirmation_count(&mut self, confirmation_count_increase: u32) {
-        self.confirmation_count = (self.confirmation_count & 0xFF000000)
-            | (self
-                .confirmation_count()
-                .checked_add(confirmation_count_increase)
-                .unwrap())
+impl From<LandedVote> for Lockout {
+    fn from(landed_vote: LandedVote) -> Self {
+        landed_vote.lockout
     }
 }
 
 #[frozen_abi(digest = "GwJfVFsATSj7nvKwtUkHYzqPRaPY6SLxPGXApuCya3x5")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteStateUpdate {
-    /// The proposed tower, without vote latencies stored in Lockouts.  Vote latencies are set on the local
-    /// vote state according to locally calculated latencies.
+    /// The proposed tower
     pub lockouts: VecDeque<Lockout>,
     /// The proposed root
     pub root: Option<Slot>,
@@ -280,6 +220,14 @@ impl<I: Default + Copy> Default for CircBuf<I> {
 }
 
 impl<I> CircBuf<I> {
+    pub fn new_from_1_10_40(from: vote_state_1_10_40::CircBuf<I>) -> Self {
+        Self {
+            buf: from.buf,
+            idx: from.idx,
+            is_empty: from.is_empty,
+        }
+    }
+
     #[allow(clippy::integer_arithmetic)]
     pub fn append(&mut self, item: I) {
         // remember prior delegate and when we switched, to support later slashing
@@ -303,7 +251,7 @@ impl<I> CircBuf<I> {
     }
 }
 
-#[frozen_abi(digest = "4oxo6mBc8zrZFA89RgKsNyMqqM52iVrCphsWfaHjaAAY")]
+#[frozen_abi(digest = "EeenjJaSrm9hRM39gK6raRNtzG61hnk7GciUCJJRDUSQ")]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteState {
     /// the node that votes in this account
@@ -315,7 +263,7 @@ pub struct VoteState {
     ///  payout should be given to this VoteAccount
     pub commission: u8,
 
-    pub votes: VecDeque<Lockout>,
+    pub votes: VecDeque<LandedVote>,
 
     // This usually the last Lockout which was popped from self.votes.
     // However, it can be arbitrary slot, when being used inside Tower
@@ -367,7 +315,7 @@ impl VoteState {
     /// Upper limit on the size of the Vote State
     /// when votes.len() is MAX_LOCKOUT_HISTORY.
     pub const fn size_of() -> usize {
-        3731 // see test_vote_state_size_of.
+        3762 // see test_vote_state_size_of.
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, InstructionError> {
@@ -413,7 +361,7 @@ impl VoteState {
     /// Returns if the vote state contains a slot `candidate_slot`
     pub fn contains_slot(&self, candidate_slot: Slot) -> bool {
         self.votes
-            .binary_search_by(|lockout| lockout.slot.cmp(&candidate_slot))
+            .binary_search_by(|landed_vote| landed_vote.lockout.slot.cmp(&candidate_slot))
             .is_ok()
     }
 
@@ -425,7 +373,7 @@ impl VoteState {
         }
 
         VoteState {
-            votes: VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]),
+            votes: VecDeque::from(vec![LandedVote::default(); MAX_LOCKOUT_HISTORY]),
             root_slot: Some(std::u64::MAX),
             epoch_credits: vec![(0, 0, 0); MAX_EPOCH_CREDITS_HISTORY],
             authorized_voters,
@@ -437,7 +385,7 @@ impl VoteState {
         &mut self,
         next_vote_slot: Slot,
         epoch: Epoch,
-        voted_in_slot: Option<Slot>,
+        current_slot: Slot,
     ) {
         // Ignore votes for slots earlier than we already have votes for
         if self
@@ -447,21 +395,22 @@ impl VoteState {
             return;
         }
 
-        let mut vote = Lockout::new(next_vote_slot);
-        if let Some(voted_in_slot) = voted_in_slot {
-            vote.set_vote_latency(voted_in_slot);
-        }
-
         self.pop_expired_votes(next_vote_slot);
+
+        let landed_vote = LandedVote {
+            latency: Self::compute_vote_latency(next_vote_slot, current_slot),
+            lockout: Lockout::new(next_vote_slot),
+        };
 
         // Once the stack is full, pop the oldest lockout and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
-            let vote = self.votes.pop_front().unwrap();
-            self.root_slot = Some(vote.slot);
+            let credits = self.credits_for_vote_at_index(0);
+            let landed_vote = self.votes.pop_front().unwrap();
+            self.root_slot = Some(landed_vote.lockout.slot);
 
-            self.increment_credits(epoch, vote.credits() as u64);
+            self.increment_credits(epoch, credits);
         }
-        self.votes.push_back(vote);
+        self.votes.push_back(landed_vote);
         self.double_lockouts();
     }
 
@@ -494,18 +443,55 @@ impl VoteState {
         self.epoch_credits.last_mut().unwrap().1 += credits;
     }
 
+    // Computes the vote latency value to use for a vote on a slot where the vote itself landed in the given slot
+    pub fn compute_vote_latency(voted_for_slot: Slot, current_slot: Slot) -> u8 {
+        std::cmp::min(current_slot.saturating_sub(voted_for_slot), u8::MAX as u64) as u8
+    }
+
+    /// Returns the credits to award for a vote at the given lockout slot index
+    pub fn credits_for_vote_at_index(&self, index: usize) -> u64 {
+        let latency = self
+            .votes
+            .get(index)
+            .map_or(0, |landed_vote| landed_vote.latency);
+
+        // If latency is 0, this means that the Lockout was created and stored from a software version that did not
+        // store vote latencies; in this case, 1 credit is awarded
+        if latency == 0 {
+            1
+        } else {
+            match latency.checked_sub(VOTE_CREDITS_GRACE_SLOTS) {
+                None | Some(0) => {
+                    // latency was <= VOTE_CREDITS_GRACE_SLOTS, so maximum credits are awarded
+                    VOTE_CREDITS_MAXIMUM_PER_SLOT as u64
+                }
+
+                Some(diff) => {
+                    // diff = latency - VOTE_CREDITS_GRACE_SLOTS, and diff > 0
+                    // Subtract diff from VOTE_CREDITS_MAXIMUM_PER_SLOT which is the number of credits to award
+                    match VOTE_CREDITS_MAXIMUM_PER_SLOT.checked_sub(diff) {
+                        // If diff >= VOTE_CREDITS_MAXIMUM_PER_SLOT, 1 credit is awarded
+                        None | Some(0) => 1,
+
+                        Some(credits) => credits as u64,
+                    }
+                }
+            }
+        }
+    }
+
     #[allow(clippy::integer_arithmetic)]
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
         if position < self.votes.len() {
             let pos = self.votes.len() - 1 - position;
-            self.votes.get(pos)
+            self.votes.get(pos).map(|landed_vote| &landed_vote.lockout)
         } else {
             None
         }
     }
 
     pub fn last_lockout(&self) -> Option<&Lockout> {
-        self.votes.back()
+        self.votes.back().map(|landed_vote| &landed_vote.lockout)
     }
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
@@ -515,7 +501,7 @@ impl VoteState {
     // Upto MAX_LOCKOUT_HISTORY many recent unexpired
     // vote slots pushed onto the stack.
     pub fn tower(&self) -> Vec<Slot> {
-        self.votes.iter().map(|v| v.slot).collect()
+        self.votes.iter().map(|v| v.lockout.slot).collect()
     }
 
     pub fn current_epoch(&self) -> Epoch {
@@ -636,8 +622,8 @@ impl VoteState {
         for (i, v) in self.votes.iter_mut().enumerate() {
             // Don't increase the lockout for this vote until we get more confirmations
             // than the max number of confirmations this vote has seen
-            if stack_depth > i + v.confirmation_count() as usize {
-                v.increase_confirmation_count(1);
+            if stack_depth > i + v.lockout.confirmation_count as usize {
+                v.lockout.confirmation_count += 1;
             }
         }
     }
@@ -708,7 +694,7 @@ pub mod serde_compact_vote_state_update {
                     None => return Some(Err(serde::ser::Error::custom("Invalid vote lockout"))),
                     Some(offset) => offset,
                 };
-                let confirmation_count = match u8::try_from(lockout.confirmation_count()) {
+                let confirmation_count = match u8::try_from(lockout.confirmation_count) {
                     Ok(confirmation_count) => confirmation_count,
                     Err(_) => {
                         return Some(Err(serde::ser::Error::custom("Invalid confirmation count")))
@@ -777,9 +763,9 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+            .resize(MAX_LOCKOUT_HISTORY, LandedVote::default());
         vote_state.root_slot = Some(1);
-        let versioned = VoteStateVersions::new_current(vote_state);
+        let versioned = VoteStateVersions::new(vote_state, true);
         assert!(VoteState::serialize(&versioned, &mut buffer[0..4]).is_err());
         VoteState::serialize(&versioned, &mut buffer).unwrap();
         assert_eq!(
@@ -1125,7 +1111,7 @@ mod tests {
     #[test]
     fn test_vote_state_size_of() {
         let vote_state = VoteState::get_max_sized_vote_state();
-        let vote_state = VoteStateVersions::new_current(vote_state);
+        let vote_state = VoteStateVersions::new(vote_state, true);
         let size = bincode::serialized_size(&vote_state).unwrap();
         assert_eq!(VoteState::size_of() as u64, size);
     }
@@ -1149,7 +1135,7 @@ mod tests {
                 )
             });
 
-            let versioned = VoteStateVersions::new_current(vote_state.take().unwrap());
+            let versioned = VoteStateVersions::new(vote_state.take().unwrap(), true);
             VoteState::serialize(&versioned, &mut max_sized_data).unwrap();
             vote_state = Some(versioned.convert_to_current());
         }
@@ -1160,7 +1146,7 @@ mod tests {
         // The default `VoteState` is stored to de-initialize a zero-balance vote account,
         // so must remain such that `VoteStateVersions::is_uninitialized()` returns true
         // when called on a `VoteStateVersions` that stores it
-        assert!(VoteStateVersions::new_current(VoteState::default()).is_uninitialized());
+        assert!(VoteStateVersions::new(VoteState::default(), true).is_uninitialized());
     }
 
     #[test]
@@ -1172,7 +1158,7 @@ mod tests {
         ));
 
         // Check default VoteState
-        let default_account_state = VoteStateVersions::new_current(VoteState::default());
+        let default_account_state = VoteStateVersions::new(VoteState::default(), true);
         VoteState::serialize(&default_account_state, &mut vote_account_data).unwrap();
         assert!(!VoteState::is_correct_size_and_initialized(
             &vote_account_data
@@ -1184,22 +1170,25 @@ mod tests {
 
         // Check non-zero large account
         let mut large_vote_data = vec![1; 2 * VoteState::size_of()];
-        let default_account_state = VoteStateVersions::new_current(VoteState::default());
+        let default_account_state = VoteStateVersions::new(VoteState::default(), true);
         VoteState::serialize(&default_account_state, &mut large_vote_data).unwrap();
         assert!(!VoteState::is_correct_size_and_initialized(
             &vote_account_data
         ));
 
         // Check populated VoteState
-        let account_state = VoteStateVersions::new_current(VoteState::new(
-            &VoteInit {
-                node_pubkey: Pubkey::new_unique(),
-                authorized_voter: Pubkey::new_unique(),
-                authorized_withdrawer: Pubkey::new_unique(),
-                commission: 0,
-            },
-            &Clock::default(),
-        ));
+        let account_state = VoteStateVersions::new(
+            VoteState::new(
+                &VoteInit {
+                    node_pubkey: Pubkey::new_unique(),
+                    authorized_voter: Pubkey::new_unique(),
+                    authorized_withdrawer: Pubkey::new_unique(),
+                    commission: 0,
+                },
+                &Clock::default(),
+            ),
+            true,
+        );
         VoteState::serialize(&account_state, &mut vote_account_data).unwrap();
         assert!(VoteState::is_correct_size_and_initialized(
             &vote_account_data

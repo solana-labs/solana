@@ -6,17 +6,19 @@ use {
         pubkey::Pubkey,
         signature::{Signature, Signer},
     },
-    solana_vote_program::vote_state::{vote_state_1_10_40::VoteState1_10_40, BlockTimestamp, Vote},
+    solana_vote_program::vote_state::{
+        vote_state_1_10_40::VoteState1_10_40, BlockTimestamp, VoteTransaction,
+    },
 };
 
-#[frozen_abi(digest = "9MMo5b68z9JTmbXvtAnedgGocnvF43wj2Z1TGjRixkgX")]
+#[frozen_abi(digest = "DaN2dZDHJ4JRAvJFBUWo7ByQ3MhhYRXoJABbxhJ5eqMk")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
-pub struct Tower1_7_14 {
+pub struct Tower1_10_40 {
     pub(crate) node_pubkey: Pubkey,
     pub(crate) threshold_depth: usize,
     pub(crate) threshold_size: f64,
     pub(crate) vote_state: VoteState1_10_40,
-    pub(crate) last_vote: Vote,
+    pub(crate) last_vote: VoteTransaction,
     #[serde(skip)]
     // The blockhash used in the last vote transaction, may or may not equal the
     // blockhash of the voted block itself, depending if the vote slot was refreshed.
@@ -36,17 +38,17 @@ pub struct Tower1_7_14 {
     pub(crate) last_switch_threshold_check: Option<(Slot, SwitchForkDecision)>,
 }
 
-#[frozen_abi(digest = "CxwFFxKfn6ez6wifDKr5WYr3eu2PsWUKdMYp3LX8Xj52")]
+#[frozen_abi(digest = "39y8iHULqCJ2JqyxLnjxotdK4hCFNfhSpD1mmz5YA6Du")]
 #[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Eq, AbiExample)]
-pub struct SavedTower1_7_14 {
+pub struct SavedTower1_10_40 {
     pub(crate) signature: Signature,
     pub(crate) data: Vec<u8>,
     #[serde(skip)]
     pub(crate) node_pubkey: Pubkey,
 }
 
-impl SavedTower1_7_14 {
-    pub fn new<T: Signer>(tower: &Tower1_7_14, keypair: &T) -> Result<Self, TowerError> {
+impl SavedTower1_10_40 {
+    pub fn new<T: Signer>(tower: &Tower1_10_40, keypair: &T) -> Result<Self, TowerError> {
         let node_pubkey = keypair.pubkey();
         if tower.node_pubkey != node_pubkey {
             return Err(TowerError::WrongTower(format!(

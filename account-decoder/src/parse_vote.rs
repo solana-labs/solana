@@ -21,9 +21,9 @@ pub fn parse_vote(data: &[u8]) -> Result<VoteAccountType, ParseAccountError> {
     let votes = vote_state
         .votes
         .iter()
-        .map(|lockout| UiLockout {
-            slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count(),
+        .map(|landed_vote| UiLockout {
+            slot: landed_vote.lockout.slot,
+            confirmation_count: landed_vote.lockout.confirmation_count,
         })
         .collect();
     let authorized_voters = vote_state
@@ -93,7 +93,7 @@ impl From<&Lockout> for UiLockout {
     fn from(lockout: &Lockout) -> Self {
         Self {
             slot: lockout.slot,
-            confirmation_count: lockout.confirmation_count(),
+            confirmation_count: lockout.confirmation_count,
         }
     }
 }

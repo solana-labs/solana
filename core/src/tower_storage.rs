@@ -1,6 +1,7 @@
 use {
     crate::{
         consensus::{Result, Tower, TowerError, TowerVersions},
+        tower1_10_40::SavedTower1_10_40,
         tower1_7_14::SavedTower1_7_14,
     },
     solana_sdk::{
@@ -17,6 +18,7 @@ use {
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, AbiExample)]
 pub enum SavedTowerVersions {
     V1_17_14(SavedTower1_7_14),
+    V1_10_40(SavedTower1_10_40),
     Current(SavedTower),
 }
 
@@ -31,6 +33,12 @@ impl SavedTowerVersions {
                     return Err(TowerError::InvalidSignature);
                 }
                 bincode::deserialize(&t.data).map(TowerVersions::V1_17_14)
+            }
+            SavedTowerVersions::V1_10_40(t) => {
+                if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
+                    return Err(TowerError::InvalidSignature);
+                }
+                bincode::deserialize(&t.data).map(TowerVersions::V1_10_40)
             }
             SavedTowerVersions::Current(t) => {
                 if !t.signature.verify(node_pubkey.as_ref(), &t.data) {
@@ -58,6 +66,7 @@ impl SavedTowerVersions {
     fn pubkey(&self) -> Pubkey {
         match self {
             SavedTowerVersions::V1_17_14(t) => t.node_pubkey,
+            SavedTowerVersions::V1_10_40(t) => t.node_pubkey,
             SavedTowerVersions::Current(t) => t.node_pubkey,
         }
     }
@@ -72,6 +81,12 @@ impl From<SavedTower> for SavedTowerVersions {
 impl From<SavedTower1_7_14> for SavedTowerVersions {
     fn from(tower: SavedTower1_7_14) -> SavedTowerVersions {
         SavedTowerVersions::V1_17_14(tower)
+    }
+}
+
+impl From<SavedTower1_10_40> for SavedTowerVersions {
+    fn from(tower: SavedTower1_10_40) -> SavedTowerVersions {
+        SavedTowerVersions::V1_10_40(tower)
     }
 }
 
@@ -372,11 +387,13 @@ pub mod test {
         super::*,
         crate::{
             consensus::Tower,
+            tower1_10_40::{SavedTower1_10_40, Tower1_10_40},
             tower1_7_14::{SavedTower1_7_14, Tower1_7_14},
         },
         solana_sdk::{hash::Hash, signature::Keypair},
         solana_vote_program::vote_state::{
-            BlockTimestamp, Lockout, Vote, VoteState, VoteTransaction, MAX_LOCKOUT_HISTORY,
+            vote_state_1_10_40::VoteState1_10_40, BlockTimestamp, Lockout, Vote, VoteTransaction,
+            MAX_LOCKOUT_HISTORY,
         },
         tempfile::TempDir,
     };
@@ -386,7 +403,7 @@ pub mod test {
         let tower_path = TempDir::new().unwrap();
         let identity_keypair = Keypair::new();
         let node_pubkey = identity_keypair.pubkey();
-        let mut vote_state = VoteState::default();
+        let mut vote_state = VoteState1_10_40::default();
         vote_state
             .votes
             .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
@@ -410,6 +427,46 @@ pub mod test {
         {
             let saved_tower = SavedTower1_7_14::new(&old_tower, &identity_keypair).unwrap();
             tower_storage.store_old(&saved_tower).unwrap();
+        }
+
+        let loaded = Tower::restore(&tower_storage, &node_pubkey).unwrap();
+        assert_eq!(loaded.node_pubkey, old_tower.node_pubkey);
+        assert_eq!(loaded.last_vote(), VoteTransaction::from(vote));
+        assert_eq!(loaded.vote_state.root_slot, Some(1));
+        assert_eq!(loaded.stray_restored_slot(), None);
+    }
+
+    #[test]
+    fn test_tower_migration_from_1_10_40() {
+        let tower_path = TempDir::new().unwrap();
+        let identity_keypair = Keypair::new();
+        let node_pubkey = identity_keypair.pubkey();
+        let mut vote_state = VoteState1_10_40::default();
+        vote_state
+            .votes
+            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
+        vote_state.root_slot = Some(1);
+
+        let vote = Vote::new(vec![1, 2, 3, 4], Hash::default());
+        let tower_storage = FileTowerStorage::new(tower_path.path().to_path_buf());
+
+        let old_tower = Tower1_10_40 {
+            node_pubkey,
+            threshold_depth: 10,
+            threshold_size: 0.9,
+            vote_state,
+            last_vote: VoteTransaction::from(vote.clone()),
+            last_timestamp: BlockTimestamp::default(),
+            last_vote_tx_blockhash: Hash::default(),
+            stray_restored_slot: Some(2),
+            last_switch_threshold_check: Option::default(),
+        };
+
+        {
+            let saved_tower = SavedTower1_10_40::new(&old_tower, &identity_keypair).unwrap();
+            tower_storage
+                .store(&SavedTowerVersions::V1_10_40(saved_tower))
+                .unwrap();
         }
 
         let loaded = Tower::restore(&tower_storage, &node_pubkey).unwrap();

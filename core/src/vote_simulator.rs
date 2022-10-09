@@ -111,7 +111,7 @@ impl VoteSimulator {
                         .unwrap()
                         .votes
                         .iter()
-                        .any(|lockout| lockout.slot == parent));
+                        .any(|landed_vote| landed_vote.lockout.slot == parent));
                 }
             }
             while new_bank.tick_height() < new_bank.max_tick_height() {

@@ -2776,9 +2776,9 @@ impl ReplayStage {
                                         // root (possible due to supermajority roots being set on
                                         // startup), then we need to adjust the tower
                                         bank_vote_state.root_slot = Some(local_root);
-                                        bank_vote_state
-                                            .votes
-                                            .retain(|lockout| lockout.slot > local_root);
+                                        bank_vote_state.votes.retain(|landed_vote| {
+                                            landed_vote.lockout.slot > local_root
+                                        });
                                         info!(
                                             "Local root is larger than on chain root,
                                             overwrote bank root {:?} and updated votes {:?}",
@@ -2787,7 +2787,7 @@ impl ReplayStage {
 
                                         if let Some(first_vote) = bank_vote_state.votes.front() {
                                             assert!(ancestors
-                                                .get(&first_vote.slot)
+                                                .get(&first_vote.lockout.slot)
                                                 .expect(
                                                     "Ancestors map must contain an
                                                         entry for all slots on this fork
