@@ -480,7 +480,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .into_inner();
 
         let rows = self.decode_read_rows_response(response).await?;
-        Ok(rows.len() > 0)
+        Ok(!rows.is_empty())
     }
 
     /// Get latest data from `table`.
