@@ -4,8 +4,8 @@ use rand::Rng;
 fn main() {
     solana_logger::setup();
 
-    //let (s, r) = crossbeam_channel::unbounded();
-    let (s, r) = crossbeam_channel::bounded(100_000);
+    let (s, r) = crossbeam_channel::unbounded();
+    //let (s, r) = crossbeam_channel::bounded(100);
     //let (s, r) = flume::unbounded();
     //let (s, r) = flume::bounded(100_000);
 
@@ -17,21 +17,24 @@ fn main() {
                 for i in 0..10_000_000 {
                     t += rand::thread_rng().gen::<u64>();
                 }
-                info!("sent begin");
-                //s.send_buffered(()).unwrap();
-                s.send_buffered(()).unwrap();
-                info!("sent end");
+                //let msg = Box::new([0x33_u8; 100_000]); // ();
+                //let msg = [0x33_u8; 100]; // ();
+                let msg = ();
+
+                let a = std::time::Instant::now();
+                //info!("sent begin");
+                s.send_buffered(msg).unwrap();
+                //s.send_buffered(msg).unwrap();
+                info!("sent took: {:?}", a.elapsed());
             }
             info!("{}", t);
         }).unwrap();
 
         std::thread::Builder::new().name("recv".into()).spawn_scoped(scope, || {
             loop {
-                /*if let Ok(u) = r.try_recv() {
-                    info!("recv");
-                }*/
                 if let Ok(u) = r.recv() {
                     info!("recv");
+                    info!("");
                 }
             }
         }).unwrap();
