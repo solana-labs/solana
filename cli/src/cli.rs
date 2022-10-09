@@ -440,6 +440,9 @@ pub enum CliCommand {
     },
     // Address lookup table commands
     AddressLookupTable(AddressLookupTableCliCommand),
+    GetEstimatedInstructionCost {
+        program_id : Option<String>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -821,6 +824,7 @@ pub fn parse_command(
             })
         }
         ("transfer", Some(matches)) => parse_transfer(matches, default_signer, wallet_manager),
+        ("estimated-instruction-costs", Some(matches)) => parse_estimated_instruction_costs(matches, default_signer, wallet_manager),
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1638,7 +1642,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         // Address Lookup Table Commands
         CliCommand::AddressLookupTable(subcommand) => {
             process_address_lookup_table_subcommand(rpc_client, config, subcommand)
-        }
+        },
+        // Get estimated instrution costs
+        CliCommand::GetEstimatedInstructionCost { program_id } => {
+            get_estimated_instruction_costs(rpc_client, program_id)
+        },
     }
 }
 

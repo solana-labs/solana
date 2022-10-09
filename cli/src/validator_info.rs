@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
@@ -129,6 +131,40 @@ fn parse_validator_info(
     }
 }
 
+pub fn get_estimated_instruction_costs(rpc_client: Arc<RpcClient>, program_id: &Option<String>) -> ProcessResult {
+    let costs = match program_id {
+        Some(x) => {
+            let program_id = Pubkey::from_str(x.as_str())?;
+            let cost = rpc_client.get_estimated_instruction_cost(program_id);
+            match cost {
+                Ok(x) => vec![x],
+                Err(_) => return Err("Cannot process estimated instruction cost as the program id is not in cost table".into())
+            }
+        },
+        None => rpc_client.get_estimated_instruction_costs()?
+    };
+    let costs_string : Vec<String>= costs.iter().map( |x| format!("program id {} has cost {} and has occured {}", x.program_id.to_string(), x.cost, x.occurence).to_string()).collect();
+
+    Ok(costs_string.join("\n"))
+}
+
+pub fn parse_estimated_instruction_costs(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let bulk_signers = vec![Some(
+        default_signer.signer_from_path(matches, wallet_manager)?,
+    )];
+    let signer_info = default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+
+    let program_id = matches.value_of("program-id");
+    match program_id {
+        Some (program_id) => Ok(CliCommandInfo { command: CliCommand::GetEstimatedInstructionCost { program_id: Some(program_id.to_string())}, signers: signer_info.signers }),
+        None => Ok(CliCommandInfo { command: CliCommand::GetEstimatedInstructionCost { program_id: None }, signers: signer_info.signers })
+    }
+}
+
 pub trait ValidatorInfoSubCommands {
     fn validator_info_subcommands(self) -> Self;
 }
@@ -206,6 +242,18 @@ impl ValidatorInfoSubCommands for App<'_, '_> {
                                 .validator(is_pubkey)
                                 .help("The pubkey of the Validator info account; without this argument, returns all"),
                         ),
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("estimated-instruction-costs")
+                .about("Get estimated instruction costs in the cost table of a validator or an rpc node")
+                .arg(
+                    Arg::with_name("program-id")
+                                .index(1)
+                                .value_name("PUBKEY")
+                                .takes_value(true)
+                                .hidden(true)// Don't document this argument to discourage its use
+                                .help("The pubkey of the Validator info account; without this argument, returns all"),
                 )
         )
     }
