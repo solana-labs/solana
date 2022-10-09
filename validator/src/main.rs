@@ -1011,7 +1011,6 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("rocksdb_shred_compaction")
-                .hidden(true)
                 .long("rocksdb-shred-compaction")
                 .value_name("ROCKSDB_COMPACTION_STYLE")
                 .takes_value(true)
@@ -1026,7 +1025,6 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("rocksdb_fifo_shred_storage_size")
-                .hidden(true)
                 .long("rocksdb-fifo-shred-storage-size")
                 .value_name("SHRED_STORAGE_SIZE_BYTES")
                 .takes_value(true)
