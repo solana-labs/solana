@@ -535,6 +535,22 @@ impl LedgerStorage {
         })
     }
 
+    /// Does the confirmed block exist in the Bigtable
+    pub async fn does_confirmed_block_exist(&self, slot: Slot) -> Result<bool> {
+        debug!(
+            "LedgerStorage::does_confirmed_block_exist request received: {:?}",
+            slot
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        let does_block_exist = bigtable
+            .does_row_key_exist("blocks", slot_to_blocks_key(slot))
+            .await?;
+
+        Ok(does_block_exist)
+    }
+
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
         debug!(
             "LedgerStorage::get_signature_status request received: {:?}",
