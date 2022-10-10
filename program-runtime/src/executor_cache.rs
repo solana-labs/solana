@@ -12,7 +12,7 @@ use {
         ops::Div,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
-            Arc,
+            Arc, RwLock,
         },
     },
 };
@@ -27,11 +27,10 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-pub type Executors = HashMap<Pubkey, LocalExecutorCacheEntry>;
-
+/// Relation between a LocalExecutorCacheEntry and its matching GlobalExecutorCacheEntry
 #[repr(u8)]
-#[derive(PartialEq, Debug)]
-enum LocalGlobalDifference {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum LocalGlobalDifference {
     /// Executor was already in the cache, no update needed
     Cached,
     /// Executor was missing from the cache, but not updated
@@ -40,59 +39,75 @@ enum LocalGlobalDifference {
     Updated,
 }
 
-/// Tracks whether a given executor is "dirty" and needs to updated in the
-/// executors cache
+/// An entry of the LocalExecutorCache
 #[derive(Debug)]
 pub struct LocalExecutorCacheEntry {
-    pub(crate) executor: Arc<dyn Executor>,
+    executor: Arc<dyn Executor>,
     status: LocalGlobalDifference,
 }
 
-impl LocalExecutorCacheEntry {
-    /// Wraps an executor and tracks that it doesn't need to be updated in the
-    /// executors cache.
-    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
+/// A subset of the GlobalExecutorCache containing only the executors relevant to one transaction
+///
+/// The GlobalExecutorCache can not be updated directly as transaction batches are
+/// processed in parallel, which would cause a race condition.
+#[derive(Default, Debug)]
+pub struct LocalExecutorCache {
+    pub executors: HashMap<Pubkey, LocalExecutorCacheEntry>,
+}
+
+impl LocalExecutorCache {
+    pub fn new(executable_keys: impl Iterator<Item = (Pubkey, Arc<dyn Executor>)>) -> Self {
         Self {
-            executor,
-            status: LocalGlobalDifference::Cached,
+            executors: executable_keys
+                .map(|(key, executor)| {
+                    let entry = LocalExecutorCacheEntry {
+                        executor,
+                        status: LocalGlobalDifference::Cached,
+                    };
+                    (key, entry)
+                })
+                .collect(),
         }
     }
 
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache.
-    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: LocalGlobalDifference::Missing,
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(key).map(|entry| entry.executor.clone())
+    }
+
+    pub fn set(&mut self, key: Pubkey, executor: Arc<dyn Executor>, replacement: bool) {
+        let status = if replacement {
+            LocalGlobalDifference::Updated
+        } else {
+            LocalGlobalDifference::Missing
+        };
+        let _was_replaced = self
+            .executors
+            .insert(key, LocalExecutorCacheEntry { executor, status })
+            .is_some();
+    }
+
+    pub fn update_global_cache(
+        &self,
+        global_cache: &RwLock<GlobalExecutorCache>,
+        selector: impl Fn(LocalGlobalDifference) -> bool,
+    ) {
+        let executors_delta: Vec<_> = self
+            .executors
+            .iter()
+            .filter_map(|(key, entry)| {
+                selector(entry.status).then(|| (key, entry.executor.clone()))
+            })
+            .collect();
+        if !executors_delta.is_empty() {
+            global_cache.write().unwrap().put(&executors_delta);
         }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache only if the transaction succeeded.
-    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: LocalGlobalDifference::Updated,
-        }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        self.status == LocalGlobalDifference::Missing
-    }
-
-    pub fn is_updated(&self) -> bool {
-        self.status == LocalGlobalDifference::Updated
-    }
-
-    pub fn get(&self) -> Arc<dyn Executor> {
-        self.executor.clone()
     }
 }
 
 /// Capacity of `GlobalExecutorCache`
 pub const MAX_CACHED_EXECUTORS: usize = 256;
 
-/// An `Executor` and its statistics tracked in `GlobalExecutorCache`
+/// An entry of the GlobalExecutorCache
 #[derive(Debug)]
 pub struct GlobalExecutorCacheEntry {
     prev_epoch_count: u64,
@@ -194,7 +209,7 @@ impl GlobalExecutorCache {
         }
     }
 
-    pub fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
+    fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
         let mut new_executors: Vec<_> = executors
             .iter()
             .filter_map(|(key, executor)| {
