@@ -643,7 +643,6 @@ impl AncestorHashesService {
                     repair_stats,
                     outstanding_requests,
                     identity_keypair,
-                    &root_bank,
                 ) {
                     request_throttle.push(timestamp());
                     repairable_dead_slot_pool.take(&slot).unwrap();
@@ -719,7 +718,6 @@ impl AncestorHashesService {
         repair_stats: &mut AncestorRepairRequestsStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         identity_keypair: &Keypair,
-        root_bank: &Bank,
     ) -> bool {
         let sampled_validators = serve_repair.repair_request_ancestor_hashes_sample_peers(
             duplicate_slot,
@@ -738,7 +736,6 @@ impl AncestorHashesService {
                     .add_request(AncestorHashesRepairType(duplicate_slot), timestamp());
                 let request_bytes = serve_repair.ancestor_repair_request_bytes(
                     identity_keypair,
-                    root_bank,
                     pubkey,
                     duplicate_slot,
                     nonce,
@@ -1164,7 +1161,6 @@ mod test {
         } = ManageAncestorHashesState::new(vote_simulator.bank_forks);
 
         let RepairInfo {
-            bank_forks,
             cluster_info: requester_cluster_info,
             cluster_slots,
             repair_validators,
@@ -1181,7 +1177,6 @@ mod test {
             &mut repair_stats,
             &outstanding_requests,
             &requester_cluster_info.keypair(),
-            &bank_forks.read().unwrap().root_bank(),
         );
         assert!(ancestor_hashes_request_statuses.is_empty());
 
@@ -1200,7 +1195,6 @@ mod test {
             &mut repair_stats,
             &outstanding_requests,
             &requester_cluster_info.keypair(),
-            &bank_forks.read().unwrap().root_bank(),
         );
 
         assert_eq!(ancestor_hashes_request_statuses.len(), 1);

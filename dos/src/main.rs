@@ -646,7 +646,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                     slot,
                     shred_index: 0,
                 };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
+                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
             }
             DataType::RepairShred => {
                 let slot = 100;
@@ -657,14 +657,14 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
                     slot,
                     shred_index: 0,
                 };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
+                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
             }
             DataType::RepairOrphan => {
                 let slot = 100;
                 let keypair = Keypair::new();
                 let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
                 let req = RepairProtocol::Orphan { header, slot };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
+                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
             }
             DataType::Random => {
                 vec![0; params.data_size]
