@@ -337,8 +337,8 @@ changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
 example, if the deposit address of interest is
-`3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN`, this transaction represents a
-transfer of 2769675090 - 1800195048 = 969,480,042 lamports = 0.969485042 SOL
+`G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o`, this transaction represents a
+transfer of 1040000000 - 1030000000 = 10,000,000 lamports = 0.01 SOL
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our
