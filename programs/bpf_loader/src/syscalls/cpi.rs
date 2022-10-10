@@ -6,6 +6,7 @@ use {
         syscalls::{
             MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
         },
+        transaction_context::BorrowedAccount,
     },
 };
 
@@ -18,11 +19,16 @@ struct CallerAccount<'a> {
     owner: &'a mut Pubkey,
     original_data_len: usize,
     data: &'a mut [u8],
+    // Given the corresponding input AccountInfo::data, vm_data_addr points to
+    // the pointer field and ref_to_len_in_vm points to the length field.
     vm_data_addr: u64,
     ref_to_len_in_vm: &'a mut u64,
     executable: bool,
     rent_epoch: u64,
 }
+
+impl<'a> CallerAccount<'a> {}
+
 type TranslatedAccounts<'a> = Vec<(IndexOfAccount, Option<CallerAccount<'a>>)>;
 
 /// Implemented by language specific data structure translators
@@ -894,73 +900,411 @@ fn cpi_common<S: SyscallInvokeSigned>(
         )
         .map_err(SyscallError::InstructionError)?;
 
-    // Copy results back to caller
+    // re-bind to please borrowck
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
         .get_current_instruction_context()
         .map_err(SyscallError::InstructionError)?;
+
+    // CPI exit.
+    //
+    // Synchronize the callee's account changes so the caller can see them.
     for (index_in_caller, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
             let callee_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, *index_in_caller)
                 .map_err(SyscallError::InstructionError)?;
-            *caller_account.lamports = callee_account.get_lamports();
-            *caller_account.owner = *callee_account.get_owner();
-            let new_len = callee_account.get_data().len();
-            if caller_account.data.len() != new_len {
-                let data_overflow = new_len
-                    > caller_account
-                        .original_data_len
-                        .saturating_add(MAX_PERMITTED_DATA_INCREASE);
-                if data_overflow {
-                    ic_msg!(
-                        invoke_context,
-                        "Account data size realloc limited to {} in inner instructions",
-                        MAX_PERMITTED_DATA_INCREASE
-                    );
-                    return Err(
-                        SyscallError::InstructionError(InstructionError::InvalidRealloc).into(),
-                    );
-                }
-                if new_len < caller_account.data.len() {
-                    caller_account
-                        .data
-                        .get_mut(new_len..)
-                        .ok_or(SyscallError::InstructionError(
-                            InstructionError::AccountDataTooSmall,
-                        ))?
-                        .fill(0);
-                }
-                caller_account.data = translate_slice_mut::<u8>(
-                    memory_mapping,
-                    caller_account.vm_data_addr,
-                    new_len as u64,
-                    false, // Don't care since it is byte aligned
-                    invoke_context.get_check_size(),
-                )?;
-                *caller_account.ref_to_len_in_vm = new_len as u64;
-                let serialized_len_ptr = translate_type_mut::<u64>(
-                    memory_mapping,
-                    caller_account
-                        .vm_data_addr
-                        .saturating_sub(std::mem::size_of::<u64>() as u64),
-                    invoke_context.get_check_aligned(),
-                )?;
-                *serialized_len_ptr = new_len as u64;
-            }
-            let to_slice = &mut caller_account.data;
-            let from_slice = callee_account
-                .get_data()
-                .get(0..new_len)
-                .ok_or(SyscallError::InvalidLength)?;
-            if to_slice.len() != from_slice.len() {
-                return Err(
-                    SyscallError::InstructionError(InstructionError::AccountDataTooSmall).into(),
-                );
-            }
-            to_slice.copy_from_slice(from_slice);
+            update_caller_account(
+                invoke_context,
+                memory_mapping,
+                caller_account,
+                &callee_account,
+            )?;
         }
     }
 
-    Ok(SUCCESS)
+    Ok(())
+}
+
+fn update_caller_account(
+    invoke_context: &InvokeContext,
+    memory_mapping: &MemoryMapping,
+    caller_account: &mut CallerAccount,
+    callee_account: &BorrowedAccount<'_>,
+) -> Result<(), EbpfError> {
+    *caller_account.lamports = callee_account.get_lamports();
+    *caller_account.owner = *callee_account.get_owner();
+    let new_len = callee_account.get_data().len();
+    if caller_account.data.len() != new_len {
+        let data_overflow = new_len
+            > caller_account
+                .original_data_len
+                .saturating_add(MAX_PERMITTED_DATA_INCREASE);
+        if data_overflow {
+            ic_msg!(
+                invoke_context,
+                "Account data size realloc limited to {} in inner instructions",
+                MAX_PERMITTED_DATA_INCREASE
+            );
+            return Err(SyscallError::InstructionError(InstructionError::InvalidRealloc).into());
+        }
+        if new_len < caller_account.data.len() {
+            caller_account
+                .data
+                .get_mut(new_len..)
+                .ok_or(SyscallError::InstructionError(
+                    InstructionError::AccountDataTooSmall,
+                ))?
+                .fill(0);
+        }
+        caller_account.data = translate_slice_mut::<u8>(
+            memory_mapping,
+            caller_account.vm_data_addr,
+            new_len as u64,
+            false, // Don't care since it is byte aligned
+            invoke_context.get_check_size(),
+        )?;
+        // this is the len field in the AccountInfo::data slice
+        *caller_account.ref_to_len_in_vm = new_len as u64;
+
+        // this is the len field in the serialized parameters
+        let serialized_len_ptr = translate_type_mut::<u64>(
+            memory_mapping,
+            caller_account
+                .vm_data_addr
+                .saturating_sub(std::mem::size_of::<u64>() as u64),
+            invoke_context.get_check_aligned(),
+        )?;
+        *serialized_len_ptr = new_len as u64;
+    }
+    let to_slice = &mut caller_account.data;
+    let from_slice = callee_account
+        .get_data()
+        .get(0..new_len)
+        .ok_or(SyscallError::InvalidLength)?;
+    if to_slice.len() != from_slice.len() {
+        return Err(SyscallError::InstructionError(InstructionError::AccountDataTooSmall).into());
+    }
+    to_slice.copy_from_slice(from_slice);
+
+    Ok(())
+}
+
+#[allow(clippy::indexing_slicing)]
+#[allow(clippy::integer_arithmetic)]
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_program_runtime::invoke_context::{
+            prepare_mock_invoke_context, MockInvokeContextPreparation,
+        },
+        solana_rbpf::{memory_region::MemoryRegion, vm::Config},
+        solana_sdk::{
+            account::{Account, AccountSharedData},
+            rent::Rent,
+            transaction_context::TransactionContext,
+        },
+        std::{mem, ptr, slice},
+    };
+    #[test]
+    fn test_update_caller_account_lamports_owner() {
+        let transaction_accounts = one_instruction_account(vec![]);
+        let account = transaction_accounts[1].1.clone();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account =
+            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let memory_mapping =
+            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let mut callee_account = instruction_context
+            .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+            .unwrap();
+
+        callee_account.set_lamports(42).unwrap();
+        callee_account
+            .set_owner(Pubkey::new_unique().as_ref())
+            .unwrap();
+
+        update_caller_account(
+            &invoke_context,
+            &memory_mapping,
+            &mut caller_account,
+            &callee_account,
+        )
+        .unwrap();
+
+        assert_eq!(*caller_account.lamports, 42);
+        assert_eq!(caller_account.owner, callee_account.get_owner());
+    }
+
+    #[test]
+    fn test_update_caller_account_data() {
+        let transaction_accounts = one_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+        let original_data_len = account.data().len();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account = MockCallerAccount::new(
+            account.lamports(),
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+        );
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let memory_mapping =
+            MemoryMapping::new(vec![mock_caller_account.region.clone()], &config).unwrap();
+
+        let data_slice = mock_caller_account.data_slice();
+        let len_ptr = unsafe {
+            data_slice
+                .as_ptr()
+                .offset(-(mem::size_of::<u64>() as isize))
+        };
+        let serialized_len = || unsafe { *len_ptr.cast::<u64>() as usize };
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let mut callee_account = instruction_context
+            .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+            .unwrap();
+
+        for (new_value, expected_realloc_size) in [
+            (b"foo".to_vec(), MAX_PERMITTED_DATA_INCREASE + 3),
+            (b"foobaz".to_vec(), MAX_PERMITTED_DATA_INCREASE),
+            (b"foobazbad".to_vec(), MAX_PERMITTED_DATA_INCREASE - 3),
+        ] {
+            assert_eq!(caller_account.data, callee_account.get_data());
+            callee_account.set_data_from_slice(&new_value).unwrap();
+
+            update_caller_account(
+                &invoke_context,
+                &memory_mapping,
+                &mut caller_account,
+                &callee_account,
+            )
+            .unwrap();
+
+            let data_len = callee_account.get_data().len();
+            assert_eq!(data_len, *caller_account.ref_to_len_in_vm as usize);
+            assert_eq!(data_len, serialized_len());
+            assert_eq!(data_len, caller_account.data.len());
+            assert_eq!(callee_account.get_data(), &caller_account.data[..data_len]);
+            assert_eq!(data_slice[data_len..].len(), expected_realloc_size);
+            assert!(is_zeroed(&data_slice[data_len..]));
+        }
+
+        callee_account
+            .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE)
+            .unwrap();
+        update_caller_account(
+            &invoke_context,
+            &memory_mapping,
+            &mut caller_account,
+            &callee_account,
+        )
+        .unwrap();
+        let data_len = callee_account.get_data().len();
+        assert_eq!(data_slice[data_len..].len(), 0);
+        assert!(is_zeroed(&data_slice[data_len..]));
+
+        callee_account
+            .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE + 1)
+            .unwrap();
+        assert!(matches!(
+            update_caller_account(
+                &invoke_context,
+                &memory_mapping,
+                &mut caller_account,
+                &callee_account,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::InvalidRealloc)
+            )
+        ));
+    }
+
+    pub type TestTransactionAccount = (Pubkey, AccountSharedData, bool);
+
+    struct MockInvokeContext {
+        transaction_context: TransactionContext,
+        program_accounts: Vec<IndexOfAccount>,
+        preparation: MockInvokeContextPreparation,
+        instruction_data: Vec<u8>,
+    }
+
+    impl MockInvokeContext {
+        fn new(
+            transaction_accounts: Vec<TestTransactionAccount>,
+            instruction_data: impl Into<Vec<u8>>,
+            program_accounts: impl Into<Vec<IndexOfAccount>>,
+            instruction_accounts: &[IndexOfAccount],
+        ) -> Self {
+            let program_accounts = program_accounts.into();
+            let instruction_data = instruction_data.into();
+            let instruction_accounts = instruction_accounts
+                .iter()
+                .enumerate()
+                .map(
+                    |(_instruction_account_index, index_in_transaction)| AccountMeta {
+                        pubkey: transaction_accounts[*index_in_transaction as usize].0,
+                        is_signer: false,
+                        is_writable: transaction_accounts[*index_in_transaction as usize].2,
+                    },
+                )
+                .collect();
+            let transaction_accounts = transaction_accounts
+                .into_iter()
+                .map(|a| (a.0, a.1))
+                .collect();
+
+            let program_accounts = program_accounts;
+            let preparation = prepare_mock_invoke_context(
+                transaction_accounts,
+                instruction_accounts,
+                &program_accounts,
+            );
+            let transaction_context = TransactionContext::new(
+                preparation.transaction_accounts.clone(),
+                Some(Rent::default()),
+                1,
+                1,
+            );
+            Self {
+                transaction_context,
+                program_accounts,
+                preparation,
+                instruction_data,
+            }
+        }
+
+        fn invoke_context(&mut self) -> InvokeContext<'_> {
+            let mut invoke_context = InvokeContext::new_mock(&mut self.transaction_context, &[]);
+            invoke_context
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(
+                    &self.program_accounts,
+                    &self.preparation.instruction_accounts,
+                    &self.instruction_data,
+                );
+            invoke_context.push().unwrap();
+            invoke_context
+        }
+    }
+
+    struct MockCallerAccount {
+        lamports: u64,
+        owner: Pubkey,
+        vm_addr: u64,
+        data: Vec<u8>,
+        len: u64,
+        region: MemoryRegion,
+    }
+
+    impl MockCallerAccount {
+        fn new(lamports: u64, owner: Pubkey, vm_addr: u64, data: &[u8]) -> MockCallerAccount {
+            // write [len][data] into a vec so we can check that they get
+            // properly updated by update_caller_account()
+            let mut d = vec![0; mem::size_of::<u64>() + data.len() + MAX_PERMITTED_DATA_INCREASE];
+            unsafe { ptr::write_unaligned::<u64>(d.as_mut_ptr().cast(), data.len() as u64) };
+            d[mem::size_of::<u64>()..][..data.len()].copy_from_slice(data);
+
+            // the memory region must include the realloc data
+            let region = MemoryRegion::new_writable(d.as_mut_slice(), vm_addr);
+
+            // caller_account.data must have the actual data length
+            d.truncate(mem::size_of::<u64>() + data.len());
+
+            MockCallerAccount {
+                lamports,
+                owner,
+                vm_addr,
+                data: d,
+                len: data.len() as u64,
+                region,
+            }
+        }
+
+        fn data_slice<'a>(&self) -> &'a [u8] {
+            // lifetime crimes
+            unsafe {
+                slice::from_raw_parts(
+                    self.data[mem::size_of::<u64>()..].as_ptr(),
+                    self.data.capacity() - mem::size_of::<u64>(),
+                )
+            }
+        }
+
+        fn caller_account(&mut self) -> CallerAccount<'_> {
+            let data = &mut self.data[mem::size_of::<u64>()..];
+            CallerAccount {
+                lamports: &mut self.lamports,
+                owner: &mut self.owner,
+                original_data_len: data.len() as usize,
+                data,
+                vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
+                ref_to_len_in_vm: &mut self.len,
+                executable: false,
+                rent_epoch: 0,
+            }
+        }
+    }
+
+    fn one_instruction_account(data: Vec<u8>) -> Vec<TestTransactionAccount> {
+        let program_id = Pubkey::new_unique();
+        let account = AccountSharedData::from(Account {
+            lamports: 1,
+            data,
+            owner: program_id,
+            executable: false,
+            rent_epoch: 100,
+        });
+        vec![
+            (
+                program_id,
+                AccountSharedData::from(Account {
+                    lamports: 0,
+                    data: vec![],
+                    owner: bpf_loader::id(),
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+                false,
+            ),
+            (Pubkey::new_unique(), account.clone(), true),
+        ]
+    }
+
+    fn is_zeroed(data: &[u8]) -> bool {
+        data.iter().all(|b| *b == 0)
+    }
 }
