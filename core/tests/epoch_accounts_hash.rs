@@ -413,7 +413,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
         // After submitting an EAH calculation request, wait until it gets handled by ABS so that
         // subsequent snapshot requests are not swallowed.
         if bank.slot() == epoch_accounts_hash::calculation_start(&bank) {
-            while dbg!(bank.epoch_accounts_hash()).is_none() {
+            while bank.epoch_accounts_hash().is_none() {
                 std::thread::sleep(Duration::from_secs(1));
             }
         }
@@ -434,11 +434,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                         break full_snapshot_archive_info;
                     }
                 }
-
-                _ = dbg!(snapshot_utils::get_full_snapshot_archives(
-                    &snapshot_config.full_snapshot_archives_dir
-                ));
-                std::thread::sleep(Duration::from_millis(1000));
+                std::thread::sleep(Duration::from_secs(1));
             };
 
             let accounts_dir = TempDir::new().unwrap();
