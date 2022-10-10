@@ -21,8 +21,9 @@ use {
     log::{log_enabled, trace, Level::Trace},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        executor_cache::Executor,
         ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, Executor, InvokeContext},
+        invoke_context::{ComputeMeter, InvokeContext},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,

@@ -87,10 +87,8 @@ use {
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
-        executor_cache::{CachedExecutors, MAX_CACHED_EXECUTORS},
-        invoke_context::{
-            BuiltinProgram, Executors, ProcessInstructionWithContext, TransactionExecutor,
-        },
+        executor_cache::{CachedExecutors, Executors, TransactionExecutor, MAX_CACHED_EXECUTORS},
+        invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -7873,7 +7871,8 @@ pub(crate) mod tests {
         rand::Rng,
         solana_program_runtime::{
             compute_budget::MAX_COMPUTE_UNIT_LIMIT,
-            invoke_context::{Executor, InvokeContext},
+            executor_cache::Executor,
+            invoke_context::InvokeContext,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
         solana_sdk::{

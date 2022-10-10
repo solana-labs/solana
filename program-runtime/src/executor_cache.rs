@@ -1,10 +1,14 @@
 use {
-    crate::invoke_context::Executor,
+    crate::invoke_context::InvokeContext,
     log::*,
     rand::Rng,
-    solana_sdk::{pubkey::Pubkey, saturating_add_assign, slot_history::Slot, stake_history::Epoch},
+    solana_sdk::{
+        instruction::InstructionError, pubkey::Pubkey, saturating_add_assign, slot_history::Slot,
+        stake_history::Epoch, transaction_context::IndexOfAccount,
+    },
     std::{
         collections::HashMap,
+        fmt::Debug,
         ops::Div,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
@@ -12,6 +16,78 @@ use {
         },
     },
 };
+
+/// Program executor
+pub trait Executor: Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: IndexOfAccount,
+        invoke_context: &mut InvokeContext,
+    ) -> Result<(), InstructionError>;
+}
+
+pub type Executors = HashMap<Pubkey, TransactionExecutor>;
+
+#[repr(u8)]
+#[derive(PartialEq, Debug)]
+enum TransactionExecutorStatus {
+    /// Executor was already in the cache, no update needed
+    Cached,
+    /// Executor was missing from the cache, but not updated
+    Missing,
+    /// Executor is for an updated program
+    Updated,
+}
+
+/// Tracks whether a given executor is "dirty" and needs to updated in the
+/// executors cache
+#[derive(Debug)]
+pub struct TransactionExecutor {
+    pub(crate) executor: Arc<dyn Executor>,
+    status: TransactionExecutorStatus,
+}
+
+impl TransactionExecutor {
+    /// Wraps an executor and tracks that it doesn't need to be updated in the
+    /// executors cache.
+    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            status: TransactionExecutorStatus::Cached,
+        }
+    }
+
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache.
+    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            status: TransactionExecutorStatus::Missing,
+        }
+    }
+
+    /// Wraps an executor and tracks that it needs to be updated in the
+    /// executors cache only if the transaction succeeded.
+    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
+        Self {
+            executor,
+            status: TransactionExecutorStatus::Updated,
+        }
+    }
+
+    pub fn is_missing(&self) -> bool {
+        self.status == TransactionExecutorStatus::Missing
+    }
+
+    pub fn is_updated(&self) -> bool {
+        self.status == TransactionExecutorStatus::Updated
+    }
+
+    pub fn get(&self) -> Arc<dyn Executor> {
+        self.executor.clone()
+    }
+}
 
 /// Capacity of `CachedExecutors`
 pub const MAX_CACHED_EXECUTORS: usize = 256;
@@ -286,9 +362,7 @@ impl Stats {
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        crate::invoke_context::InvokeContext,
-        solana_sdk::{instruction::InstructionError, transaction_context::IndexOfAccount},
+        super::*, crate::invoke_context::InvokeContext, solana_sdk::instruction::InstructionError,
     };
 
     #[derive(Debug)]

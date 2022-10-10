@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
+        executor_cache::{Executor, Executors, TransactionExecutor},
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
@@ -28,7 +29,6 @@ use {
         alloc::Layout,
         borrow::Cow,
         cell::RefCell,
-        collections::HashMap,
         fmt::{self, Debug},
         rc::Rc,
         sync::Arc,
@@ -55,78 +55,6 @@ impl std::fmt::Debug for BuiltinProgram {
         // https://users.rust-lang.org/t/display-function-pointer/17073/2
         let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
         write!(f, "{}: {:p}", self.program_id, erased_instruction)
-    }
-}
-
-/// Program executor
-pub trait Executor: Debug + Send + Sync {
-    /// Execute the program
-    fn execute(
-        &self,
-        first_instruction_account: IndexOfAccount,
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), InstructionError>;
-}
-
-pub type Executors = HashMap<Pubkey, TransactionExecutor>;
-
-#[repr(u8)]
-#[derive(PartialEq, Debug)]
-enum TransactionExecutorStatus {
-    /// Executor was already in the cache, no update needed
-    Cached,
-    /// Executor was missing from the cache, but not updated
-    Missing,
-    /// Executor is for an updated program
-    Updated,
-}
-
-/// Tracks whether a given executor is "dirty" and needs to updated in the
-/// executors cache
-#[derive(Debug)]
-pub struct TransactionExecutor {
-    executor: Arc<dyn Executor>,
-    status: TransactionExecutorStatus,
-}
-
-impl TransactionExecutor {
-    /// Wraps an executor and tracks that it doesn't need to be updated in the
-    /// executors cache.
-    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Cached,
-        }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache.
-    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Missing,
-        }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache only if the transaction succeeded.
-    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Updated,
-        }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        self.status == TransactionExecutorStatus::Missing
-    }
-
-    pub fn is_updated(&self) -> bool {
-        self.status == TransactionExecutorStatus::Updated
-    }
-
-    pub fn get(&self) -> Arc<dyn Executor> {
-        self.executor.clone()
     }
 }
 
