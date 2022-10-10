@@ -27,69 +27,56 @@ pub fn parse_associated_token(
             ));
         }
     }
-    if instruction.data.is_empty() {
-        check_num_associated_token_accounts(&instruction.accounts, 7)?;
-        Ok(ParsedInstructionEnum {
-            instruction_type: "create".to_string(),
-            info: json!({
-                "source": account_keys[instruction.accounts[0] as usize].to_string(),
-                "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                "wallet": account_keys[instruction.accounts[2] as usize].to_string(),
-                "mint": account_keys[instruction.accounts[3] as usize].to_string(),
-                "systemProgram": account_keys[instruction.accounts[4] as usize].to_string(),
-                "tokenProgram": account_keys[instruction.accounts[5] as usize].to_string(),
-                "rentSysvar": account_keys[instruction.accounts[6] as usize].to_string(),
-            }),
-        })
+    let ata_instruction = if instruction.data.is_empty() {
+        AssociatedTokenAccountInstruction::Create
     } else {
-        let ata_instruction = AssociatedTokenAccountInstruction::try_from_slice(&instruction.data)
-            .map_err(|_| {
-                ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken)
-            })?;
-        match ata_instruction {
-            AssociatedTokenAccountInstruction::Create => {
-                check_num_associated_token_accounts(&instruction.accounts, 6)?;
-                Ok(ParsedInstructionEnum {
-                    instruction_type: "create".to_string(),
-                    info: json!({
-                        "source": account_keys[instruction.accounts[0] as usize].to_string(),
-                        "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                        "wallet": account_keys[instruction.accounts[2] as usize].to_string(),
-                        "mint": account_keys[instruction.accounts[3] as usize].to_string(),
-                        "systemProgram": account_keys[instruction.accounts[4] as usize].to_string(),
-                        "tokenProgram": account_keys[instruction.accounts[5] as usize].to_string(),
-                    }),
-                })
-            }
-            AssociatedTokenAccountInstruction::CreateIdempotent => {
-                check_num_associated_token_accounts(&instruction.accounts, 6)?;
-                Ok(ParsedInstructionEnum {
-                    instruction_type: "createIdempotent".to_string(),
-                    info: json!({
-                        "source": account_keys[instruction.accounts[0] as usize].to_string(),
-                        "account": account_keys[instruction.accounts[1] as usize].to_string(),
-                        "wallet": account_keys[instruction.accounts[2] as usize].to_string(),
-                        "mint": account_keys[instruction.accounts[3] as usize].to_string(),
-                        "systemProgram": account_keys[instruction.accounts[4] as usize].to_string(),
-                        "tokenProgram": account_keys[instruction.accounts[5] as usize].to_string(),
-                    }),
-                })
-            }
-            AssociatedTokenAccountInstruction::RecoverNested => {
-                check_num_associated_token_accounts(&instruction.accounts, 7)?;
-                Ok(ParsedInstructionEnum {
-                    instruction_type: "recoverNested".to_string(),
-                    info: json!({
-                        "nestedSource": account_keys[instruction.accounts[0] as usize].to_string(),
-                        "nestedMint": account_keys[instruction.accounts[1] as usize].to_string(),
-                        "destination": account_keys[instruction.accounts[2] as usize].to_string(),
-                        "nestedOwner": account_keys[instruction.accounts[3] as usize].to_string(),
-                        "ownerMint": account_keys[instruction.accounts[4] as usize].to_string(),
-                        "wallet": account_keys[instruction.accounts[5] as usize].to_string(),
-                        "tokenProgram": account_keys[instruction.accounts[6] as usize].to_string(),
-                    }),
-                })
-            }
+        AssociatedTokenAccountInstruction::try_from_slice(&instruction.data)
+            .map_err(|_| ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken))?
+    };
+
+    match ata_instruction {
+        AssociatedTokenAccountInstruction::Create => {
+            check_num_associated_token_accounts(&instruction.accounts, 6)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "create".to_string(),
+                info: json!({
+                    "source": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "account": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "wallet": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "systemProgram": account_keys[instruction.accounts[4] as usize].to_string(),
+                    "tokenProgram": account_keys[instruction.accounts[5] as usize].to_string(),
+                }),
+            })
+        }
+        AssociatedTokenAccountInstruction::CreateIdempotent => {
+            check_num_associated_token_accounts(&instruction.accounts, 6)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "createIdempotent".to_string(),
+                info: json!({
+                    "source": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "account": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "wallet": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "mint": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "systemProgram": account_keys[instruction.accounts[4] as usize].to_string(),
+                    "tokenProgram": account_keys[instruction.accounts[5] as usize].to_string(),
+                }),
+            })
+        }
+        AssociatedTokenAccountInstruction::RecoverNested => {
+            check_num_associated_token_accounts(&instruction.accounts, 7)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "recoverNested".to_string(),
+                info: json!({
+                    "nestedSource": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "nestedMint": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "destination": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "nestedOwner": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "ownerMint": account_keys[instruction.accounts[4] as usize].to_string(),
+                    "wallet": account_keys[instruction.accounts[5] as usize].to_string(),
+                    "tokenProgram": account_keys[instruction.accounts[6] as usize].to_string(),
+                }),
+            })
         }
     }
 }
@@ -158,25 +145,43 @@ mod test {
         );
         let message = Message::new(&[create_ix], None);
         let mut compiled_instruction = convert_compiled_instruction(&message.instructions[0]);
+        let expected_parsed_ix = ParsedInstructionEnum {
+            instruction_type: "create".to_string(),
+            info: json!({
+                "source": funder.to_string(),
+                "account": associated_account_address.to_string(),
+                "wallet": wallet_address.to_string(),
+                "mint": mint.to_string(),
+                "systemProgram": solana_sdk::system_program::id().to_string(),
+                "tokenProgram": spl_token::id().to_string(),
+            }),
+        };
         assert_eq!(
             parse_associated_token(
                 &compiled_instruction,
                 &AccountKeys::new(&convert_account_keys(&message), None)
             )
             .unwrap(),
-            ParsedInstructionEnum {
-                instruction_type: "create".to_string(),
-                info: json!({
-                    "source": funder.to_string(),
-                    "account": associated_account_address.to_string(),
-                    "wallet": wallet_address.to_string(),
-                    "mint": mint.to_string(),
-                    "systemProgram": solana_sdk::system_program::id().to_string(),
-                    "tokenProgram": spl_token::id().to_string(),
-                    "rentSysvar": sysvar::rent::id().to_string(),
-                })
-            }
+            expected_parsed_ix,
         );
+
+        // after popping rent account, parsing should still succeed
+        let rent_account_index = compiled_instruction
+            .accounts
+            .iter()
+            .position(|index| message.account_keys[*index as usize] == sysvar::rent::id())
+            .unwrap();
+        compiled_instruction.accounts.remove(rent_account_index);
+        assert_eq!(
+            parse_associated_token(
+                &compiled_instruction,
+                &AccountKeys::new(&convert_account_keys(&message), None)
+            )
+            .unwrap(),
+            expected_parsed_ix,
+        );
+
+        // after popping another account, parsing should fail
         compiled_instruction.accounts.pop();
         assert!(parse_associated_token(
             &compiled_instruction,
