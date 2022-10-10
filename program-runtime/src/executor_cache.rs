@@ -31,7 +31,7 @@ pub type Executors = HashMap<Pubkey, LocalExecutorCacheEntry>;
 
 #[repr(u8)]
 #[derive(PartialEq, Debug)]
-enum TransactionExecutorStatus {
+enum LocalGlobalDifference {
     /// Executor was already in the cache, no update needed
     Cached,
     /// Executor was missing from the cache, but not updated
@@ -45,7 +45,7 @@ enum TransactionExecutorStatus {
 #[derive(Debug)]
 pub struct LocalExecutorCacheEntry {
     pub(crate) executor: Arc<dyn Executor>,
-    status: TransactionExecutorStatus,
+    status: LocalGlobalDifference,
 }
 
 impl LocalExecutorCacheEntry {
@@ -54,7 +54,7 @@ impl LocalExecutorCacheEntry {
     pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            status: TransactionExecutorStatus::Cached,
+            status: LocalGlobalDifference::Cached,
         }
     }
 
@@ -63,7 +63,7 @@ impl LocalExecutorCacheEntry {
     pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            status: TransactionExecutorStatus::Missing,
+            status: LocalGlobalDifference::Missing,
         }
     }
 
@@ -72,16 +72,16 @@ impl LocalExecutorCacheEntry {
     pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
         Self {
             executor,
-            status: TransactionExecutorStatus::Updated,
+            status: LocalGlobalDifference::Updated,
         }
     }
 
     pub fn is_missing(&self) -> bool {
-        self.status == TransactionExecutorStatus::Missing
+        self.status == LocalGlobalDifference::Missing
     }
 
     pub fn is_updated(&self) -> bool {
-        self.status == TransactionExecutorStatus::Updated
+        self.status == LocalGlobalDifference::Updated
     }
 
     pub fn get(&self) -> Arc<dyn Executor> {
