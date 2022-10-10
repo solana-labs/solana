@@ -27,7 +27,7 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-pub type Executors = HashMap<Pubkey, TransactionExecutor>;
+pub type Executors = HashMap<Pubkey, LocalExecutorCacheEntry>;
 
 #[repr(u8)]
 #[derive(PartialEq, Debug)]
@@ -43,12 +43,12 @@ enum TransactionExecutorStatus {
 /// Tracks whether a given executor is "dirty" and needs to updated in the
 /// executors cache
 #[derive(Debug)]
-pub struct TransactionExecutor {
+pub struct LocalExecutorCacheEntry {
     pub(crate) executor: Arc<dyn Executor>,
     status: TransactionExecutorStatus,
 }
 
-impl TransactionExecutor {
+impl LocalExecutorCacheEntry {
     /// Wraps an executor and tracks that it doesn't need to be updated in the
     /// executors cache.
     pub fn new_cached(executor: Arc<dyn Executor>) -> Self {

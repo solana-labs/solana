@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
-        executor_cache::{Executor, Executors, TransactionExecutor},
+        executor_cache::{Executor, Executors, LocalExecutorCacheEntry},
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
@@ -798,14 +798,14 @@ impl<'a> InvokeContext<'a> {
     pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         self.executors
             .borrow_mut()
-            .insert(*pubkey, TransactionExecutor::new_miss(executor));
+            .insert(*pubkey, LocalExecutorCacheEntry::new_miss(executor));
     }
 
     /// Cache an executor that has changed
     pub fn update_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
         self.executors
             .borrow_mut()
-            .insert(*pubkey, TransactionExecutor::new_updated(executor));
+            .insert(*pubkey, LocalExecutorCacheEntry::new_updated(executor));
     }
 
     /// Get the completed loader work that can be re-used across execution

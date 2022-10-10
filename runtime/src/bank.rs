@@ -88,7 +88,7 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
         executor_cache::{
-            Executors, GlobalExecutorCache, TransactionExecutor, MAX_CACHED_EXECUTORS,
+            Executors, GlobalExecutorCache, LocalExecutorCacheEntry, MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         log_collector::LogCollector,
@@ -4018,7 +4018,7 @@ impl Bank {
                 .filter_map(|key| {
                     cache
                         .get(key)
-                        .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
+                        .map(|executor| (*key, LocalExecutorCacheEntry::new_cached(executor)))
                 })
                 .collect()
         };
@@ -4040,7 +4040,7 @@ impl Bank {
     fn store_executors_internal(
         &self,
         executors: &RefCell<Executors>,
-        selector: impl Fn(&TransactionExecutor) -> bool,
+        selector: impl Fn(&LocalExecutorCacheEntry) -> bool,
     ) {
         let executors = executors.borrow();
         let dirty_executors: Vec<_> = executors
@@ -15108,10 +15108,10 @@ pub(crate) mod tests {
 
         // don't do any work if not dirty
         let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key2, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key3, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key4, TransactionExecutor::new_cached(executor.clone()));
+        executors.insert(key1, LocalExecutorCacheEntry::new_cached(executor.clone()));
+        executors.insert(key2, LocalExecutorCacheEntry::new_cached(executor.clone()));
+        executors.insert(key3, LocalExecutorCacheEntry::new_cached(executor.clone()));
+        executors.insert(key4, LocalExecutorCacheEntry::new_cached(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         bank.store_missing_executors(&executors);
         bank.store_updated_executors(&executors);
@@ -15120,10 +15120,10 @@ pub(crate) mod tests {
 
         // do work
         let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
-        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
-        executors.insert(key3, TransactionExecutor::new_updated(executor.clone()));
-        executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key1, LocalExecutorCacheEntry::new_miss(executor.clone()));
+        executors.insert(key2, LocalExecutorCacheEntry::new_miss(executor.clone()));
+        executors.insert(key3, LocalExecutorCacheEntry::new_updated(executor.clone()));
+        executors.insert(key4, LocalExecutorCacheEntry::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
 
         // store the new_miss
@@ -15181,7 +15181,7 @@ pub(crate) mod tests {
 
         // add one to root bank
         let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key1, LocalExecutorCacheEntry::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         root.store_missing_executors(&executors);
         let executors = root.get_executors(accounts);
@@ -15196,7 +15196,7 @@ pub(crate) mod tests {
         assert_eq!(executors.borrow().len(), 1);
 
         let mut executors = Executors::default();
-        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
+        executors.insert(key2, LocalExecutorCacheEntry::new_miss(executor.clone()));
         let executors = Rc::new(RefCell::new(executors));
         fork1.store_missing_executors(&executors);
 
