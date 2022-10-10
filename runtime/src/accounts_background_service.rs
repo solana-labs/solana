@@ -160,7 +160,6 @@ impl SnapshotRequestHandler {
             .map(|(snapshot_request, accounts_package_type)| {
                 trace!("handling snapshot request: {:?}, {:?}", snapshot_request, accounts_package_type);
                 let mut total_time = Measure::start("snapshot_request_receiver_total_time");
-                let accounts_package_type = new_accounts_package_type(&snapshot_request, &self.snapshot_config, *last_full_snapshot_slot);
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
