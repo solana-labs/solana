@@ -179,10 +179,17 @@ impl PacketDeserializer {
 mod tests {
     use {
         super::*,
-        solana_perf::packet::to_packet_batches,
+        solana_perf::packet::{to_packet_batches, Packet},
         solana_sdk::{
-            hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction,
-            transaction::Transaction,
+            hash::Hash,
+            message::{
+                v0::{Message, MessageAddressTableLookup},
+                MessageHeader, VersionedMessage,
+            },
+            pubkey::Pubkey,
+            signature::{Keypair, Signature},
+            system_transaction,
+            transaction::{Transaction, VersionedTransaction},
         },
     };
 
@@ -233,5 +240,59 @@ mod tests {
         assert!(results.new_tracer_stats_option.is_none());
         assert_eq!(results.passed_sigverify_count, 1);
         assert_eq!(results.failed_sigverify_count, 1);
+    }
+
+    #[test]
+    fn test_check_account_locks_limit() {
+        let tx = random_transfer();
+
+        // at limit - should pass
+        {
+            let packet = Packet::from_data(None, &tx).unwrap();
+            let packet = ImmutableDeserializedPacket::new(packet, None).unwrap();
+            assert!(PacketDeserializer::check_account_locks_limit(&packet, 3));
+        }
+
+        // over limit - should fail
+        {
+            let packet = Packet::from_data(None, &tx).unwrap();
+            let packet = ImmutableDeserializedPacket::new(packet, None).unwrap();
+            assert!(!PacketDeserializer::check_account_locks_limit(&packet, 2));
+        }
+    }
+
+    #[test]
+    fn test_check_account_locks_limit_with_lookup() {
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                ..MessageHeader::default()
+            },
+            account_keys: vec![Pubkey::new_unique()],
+            address_table_lookups: vec![MessageAddressTableLookup {
+                account_key: Pubkey::new_unique(),
+                writable_indexes: vec![1, 2, 3],
+                readonly_indexes: vec![0],
+            }],
+            ..Message::default()
+        };
+        let tx = VersionedTransaction {
+            signatures: vec![Signature::default()],
+            message: VersionedMessage::V0(message),
+        };
+
+        // at limit - should pass
+        {
+            let packet = Packet::from_data(None, &tx).unwrap();
+            let packet = ImmutableDeserializedPacket::new(packet, None).unwrap();
+            assert!(PacketDeserializer::check_account_locks_limit(&packet, 5));
+        }
+
+        // over limit - should fail
+        {
+            let packet = Packet::from_data(None, &tx).unwrap();
+            let packet = ImmutableDeserializedPacket::new(packet, None).unwrap();
+            assert!(!PacketDeserializer::check_account_locks_limit(&packet, 4));
+        }
     }
 }
