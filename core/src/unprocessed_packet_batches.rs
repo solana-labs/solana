@@ -365,7 +365,8 @@ pub fn transaction_from_deserialized_packet(
     Some(tx)
 }
 
-pub fn transaction_from_deserialized_packet_without_metrics(
+#[cfg(test)]
+pub fn transaction_from_deserialized_packet_for_tests(
     deserialized_packet: &ImmutableDeserializedPacket,
     feature_set: &Arc<feature_set::FeatureSet>,
     votes_only: bool,
@@ -565,7 +566,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
@@ -577,7 +578,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
@@ -598,7 +599,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
@@ -610,7 +611,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
@@ -631,7 +632,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
@@ -643,7 +644,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet_without_metrics(
+                transaction_from_deserialized_packet_for_tests(
                     tx.immutable_section(),
                     &Arc::new(FeatureSet::default()),
                     votes_only,
