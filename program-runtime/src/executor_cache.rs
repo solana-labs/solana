@@ -89,19 +89,19 @@ impl TransactionExecutor {
     }
 }
 
-/// Capacity of `CachedExecutors`
+/// Capacity of `GlobalExecutorCache`
 pub const MAX_CACHED_EXECUTORS: usize = 256;
 
-/// An `Executor` and its statistics tracked in `CachedExecutors`
+/// An `Executor` and its statistics tracked in `GlobalExecutorCache`
 #[derive(Debug)]
-pub struct CachedExecutorsEntry {
+pub struct GlobalExecutorCacheEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
     executor: Arc<dyn Executor>,
     pub hit_count: AtomicU64,
 }
 
-impl Clone for CachedExecutorsEntry {
+impl Clone for GlobalExecutorCacheEntry {
     fn clone(&self) -> Self {
         Self {
             prev_epoch_count: self.prev_epoch_count,
@@ -112,16 +112,16 @@ impl Clone for CachedExecutorsEntry {
     }
 }
 
-/// LFU Cache of executors with single-epoch memory of usage counts
+/// LFU Cache of executors which exists once per bank
 #[derive(Debug)]
-pub struct CachedExecutors {
+pub struct GlobalExecutorCache {
     capacity: usize,
     current_epoch: Epoch,
-    pub executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    pub executors: HashMap<Pubkey, GlobalExecutorCacheEntry>,
     pub stats: Stats,
 }
 
-impl Default for CachedExecutors {
+impl Default for GlobalExecutorCache {
     fn default() -> Self {
         Self {
             capacity: MAX_CACHED_EXECUTORS,
@@ -133,16 +133,16 @@ impl Default for CachedExecutors {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::AbiExample for CachedExecutors {
+impl solana_frozen_abi::abi_example::AbiExample for GlobalExecutorCache {
     fn example() -> Self {
         // Delegate AbiExample impl to Default before going deep and stuck with
         // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
-        // This is safe because CachedExecutors isn't serializable by definition.
+        // This is safe because GlobalExecutorCache isn't serializable by definition.
         Self::default()
     }
 }
 
-impl CachedExecutors {
+impl GlobalExecutorCache {
     pub fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
             capacity: max_capacity,
@@ -153,7 +153,7 @@ impl CachedExecutors {
     }
 
     pub fn new_from_parent_bank_executors(
-        parent_bank_executors: &CachedExecutors,
+        parent_bank_executors: &GlobalExecutorCache,
         current_epoch: Epoch,
     ) -> Self {
         let executors = if parent_bank_executors.current_epoch == current_epoch {
@@ -163,7 +163,7 @@ impl CachedExecutors {
                 .executors
                 .iter()
                 .map(|(&key, entry)| {
-                    let entry = CachedExecutorsEntry {
+                    let entry = GlobalExecutorCacheEntry {
                         prev_epoch_count: entry.epoch_count.load(Relaxed),
                         epoch_count: AtomicU64::default(),
                         executor: entry.executor.clone(),
@@ -242,7 +242,7 @@ impl CachedExecutors {
             }
 
             for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
-                let entry = CachedExecutorsEntry {
+                let entry = GlobalExecutorCacheEntry {
                     prev_epoch_count: 0,
                     epoch_count: AtomicU64::new(primer_count),
                     executor: executor.clone(),
@@ -253,7 +253,7 @@ impl CachedExecutors {
         }
     }
 
-    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
+    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<GlobalExecutorCacheEntry> {
         let maybe_entry = self.executors.remove(pubkey);
         if let Some(entry) = maybe_entry.as_ref() {
             if entry.hit_count.load(Relaxed) == 1 {
@@ -264,7 +264,7 @@ impl CachedExecutors {
     }
 
     pub fn clear(&mut self) {
-        *self = CachedExecutors::default();
+        *self = GlobalExecutorCache::default();
     }
 
     pub fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
@@ -303,7 +303,7 @@ impl CachedExecutors {
     }
 }
 
-/// Statistics of the entrie `CachedExecutors`
+/// Statistics of the entire `GlobalExecutorCache`
 #[derive(Debug, Default)]
 pub struct Stats {
     pub hits: AtomicU64,
@@ -384,7 +384,7 @@ mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
+        let mut cache = GlobalExecutorCache::new(3, 0);
 
         cache.put(&[(&key1, executor.clone())]);
         cache.put(&[(&key2, executor.clone())]);
@@ -423,7 +423,7 @@ mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
+        let mut cache = GlobalExecutorCache::new(3, 0);
         assert!(cache.current_epoch == 0);
 
         cache.put(&[(&key1, executor.clone())]);
@@ -433,7 +433,7 @@ mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = CachedExecutors::new_from_parent_bank_executors(&cache, 1);
+        let mut cache = GlobalExecutorCache::new_from_parent_bank_executors(&cache, 1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
@@ -458,7 +458,7 @@ mod tests {
             .count();
         assert_eq!(num_retained, 1);
 
-        cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
+        cache = GlobalExecutorCache::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
         cache.put(&[(&key3, executor.clone())]);
@@ -471,7 +471,7 @@ mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(2, 0);
+        let mut cache = GlobalExecutorCache::new(2, 0);
 
         cache.put(&[(&key1, executor.clone())]);
         for _ in 0..5 {
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn test_cached_executors_one_hit_wonder_counter() {
-        let mut cache = CachedExecutors::new(1, 0);
+        let mut cache = GlobalExecutorCache::new(1, 0);
 
         let one_hit_wonder = Pubkey::new_unique();
         let popular = Pubkey::new_unique();
@@ -532,17 +532,17 @@ mod tests {
         let pubkey = Pubkey::default();
         let v = [];
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            GlobalExecutorCache::get_primer_count_upper_bound_inclusive(&v),
             0
         );
         let v = [(&pubkey, 1)];
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            GlobalExecutorCache::get_primer_count_upper_bound_inclusive(&v),
             1
         );
         let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
+            GlobalExecutorCache::get_primer_count_upper_bound_inclusive(v.as_slice()),
             7
         );
     }
@@ -580,7 +580,7 @@ mod tests {
         }
 
         const CURRENT_EPOCH: Epoch = 0;
-        let mut cache = CachedExecutors::new(2, CURRENT_EPOCH);
+        let mut cache = GlobalExecutorCache::new(2, CURRENT_EPOCH);
         let mut expected_stats = ComparableStats::default();
 
         let program_id1 = Pubkey::new_unique();
@@ -623,13 +623,14 @@ mod tests {
         // make sure stats are cleared in new_from_parent
         assert_eq!(
             ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
+                &GlobalExecutorCache::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
             ),
             ComparableStats::default()
         );
         assert_eq!(
             ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
+                &GlobalExecutorCache::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1)
+                    .stats
             ),
             ComparableStats::default()
         );

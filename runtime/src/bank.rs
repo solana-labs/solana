@@ -87,7 +87,9 @@ use {
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
-        executor_cache::{CachedExecutors, Executors, TransactionExecutor, MAX_CACHED_EXECUTORS},
+        executor_cache::{
+            Executors, GlobalExecutorCache, TransactionExecutor, MAX_CACHED_EXECUTORS,
+        },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
@@ -1063,7 +1065,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: RwLock<CachedExecutors>,
+    cached_executors: RwLock<GlobalExecutorCache>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1276,7 +1278,7 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<CachedExecutors>::default(),
+            cached_executors: RwLock::<GlobalExecutorCache>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1512,7 +1514,7 @@ impl Bank {
         let (cached_executors, cached_executors_time) = measure!(
             {
                 let parent_bank_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(CachedExecutors::new_from_parent_bank_executors(
+                RwLock::new(GlobalExecutorCache::new_from_parent_bank_executors(
                     &parent_bank_executors,
                     epoch,
                 ))
@@ -1943,7 +1945,10 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch)),
+            cached_executors: RwLock::new(GlobalExecutorCache::new(
+                MAX_CACHED_EXECUTORS,
+                fields.epoch,
+            )),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
