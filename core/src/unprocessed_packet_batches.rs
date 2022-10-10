@@ -352,10 +352,12 @@ pub fn transaction_from_deserialized_packet(
         Err(TransactionError::AccountLoadedTwice) => {
             saturating_add_assign!(transaction_error_counters.total, 1);
             saturating_add_assign!(transaction_error_counters.account_loaded_twice, 1);
+            return None;
         }
         Err(TransactionError::TooManyAccountLocks) => {
             saturating_add_assign!(transaction_error_counters.total, 1);
             saturating_add_assign!(transaction_error_counters.too_many_account_locks, 1);
+            return None;
         }
         _ => {}
     }
