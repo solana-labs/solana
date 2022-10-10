@@ -7,7 +7,8 @@ use {
     serial_test::serial,
     solana_core::{
         broadcast_stage::{
-            broadcast_duplicates_run::BroadcastDuplicatesConfig, BroadcastStageType,
+            broadcast_duplicates_run::{BroadcastDuplicatesConfig, ClusterPartition},
+            BroadcastStageType,
         },
         consensus::SWITCH_FORK_THRESHOLD,
         replay_stage::DUPLICATE_THRESHOLD,
@@ -17,7 +18,7 @@ use {
         crds::Cursor,
         gossip_service::{self, discover_cluster},
     },
-    solana_ledger::ancestor_iterator::AncestorIterator,
+    solana_ledger::{ancestor_iterator::AncestorIterator, leader_schedule::FixedSchedule},
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
@@ -389,7 +390,94 @@ fn test_kill_partition_switch_threshold_progress() {
 #[test]
 #[serial]
 #[allow(unused_attributes)]
+fn test_duplicate_shreds_switch_failure() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    let validator_keypairs = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+        "4mx9yoFBeYasDKBGDWCTWGJdWuJCKbgqmuP8bN9umybCh5Jzngw7KQxe99Rf5uzfyzgba1i65rJW4Wqk7Ab5S8ye",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .collect::<Vec<_>>();
+    let validators = validator_keypairs
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+
+    // Create 3 nodes:
+    // 1) One with > DUPLICATE_THRESHOLD but < 2/3+ supermajority
+    // 2) One with < SWITCHING_THRESHOLD so that validator from 1) can't switch to it
+    // 3) One bad leader to make duplicate slots
+    let total_stake = 100 * DEFAULT_NODE_STAKE;
+    let target_switch_fork_stake = (total_stake as f64 * SWITCH_FORK_THRESHOLD) as u64;
+    let duplicate_leader_stake = 1;
+    let duplicate_fork_node_stake = total_stake - target_switch_fork_stake - duplicate_leader_stake;
+    // Ensure the duplicate fork will get duplicate confirmed
+    assert!(duplicate_fork_node_stake >= (total_stake as f64 * DUPLICATE_THRESHOLD) as u64);
+
+    let node_stakes = vec![
+        duplicate_leader_stake,
+        target_switch_fork_stake,
+        duplicate_fork_node_stake,
+    ];
+
+    let (
+        // Has to be first in order to be picked as the duplicate leader
+        duplicate_leader_validator_pubkey,
+        target_switch_fork_validator_pubkey,
+        duplicate_fork_validator_pubkey,
+    ) = (validators[0], validators[1], validators[2]);
+
+    info!(
+        "duplicate_fork_validator_pubkey: {},
+        target_switch_fork_validator_pubkey: {},
+        duplicate_leader_validator_pubkey: {}",
+        duplicate_fork_validator_pubkey,
+        target_switch_fork_validator_pubkey,
+        duplicate_leader_validator_pubkey
+    );
+
+    let validator_to_slots = vec![
+        (duplicate_leader_validator_pubkey, 4),
+        (duplicate_fork_validator_pubkey, 8),
+        (duplicate_leader_validator_pubkey, 4),
+    ];
+
+    let leader_schedule = create_custom_leader_schedule(validator_to_slots.into_iter());
+
+    // 1) Set up the cluster
+    let (mut cluster, validator_keypairs) = test_faulty_node(
+        BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
+            partition: ClusterPartition::Pubkey(vec![duplicate_fork_validator_pubkey]),
+        }),
+        node_stakes,
+        Some(validator_keypairs),
+        Some(FixedSchedule {
+            leader_schedule: Arc::new(leader_schedule),
+        }),
+    );
+
+    // 2) Wait for `duplicate_fork_validator_pubkey` to vote on a duplicate fork and
+    // fork off from `target_switch_fork_validator_pubkey`
+
+    // 3) Ensure `target_switch_fork_validator_pubkey` is not built off a duplicate fork
+
+    // 4) Check that the cluster is making progress
+    cluster.check_for_new_roots(
+        16,
+        "test_duplicate_shreds_switch_failure",
+        SocketAddrSpace::Unspecified,
+    );
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
 fn test_duplicate_shreds_broadcast_leader() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
     // Create 4 nodes:
     // 1) Bad leader sending different versions of shreds to both of the other nodes
     // 2) 1 node who's voting behavior in gossip
@@ -443,11 +531,14 @@ fn test_duplicate_shreds_broadcast_leader() {
     // 1) Set up the cluster
     let (mut cluster, validator_keys) = test_faulty_node(
         BroadcastStageType::BroadcastDuplicates(BroadcastDuplicatesConfig {
-            stake_partition: partition_node_stake,
+            partition: ClusterPartition::Stake(partition_node_stake),
         }),
         node_stakes,
+        None,
+        None,
     );
 
+    info!("Returned after test_faulty_node");
     // This is why it's important our node was last in `node_stakes`
     let our_id = validator_keys.last().unwrap().pubkey();
 

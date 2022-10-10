@@ -17,10 +17,16 @@ pub const MINIMUM_DUPLICATE_SLOT: Slot = 20;
 pub const DUPLICATE_RATE: usize = 10;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
+pub enum ClusterPartition {
+    Stake(u64),
+    Pubkey(Vec<Pubkey>),
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct BroadcastDuplicatesConfig {
     /// Amount of stake (excluding the leader) to send different version of slots to.
     /// Note this is sampled from a list of stakes sorted least to greatest.
-    pub stake_partition: u64,
+    pub partition: ClusterPartition,
 }
 
 #[derive(Clone)]
@@ -280,20 +286,25 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let self_pubkey = cluster_info.id();
         // Create cluster partition.
         let cluster_partition: HashSet<Pubkey> = {
-            let mut cumilative_stake = 0;
-            let epoch = root_bank.get_leader_schedule_epoch(slot);
-            root_bank
-                .epoch_staked_nodes(epoch)
-                .unwrap()
-                .iter()
-                .filter(|(pubkey, _)| **pubkey != self_pubkey)
-                .sorted_by_key(|(pubkey, stake)| (**stake, **pubkey))
-                .take_while(|(_, stake)| {
-                    cumilative_stake += *stake;
-                    cumilative_stake <= self.config.stake_partition
-                })
-                .map(|(pubkey, _)| *pubkey)
-                .collect()
+            match &self.config.partition {
+                ClusterPartition::Stake(partition_total_stake) => {
+                    let mut cumilative_stake = 0;
+                    let epoch = root_bank.get_leader_schedule_epoch(slot);
+                    root_bank
+                        .epoch_staked_nodes(epoch)
+                        .unwrap()
+                        .iter()
+                        .filter(|(pubkey, _)| **pubkey != self_pubkey)
+                        .sorted_by_key(|(pubkey, stake)| (**stake, **pubkey))
+                        .take_while(|(_, stake)| {
+                            cumilative_stake += *stake;
+                            cumilative_stake <= *partition_total_stake
+                        })
+                        .map(|(pubkey, _)| *pubkey)
+                        .collect()
+                }
+                ClusterPartition::Pubkey(pubkeys) => pubkeys.iter().cloned().collect(),
+            }
         };
 
         // Broadcast data
@@ -316,10 +327,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                 {
                     if cluster_partition.contains(&node.id) {
                         info!(
-                            "skipping node {} for original shred index {}, slot {}",
-                            node.id,
+                            "Not broadcasting original shred index {}, slot {} to partition node {}",
                             shred.index(),
-                            shred.slot()
+                            shred.slot(),
+                            node.id,
                         );
                         return None;
                     }
@@ -337,6 +348,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                         cluster_partition
                             .iter()
                             .filter_map(|pubkey| {
+                                info!(
+                                    "Broadcasting partition shred index {}, slot {} to partition node {}",
+                                    shred.index(),
+                                    shred.slot(),
+                                    pubkey,
+                                );
                                 let tvu = cluster_info
                                     .lookup_contact_info(pubkey, |contact_info| contact_info.tvu)?;
                                 Some((shred.payload(), tvu))
