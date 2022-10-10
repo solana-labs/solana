@@ -20,7 +20,7 @@ static const uint64_t MAX_CPI_INSTRUCTION_DATA_LEN = 10240;
 
 /**
  * Maximum CPI instruction accounts. 255 was chosen to ensure that instruction
- * accounts are always within the maximum instruction account limit for BPF
+ * accounts are always within the maximum instruction account limit for SBF
  * program instructions.
  */
 static const uint8_t MAX_CPI_INSTRUCTION_ACCOUNTS = 255;
@@ -56,7 +56,7 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
-/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/cpi.inc AND RUN `cargo run --bin gen-headers` */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/sbf/c/inc/sol/inc/cpi.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 uint64_t sol_invoke_signed_c(
   const SolInstruction *,

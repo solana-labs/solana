@@ -98,7 +98,7 @@ members = [
 ]
 
 exclude = [
-    "programs/bpf",
+    "programs/sbf",
 ]
 
 # This prevents a Travis CI error when building for Windows.
