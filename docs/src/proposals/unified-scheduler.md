@@ -2,12 +2,14 @@
 
 ## Architechtural problem
 
-- there's two execution scheduling algorithms, and both are subotimmal
-and the independent algorithms are exposing the so-called replayability risk
+- there's two execution scheduling algorithms, and both are subotimmal for current tx load. 
+independent algorithms are exposing the so-called replayability risk
+
+also, increasing banking threads doesn't linearly scale to the number of cpu cores.
  
 ## Current Transaction load pattern
 
-## Redefiend scheduling design goal
+## Redefined scheduler's design goal
 
 saturate N cores with full of tx exec cycles.
 
@@ -32,7 +34,7 @@ pessimic locking is chosen for now (might switch to optimistic)
 ### design philophy
 
 - no timer/no bucketing (thus, no jitter and no odd juggy incentive)
-- no huetrics (try to be agnostic as much as possible)
+- no huetrics (try to be generic/agnostic/adaptive as much as possible)
 - no estimator/prediction (so bots can't trick leaders)
 - single threaded
 - determinicity
@@ -64,6 +66,10 @@ this is planned or only lightly experimented
 
 #### why single threaded?
 
+all the good benefits except the single and obvious pitfall: can become bottleneck.
+
+no pathologic poor performance due to heavy lock contention for small subset of active addresses
+
 #### overhead of tx-level scheduling
 
 
@@ -83,6 +89,7 @@ censorship attack
 scheduler thread could be the bottleneck
 
 ## further work
+- rework compute unit, consider runtime account state transition verification/N addresses (i.e. scheduling cost)
 - what is going with the bankless?: meh
 - scrambled tx
 - loopback transaction submission from on-chain programs. no cranks/liquidation/arb bots?
