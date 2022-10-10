@@ -1,15 +1,13 @@
 #![allow(clippy::integer_arithmetic)]
 #![feature(test)]
 
-use solana_core::leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker;
-
 extern crate test;
 
 use {
     rand::distributions::{Distribution, Uniform},
     solana_core::{
         banking_stage::*, forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        unprocessed_packet_batches::*,
+        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker, unprocessed_packet_batches::*,
     },
     solana_measure::measure::Measure,
     solana_perf::packet::{Packet, PacketBatch},

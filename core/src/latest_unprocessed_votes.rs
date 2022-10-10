@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,

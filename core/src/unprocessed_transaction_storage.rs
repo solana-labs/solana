@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-
 use {
     crate::{
         banking_stage::{self, BankingStage, FilterForwardingResults, ForwardOption},
