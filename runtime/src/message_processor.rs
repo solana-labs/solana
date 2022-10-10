@@ -3,7 +3,8 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        invoke_context::{BuiltinProgram, Executors, InvokeContext},
+        executor_cache::Executors,
+        invoke_context::{BuiltinProgram, InvokeContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
