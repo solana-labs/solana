@@ -9,7 +9,6 @@ use {
     solana_sdk::{
         feature_set,
         hash::Hash,
-        message::SanitizedMessage,
         saturating_add_assign,
         transaction::{AddressLoader, SanitizedTransaction, Transaction, TransactionError},
     },
@@ -342,13 +341,15 @@ pub fn transaction_from_deserialized_packet(
         return None;
     }
 
-    // Check that the account locks are valid
-    let message = SanitizedMessage::try_new(
-        deserialized_packet.transaction().get_message().clone(),
+    let tx = SanitizedTransaction::try_new(
+        deserialized_packet.transaction().clone(),
+        *deserialized_packet.message_hash(),
+        deserialized_packet.is_simple_vote(),
         address_loader,
     )
     .ok()?;
-    match SanitizedTransaction::validate_account_locks(&message, tx_account_lock_limit) {
+    tx.verify_precompiles(feature_set).ok()?;
+    match tx.validate_account_locks(tx_account_lock_limit) {
         Err(TransactionError::AccountLoadedTwice) => {
             saturating_add_assign!(transaction_error_counters.total, 1);
             saturating_add_assign!(transaction_error_counters.account_loaded_twice, 1);
@@ -361,15 +362,6 @@ pub fn transaction_from_deserialized_packet(
         }
         _ => {}
     }
-
-    let tx = SanitizedTransaction::new(
-        deserialized_packet.transaction().clone(),
-        message,
-        *deserialized_packet.message_hash(),
-        deserialized_packet.is_simple_vote(),
-    );
-
-    tx.verify_precompiles(feature_set).ok()?;
     Some(tx)
 }
 

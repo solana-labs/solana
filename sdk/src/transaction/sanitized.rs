@@ -58,21 +58,6 @@ impl From<Hash> for MessageHash {
 }
 
 impl SanitizedTransaction {
-    /// Create a sanitized transaction
-    pub fn new(
-        tx: SanitizedVersionedTransaction,
-        message: SanitizedMessage,
-        message_hash: Hash,
-        is_simple_vote_tx: bool,
-    ) -> Self {
-        Self {
-            message,
-            message_hash,
-            is_simple_vote_tx,
-            signatures: tx.signatures,
-        }
-    }
-
     /// Create a sanitized transaction from a sanitized versioned transaction.
     /// If the input transaction uses address tables, attempt to lookup the
     /// address for each table index.
@@ -214,7 +199,7 @@ impl SanitizedTransaction {
         &self,
         tx_account_lock_limit: usize,
     ) -> Result<TransactionAccountLocks> {
-        Self::validate_account_locks(self.message(), tx_account_lock_limit)?;
+        self.validate_account_locks(tx_account_lock_limit)?;
         Ok(self.get_account_locks_unchecked())
     }
 
@@ -293,13 +278,10 @@ impl SanitizedTransaction {
     }
 
     /// Validate a transaction message against locked accounts
-    pub fn validate_account_locks(
-        message: &SanitizedMessage,
-        tx_account_lock_limit: usize,
-    ) -> Result<()> {
-        if message.has_duplicates() {
+    pub fn validate_account_locks(&self, tx_account_lock_limit: usize) -> Result<()> {
+        if self.message().has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
-        } else if message.account_keys().len() > tx_account_lock_limit {
+        } else if self.message().account_keys().len() > tx_account_lock_limit {
             Err(TransactionError::TooManyAccountLocks)
         } else {
             Ok(())
