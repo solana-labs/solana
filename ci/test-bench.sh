@@ -58,7 +58,7 @@ _ "$cargo" nightly bench --manifest-path core/Cargo.toml ${V:+--verbose} \
   -- -Z unstable-options --format=json | tee -a "$BENCH_FILE"
 
 # Run sbf benches
-_ "$cargo" nightly bench --manifest-path programs/bpf/Cargo.toml ${V:+--verbose} --features=bpf_c \
+_ "$cargo" nightly bench --manifest-path programs/sbf/Cargo.toml ${V:+--verbose} --features=sbf_c \
   -- -Z unstable-options --format=json --nocapture | tee -a "$BENCH_FILE"
 
 # Run banking/accounts bench. Doesn't require nightly, but use since it is already built.

@@ -87,20 +87,20 @@ test-stable-sbf)
   "$cargo_build_sbf" --manifest-path sdk/Cargo.toml
 
   # SBF C program system tests
-  _ make -C programs/bpf/c tests
+  _ make -C programs/sbf/c tests
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
-      --manifest-path programs/bpf/Cargo.toml \
-      --no-default-features --features=bpf_c,bpf_rust -- -Z unstable-options --format json --report-time | tee results.json
+      --manifest-path programs/sbf/Cargo.toml \
+      --no-default-features --features=sbf_c,sbf_rust -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test \
-      --manifest-path programs/bpf/Cargo.toml \
-      --no-default-features --features=bpf_c,bpf_rust -- --nocapture
+      --manifest-path programs/sbf/Cargo.toml \
+      --no-default-features --features=sbf_c,sbf_rust -- --nocapture
   fi
 
   # SBF Rust program unit tests
-  for sbf_test in programs/bpf/rust/*; do
+  for sbf_test in programs/sbf/rust/*; do
     if pushd "$sbf_test"; then
       "$cargo" test
       "$cargo_build_sbf" --sbf-sdk ../../../../sdk/sbf --dump
@@ -129,17 +129,17 @@ test-stable-sbf)
   "$cargo_build_sbf" -V
 
   # SBF program instruction count assertion
-  sbf_target_path=programs/bpf/target
+  sbf_target_path=programs/sbf/target
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
-      --manifest-path programs/bpf/Cargo.toml \
-      --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
+      --manifest-path programs/sbf/Cargo.toml \
+      --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
       -- -Z unstable-options --format json --report-time |& tee results.json
     awk '!/{ "type": .* }/' results.json >"${sbf_target_path}"/deploy/instuction_counts.txt
   else
     _ "$cargo" stable test \
-      --manifest-path programs/bpf/Cargo.toml \
-      --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
+      --manifest-path programs/sbf/Cargo.toml \
+      --no-default-features --features=sbf_c,sbf_rust assert_instruction_count \
       -- --nocapture &> "${sbf_target_path}"/deploy/instuction_counts.txt
   fi
 

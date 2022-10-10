@@ -1,8 +1,8 @@
 #pragma once
 /**
- * @brief Solana BPF loader deserializer to be used when deploying
- * a program with `BPFLoader2111111111111111111111111111111111` or
- * `BPFLoaderUpgradeab1e11111111111111111111111`
+ * @brief Solana SBF loader deserializer to be used when deploying
+ * a program with `SBFLoader2111111111111111111111111111111111` or
+ * `SBFLoaderUpgradeab1e11111111111111111111111`
  */
 
 #include <sol/types.h>
