@@ -157,11 +157,7 @@ struct ServeRepairStats {
     highest_window_index: usize,
     orphan: usize,
     ancestor_hashes: usize,
-<<<<<<< HEAD
     pong: usize,
-    pings_required: usize,
-=======
->>>>>>> 206cc9407 (allow unsigned repair requests (#27910))
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -651,19 +647,7 @@ impl ServeRepair {
         _root_bank: &Bank,
         stats: &mut ServeRepairStats,
     ) {
-<<<<<<< HEAD
-        let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let check_ping_ancestor_request_epoch =
-            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
-        let (identity_keypair, socket_addr_space) = {
-            let me_r = me.read().unwrap();
-            let keypair = me_r.cluster_info.keypair().clone();
-            let socket_addr_space = *me_r.cluster_info.socket_addr_space();
-            (keypair, socket_addr_space)
-        };
-=======
         let identity_keypair = self.cluster_info.keypair().clone();
->>>>>>> 206cc9407 (allow unsigned repair requests (#27910))
         let my_id = identity_keypair.pubkey();
 
         // iter over the packets
