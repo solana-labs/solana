@@ -5248,6 +5248,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
+ "rand 0.7.3",
  "rustc_version",
  "serde",
  "solana-frozen-abi 1.14.6",
