@@ -193,6 +193,7 @@ impl UnprocessedTransactionStorage {
             Self::VoteStorage(vote_storage) => vote_storage
                 .filter_forwardable_packets_and_add_batches(
                     bank,
+                    slot_metrics_tracker,
                     forward_packet_batches_by_accounts,
                 ),
         }
@@ -261,12 +262,17 @@ impl VoteStorage {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
             let total_forwardable_packets = self
                 .latest_unprocessed_votes
-                .get_and_insert_forwardable_packets(bank, forward_packet_batches_by_accounts);
+                .get_and_insert_forwardable_packets(
+                    bank,
+                    slot_metrics_tracker,
+                    forward_packet_batches_by_accounts,
+                );
             return FilterForwardingResults {
                 total_forwardable_packets,
                 ..FilterForwardingResults::default()
