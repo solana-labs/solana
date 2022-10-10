@@ -647,7 +647,7 @@ impl ServeRepair {
         _root_bank: &Bank,
         stats: &mut ServeRepairStats,
     ) {
-        let identity_keypair = self.cluster_info.keypair().clone();
+        let identity_keypair = me.read().unwrap().cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
 
         // iter over the packets
