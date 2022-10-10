@@ -1384,9 +1384,8 @@ fn load_frozen_forks(
         &mut pending_slots,
     )?;
 
-    let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
     let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
-    if bank_forks.read().unwrap().root() != halt_at_slot {
+    if Some(bank_forks.read().unwrap().root()) != opts.halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
@@ -1510,6 +1509,17 @@ fn load_frozen_forks(
                 slot,
             );
 
+            let done_processing = opts
+                .halt_at_slot
+                .map(|halt_at_slot| slot >= halt_at_slot)
+                .unwrap_or(false);
+            if done_processing {
+                if opts.run_final_accounts_hash_calc {
+                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                }
+                break;
+            }
+
             process_next_slots(
                 &bank,
                 &meta,
@@ -1517,13 +1527,6 @@ fn load_frozen_forks(
                 leader_schedule_cache,
                 &mut pending_slots,
             )?;
-
-            if slot >= halt_at_slot {
-                if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
-                }
-                break;
-            }
         }
     } else if on_halt_store_hash_raw_data_for_debug {
         run_final_hash_calc(
