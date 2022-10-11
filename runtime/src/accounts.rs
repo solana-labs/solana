@@ -635,26 +635,15 @@ impl Accounts {
         }
     }
 
-    fn filter_zero_lamport_account(
-        account: AccountSharedData,
-        slot: Slot,
-    ) -> Option<(AccountSharedData, Slot)> {
-        if account.lamports() > 0 {
-            Some((account, slot))
-        } else {
-            None
-        }
-    }
-
     /// Slow because lock is held for 1 operation instead of many
+    /// This always returns None for zero-lamport accounts.
     fn load_slow(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint)?;
-        Self::filter_zero_lamport_account(account, slot)
+        self.accounts_db.load(ancestors, pubkey, load_hint)
     }
 
     pub fn load_with_fixed_root(
