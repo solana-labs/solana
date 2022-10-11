@@ -445,10 +445,7 @@ mod tests {
         debug!("many random transaction {:?}", tx);
 
         let testee = CostModel::default();
-        let expected_cost = testee
-            .instruction_execution_cost_table
-            .get_default_compute_unit_limit()
-            * 2;
+        let expected_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2;
         let mut tx_cost = TransactionCost::default();
         testee.get_transaction_cost(&mut tx_cost, &tx);
         assert_eq!(0, tx_cost.builtins_execution_cost);
