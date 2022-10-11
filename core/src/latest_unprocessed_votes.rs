@@ -3,7 +3,6 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         unprocessed_packet_batches,
     },
     itertools::Itertools,
@@ -242,7 +241,6 @@ impl LatestUnprocessedVotes {
     pub fn get_and_insert_forwardable_packets(
         &self,
         bank: Arc<Bank>,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
         let mut continue_forwarding = true;
@@ -252,7 +250,7 @@ impl LatestUnprocessedVotes {
         )
         .collect_vec();
         let mut sanitization_errors = TransactionErrorMetrics::default();
-        let count = pubkeys_by_stake
+        pubkeys_by_stake
             .into_iter()
             .filter(|&pubkey| {
                 if !continue_forwarding {
@@ -290,10 +288,7 @@ impl LatestUnprocessedVotes {
                 }
                 false
             })
-            .count();
-
-        slot_metrics_tracker.accumulate_transaction_errors(&sanitization_errors);
-        count
+            .count()
     }
 
     /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
@@ -605,11 +600,8 @@ mod tests {
         latest_unprocessed_votes.update_latest_vote(vote_b);
 
         // Don't forward 0 stake accounts
-        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
-            bank,
-            &mut LeaderSlotMetricsTracker::new(0),
-            &mut forward_packet_batches_by_accounts,
-        );
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
         assert_eq!(0, forwarded);
         assert_eq!(
             0,
@@ -632,7 +624,6 @@ mod tests {
         // Don't forward votes from gossip
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
             Arc::new(bank),
-            &mut LeaderSlotMetricsTracker::new(0),
             &mut forward_packet_batches_by_accounts,
         );
 
@@ -658,7 +649,6 @@ mod tests {
         // Forward from TPU
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
             bank.clone(),
-            &mut LeaderSlotMetricsTracker::new(0),
             &mut forward_packet_batches_by_accounts,
         );
 
@@ -674,11 +664,8 @@ mod tests {
         // Don't forward again
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
-        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
-            bank,
-            &mut LeaderSlotMetricsTracker::new(0),
-            &mut forward_packet_batches_by_accounts,
-        );
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 
         assert_eq!(0, forwarded);
         assert_eq!(

@@ -954,7 +954,6 @@ impl BankingStage {
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = Self::filter_and_forward_with_account_limits(
             &current_bank,
-            slot_metrics_tracker,
             buffered_packet_batches,
             &mut forward_packet_batches_by_accounts,
             UNPROCESSED_BUFFER_STEP_SIZE,
@@ -1032,7 +1031,6 @@ impl BankingStage {
     /// Added valid and sanitized packets to forwarding queue.
     pub fn filter_and_forward_with_account_limits(
         bank: &Arc<Bank>,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         batch_size: usize,
@@ -1092,7 +1090,15 @@ impl BankingStage {
                         ),
                         "sanitize_packet",
                     );
-                    slot_metrics_tracker.accumulate_transaction_errors(&sanitization_error_metrics);
+                    saturating_add_assign!(
+                        dropped_tx_before_forwarding_count,
+                        sanitization_error_metrics.too_many_account_locks
+                    );
+                    saturating_add_assign!(
+                        dropped_tx_before_forwarding_count,
+                        sanitization_error_metrics.account_loaded_twice
+                    );
+
                     saturating_add_assign!(
                         total_packet_conversion_us,
                         packet_conversion_time.as_us()
@@ -3537,7 +3543,6 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
-                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
@@ -3579,7 +3584,6 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
-                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,
@@ -3612,7 +3616,6 @@ mod tests {
                 ..
             } = BankingStage::filter_and_forward_with_account_limits(
                 &current_bank,
-                &mut LeaderSlotMetricsTracker::new(0),
                 &mut buffered_packet_batches,
                 &mut forward_packet_batches_by_accounts,
                 UNPROCESSED_BUFFER_STEP_SIZE,

@@ -7,7 +7,7 @@ use {
     rand::distributions::{Distribution, Uniform},
     solana_core::{
         banking_stage::*, forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker, unprocessed_packet_batches::*,
+        unprocessed_packet_batches::*,
     },
     solana_measure::measure::Measure,
     solana_perf::packet::{Packet, PacketBatch},
@@ -230,7 +230,6 @@ fn buffer_iter_desc_and_forward(
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
         let _ = BankingStage::filter_and_forward_with_account_limits(
             &current_bank,
-            &mut LeaderSlotMetricsTracker::new(0),
             &mut unprocessed_packet_batches,
             &mut forward_packet_batches_by_accounts,
             128usize,
