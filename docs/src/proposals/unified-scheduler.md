@@ -13,16 +13,16 @@ also, increasing replaying/banking threads doesn't linearly scale to the number 
 
 Simply put, the current transaction pattern is extremely diversified in terms
 of various aspects of system resource usage. This is a stark difference since
-existing implementations were designed/implemented, warranting to rework on the
-area.
+existing implementations were designed/implemented originally, warranting to
+rework on the area.
 
 Firstly, it's safe assumption that transaction execution's wall-clock duration
 will differ by 100x: from spl-token transfer's ~50us, to heavily-corss-margined
 liquidation's ~5ms. These are due to the nature of inherent complexity
-differences of these respective atomic state transitions, which are both
-reasonable for both mentioned use cases. Thus, even after all upcoming
-optimizations (like `direct_mapping`) are in place, it's expected for these
-variance to persist for foreseeable future.
+differences of these respective atomic state transitions, which are reasonable
+for both of mentioned use cases. Thus, even after all upcoming optimizations
+(like `direct_mapping`) are in place, it's expected for these variance to
+persist for foreseeable future.
 
 Regarding discussion of scheduler's design, it's also important to note that
 transaction's address access pattern varies greatly as well. Simple
