@@ -22,10 +22,6 @@ use {
     tempfile::TempDir,
 };
 
-/// The PendingAccountsPackage passes an AccountsPackage from AccountsBackgroundService to
-/// AccountsHashVerifier for hashing
-pub type PendingAccountsPackage = Arc<Mutex<Option<AccountsPackage>>>;
-
 /// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
 /// SnapshotPackagerService for archiving
 pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;

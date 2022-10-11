@@ -5,15 +5,16 @@
 // set and halt the node if a mismatch is detected.
 
 use {
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_runtime::{
         accounts_hash::{CalcAccountsHashConfig, HashStats},
         epoch_accounts_hash::EpochAccountsHash,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            retain_max_n_elements, AccountsPackage, AccountsPackageType, PendingAccountsPackage,
-            PendingSnapshotPackage, SnapshotPackage, SnapshotType,
+            retain_max_n_elements, AccountsPackage, AccountsPackageType, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -39,7 +40,7 @@ pub struct AccountsHashVerifier {
 
 impl AccountsHashVerifier {
     pub fn new(
-        pending_accounts_package: PendingAccountsPackage,
+        accounts_package_receiver: Receiver<AccountsPackage>,
         pending_snapshot_package: Option<PendingSnapshotPackage>,
         exit: &Arc<AtomicBool>,
         cluster_info: &Arc<ClusterInfo>,
@@ -48,6 +49,7 @@ impl AccountsHashVerifier {
         fault_injection_rate_slots: u64,
         snapshot_config: Option<SnapshotConfig>,
     ) -> Self {
+        const RECEIVE_TIMEOUT: Duration = Duration::from_millis(SLOT_MS);
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let t_accounts_hash_verifier = Builder::new()
@@ -59,12 +61,14 @@ impl AccountsHashVerifier {
                         break;
                     }
 
-                    let accounts_package = pending_accounts_package.lock().unwrap().take();
-                    if accounts_package.is_none() {
-                        std::thread::sleep(Duration::from_millis(SLOT_MS));
-                        continue;
-                    }
-                    let accounts_package = accounts_package.unwrap();
+                    let num_outstanding_accounts_packages = accounts_package_receiver.len();
+                    let accounts_package =
+                        match accounts_package_receiver.recv_timeout(RECEIVE_TIMEOUT) {
+                            Ok(accounts_package) => accounts_package,
+                            Err(RecvTimeoutError::Timeout) => continue,
+                            Err(RecvTimeoutError::Disconnected) => break,
+                        };
+
                     debug!(
                         "handling accounts package, type: {:?}, slot: {}, block height: {}",
                         accounts_package.package_type,
@@ -72,7 +76,7 @@ impl AccountsHashVerifier {
                         accounts_package.block_height,
                     );
 
-                    Self::process_accounts_package(
+                    let (_, measure) = measure!(Self::process_accounts_package(
                         accounts_package,
                         &cluster_info,
                         known_validators.as_ref(),
@@ -82,6 +86,16 @@ impl AccountsHashVerifier {
                         &exit,
                         fault_injection_rate_slots,
                         snapshot_config.as_ref(),
+                    ));
+
+                    datapoint_info!(
+                        "accounts_hash_verifier",
+                        (
+                            "num-outstanding-accounts-packages",
+                            num_outstanding_accounts_packages as i64,
+                            i64
+                        ),
+                        ("total-processing-time-ms", measure.as_ms() as i64, i64),
                     );
                 }
             })
