@@ -1224,6 +1224,14 @@ impl BankingStage {
             "banking_stage-dropped_tx_before_forwarding",
             unsanitized_packets_filtered_count
         );
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding-too_many_account_locks",
+            sanitization_error_metrics.too_many_account_locks
+        );
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding-account_loaded_twice",
+            sanitization_error_metrics.account_loaded_twice
+        );
 
         (
             transactions,
