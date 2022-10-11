@@ -30,7 +30,7 @@ transactions access a handful, while others will do 50s (soon, up to 256) of
 them, thanks to the recent introduction of Address lookup table mechanism.
 Also, when seen from the viewpoint of the on-chain state, a very few of its
 addresses can be highly contended _chronically_ (i.e order books) or _acutely_
-(i.e. ido/nft drop), while vast of others are seldom accessed.
+(i.e. IDO/NFT drop), while vast of others are seldom accessed.
 
 To make the situation more nuanced, consensus messages (= vote transactions)
 are currently included into blocks (i.e. on-chain) likewise the normal
@@ -39,10 +39,10 @@ overall system load and are characterized as being free of lock contentions,
 fast to execute, quite large in quantities, and inherently high-priority.
 
 All in all, any upcoming changes to the scheduler must accommodate to the
-versatility of these peculiar load pattern. At the same time, it shouldn't be
-over-otpmized for the currnet pattern, using hueritics and/or fairness skew.
-That's because any blockchain network's schduling inbalance can be exploited by
-malicious users.  It should strictly strive for being generic/adaptive, not
+divergence of these peculiar load pattern. At the same time, it shouldn't be
+over-optimized for the current pattern, introducing heuristics and/or fairness skew.
+That's because any blockchain network's scheduling imbalance can be exploited by
+malicious users. It should strictly strive for being generic/adaptive, not
 like other problem settings (i.e. trusted environments).
 
 That means, synthesized benchmark results should be taken with a grain of salt
