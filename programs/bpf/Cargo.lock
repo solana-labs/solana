@@ -4249,7 +4249,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-big-mod_exp"
+name = "solana-bpf-rust-big-mod-exp"
 version = "1.15.0"
 dependencies = [
  "array-bytes",
