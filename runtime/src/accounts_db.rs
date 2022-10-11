@@ -1207,8 +1207,6 @@ pub struct AccountsDb {
     /// debug feature to scan every append vec and verify refcounts are equal
     exhaustively_verify_refcounts: bool,
 
-    last_add_root_log: AtomicInterval,
-
     /// the full accounts hash calculation as of a predetermined block height 'N'
     /// to be included in the bank hash at a predetermined block height 'M'
     /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
@@ -2191,7 +2189,6 @@ impl AccountsDb {
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
-            last_add_root_log: AtomicInterval::default(),
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
@@ -8549,10 +8546,6 @@ impl AccountsDb {
             }
         }
         store_time.stop();
-
-        if self.last_add_root_log.should_update(10_000) {
-            datapoint_info!("add_root", ("root", slot, i64));
-        }
 
         AccountsAddRootTiming {
             index_us: index_time.as_us(),
