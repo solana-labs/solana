@@ -2975,13 +2975,31 @@ impl Blockstore {
         entries.into_iter().flatten().collect()
     }
 
-    // Returns slots connecting to any element of the list `slots`.
+    /// Returns next_slots of all elements in  `slots`. However, specificaly
+    /// exclude any dead slots from the results.
     pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
-        let slot_metas: Result<Vec<Option<SlotMeta>>> =
-            self.meta_cf.multi_get(slots.to_vec()).into_iter().collect();
+        let dead_slots: Result<Vec<Option<bool>>> = self
+            .dead_slots_cf
+            .multi_get(slots.to_vec())
+            .into_iter()
+            .collect();
+        let dead_slots = dead_slots?;
+        // If there is anything in the dead_slots cf for this slot, it is dead
+        let alive_slots: Vec<Slot> = slots
+            .iter()
+            .zip(dead_slots)
+            .filter(|(_slot, dead)| dead.is_none())
+            .map(|(slot, _dead)| *slot)
+            .collect();
+
+        let slot_metas: Result<Vec<Option<SlotMeta>>> = self
+            .meta_cf
+            .multi_get(alive_slots.to_vec())
+            .into_iter()
+            .collect();
         let slot_metas = slot_metas?;
 
-        let result: HashMap<u64, Vec<u64>> = slots
+        let result: HashMap<u64, Vec<u64>> = alive_slots
             .iter()
             .zip(slot_metas)
             .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots.to_vec())))
@@ -5705,6 +5723,7 @@ pub mod tests {
 
     #[test]
     fn test_get_slots_since() {
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5732,6 +5751,11 @@ pub mod tests {
             .into_iter()
             .collect();
         assert_eq!(blockstore.get_slots_since(&[0, 1, 3]).unwrap(), expected);
+
+        // Mark slot 0 dead, it should now be excluded from the get_slots_since() result
+        blockstore.set_dead_slot(0).unwrap();
+        let expected: HashMap<u64, Vec<u64>> = vec![(3, vec![10, 5])].into_iter().collect();
+        assert_eq!(blockstore.get_slots_since(&[0, 3]).unwrap(), expected);
     }
 
     #[test]
