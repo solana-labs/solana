@@ -22,19 +22,6 @@ use {
     },
 };
 
-#[cfg(not(test))]
-pub const REWARD_CALCULATION_INTERVAL: u64 = 100;
-
-#[cfg(not(test))]
-pub const REWARD_CREDIT_INTERVAL: u64 = 50;
-
-/// Test configurations
-#[cfg(test)]
-pub const REWARD_CALCULATION_INTERVAL: u64 = 10;
-
-#[cfg(test)]
-pub const REWARD_CREDIT_INTERVAL: u64 = 5;
-
 /// Epoch reward calculation request with current epoch and target bank
 pub struct EpochRewardCalcRequest {
     /// current epoch
@@ -299,7 +286,7 @@ mod test {
         super::*,
         crate::{bank::VoteWithStakeDelegations, genesis_utils::create_genesis_config},
         dashmap::DashMap,
-        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
+        solana_sdk::{account::AccountSharedData, epoch_schedule::EpochSchedule, pubkey::Pubkey},
         solana_vote_program::vote_state::VoteState,
         std::{default::Default, str::FromStr},
     };
@@ -470,8 +457,13 @@ mod test {
     fn test_epoch_reward_service_long() {
         let exit = Arc::new(AtomicBool::new(false));
 
-        let genesis = create_genesis_config(10);
+        let mut genesis = create_genesis_config(10);
+        genesis.genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
         let bank0 = Bank::new_for_tests(&genesis.genesis_config);
+        let reward_calculation_interval = bank0.get_reward_calculation_interval();
+        let reward_credit_interval = bank0.get_reward_credit_interval();
+
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
         // setup the service
@@ -509,7 +501,7 @@ mod test {
         // start new epoch and entering REWARD_CALCULATION_INTERVAL
         let mut reward_bank = None;
         let calc_start = 31;
-        for _ in 0..REWARD_CALCULATION_INTERVAL {
+        for _ in 0..reward_calculation_interval {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
             if reward_bank.is_none() {
                 reward_bank = Some(bank.clone());
@@ -534,7 +526,7 @@ mod test {
         }
 
         // entering REWARD_CREDIT_INTERVAL
-        for _ in 0..REWARD_CREDIT_INTERVAL {
+        for _ in 0..reward_credit_interval {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
             assert!(bank.in_reward_interval());
             assert!(!bank.in_reward_calc_interval());
@@ -560,12 +552,17 @@ mod test {
     /// A test for epoch reward calc progress
     #[test]
     fn test_epoch_reward_calc_progress() {
-        let genesis = create_genesis_config(10);
+        let mut genesis = create_genesis_config(10);
+        genesis.genesis_config.epoch_schedule = EpochSchedule::without_warmup();
+
         let bank0 = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
 
         // set up (0, 0)
         let mut bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
         bank1.set_epoch_reward_calc_start_for_test(0, 0);
+
+        let reward_calculation_interval = bank0.get_reward_calculation_interval();
+        let reward_credit_interval = bank0.get_reward_credit_interval();
 
         // assert bank1 - start calc bank (1, 1)
         assert!(bank1.in_reward_interval());
@@ -576,7 +573,7 @@ mod test {
 
         // assert calc interval [2..REWARD_CALCULATION_INTERVAL]
         let mut bank = Arc::new(bank1);
-        for i in 0..REWARD_CALCULATION_INTERVAL - 1 {
+        for i in 0..reward_calculation_interval - 1 {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 2 + i));
 
             assert!(bank.in_reward_interval());
@@ -587,11 +584,11 @@ mod test {
         }
 
         // assert redeem interval [REWARD_CALCULATION_INTERVAL+1, REWARD_CALCULATION_INTERVAL+REWARD_CREDIT_INTERVAL]
-        for i in 0..REWARD_CREDIT_INTERVAL {
+        for i in 0..reward_credit_interval {
             bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &Pubkey::default(),
-                REWARD_CALCULATION_INTERVAL + 1 + i,
+                reward_calculation_interval + 1 + i,
             ));
 
             assert!(bank.in_reward_interval());
@@ -599,11 +596,11 @@ mod test {
             assert!(bank.in_reward_redeem_interval());
             assert_eq!(
                 bank.get_reward_progress_index().unwrap(),
-                REWARD_CALCULATION_INTERVAL + 1 + i
+                reward_calculation_interval + 1 + i
             );
             assert_eq!(
                 bank.get_reward_elapsed_slots().unwrap(),
-                REWARD_CALCULATION_INTERVAL + 1 + i
+                reward_calculation_interval + 1 + i
             );
         }
 
@@ -612,7 +609,7 @@ mod test {
             bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 &Pubkey::default(),
-                REWARD_CALCULATION_INTERVAL + REWARD_CREDIT_INTERVAL + 1 + i,
+                reward_calculation_interval + reward_credit_interval + 1 + i,
             ));
 
             assert!(!bank.in_reward_interval());
@@ -622,8 +619,12 @@ mod test {
     /// A test for reward calculation at epoch boundary
     #[test]
     fn test_calc_start_cross_epoch() {
-        let genesis = create_genesis_config(10);
+        let mut genesis = create_genesis_config(10);
+        genesis.genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+
+        let reward_calculation_interval = bank0.get_reward_calculation_interval();
+        let reward_credit_interval = bank0.get_reward_credit_interval();
 
         let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
 
@@ -638,7 +639,7 @@ mod test {
 
         // start new epoch and entering REWARD_CALCULATION_INTERVAL
         let calc_start = 31;
-        for _ in 0..REWARD_CALCULATION_INTERVAL {
+        for _ in 0..reward_calculation_interval {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
             assert!(bank.in_reward_interval());
             assert!(bank.in_reward_calc_interval());
@@ -649,7 +650,7 @@ mod test {
         }
 
         // entering REWARD_CREDIT_INTERVAL
-        for _ in 0..REWARD_CREDIT_INTERVAL {
+        for _ in 0..reward_credit_interval {
             bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
             assert!(bank.in_reward_interval());
             assert!(!bank.in_reward_calc_interval());

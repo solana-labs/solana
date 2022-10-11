@@ -54,9 +54,7 @@ use {
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
-        epoch_reward_calc_service::{
-            EpochRewardCalculator, REWARD_CALCULATION_INTERVAL, REWARD_CREDIT_INTERVAL,
-        },
+        epoch_reward_calc_service::EpochRewardCalculator,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
@@ -1787,8 +1785,20 @@ impl Bank {
         )
     }
 
-    fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
+    pub fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
         rent_collector.clone_with_epoch(epoch)
+    }
+
+    pub fn get_reward_calculation_interval(&self) -> u64 {
+        (self.epoch_schedule.slots_per_epoch / 10).min(100)
+    }
+
+    pub fn get_reward_credit_interval(&self) -> u64 {
+        (self.epoch_schedule.slots_per_epoch / 20).min(50)
+    }
+
+    pub fn get_reward_interval(&self) -> u64 {
+        self.get_reward_calculation_interval() + self.get_reward_credit_interval()
     }
 
     fn _new_from_parent(
@@ -2019,10 +2029,7 @@ impl Bank {
                         new.update_epoch_stakes(leader_schedule_epoch),
                         "update_epoch_stakes",
                     );
-                    assert!(
-                        new.epoch_schedule.slots_per_epoch
-                            > REWARD_CALCULATION_INTERVAL + REWARD_CREDIT_INTERVAL
-                    );
+                    assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
                     let mut metrics = RewardsMetrics::default();
                     let mut update_rewards_with_thread_pool_us = 0;
@@ -2118,16 +2125,14 @@ impl Bank {
                     let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
                     new.update_epoch_stakes(leader_schedule_epoch);
 
-                    assert!(
-                        new.epoch_schedule.slots_per_epoch
-                            > REWARD_CALCULATION_INTERVAL + REWARD_CREDIT_INTERVAL
-                    );
+                    assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
                     if enable_partitioned_rewards {
                         if let Some((start_slot, start_height)) = new.epoch_reward_calc_start {
                             let height = new.block_height();
-                            let credit_start = start_height + REWARD_CALCULATION_INTERVAL + 1;
-                            let credit_end = credit_start + REWARD_CREDIT_INTERVAL;
+                            let credit_start =
+                                start_height + new.get_reward_calculation_interval() + 1;
+                            let credit_end = credit_start + new.get_reward_credit_interval();
 
                             if height >= credit_start && height < credit_end {
                                 let partition_index = height - credit_start;
@@ -2216,7 +2221,7 @@ impl Bank {
     pub fn in_reward_calc_interval(&self) -> bool {
         if let Some((_start_slot, start_height)) = self.epoch_reward_calc_start {
             let height = self.block_height();
-            let credit_start = start_height + REWARD_CALCULATION_INTERVAL + 1;
+            let credit_start = start_height + self.get_reward_calculation_interval() + 1;
             if height < credit_start {
                 return true;
             }
@@ -2227,7 +2232,7 @@ impl Bank {
     pub fn in_reward_redeem_interval(&self) -> bool {
         if let Some((_start_slot, start_height)) = self.epoch_reward_calc_start {
             let height = self.block_height();
-            let credit_start = start_height + REWARD_CALCULATION_INTERVAL + 1;
+            let credit_start = start_height + self.get_reward_calculation_interval() + 1;
             if height >= credit_start {
                 return true;
             }
@@ -3447,10 +3452,10 @@ impl Bank {
     }
 
     fn get_partition_begin_end(&self, partition_index: u64, n: u64) -> (usize, usize) {
-        assert!(partition_index < REWARD_CREDIT_INTERVAL);
-        let step = n / REWARD_CREDIT_INTERVAL;
+        assert!(partition_index < self.get_reward_credit_interval());
+        let step = n / self.get_reward_credit_interval();
         let begin = step * partition_index;
-        let end = if partition_index == REWARD_CREDIT_INTERVAL - 1 {
+        let end = if partition_index == self.get_reward_credit_interval() - 1 {
             n
         } else {
             step * (partition_index + 1)
@@ -20254,7 +20259,7 @@ pub(crate) mod tests {
         let (begin, _) = bank.get_partition_begin_end(0, n);
         assert_eq!(begin, 0);
 
-        let (_, end) = bank.get_partition_begin_end(REWARD_CREDIT_INTERVAL - 1, n);
+        let (_, end) = bank.get_partition_begin_end(bank.get_reward_credit_interval() - 1, n);
         assert_eq!(end, n as usize);
     }
 
@@ -20273,7 +20278,7 @@ pub(crate) mod tests {
         let mut t1 = 0;
         let mut t2 = 0;
 
-        for partition_index in 0..REWARD_CREDIT_INTERVAL {
+        for partition_index in 0..bank.get_reward_credit_interval() {
             let n1 = bank.store_stake_accounts_in_partition(
                 &stake_rewards,
                 partition_index,
@@ -20298,5 +20303,25 @@ pub(crate) mod tests {
 
         assert_eq!(t1, n);
         assert_eq!(t2, n);
+    }
+
+    #[test]
+    fn test_reward_interval_cap() {
+        let (mut genesis_config, _mint_keypair) =
+            create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        genesis_config.epoch_schedule = EpochSchedule::custom(32, 32, false);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.get_reward_calculation_interval(), 3);
+        assert_eq!(bank.get_reward_credit_interval(), 1);
+    }
+
+    #[test]
+    fn test_reward_interval() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.get_reward_calculation_interval(), 100);
+        assert_eq!(bank.get_reward_credit_interval(), 50);
     }
 }
