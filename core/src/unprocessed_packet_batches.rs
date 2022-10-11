@@ -371,14 +371,15 @@ pub fn transaction_from_deserialized_packet_for_tests(
     feature_set: &Arc<feature_set::FeatureSet>,
     votes_only: bool,
     address_loader: impl AddressLoader,
-    tx_account_lock_limit: usize,
 ) -> Option<SanitizedTransaction> {
+    use solana_sdk::transaction::MAX_TX_ACCOUNT_LOCKS;
+
     transaction_from_deserialized_packet(
         deserialized_packet,
         feature_set,
         votes_only,
         address_loader,
-        tx_account_lock_limit,
+        MAX_TX_ACCOUNT_LOCKS,
         &mut TransactionErrorMetrics::default(),
     )
 }
@@ -391,7 +392,7 @@ mod tests {
         solana_sdk::{
             signature::{Keypair, Signer},
             system_transaction,
-            transaction::{SimpleAddressLoader, Transaction, MAX_TX_ACCOUNT_LOCKS},
+            transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
     };
@@ -571,7 +572,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(2, txs.count());
@@ -583,7 +583,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(0, txs.count());
@@ -604,7 +603,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());
@@ -616,7 +614,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(2, txs.count());
@@ -637,7 +634,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());
@@ -649,7 +645,6 @@ mod tests {
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
-                    MAX_TX_ACCOUNT_LOCKS,
                 )
             });
             assert_eq!(3, txs.count());
