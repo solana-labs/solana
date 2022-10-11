@@ -4775,6 +4775,8 @@ version = "1.15.0"
 dependencies = [
  "cargo_metadata",
  "clap 3.1.8",
+ "log",
+ "solana-logger 1.15.0",
  "solana-sdk 1.15.0",
 ]
 
@@ -5850,6 +5852,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
+ "rand 0.7.3",
  "rustc_version 0.4.0",
  "serde",
  "solana-frozen-abi 1.15.0",
@@ -6324,22 +6327,14 @@ dependencies = [
  "assert_matches",
  "bincode",
  "log",
- "num-derive",
- "num-traits",
  "proptest",
  "rustc_version 0.4.0",
- "serde",
- "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.15.0",
- "solana-frozen-abi-macro 1.15.0",
  "solana-logger 1.15.0",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-vote-program",
  "test-case",
- "thiserror",
 ]
 
 [[package]]
@@ -6639,6 +6634,7 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-ipc-server",
  "jsonrpc-server-utils",
+ "lazy_static",
  "libc",
  "log",
  "num_cpus",
@@ -6806,9 +6802,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.33"
+version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b13ec17b58709d07634895dbca4cae6bebeaddf3b83bf4fa8dfeaf3621222347"
+checksum = "334bb11faee82f0306e39944cb4ac85824b7d261f3d99d1f2f8bd09851644f0b"
 dependencies = [
  "byteorder",
  "combine",

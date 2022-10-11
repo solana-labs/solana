@@ -27,7 +27,7 @@ use {
 pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 
 /// Sanitized transaction and the hash of its message
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
@@ -36,7 +36,7 @@ pub struct SanitizedTransaction {
 }
 
 /// Set of accounts that must be locked for safe transaction processing
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
     pub readonly: Vec<&'a Pubkey>,
@@ -199,13 +199,8 @@ impl SanitizedTransaction {
         &self,
         tx_account_lock_limit: usize,
     ) -> Result<TransactionAccountLocks> {
-        if self.message.has_duplicates() {
-            Err(TransactionError::AccountLoadedTwice)
-        } else if self.message.account_keys().len() > tx_account_lock_limit {
-            Err(TransactionError::TooManyAccountLocks)
-        } else {
-            Ok(self.get_account_locks_unchecked())
-        }
+        Self::validate_account_locks(self.message(), tx_account_lock_limit)?;
+        Ok(self.get_account_locks_unchecked())
     }
 
     /// Return the list of accounts that must be locked during processing this transaction.
@@ -280,5 +275,19 @@ impl SanitizedTransaction {
             .map_err(|_| TransactionError::InvalidAccountIndex)?;
         }
         Ok(())
+    }
+
+    /// Validate a transaction message against locked accounts
+    fn validate_account_locks(
+        message: &SanitizedMessage,
+        tx_account_lock_limit: usize,
+    ) -> Result<()> {
+        if message.has_duplicates() {
+            Err(TransactionError::AccountLoadedTwice)
+        } else if message.account_keys().len() > tx_account_lock_limit {
+            Err(TransactionError::TooManyAccountLocks)
+        } else {
+            Ok(())
+        }
     }
 }

@@ -58,7 +58,7 @@ jobs:
         if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         uses: actions/setup-node@v3
         with:
-          node-version: 14
+          node-version: 16
 
       - name: Build
         if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}

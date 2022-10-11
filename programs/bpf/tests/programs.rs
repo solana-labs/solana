@@ -55,7 +55,7 @@ use {
         create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::register_syscalls,
-        BpfError, ThisInstructionMeter,
+        ThisInstructionMeter,
     },
     solana_program_runtime::invoke_context::with_mock_invoke_context,
     solana_rbpf::{
@@ -224,16 +224,6 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let (parameter_bytes, account_lengths) = serialize_parameters(
-            invoke_context.transaction_context,
-            invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap(),
-            true, // should_cap_ix_accounts
-        )
-        .unwrap();
-
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
@@ -241,7 +231,7 @@ fn run_program(name: &str) -> u64 {
             reject_broken_elfs: true,
             ..Config::default()
         };
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             &data,
             config,
             register_syscalls(invoke_context, true /* no sol_alloc_free */).unwrap(),
@@ -249,12 +239,11 @@ fn run_program(name: &str) -> u64 {
         .unwrap();
 
         #[allow(unused_mut)]
-        let mut verified_executable = VerifiedExecutable::<
-            RequisiteVerifier,
-            BpfError,
-            ThisInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let mut verified_executable =
+            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
 
         let run_program_iterations = {
             #[cfg(target_arch = "x86_64")]
@@ -279,11 +268,21 @@ fn run_program(name: &str) -> u64 {
             transaction_context
                 .set_return_data(caller, Vec::new())
                 .unwrap();
-            let mut parameter_bytes = parameter_bytes.clone();
+
+            let (parameter_bytes, regions, account_lengths) = serialize_parameters(
+                invoke_context.transaction_context,
+                invoke_context
+                    .transaction_context
+                    .get_current_instruction_context()
+                    .unwrap(),
+                true, // should_cap_ix_accounts
+            )
+            .unwrap();
+
             {
                 let mut vm = create_vm(
                     &verified_executable,
-                    parameter_bytes.as_slice_mut(),
+                    regions,
                     account_lengths.clone(),
                     invoke_context,
                 )
@@ -300,7 +299,10 @@ fn run_program(name: &str) -> u64 {
                 instruction_count = vm.get_total_instruction_count();
                 if config.enable_instruction_tracing {
                     if i == 1 {
-                        if !Tracer::compare(tracer.as_ref().unwrap(), vm.get_tracer()) {
+                        if !Tracer::compare(
+                            tracer.as_ref().unwrap(),
+                            &vm.get_program_environment().tracer,
+                        ) {
                             let analysis =
                                 Analysis::from_executable(verified_executable.get_executable())
                                     .unwrap();
@@ -312,7 +314,8 @@ fn run_program(name: &str) -> u64 {
                                 .write(&mut stdout.lock(), &analysis)
                                 .unwrap();
                             println!("TRACE (jit):");
-                            vm.get_tracer()
+                            vm.get_program_environment()
+                                .tracer
                                 .write(&mut stdout.lock(), &analysis)
                                 .unwrap();
                             assert!(false);
@@ -330,7 +333,7 @@ fn run_program(name: &str) -> u64 {
                             trace!("BPF Program Instruction Trace:\n{}", trace_string);
                         }
                     }
-                    tracer = Some(vm.get_tracer().clone());
+                    tracer = Some(vm.get_program_environment().tracer.clone());
                 }
             }
             assert!(match deserialize_parameters(

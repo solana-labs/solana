@@ -197,10 +197,6 @@ async function fetchAccountInfo(
                 ) {
                   const info = create(result.data.parsed, ParsedInfo);
                   programData = create(info, ProgramDataAccount).info;
-                } else {
-                  throw new Error(
-                    `invalid program data account for program: ${pubkey.toBase58()}`
-                  );
                 }
               }
 
