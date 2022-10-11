@@ -215,12 +215,16 @@ export class Message {
           'data',
         ),
       ]);
+      try {
       const length = instructionLayout.encode(
         instruction,
         instructionBuffer,
         instructionBufferLength,
       );
       instructionBufferLength += length;
+      } catch (err){
+        console.log('lol this is not a fix at all cc @jstrry')
+      }
     });
     instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
 
