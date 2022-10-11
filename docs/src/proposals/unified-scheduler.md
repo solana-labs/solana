@@ -1,6 +1,6 @@
 # Unified Scheduler
 
-# Terminologies
+## Terminologies
 
 ## Architechtural problem
 
@@ -49,6 +49,32 @@ That means, synthesized benchmark results should be taken with a grain of salt
 because they tend to be overly uniform, not reflecting the realistic usage.
 
 ## Redefined scheduler's problem space
+
+In general terms, leaders are expected to pack (i.e. after scheduling by their likes) as many as transactions to maximize profits. On the flip side, users are expected to pay as few as fees to minimize costs. There should be no exception for rational participants in this market.
+
+That said, it can be characterized that this _market_ is actually of _time slice_ in the case of Solana, unlike the so-called _blockspace_ in others.
+
+That property can be derived from the simple and unforgiving fact that Solana's block propagation must be streamed _in real time_ due to competition among leaders. Any stalemate would be forced to be less-populated because that block won't be finished to be replayed otherwise due to the wasted time. Then, such blocks will be regarded as less favorable to vote by others (might not the case at the moment due to current fork choice, but ideally adjustments should be made for this to be held true for the maximum utility of the cluster itself, economically). As a whole, that illogical behavior would adversely affect the consequential likeliness of block confirmation by other validators. Thereby, block proposal timings are quite severe in Solana.
+
+Then, it can now be said leader are gaming to pack transactions _not to create idling **time** of blocktime (`slot` in solana)_, rather than _not to create empty **space** of blockspace_.
+
+That limits transactions reordering capability severely due to this very tight time constraicts. Waiting for more lucrative transactions are just risking the binary opportunity cost, because supermajority of others are eager to punish these observable selfish behavior by means of vote abstrain. Clearly, that would be regarded against the best interest of whole cluster.
+
+The game is simplified to blindly try to saturate the blocktime with highest-paying transactions for any given moment of time (premium/time paid by users). In concreate terms, that saturation is defined to fill the 400ms as long as others can replay likewise. (note: That means this proposal is against bankless leader proposal)
+
+At this later part of this section, we finally introduce the fact the solana's program execution is multithreaded by nature. That extension is delayed intentionally not to complite preceeding reasoning and it's rather straightforward. Firstly, unboudned execution threads isn't viable for supermajority's replayability. So, some bounded core count N must be hard-coded picked from the present common node setup to both staked and rpc nodes.
+ 
+Then, block saturation is defined as N*CU where N is such core count and CU is equivalent of 400ms for single-threaed on-chain program execution. Currently, compute unit are used to meter these two dimentions ambiguously in somewhat unclear definition. Now, CU's definition is refined and N*CU becomes the unit of measurement of saturation, which can be called like _blockspacetime_.
+
+Fianlly, all these observation should lead to the justification of alternative scheduler.
+
+
+
+In other words, some users are willing to pay little more than others to use it. 
+
+This means leaders must propose blocks timely at closer look.
+
+thread utilization-optimized
 
 saturate N cores with full of tx exec cycles.
 
