@@ -1191,8 +1191,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut num_programs = 0;
 
     let mut program_ids = HashMap::new();
-    let mut cost_model = CostModel::default();
-    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
+    let cost_model = CostModel::default();
     let mut cost_tracker = CostTracker::default();
 
     for entry in entries {

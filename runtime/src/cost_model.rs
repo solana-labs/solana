@@ -9,7 +9,7 @@ use solana_program_runtime::compute_budget::{
     ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
 };
 use {
-    crate::{block_cost_limits::*, execute_cost_table::ExecuteCostTable},
+    crate::block_cost_limits::*,
     log::*,
     solana_sdk::{
         compute_budget, instruction::CompiledInstruction, program_utils::limited_deserialize,
@@ -80,24 +80,11 @@ impl TransactionCost {
 }
 
 #[derive(Debug, Default)]
-pub struct CostModel {
-    instruction_execution_cost_table: ExecuteCostTable,
-}
+pub struct CostModel {}
 
 impl CostModel {
     pub fn new() -> Self {
-        Self {
-            instruction_execution_cost_table: ExecuteCostTable::default(),
-        }
-    }
-
-    pub fn initialize_cost_table(&mut self, cost_table: &[(Pubkey, u64)]) {
-        cost_table
-            .iter()
-            .map(|(key, cost)| (key, cost))
-            .for_each(|(program_id, cost)| {
-                self.upsert_instruction_cost(program_id, *cost);
-            });
+        Self {}
     }
 
     pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
@@ -111,27 +98,6 @@ impl CostModel {
 
         debug!("transaction {:?} has cost {:?}", transaction, tx_cost);
         tx_cost
-    }
-
-    pub fn upsert_instruction_cost(&mut self, program_key: &Pubkey, cost: u64) {
-        self.instruction_execution_cost_table
-            .upsert(program_key, cost);
-    }
-
-    pub fn find_instruction_cost(&self, program_key: &Pubkey) -> u64 {
-        match self.instruction_execution_cost_table.get_cost(program_key) {
-            Some(cost) => *cost,
-            None => {
-                let default_value = self
-                    .instruction_execution_cost_table
-                    .get_default_compute_unit_limit();
-                debug!(
-                    "Program {:?} does not have aggregated cost, using default value {}",
-                    program_key, default_value
-                );
-                default_value
-            }
-        }
     }
 
     fn get_signature_cost(&self, transaction: &SanitizedTransaction) -> u64 {
@@ -289,29 +255,6 @@ mod tests {
         let bank = Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config));
         let start_hash = bank.last_blockhash();
         (mint_keypair, start_hash)
-    }
-
-    #[test]
-    fn test_cost_model_instruction_cost() {
-        let mut testee = CostModel::default();
-
-        let known_key = Pubkey::from_str("known11111111111111111111111111111111111111").unwrap();
-        testee.upsert_instruction_cost(&known_key, 100);
-        // find cost for known programs
-        assert_eq!(100, testee.find_instruction_cost(&known_key));
-
-        testee.upsert_instruction_cost(&bpf_loader::id(), 1999);
-        assert_eq!(1999, testee.find_instruction_cost(&bpf_loader::id()));
-
-        // unknown program is assigned with default cost
-        assert_eq!(
-            testee
-                .instruction_execution_cost_table
-                .get_default_compute_unit_limit(),
-            testee.find_instruction_cost(
-                &Pubkey::from_str("unknown111111111111111111111111111111111111").unwrap()
-            )
-        );
     }
 
     #[test]
@@ -546,27 +489,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cost_model_insert_instruction_cost() {
-        let key1 = Pubkey::new_unique();
-        let cost1 = 100;
-
-        let mut cost_model = CostModel::default();
-        // Using default cost for unknown instruction
-        assert_eq!(
-            cost_model
-                .instruction_execution_cost_table
-                .get_default_compute_unit_limit(),
-            cost_model.find_instruction_cost(&key1)
-        );
-
-        // insert instruction cost to table
-        cost_model.upsert_instruction_cost(&key1, cost1);
-
-        // now it is known instruction with known cost
-        assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
-    }
-
-    #[test]
     fn test_cost_model_calculate_cost() {
         let (mint_keypair, start_hash) = test_setup();
         let tx = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
@@ -586,109 +508,5 @@ mod tests {
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());
-    }
-
-    #[test]
-    fn test_cost_model_update_instruction_cost() {
-        let key1 = Pubkey::new_unique();
-        let cost1 = 100;
-        let cost2 = 200;
-        let updated_cost = (cost1 + cost2) / 2;
-
-        let mut cost_model = CostModel::default();
-
-        // insert instruction cost to table
-        cost_model.upsert_instruction_cost(&key1, cost1);
-        assert_eq!(cost1, cost_model.find_instruction_cost(&key1));
-
-        // update instruction cost
-        cost_model.upsert_instruction_cost(&key1, cost2);
-        assert_eq!(updated_cost, cost_model.find_instruction_cost(&key1));
-    }
-
-    #[test]
-    fn test_cost_model_can_be_shared_concurrently_with_rwlock() {
-        let (mint_keypair, start_hash) = test_setup();
-        // construct a transaction with multiple random instructions
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let prog1 = solana_sdk::pubkey::new_rand();
-        let prog2 = solana_sdk::pubkey::new_rand();
-        let instructions = vec![
-            CompiledInstruction::new(3, &(), vec![0, 1]),
-            CompiledInstruction::new(4, &(), vec![0, 2]),
-        ];
-        let tx = Arc::new(SanitizedTransaction::from_transaction_for_tests(
-            Transaction::new_with_compiled_instructions(
-                &[&mint_keypair],
-                &[key1, key2],
-                start_hash,
-                vec![prog1, prog2],
-                instructions,
-            ),
-        ));
-
-        let number_threads = 10;
-        let expected_account_cost = WRITE_LOCK_UNITS * 3;
-        let cost1 = 100;
-        let cost2 = 200;
-        // execution cost can be either 2 * Default (before write) or cost1+cost2 (after write)
-
-        let cost_model: Arc<RwLock<CostModel>> = Arc::new(RwLock::new(CostModel::default()));
-
-        let thread_handlers: Vec<JoinHandle<()>> = (0..number_threads)
-            .map(|i| {
-                let cost_model = cost_model.clone();
-                let tx = tx.clone();
-
-                if i == 5 {
-                    thread::spawn(move || {
-                        let mut cost_model = cost_model.write().unwrap();
-                        cost_model.upsert_instruction_cost(&prog1, cost1);
-                        cost_model.upsert_instruction_cost(&prog2, cost2);
-                    })
-                } else {
-                    thread::spawn(move || {
-                        let cost_model = cost_model.write().unwrap();
-                        let tx_cost = cost_model.calculate_cost(&tx);
-                        assert_eq!(3, tx_cost.writable_accounts.len());
-                        assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
-                    })
-                }
-            })
-            .collect();
-
-        for th in thread_handlers {
-            th.join().unwrap();
-        }
-    }
-
-    #[test]
-    fn test_initialize_cost_table() {
-        // build cost table
-        let cost_table = vec![
-            (Pubkey::new_unique(), 10),
-            (Pubkey::new_unique(), 20),
-            (Pubkey::new_unique(), 30),
-        ];
-
-        // init cost model
-        let mut cost_model = CostModel::default();
-        cost_model.initialize_cost_table(&cost_table);
-
-        // verify
-        for (id, cost) in cost_table.iter() {
-            assert_eq!(*cost, cost_model.find_instruction_cost(id));
-        }
-
-        // verify built-in programs are not in bpf_costs
-        assert!(cost_model
-            .instruction_execution_cost_table
-            .get_cost(&system_program::id())
-            .is_none());
-        assert!(cost_model
-            .instruction_execution_cost_table
-            .get_cost(&solana_vote_program::id())
-            .is_none());
     }
 }
