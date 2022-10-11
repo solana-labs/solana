@@ -134,7 +134,11 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// The slot metadata column
+    /// The slot metadata column.
+    ///
+    /// This column family tracks the status of the received shred data for a
+    /// given slot.  Tracking the progress as the slot fills up allows us to
+    /// know if the slot (or pieces of the slot) are ready to be replayed.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::SlotMeta`
