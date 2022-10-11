@@ -1522,7 +1522,7 @@ impl Bank {
 
         let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
             parent.transaction_debug_keys.clone(),
-            "transation_debug_keys_creation",
+            "transaction_debug_keys_creation",
         );
 
         let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
