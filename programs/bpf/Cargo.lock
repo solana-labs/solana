@@ -5637,19 +5637,11 @@ version = "1.15.0"
 dependencies = [
  "bincode",
  "log",
- "num-derive",
- "num-traits",
  "rustc_version",
- "serde",
- "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.15.0",
- "solana-frozen-abi-macro 1.15.0",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-vote-program",
- "thiserror",
 ]
 
 [[package]]

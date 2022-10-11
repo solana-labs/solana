@@ -6327,22 +6327,14 @@ dependencies = [
  "assert_matches",
  "bincode",
  "log",
- "num-derive",
- "num-traits",
  "proptest",
  "rustc_version 0.4.0",
- "serde",
- "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.15.0",
- "solana-frozen-abi-macro 1.15.0",
  "solana-logger 1.15.0",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-vote-program",
  "test-case",
- "thiserror",
 ]
 
 [[package]]
