@@ -1,15 +1,54 @@
 # Unified Scheduler
 
+# Terminologies
+
 ## Architechtural problem
 
 - there's two execution scheduling algorithms, and both are subotimmal for current tx load. 
 independent algorithms are exposing the so-called replayability risk
 
-also, increasing banking threads doesn't linearly scale to the number of cpu cores.
+also, increasing replaying/banking threads doesn't linearly scale to the number of cpu cores.
  
-## Current Transaction load pattern
+## Present (and projected) transaction patterns
 
-## Redefined scheduler's design goal
+Simply put, the current transaction pattern is extremely diversified in terms
+of various aspects of system resource usage. This is a stark difference since
+existing implementations were designed/implemented, warranting to rework on the
+area.
+
+Firstly, it's safe assumption that transaction execution's wall-clock duration
+will differ by 100x: from spl-token transfer's ~50us, to heavily-corss-margined
+liquidation's ~5ms. These are due to the nature of inherent complexity
+differences of these respective atomic state transitions, which are both
+reasonable for both mentioned use cases. Thus, even after all upcoming
+optimizations (like `direct_mapping`) are in place, it's expected for these
+variance to persist for foreseeable future.
+
+Regarding discussion of scheduler's design, it's also important to note that
+transaction's address access pattern varies greatly as well. Simple
+transactions access a handful, while others will do 50s (soon, up to 256) of
+them, thanks to the recent introduction of Address lookup table mechanism.
+Also, when seen from the viewpoint of the on-chain state, a very few of its
+addresses can be highly contended _chronically_ (i.e order books) or
+_acutely_ (i.e. ido/nft drop), while vast of others are seldom accessed.
+
+To make the situation more nuanced, consensus messages (= vote transactions)
+are currently included into blocks (i.e. on-chain) likewise the normal
+transactions. These collectively comprise a noticeable presence among the
+overall system load and are characterized as being free of lock contentions,
+fast to execute, quite large in quantities, and inherently high-priority.
+
+All in all, any upcoming changes to the scheduler must accommodate to the
+versatility of these peculiar load pattern. At the same time, it shouldn't be
+over-otpmized for the currnet pattern, using hueritics and/or fairness skew.
+That's because any blockchain network's schduling inbalance can be exploited by
+malicious users.  It should strictly strive for being generic/adaptive, not
+like other problem settings (i.e. trusted environments).
+
+That means, synthesized benchmark results should be taken with a grain of salt
+because they tend to be overly uniform, not reflecting the realistic usage.
+
+## Redefined scheduler's problem space
 
 saturate N cores with full of tx exec cycles.
 
