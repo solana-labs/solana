@@ -1177,7 +1177,20 @@ declare_syscall!(
 
         match curve_id {
             CURVE25519_EDWARDS => {
-                // TODO: update cost
+                question_mark!(
+                    invoke_context.get_compute_meter().consume(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_edwards_msm_base_cost
+                            .saturating_add(
+                                invoke_context
+                                    .get_compute_budget()
+                                    .curve25519_edwards_msm_incremental_cost
+                                    .saturating_mul(points_len.saturating_sub(1)),
+                            )
+                    ),
+                    result
+                );
 
                 let scalars = question_mark!(
                     translate_slice::<scalar::PodScalar>(
@@ -1215,7 +1228,20 @@ declare_syscall!(
                 }
             }
             CURVE25519_RISTRETTO => {
-                // TODO: update cost
+                question_mark!(
+                    invoke_context.get_compute_meter().consume(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_ristretto_msm_base_cost
+                            .saturating_add(
+                                invoke_context
+                                    .get_compute_budget()
+                                    .curve25519_ristretto_msm_incremental_cost
+                                    .saturating_mul(points_len.saturating_sub(1)),
+                            )
+                    ),
+                    result
+                );
 
                 let scalars = question_mark!(
                     translate_slice::<scalar::PodScalar>(
