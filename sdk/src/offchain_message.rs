@@ -9,10 +9,25 @@ use crate::{
     signature::{Signature, Signer},
 };
 
+/// Check if given bytes contain only printable ASCII characters
+pub fn is_printable_ascii(data: &[u8]) -> bool {
+    for &char in data {
+        if !(0x20..=0x7e).contains(&char) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check if given bytes contain valid UTF8 string
+pub fn is_utf8(data: &[u8]) -> bool {
+    std::str::from_utf8(data).is_ok()
+}
+
 #[allow(clippy::integer_arithmetic)]
 pub mod v0 {
     use {
-        super::OffchainMessage as Base,
+        super::{is_printable_ascii, is_utf8, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
             sanitize::SanitizeError,
@@ -28,24 +43,27 @@ pub mod v0 {
     }
 
     impl OffchainMessage {
-        pub const MAX_LEN: usize = 65515;
-        pub const MAX_LEN_LEDGER: usize = 1212;
-        pub const HEADER_LEN: usize = 20;
+        // Header Length = Message Format (1) + Message Length (2)
+        pub const HEADER_LEN: usize = 3;
+        // Max length of the OffchainMessage
+        pub const MAX_LEN: usize = u16::MAX as usize - Base::HEADER_LEN - Self::HEADER_LEN;
+        // Max Length of the OffchainMessage supported by the Ledger
+        pub const MAX_LEN_LEDGER: usize = 1232 - Base::HEADER_LEN - Self::HEADER_LEN;
 
         /// Construct a new OffchainMessage object from the given message
         pub fn new(message: &[u8]) -> Result<Self, SanitizeError> {
             let format = if message.is_empty() {
                 return Err(SanitizeError::InvalidValue);
             } else if message.len() <= OffchainMessage::MAX_LEN_LEDGER {
-                if OffchainMessage::is_printable_ascii(message) {
+                if is_printable_ascii(message) {
                     0
-                } else if OffchainMessage::is_utf8(message) {
+                } else if is_utf8(message) {
                     1
                 } else {
                     return Err(SanitizeError::InvalidValue);
                 }
             } else if message.len() <= OffchainMessage::MAX_LEN {
-                if OffchainMessage::is_utf8(message) {
+                if is_utf8(message) {
                     2
                 } else {
                     return Err(SanitizeError::InvalidValue);
@@ -60,25 +78,19 @@ pub mod v0 {
         }
 
         /// Serialize the message to bytes, including the full header
-        pub fn serialize(&self) -> Result<Vec<u8>, SanitizeError> {
+        pub fn serialize(&self, data: &mut Vec<u8>) -> Result<(), SanitizeError> {
             // invalid messages shouldn't be possible, but a quick sanity check never hurts
             assert!(
                 self.format <= 2 && !self.message.is_empty() && self.message.len() <= Self::MAX_LEN
             );
-            let mut res: Vec<u8> = vec![0; Self::HEADER_LEN + self.message.len()];
-            let domain_len = Base::SIGNING_DOMAIN.len();
-            // signing domain
-            res[..domain_len].copy_from_slice(Base::SIGNING_DOMAIN);
-            // version
-            res[domain_len] = 0;
+            data.reserve(Self::HEADER_LEN.saturating_add(self.message.len()));
             // format
-            res[domain_len + 1] = self.format;
+            data.push(self.format);
             // message length
-            res[(domain_len + 2)..(domain_len + 4)]
-                .copy_from_slice(&(self.message.len() as u16).to_le_bytes());
+            data.extend_from_slice(&(self.message.len() as u16).to_le_bytes());
             // message
-            res[(domain_len + 4)..].copy_from_slice(&self.message);
-            Ok(res)
+            data.extend_from_slice(&self.message);
+            Ok(())
         }
 
         /// Deserialize the message from bytes that include a full header
@@ -88,21 +100,18 @@ pub mod v0 {
                 return Err(SanitizeError::ValueOutOfBounds);
             }
             // decode header
-            let domain_len = Base::SIGNING_DOMAIN.len();
-            let version = data[domain_len];
-            let format = data[domain_len + 1];
-            let message_len =
-                u16::from_le_bytes([data[domain_len + 2], data[domain_len + 3]]) as usize;
+            let format = data[0];
+            let message_len = u16::from_le_bytes([data[1], data[2]]) as usize;
             // check header
-            if version != 0 || format > 2 || message_len + Self::HEADER_LEN != data.len() {
+            if format > 2 || Self::HEADER_LEN.saturating_add(message_len) != data.len() {
                 return Err(SanitizeError::InvalidValue);
             }
-            let message = &data[(domain_len + 4)..];
+            let message = &data[3..];
             // check format
             let is_valid = match format {
-                0 => message.len() <= Self::MAX_LEN_LEDGER && Self::is_printable_ascii(message),
-                1 => message.len() <= Self::MAX_LEN_LEDGER && Self::is_utf8(message),
-                2 => message.len() <= Self::MAX_LEN && Self::is_utf8(message),
+                0 => message.len() <= Self::MAX_LEN_LEDGER && is_printable_ascii(message),
+                1 => message.len() <= Self::MAX_LEN_LEDGER && is_utf8(message),
+                2 => message.len() <= Self::MAX_LEN && is_utf8(message),
                 _ => false,
             };
 
@@ -116,26 +125,11 @@ pub mod v0 {
             }
         }
 
-        /// Compute the SHA256 hash of the off-chain message
-        pub fn hash(&self) -> Result<Hash, SanitizeError> {
+        /// Compute the SHA256 hash of the serialized off-chain message
+        pub fn hash(&self, serialized_message: &[u8]) -> Result<Hash, SanitizeError> {
             let mut hasher = Hasher::default();
-            hasher.hash(&self.serialize()?);
+            hasher.hash(serialized_message);
             Ok(hasher.result())
-        }
-
-        /// Check if given bytes contain only printable ASCII characters
-        pub fn is_printable_ascii(data: &[u8]) -> bool {
-            for &char in data {
-                if !(0x20..=0x7e).contains(&char) {
-                    return false;
-                }
-            }
-            true
-        }
-
-        /// Check if given bytes contain valid UTF8 string
-        pub fn is_utf8(data: &[u8]) -> bool {
-            std::str::from_utf8(data).is_ok()
         }
 
         pub fn get_format(&self) -> u8 {
@@ -155,6 +149,7 @@ pub enum OffchainMessage {
 
 impl OffchainMessage {
     pub const SIGNING_DOMAIN: &'static [u8] = b"\xffsolana offchain";
+    // Header Length = Signing Domain (16) + Header Version (1)
     pub const HEADER_LEN: usize = Self::SIGNING_DOMAIN.len() + 1;
 
     /// Construct a new OffchainMessage object from the given version and message
@@ -167,17 +162,26 @@ impl OffchainMessage {
 
     /// Serialize the off-chain message to bytes including full header
     pub fn serialize(&self) -> Result<Vec<u8>, SanitizeError> {
+        // serialize signing domain
+        let mut data = Self::SIGNING_DOMAIN.to_vec();
+
+        // serialize version and call version specific serializer
         match self {
-            Self::V0(msg) => msg.serialize(),
+            Self::V0(msg) => {
+                data.push(0);
+                msg.serialize(&mut data)?;
+            }
         }
+        Ok(data)
     }
 
     /// Deserialize the off-chain message from bytes that include full header
     pub fn deserialize(data: &[u8]) -> Result<Self, SanitizeError> {
-        if data.len() < Self::HEADER_LEN {
+        if data.len() <= Self::HEADER_LEN {
             return Err(SanitizeError::ValueOutOfBounds);
         }
         let version = data[Self::SIGNING_DOMAIN.len()];
+        let data = &data[Self::SIGNING_DOMAIN.len().saturating_add(1)..];
         match version {
             0 => Ok(Self::V0(v0::OffchainMessage::deserialize(data)?)),
             _ => Err(SanitizeError::ValueOutOfBounds),
@@ -187,7 +191,7 @@ impl OffchainMessage {
     /// Compute the hash of the off-chain message
     pub fn hash(&self) -> Result<Hash, SanitizeError> {
         match self {
-            Self::V0(msg) => msg.hash(),
+            Self::V0(msg) => msg.hash(&self.serialize()?),
         }
     }
 

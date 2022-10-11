@@ -431,9 +431,11 @@ impl RemoteWallet<hidapi::DeviceInfo> for LedgerWallet {
         derivation_path: &DerivationPath,
         data: &[u8],
     ) -> Result<Signature, RemoteWalletError> {
+        // If the first byte of the data is 0xff then it is an off-chain message
+        // because it starts with the Domain Specifier b"\xffsolana offchain".
+        // On-chain messages, in contrast, start with either 0x80 (MESSAGE_VERSION_PREFIX)
+        // or the number of signatures (0x00 - 0x13).
         if !data.is_empty() && data[0] == 0xff {
-            // on-chain message doesn't start with 0xff, it either starts with
-            // 0x80 (MESSAGE_VERSION_PREFIX) or number of signatures
             return self.sign_offchain_message(derivation_path, data);
         }
         let mut payload = if self.outdated_app() {

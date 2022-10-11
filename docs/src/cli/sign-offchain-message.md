@@ -18,7 +18,7 @@ The message will be encoded and signed with CLI's default private key and signat
 solana sign-offchain-message -k <KEYPAIR> <MESSAGE>
 ```
 
-By default, version 0 messages are constructed. You can override this with `--version` option:
+By default, version 0 messages are constructed (and the only supported at this moment). When other versions become available, you can override default value with `--version` option:
 
 ```bash
 solana sign-offchain-message -k <KEYPAIR> --version <VERSION> <MESSAGE>
@@ -40,11 +40,13 @@ returns true. That is, `0x20..=0x7e`.
 
 Formats `0` and `1` are motivated by hardware wallet support where both RAM to store the payload and font character support are limited.
 
-To sign an off-chain message with Ledger, ensure your Ledger is running firmware with SE version 1.0.3 or later and Solana Ledger App version 1.3.0 or later. After Ledger is unlocked and Solana Ledger App is open, run:
+To sign an off-chain message with Ledger, ensure your Ledger is running latest firmware and Solana Ledger App version 1.3.0 or later. After Ledger is unlocked and Solana Ledger App is open, run:
 
 ```bash
 solana sign-offchain-message -k usb://ledger <MESSAGE>
 ```
+
+For more information on how to setup and work with the ledger device see this [link](../wallet-guide/hardware-wallets/ledger.md).
 
 Please note that UTF-8 encoded messages require `Allow blind sign` option enabled in Solana Ledger App. Also, due to the lack of UTF-8 support in Ledger devices, only the hash of the message will be displayed in such cases.
 

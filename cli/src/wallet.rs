@@ -279,6 +279,14 @@ impl WalletSubCommands for App<'_, '_> {
             SubCommand::with_name("sign-offchain-message")
                 .about("Sign off-chain message")
                 .arg(
+                    Arg::with_name("message")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("STRING")
+                        .required(true)
+                        .help("The message text to be signed")
+                )
+                .arg(
                     Arg::with_name("version")
                         .long("version")
                         .takes_value(true)
@@ -290,33 +298,14 @@ impl WalletSubCommands for App<'_, '_> {
                             Ok(_) => { Ok(()) }
                         })
                         .help("The off-chain message version")
-                )
-                .arg(
-                    Arg::with_name("message")
-                        .takes_value(true)
-                        .value_name("STRING")
-                        .required(true)
-                        .help("The message text to be signed")
                 )
         )
         .subcommand(
             SubCommand::with_name("verify-offchain-signature")
                 .about("Verify off-chain message signature")
                 .arg(
-                    Arg::with_name("version")
-                        .long("version")
-                        .takes_value(true)
-                        .value_name("VERSION")
-                        .required(false)
-                        .default_value("0")
-                        .validator(|p| match p.parse::<u8>() {
-                            Err(_) => Err(String::from("Must be unsigned integer")),
-                            Ok(_) => { Ok(()) }
-                        })
-                        .help("The off-chain message version")
-                )
-                .arg(
                     Arg::with_name("message")
+                        .index(1)
                         .takes_value(true)
                         .value_name("STRING")
                         .required(true)
@@ -324,10 +313,24 @@ impl WalletSubCommands for App<'_, '_> {
                 )
                 .arg(
                     Arg::with_name("signature")
+                        .index(2)
                         .value_name("SIGNATURE")
                         .takes_value(true)
                         .required(true)
                         .help("The message signature to verify")
+                )
+                .arg(
+                    Arg::with_name("version")
+                        .long("version")
+                        .takes_value(true)
+                        .value_name("VERSION")
+                        .required(false)
+                        .default_value("0")
+                        .validator(|p| match p.parse::<u8>() {
+                            Err(_) => Err(String::from("Must be unsigned integer")),
+                            Ok(_) => { Ok(()) }
+                        })
+                        .help("The off-chain message version")
                 )
                 .arg(
                     pubkey!(Arg::with_name("signer")
@@ -515,7 +518,7 @@ pub fn parse_sign_offchain_message(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap_or(0);
+    let version: u8 = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
     let message = OffchainMessage::new(version, message_text.as_bytes())
@@ -532,7 +535,7 @@ pub fn parse_verify_offchain_signature(
     default_signer: &DefaultSigner,
     wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
 ) -> Result<CliCommandInfo, CliError> {
-    let version: u8 = value_of(matches, "version").unwrap_or(0);
+    let version: u8 = value_of(matches, "version").unwrap();
     let message_text: String = value_of(matches, "message")
         .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
     let message = OffchainMessage::new(version, message_text.as_bytes())
