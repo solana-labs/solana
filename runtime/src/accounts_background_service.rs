@@ -150,161 +150,202 @@ impl SnapshotRequestHandler {
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
-        self.snapshot_request_receiver.try_iter()
+        self.snapshot_request_receiver
+            .try_iter()
             .map(|request| {
-                let accounts_package_type = new_accounts_package_type(&request, &self.snapshot_config, *last_full_snapshot_slot);
+                let accounts_package_type = new_accounts_package_type(
+                    &request,
+                    &self.snapshot_config,
+                    *last_full_snapshot_slot,
+                );
                 (request, accounts_package_type)
             })
-            .inspect(|(request, package_type)| trace!("outstanding snapshot request: {:?}, {:?}", request, package_type))
+            .inspect(|(request, package_type)| {
+                trace!(
+                    "outstanding snapshot request: {:?}, {:?}",
+                    request,
+                    package_type
+                )
+            })
             .max_by(cmp_snapshot_requests)
             .map(|(snapshot_request, accounts_package_type)| {
-                trace!("handling snapshot request: {:?}, {:?}", snapshot_request, accounts_package_type);
-                let mut total_time = Measure::start("snapshot_request_receiver_total_time");
-                let SnapshotRequest {
-                    snapshot_root_bank,
-                    status_cache_slot_deltas,
-                    request_type,
-                } = snapshot_request;
-
-                // we should not rely on the state of this validator until startup verification is complete (unless handling an EAH request)
-                assert!(snapshot_root_bank.is_startup_verification_complete() || request_type == SnapshotRequestType::EpochAccountsHash);
-
-                if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
-                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
-                }
-
-                let previous_hash = if test_hash_calculation {
-                    // We have to use the index version here.
-                    // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
-                    snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
-                } else {
-                    Hash::default()
-                };
-
-                let mut shrink_time = Measure::start("shrink_time");
-                if !accounts_db_caching_enabled {
-                    snapshot_root_bank
-                        .process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
-                }
-                shrink_time.stop();
-
-                let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
-                if accounts_db_caching_enabled {
-                    // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
-                    // That's because `snapshot_root_bank.slot()` must be root at this point,
-                    // and contains relevant updates because each bank has at least 1 account update due
-                    // to sysvar maintenance. Otherwise, this would cause missing storages in the snapshot
-                    snapshot_root_bank.force_flush_accounts_cache();
-                    // Ensure all roots <= `self.slot()` have been flushed.
-                    // Note `max_flush_root` could be larger than self.slot() if there are
-                    // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
-                    assert!(
-                        snapshot_root_bank.slot()
-                            <= snapshot_root_bank
-                                .rc
-                                .accounts
-                                .accounts_db
-                                .accounts_cache
-                                .fetch_max_flush_root()
-                    );
-                }
-                flush_accounts_cache_time.stop();
-
-                let hash_for_testing = if test_hash_calculation {
-                    let use_index_hash_calculation = false;
-                    let check_hash = false;
-
-                    let (this_hash, capitalization) = snapshot_root_bank.accounts().accounts_db.calculate_accounts_hash_helper(
-                        use_index_hash_calculation,
-                        snapshot_root_bank.slot(),
-                        &CalcAccountsHashConfig {
-                            use_bg_thread_pool: true,
-                            check_hash,
-                            ancestors: None,
-                            epoch_schedule: snapshot_root_bank.epoch_schedule(),
-                            rent_collector: snapshot_root_bank.rent_collector(),
-                            store_detailed_debug_info_on_failure: false,
-                            full_snapshot: None,
-                            enable_rehashing: snapshot_root_bank.bank_enable_rehashing_on_accounts_hash(),
-                        },
-                    ).unwrap();
-                    assert_eq!(previous_hash, this_hash);
-                    assert_eq!(capitalization, snapshot_root_bank.capitalization());
-                    Some(this_hash)
-                } else {
-                    None
-                };
-
-                let mut clean_time = Measure::start("clean_time");
-                snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
-                clean_time.stop();
-
-                if accounts_db_caching_enabled {
-                    shrink_time = Measure::start("shrink_time");
-                    snapshot_root_bank.shrink_candidate_slots();
-                    shrink_time.stop();
-                }
-
-                // Snapshot the bank and send over an accounts package
-                let mut snapshot_time = Measure::start("snapshot_time");
-                let result = snapshot_utils::snapshot_bank(
-                    &snapshot_root_bank,
-                    status_cache_slot_deltas,
-                    &self.pending_accounts_package,
-                    &self.snapshot_config.bank_snapshots_dir,
-                    &self.snapshot_config.full_snapshot_archives_dir,
-                    &self.snapshot_config.incremental_snapshot_archives_dir,
-                    self.snapshot_config.snapshot_version,
-                    self.snapshot_config.archive_format,
-                    hash_for_testing,
+                self.handle_snapshot_request(
+                    accounts_db_caching_enabled,
+                    test_hash_calculation,
+                    non_snapshot_time_us,
+                    last_full_snapshot_slot,
+                    snapshot_request,
                     accounts_package_type,
-                );
-                if let Err(e) = result {
-                    warn!(
-                        "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
-                        snapshot_root_bank.slot(),
-                        accounts_package_type,
-                        e,
-                    );
-
-                    if Self::is_snapshot_error_fatal(&e) {
-                        return Err(e);
-                    }
-                }
-                snapshot_time.stop();
-                info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-                      accounts_package_type,
-                      snapshot_root_bank.slot(),
-                      snapshot_root_bank.get_accounts_hash(),
-                      snapshot_root_bank.hash(),
-                  );
-
-                // Cleanup outdated snapshots
-                let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
-                snapshot_utils::purge_old_bank_snapshots(&self.snapshot_config.bank_snapshots_dir);
-                purge_old_snapshots_time.stop();
-                total_time.stop();
-
-                datapoint_info!(
-                    "handle_snapshot_requests-timing",
-                    (
-                        "flush_accounts_cache_time",
-                        flush_accounts_cache_time.as_us(),
-                        i64
-                    ),
-                    ("shrink_time", shrink_time.as_us(), i64),
-                    ("clean_time", clean_time.as_us(), i64),
-                    ("snapshot_time", snapshot_time.as_us(), i64),
-                    (
-                        "purge_old_snapshots_time",
-                        purge_old_snapshots_time.as_us(),
-                        i64
-                    ),
-                    ("total_us", total_time.as_us(), i64),
-                    ("non_snapshot_time_us", non_snapshot_time_us, i64),
-                );
-                Ok(snapshot_root_bank.block_height())
+                )
             })
+    }
+
+    fn handle_snapshot_request(
+        &self,
+        accounts_db_caching_enabled: bool,
+        test_hash_calculation: bool,
+        non_snapshot_time_us: u128,
+        last_full_snapshot_slot: &mut Option<Slot>,
+        snapshot_request: SnapshotRequest,
+        accounts_package_type: AccountsPackageType,
+    ) -> Result<u64, SnapshotError> {
+        trace!(
+            "handling snapshot request: {:?}, {:?}",
+            snapshot_request,
+            accounts_package_type
+        );
+        let mut total_time = Measure::start("snapshot_request_receiver_total_time");
+        let SnapshotRequest {
+            snapshot_root_bank,
+            status_cache_slot_deltas,
+            request_type,
+        } = snapshot_request;
+
+        // we should not rely on the state of this validator until startup verification is complete (unless handling an EAH request)
+        assert!(
+            snapshot_root_bank.is_startup_verification_complete()
+                || request_type == SnapshotRequestType::EpochAccountsHash
+        );
+
+        if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
+            *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
+        }
+
+        let previous_hash = if test_hash_calculation {
+            // We have to use the index version here.
+            // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
+            snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
+        } else {
+            Hash::default()
+        };
+
+        let mut shrink_time = Measure::start("shrink_time");
+        if !accounts_db_caching_enabled {
+            snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
+        }
+        shrink_time.stop();
+
+        let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
+        if accounts_db_caching_enabled {
+            // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
+            // That's because `snapshot_root_bank.slot()` must be root at this point,
+            // and contains relevant updates because each bank has at least 1 account update due
+            // to sysvar maintenance. Otherwise, this would cause missing storages in the snapshot
+            snapshot_root_bank.force_flush_accounts_cache();
+            // Ensure all roots <= `self.slot()` have been flushed.
+            // Note `max_flush_root` could be larger than self.slot() if there are
+            // `> MAX_CACHE_SLOT` cached and rooted slots which triggered earlier flushes.
+            assert!(
+                snapshot_root_bank.slot()
+                    <= snapshot_root_bank
+                        .rc
+                        .accounts
+                        .accounts_db
+                        .accounts_cache
+                        .fetch_max_flush_root()
+            );
+        }
+        flush_accounts_cache_time.stop();
+
+        let hash_for_testing = if test_hash_calculation {
+            let use_index_hash_calculation = false;
+            let check_hash = false;
+
+            let (this_hash, capitalization) = snapshot_root_bank
+                .accounts()
+                .accounts_db
+                .calculate_accounts_hash_helper(
+                    use_index_hash_calculation,
+                    snapshot_root_bank.slot(),
+                    &CalcAccountsHashConfig {
+                        use_bg_thread_pool: true,
+                        check_hash,
+                        ancestors: None,
+                        epoch_schedule: snapshot_root_bank.epoch_schedule(),
+                        rent_collector: snapshot_root_bank.rent_collector(),
+                        store_detailed_debug_info_on_failure: false,
+                        full_snapshot: None,
+                        enable_rehashing: snapshot_root_bank
+                            .bank_enable_rehashing_on_accounts_hash(),
+                    },
+                )
+                .unwrap();
+            assert_eq!(previous_hash, this_hash);
+            assert_eq!(capitalization, snapshot_root_bank.capitalization());
+            Some(this_hash)
+        } else {
+            None
+        };
+
+        let mut clean_time = Measure::start("clean_time");
+        snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
+        clean_time.stop();
+
+        if accounts_db_caching_enabled {
+            shrink_time = Measure::start("shrink_time");
+            snapshot_root_bank.shrink_candidate_slots();
+            shrink_time.stop();
+        }
+
+        // Snapshot the bank and send over an accounts package
+        let mut snapshot_time = Measure::start("snapshot_time");
+        let result = snapshot_utils::snapshot_bank(
+            &snapshot_root_bank,
+            status_cache_slot_deltas,
+            &self.pending_accounts_package,
+            &self.snapshot_config.bank_snapshots_dir,
+            &self.snapshot_config.full_snapshot_archives_dir,
+            &self.snapshot_config.incremental_snapshot_archives_dir,
+            self.snapshot_config.snapshot_version,
+            self.snapshot_config.archive_format,
+            hash_for_testing,
+            accounts_package_type,
+        );
+        if let Err(e) = result {
+            warn!(
+                "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
+                snapshot_root_bank.slot(),
+                accounts_package_type,
+                e,
+            );
+
+            if Self::is_snapshot_error_fatal(&e) {
+                return Err(e);
+            }
+        }
+        snapshot_time.stop();
+        info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+              accounts_package_type,
+              snapshot_root_bank.slot(),
+              snapshot_root_bank.get_accounts_hash(),
+              snapshot_root_bank.hash(),
+              );
+
+        // Cleanup outdated snapshots
+        let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
+        snapshot_utils::purge_old_bank_snapshots(&self.snapshot_config.bank_snapshots_dir);
+        purge_old_snapshots_time.stop();
+        total_time.stop();
+
+        datapoint_info!(
+            "handle_snapshot_requests-timing",
+            (
+                "flush_accounts_cache_time",
+                flush_accounts_cache_time.as_us(),
+                i64
+            ),
+            ("shrink_time", shrink_time.as_us(), i64),
+            ("clean_time", clean_time.as_us(), i64),
+            ("snapshot_time", snapshot_time.as_us(), i64),
+            (
+                "purge_old_snapshots_time",
+                purge_old_snapshots_time.as_us(),
+                i64
+            ),
+            ("total_us", total_time.as_us(), i64),
+            ("non_snapshot_time_us", non_snapshot_time_us, i64),
+        );
+        Ok(snapshot_root_bank.block_height())
     }
 
     /// Check if a SnapshotError should be treated as 'fatal' by SnapshotRequestHandler, and
