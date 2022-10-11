@@ -3382,17 +3382,20 @@ mod tests {
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(
-                (invoke_context
+                invoke_context
                     .get_compute_budget()
-                    .curve25519_edwards_add_cost
+                    .curve25519_edwards_msm_base_cost
                     + invoke_context
                         .get_compute_budget()
-                        .curve25519_edwards_subtract_cost
+                        .curve25519_edwards_msm_incremental_cost
                     + invoke_context
                         .get_compute_budget()
-                        .curve25519_edwards_multiply_cost)
-                    * 2,
+                        .curve25519_ristretto_msm_base_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_msm_incremental_cost,
             );
+
         let mut syscall = SyscallCurveMultiscalarMultiplication {
             invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
         };
