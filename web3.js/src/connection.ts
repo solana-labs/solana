@@ -1175,6 +1175,8 @@ export type ParsedBlockResponse = {
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
+  /** The number of blocks beneath this block */
+  blockHeight: number | null;
 };
 
 /**
