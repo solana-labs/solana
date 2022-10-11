@@ -29,8 +29,8 @@ transaction's address access pattern varies greatly as well. Simple
 transactions access a handful, while others will do 50s (soon, up to 256) of
 them, thanks to the recent introduction of Address lookup table mechanism.
 Also, when seen from the viewpoint of the on-chain state, a very few of its
-addresses can be highly contended _chronically_ (i.e order books) or
-_acutely_ (i.e. ido/nft drop), while vast of others are seldom accessed.
+addresses can be highly contended _chronically_ (i.e order books) or _acutely_
+(i.e. ido/nft drop), while vast of others are seldom accessed.
 
 To make the situation more nuanced, consensus messages (= vote transactions)
 are currently included into blocks (i.e. on-chain) likewise the normal
