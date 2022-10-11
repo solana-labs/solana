@@ -2,6 +2,7 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
+        executor_cache::{Executor, Executors, TransactionExecutor},
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
@@ -28,7 +29,6 @@ use {
         alloc::Layout,
         borrow::Cow,
         cell::RefCell,
-        collections::HashMap,
         fmt::{self, Debug},
         rc::Rc,
         sync::Arc,
@@ -55,78 +55,6 @@ impl std::fmt::Debug for BuiltinProgram {
         // https://users.rust-lang.org/t/display-function-pointer/17073/2
         let erased_instruction: ErasedProcessInstructionWithContext = self.process_instruction;
         write!(f, "{}: {:p}", self.program_id, erased_instruction)
-    }
-}
-
-/// Program executor
-pub trait Executor: Debug + Send + Sync {
-    /// Execute the program
-    fn execute(
-        &self,
-        first_instruction_account: IndexOfAccount,
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), InstructionError>;
-}
-
-pub type Executors = HashMap<Pubkey, TransactionExecutor>;
-
-#[repr(u8)]
-#[derive(PartialEq, Debug)]
-enum TransactionExecutorStatus {
-    /// Executor was already in the cache, no update needed
-    Cached,
-    /// Executor was missing from the cache, but not updated
-    Missing,
-    /// Executor is for an updated program
-    Updated,
-}
-
-/// Tracks whether a given executor is "dirty" and needs to updated in the
-/// executors cache
-#[derive(Debug)]
-pub struct TransactionExecutor {
-    executor: Arc<dyn Executor>,
-    status: TransactionExecutorStatus,
-}
-
-impl TransactionExecutor {
-    /// Wraps an executor and tracks that it doesn't need to be updated in the
-    /// executors cache.
-    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Cached,
-        }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache.
-    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Missing,
-        }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache only if the transaction succeeded.
-    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Updated,
-        }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        self.status == TransactionExecutorStatus::Missing
-    }
-
-    pub fn is_updated(&self) -> bool {
-        self.status == TransactionExecutorStatus::Updated
-    }
-
-    pub fn get(&self) -> Arc<dyn Executor> {
-        self.executor.clone()
     }
 }
 
@@ -998,35 +926,35 @@ pub fn prepare_mock_invoke_context(
 pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     loader_id: Pubkey,
     account_size: usize,
+    is_writable: bool,
     mut callback: F,
 ) -> R {
     let program_indices = vec![0, 1];
+    let program_key = Pubkey::new_unique();
     let transaction_accounts = vec![
         (
             loader_id,
             AccountSharedData::new(0, 0, &native_loader::id()),
         ),
+        (program_key, AccountSharedData::new(1, 0, &loader_id)),
         (
             Pubkey::new_unique(),
-            AccountSharedData::new(1, 0, &loader_id),
-        ),
-        (
-            Pubkey::new_unique(),
-            AccountSharedData::new(2, account_size, &Pubkey::new_unique()),
+            AccountSharedData::new(2, account_size, &program_key),
         ),
     ];
     let instruction_accounts = vec![AccountMeta {
         pubkey: transaction_accounts.get(2).unwrap().0,
         is_signer: false,
-        is_writable: false,
+        is_writable,
     }];
     let preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
+    let compute_budget = ComputeBudget::default();
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         Some(Rent::default()),
-        ComputeBudget::default().max_invoke_depth.saturating_add(1),
-        1,
+        compute_budget.max_invoke_depth.saturating_add(1),
+        compute_budget.max_instruction_trace_length,
     );
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -1057,11 +985,12 @@ pub fn mock_process_instruction(
     preparation
         .transaction_accounts
         .push((*loader_id, processor_account));
+    let compute_budget = ComputeBudget::default();
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         Some(Rent::default()),
-        ComputeBudget::default().max_invoke_depth.saturating_add(1),
-        1,
+        compute_budget.max_invoke_depth.saturating_add(1),
+        compute_budget.max_instruction_trace_length,
     );
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -1185,13 +1114,13 @@ mod tests {
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&[1])?,
+                    .set_data_from_slice(&[1])?,
                 MockInstruction::ModifyNotOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data(&[1])?,
+                    .set_data_from_slice(&[1])?,
                 MockInstruction::ModifyReadonly => instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data(&[1])?,
+                    .set_data_from_slice(&[1])?,
                 MockInstruction::UnbalancedPush => {
                     instruction_context
                         .try_borrow_instruction_account(transaction_context, 0)?
@@ -1239,7 +1168,7 @@ mod tests {
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len as usize])?,
+                    .set_data(vec![0; new_len as usize])?,
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
@@ -1284,7 +1213,7 @@ mod tests {
             accounts,
             Some(Rent::default()),
             ComputeBudget::default().max_invoke_depth,
-            1,
+            MAX_DEPTH,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
@@ -1307,6 +1236,21 @@ mod tests {
         }
         assert_ne!(depth_reached, 0);
         assert!(depth_reached < MAX_DEPTH);
+    }
+
+    #[test]
+    fn test_max_instruction_trace_length() {
+        const MAX_INSTRUCTIONS: usize = 8;
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, MAX_INSTRUCTIONS);
+        for _ in 0..MAX_INSTRUCTIONS {
+            transaction_context.push().unwrap();
+            transaction_context.pop().unwrap();
+        }
+        assert_eq!(
+            transaction_context.push(),
+            Err(InstructionError::MaxInstructionTraceLengthExceeded)
+        );
     }
 
     #[test]
@@ -1345,7 +1289,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 2, 9);
+            TransactionContext::new(accounts, Some(Rent::default()), 2, 18);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1436,7 +1380,7 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
         let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);

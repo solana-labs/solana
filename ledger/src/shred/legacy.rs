@@ -196,13 +196,6 @@ impl ShredDataTrait for ShredData {
         }
         Ok(&self.payload[Self::SIZE_OF_HEADERS..size])
     }
-
-    // Only for tests.
-    fn set_last_in_slot(&mut self) {
-        self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
-        let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
-        bincode::serialize_into(buffer, &self.data_header).unwrap();
-    }
 }
 
 impl ShredCodeTrait for ShredCode {
@@ -277,6 +270,13 @@ impl ShredData {
         }
         shred.resize(Self::SIZE_OF_PAYLOAD, 0u8);
         Ok(shred)
+    }
+
+    // Only for tests.
+    pub(crate) fn set_last_in_slot(&mut self) {
+        self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
+        let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
+        bincode::serialize_into(buffer, &self.data_header).unwrap();
     }
 }
 

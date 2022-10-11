@@ -353,7 +353,7 @@ impl<'a> SnapshotMinimizer<'a> {
             .into_iter()
             .map(|pubkey| (*pubkey, slot))
             .collect();
-        self.accounts_db().purge_keys_exact(purge_pubkeys.iter());
+        let _ = self.accounts_db().purge_keys_exact(purge_pubkeys.iter());
 
         let aligned_total: u64 = AccountsDb::page_align(total_bytes as u64);
         if aligned_total > 0 {
@@ -388,6 +388,7 @@ impl<'a> SnapshotMinimizer<'a> {
             slot,
             &mut dead_storages.lock().unwrap(),
             |store| !append_vec_set.contains(&store.append_vec_id()),
+            true, // add_dirty_stores
         );
     }
 

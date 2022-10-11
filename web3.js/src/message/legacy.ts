@@ -130,14 +130,18 @@ export class Message {
   }
 
   isAccountWritable(index: number): boolean {
-    return (
-      index <
-        this.header.numRequiredSignatures -
-          this.header.numReadonlySignedAccounts ||
-      (index >= this.header.numRequiredSignatures &&
-        index <
-          this.accountKeys.length - this.header.numReadonlyUnsignedAccounts)
-    );
+    const numSignedAccounts = this.header.numRequiredSignatures;
+    if (index >= this.header.numRequiredSignatures) {
+      const unsignedAccountIndex = index - numSignedAccounts;
+      const numUnsignedAccounts = this.accountKeys.length - numSignedAccounts;
+      const numWritableUnsignedAccounts =
+        numUnsignedAccounts - this.header.numReadonlyUnsignedAccounts;
+      return unsignedAccountIndex < numWritableUnsignedAccounts;
+    } else {
+      const numWritableSignedAccounts =
+        numSignedAccounts - this.header.numReadonlySignedAccounts;
+      return index < numWritableSignedAccounts;
+    }
   }
 
   isProgramId(index: number): boolean {

@@ -27,7 +27,7 @@ pub const SIGNATURE_COST: u64 = COMPUTE_UNIT_TO_US_RATIO * 24;
 /// Number of compute units for one write lock
 pub const WRITE_LOCK_UNITS: u64 = COMPUTE_UNIT_TO_US_RATIO * 10;
 /// Number of data bytes per compute units
-pub const DATA_BYTES_UNITS: u64 = 550 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
+pub const INSTRUCTION_DATA_BYTES_COST: u64 = 140 /*bytes per us*/ / COMPUTE_UNIT_TO_US_RATIO;
 // Number of compute units for each built-in programs
 lazy_static! {
     /// Number of compute units for each built-in programs
@@ -56,13 +56,24 @@ lazy_static! {
 /// data size and built-in and BPF instructions.
 pub const MAX_BLOCK_UNITS: u64 =
     MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO * MAX_CONCURRENCY;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_BLOCK_UNITS, 48_000_000);
+
 /// Number of compute units that a writable account in a block is allowed. The
 /// limit is to prevent too many transactions write to same account, therefore
 /// reduce block's parallelism.
 pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_WRITABLE_ACCOUNT_UNITS, 12_000_000);
+
 /// Number of compute units that a block can have for vote transactions,
 /// sets at ~75% of MAX_BLOCK_UNITS to leave room for non-vote transactions
 pub const MAX_VOTE_UNITS: u64 = (MAX_BLOCK_UNITS as f64 * 0.75_f64) as u64;
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_VOTE_UNITS, 36_000_000);
 
 /// The maximum allowed size, in bytes, that accounts data can grow, per block.
 /// This can also be thought of as the maximum size of new allocations per block.

@@ -108,7 +108,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(&vec![0; space as usize])?;
+    account.set_data_length(space as usize)?;
 
     Ok(())
 }

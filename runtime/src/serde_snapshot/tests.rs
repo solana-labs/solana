@@ -116,6 +116,7 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
         None,
     )
     .map(|(accounts_db, _)| accounts_db)
@@ -253,15 +254,15 @@ fn test_bank_serialize_style(
 
     if initial_epoch_accounts_hash {
         expected_epoch_accounts_hash = Some(Hash::new(&[7; 32]));
-        *bank2
+        bank2
             .rc
             .accounts
             .accounts_db
-            .epoch_accounts_hash
-            .lock()
-            .unwrap() = Some(EpochAccountsHash::new(
-            expected_epoch_accounts_hash.unwrap(),
-        ));
+            .epoch_accounts_hash_manager
+            .set_valid(
+                EpochAccountsHash::new(expected_epoch_accounts_hash.unwrap()),
+                0,
+            );
     }
 
     crate::serde_snapshot::bank_to_stream(
@@ -405,6 +406,7 @@ fn test_bank_serialize_style(
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
     dbank.status_cache = Arc::new(RwLock::new(status_cache));
@@ -414,7 +416,7 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
-    assert_eq!(dbank.rc.accounts.accounts_db.epoch_accounts_hash.lock().unwrap().map(|hash| *hash.as_ref()), expected_epoch_accounts_hash,
+    assert_eq!(dbank.rc.accounts.accounts_db.epoch_accounts_hash_manager.try_get_epoch_accounts_hash().map(|hash| *hash.as_ref()), expected_epoch_accounts_hash,
         "(reserialize_accounts_hash, incremental_snapshot_persistence, epoch_accounts_hash, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
         (
             reserialize_accounts_hash,
@@ -551,6 +553,7 @@ fn test_extra_fields_eof() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 
@@ -613,6 +616,7 @@ fn test_extra_fields_full_snapshot_archive() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 
@@ -674,6 +678,7 @@ fn test_blank_extra_fields() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 

@@ -8,6 +8,7 @@ use {
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
     solana_measure::measure::Measure,
@@ -363,6 +364,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    /// return false if the entry is in the index (disk or memory) and has a slot list len > 0
+    /// return true in all other cases, including if the entry is NOT in the index at all
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
@@ -396,7 +399,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             false
                         }
                     }
-                    None => false, // not in cache or on disk
+                    None => true, // not in cache or on disk, but slot list is 'empty' and entry is not in index, so return true
                 }
             }
         }
@@ -437,7 +440,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn unref(&self, pubkey: &Pubkey) {
         self.get_internal(pubkey, |entry| {
             if let Some(entry) = entry {
-                entry.add_un_ref(false)
+                if entry.unref() {
+                    info!("refcount of item already at 0: {pubkey}");
+                }
             }
             (true, ())
         })
@@ -557,7 +562,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaim,
         );
         if addref {
-            current.add_un_ref(true);
+            current.addref();
         }
         current.set_dirty(true);
         slot_list.len()
@@ -1048,11 +1053,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
-        let mut duplicate = vec![];
         let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
-            let new_ref_count = if v.is_cached() { 0 } else { 1 };
+            let new_ref_count = u64::from(!v.is_cached());
             disk.update(&k, |current| {
                 match current {
                     Some((current_slot_list, mut ref_count)) => {
@@ -1061,7 +1065,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         slot_list.extend_from_slice(current_slot_list);
                         slot_list.push(entry); // will never be from the same slot that already exists in the list
                         ref_count += new_ref_count;
-                        duplicate.push((slot, k));
+                        duplicates.push((slot, k));
                         Some((slot_list, ref_count))
                     }
                     None => {
@@ -1893,6 +1897,54 @@ mod tests {
 
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn test_remove_if_slot_list_empty_entry() {
+        let key = solana_sdk::pubkey::new_rand();
+        let unknown_key = solana_sdk::pubkey::new_rand();
+
+        let test = new_for_test::<u64>();
+
+        let mut map = test.map_internal.write().unwrap();
+
+        {
+            // item is NOT in index at all, still return true from remove_if_slot_list_empty_entry
+            // make sure not initially in index
+            let entry = map.entry(unknown_key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+            let entry = map.entry(unknown_key);
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+            // make sure still not in index
+            let entry = map.entry(unknown_key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+        }
+
+        {
+            // add an entry with an empty slot list
+            let val = Arc::new(AccountMapEntryInner::<u64>::default());
+            map.insert(key, val);
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Occupied(_)));
+            // should have removed it since it had an empty slot list
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+            // return true - item is not in index at all now
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+        }
+
+        {
+            // add an entry with a NON empty slot list - it will NOT get removed
+            let val = Arc::new(AccountMapEntryInner::<u64>::default());
+            val.slot_list.write().unwrap().push((1, 1));
+            map.insert(key, val);
+            // does NOT remove it since it has a non-empty slot list
+            let entry = map.entry(key);
+            assert!(!test.remove_if_slot_list_empty_entry(entry));
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Occupied(_)));
+        }
     }
 
     #[test]

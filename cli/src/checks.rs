@@ -112,7 +112,7 @@ pub fn get_fee_for_messages(
 ) -> Result<u64, CliError> {
     Ok(messages
         .iter()
-        .map(|message| rpc_client.get_fee_for_message(message))
+        .map(|message| rpc_client.get_fee_for_message(*message))
         .collect::<Result<Vec<_>, _>>()?
         .iter()
         .sum())

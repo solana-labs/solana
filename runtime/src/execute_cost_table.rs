@@ -53,7 +53,7 @@ impl ExecuteCostTable {
         if self.table.is_empty() {
             self.get_default_compute_unit_limit()
         } else {
-            self.table.iter().map(|(_, value)| value).sum::<u64>() / self.get_count() as u64
+            self.table.values().sum::<u64>() / self.get_count() as u64
         }
     }
 

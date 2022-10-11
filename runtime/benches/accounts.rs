@@ -99,6 +99,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         &ancestors,
         &EpochSchedule::default(),
         &RentCollector::default(),
+        true,
     );
     let test_hash_calculation = false;
     bencher.iter(|| {
@@ -111,6 +112,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             &RentCollector::default(),
             false,
             false,
+            true,
             false,
         ))
     });
@@ -135,6 +137,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
             &ancestors,
             &EpochSchedule::default(),
             &RentCollector::default(),
+            true,
         );
     });
 }

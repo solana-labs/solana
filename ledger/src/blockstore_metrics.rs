@@ -310,7 +310,7 @@ thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefC
 // The minimum time duration between two RocksDB perf samples of the same operation.
 const PERF_SAMPLING_MIN_DURATION: Duration = Duration::from_secs(1);
 pub(crate) const PERF_METRIC_OP_NAME_GET: &str = "get";
-
+pub(crate) const PERF_METRIC_OP_NAME_MULTI_GET: &str = "multi_get";
 pub(crate) const PERF_METRIC_OP_NAME_PUT: &str = "put";
 pub(crate) const PERF_METRIC_OP_NAME_WRITE_BATCH: &str = "write_batch";
 

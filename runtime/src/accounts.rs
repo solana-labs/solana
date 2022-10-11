@@ -34,7 +34,10 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-        feature_set::{self, use_default_units_in_fee_calculation, FeatureSet},
+        feature_set::{
+            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
+            FeatureSet,
+        },
         fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,
@@ -61,7 +64,7 @@ use {
         ops::RangeBounds,
         path::PathBuf,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
@@ -164,6 +167,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -182,6 +186,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            &Arc::default(),
         )
     }
 
@@ -193,6 +198,7 @@ impl Accounts {
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -203,6 +209,7 @@ impl Accounts {
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
+                exit,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }
@@ -553,6 +560,7 @@ impl Accounts {
                             lamports_per_signature,
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -627,26 +635,15 @@ impl Accounts {
         }
     }
 
-    fn filter_zero_lamport_account(
-        account: AccountSharedData,
-        slot: Slot,
-    ) -> Option<(AccountSharedData, Slot)> {
-        if account.lamports() > 0 {
-            Some((account, slot))
-        } else {
-            None
-        }
-    }
-
     /// Slow because lock is held for 1 operation instead of many
+    /// This always returns None for zero-lamport accounts.
     fn load_slow(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint)?;
-        Self::filter_zero_lamport_account(account, slot)
+        self.accounts_db.load(ancestors, pubkey, load_hint)
     }
 
     pub fn load_with_fixed_root(
@@ -787,10 +784,10 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         slot: Slot,
-        can_cached_slot_be_unflushed: bool,
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        enable_rehashing: bool,
     ) -> u64 {
         let use_index = false;
         let is_startup = true;
@@ -804,10 +801,10 @@ impl Accounts {
                 slot,
                 ancestors,
                 None,
-                can_cached_slot_be_unflushed,
                 epoch_schedule,
                 rent_collector,
                 is_startup,
+                enable_rehashing,
             )
             .1
     }
@@ -823,9 +820,10 @@ impl Accounts {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
-        can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
         store_detailed_debug_info: bool,
+        enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -834,9 +832,10 @@ impl Accounts {
             test_hash_calculation,
             epoch_schedule,
             rent_collector,
-            can_cached_slot_be_unflushed,
             ignore_mismatch,
             store_detailed_debug_info,
+            enable_rehashing,
+            use_bg_thread_pool,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
@@ -1417,7 +1416,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::invoke_context::Executors,
+        solana_program_runtime::executor_cache::Executors,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1674,6 +1673,7 @@ mod tests {
             lamports_per_signature,
             &FeeStructure::default(),
             true,
+            false,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2082,7 +2082,8 @@ mod tests {
         );
 
         let invalid_table_key = Pubkey::new_unique();
-        let invalid_table_account = AccountSharedData::default();
+        let mut invalid_table_account = AccountSharedData::default();
+        invalid_table_account.set_lamports(1);
         accounts.store_slow_uncached(0, &invalid_table_key, &invalid_table_account);
 
         let address_table_lookup = MessageAddressTableLookup {

@@ -162,6 +162,7 @@ pub struct ValidatorConfig {
     pub no_os_disk_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
+    pub process_ledger_before_services: bool,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
@@ -226,6 +227,7 @@ impl Default for ValidatorConfig {
             no_os_disk_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
+            process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
@@ -671,6 +673,9 @@ impl Validator {
             &leader_schedule_cache,
         )?;
 
+        if config.process_ledger_before_services {
+            process_blockstore.process()?;
+        }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
         let sample_performance_service =
@@ -1413,7 +1418,9 @@ fn load_blockstore(
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
-    let halt_at_slot = config.halt_at_slot.or_else(|| highest_slot(&blockstore));
+    let halt_at_slot = config
+        .halt_at_slot
+        .or_else(|| blockstore.highest_slot().unwrap_or(None));
 
     let process_options = blockstore_processor::ProcessOptions {
         poh_verify: config.poh_verify,
@@ -1458,6 +1465,7 @@ fn load_blockstore(
                 .cache_block_meta_sender
                 .as_ref(),
             accounts_update_notifier,
+            exit,
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
@@ -1509,29 +1517,6 @@ fn load_blockstore(
         blockstore_root_scan,
         pruned_banks_receiver,
     ))
-}
-
-fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
-    let mut start = Measure::start("Blockstore search for highest slot");
-    let highest_slot = blockstore
-        .slot_meta_iterator(0)
-        .map(|metas| {
-            let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-            if slots.is_empty() {
-                info!("Ledger is empty");
-                None
-            } else {
-                let first = slots.first().unwrap();
-                Some(*slots.last().unwrap_or(first))
-            }
-        })
-        .unwrap_or_else(|err| {
-            warn!("Failed to ledger slot meta: {}", err);
-            None
-        });
-    start.stop();
-    info!("{}. Found slot {:?}", start, highest_slot);
-    highest_slot
 }
 
 pub struct ProcessBlockStore<'a> {
@@ -1592,7 +1577,7 @@ impl<'a> ProcessBlockStore<'a> {
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
 
             let exit = Arc::new(AtomicBool::new(false));
-            if let Some(max_slot) = highest_slot(self.blockstore) {
+            if let Ok(Some(max_slot)) = self.blockstore.highest_slot() {
                 let bank_forks = self.bank_forks.clone();
                 let exit = exit.clone();
                 let start_progress = self.start_progress.clone();
@@ -2066,7 +2051,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         return;
     }
 
-    if let Err(err) = std::fs::rename(&path, &path_delete) {
+    if let Err(err) = std::fs::rename(path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
@@ -2088,7 +2073,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
 /// to delete the top level directory it might be able to
 /// delete the contents of that directory.
 fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
-    if let Ok(dir_entries) = std::fs::read_dir(&path) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
         for entry in dir_entries.flatten() {
             let sub_path = entry.path();
             let metadata = match entry.metadata() {
@@ -2238,7 +2223,14 @@ mod tests {
             info!("creating shreds");
             let mut last_print = Instant::now();
             for i in 1..10 {
-                let shreds = blockstore::entries_to_test_shreds(&entries, i, i - 1, true, 1);
+                let shreds = blockstore::entries_to_test_shreds(
+                    &entries,
+                    i,     // slot
+                    i - 1, // parent_slot
+                    true,  // is_full_slot
+                    1,     // version
+                    true,  // merkle_variant
+                );
                 blockstore.insert_shreds(shreds, None, true).unwrap();
                 if last_print.elapsed().as_millis() > 5000 {
                     info!("inserted {}", i);

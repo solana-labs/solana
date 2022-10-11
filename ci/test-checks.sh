@@ -17,7 +17,11 @@ scripts/increment-cargo-version.sh check
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
   set +e
   if ! _ git diff --exit-code; then
-    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    cat <<EOF 1>&2
+
+Error: Uncommitted Cargo.lock changes.
+Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
+EOF
     exit 1
   fi
 )

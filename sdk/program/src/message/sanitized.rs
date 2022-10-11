@@ -5,7 +5,8 @@ use {
         message::{
             legacy,
             v0::{self, LoadedAddresses},
-            AccountKeys, MessageHeader,
+            AccountKeys, AddressLoader, AddressLoaderError, MessageHeader,
+            SanitizedVersionedMessage, VersionedMessage,
         },
         nonce::NONCED_TX_MARKER_IX_INDEX,
         program_utils::limited_deserialize,
@@ -81,6 +82,8 @@ pub enum SanitizeMessageError {
     ValueOutOfBounds,
     #[error("invalid value")]
     InvalidValue,
+    #[error("{0}")]
+    AddressLoaderError(#[from] AddressLoaderError),
 }
 
 impl From<SanitizeError> for SanitizeMessageError {
@@ -102,6 +105,25 @@ impl TryFrom<legacy::Message> for SanitizedMessage {
 }
 
 impl SanitizedMessage {
+    /// Create a sanitized message from a sanitized versioned message.
+    /// If the input message uses address tables, attempt to look up the
+    /// address for each table index.
+    pub fn try_new(
+        sanitized_msg: SanitizedVersionedMessage,
+        address_loader: impl AddressLoader,
+    ) -> Result<Self, SanitizeMessageError> {
+        Ok(match sanitized_msg.message {
+            VersionedMessage::Legacy(message) => {
+                SanitizedMessage::Legacy(LegacyMessage::new(message))
+            }
+            VersionedMessage::V0(message) => {
+                let loaded_addresses =
+                    address_loader.load_addresses(&message.address_table_lookups)?;
+                SanitizedMessage::V0(v0::LoadedMessage::new(message, loaded_addresses))
+            }
+        })
+    }
+
     /// Return true if this message contains duplicate account keys
     pub fn has_duplicates(&self) -> bool {
         match self {

@@ -15,6 +15,7 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
@@ -117,7 +118,7 @@ pub fn builtin_process_instruction(
     let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
     // Serialize entrypoint parameters with BPF ABI
-    let (mut parameter_bytes, _account_lengths) = serialize_parameters(
+    let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
             .transaction_context
@@ -160,7 +161,7 @@ pub fn builtin_process_instruction(
                     .is_ok()
                     && borrowed_account.can_data_be_changed().is_ok()
                 {
-                    borrowed_account.set_data(&account_info.data.borrow())?;
+                    borrowed_account.set_data_from_slice(&account_info.data.borrow())?;
                 }
                 if borrowed_account.get_owner() != account_info.owner {
                     borrowed_account.set_owner(account_info.owner.as_ref())?;
@@ -286,7 +287,9 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .can_data_be_resized(account_info_data.len())
                 .and_then(|_| borrowed_account.can_data_be_changed())
             {
-                Ok(()) => borrowed_account.set_data(&account_info_data).unwrap(),
+                Ok(()) => borrowed_account
+                    .set_data_from_slice(&account_info_data)
+                    .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
                     panic!("{:?}", err);
                 }
@@ -396,7 +399,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
     for dir in default_shared_object_dirs() {
-        let candidate = dir.join(&filename);
+        let candidate = dir.join(filename);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -604,7 +607,7 @@ impl ProgramTest {
                     })
                     .ok()
                     .flatten()
-                    .unwrap_or_else(|| "".to_string())
+                    .unwrap_or_default()
             );
 
             this.add_account(
@@ -1127,11 +1130,29 @@ impl ProgramTestContext {
                 pre_warp_slot,
             ))
         };
-        bank_forks.set_root(
-            pre_warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(pre_warp_slot),
-        );
+
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+
+        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
+
+        // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
+        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not
+        // hang in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        snapshot_request_receiver
+            .try_iter()
+            .filter(|snapshot_request| {
+                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+            })
+            .for_each(|snapshot_request| {
+                snapshot_request
+                    .snapshot_root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .epoch_accounts_hash_manager
+                    .set_invalid_for_tests();
+            });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(

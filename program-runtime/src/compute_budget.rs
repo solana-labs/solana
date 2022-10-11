@@ -37,6 +37,8 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed
     pub max_invoke_depth: usize,
+    /// Maximum cross-program invocation and instructions per transaction
+    pub max_instruction_trace_length: usize,
     /// Base number of compute units consumed to call SHA256
     pub sha256_base_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
@@ -100,6 +102,7 @@ impl ComputeBudget {
             create_program_address_units: 1500,
             invoke_units: 1000,
             max_invoke_depth: 4,
+            max_instruction_trace_length: 64,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
             sha256_max_slices: 20_000,
@@ -111,14 +114,14 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
-            curve25519_edwards_validate_point_cost: 5_000, // TODO: precisely determine curve25519 costs
-            curve25519_edwards_add_cost: 5_000,
-            curve25519_edwards_subtract_cost: 5_000,
-            curve25519_edwards_multiply_cost: 10_000,
-            curve25519_ristretto_validate_point_cost: 5_000,
-            curve25519_ristretto_add_cost: 5_000,
-            curve25519_ristretto_subtract_cost: 5_000,
-            curve25519_ristretto_multiply_cost: 10_000,
+            curve25519_edwards_validate_point_cost: 111,
+            curve25519_edwards_add_cost: 331,
+            curve25519_edwards_subtract_cost: 329,
+            curve25519_edwards_multiply_cost: 1_753,
+            curve25519_ristretto_validate_point_cost: 117,
+            curve25519_ristretto_add_cost: 367,
+            curve25519_ristretto_subtract_cost: 366,
+            curve25519_ristretto_multiply_cost: 1_804,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
@@ -130,6 +133,7 @@ impl ComputeBudget {
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
+        support_request_units_deprecated: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -148,7 +152,7 @@ impl ComputeBudget {
                     Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
                         units: compute_unit_limit,
                         additional_fee,
-                    }) => {
+                    }) if support_request_units_deprecated => {
                         if updated_compute_unit_limit.is_some() {
                             return Err(duplicate_instruction_error);
                         }
@@ -243,8 +247,11 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result =
-                compute_budget.process_instructions(tx.message().program_instructions_iter(), true);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                false, /*not support request_units_deprecated*/
+            );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };
@@ -489,6 +496,23 @@ mod tests {
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
+            ComputeBudget::default()
+        );
+
+        // deprecated
+        test!(
+            &[Instruction::new_with_borsh(
+                compute_budget::id(),
+                &compute_budget::ComputeBudgetInstruction::RequestUnitsDeprecated {
+                    units: 1_000,
+                    additional_fee: 10
+                },
+                vec![]
+            )],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            )),
             ComputeBudget::default()
         );
     }

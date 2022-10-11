@@ -20,6 +20,12 @@ use {
 mod sanitized;
 
 pub use sanitized::*;
+use {
+    crate::program_utils::limited_deserialize,
+    solana_program::{
+        nonce::NONCED_TX_MARKER_IX_INDEX, system_instruction::SystemInstruction, system_program,
+    },
+};
 
 /// Type that serializes to the string "legacy"
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,6 +187,35 @@ impl VersionedTransaction {
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), message_bytes))
             .collect()
     }
+
+    /// Returns true if transaction begins with a valid advance nonce
+    /// instruction. Since dynamically loaded addresses can't have write locks
+    /// demoted without loading addresses, this shouldn't be used in the
+    /// runtime.
+    pub fn uses_durable_nonce(&self) -> bool {
+        let message = &self.message;
+        message
+            .instructions()
+            .get(NONCED_TX_MARKER_IX_INDEX as usize)
+            .filter(|instruction| {
+                // Is system program
+                matches!(
+                    message.static_account_keys().get(instruction.program_id_index as usize),
+                    Some(program_id) if system_program::check_id(program_id)
+                )
+                // Is a nonce advance instruction
+                && matches!(
+                    limited_deserialize(&instruction.data),
+                    Ok(SystemInstruction::AdvanceNonceAccount)
+                )
+                // Nonce account is writable
+                && matches!(
+                    instruction.accounts.first(),
+                    Some(index) if message.is_maybe_writable(*index as usize)
+                )
+            })
+            .is_some()
+    }
 }
 
 #[cfg(test)]
@@ -190,6 +225,7 @@ mod tests {
         crate::{
             message::Message as LegacyMessage,
             signer::{keypair::Keypair, Signer},
+            system_instruction, sysvar,
         },
         solana_program::{
             instruction::{AccountMeta, Instruction},
@@ -239,5 +275,106 @@ mod tests {
             Ok(tx) => assert_eq!(tx.verify_with_results(), vec![true; 2]),
             Err(err) => assert_eq!(Some(err), None),
         }
+    }
+
+    fn nonced_transfer_tx() -> (Pubkey, Pubkey, VersionedTransaction) {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let nonce_keypair = Keypair::new();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let instructions = [
+            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+        ];
+        let message = LegacyMessage::new(&instructions, Some(&nonce_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
+        (from_pubkey, nonce_pubkey, tx.into())
+    }
+
+    #[test]
+    fn tx_uses_nonce_ok() {
+        let (_, _, tx) = nonced_transfer_tx();
+        assert!(tx.uses_durable_nonce());
+    }
+
+    #[test]
+    fn tx_uses_nonce_empty_ix_fail() {
+        assert!(!VersionedTransaction::default().uses_durable_nonce());
+    }
+
+    #[test]
+    fn tx_uses_nonce_bad_prog_id_idx_fail() {
+        let (_, _, mut tx) = nonced_transfer_tx();
+        match &mut tx.message {
+            VersionedMessage::Legacy(message) => {
+                message.instructions.get_mut(0).unwrap().program_id_index = 255u8;
+            }
+            VersionedMessage::V0(_) => unreachable!(),
+        };
+        assert!(!tx.uses_durable_nonce());
+    }
+
+    #[test]
+    fn tx_uses_nonce_first_prog_id_not_nonce_fail() {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let nonce_keypair = Keypair::new();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let instructions = [
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+            system_instruction::advance_nonce_account(&nonce_pubkey, &nonce_pubkey),
+        ];
+        let message = LegacyMessage::new(&instructions, Some(&from_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
+        let tx = VersionedTransaction::from(tx);
+        assert!(!tx.uses_durable_nonce());
+    }
+
+    #[test]
+    fn tx_uses_ro_nonce_account() {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let nonce_keypair = Keypair::new();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let account_metas = vec![
+            AccountMeta::new_readonly(nonce_pubkey, false),
+            #[allow(deprecated)]
+            AccountMeta::new_readonly(sysvar::recent_blockhashes::id(), false),
+            AccountMeta::new_readonly(nonce_pubkey, true),
+        ];
+        let nonce_instruction = Instruction::new_with_bincode(
+            system_program::id(),
+            &system_instruction::SystemInstruction::AdvanceNonceAccount,
+            account_metas,
+        );
+        let tx = Transaction::new_signed_with_payer(
+            &[nonce_instruction],
+            Some(&from_pubkey),
+            &[&from_keypair, &nonce_keypair],
+            Hash::default(),
+        );
+        let tx = VersionedTransaction::from(tx);
+        assert!(!tx.uses_durable_nonce());
+    }
+
+    #[test]
+    fn tx_uses_nonce_wrong_first_nonce_ix_fail() {
+        let from_keypair = Keypair::new();
+        let from_pubkey = from_keypair.pubkey();
+        let nonce_keypair = Keypair::new();
+        let nonce_pubkey = nonce_keypair.pubkey();
+        let instructions = [
+            system_instruction::withdraw_nonce_account(
+                &nonce_pubkey,
+                &nonce_pubkey,
+                &from_pubkey,
+                42,
+            ),
+            system_instruction::transfer(&from_pubkey, &nonce_pubkey, 42),
+        ];
+        let message = LegacyMessage::new(&instructions, Some(&nonce_pubkey));
+        let tx = Transaction::new(&[&from_keypair, &nonce_keypair], message, Hash::default());
+        let tx = VersionedTransaction::from(tx);
+        assert!(!tx.uses_durable_nonce());
     }
 }

@@ -3,7 +3,7 @@ use {
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats},
+        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
         request_response::RequestResponse,
         result::{Error, Result},
     },
@@ -29,16 +29,14 @@ use {
         data_budget::DataBudget,
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
-        feature_set::{check_ping_ancestor_requests, sign_repair_requests},
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
-        stake_history::Epoch,
         timing::{duration_as_ms, timestamp},
     },
     solana_streamer::{
@@ -46,7 +44,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -76,6 +74,7 @@ pub const MAX_ANCESTOR_RESPONSES: usize =
 pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
 pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
 pub const REPAIR_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
+const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(2);
 pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
     4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
@@ -151,10 +150,15 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 struct ServeRepairStats {
     total_requests: usize,
-    dropped_requests: usize,
+    unsigned_requests: usize,
+    dropped_requests_outbound_bandwidth: usize,
+    dropped_requests_load_shed: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
-    total_response_bytes: usize,
+    total_response_bytes_staked: usize,
+    total_response_bytes_unstaked: usize,
+    handle_requests_staked: usize,
+    handle_requests_unstaked: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -162,7 +166,6 @@ struct ServeRepairStats {
     orphan: usize,
     pong: usize,
     ancestor_hashes: usize,
-    pings_required: usize,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -312,10 +315,6 @@ impl ServeRepair {
         }
     }
 
-    fn my_info(&self) -> ContactInfo {
-        self.cluster_info.my_contact_info()
-    }
-
     pub(crate) fn my_id(&self) -> Pubkey {
         self.cluster_info.id()
     }
@@ -424,42 +423,6 @@ impl ServeRepair {
         }
     }
 
-    pub(crate) fn sign_repair_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
-        root_bank
-            .feature_set
-            .activated_slot(&sign_repair_requests::id())
-            .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
-    }
-
-    pub(crate) fn should_sign_repair_request(
-        slot: Slot,
-        root_bank: &Bank,
-        sign_repairs_epoch: Option<Epoch>,
-    ) -> bool {
-        match sign_repairs_epoch {
-            None => false,
-            Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
-        }
-    }
-
-    fn check_ping_ancestor_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
-        root_bank
-            .feature_set
-            .activated_slot(&check_ping_ancestor_requests::id())
-            .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
-    }
-
-    fn should_check_ping_ancestor_request(
-        slot: Slot,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
-    ) -> bool {
-        match check_ping_ancestor_request_epoch {
-            None => false,
-            Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
-        }
-    }
-
     /// Process messages from the network
     fn run_listen(
         &self,
@@ -487,10 +450,11 @@ impl ServeRepair {
             }
         }
 
-        stats.dropped_requests += dropped_requests;
+        stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
         let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         for reqs in reqs_v {
             self.handle_packets(
                 ping_cache,
@@ -498,9 +462,9 @@ impl ServeRepair {
                 blockstore,
                 reqs,
                 response_sender,
-                &root_bank,
                 stats,
                 data_budget,
+                &epoch_staked_nodes,
             );
         }
         Ok(())
@@ -519,14 +483,40 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
-            ("dropped_requests", stats.dropped_requests, i64),
+            ("unsigned_requests", stats.unsigned_requests, i64),
+            (
+                "dropped_requests_outbound_bandwidth",
+                stats.dropped_requests_outbound_bandwidth,
+                i64
+            ),
+            (
+                "dropped_requests_load_shed",
+                stats.dropped_requests_load_shed,
+                i64
+            ),
             (
                 "total_dropped_response_packets",
                 stats.total_dropped_response_packets,
                 i64
             ),
+            ("handle_requests_staked", stats.handle_requests_staked, i64),
+            (
+                "handle_requests_unstaked",
+                stats.handle_requests_unstaked,
+                i64
+            ),
+            ("processed", stats.processed, i64),
             ("total_response_packets", stats.total_response_packets, i64),
-            ("total_response_bytes", stats.total_response_bytes, i64),
+            (
+                "total_response_bytes_staked",
+                stats.total_response_bytes_staked,
+                i64
+            ),
+            (
+                "total_response_bytes_unstaked",
+                stats.total_response_bytes_unstaked,
+                i64
+            ),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
@@ -541,7 +531,6 @@ impl ServeRepair {
                 i64
             ),
             ("pong", stats.pong, i64),
-            ("pings_required", stats.pings_required, i64),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -563,7 +552,14 @@ impl ServeRepair {
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
 
-        let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
+        // rate limit delay should be greater than the repair request iteration delay
+        assert!(REPAIR_PING_CACHE_RATE_LIMIT_DELAY > Duration::from_millis(REPAIR_MS));
+
+        let mut ping_cache = PingCache::new(
+            REPAIR_PING_CACHE_TTL,
+            REPAIR_PING_CACHE_RATE_LIMIT_DELAY,
+            REPAIR_PING_CACHE_CAPACITY,
+        );
 
         let recycler = PacketBatchRecycler::default();
         Builder::new()
@@ -663,78 +659,6 @@ impl ServeRepair {
         true
     }
 
-    fn check_ping_cache(
-        request: &RepairProtocol,
-        from_addr: &SocketAddr,
-        identity_keypair: &Keypair,
-        ping_cache: &mut PingCache,
-    ) -> (bool, Option<Ping>) {
-        let mut rng = rand::thread_rng();
-        let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
-        ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf)
-    }
-
-    fn requires_signature_check(
-        request: &RepairProtocol,
-        root_bank: &Bank,
-        sign_repairs_epoch: Option<Epoch>,
-    ) -> bool {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, slot, _)
-            | RepairProtocol::LegacyOrphan(_, slot)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, slot, _)
-            | RepairProtocol::LegacyAncestorHashes(_, slot, _)
-            | RepairProtocol::WindowIndex { slot, .. }
-            | RepairProtocol::HighestWindowIndex { slot, .. }
-            | RepairProtocol::Orphan { slot, .. }
-            | RepairProtocol::AncestorHashes { slot, .. } => {
-                Self::should_sign_repair_request(*slot, root_bank, sign_repairs_epoch)
-            }
-            RepairProtocol::Pong(_) => true,
-        }
-    }
-
-    fn ping_to_packet_mapper_by_request_variant(
-        request: &RepairProtocol,
-        dest_addr: SocketAddr,
-        root_bank: &Bank,
-        check_ping_ancestor_request_epoch: Option<Epoch>,
-    ) -> Option<Box<dyn FnOnce(Ping) -> Option<Packet>>> {
-        match request {
-            RepairProtocol::LegacyWindowIndex(_, _, _)
-            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
-            | RepairProtocol::LegacyOrphan(_, _)
-            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
-            | RepairProtocol::LegacyAncestorHashes(_, _, _)
-            | RepairProtocol::Pong(_) => None,
-            RepairProtocol::WindowIndex { .. }
-            | RepairProtocol::HighestWindowIndex { .. }
-            | RepairProtocol::Orphan { .. } => Some(Box::new(move |ping| {
-                let ping = RepairResponse::Ping(ping);
-                Packet::from_data(Some(&dest_addr), ping).ok()
-            })),
-            RepairProtocol::AncestorHashes { slot, .. } => {
-                if Self::should_check_ping_ancestor_request(
-                    *slot,
-                    root_bank,
-                    check_ping_ancestor_request_epoch,
-                ) {
-                    Some(Box::new(move |ping| {
-                        let ping = AncestorHashesResponse::Ping(ping);
-                        Packet::from_data(Some(&dest_addr), ping).ok()
-                    }))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
     fn handle_packets(
         &self,
         ping_cache: &mut PingCache,
@@ -742,17 +666,12 @@ impl ServeRepair {
         blockstore: &Blockstore,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
-        root_bank: &Bank,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
     ) {
-        let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let check_ping_ancestor_request_epoch =
-            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let identity_keypair = self.cluster_info.keypair().clone();
-        let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
-        let mut pending_pings = Vec::default();
 
         // iter over the packets
         for (i, packet) in packet_batch.iter().enumerate() {
@@ -764,47 +683,28 @@ impl ServeRepair {
                 }
             };
 
+            let staked = epoch_staked_nodes
+                .as_ref()
+                .map(|nodes| nodes.contains_key(request.sender()))
+                .unwrap_or_default();
+            match staked {
+                true => stats.handle_requests_staked += 1,
+                false => stats.handle_requests_unstaked += 1,
+            }
+
             if request.sender() == &my_id {
                 stats.self_repair += 1;
                 continue;
             }
 
-            let require_signature_check =
-                Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
-            if require_signature_check && !request.supports_signature() {
-                stats.err_unsigned += 1;
-                continue;
-            }
-            if request.supports_signature()
-                && !Self::verify_signed_packet(&my_id, packet, &request, stats)
-            {
-                continue;
+            if request.supports_signature() {
+                // collect stats for signature verification
+                Self::verify_signed_packet(&my_id, packet, &request, stats);
+            } else {
+                stats.unsigned_requests += 1;
             }
 
             let from_addr = packet.meta.socket_addr();
-            if let Some(ping_to_pkt) = Self::ping_to_packet_mapper_by_request_variant(
-                &request,
-                from_addr,
-                root_bank,
-                check_ping_ancestor_request_epoch,
-            ) {
-                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                    stats.err_malformed += 1;
-                    continue;
-                }
-                let (check, ping) =
-                    Self::check_ping_cache(&request, &from_addr, &identity_keypair, ping_cache);
-                if let Some(ping) = ping {
-                    if let Some(pkt) = ping_to_pkt(ping) {
-                        pending_pings.push(pkt);
-                    }
-                }
-                if !check {
-                    stats.pings_required += 1;
-                    continue;
-                }
-            }
-
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -815,56 +715,38 @@ impl ServeRepair {
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
-                stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
+                match staked {
+                    true => stats.total_response_bytes_staked += num_response_bytes,
+                    false => stats.total_response_bytes_unstaked += num_response_bytes,
+                }
             } else {
-                stats.dropped_requests += packet_batch.len() - i;
+                stats.dropped_requests_outbound_bandwidth += packet_batch.len() - i;
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }
-        }
-
-        if !pending_pings.is_empty() {
-            let batch = PacketBatch::new(pending_pings);
-            let _ignore = response_sender.send(batch);
         }
     }
 
     pub fn ancestor_repair_request_bytes(
         &self,
         keypair: &Keypair,
-        root_bank: &Bank,
         repair_peer_id: &Pubkey,
         request_slot: Slot,
         nonce: Nonce,
     ) -> Result<Vec<u8>> {
-        let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let require_sig =
-            Self::should_sign_repair_request(request_slot, root_bank, sign_repairs_epoch);
-
-        let (request_proto, maybe_keypair) = if require_sig {
-            let header = RepairRequestHeader {
-                signature: Signature::default(),
-                sender: self.my_id(),
-                recipient: *repair_peer_id,
-                timestamp: timestamp(),
-                nonce,
-            };
-            (
-                RepairProtocol::AncestorHashes {
-                    header,
-                    slot: request_slot,
-                },
-                Some(keypair),
-            )
-        } else {
-            (
-                RepairProtocol::LegacyAncestorHashes(self.my_info(), request_slot, nonce),
-                None,
-            )
+        let header = RepairRequestHeader {
+            signature: Signature::default(),
+            sender: self.my_id(),
+            recipient: *repair_peer_id,
+            timestamp: timestamp(),
+            nonce,
         };
-
-        Self::repair_proto_to_bytes(&request_proto, maybe_keypair)
+        let request = RepairProtocol::AncestorHashes {
+            header,
+            slot: request_slot,
+        };
+        Self::repair_proto_to_bytes(&request, keypair)
     }
 
     pub(crate) fn repair_request(
@@ -875,7 +757,7 @@ impl ServeRepair {
         repair_stats: &mut RepairStats,
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
-        identity_keypair: Option<&Keypair>,
+        identity_keypair: &Keypair,
     ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
@@ -951,67 +833,41 @@ impl ServeRepair {
         repair_peer_id: &Pubkey,
         repair_stats: &mut RepairStats,
         nonce: Nonce,
-        identity_keypair: Option<&Keypair>,
+        identity_keypair: &Keypair,
     ) -> Result<Vec<u8>> {
-        let header = if identity_keypair.is_some() {
-            Some(RepairRequestHeader {
-                signature: Signature::default(),
-                sender: self.my_id(),
-                recipient: *repair_peer_id,
-                timestamp: timestamp(),
-                nonce,
-            })
-        } else {
-            None
+        let header = RepairRequestHeader {
+            signature: Signature::default(),
+            sender: self.my_id(),
+            recipient: *repair_peer_id,
+            timestamp: timestamp(),
+            nonce,
         };
         let request_proto = match repair_request {
             ShredRepairType::Shred(slot, shred_index) => {
                 repair_stats
                     .shred
                     .update(repair_peer_id, *slot, *shred_index);
-                if let Some(header) = header {
-                    RepairProtocol::WindowIndex {
-                        header,
-                        slot: *slot,
-                        shred_index: *shred_index,
-                    }
-                } else {
-                    RepairProtocol::LegacyWindowIndexWithNonce(
-                        self.my_info(),
-                        *slot,
-                        *shred_index,
-                        nonce,
-                    )
+                RepairProtocol::WindowIndex {
+                    header,
+                    slot: *slot,
+                    shred_index: *shred_index,
                 }
             }
             ShredRepairType::HighestShred(slot, shred_index) => {
                 repair_stats
                     .highest_shred
                     .update(repair_peer_id, *slot, *shred_index);
-                if let Some(header) = header {
-                    RepairProtocol::HighestWindowIndex {
-                        header,
-                        slot: *slot,
-                        shred_index: *shred_index,
-                    }
-                } else {
-                    RepairProtocol::LegacyHighestWindowIndexWithNonce(
-                        self.my_info(),
-                        *slot,
-                        *shred_index,
-                        nonce,
-                    )
+                RepairProtocol::HighestWindowIndex {
+                    header,
+                    slot: *slot,
+                    shred_index: *shred_index,
                 }
             }
             ShredRepairType::Orphan(slot) => {
                 repair_stats.orphan.update(repair_peer_id, *slot, 0);
-                if let Some(header) = header {
-                    RepairProtocol::Orphan {
-                        header,
-                        slot: *slot,
-                    }
-                } else {
-                    RepairProtocol::LegacyOrphanWithNonce(self.my_info(), *slot, nonce)
+                RepairProtocol::Orphan {
+                    header,
+                    slot: *slot,
                 }
             }
         };
@@ -1072,17 +928,12 @@ impl ServeRepair {
         }
     }
 
-    pub fn repair_proto_to_bytes(
-        request: &RepairProtocol,
-        keypair: Option<&Keypair>,
-    ) -> Result<Vec<u8>> {
+    pub fn repair_proto_to_bytes(request: &RepairProtocol, keypair: &Keypair) -> Result<Vec<u8>> {
+        debug_assert!(request.supports_signature());
         let mut payload = serialize(&request)?;
-        if let Some(keypair) = keypair {
-            debug_assert!(request.supports_signature());
-            let signable_data = [&payload[..4], &payload[4 + SIGNATURE_BYTES..]].concat();
-            let signature = keypair.sign_message(&signable_data[..]);
-            payload[4..4 + SIGNATURE_BYTES].copy_from_slice(signature.as_ref());
-        }
+        let signable_data = [&payload[..4], &payload[4 + SIGNATURE_BYTES..]].concat();
+        let signature = keypair.sign_message(&signable_data[..]);
+        payload[4..4 + SIGNATURE_BYTES].copy_from_slice(signature.as_ref());
         Ok(payload)
     }
 
@@ -1311,7 +1162,7 @@ mod tests {
                 &repair_peer_id,
                 &mut RepairStats::default(),
                 456,
-                Some(&keypair),
+                &keypair,
             )
             .unwrap();
 
@@ -1335,7 +1186,7 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_ancestor_hashes_request() {
-        let slot = 50;
+        let slot: Slot = 50;
         let nonce = 70;
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
@@ -1346,11 +1197,10 @@ mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks.clone());
+        let serve_repair = ServeRepair::new(cluster_info, bank_forks);
 
-        let root_bank = bank_forks.read().unwrap().root_bank();
         let request_bytes = serve_repair
-            .ancestor_repair_request_bytes(&keypair, &root_bank, &repair_peer_id, slot, nonce)
+            .ancestor_repair_request_bytes(&keypair, &repair_peer_id, slot, nonce)
             .unwrap();
         let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
@@ -1372,35 +1222,10 @@ mod tests {
         } else {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
-
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&sign_repair_requests::id());
-        bank.feature_set = Arc::new(feature_set);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let serve_repair = ServeRepair::new(cluster_info, bank_forks.clone());
-
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        let request_bytes = serve_repair
-            .ancestor_repair_request_bytes(&keypair, &root_bank, &repair_peer_id, slot, nonce)
-            .unwrap();
-        let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), request_bytes.len() as u64);
-        if let RepairProtocol::LegacyAncestorHashes(ci, deserialized_slot, deserialized_nonce) =
-            deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
     }
 
     #[test]
-    fn test_map_requests_signed_unsigned() {
+    fn test_map_requests_signed() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
@@ -1415,20 +1240,20 @@ mod tests {
         let nonce = 70;
 
         let request = ShredRepairType::Shred(slot, shred_index);
-        let rsp = serve_repair
+        let request_bytes = serve_repair
             .map_repair_request(
                 &request,
                 &repair_peer_id,
                 &mut RepairStats::default(),
                 nonce,
-                Some(&keypair),
+                &keypair,
             )
             .unwrap();
 
-        let mut cursor = Cursor::new(&rsp[..]);
+        let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
             deserialize_from_with_limit(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
+        assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::WindowIndex {
             header,
             slot: deserialized_slot,
@@ -1440,7 +1265,7 @@ mod tests {
             assert_eq!(header.nonce, nonce);
             assert_eq!(&header.sender, &serve_repair.my_id());
             assert_eq!(&header.recipient, &repair_peer_id);
-            let signed_data = [&rsp[..4], &rsp[4 + SIGNATURE_BYTES..]].concat();
+            let signed_data = [&request_bytes[..4], &request_bytes[4 + SIGNATURE_BYTES..]].concat();
             assert!(header
                 .signature
                 .verify(keypair.pubkey().as_ref(), &signed_data));
@@ -1448,50 +1273,21 @@ mod tests {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
 
-        let rsp = serve_repair
-            .map_repair_request(
-                &request,
-                &repair_peer_id,
-                &mut RepairStats::default(),
-                nonce,
-                None,
-            )
-            .unwrap();
-
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-        if let RepairProtocol::LegacyWindowIndexWithNonce(
-            ci,
-            deserialized_slot,
-            deserialized_shred_index,
-            deserialized_nonce,
-        ) = deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(shred_index, deserialized_shred_index);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
-
         let request = ShredRepairType::HighestShred(slot, shred_index);
-        let rsp = serve_repair
+        let request_bytes = serve_repair
             .map_repair_request(
                 &request,
                 &repair_peer_id,
                 &mut RepairStats::default(),
                 nonce,
-                Some(&keypair),
+                &keypair,
             )
             .unwrap();
 
-        let mut cursor = Cursor::new(&rsp[..]);
+        let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
             deserialize_from_with_limit(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
+        assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::HighestWindowIndex {
             header,
             slot: deserialized_slot,
@@ -1503,39 +1299,10 @@ mod tests {
             assert_eq!(header.nonce, nonce);
             assert_eq!(&header.sender, &serve_repair.my_id());
             assert_eq!(&header.recipient, &repair_peer_id);
-            let signed_data = [&rsp[..4], &rsp[4 + SIGNATURE_BYTES..]].concat();
+            let signed_data = [&request_bytes[..4], &request_bytes[4 + SIGNATURE_BYTES..]].concat();
             assert!(header
                 .signature
                 .verify(keypair.pubkey().as_ref(), &signed_data));
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
-
-        let rsp = serve_repair
-            .map_repair_request(
-                &request,
-                &repair_peer_id,
-                &mut RepairStats::default(),
-                nonce,
-                None,
-            )
-            .unwrap();
-
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-        if let RepairProtocol::LegacyHighestWindowIndexWithNonce(
-            ci,
-            deserialized_slot,
-            deserialized_shred_index,
-            deserialized_nonce,
-        ) = deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(shred_index, deserialized_shred_index);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
         } else {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
@@ -1765,6 +1532,7 @@ mod tests {
         let me = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         let cluster_info = Arc::new(new_test_cluster_info(me));
         let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks);
+        let identity_keypair = cluster_info.keypair().clone();
         let mut outstanding_requests = OutstandingShredRepairs::default();
         let rv = serve_repair.repair_request(
             &cluster_slots,
@@ -1773,7 +1541,7 @@ mod tests {
             &mut RepairStats::default(),
             &None,
             &mut outstanding_requests,
-            None,
+            &identity_keypair,
         );
         assert_matches!(rv, Err(Error::ClusterInfo(ClusterInfoError::NoPeers)));
 
@@ -1802,7 +1570,7 @@ mod tests {
                 &mut RepairStats::default(),
                 &None,
                 &mut outstanding_requests,
-                None,
+                &identity_keypair,
             )
             .unwrap();
         assert_eq!(nxt.serve_repair, serve_repair_addr);
@@ -1837,7 +1605,7 @@ mod tests {
                     &mut RepairStats::default(),
                     &None,
                     &mut outstanding_requests,
-                    None,
+                    &identity_keypair,
                 )
                 .unwrap();
             if rv.0 == serve_repair_addr {
@@ -2093,6 +1861,7 @@ mod tests {
             ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), timestamp());
         cluster_info.insert_info(contact_info2.clone());
         cluster_info.insert_info(contact_info3.clone());
+        let identity_keypair = cluster_info.keypair().clone();
         let serve_repair = ServeRepair::new(cluster_info, bank_forks);
 
         // If:
@@ -2110,7 +1879,7 @@ mod tests {
                     &mut RepairStats::default(),
                     &known_validators,
                     &mut OutstandingShredRepairs::default(),
-                    None,
+                    &identity_keypair,
                 )
                 .is_err());
         }
@@ -2128,7 +1897,7 @@ mod tests {
                 &mut RepairStats::default(),
                 &known_validators,
                 &mut OutstandingShredRepairs::default(),
-                None,
+                &identity_keypair,
             )
             .is_ok());
 
@@ -2150,7 +1919,7 @@ mod tests {
                 &mut RepairStats::default(),
                 &None,
                 &mut OutstandingShredRepairs::default(),
-                None,
+                &identity_keypair,
             )
             .is_ok());
     }

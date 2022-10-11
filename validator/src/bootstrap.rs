@@ -618,6 +618,8 @@ fn get_rpc_nodes(
     let mut newer_cluster_snapshot_timeout = None;
     let mut retry_reason = None;
     loop {
+        // Give gossip some time to populate and not spin on grabbing the crds lock
+        std::thread::sleep(Duration::from_secs(1));
         info!("\n{}", cluster_info.rpc_info_trace());
 
         let rpc_peers = get_rpc_peers(
@@ -844,10 +846,10 @@ where
             if is_any_same_slot_and_different_hash(full_snapshot_hash, known_snapshot_hashes.keys())
             {
                 warn!(
-                        "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot.\nfull snapshot hash: {:?}",
-                        node,
-                        full_snapshot_hash,
-                    );
+                    "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot.\nfull snapshot hash: {:?}",
+                    node,
+                    full_snapshot_hash,
+                );
                 debug!(
                     "known full snapshot hashes: {:#?}",
                     known_snapshot_hashes.keys(),
@@ -1202,19 +1204,28 @@ fn download_snapshot(
                         && known_validators.len() == 1
                         && bootstrap_config.only_known_rpc
                     {
-                        warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, but will NOT abort \
-                                  and try a different node as it is the only known validator and the --only-known-rpc flag \
-                                  is set. \
-                                  Abort count: {}, Progress detail: {:?}",
-                                  download_progress.last_throughput, minimal_snapshot_download_speed,
-                                  download_abort_count, download_progress);
+                        warn!(
+                            "The snapshot download is too slow, throughput: {} < min speed {} \
+                            bytes/sec, but will NOT abort and try a different node as it is the \
+                            only known validator and the --only-known-rpc flag is set. \
+                            Abort count: {}, Progress detail: {:?}",
+                            download_progress.last_throughput,
+                            minimal_snapshot_download_speed,
+                            download_abort_count,
+                            download_progress,
+                        );
                         return true; // Do not abort download from the one-and-only known validator
                     }
                 }
-                warn!("The snapshot download is too slow, throughput: {} < min speed {} bytes/sec, will abort \
-                           and try a different node. Abort count: {}, Progress detail: {:?}",
-                           download_progress.last_throughput, minimal_snapshot_download_speed,
-                           download_abort_count, download_progress);
+                warn!(
+                    "The snapshot download is too slow, throughput: {} < min speed {} \
+                    bytes/sec, will abort and try a different node. \
+                    Abort count: {}, Progress detail: {:?}",
+                    download_progress.last_throughput,
+                    minimal_snapshot_download_speed,
+                    download_abort_count,
+                    download_progress,
+                );
                 *download_abort_count += 1;
                 false
             } else {

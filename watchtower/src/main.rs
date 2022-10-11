@@ -10,7 +10,7 @@ use {
     },
     solana_cli_output::display::format_labeled_address,
     solana_metrics::{datapoint_error, datapoint_info},
-    solana_notifier::Notifier,
+    solana_notifier::{NotificationType, Notifier},
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{client_error, response::RpcVoteAccountStatus},
     solana_sdk::{
@@ -31,10 +31,12 @@ struct Config {
     ignore_http_bad_gateway: bool,
     interval: Duration,
     json_rpc_url: String,
+    rpc_timeout: Duration,
     minimum_validator_identity_balance: u64,
     monitor_active_stake: bool,
     unhealthy_threshold: usize,
     validator_identity_pubkeys: Vec<Pubkey>,
+    name_suffix: String,
 }
 
 fn get_config() -> Config {
@@ -42,7 +44,7 @@ fn get_config() -> Config {
         .about(crate_description!())
         .version(solana_version::version!())
         .after_help("ADDITIONAL HELP:
-        To receive a Slack, Discord and/or Telegram notification on sanity failure,
+        To receive a Slack, Discord, PagerDuty and/or Telegram notification on sanity failure,
         define environment variables before running `solana-watchtower`:
 
         export SLACK_WEBHOOK=...
@@ -52,6 +54,10 @@ fn get_config() -> Config {
 
         export TELEGRAM_BOT_TOKEN=...
         export TELEGRAM_CHAT_ID=...
+
+        PagerDuty requires an Integration Key from the Events API v2 (Add this integration to your PagerDuty service to get this)
+
+        export PAGERDUTY_INTEGRATION_KEY=...
 
         To receive a Twilio SMS notification on failure, having a Twilio account,
         and a sending number owned by that account,
@@ -79,6 +85,14 @@ fn get_config() -> Config {
                 .takes_value(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the cluster"),
+        )
+        .arg(
+            Arg::with_name("rpc_timeout")
+                .long("rpc-timeout")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .default_value("30")
+                .help("Timeout value for RPC requests"),
         )
         .arg(
             Arg::with_name("interval")
@@ -135,6 +149,14 @@ fn get_config() -> Config {
                     no alerting should a Bad Gateway error be a side effect of \
                     the real problem")
         )
+        .arg(
+            Arg::with_name("name_suffix")
+                .long("name-suffix")
+                .value_name("SUFFIX")
+                .takes_value(true)
+                .default_value("")
+                .help("Add this string into all notification messages after \"solana-watchtower\"")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -152,6 +174,8 @@ fn get_config() -> Config {
     ));
     let json_rpc_url =
         value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url.clone());
+    let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
+    let rpc_timeout = Duration::from_secs(rpc_timeout);
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_default()
         .into_iter()
@@ -160,15 +184,19 @@ fn get_config() -> Config {
     let monitor_active_stake = matches.is_present("monitor_active_stake");
     let ignore_http_bad_gateway = matches.is_present("ignore_http_bad_gateway");
 
+    let name_suffix = value_t_or_exit!(matches, "name_suffix", String);
+
     let config = Config {
         address_labels: config.address_labels,
         ignore_http_bad_gateway,
         interval,
         json_rpc_url,
+        rpc_timeout,
         minimum_validator_identity_balance,
         monitor_active_stake,
         unhealthy_threshold,
         validator_identity_pubkeys,
+        name_suffix,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -209,13 +237,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let config = get_config();
 
-    let rpc_client = RpcClient::new(config.json_rpc_url.clone());
+    let rpc_client = RpcClient::new_with_timeout(config.json_rpc_url.clone(), config.rpc_timeout);
     let notifier = Notifier::default();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
     let mut last_notification_msg = "".into();
     let mut num_consecutive_failures = 0;
     let mut last_success = Instant::now();
+    let mut incident = Hash::new_unique();
 
     loop {
         let failure = match get_cluster_info(&config, &rpc_client) {
@@ -338,14 +367,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if let Some((failure_test_name, failure_error_message)) = &failure {
             let notification_msg = format!(
-                "solana-watchtower: Error: {}: {}",
-                failure_test_name, failure_error_message
+                "solana-watchtower{}: Error: {}: {}",
+                config.name_suffix, failure_test_name, failure_error_message
             );
             num_consecutive_failures += 1;
             if num_consecutive_failures > config.unhealthy_threshold {
                 datapoint_info!("watchtower-sanity", ("ok", false, bool));
                 if last_notification_msg != notification_msg {
-                    notifier.send(&notification_msg);
+                    notifier.send(&notification_msg, &NotificationType::Trigger { incident });
                 }
                 datapoint_error!(
                     "watchtower-sanity-failure",
@@ -371,11 +400,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     humantime::format_duration(alarm_duration)
                 );
                 info!("{}", all_clear_msg);
-                notifier.send(&format!("solana-watchtower: {}", all_clear_msg));
+                notifier.send(
+                    &format!("solana-watchtower{}: {}", config.name_suffix, all_clear_msg),
+                    &NotificationType::Resolve { incident },
+                );
             }
             last_notification_msg = "".into();
             last_success = Instant::now();
             num_consecutive_failures = 0;
+            incident = Hash::new_unique();
         }
         sleep(config.interval);
     }

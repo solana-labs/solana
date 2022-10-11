@@ -103,6 +103,7 @@ impl SnapshotTestConfig {
             accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
+        bank0.set_startup_verification_complete();
         let mut bank_forks = BankForks::new(bank0);
         bank_forks.accounts_hash_interval_slots = accounts_hash_interval_slots;
 
@@ -176,6 +177,7 @@ fn restore_from_snapshot(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 
@@ -207,15 +209,33 @@ fn run_bank_forks_snapshot_n<F>(
     );
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
+
+    let pending_accounts_package = PendingAccountsPackage::default();
+    let exit = Arc::new(AtomicBool::new(false));
+    let node_id = Arc::new(Keypair::new());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
+        Arc::clone(&node_id),
+        SocketAddrSpace::Unspecified,
+    ));
+    let accounts_hash_verifier = AccountsHashVerifier::new(
+        Arc::clone(&pending_accounts_package),
+        None,
+        &exit,
+        &cluster_info,
+        None,
+        false,
+        0,
+        Some(snapshot_test_config.snapshot_config.clone()),
+    );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender);
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        pending_accounts_package,
     };
     for slot in 1..=last_slot {
         let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -274,6 +294,9 @@ fn run_bank_forks_snapshot_n<F>(
     let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
     restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
+
+    exit.store(true, Ordering::Relaxed);
+    accounts_hash_verifier.join().unwrap();
 }
 
 #[test_case(V1_2_0, Development)]
@@ -451,7 +474,7 @@ fn test_concurrent_snapshot_packaging(
     // currently sitting in the channel
     snapshot_utils::purge_old_bank_snapshots(bank_snapshots_dir);
 
-    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(&bank_snapshots_dir);
+    let mut bank_snapshots = snapshot_utils::get_bank_snapshots_pre(bank_snapshots_dir);
     bank_snapshots.sort_unstable();
     assert!(bank_snapshots
         .into_iter()
@@ -582,6 +605,16 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
             snapshot_test_config
                 .bank_forks
                 .set_root(current_bank.slot(), &request_sender, None);
+
+            // Since the accounts background services are not runnning, EpochAccountsHash
+            // calculation requests will not be handled. To prevent banks from hanging during
+            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Invalid.
+            current_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_invalid_for_tests();
         }
 
         let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
@@ -674,15 +707,33 @@ fn test_bank_forks_incremental_snapshot(
             snapshot_test_config.accounts_dir.path().display(), snapshot_test_config.bank_snapshots_dir.path().display(), snapshot_test_config.full_snapshot_archives_dir.path().display(), snapshot_test_config.incremental_snapshot_archives_dir.path().display());
 
     let bank_forks = &mut snapshot_test_config.bank_forks;
-    bank_forks.root_bank().set_startup_verification_complete();
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
+
+    let pending_accounts_package = PendingAccountsPackage::default();
+    let exit = Arc::new(AtomicBool::new(false));
+    let node_id = Arc::new(Keypair::new());
+    let cluster_info = Arc::new(ClusterInfo::new(
+        ContactInfo::new_localhost(&node_id.pubkey(), timestamp()),
+        Arc::clone(&node_id),
+        SocketAddrSpace::Unspecified,
+    ));
+    let accounts_hash_verifier = AccountsHashVerifier::new(
+        Arc::clone(&pending_accounts_package),
+        None,
+        &exit,
+        &cluster_info,
+        None,
+        false,
+        0,
+        Some(snapshot_test_config.snapshot_config.clone()),
+    );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
     let request_sender = AbsRequestSender::new(snapshot_request_sender);
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        pending_accounts_package,
     };
 
     let mut last_full_snapshot_slot = None;
@@ -691,11 +742,11 @@ fn test_bank_forks_incremental_snapshot(
         let bank = {
             let bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 0, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -753,6 +804,8 @@ fn test_bank_forks_incremental_snapshot(
             .unwrap();
         }
     }
+    exit.store(true, Ordering::Relaxed);
+    accounts_hash_verifier.join().unwrap();
 }
 
 fn make_full_snapshot_archive(
@@ -849,6 +902,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )?;
 
     assert_eq!(bank, &deserialized_bank);
@@ -910,10 +964,6 @@ fn test_snapshots_with_background_services(
     let pending_accounts_package = PendingAccountsPackage::default();
     let pending_snapshot_package = PendingSnapshotPackage::default();
 
-    snapshot_test_config
-        .bank_forks
-        .root_bank()
-        .set_startup_verification_complete();
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
     let callback = bank_forks
         .read()
@@ -981,11 +1031,11 @@ fn test_snapshots_with_background_services(
                 slot,
             );
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 1, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-            let key = Keypair::new().pubkey();
+            let key = solana_sdk::pubkey::new_rand();
             let tx = system_transaction::transfer(mint_keypair, &key, 0, bank.last_blockhash());
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
@@ -1044,6 +1094,7 @@ fn test_snapshots_with_background_services(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        &Arc::default(),
     )
     .unwrap();
 

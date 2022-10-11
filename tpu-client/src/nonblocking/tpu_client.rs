@@ -500,7 +500,7 @@ impl TpuClient {
                 }
             }
 
-            transactions = pending_transactions.into_iter().map(|(_k, v)| v).collect();
+            transactions = pending_transactions.into_values().collect();
             progress_bar.println(format!(
                 "Blockhash expired. {} retries remaining",
                 expired_blockhash_retries
