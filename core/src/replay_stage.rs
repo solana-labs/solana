@@ -15,7 +15,6 @@ use {
         consensus::{
             ComputedBankState, Stake, SwitchForkDecision, Tower, VotedStakes, SWITCH_FORK_THRESHOLD,
         },
-        cost_update_service::CostUpdate,
         fork_choice::{ForkChoice, SelectVoteAndResetForkResult},
         heaviest_subtree_fork_choice::HeaviestSubtreeForkChoice,
         latest_validator_votes_for_frozen_banks::LatestValidatorVotesForFrozenBanks,
@@ -394,7 +393,6 @@ impl ReplayStage {
         gossip_duplicate_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         gossip_verified_vote_hash_receiver: GossipVerifiedVoteHashReceiver,
         cluster_slots_update_sender: ClusterSlotsUpdateSender,
-        cost_update_sender: Sender<CostUpdate>,
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
@@ -527,7 +525,6 @@ impl ReplayStage {
                         &mut unfrozen_gossip_verified_vote_hashes,
                         &mut latest_validator_votes_for_frozen_banks,
                         &cluster_slots_update_sender,
-                        &cost_update_sender,
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
@@ -2420,7 +2417,6 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
-        cost_update_sender: &Sender<CostUpdate>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
@@ -2491,12 +2487,6 @@ impl ReplayStage {
                     ("slot", bank_slot, i64),
                     ("hash", bank.hash().to_string(), String),
                 );
-                // report cost tracker stats
-                cost_update_sender
-                    .send(CostUpdate::FrozenBank { bank: bank.clone() })
-                    .unwrap_or_else(|err| {
-                        warn!("cost_update_sender failed sending bank stats: {:?}", err)
-                    });
 
                 // finalize block's minimum prioritization fee cache for this bank
                 prioritization_fee_cache.finalize_priority_fee(bank.slot());
@@ -2579,14 +2569,6 @@ impl ReplayStage {
             }
         }
 
-        // Send accumulated execute-timings to cost_update_service.
-        if !execute_timings.details.per_program_timings.is_empty() {
-            cost_update_sender
-                .send(CostUpdate::ExecuteTiming {
-                    execute_timings: Box::new(execute_timings),
-                })
-                .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
-        }
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
@@ -2612,7 +2594,6 @@ impl ReplayStage {
         unfrozen_gossip_verified_vote_hashes: &mut UnfrozenGossipVerifiedVoteHashes,
         latest_validator_votes_for_frozen_banks: &mut LatestValidatorVotesForFrozenBanks,
         cluster_slots_update_sender: &ClusterSlotsUpdateSender,
-        cost_update_sender: &Sender<CostUpdate>,
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
@@ -2682,7 +2663,6 @@ impl ReplayStage {
                 unfrozen_gossip_verified_vote_hashes,
                 latest_validator_votes_for_frozen_banks,
                 cluster_slots_update_sender,
-                cost_update_sender,
                 duplicate_slots_to_repair,
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,

@@ -983,7 +983,6 @@ impl Validator {
                 replay_slots_concurrently: config.replay_slots_concurrently,
             },
             &max_slots,
-            &cost_model,
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
