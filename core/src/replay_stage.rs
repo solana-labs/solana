@@ -2271,7 +2271,7 @@ impl ReplayStage {
                 bank.freeze();
                 datapoint_info!(
                     "bank_frozen",
-                    ("slot", bank_slot, i64),
+                    ("slot", *bank_slot, i64),
                     ("hash", bank.hash().to_string(), String),
                 );
                 // report cost tracker stats
