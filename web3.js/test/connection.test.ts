@@ -4621,6 +4621,24 @@ describe('Connection', function () {
         }
         expect(foundTx).to.be.true;
       });
+
+      it('getParsedBlock', async () => {
+        const block = await connection.getParsedBlock(transactionSlot, {
+          maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed',
+        });
+        expect(block).to.not.be.null;
+        if (block === null) throw new Error(); // unreachable
+
+        let foundTx = false;
+        for (const tx of block.transactions) {
+          if (tx.transaction.signatures[0] === signature) {
+            foundTx = true;
+            expect(tx.version).to.eq(0);
+          }
+        }
+        expect(foundTx).to.be.true;
+      });
     }).timeout(5 * 1000);
   }
 });
