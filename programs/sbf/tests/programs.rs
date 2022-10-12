@@ -3017,13 +3017,17 @@ fn test_program_sbf_realloc() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[realloc_extend_and_fill(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        1,
-                        &mut bump,
-                    )],
+                    &[
+                        realloc_extend_and_fill(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            1,
+                            &mut bump,
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 ),
             )
@@ -3041,12 +3045,16 @@ fn test_program_sbf_realloc() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[realloc_extend(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        &mut bump
-                    )],
+                    &[
+                        realloc_extend(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            &mut bump
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3060,7 +3068,10 @@ fn test_program_sbf_realloc() {
         .send_and_confirm_message(
             signer,
             Message::new(
-                &[realloc(&program_id, &pubkey, 0, &mut bump)],
+                &[
+                    realloc(&program_id, &pubkey, 0, &mut bump),
+                    ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                ],
                 Some(&mint_pubkey),
             ),
         )
@@ -3264,14 +3275,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_PLUS_ONE],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_PLUS_ONE],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3286,14 +3301,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_TWICE],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_TWICE],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3516,14 +3535,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_INVOKE_MAX],
-                        vec![
-                            AccountMeta::new(invoke_pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_INVOKE_MAX],
+                            vec![
+                                AccountMeta::new(invoke_pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3585,15 +3608,19 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_INVOKE_MAX_TWICE],
-                        vec![
-                            AccountMeta::new(invoke_pubkey, false),
-                            AccountMeta::new_readonly(realloc_invoke_program_id, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_INVOKE_MAX_TWICE],
+                            vec![
+                                AccountMeta::new(invoke_pubkey, false),
+                                AccountMeta::new_readonly(realloc_invoke_program_id, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3621,14 +3648,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 ),
             )
@@ -3646,14 +3677,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3818,6 +3853,7 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        false,
         compute_budget::LoadedAccountsDataLimitType::V0,
     );
     bank_client
@@ -3840,6 +3876,7 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
+        false,
         false,
         compute_budget::LoadedAccountsDataLimitType::V0,
     );

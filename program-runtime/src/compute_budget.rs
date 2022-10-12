@@ -17,7 +17,7 @@ const MAX_HEAP_FRAME_BYTES: u32 = 256 * 1024;
 /// To change `default` and/or `max` values for `accounts_data_size_limit` in the future,
 /// add new enum type here, link to feature gate, and implement the enum in
 /// `get_default_loaded_accounts_data_limit()` and/or `get_max_loaded_accounts_data_limit()`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum LoadedAccountsDataLimitType {
     V0,
     // add future versions here

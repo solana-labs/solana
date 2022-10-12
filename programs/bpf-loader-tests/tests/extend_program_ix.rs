@@ -5,6 +5,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{extend_program, id, UpgradeableLoaderState},
+        compute_budget::ComputeBudgetInstruction,
         instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -103,7 +104,7 @@ async fn test_extend_program_not_upgradeable() {
     let payer_address = context.payer.pubkey();
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 42),
+        &[extend_program(&program_address, Some(&payer_address), 42)],
         None,
         InstructionError::Immutable,
         "should fail because the program data account isn't upgradeable",
@@ -142,7 +143,7 @@ async fn test_extend_program_by_zero_bytes() {
     let payer_address = context.payer.pubkey();
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 0),
+        &[extend_program(&program_address, Some(&payer_address), 0)],
         None,
         InstructionError::InvalidInstructionData,
         "should fail because the program data account must be extended by more than 0 bytes",
@@ -181,7 +182,12 @@ async fn test_extend_program_past_max_size() {
     let payer_address = context.payer.pubkey();
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 1),
+        &[
+            extend_program(&program_address, Some(&payer_address), 1),
+            // To request large transaction accounts data size to allow max sized test
+            // instruction being loaded and processed.
+            ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+        ],
         None,
         InstructionError::InvalidRealloc,
         "should fail because the program data account cannot be extended past the max data size",
@@ -238,11 +244,11 @@ async fn test_extend_program_with_invalid_payer() {
 
     assert_ix_error(
         &mut context,
-        extend_program(
+        &[extend_program(
             &program_address,
             Some(&payer_with_insufficient_funds.pubkey()),
             1024,
-        ),
+        )],
         Some(&payer_with_insufficient_funds),
         InstructionError::from(SystemError::ResultWithNegativeLamports),
         "should fail because the payer has insufficient funds to cover program data account rent",
@@ -251,11 +257,11 @@ async fn test_extend_program_with_invalid_payer() {
 
     assert_ix_error(
         &mut context,
-        extend_program(
+        &[extend_program(
             &program_address,
             Some(&payer_with_invalid_owner.pubkey()),
             1,
-        ),
+        )],
         Some(&payer_with_invalid_owner),
         InstructionError::ExternalAccountLamportSpend,
         "should fail because the payer is not a system account",
@@ -280,7 +286,7 @@ async fn test_extend_program_with_invalid_payer() {
 
     assert_ix_error(
         &mut context,
-        ix,
+        &[ix],
         None,
         InstructionError::PrivilegeEscalation,
         "should fail because the payer did not sign",
@@ -320,7 +326,7 @@ async fn test_extend_program_without_payer() {
 
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, None, 1024),
+        &[extend_program(&program_address, None, 1024)],
         None,
         InstructionError::NotEnoughAccountKeys,
         "should fail because program data has insufficient funds to cover rent",
@@ -406,7 +412,7 @@ async fn test_extend_program_with_invalid_system_program() {
 
     assert_ix_error(
         &mut context,
-        ix,
+        &[ix],
         None,
         InstructionError::MissingAccount,
         "should fail because the system program is missing",
@@ -459,7 +465,7 @@ async fn test_extend_program_with_mismatch_program_data() {
 
     assert_ix_error(
         &mut context,
-        ix,
+        &[ix],
         None,
         InstructionError::InvalidArgument,
         "should fail because the program data account doesn't match the program",
@@ -510,7 +516,7 @@ async fn test_extend_program_with_readonly_program_data() {
 
     assert_ix_error(
         &mut context,
-        ix,
+        &[ix],
         None,
         InstructionError::InvalidArgument,
         "should fail because the program data account is not writable",
@@ -548,7 +554,7 @@ async fn test_extend_program_with_invalid_program_data_state() {
 
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 1024),
+        &[extend_program(&program_address, Some(&payer_address), 1024)],
         None,
         InstructionError::InvalidAccountData,
         "should fail because the program data account state isn't valid",
@@ -589,7 +595,7 @@ async fn test_extend_program_with_invalid_program_data_owner() {
 
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 1024),
+        &[extend_program(&program_address, Some(&payer_address), 1024)],
         None,
         InstructionError::InvalidAccountOwner,
         "should fail because the program data account owner isn't valid",
@@ -640,7 +646,7 @@ async fn test_extend_program_with_readonly_program() {
 
     assert_ix_error(
         &mut context,
-        ix,
+        &[ix],
         None,
         InstructionError::InvalidArgument,
         "should fail because the program account is not writable",
@@ -680,7 +686,7 @@ async fn test_extend_program_with_invalid_program_owner() {
 
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 1024),
+        &[extend_program(&program_address, Some(&payer_address), 1024)],
         None,
         InstructionError::InvalidAccountOwner,
         "should fail because the program account owner isn't valid",
@@ -720,7 +726,7 @@ async fn test_extend_program_with_invalid_program_state() {
 
     assert_ix_error(
         &mut context,
-        extend_program(&program_address, Some(&payer_address), 1024),
+        &[extend_program(&program_address, Some(&payer_address), 1024)],
         None,
         InstructionError::InvalidAccountData,
         "should fail because the program account state isn't valid",

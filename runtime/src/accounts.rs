@@ -62,6 +62,7 @@ use {
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -389,7 +390,7 @@ impl Accounts {
                         .data()
                         .len()
                         .saturating_add(loaded_programdata_account_size),
-                    &requested_loaded_accounts_data_size_limit,
+                    requested_loaded_accounts_data_size_limit,
                     error_counters,
                 )?;
 
@@ -414,7 +415,7 @@ impl Accounts {
                             instruction.program_id_index as IndexOfAccount,
                             error_counters,
                             &mut accumulated_accounts_data_size,
-                            &requested_loaded_accounts_data_size_limit,
+                            requested_loaded_accounts_data_size_limit,
                         )
                     })
                     .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
@@ -435,7 +436,7 @@ impl Accounts {
     fn get_requested_loaded_accounts_data_size_limit(
         tx: &SanitizedTransaction,
         feature_set: &FeatureSet,
-    ) -> Result<usize> {
+    ) -> Result<NonZeroUsize> {
         let mut compute_budget = ComputeBudget::default();
         let _prioritization_fee_details = compute_budget.process_instructions(
             tx.message().program_instructions_iter(),
@@ -444,7 +445,8 @@ impl Accounts {
             feature_set.is_active(&cap_transaction_accounts_data_size::id()),
             Bank::get_loaded_accounts_data_limit_type(feature_set),
         )?;
-        Ok(compute_budget.accounts_data_size_limit as usize)
+        NonZeroUsize::new(compute_budget.accounts_data_size_limit as usize)
+            .ok_or(TransactionError::InvalidLoadedAccountsDataSizeLimit)
     }
 
     fn validate_fee_payer(
@@ -502,7 +504,7 @@ impl Accounts {
         mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
         accumulated_accounts_data_size: &mut usize,
-        requested_loaded_accounts_data_size_limit: &Option<usize>,
+        requested_loaded_accounts_data_size_limit: Option<NonZeroUsize>,
     ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
         let (mut program_id, already_loaded_as_non_loader) =
@@ -586,13 +588,13 @@ impl Accounts {
                     error_counters.invalid_program_for_execution += 1;
                     return Err(TransactionError::InvalidProgramForExecution);
                 }
-                Self::accumulate_and_check_loaded_account_data_size(
-                    accumulated_accounts_data_size,
-                    loaded_account_total_size,
-                    requested_loaded_accounts_data_size_limit,
-                    error_counters,
-                )?;
             }
+            Self::accumulate_and_check_loaded_account_data_size(
+                accumulated_accounts_data_size,
+                loaded_account_total_size,
+                requested_loaded_accounts_data_size_limit,
+                error_counters,
+            )?;
 
             program_id = program_owner;
         }
@@ -606,14 +608,14 @@ impl Accounts {
     fn accumulate_and_check_loaded_account_data_size(
         accumulated_loaded_accounts_data_size: &mut usize,
         account_data_size: usize,
-        requested_loaded_accounts_data_size_limit: &Option<usize>,
+        requested_loaded_accounts_data_size_limit: Option<NonZeroUsize>,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Result<()> {
         if let Some(requested_loaded_accounts_data_size) = requested_loaded_accounts_data_size_limit
         {
             *accumulated_loaded_accounts_data_size =
                 accumulated_loaded_accounts_data_size.saturating_add(account_data_size);
-            if *accumulated_loaded_accounts_data_size > *requested_loaded_accounts_data_size {
+            if *accumulated_loaded_accounts_data_size > requested_loaded_accounts_data_size.get() {
                 error_counters.max_loaded_accounts_data_size_exceeded += 1;
                 Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
             } else {
@@ -2573,7 +2575,7 @@ mod tests {
                 0,
                 &mut error_counters,
                 &mut 0,
-                &None,
+                None,
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
@@ -4016,7 +4018,7 @@ mod tests {
             assert!(Accounts::accumulate_and_check_loaded_account_data_size(
                 &mut accumulated_data_size,
                 data_size,
-                &requested_data_size_limit,
+                requested_data_size_limit,
                 &mut error_counter
             )
             .is_ok());
@@ -4026,27 +4028,205 @@ mod tests {
         {
             let mut accumulated_data_size: usize = 0;
             let data_size: usize = 123;
-            let requested_data_size_limit = Some(data_size + 1);
+            let requested_data_size_limit = NonZeroUsize::new(data_size);
 
             // OK
             assert!(Accounts::accumulate_and_check_loaded_account_data_size(
                 &mut accumulated_data_size,
                 data_size,
-                &requested_data_size_limit,
+                requested_data_size_limit,
                 &mut error_counter
             )
             .is_ok());
             assert_eq!(data_size, accumulated_data_size);
 
             // exceeds
+            let another_byte: usize = 1;
             assert_eq!(
                 Accounts::accumulate_and_check_loaded_account_data_size(
                     &mut accumulated_data_size,
-                    data_size,
-                    &requested_data_size_limit,
+                    another_byte,
+                    requested_data_size_limit,
                     &mut error_counter
                 ),
                 Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_executable_accounts() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let mut error_counters = TransactionErrorMetrics::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+
+        let space: usize = 9;
+        let keypair = Keypair::new();
+        let mut account = AccountSharedData::new(1, space, &native_loader::id());
+        account.set_executable(true);
+        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+
+        let mut accumulated_accounts_data_size: usize = 0;
+        let mut expect_accumulated_accounts_data_size: usize;
+
+        // test: program account has been loaded as non-loader, load_executable_accounts
+        //       will not double count its data size
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), account)];
+            accumulated_accounts_data_size += space;
+            expect_accumulated_accounts_data_size = accumulated_accounts_data_size;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: program account has not been loaded cause it's loader, load_executable_accounts
+        //       will accumulate its data size
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), AccountSharedData::default())];
+            expect_accumulated_accounts_data_size = accumulated_accounts_data_size + space;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: try to load one more account will accumulate additional `space` bytes, therefore
+        //       exceed limit of `expect_accumulated_accounts_data_size` set above.
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), AccountSharedData::default())];
+            assert_eq!(
+                accounts.load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                ),
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_executable_accounts_with_upgradeable_program() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let mut error_counters = TransactionErrorMetrics::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+
+        // call chain: native_loader -> key0 -> upgradeable bpf loader -> program_key (that has programdata_key)
+        let programdata_key = Pubkey::new(&[3u8; 32]);
+        let program_data = UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: None,
+        };
+        let mut program_data_account =
+            AccountSharedData::new_data(1, &program_data, &Pubkey::default()).unwrap();
+        let program_data_account_size = program_data_account.data().len();
+        program_data_account.set_executable(true);
+        program_data_account.set_rent_epoch(0);
+        accounts.store_slow_uncached(0, &programdata_key, &program_data_account);
+
+        let program_key = Pubkey::new(&[2u8; 32]);
+        let program = UpgradeableLoaderState::Program {
+            programdata_address: programdata_key,
+        };
+        let mut program_account =
+            AccountSharedData::new_data(1, &program, &bpf_loader_upgradeable::id()).unwrap();
+        let program_account_size = program_account.data().len();
+        program_account.set_executable(true);
+        program_account.set_rent_epoch(0);
+        accounts.store_slow_uncached(0, &program_key, &program_account);
+
+        let key0 = Pubkey::new(&[1u8; 32]);
+        let mut bpf_loader_account = AccountSharedData::new(1, 0, &key0);
+        bpf_loader_account.set_executable(true);
+        accounts.store_slow_uncached(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
+
+        let space: usize = 9;
+        let mut account = AccountSharedData::new(1, space, &native_loader::id());
+        account.set_executable(true);
+        accounts.store_slow_uncached(0, &key0, &account);
+
+        // test:  program_key account has been loaded as non-loader, load_executable_accounts
+        //       will not double count its data size, but still accumulate data size from
+        //       callchain
+        {
+            let expect_accumulated_accounts_data_size: usize = space;
+            let mut accumulated_accounts_data_size: usize = 0;
+            let mut loaded_accounts = vec![(program_key, program_account)];
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: program account has not been loaded cause it's loader, load_executable_accounts
+        //       will accumulate entire callchain data size.
+        {
+            let mut loaded_accounts = vec![(program_key, AccountSharedData::default())];
+            let mut accumulated_accounts_data_size: usize = 0;
+            let expect_accumulated_accounts_data_size =
+                program_account_size + program_data_account_size + space;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
             );
         }
     }
