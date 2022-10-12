@@ -484,6 +484,8 @@ impl ReplayStage {
                     &leader_schedule_cache,
                 );
 
+                Self::send_reward_calculation_request(&working_bank);
+
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
@@ -3454,6 +3456,21 @@ impl ReplayStage {
     ) -> Bank {
         rpc_subscriptions.notify_slot(slot, parent.slot(), root_slot);
         Bank::new_from_parent_with_options(parent, leader, slot, new_bank_options)
+    }
+
+    fn send_reward_calculation_request(bank: &Arc<Bank>) {
+        if bank.start_epoch_reward_calc() {
+            let calc = bank.get_epoch_reward_calculator();
+            let inner = calc.read().unwrap();
+            if let Some(calc) = &*inner {
+                calc.send(bank.epoch(), bank.clone());
+                info!(
+                    "send reward calc request: epoch={} slot={}",
+                    bank.epoch(),
+                    bank.slot()
+                );
+            }
+        }
     }
 
     fn record_rewards(bank: &Bank, rewards_recorder_sender: &Option<RewardsRecorderSender>) {
