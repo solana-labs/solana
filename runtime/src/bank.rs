@@ -4031,7 +4031,7 @@ impl Bank {
         local_executor_cache
             .borrow()
             .update_global_cache(&self.cached_executors, |difference| {
-                difference == LocalGlobalDifference::Missing
+                difference == LocalGlobalDifference::Inserted
             });
     }
 

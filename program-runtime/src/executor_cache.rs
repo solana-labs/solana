@@ -31,11 +31,11 @@ pub trait Executor: Debug + Send + Sync {
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LocalGlobalDifference {
-    /// Executor was already in the cache, no update needed
-    Cached,
-    /// Executor was missing from the cache, but not updated
-    Missing,
-    /// Executor is for an updated program
+    /// The LocalExecutorCacheEntry did not change and is the same as the GlobalExecutorCacheEntry.
+    None,
+    /// The LocalExecutorCacheEntry was inserted, no matching GlobalExecutorCacheEntry exists, so it needs to be inserted.
+    Inserted,
+    /// The LocalExecutorCacheEntry was replaced, the matching GlobalExecutorCacheEntry needs to be updated.
     Updated,
 }
 
@@ -43,7 +43,7 @@ pub enum LocalGlobalDifference {
 #[derive(Debug)]
 pub struct LocalExecutorCacheEntry {
     executor: Arc<dyn Executor>,
-    status: LocalGlobalDifference,
+    difference: LocalGlobalDifference,
 }
 
 /// A subset of the GlobalExecutorCache containing only the executors relevant to one transaction
@@ -62,7 +62,7 @@ impl LocalExecutorCache {
                 .map(|(key, executor)| {
                     let entry = LocalExecutorCacheEntry {
                         executor,
-                        status: LocalGlobalDifference::Cached,
+                        difference: LocalGlobalDifference::None,
                     };
                     (key, entry)
                 })
@@ -75,15 +75,16 @@ impl LocalExecutorCache {
     }
 
     pub fn set(&mut self, key: Pubkey, executor: Arc<dyn Executor>, replacement: bool) {
-        let status = if replacement {
+        let difference = if replacement {
             LocalGlobalDifference::Updated
         } else {
-            LocalGlobalDifference::Missing
+            LocalGlobalDifference::Inserted
         };
-        let _was_replaced = self
-            .executors
-            .insert(key, LocalExecutorCacheEntry { executor, status })
-            .is_some();
+        let entry = LocalExecutorCacheEntry {
+            executor,
+            difference,
+        };
+        let _was_replaced = self.executors.insert(key, entry).is_some();
     }
 
     pub fn update_global_cache(
@@ -95,7 +96,7 @@ impl LocalExecutorCache {
             .executors
             .iter()
             .filter_map(|(key, entry)| {
-                selector(entry.status).then(|| (key, entry.executor.clone()))
+                selector(entry.difference).then(|| (key, entry.executor.clone()))
             })
             .collect();
         if !executors_delta.is_empty() {
