@@ -150,9 +150,12 @@ pub fn create_executor(
     invoke_context: &mut InvokeContext,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
-    disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
+    let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
+        && invoke_context
+            .feature_set
+            .is_active(&disable_deploy_of_alloc_free_syscall::id());
     let register_syscall_result =
         syscalls::register_syscalls(invoke_context, disable_deploy_of_alloc_free_syscall);
     register_syscalls_time.stop();
@@ -450,8 +453,6 @@ fn process_instruction_common(
                 invoke_context,
                 use_jit,
                 false, /* reject_deployment_of_broken_elfs */
-                // allow _sol_alloc_free syscall for execution
-                false, /* disable_sol_alloc_free_syscall */
             )?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -683,9 +684,6 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context
                 .tx_executor_cache
@@ -854,9 +852,6 @@ fn process_loader_upgradeable_instruction(
                 invoke_context,
                 use_jit,
                 true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context
                 .tx_executor_cache
@@ -1266,16 +1261,8 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let executor = create_executor(
-                first_instruction_account,
-                0,
-                invoke_context,
-                use_jit,
-                true,
-                invoke_context
-                    .feature_set
-                    .is_active(&disable_deploy_of_alloc_free_syscall::id()),
-            )?;
+            let executor =
+                create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
