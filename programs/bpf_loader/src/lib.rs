@@ -83,11 +83,6 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-fn map_ebpf_error(invoke_context: &InvokeContext, e: EbpfError) -> InstructionError {
-    ic_msg!(invoke_context, "{}", e);
-    InstructionError::InvalidAccountData
-}
-
 mod executor_metrics {
     #[derive(Debug, Default)]
     pub struct CreateMetrics {
@@ -151,6 +146,7 @@ pub fn create_executor(
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
+    let log_collector = invoke_context.get_log_collector();
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && invoke_context
@@ -166,7 +162,7 @@ pub fn create_executor(
         .create_executor_register_syscalls_us
         .saturating_add(register_syscalls_time.as_us());
     let syscall_registry = register_syscall_result.map_err(|e| {
-        ic_msg!(invoke_context, "Failed to register syscalls: {}", e);
+        ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
     let compute_budget = invoke_context.get_compute_budget();
@@ -225,11 +221,17 @@ pub fn create_executor(
             .saturating_add(create_executor_metrics.load_elf_us);
         executable
     }
-    .map_err(|e| map_ebpf_error(invoke_context, e))?;
+    .map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    })?;
     let mut verify_code_time = Measure::start("verify_code_time");
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
-            .map_err(|e| map_ebpf_error(invoke_context, e))?;
+            .map_err(|err| {
+                ic_logger_msg!(log_collector, "{}", err);
+                InstructionError::InvalidAccountData
+            })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     invoke_context.timings.create_executor_verify_code_us = invoke_context
@@ -246,7 +248,7 @@ pub fn create_executor(
             .create_executor_jit_compile_us
             .saturating_add(create_executor_metrics.jit_compile_us);
         if let Err(err) = jit_compile_result {
-            ic_msg!(invoke_context, "Failed to compile program {:?}", err);
+            ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
