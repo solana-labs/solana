@@ -23,6 +23,7 @@ use {
 };
 
 /// Epoch reward calculation request with current epoch and target bank
+#[derive(AbiExample, Debug)]
 pub struct EpochRewardCalcRequest {
     /// current epoch
     epoch: Epoch,
@@ -45,7 +46,7 @@ pub type EpochRewardCalcRequestSender = Sender<EpochRewardCalcRequest>;
 pub type EpochRewardCalcRequestReceiver = Receiver<EpochRewardCalcRequest>;
 
 /// Epoch reward computation result indexed by slot and calc request signature
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct EpochRewardResult<T> {
     /// Map from reward calculate request hash to reward result
     rewards: HashMap<Hash, Arc<T>>,
@@ -101,7 +102,7 @@ impl<T> EpochRewardResult<T> {
 /// Epoch reward calculator
 ///   A client class to send rewards calculation request and retrieve EpochRewardResult to/from
 ///   EpochRewardCalculationService
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct EpochRewardCalculator<T> {
     /// Channel sender for epoch reward calculation request
     sender: EpochRewardCalcRequestSender,

@@ -1434,7 +1434,7 @@ pub struct CommitTransactionCounts {
     pub signature_count: u64,
 }
 
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct StakeReward {
     stake_pubkey: Pubkey,
     stake_reward_info: RewardInfo,
@@ -1467,7 +1467,7 @@ impl StakeReward {
     }
 }
 
-#[derive(Debug)]
+#[derive(AbiExample, Debug)]
 pub struct VoteReward {
     pub vote_pubkey: Pubkey,
     pub vote_reward_info: Option<RewardInfo>,
