@@ -27,6 +27,7 @@ use {
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
+        timings::ExecuteDetailsTimings,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -84,6 +85,8 @@ pub enum BpfError {
 impl UserDefinedError for BpfError {}
 
 mod executor_metrics {
+    use super::*;
+
     #[derive(Debug, Default)]
     pub struct CreateMetrics {
         pub program_id: String,
@@ -94,7 +97,14 @@ mod executor_metrics {
     }
 
     impl CreateMetrics {
-        pub fn submit_datapoint(&self) {
+        pub fn submit_datapoint(&self, timings: &mut ExecuteDetailsTimings) {
+            saturating_add_assign!(
+                timings.create_executor_register_syscalls_us,
+                self.register_syscalls_us
+            );
+            saturating_add_assign!(timings.create_executor_load_elf_us, self.load_elf_us);
+            saturating_add_assign!(timings.create_executor_verify_code_us, self.verify_code_us);
+            saturating_add_assign!(timings.create_executor_jit_compile_us, self.jit_compile_us);
             datapoint_trace!(
                 "create_executor_trace",
                 ("program_id", self.program_id, String),
@@ -161,10 +171,6 @@ pub fn create_executor(
     );
     register_syscalls_time.stop();
     create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    invoke_context.timings.create_executor_register_syscalls_us = invoke_context
-        .timings
-        .create_executor_register_syscalls_us
-        .saturating_add(create_executor_metrics.register_syscalls_us);
     let syscall_registry = register_syscall_result.map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
@@ -218,10 +224,6 @@ pub fn create_executor(
         );
         load_elf_time.stop();
         create_executor_metrics.load_elf_us = load_elf_time.as_us();
-        invoke_context.timings.create_executor_load_elf_us = invoke_context
-            .timings
-            .create_executor_load_elf_us
-            .saturating_add(create_executor_metrics.load_elf_us);
         executable
     }
     .map_err(|err| {
@@ -237,25 +239,17 @@ pub fn create_executor(
             })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
-    invoke_context.timings.create_executor_verify_code_us = invoke_context
-        .timings
-        .create_executor_verify_code_us
-        .saturating_add(create_executor_metrics.verify_code_us);
     if use_jit {
         let mut jit_compile_time = Measure::start("jit_compile_time");
         let jit_compile_result = verified_executable.jit_compile();
         jit_compile_time.stop();
         create_executor_metrics.jit_compile_us = jit_compile_time.as_us();
-        invoke_context.timings.create_executor_jit_compile_us = invoke_context
-            .timings
-            .create_executor_jit_compile_us
-            .saturating_add(create_executor_metrics.jit_compile_us);
         if let Err(err) = jit_compile_result {
             ic_logger_msg!(log_collector, "Failed to compile program {:?}", err);
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
-    create_executor_metrics.submit_datapoint();
+    create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
     Ok(Arc::new(BpfExecutor {
         verified_executable,
         use_jit,
