@@ -3436,6 +3436,9 @@ export class Connection {
                   done = true;
                   resolve({__type: TransactionStatus.PROCESSED, response});
                 }
+                if (intervalId) {
+                  clearInterval(intervalId);
+                }
               })();
             }
           }, 100);
