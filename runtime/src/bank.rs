@@ -1127,6 +1127,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
+            enable_partitioned_rewards: _,
             epoch_reward_calculator: _,
             epoch_reward_calc_start: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
@@ -1385,6 +1386,9 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
+    /// Enable partitioned epoch reward
+    enable_partitioned_rewards: bool,
+
     /// Epoch reward calculator - a client to communicate with epoch reward calc service.
     epoch_reward_calculator:
         Arc<RwLock<Option<EpochRewardCalculator<StakeVoteAccountRewardResult>>>>,
@@ -1642,6 +1646,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            enable_partitioned_rewards: true,
             epoch_reward_calculator: Arc::new(RwLock::new(None)),
             epoch_reward_calc_start: None,
         };
@@ -1787,6 +1792,14 @@ impl Bank {
 
     pub fn get_rent_collector_from(rent_collector: &RentCollector, epoch: Epoch) -> RentCollector {
         rent_collector.clone_with_epoch(epoch)
+    }
+
+    pub fn partitioned_rewards_enabled(&self) -> bool {
+        self.enable_partitioned_rewards
+    }
+
+    pub fn set_partitioned_rewards_enable(&mut self, enable: bool) {
+        self.enable_partitioned_rewards = enable;
     }
 
     pub fn get_reward_calculation_interval(&self) -> u64 {
@@ -1978,6 +1991,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            enable_partitioned_rewards: parent.enable_partitioned_rewards,
             epoch_reward_calculator: parent.epoch_reward_calculator.clone(),
             epoch_reward_calc_start: parent.epoch_reward_calc_start,
         };
@@ -1997,7 +2011,7 @@ impl Bank {
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
 
-        let enable_partitioned_rewards = true;
+        let enable_partitioned_rewards = new.partitioned_rewards_enabled();
 
         let (_, update_epoch_time) = measure!(
             {
@@ -2437,6 +2451,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            enable_partitioned_rewards: true,
             epoch_reward_calculator: Arc::new(RwLock::new(None)),
             epoch_reward_calc_start: None,
         };
@@ -10865,6 +10880,8 @@ pub(crate) mod tests {
             ..GenesisConfig::default()
         }));
 
+        bank0.set_partitioned_rewards_enable(false);
+
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
         bank0.restore_old_behavior_for_fragile_tests();
@@ -10993,6 +11010,8 @@ pub(crate) mod tests {
 
             ..GenesisConfig::default()
         }));
+
+        bank.set_partitioned_rewards_enable(false);
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
