@@ -43,6 +43,11 @@ impl HttpSender {
         Self::new_with_timeout(url, Duration::from_secs(30))
     }
 
+
+    pub fn new_with_proxy<U: ToString>(url: U, timeout: Duration, proxy_string: String) -> Self {
+        Self::new_with_timeout_and_proxy(url, timeout, proxy_string)
+    }
+
     /// Create an HTTP RPC sender.
     ///
     /// The URL is an HTTP URL, usually for port 8899.
@@ -61,6 +66,34 @@ impl HttpSender {
                 .default_headers(default_headers)
                 .timeout(timeout)
                 .pool_idle_timeout(timeout)
+                .build()
+                .expect("build rpc client"),
+        );
+
+        Self {
+            client,
+            url: url.to_string(),
+            request_id: AtomicU64::new(0),
+            stats: RwLock::new(RpcTransportStats::default()),
+        }
+    }
+
+    pub fn new_with_timeout_and_proxy<U: ToString>(url: U, timeout: Duration, proxy_string: String) -> Self {
+        let mut default_headers = header::HeaderMap::new();
+        default_headers.append(
+            header::HeaderName::from_static("solana-client"),
+            header::HeaderValue::from_str(
+                format!("rust/{}", solana_version::Version::default()).as_str(),
+            )
+            .unwrap(),
+        );
+
+        let client = Arc::new(
+            reqwest::Client::builder()
+                .default_headers(default_headers)
+                .timeout(timeout)
+                .pool_idle_timeout(timeout)
+                .proxy(reqwest::Proxy::all(proxy_string)?)
                 .build()
                 .expect("build rpc client"),
         );
