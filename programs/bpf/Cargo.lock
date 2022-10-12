@@ -4839,6 +4839,7 @@ dependencies = [
  "bv",
  "byteorder 1.4.3",
  "cc",
+ "crossbeam-channel",
  "either",
  "generic-array 0.14.6",
  "getrandom 0.1.14",
