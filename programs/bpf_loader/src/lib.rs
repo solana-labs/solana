@@ -156,8 +156,10 @@ pub fn create_executor(
         && invoke_context
             .feature_set
             .is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let register_syscall_result =
-        syscalls::register_syscalls(invoke_context, disable_deploy_of_alloc_free_syscall);
+    let register_syscall_result = syscalls::register_syscalls(
+        &invoke_context.feature_set,
+        disable_deploy_of_alloc_free_syscall,
+    );
     register_syscalls_time.stop();
     invoke_context.timings.create_executor_register_syscalls_us = invoke_context
         .timings
