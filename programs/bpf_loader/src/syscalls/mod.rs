@@ -208,9 +208,7 @@ pub fn register_syscalls(
         SyscallBlake3::call,
     )?;
 
-    // Elliptic Curve Point Validation
-    //
-    // TODO: add group operations and multiscalar multiplications
+    // Elliptic Curve Operations
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
@@ -222,6 +220,12 @@ pub fn register_syscalls(
         curve25519_syscall_enabled,
         b"sol_curve_group_op",
         SyscallCurveGroupOps::call,
+    )?;
+    register_feature_gated_syscall!(
+        syscall_registry,
+        curve25519_syscall_enabled,
+        b"sol_curve_multiscalar_mul",
+        SyscallCurveMultiscalarMultiplication::call,
     )?;
 
     // Sysvars
@@ -1138,6 +1142,111 @@ declare_syscall!(
                 }
                 _ => Ok(1),
             },
+
+            _ => Ok(1),
+        }
+    }
+);
+
+declare_syscall!(
+    // Elliptic Curve Multiscalar Multiplication
+    //
+    // Currently, only curve25519 Edwards and Ristretto representations are supported
+    SyscallCurveMultiscalarMultiplication,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        curve_id: u64,
+        scalars_addr: u64,
+        points_addr: u64,
+        points_len: u64,
+        result_point_addr: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        use solana_zk_token_sdk::curve25519::{
+            curve_syscall_traits::*, edwards, ristretto, scalar,
+        };
+        match curve_id {
+            CURVE25519_EDWARDS => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_msm_base_cost
+                    .saturating_add(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_edwards_msm_incremental_cost
+                            .saturating_mul(points_len.saturating_sub(1)),
+                    );
+                invoke_context.get_compute_meter().consume(cost)?;
+
+                let scalars = translate_slice::<scalar::PodScalar>(
+                    memory_mapping,
+                    scalars_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                let points = translate_slice::<edwards::PodEdwardsPoint>(
+                    memory_mapping,
+                    points_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                if let Some(result_point) = edwards::multiscalar_multiply_edwards(scalars, points) {
+                    *translate_type_mut::<edwards::PodEdwardsPoint>(
+                        memory_mapping,
+                        result_point_addr,
+                        invoke_context.get_check_aligned(),
+                    )? = result_point;
+                    Ok(0)
+                } else {
+                    Ok(1)
+                }
+            }
+
+            CURVE25519_RISTRETTO => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_msm_base_cost
+                    .saturating_add(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_ristretto_msm_incremental_cost
+                            .saturating_mul(points_len.saturating_sub(1)),
+                    );
+                invoke_context.get_compute_meter().consume(cost)?;
+
+                let scalars = translate_slice::<scalar::PodScalar>(
+                    memory_mapping,
+                    scalars_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                let points = translate_slice::<ristretto::PodRistrettoPoint>(
+                    memory_mapping,
+                    points_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                if let Some(result_point) =
+                    ristretto::multiscalar_multiply_ristretto(scalars, points)
+                {
+                    *translate_type_mut::<ristretto::PodRistrettoPoint>(
+                        memory_mapping,
+                        result_point_addr,
+                        invoke_context.get_check_aligned(),
+                    )? = result_point;
+                    Ok(0)
+                } else {
+                    Ok(1)
+                }
+            }
 
             _ => Ok(1),
         }
@@ -3147,6 +3256,149 @@ mod tests {
                 SyscallError::InstructionError(InstructionError::ComputationalBudgetExceeded)
             ),
         ));
+    }
+
+    #[test]
+    fn test_syscall_multiscalar_multiplication() {
+        use solana_zk_token_sdk::curve25519::curve_syscall_traits::{
+            CURVE25519_EDWARDS, CURVE25519_RISTRETTO,
+        };
+
+        let config = Config::default();
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let scalar_a: [u8; 32] = [
+            254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
+            78, 137, 3, 107, 136, 237, 49, 126, 117, 223, 37, 191, 88, 6,
+        ];
+        let scalar_b: [u8; 32] = [
+            254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
+            78, 137, 3, 107, 136, 237, 49, 126, 117, 223, 37, 191, 88, 6,
+        ];
+
+        let scalars = [scalar_a, scalar_b];
+        let scalars_va = 0x100000000;
+
+        let edwards_point_x: [u8; 32] = [
+            252, 31, 230, 46, 173, 95, 144, 148, 158, 157, 63, 10, 8, 68, 58, 176, 142, 192, 168,
+            53, 61, 105, 194, 166, 43, 56, 246, 236, 28, 146, 114, 133,
+        ];
+        let edwards_point_y: [u8; 32] = [
+            10, 111, 8, 236, 97, 189, 124, 69, 89, 176, 222, 39, 199, 253, 111, 11, 248, 186, 128,
+            90, 120, 128, 248, 210, 232, 183, 93, 104, 111, 150, 7, 241,
+        ];
+        let edwards_points = [edwards_point_x, edwards_point_y];
+        let edwards_points_va = 0x200000000;
+
+        let ristretto_point_x: [u8; 32] = [
+            130, 35, 97, 25, 18, 199, 33, 239, 85, 143, 119, 111, 49, 51, 224, 40, 167, 185, 240,
+            179, 25, 194, 213, 41, 14, 155, 104, 18, 181, 197, 15, 112,
+        ];
+        let ristretto_point_y: [u8; 32] = [
+            152, 156, 155, 197, 152, 232, 92, 206, 219, 159, 193, 134, 121, 128, 139, 36, 56, 191,
+            51, 143, 72, 204, 87, 76, 110, 124, 101, 96, 238, 158, 42, 108,
+        ];
+        let ristretto_points = [ristretto_point_x, ristretto_point_y];
+        let ristretto_points_va = 0x300000000;
+
+        let result_point: [u8; 32] = [0; 32];
+        let result_point_va = 0x400000000;
+
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion {
+                    host_addr: scalars.as_ptr() as *const _ as u64,
+                    vm_addr: scalars_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: edwards_points.as_ptr() as *const _ as u64,
+                    vm_addr: edwards_points_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: ristretto_points.as_ptr() as *const _ as u64,
+                    vm_addr: ristretto_points_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: result_point.as_ptr() as *const _ as u64,
+                    vm_addr: result_point_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(
+                invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_msm_base_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_edwards_msm_incremental_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_msm_base_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_msm_incremental_cost,
+            );
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallCurveMultiscalarMultiplication::call(
+            &mut invoke_context,
+            CURVE25519_EDWARDS,
+            scalars_va,
+            edwards_points_va,
+            2,
+            result_point_va,
+            &mut memory_mapping,
+            &mut result,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            30, 174, 168, 34, 160, 70, 63, 166, 236, 18, 74, 144, 185, 222, 208, 243, 5, 54, 223,
+            172, 185, 75, 244, 26, 70, 18, 248, 46, 207, 184, 235, 60,
+        ];
+        assert_eq!(expected_product, result_point);
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallCurveMultiscalarMultiplication::call(
+            &mut invoke_context,
+            CURVE25519_RISTRETTO,
+            scalars_va,
+            ristretto_points_va,
+            2,
+            result_point_va,
+            &mut memory_mapping,
+            &mut result,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            78, 120, 86, 111, 152, 64, 146, 84, 14, 236, 77, 147, 237, 190, 251, 241, 136, 167, 21,
+            94, 84, 118, 92, 140, 120, 81, 30, 246, 173, 140, 195, 86,
+        ];
+        assert_eq!(expected_product, result_point);
     }
 
     fn create_filled_type<T: Default>(zero_init: bool) -> T {

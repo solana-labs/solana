@@ -69,6 +69,12 @@ pub struct ComputeBudget {
     pub curve25519_edwards_subtract_cost: u64,
     /// Number of compute units consumed to multiply a curve25519 edwards point
     pub curve25519_edwards_multiply_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of edwards points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_edwards_msm_base_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of edwards points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_edwards_msm_incremental_cost: u64,
     /// Number of compute units consumed to validate a curve25519 ristretto point
     pub curve25519_ristretto_validate_point_cost: u64,
     /// Number of compute units consumed to add two curve25519 ristretto points
@@ -77,6 +83,12 @@ pub struct ComputeBudget {
     pub curve25519_ristretto_subtract_cost: u64,
     /// Number of compute units consumed to multiply a curve25519 ristretto point
     pub curve25519_ristretto_multiply_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_ristretto_msm_base_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_ristretto_msm_incremental_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -118,10 +130,14 @@ impl ComputeBudget {
             curve25519_edwards_add_cost: 331,
             curve25519_edwards_subtract_cost: 329,
             curve25519_edwards_multiply_cost: 1_753,
+            curve25519_edwards_msm_base_cost: 1_870,
+            curve25519_edwards_msm_incremental_cost: 670,
             curve25519_ristretto_validate_point_cost: 117,
             curve25519_ristretto_add_cost: 367,
             curve25519_ristretto_subtract_cost: 366,
             curve25519_ristretto_multiply_cost: 1_804,
+            curve25519_ristretto_msm_base_cost: 1_870,
+            curve25519_ristretto_msm_incremental_cost: 670,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
