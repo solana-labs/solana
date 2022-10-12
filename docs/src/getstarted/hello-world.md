@@ -4,7 +4,7 @@ description: 'This "hello world" quickstart guide will demonstrate how to setup,
 keywords: "playground, solana pg, on chain, rust, native program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
 ---
 
-For this "hello world" quickstart guide, we will use [Solana Playground](https://beta.solpg.io), a browser the based IDE, to develop and deploy our Solana program. To use it, you do **NOT** have to install any software on your computer. Simply open Solana Playground in your browser of choice, and you are ready to write and deploy Solana programs.
+For this "hello world" quickstart guide, we will use [Solana Playground](https://beta.solpg.io), a browser based IDE to develop and deploy our Solana program. To use it, you do **NOT** have to install any software on your computer. Simply open Solana Playground in your browser of choice, and you are ready to write and deploy Solana programs.
 
 ## What you will learn
 
