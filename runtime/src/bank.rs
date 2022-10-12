@@ -88,7 +88,8 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
         executor_cache::{
-            GlobalExecutorCache, LocalExecutorCache, LocalGlobalDifference, MAX_CACHED_EXECUTORS,
+            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
+            MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         log_collector::LogCollector,
@@ -390,7 +391,7 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        local_executor_cache: Rc<RefCell<LocalExecutorCache>>,
+        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     },
     NotExecuted(TransactionError),
 }
@@ -832,7 +833,7 @@ impl PartialEq for Bank {
             cluster_type: _,
             lazy_rent_collection: _,
             rewards_pool_pubkeys: _,
-            cached_executors: _,
+            executor_cache: _,
             transaction_debug_keys: _,
             transaction_log_collector_config: _,
             transaction_log_collector: _,
@@ -1065,7 +1066,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: RwLock<GlobalExecutorCache>,
+    executor_cache: RwLock<BankExecutorCache>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1278,7 +1279,7 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<GlobalExecutorCache>::default(),
+            executor_cache: RwLock::<BankExecutorCache>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1511,15 +1512,15 @@ impl Bank {
             "rewards_pool_pubkeys_creation",
         );
 
-        let (cached_executors, cached_executors_time) = measure!(
+        let (executor_cache, executor_cache_time) = measure!(
             {
-                let parent_bank_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(GlobalExecutorCache::new_from_parent_bank_executors(
+                let parent_bank_executors = parent.executor_cache.read().unwrap();
+                RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
                     &parent_bank_executors,
                     epoch,
                 ))
             },
-            "cached_executors_creation",
+            "executor_cache_creation",
         );
 
         let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
@@ -1586,7 +1587,7 @@ impl Bank {
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys,
-            cached_executors,
+            executor_cache,
             transaction_debug_keys,
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
@@ -1783,7 +1784,7 @@ impl Bank {
                 rewards_pool_pubkeys_time.as_us(),
                 i64
             ),
-            ("cached_executors_us", cached_executors_time.as_us(), i64),
+            ("executor_cache_us", executor_cache_time.as_us(), i64),
             (
                 "transaction_debug_keys_us",
                 transaction_debug_keys_time.as_us(),
@@ -1802,7 +1803,7 @@ impl Bank {
         );
 
         parent
-            .cached_executors
+            .executor_cache
             .read()
             .unwrap()
             .stats
@@ -1945,10 +1946,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: RwLock::new(GlobalExecutorCache::new(
-                MAX_CACHED_EXECUTORS,
-                fields.epoch,
-            )),
+            executor_cache: RwLock::new(BankExecutorCache::new(MAX_CACHED_EXECUTORS, fields.epoch)),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
@@ -3995,10 +3993,10 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
-    fn get_local_executor_cache(
+    fn get_tx_executor_cache(
         &self,
         accounts: &[TransactionAccount],
-    ) -> Rc<RefCell<LocalExecutorCache>> {
+    ) -> Rc<RefCell<TransactionExecutorCache>> {
         let executable_keys: Vec<_> = accounts
             .iter()
             .filter_map(|(key, account)| {
@@ -4011,46 +4009,46 @@ impl Bank {
             .collect();
 
         if executable_keys.is_empty() {
-            return Rc::new(RefCell::new(LocalExecutorCache::default()));
+            return Rc::new(RefCell::new(TransactionExecutorCache::default()));
         }
 
-        let local_executor_cache = {
-            let cache = self.cached_executors.read().unwrap();
-            LocalExecutorCache::new(
+        let tx_executor_cache = {
+            let cache = self.executor_cache.read().unwrap();
+            TransactionExecutorCache::new(
                 executable_keys
                     .into_iter()
                     .filter_map(|key| cache.get(key).map(|executor| (*key, executor))),
             )
         };
 
-        Rc::new(RefCell::new(local_executor_cache))
+        Rc::new(RefCell::new(tx_executor_cache))
     }
 
     /// Add executors back to the bank's cache if they were missing and not updated
-    fn store_missing_executors(&self, local_executor_cache: &RefCell<LocalExecutorCache>) {
-        local_executor_cache
+    fn store_missing_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
+        tx_executor_cache
             .borrow()
-            .update_global_cache(&self.cached_executors, |difference| {
-                difference == LocalGlobalDifference::Inserted
+            .update_global_cache(&self.executor_cache, |difference| {
+                difference == TxBankExecutorCacheDiff::Inserted
             });
     }
 
     /// Add updated executors back to the bank's cache
-    fn store_updated_executors(&self, local_executor_cache: &RefCell<LocalExecutorCache>) {
-        local_executor_cache
+    fn store_updated_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
+        tx_executor_cache
             .borrow()
-            .update_global_cache(&self.cached_executors, |difference| {
-                difference == LocalGlobalDifference::Updated
+            .update_global_cache(&self.executor_cache, |difference| {
+                difference == TxBankExecutorCacheDiff::Updated
             });
     }
 
     /// Remove an executor from the bank's cache
     fn remove_executor(&self, pubkey: &Pubkey) {
-        let _ = self.cached_executors.write().unwrap().remove(pubkey);
+        let _ = self.executor_cache.write().unwrap().remove(pubkey);
     }
 
     pub fn clear_executors(&self) {
-        self.cached_executors.write().unwrap().clear();
+        self.executor_cache.write().unwrap().clear();
     }
 
     /// Execute a transaction using the provided loaded accounts and update
@@ -4069,12 +4067,12 @@ impl Bank {
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
     ) -> TransactionExecutionResult {
-        let mut get_local_executor_cache_time = Measure::start("get_local_executor_cache_time");
-        let local_executor_cache = self.get_local_executor_cache(&loaded_transaction.accounts);
-        get_local_executor_cache_time.stop();
+        let mut get_tx_executor_cache_time = Measure::start("get_tx_executor_cache_time");
+        let tx_executor_cache = self.get_tx_executor_cache(&loaded_transaction.accounts);
+        get_tx_executor_cache_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.get_executors_us,
-            get_local_executor_cache_time.as_us()
+            get_tx_executor_cache_time.as_us()
         );
 
         let prev_accounts_data_len = self.load_accounts_data_size();
@@ -4132,7 +4130,7 @@ impl Bank {
             &mut transaction_context,
             self.rent_collector.rent,
             log_collector.clone(),
-            local_executor_cache.clone(),
+            tx_executor_cache.clone(),
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4150,7 +4148,7 @@ impl Bank {
         );
 
         let mut store_missing_executors_time = Measure::start("store_missing_executors_time");
-        self.store_missing_executors(&local_executor_cache);
+        self.store_missing_executors(&tx_executor_cache);
         store_missing_executors_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
@@ -4244,7 +4242,7 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            local_executor_cache,
+            tx_executor_cache,
         }
     }
 
@@ -4825,11 +4823,11 @@ impl Bank {
         for execution_result in &execution_results {
             if let TransactionExecutionResult::Executed {
                 details,
-                local_executor_cache,
+                tx_executor_cache,
             } = execution_result
             {
                 if details.status.is_ok() {
-                    self.store_updated_executors(local_executor_cache);
+                    self.store_updated_executors(tx_executor_cache);
                 }
             }
         }
@@ -7939,7 +7937,7 @@ pub(crate) mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            local_executor_cache: Rc::new(RefCell::new(LocalExecutorCache::default())),
+            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }
     }
 
@@ -15102,16 +15100,17 @@ pub(crate) mod tests {
         ];
 
         // don't do any work if not dirty
-        let executors = LocalExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
+        let executors =
+            TransactionExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
         let executors = Rc::new(RefCell::new(executors));
         bank.store_missing_executors(&executors);
         bank.store_updated_executors(&executors);
-        let stored_executors = bank.get_local_executor_cache(accounts);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
         assert_eq!(stored_executors.borrow().executors.len(), 0);
 
         // do work
         let mut executors =
-            LocalExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
+            TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
         executors.set(key1, executor.clone(), false);
         executors.set(key2, executor.clone(), false);
         executors.set(key3, executor.clone(), true);
@@ -15120,14 +15119,14 @@ pub(crate) mod tests {
 
         // store Missing
         bank.store_missing_executors(&executors);
-        let stored_executors = bank.get_local_executor_cache(accounts);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
         assert_eq!(stored_executors.borrow().executors.len(), 2);
         assert!(stored_executors.borrow().executors.contains_key(&key1));
         assert!(stored_executors.borrow().executors.contains_key(&key2));
 
         // store Updated
         bank.store_updated_executors(&executors);
-        let stored_executors = bank.get_local_executor_cache(accounts);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
         assert_eq!(stored_executors.borrow().executors.len(), 3);
         assert!(stored_executors.borrow().executors.contains_key(&key1));
         assert!(stored_executors.borrow().executors.contains_key(&key2));
@@ -15135,7 +15134,7 @@ pub(crate) mod tests {
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-        let stored_executors = bank.get_local_executor_cache(accounts);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
         assert_eq!(stored_executors.borrow().executors.len(), 3);
         assert!(stored_executors.borrow().executors.contains_key(&key1));
         assert!(stored_executors.borrow().executors.contains_key(&key2));
@@ -15146,7 +15145,7 @@ pub(crate) mod tests {
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-        let stored_executors = bank.get_local_executor_cache(accounts);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
         assert_eq!(stored_executors.borrow().executors.len(), 0);
     }
 
@@ -15172,36 +15171,36 @@ pub(crate) mod tests {
         ];
 
         // add one to root bank
-        let mut executors = LocalExecutorCache::default();
+        let mut executors = TransactionExecutorCache::default();
         executors.set(key1, executor.clone(), false);
         let executors = Rc::new(RefCell::new(executors));
         root.store_missing_executors(&executors);
-        let executors = root.get_local_executor_cache(accounts);
+        let executors = root.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
-        let executors = fork1.get_local_executor_cache(accounts);
+        let executors = fork1.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
-        let executors = fork2.get_local_executor_cache(accounts);
+        let executors = fork2.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
 
-        let mut executors = LocalExecutorCache::default();
+        let mut executors = TransactionExecutorCache::default();
         executors.set(key2, executor.clone(), false);
         let executors = Rc::new(RefCell::new(executors));
         fork1.store_missing_executors(&executors);
 
-        let executors = fork1.get_local_executor_cache(accounts);
+        let executors = fork1.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 2);
-        let executors = fork2.get_local_executor_cache(accounts);
+        let executors = fork2.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
 
         fork1.remove_executor(&key1);
 
-        let executors = fork1.get_local_executor_cache(accounts);
+        let executors = fork1.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
-        let executors = fork2.get_local_executor_cache(accounts);
+        let executors = fork2.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
     }
 

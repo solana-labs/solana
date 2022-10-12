@@ -440,7 +440,7 @@ fn process_instruction_common(
         drop(program);
 
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let cached_executor = invoke_context.local_executor_cache.borrow().get(program_id);
+        let cached_executor = invoke_context.tx_executor_cache.borrow().get(program_id);
         let executor = if let Some(executor) = cached_executor {
             executor
         } else {
@@ -456,11 +456,10 @@ fn process_instruction_common(
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let program_id = instruction_context.get_last_program_key(transaction_context)?;
-            invoke_context.local_executor_cache.borrow_mut().set(
-                *program_id,
-                executor.clone(),
-                false,
-            );
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(*program_id, executor.clone(), false);
             executor
         };
         get_or_create_executor_time.stop();
@@ -689,7 +688,7 @@ fn process_loader_upgradeable_instruction(
                     .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context
-                .local_executor_cache
+                .tx_executor_cache
                 .borrow_mut()
                 .set(new_program_id, executor, true);
 
@@ -860,7 +859,7 @@ fn process_loader_upgradeable_instruction(
                     .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
             invoke_context
-                .local_executor_cache
+                .tx_executor_cache
                 .borrow_mut()
                 .set(new_program_id, executor, true);
 
@@ -1281,11 +1280,10 @@ fn process_loader_instruction(
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            invoke_context.local_executor_cache.borrow_mut().set(
-                *program.get_key(),
-                executor,
-                true,
-            );
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(*program.get_key(), executor, true);
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }
