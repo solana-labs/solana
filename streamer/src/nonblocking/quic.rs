@@ -45,14 +45,14 @@ const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
 
-const CONNECTION_CLOSE_CODE_DROP_ENTRY: u32 = 1;
-const CONNECTION_CLOSE_REASON_DROP_ENTRY: &[u8] = b"drop";
+const CONNECTION_CLOSE_CODE_DROPPED_ENTRY: u32 = 1;
+const CONNECTION_CLOSE_REASON_DROPPED_ENTRY: &[u8] = b"dropped";
 
 const CONNECTION_CLOSE_CODE_DISALLOWED: u32 = 2;
 const CONNECTION_CLOSE_REASON_DISALLOWED: &[u8] = b"disallowed";
 
-const CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT: u32 = 3;
-const CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT: &[u8] = b"invalid_stream_count";
+const CONNECTION_CLOSE_CODE_EXCEED_MAX_STREAM_COUNT: u32 = 3;
+const CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT: &[u8] = b"exceed_max_stream_count";
 
 const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
@@ -311,8 +311,8 @@ fn handle_and_cache_new_connection(
         }
     } else {
         connection.close(
-            CONNECTION_CLOSE_CODE_INVALID_STREAM_COUNT.into(),
-            CONNECTION_CLOSE_REASON_INVALID_STREAM_COUNT,
+            CONNECTION_CLOSE_CODE_EXCEED_MAX_STREAM_COUNT.into(),
+            CONNECTION_CLOSE_REASON_EXCEED_MAX_STREAM_COUNT,
         );
         params
             .stats
@@ -728,8 +728,8 @@ impl Drop for ConnectionEntry {
     fn drop(&mut self) {
         if let Some(conn) = self.connection.take() {
             conn.close(
-                CONNECTION_CLOSE_CODE_DROP_ENTRY.into(),
-                CONNECTION_CLOSE_REASON_DROP_ENTRY,
+                CONNECTION_CLOSE_CODE_DROPPED_ENTRY.into(),
+                CONNECTION_CLOSE_REASON_DROPPED_ENTRY,
             );
         }
         self.exit.store(true, Ordering::Relaxed);
