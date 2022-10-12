@@ -1820,6 +1820,7 @@ impl Bank {
         slot: Slot,
         //reward_calc_tracer: Option<impl Fn(&RewardCalculationEvent) + Send + Sync>,
         vote_only_bank: bool,
+        add_ancestor: bool,
     ) -> Self {
         //let mut time = Measure::start("bank::new_from_parent");
         //let NewBankOptions { vote_only_bank } = new_bank_options;
@@ -1996,17 +1997,19 @@ impl Bank {
             epoch_reward_calc_start: parent.epoch_reward_calc_start,
         };
 
-        let (_, ancestors_time) = measure!(
-            {
-                let mut ancestors = Vec::with_capacity(1 + new.parents().len());
-                ancestors.push(new.slot());
-                new.parents().iter().for_each(|p| {
-                    ancestors.push(p.slot());
-                });
-                new.ancestors = Ancestors::from(ancestors);
-            },
-            "ancestors_creation",
-        );
+        if add_ancestor {
+            let (_, ancestors_time) = measure!(
+                {
+                    let mut ancestors = Vec::with_capacity(1 + new.parents().len());
+                    ancestors.push(new.slot());
+                    new.parents().iter().for_each(|p| {
+                        ancestors.push(p.slot());
+                    });
+                    new.ancestors = Ancestors::from(ancestors);
+                },
+                "ancestors_creation",
+            );
+        }
         new
 
         //        // Following code may touch AccountsDb, requiring proper ancestors
@@ -2248,6 +2251,7 @@ impl Bank {
             slot,
             //reward_calc_tracer,
             vote_only_bank,
+            true,
         );
 
         //        let epoch_schedule = parent.epoch_schedule;
@@ -2477,6 +2481,7 @@ impl Bank {
                             slot,
                             //reward_calc_tracer,
                             vote_only_bank,
+                            false,
                         );
 
                         new2.apply_feature_activations(
