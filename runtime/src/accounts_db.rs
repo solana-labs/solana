@@ -6614,12 +6614,10 @@ impl AccountsDb {
                 None => {
                     // hash any accounts where we were lazy in calculating the hash
                     let mut hash_time = Measure::start("hash_accounts");
-                    let mut stats = BankHashStats::default();
                     let len = accounts_and_meta_to_store.len();
                     let mut hashes = Vec::with_capacity(len);
                     for index in 0..accounts.len() {
                         let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                        stats.update(account);
                         let hash = Self::hash_account(slot, account, pubkey);
                         hashes.push(hash);
                     }
