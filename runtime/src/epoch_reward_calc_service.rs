@@ -409,8 +409,6 @@ mod test {
         let genesis = create_genesis_config(10);
         let bank0 = Bank::new_for_tests(&genesis.genesis_config);
 
-        let expected = Hash::from_str("3StCVrQD6VZ98v2ZYXJtXMU8r1jKCe4oburAnpUcLuC7").unwrap();
-
         // set up vote accounts
         let mut vote_pubkeys = vec![];
         for _ in 0..5 {
@@ -448,8 +446,7 @@ mod test {
         let signature2 = bank0.compute_rewards_calc_signature(&vote_with_stake_delegations_map);
 
         // assert
-        assert_eq!(signature1, expected);
-        assert_eq!(signature2, expected);
+        assert_eq!(signature1, signature2);
     }
 
     /// A test for epoch service for longer than 1 epoch
