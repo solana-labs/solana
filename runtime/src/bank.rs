@@ -10856,7 +10856,7 @@ pub(crate) mod tests {
         solana_logger::setup();
 
         // create a bank that ticks really slowly...
-        let bank0 = Arc::new(Bank::new_for_tests(&GenesisConfig {
+        let mut bank0 = Bank::new_for_tests(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -10878,9 +10878,11 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()
-        }));
+        });
 
         bank0.set_partitioned_rewards_enable(false);
+
+        let bank0 = Arc::new(bank0);
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
@@ -10987,7 +10989,7 @@ pub(crate) mod tests {
 
     fn do_test_bank_update_rewards_determinism() -> u64 {
         // create a bank that ticks really slowly...
-        let bank = Arc::new(Bank::new_for_tests(&GenesisConfig {
+        let mut bank = Bank::new_for_tests(&GenesisConfig {
             accounts: (0..42)
                 .map(|_| {
                     (
@@ -11009,9 +11011,10 @@ pub(crate) mod tests {
             cluster_type: ClusterType::MainnetBeta,
 
             ..GenesisConfig::default()
-        }));
+        });
 
         bank.set_partitioned_rewards_enable(false);
+        let bank = Arc::new(bank);
 
         // enable lazy rent collection because this test depends on rent-due accounts
         // not being eagerly-collected for exact rewards calculation
