@@ -97,27 +97,51 @@ export function generateTokenBalanceRows(
   accounts: ParsedMessageAccount[]
 ): TokenBalanceRow[] {
   let preBalanceMap: { [index: number]: TokenBalance } = {};
+  let postBalanceMap: { [index: number]: TokenBalance } = {};
 
   preTokenBalances.forEach(
     (balance) => (preBalanceMap[balance.accountIndex] = balance)
   );
+  postTokenBalances.forEach(
+    (balance) => (postBalanceMap[balance.accountIndex] = balance)
+  );
+
+  // Check if any pre token balances do not have corresponding
+  // post token balances. If not, insert a post balance of zero
+  // so that the delta is displayed properly
+  for (let index in preBalanceMap) {
+    const preBalance = preBalanceMap[index];
+    if (!postBalanceMap[index]) {
+      postBalanceMap[index] = {
+        accountIndex: Number(index),
+        mint: preBalance.mint,
+        uiTokenAmount: {
+          amount: "0",
+          decimals: preBalance.uiTokenAmount.decimals,
+          uiAmount: null,
+          uiAmountString: "0",
+        },
+      };
+    }
+  }
 
   let rows: TokenBalanceRow[] = [];
 
-  postTokenBalances.forEach(({ uiTokenAmount, accountIndex, mint }) => {
+  for (let index in postBalanceMap) {
+    const { uiTokenAmount, accountIndex, mint } = postBalanceMap[index];
     const preBalance = preBalanceMap[accountIndex];
     const account = accounts[accountIndex].pubkey;
 
     if (!uiTokenAmount.uiAmountString) {
       // uiAmount deprecation
-      return;
+      continue;
     }
 
     // case where mint changes
     if (preBalance && preBalance.mint !== mint) {
       if (!preBalance.uiTokenAmount.uiAmountString) {
         // uiAmount deprecation
-        return;
+        continue;
       }
 
       rows.push({
@@ -139,7 +163,7 @@ export function generateTokenBalanceRows(
         delta: new BigNumber(uiTokenAmount.uiAmountString),
         mint: mint,
       });
-      return;
+      continue;
     }
 
     let delta;
@@ -147,7 +171,7 @@ export function generateTokenBalanceRows(
     if (preBalance) {
       if (!preBalance.uiTokenAmount.uiAmountString) {
         // uiAmount deprecation
-        return;
+        continue;
       }
 
       delta = new BigNumber(uiTokenAmount.uiAmountString).minus(
@@ -164,7 +188,7 @@ export function generateTokenBalanceRows(
       delta,
       accountIndex,
     });
-  });
+  }
 
   return rows.sort((a, b) => a.accountIndex - b.accountIndex);
 }

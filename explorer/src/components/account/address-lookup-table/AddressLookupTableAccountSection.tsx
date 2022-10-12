@@ -1,24 +1,36 @@
 import React from "react";
 import { TableCardBody } from "src/components/common/TableCardBody";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { Account, useFetchAccountInfo } from "src/providers/accounts";
 import { Address } from "src/components/common/Address";
 import { AddressLookupTableAccount } from "@solana/web3.js";
 import { Slot } from "src/components/common/Slot";
+import { AddressLookupTableAccountInfo } from "src/validators/accounts/address-lookup-table";
 
-export function AddressLookupTableAccountSection({
-  account,
-  data,
-}: {
-  account: Account;
-  data: Uint8Array;
-}) {
-  const lookupTableAccount = React.useMemo(() => {
-    return new AddressLookupTableAccount({
-      key: account.pubkey,
-      state: AddressLookupTableAccount.deserialize(data),
-    });
-  }, [account, data]);
+
+export function AddressLookupTableAccountSection(
+  params:
+    | {
+        account: Account;
+        data: Uint8Array;
+      }
+    | {
+        account: Account;
+        lookupTableAccount: AddressLookupTableAccountInfo;
+      }
+) {
+  const account = params.account;
+  const lookupTableState = React.useMemo(() => {
+    if ("data" in params) {
+      return AddressLookupTableAccount.deserialize(params.data);
+    } else {
+      return params.lookupTableAccount;
+    }
+  }, [params]);
+  const lookupTableAccount = new AddressLookupTableAccount({
+    key: account.pubkey,
+    state: lookupTableState,
+  });
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">

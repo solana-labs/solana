@@ -175,7 +175,6 @@ use {
 /// params to `verify_bank_hash`
 pub struct VerifyBankHash {
     pub test_hash_calculation: bool,
-    pub can_cached_slot_be_unflushed: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
     pub run_in_background: bool,
@@ -285,7 +284,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
+#[frozen_abi(digest = "A7T7XohiSoo8FGoCPTsaXAYYugXTkoYnBjQAdBgYHH85")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -4363,7 +4362,14 @@ impl Bank {
                 None
             },
             compute_budget.max_invoke_depth.saturating_add(1),
-            tx.message().instructions().len(),
+            if self
+                .feature_set
+                .is_active(&feature_set::limit_max_instruction_trace_length::id())
+            {
+                compute_budget.max_instruction_trace_length
+            } else {
+                std::usize::MAX
+            },
         );
         if self
             .feature_set
@@ -4536,14 +4542,32 @@ impl Bank {
             .iter()
             .enumerate()
             .filter_map(|(index, res)| match res {
+                // following are retryable errors
                 Err(TransactionError::AccountInUse) => {
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
-                Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                | Err(TransactionError::WouldExceedMaxVoteCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedAccountDataBlockLimit) => Some(index),
+                Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
+                    error_counters.would_exceed_max_block_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
+                    error_counters.would_exceed_max_vote_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
+                    error_counters.would_exceed_max_account_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
+                    error_counters.would_exceed_account_data_block_limit += 1;
+                    Some(index)
+                }
+                // following are non-retryable errors
+                Err(TransactionError::TooManyAccountLocks) => {
+                    error_counters.too_many_account_locks += 1;
+                    None
+                }
                 Err(_) => None,
                 Ok(_) => None,
             })
@@ -6863,21 +6887,11 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
-        let epoch_accounts_hash = self.epoch_accounts_hash();
-        let should_include_epoch_accounts_hash = self.should_include_epoch_accounts_hash();
-        if should_include_epoch_accounts_hash {
-            // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
-            // for normal clusters, as the feature gating this `if` block is always false.
-            // However, some tests enable all features, so this `if` block can be true.
-            //
-            // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
-            // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
-            // will be required for the epoch accounts hash calculation to have completed and
-            // for this value to be `Some`.
-            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
-                hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
-            }
-        }
+        let epoch_accounts_hash = self.should_include_epoch_accounts_hash().then(|| {
+            let epoch_accounts_hash = self.wait_get_epoch_accounts_hash();
+            hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            epoch_accounts_hash
+        });
 
         let buf = self
             .hard_forks
@@ -6904,8 +6918,8 @@ impl Bank {
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
-            if should_include_epoch_accounts_hash {
-                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash)
+            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
             } else {
                 "".to_string()
             }
@@ -6929,10 +6943,31 @@ impl Bank {
             return false;
         }
 
-        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
-        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
-        let stop_slot = first_slot_in_epoch + stop_offset;
+        let stop_slot = epoch_accounts_hash::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
+    }
+
+    /// If the epoch accounts hash should be included in this Bank, then fetch it.  If the EAH
+    /// calculation has not completed yet, this fn will block until it does complete.
+    fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
+        let (epoch_accounts_hash, measure) = measure!(self
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .wait_get_epoch_accounts_hash());
+
+        datapoint_info!(
+            "bank-wait_get_epoch_accounts_hash",
+            ("slot", self.slot() as i64, i64),
+            (
+                "epoch_accounts_hash",
+                epoch_accounts_hash.as_ref().to_string(),
+                String
+            ),
+            ("waiting-time-us", measure.as_us() as i64, i64),
+        );
+        epoch_accounts_hash
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
@@ -6990,10 +7025,11 @@ impl Bank {
                             config.test_hash_calculation,
                             &epoch_schedule,
                             &rent_collector,
-                            config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
                             enable_rehashing,
+                            // true to run using bg thread pool
+                            true,
                         );
                         accounts_
                             .accounts_db
@@ -7012,10 +7048,11 @@ impl Bank {
                 config.test_hash_calculation,
                 epoch_schedule,
                 rent_collector,
-                config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
                 enable_rehashing,
+                // fg is waiting for this to run, so we can use the fg thread pool
+                false,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
@@ -7108,13 +7145,11 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
-        let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
             self.slot(),
-            can_cached_slot_be_unflushed,
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
@@ -7122,7 +7157,7 @@ impl Bank {
         )
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from tests or ledger tool
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
@@ -7178,7 +7213,6 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 Some(self.capitalization()),
-                false,
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
@@ -7205,7 +7239,6 @@ impl Bank {
                         self.slot(),
                         &self.ancestors,
                         Some(self.capitalization()),
-                        false,
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
@@ -7260,7 +7293,6 @@ impl Bank {
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
                 test_hash_calculation,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: true,
@@ -7922,14 +7954,12 @@ impl Bank {
     }
 
     /// Convenience fn to get the Epoch Accounts Hash
-    fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
-        *self
-            .rc
+    pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+        self.rc
             .accounts
             .accounts_db
-            .epoch_accounts_hash
-            .lock()
-            .unwrap()
+            .epoch_accounts_hash_manager
+            .try_get_epoch_accounts_hash()
     }
 }
 
@@ -10475,7 +10505,6 @@ pub(crate) mod tests {
         fn default_for_test() -> Self {
             Self {
                 test_hash_calculation: true,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: false,
@@ -18774,7 +18803,6 @@ pub(crate) mod tests {
             sol_to_lamports(1.),
             bank.last_blockhash(),
         );
-        let number_of_instructions_at_transaction_level = tx.message().instructions.len();
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -18797,7 +18825,7 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             Some(Rent::default()),
             compute_budget.max_invoke_depth.saturating_add(1),
-            number_of_instructions_at_transaction_level,
+            compute_budget.max_instruction_trace_length,
         );
 
         assert_eq!(
@@ -18945,8 +18973,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
-        let mut transaction_context = TransactionContext::new(vec![], None, 3, 3);
-        for (index_in_trace, stack_height) in [1, 2, 1, 1, 2, 3, 2].into_iter().enumerate() {
+        let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
+        let mut transaction_context =
+            TransactionContext::new(vec![], None, 3, instruction_trace.len());
+        for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();
             }

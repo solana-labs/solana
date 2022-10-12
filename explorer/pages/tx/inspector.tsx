@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { PACKET_DATA_SIZE, VersionedMessage } from "@solana/web3.js";
 
 import { TableCardBody } from "src/components/common/TableCardBody";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { useQuery } from "src/utils/url";
 import {
   useFetchRawTransaction,

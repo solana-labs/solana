@@ -3230,7 +3230,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c53a5ade47760e8cc4986bdc5e72daeffaaaee64cbc374f9cfe0a00c1cd87b1f"
 dependencies = [
  "serde",
- "serde_yaml 0.8.26",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -4279,19 +4279,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.9.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8613d593412a0deb7bbd8de9d908efff5a0cb9ccd8f62c641e7b2ed2f57291d1"
-dependencies = [
- "indexmap",
- "itoa 1.0.1",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
 name = "serial_test"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4691,7 +4678,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serde_json",
- "serde_yaml 0.9.13",
+ "serde_yaml",
  "serial_test",
  "solana-clap-utils",
  "solana-cli-config",
@@ -4788,6 +4775,8 @@ version = "1.15.0"
 dependencies = [
  "cargo_metadata",
  "clap 3.1.8",
+ "log",
+ "solana-logger 1.15.0",
  "solana-sdk 1.15.0",
 ]
 
@@ -4918,7 +4907,7 @@ dependencies = [
  "lazy_static",
  "serde",
  "serde_derive",
- "serde_yaml 0.9.13",
+ "serde_yaml",
  "solana-clap-utils",
  "solana-sdk 1.15.0",
  "url 2.2.2",
@@ -5035,6 +5024,7 @@ dependencies = [
  "lru",
  "matches",
  "min-max-heap",
+ "num_enum",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "raptorq",
@@ -5277,7 +5267,7 @@ dependencies = [
  "clap 2.33.3",
  "serde",
  "serde_json",
- "serde_yaml 0.9.13",
+ "serde_yaml",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-entry",
@@ -5396,7 +5386,7 @@ dependencies = [
  "reqwest",
  "semver 1.0.14",
  "serde",
- "serde_yaml 0.9.13",
+ "serde_yaml",
  "solana-clap-utils",
  "solana-config-program",
  "solana-logger 1.15.0",
@@ -5601,6 +5591,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-memory-management"
+version = "1.15.0"
+
+[[package]]
 name = "solana-merkle-root-bench"
 version = "1.15.0"
 dependencies = [
@@ -5676,6 +5670,7 @@ dependencies = [
  "log",
  "reqwest",
  "serde_json",
+ "solana-sdk 1.15.0",
 ]
 
 [[package]]
@@ -5877,6 +5872,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "chrono-humanize",
+ "crossbeam-channel",
  "log",
  "serde",
  "solana-banks-client",
@@ -5913,6 +5909,17 @@ dependencies = [
  "tokio-tungstenite",
  "tungstenite",
  "url 2.2.2",
+]
+
+[[package]]
+name = "solana-quic-client"
+version = "1.15.0"
+dependencies = [
+ "solana-logger 1.15.0",
+ "solana-metrics",
+ "solana-sdk 1.15.0",
+ "solana-streamer",
+ "solana-tpu-client",
 ]
 
 [[package]]
@@ -6144,6 +6151,7 @@ dependencies = [
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk 1.15.0",
+ "static_assertions",
  "strum",
  "strum_macros",
  "symlink",
@@ -6602,6 +6610,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-udp-client"
+version = "1.15.0"
+dependencies = [
+ "solana-net-utils",
+ "solana-tpu-client",
+]
+
+[[package]]
 name = "solana-upload-perf"
 version = "1.15.0"
 dependencies = [
@@ -6625,6 +6641,7 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-ipc-server",
  "jsonrpc-server-utils",
+ "lazy_static",
  "libc",
  "log",
  "num_cpus",
@@ -6632,7 +6649,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "serde_yaml 0.9.13",
+ "serde_yaml",
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",
@@ -6792,9 +6809,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.32"
+version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe055100805e9069715acf73529ec563ad987a4d042da9defe9b7554560f2df4"
+checksum = "334bb11faee82f0306e39944cb4ac85824b7d261f3d99d1f2f8bd09851644f0b"
 dependencies = [
  "byteorder",
  "combine",
@@ -7764,12 +7781,6 @@ checksum = "382810877fe448991dfc7f0dd6e3ae5d58088fd0ea5e35189655f84e6814fa56"
 dependencies = [
  "void",
 ]
-
-[[package]]
-name = "unsafe-libyaml"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1e5fa573d8ac5f1a856f8d7be41d390ee973daf97c806b2c1a465e4e1406e68"
 
 [[package]]
 name = "untrusted"

@@ -53,8 +53,9 @@ impl Node {
         stake: u64,
     ) -> Self {
         let ping_cache = Arc::new(Mutex::new(PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            2048,                         // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // delay
+            2048,                              // capacity
         )));
         Node {
             keypair,

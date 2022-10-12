@@ -510,10 +510,6 @@ pub mod cap_accounts_data_allocations_per_transaction {
     solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
 }
 
-pub mod return_none_for_zero_lamport_accounts {
-    solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
-}
-
 pub mod epoch_accounts_hash {
     solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
 }
@@ -524,6 +520,10 @@ pub mod remove_deprecated_request_unit_ix {
 
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
+}
+
+pub mod limit_max_instruction_trace_length {
+    solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
 }
 
 lazy_static! {
@@ -648,10 +648,10 @@ lazy_static! {
         (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
-        (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
+        (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

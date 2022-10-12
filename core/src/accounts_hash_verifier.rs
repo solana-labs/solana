@@ -147,7 +147,6 @@ impl AccountsHashVerifier {
                     use_bg_thread_pool: true,
                     check_hash: false,
                     ancestors: None,
-                    use_write_cache: false,
                     epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
@@ -171,7 +170,6 @@ impl AccountsHashVerifier {
                         use_bg_thread_pool: false,
                         check_hash: false,
                         ancestors: None,
-                        use_write_cache: false,
                         epoch_schedule: &accounts_package.epoch_schedule,
                         rent_collector: &accounts_package.rent_collector,
                         store_detailed_debug_info_on_failure: false,
@@ -191,7 +189,6 @@ impl AccountsHashVerifier {
                         use_bg_thread_pool: false,
                         check_hash: false,
                         ancestors: None,
-                        use_write_cache: false,
                         epoch_schedule: &accounts_package.epoch_schedule,
                         rent_collector: &accounts_package.rent_collector,
                         // now that we've failed, store off the failing contents that produced a bad capitalization
@@ -237,20 +234,16 @@ impl AccountsHashVerifier {
 
     fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: Hash) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
-            debug!(
+            info!(
                 "saving epoch accounts hash, slot: {}, hash: {}",
                 accounts_package.slot, accounts_hash
             );
-            let new_epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
-            let old_epoch_accounts_hash = accounts_package
+            let epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
+            accounts_package
                 .accounts
                 .accounts_db
-                .epoch_accounts_hash
-                .lock()
-                .unwrap()
-                .replace(new_epoch_accounts_hash);
-            // Old epoch accounts hash must be NONE, because a previous bank must have taken it to hash into itself
-            assert!(old_epoch_accounts_hash.is_none());
+                .epoch_accounts_hash_manager
+                .set_valid(epoch_accounts_hash, accounts_package.slot);
         }
     }
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { Account } from "src/providers/accounts";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { TableCardBody } from "src/components/common/TableCardBody";
 import { Address } from "src/components/common/Address";
 import { addressLabel } from "src/utils/tx";

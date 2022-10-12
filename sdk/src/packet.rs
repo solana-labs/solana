@@ -170,6 +170,11 @@ impl Meta {
     }
 
     #[inline]
+    pub fn set_simple_vote(&mut self, is_simple_vote: bool) {
+        self.flags.set(PacketFlags::SIMPLE_VOTE_TX, is_simple_vote);
+    }
+
+    #[inline]
     pub fn forwarded(&self) -> bool {
         self.flags.contains(PacketFlags::FORWARDED)
     }

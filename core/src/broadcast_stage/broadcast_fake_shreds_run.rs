@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::{ProcessShredsStats, Shredder},
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -11,6 +11,7 @@ pub(super) struct BroadcastFakeShredsRun {
     partition: usize,
     shred_version: u16,
     next_code_index: u32,
+    reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl BroadcastFakeShredsRun {
@@ -20,6 +21,7 @@ impl BroadcastFakeShredsRun {
             partition,
             shred_version,
             next_code_index: 0,
+            reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
 }
@@ -61,6 +63,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant
+            &self.reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
 
@@ -81,6 +84,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             next_shred_index,
             self.next_code_index,
             true, // merkle_variant
+            &self.reed_solomon_cache,
             &mut ProcessShredsStats::default(),
         );
 

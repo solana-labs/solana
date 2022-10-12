@@ -525,6 +525,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)]
     fn test_banks_server_transfer_via_server() -> Result<(), BanksClientError> {
         // This test shows the preferred way to interact with BanksServer.
         // It creates a runtime explicitly (no globals via tokio macros) and calls
@@ -563,6 +564,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::result_large_err)]
     fn test_banks_server_transfer_via_client() -> Result<(), BanksClientError> {
         // The caller may not want to hold the connection open until the transaction
         // is processed (or blockhash expires). In this test, we verify the

@@ -5,7 +5,7 @@ import { AccountBalancePair } from "@solana/web3.js";
 import { useRichList, useFetchRichList, Status } from "src/providers/richList";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { useQuery } from "src/utils/url";
 import { useSupply } from "src/providers/supply";
 import { Address } from "./common/Address";

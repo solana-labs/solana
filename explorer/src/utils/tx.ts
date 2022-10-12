@@ -93,6 +93,9 @@ export enum PROGRAM_NAMES {
   SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  WORMHOLE_CORE = "Wormhole Core Bridge",
+  WORMHOLE_TOKEN = "Wormhole Token Bridge",
+  WORMHOLE_NFT = "Wormhole NFT Bridge",
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
@@ -375,6 +378,30 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   WormT3McKhFJ2RkiGpdw9GKvNCrB2aB54gb2uV9MfQC: {
     name: PROGRAM_NAMES.WORMHOLE,
     deployments: [Cluster.MainnetBeta],
+  },
+  worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth: {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5": {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.Devnet],
+  },
+  wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.MainnetBeta],
+  },
+  DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.Devnet],
+  },
+  WnFt12ZrnzZrFZkt2xsNsaNWoQribnuQ5B5FrDbwDhD: {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "2rHhojZ7hpu1zA91nvZmT8TqWWvMcKmmNBCr2mKTtMq4": {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.Devnet],
   },
   CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz: {
     name: PROGRAM_NAMES.SOLANART,

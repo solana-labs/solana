@@ -3,7 +3,7 @@ use {
         cluster_slots::ClusterSlots,
         duplicate_repair_status::ANCESTOR_HASH_REPAIR_SAMPLE_SIZE,
         repair_response,
-        repair_service::{OutstandingShredRepairs, RepairStats},
+        repair_service::{OutstandingShredRepairs, RepairStats, REPAIR_MS},
         request_response::RequestResponse,
         result::{Error, Result},
     },
@@ -46,7 +46,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -76,6 +76,7 @@ pub const MAX_ANCESTOR_RESPONSES: usize =
 pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
 pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
 pub const REPAIR_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
+const REPAIR_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(2);
 pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
     4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
@@ -151,10 +152,15 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 struct ServeRepairStats {
     total_requests: usize,
-    dropped_requests: usize,
+    unsigned_requests: usize,
+    dropped_requests_outbound_bandwidth: usize,
+    dropped_requests_load_shed: usize,
     total_dropped_response_packets: usize,
     total_response_packets: usize,
-    total_response_bytes: usize,
+    total_response_bytes_staked: usize,
+    total_response_bytes_unstaked: usize,
+    handle_requests_staked: usize,
+    handle_requests_unstaked: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -468,10 +474,11 @@ impl ServeRepair {
             }
         }
 
-        stats.dropped_requests += dropped_requests;
+        stats.dropped_requests_load_shed += dropped_requests;
         stats.total_requests += total_requests;
 
         let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         for reqs in reqs_v {
             self.handle_packets(
                 ping_cache,
@@ -479,9 +486,9 @@ impl ServeRepair {
                 blockstore,
                 reqs,
                 response_sender,
-                &root_bank,
                 stats,
                 data_budget,
+                &epoch_staked_nodes,
             );
         }
         Ok(())
@@ -500,14 +507,40 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
-            ("dropped_requests", stats.dropped_requests, i64),
+            ("unsigned_requests", stats.unsigned_requests, i64),
+            (
+                "dropped_requests_outbound_bandwidth",
+                stats.dropped_requests_outbound_bandwidth,
+                i64
+            ),
+            (
+                "dropped_requests_load_shed",
+                stats.dropped_requests_load_shed,
+                i64
+            ),
             (
                 "total_dropped_response_packets",
                 stats.total_dropped_response_packets,
                 i64
             ),
+            ("handle_requests_staked", stats.handle_requests_staked, i64),
+            (
+                "handle_requests_unstaked",
+                stats.handle_requests_unstaked,
+                i64
+            ),
+            ("processed", stats.processed, i64),
             ("total_response_packets", stats.total_response_packets, i64),
-            ("total_response_bytes", stats.total_response_bytes, i64),
+            (
+                "total_response_bytes_staked",
+                stats.total_response_bytes_staked,
+                i64
+            ),
+            (
+                "total_response_bytes_unstaked",
+                stats.total_response_bytes_unstaked,
+                i64
+            ),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
@@ -543,7 +576,14 @@ impl ServeRepair {
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
 
-        let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
+        // rate limit delay should be greater than the repair request iteration delay
+        assert!(REPAIR_PING_CACHE_RATE_LIMIT_DELAY > Duration::from_millis(REPAIR_MS));
+
+        let mut ping_cache = PingCache::new(
+            REPAIR_PING_CACHE_TTL,
+            REPAIR_PING_CACHE_RATE_LIMIT_DELAY,
+            REPAIR_PING_CACHE_CAPACITY,
+        );
 
         let recycler = PacketBatchRecycler::default();
         Builder::new()
@@ -650,9 +690,9 @@ impl ServeRepair {
         blockstore: &Blockstore,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
-        _root_bank: &Bank,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
     ) {
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
@@ -667,6 +707,15 @@ impl ServeRepair {
                 }
             };
 
+            let staked = epoch_staked_nodes
+                .as_ref()
+                .map(|nodes| nodes.contains_key(request.sender()))
+                .unwrap_or_default();
+            match staked {
+                true => stats.handle_requests_staked += 1,
+                false => stats.handle_requests_unstaked += 1,
+            }
+
             if request.sender() == &my_id {
                 stats.self_repair += 1;
                 continue;
@@ -675,6 +724,8 @@ impl ServeRepair {
             if request.supports_signature() {
                 // collect stats for signature verification
                 Self::verify_signed_packet(&my_id, packet, &request, stats);
+            } else {
+                stats.unsigned_requests += 1;
             }
 
             let from_addr = packet.meta.socket_addr();
@@ -688,10 +739,13 @@ impl ServeRepair {
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
-                stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
+                match staked {
+                    true => stats.total_response_bytes_staked += num_response_bytes,
+                    false => stats.total_response_bytes_unstaked += num_response_bytes,
+                }
             } else {
-                stats.dropped_requests += packet_batch.len() - i;
+                stats.dropped_requests_outbound_bandwidth += packet_batch.len() - i;
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }

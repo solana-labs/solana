@@ -391,6 +391,17 @@ function InfoSection({ account }: { account: Account }) {
       <ConfigAccountSection account={account} configAccount={data.parsed} />
     );
   } else if (
+    data &&
+    data.program === "address-lookup-table" &&
+    data.parsed.type === "lookupTable"
+  ) {
+    return (
+      <AddressLookupTableAccountSection
+        account={account}
+        lookupTableAccount={data.parsed.info}
+      />
+    );
+  } else if (
     details?.rawData &&
     isAddressLookupTableAccount(details.owner, details.rawData)
   ) {
@@ -528,6 +539,11 @@ function MoreSection({
         details?.rawData &&
         isAddressLookupTableAccount(details.owner, details.rawData) && (
           <LookupTableEntriesCard lookupTableAccountData={details?.rawData} />
+        )}
+      {tab === "entries" &&
+        data?.program === "address-lookup-table" &&
+        data.parsed.type === "lookupTable" && (
+          <LookupTableEntriesCard parsedLookupTable={data.parsed.info} />
         )}
     </>
   );

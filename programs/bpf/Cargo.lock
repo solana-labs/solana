@@ -2309,6 +2309,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linked-hash-map"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.0.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3866,15 +3872,14 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.13"
+version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8613d593412a0deb7bbd8de9d908efff5a0cb9ccd8f62c641e7b2ed2f57291d1"
+checksum = "578a7433b776b56a35785ed5ce9a7e777ac0598aac5a6dd1b4b18a307c7fc71b"
 dependencies = [
  "indexmap",
- "itoa",
  "ryu",
  "serde",
- "unsafe-libyaml",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -4695,6 +4700,7 @@ dependencies = [
  "log",
  "lru",
  "min-max-heap",
+ "num_enum",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -4964,6 +4970,7 @@ dependencies = [
 name = "solana-ledger"
 version = "1.15.0"
 dependencies = [
+ "assert_matches",
  "bincode",
  "bitflags",
  "byteorder 1.4.3",
@@ -5257,6 +5264,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "chrono-humanize",
+ "crossbeam-channel",
  "log",
  "serde",
  "solana-banks-client",
@@ -5845,6 +5853,7 @@ dependencies = [
  "jsonrpc-derive",
  "jsonrpc-ipc-server",
  "jsonrpc-server-utils",
+ "lazy_static",
  "libc",
  "log",
  "num_cpus",
@@ -5992,9 +6001,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.32"
+version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe055100805e9069715acf73529ec563ad987a4d042da9defe9b7554560f2df4"
+checksum = "334bb11faee82f0306e39944cb4ac85824b7d261f3d99d1f2f8bd09851644f0b"
 dependencies = [
  "byteorder 1.4.3",
  "combine",
@@ -6922,12 +6931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "unsafe-libyaml"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1e5fa573d8ac5f1a856f8d7be41d390ee973daf97c806b2c1a465e4e1406e68"
-
-[[package]]
 name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7324,6 +7327,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "244c3741f4240ef46274860397c7c74e50eb23624996930e484c16679633a54c"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+ "linked-hash-map",
 ]
 
 [[package]]

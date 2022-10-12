@@ -8,13 +8,15 @@ extern crate solana_bpf_loader_program;
 use {
     byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
+        create_vm, serialization::serialize_parameters, syscalls::register_syscalls,
         ThisInstructionMeter,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::invoke_context::with_mock_invoke_context,
     solana_rbpf::{
+        ebpf::MM_INPUT_START,
         elf::Executable,
+        memory_region::MemoryRegion,
         verifier::RequisiteVerifier,
         vm::{Config, InstructionMeter, SyscallRegistry, VerifiedExecutable},
     },
@@ -80,7 +82,7 @@ fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
     bencher.iter(|| {
-        let _ = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let _ = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
             SyscallRegistry::default(),
@@ -100,31 +102,30 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter.write_u64::<LittleEndian>(0).unwrap();
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
         invoke_context
             .get_compute_meter()
             .borrow_mut()
             .mock_set_remaining(std::i64::MAX as u64);
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
             register_syscalls(invoke_context, true).unwrap(),
         )
         .unwrap();
 
-        let mut verified_executable = VerifiedExecutable::<
-            RequisiteVerifier,
-            BpfError,
-            ThisInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let mut verified_executable =
+            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
 
         verified_executable.jit_compile().unwrap();
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
             &verified_executable,
-            &mut inner_iter,
+            vec![MemoryRegion::new_writable(&mut inner_iter, MM_INPUT_START)],
             vec![],
             invoke_context,
         )
@@ -216,7 +217,7 @@ fn bench_program_execute_noop(bencher: &mut Bencher) {
 fn bench_create_vm(bencher: &mut Bencher) {
     let elf = load_elf("noop").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
         const BUDGET: u64 = 200_000;
         invoke_context
             .get_compute_meter()
@@ -224,7 +225,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
             .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let (mut serialized, account_lengths) = serialize_parameters(
+        let (_serialized, regions, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
@@ -234,24 +235,23 @@ fn bench_create_vm(bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
             register_syscalls(invoke_context, true).unwrap(),
         )
         .unwrap();
 
-        let verified_executable = VerifiedExecutable::<
-            RequisiteVerifier,
-            BpfError,
-            ThisInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let verified_executable =
+            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
 
         bencher.iter(|| {
             let _ = create_vm(
                 &verified_executable,
-                serialized.as_slice_mut(),
+                regions.clone(),
                 account_lengths.clone(),
                 invoke_context,
             )
@@ -264,7 +264,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
 fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
     let elf = load_elf("tuner").unwrap();
     let loader_id = bpf_loader::id();
-    with_mock_invoke_context(loader_id, 10000001, |invoke_context| {
+    with_mock_invoke_context(loader_id, 10000001, true, |invoke_context| {
         const BUDGET: u64 = 200_000;
         invoke_context
             .get_compute_meter()
@@ -272,7 +272,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             .mock_set_remaining(BUDGET);
 
         // Serialize account data
-        let (mut serialized, account_lengths) = serialize_parameters(
+        let (_serialized, regions, account_lengths) = serialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
@@ -282,25 +282,24 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+        let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
             register_syscalls(invoke_context, true).unwrap(),
         )
         .unwrap();
 
-        let verified_executable = VerifiedExecutable::<
-            RequisiteVerifier,
-            BpfError,
-            ThisInstructionMeter,
-        >::from_executable(executable)
-        .unwrap();
+        let verified_executable =
+            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
+                executable,
+            )
+            .unwrap();
 
         let compute_meter = invoke_context.get_compute_meter();
         let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let mut vm = create_vm(
             &verified_executable,
-            serialized.as_slice_mut(),
+            regions,
             account_lengths,
             invoke_context,
         )

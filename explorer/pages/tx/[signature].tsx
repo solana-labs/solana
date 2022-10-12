@@ -14,7 +14,7 @@ import {
   SystemProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { ErrorCard } from "src/components/common/ErrorCard";
 import { LoadingCard } from "src/components/common/LoadingCard";
 import { TableCardBody } from "src/components/common/TableCardBody";

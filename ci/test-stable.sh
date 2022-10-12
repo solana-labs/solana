@@ -68,25 +68,25 @@ test-stable)
     _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   fi
   ;;
-test-stable-bpf)
+test-stable-sbf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
-  test -d target/debug/bpf && find target/debug/bpf -name '*.d' -delete
-  test -d target/release/bpf && find target/release/bpf -name '*.d' -delete
+  test -d target/debug/sbf && find target/debug/sbf -name '*.d' -delete
+  test -d target/release/sbf && find target/release/sbf -name '*.d' -delete
 
-  # rustfilt required for dumping BPF assembly listings
+  # rustfilt required for dumping SBF assembly listings
   "$cargo" install rustfilt
 
   # solana-keygen required when building C programs
   _ "$cargo" build --manifest-path=keygen/Cargo.toml
 
   export PATH="$PWD/target/debug":$PATH
-  cargo_build_bpf="$(realpath ./cargo-build-bpf)"
-  cargo_test_bpf="$(realpath ./cargo-test-bpf)"
+  cargo_build_sbf="$(realpath ./cargo-build-sbf)"
+  cargo_test_sbf="$(realpath ./cargo-test-sbf)"
 
-  # BPF solana-sdk legacy compile test
-  "$cargo_build_bpf" --manifest-path sdk/Cargo.toml
+  # SBF solana-sdk legacy compile test
+  "$cargo_build_sbf" --manifest-path sdk/Cargo.toml
 
-  # BPF C program system tests
+  # SBF C program system tests
   _ make -C programs/bpf/c tests
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
@@ -99,16 +99,16 @@ test-stable-bpf)
       --no-default-features --features=bpf_c,bpf_rust -- --nocapture
   fi
 
-  # BPF Rust program unit tests
-  for bpf_test in programs/bpf/rust/*; do
-    if pushd "$bpf_test"; then
+  # SBF Rust program unit tests
+  for sbf_test in programs/bpf/rust/*; do
+    if pushd "$sbf_test"; then
       "$cargo" test
-      "$cargo_build_bpf" --bpf-sdk ../../../../sdk/bpf --dump
-      "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
+      "$cargo_build_sbf" --sbf-sdk ../../../../sdk/sbf --dump
+      "$cargo_test_sbf" --sbf-sdk ../../../../sdk/sbf
       popd
     fi
   done |& tee cargo.log
-  # Save the output of cargo building the bpf tests so we can analyze
+  # Save the output of cargo building the sbf tests so we can analyze
   # the number of redundant rebuilds of dependency crates. The
   # expected number of solana-program crate compilations is 4. There
   # should be 3 builds of solana-program while 128bit crate is
@@ -125,27 +125,27 @@ test-stable-bpf)
       exit 1
   fi
 
-  # bpf-tools version
-  "$cargo_build_bpf" -V
+  # sbf-tools version
+  "$cargo_build_sbf" -V
 
-  # BPF program instruction count assertion
-  bpf_target_path=programs/bpf/target
+  # SBF program instruction count assertion
+  sbf_target_path=programs/bpf/target
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
       --manifest-path programs/bpf/Cargo.toml \
       --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
       -- -Z unstable-options --format json --report-time |& tee results.json
-    awk '!/{ "type": .* }/' results.json >"${bpf_target_path}"/deploy/instuction_counts.txt
+    awk '!/{ "type": .* }/' results.json >"${sbf_target_path}"/deploy/instuction_counts.txt
   else
     _ "$cargo" stable test \
       --manifest-path programs/bpf/Cargo.toml \
       --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
-      -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
+      -- --nocapture &> "${sbf_target_path}"/deploy/instuction_counts.txt
   fi
 
-  bpf_dump_archive="bpf-dumps.tar.bz2"
-  rm -f "$bpf_dump_archive"
-  tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,bpfel-unknown-unknown/release/*.so}
+  sbf_dump_archive="sbf-dumps.tar.bz2"
+  rm -f "$sbf_dump_archive"
+  tar cjvf "$sbf_dump_archive" "${sbf_target_path}"/{deploy/*.txt,sbf-solana-solana/release/*.so}
   exit 0
   ;;
 test-stable-perf)

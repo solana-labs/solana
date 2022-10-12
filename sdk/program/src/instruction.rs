@@ -256,6 +256,10 @@ pub enum InstructionError {
     /// Max accounts exceeded
     #[error("Max accounts exceeded")]
     MaxAccountsExceeded,
+
+    /// Max instruction trace length exceeded
+    #[error("Max instruction trace length exceeded")]
+    MaxInstructionTraceLengthExceeded,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }

@@ -31,8 +31,8 @@ use {
         blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
         blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
-            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-            LedgerColumnOptions, ShredStorageType,
+            AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
+            ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -215,13 +215,14 @@ fn output_slot(
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 2 {
-                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
+            if verbose_level >= 1 {
+                println!("  {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
+                    meta.next_slots,
                     entries.len(),
                     is_full,
                 );
@@ -871,14 +872,11 @@ fn open_blockstore_with_temporary_primary_access(
 }
 
 fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
-    // TODO: the following shred_storage_type inference must be updated once the
-    // rocksdb options can be constructed via load_options_file() as the
-    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
-    // could affect the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(
-        ledger_path,
-        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    ) {
+    // TODO: the following shred_storage_type inference must be updated once
+    // the rocksdb options can be constructed via load_options_file() as the
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
             warn!("{}", warn_message);
@@ -1277,10 +1275,6 @@ use jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
-
-/// The default size for data and coding shred column families in FIFO compaction.
-/// u64::MAX as the default value means it won't delete any files by default.
-const DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
@@ -2317,8 +2311,7 @@ fn main() {
                      the default RocksLevel will be used. \
                      If you want to use FIFO shred_storage_type on an empty target_db, \
                      create {} foldar the specified target_db directory.",
-                        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-                            .blockstore_directory()
+                        BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
                     ),
                 );
 
@@ -2776,6 +2769,8 @@ fn main() {
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
+                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
+                    run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),

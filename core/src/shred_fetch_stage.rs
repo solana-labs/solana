@@ -251,7 +251,7 @@ mod tests {
         super::*,
         solana_ledger::{
             blockstore::MAX_DATA_SHREDS_PER_SLOT,
-            shred::{Shred, ShredFlags},
+            shred::{ReedSolomonCache, Shred, ShredFlags},
         },
     };
 
@@ -294,6 +294,7 @@ mod tests {
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
             &[shred],
             3, // next_code_index
+            &ReedSolomonCache::default(),
         );
         coding[0].copy_to_packet(&mut packet);
         assert!(!should_discard_packet(

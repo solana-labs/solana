@@ -1,6 +1,6 @@
 import React from "react";
 import { TableCardBody } from "src/components/common/TableCardBody";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { displayTimestampUtc } from "src/utils/date";
 import { Account, useFetchAccountInfo } from "src/providers/accounts";
 import { Address } from "src/components/common/Address";

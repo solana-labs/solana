@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        connection_cache::ConnectionCacheStats,
+        connection_cache_stats::ConnectionCacheStats,
         nonblocking::{
             quic_client::{
                 QuicClient, QuicLazyInitializedEndpoint,
@@ -21,6 +21,7 @@ use {
 
 lazy_static! {
     static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
+        .thread_name("quic-client")
         .enable_all()
         .build()
         .unwrap();

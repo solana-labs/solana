@@ -15,7 +15,7 @@ import { clusterPath, pickClusterParams, useQuery } from "src/utils/url";
 import { useCluster } from "src/providers/cluster";
 import { displayAddress } from "src/utils/tx";
 import { parseProgramLogs } from "src/utils/program-logs";
-import { SolBalance } from "src/utils";
+import { SolBalance } from "src/components/common/SolBalance";
 import { dummyUrl } from "src/constants/urls";
 
 const PAGE_SIZE = 25;
@@ -306,7 +306,7 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
 
                     <td className="text-end">
                       {tx.meta !== null ? (
-                        <SolBalance lamports={-tx.meta.fee} />
+                        <SolBalance lamports={tx.meta.fee} />
                       ) : (
                         "Unknown"
                       )}
