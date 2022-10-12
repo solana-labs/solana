@@ -41,7 +41,7 @@ export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
   confirmationStrategyOrConfirmOptions:
-    | BlockheightBasedTransactionConfirmationStrategy
+    | Omit<BlockheightBasedTransactionConfirmationStrategy, 'signature'>
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
@@ -78,7 +78,10 @@ export async function sendAndConfirmRawTransaction(
 
   const commitment = options && options.commitment;
   const confirmationPromise = confirmationStrategy
-    ? connection.confirmTransaction(confirmationStrategy, commitment)
+    ? connection.confirmTransaction(
+        {...confirmationStrategy, signature},
+        commitment,
+      )
     : connection.confirmTransaction(signature, commitment);
   const status = (await confirmationPromise).value;
 
