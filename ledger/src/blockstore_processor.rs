@@ -1319,6 +1319,19 @@ fn process_next_slots(
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Bank, Hash)>,
 ) -> result::Result<(), BlockstoreProcessorError> {
+    if bank.start_epoch_reward_calc() {
+        let calc = bank.get_epoch_reward_calculator();
+        let inner = calc.read().unwrap();
+        if let Some(calc) = &*inner {
+            calc.send(bank.epoch(), bank.clone());
+            info!(
+                "send reward calc request: epoch={} slot={}",
+                bank.epoch(),
+                bank.slot()
+            );
+        }
+    }
+
     if meta.next_slots.is_empty() {
         return Ok(());
     }
