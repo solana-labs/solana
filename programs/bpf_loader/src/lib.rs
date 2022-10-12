@@ -87,6 +87,7 @@ mod executor_metrics {
     #[derive(Debug, Default)]
     pub struct CreateMetrics {
         pub program_id: String,
+        pub register_syscalls_us: u64,
         pub load_elf_us: u64,
         pub verify_code_us: u64,
         pub jit_compile_us: u64,
@@ -97,6 +98,7 @@ mod executor_metrics {
             datapoint_trace!(
                 "create_executor_trace",
                 ("program_id", self.program_id, String),
+                ("register_syscalls_us", self.register_syscalls_us, i64),
                 ("load_elf_us", self.load_elf_us, i64),
                 ("verify_code_us", self.verify_code_us, i64),
                 ("jit_compile_us", self.jit_compile_us, i64),
@@ -147,6 +149,7 @@ pub fn create_executor(
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let log_collector = invoke_context.get_log_collector();
+    let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && invoke_context
@@ -157,10 +160,11 @@ pub fn create_executor(
         disable_deploy_of_alloc_free_syscall,
     );
     register_syscalls_time.stop();
+    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
     invoke_context.timings.create_executor_register_syscalls_us = invoke_context
         .timings
         .create_executor_register_syscalls_us
-        .saturating_add(register_syscalls_time.as_us());
+        .saturating_add(create_executor_metrics.register_syscalls_us);
     let syscall_registry = register_syscall_result.map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
@@ -194,7 +198,6 @@ pub fn create_executor(
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let executable = {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
