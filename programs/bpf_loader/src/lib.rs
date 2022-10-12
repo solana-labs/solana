@@ -440,24 +440,27 @@ fn process_instruction_common(
         drop(program);
 
         let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let executor = match invoke_context.get_executor(program_id) {
-            Some(executor) => executor,
-            None => {
-                let executor = create_executor(
-                    first_instruction_account,
-                    program_data_offset,
-                    invoke_context,
-                    use_jit,
-                    false, /* reject_deployment_of_broken_elfs */
-                    // allow _sol_alloc_free syscall for execution
-                    false, /* disable_sol_alloc_free_syscall */
-                )?;
-                let transaction_context = &invoke_context.transaction_context;
-                let instruction_context = transaction_context.get_current_instruction_context()?;
-                let program_id = instruction_context.get_last_program_key(transaction_context)?;
-                invoke_context.add_executor(program_id, executor.clone());
-                executor
-            }
+        let cached_executor = invoke_context.tx_executor_cache.borrow().get(program_id);
+        let executor = if let Some(executor) = cached_executor {
+            executor
+        } else {
+            let executor = create_executor(
+                first_instruction_account,
+                program_data_offset,
+                invoke_context,
+                use_jit,
+                false, /* reject_deployment_of_broken_elfs */
+                // allow _sol_alloc_free syscall for execution
+                false, /* disable_sol_alloc_free_syscall */
+            )?;
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let program_id = instruction_context.get_last_program_key(transaction_context)?;
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(*program_id, executor.clone(), false);
+            executor
         };
         get_or_create_executor_time.stop();
         saturating_add_assign!(
@@ -684,7 +687,10 @@ fn process_loader_upgradeable_instruction(
                     .feature_set
                     .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
-            invoke_context.update_executor(&new_program_id, executor);
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(new_program_id, executor, true);
 
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -852,7 +858,10 @@ fn process_loader_upgradeable_instruction(
                     .feature_set
                     .is_active(&disable_deploy_of_alloc_free_syscall::id()),
             )?;
-            invoke_context.update_executor(&new_program_id, executor);
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(new_program_id, executor, true);
 
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -1271,7 +1280,10 @@ fn process_loader_instruction(
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            invoke_context.update_executor(program.get_key(), executor);
+            invoke_context
+                .tx_executor_cache
+                .borrow_mut()
+                .set(*program.get_key(), executor, true);
             program.set_executable(true)?;
             ic_msg!(invoke_context, "Finalized account {:?}", program.get_key());
         }

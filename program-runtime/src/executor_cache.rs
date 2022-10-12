@@ -12,7 +12,7 @@ use {
         ops::Div,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
-            Arc,
+            Arc, RwLock,
         },
     },
 };
@@ -27,81 +27,97 @@ pub trait Executor: Debug + Send + Sync {
     ) -> Result<(), InstructionError>;
 }
 
-pub type Executors = HashMap<Pubkey, TransactionExecutor>;
-
+/// Relation between a TransactionExecutorCacheEntry and its matching BankExecutorCacheEntry
 #[repr(u8)]
-#[derive(PartialEq, Debug)]
-enum TransactionExecutorStatus {
-    /// Executor was already in the cache, no update needed
-    Cached,
-    /// Executor was missing from the cache, but not updated
-    Missing,
-    /// Executor is for an updated program
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum TxBankExecutorCacheDiff {
+    /// The TransactionExecutorCacheEntry did not change and is the same as the BankExecutorCacheEntry.
+    None,
+    /// The TransactionExecutorCacheEntry was inserted, no matching BankExecutorCacheEntry exists, so it needs to be inserted.
+    Inserted,
+    /// The TransactionExecutorCacheEntry was replaced, the matching BankExecutorCacheEntry needs to be updated.
     Updated,
 }
 
-/// Tracks whether a given executor is "dirty" and needs to updated in the
-/// executors cache
+/// An entry of the TransactionExecutorCache
 #[derive(Debug)]
-pub struct TransactionExecutor {
-    pub(crate) executor: Arc<dyn Executor>,
-    status: TransactionExecutorStatus,
+pub struct TransactionExecutorCacheEntry {
+    executor: Arc<dyn Executor>,
+    difference: TxBankExecutorCacheDiff,
 }
 
-impl TransactionExecutor {
-    /// Wraps an executor and tracks that it doesn't need to be updated in the
-    /// executors cache.
-    pub fn new_cached(executor: Arc<dyn Executor>) -> Self {
+/// A subset of the BankExecutorCache containing only the executors relevant to one transaction
+///
+/// The BankExecutorCache can not be updated directly as transaction batches are
+/// processed in parallel, which would cause a race condition.
+#[derive(Default, Debug)]
+pub struct TransactionExecutorCache {
+    pub executors: HashMap<Pubkey, TransactionExecutorCacheEntry>,
+}
+
+impl TransactionExecutorCache {
+    pub fn new(executable_keys: impl Iterator<Item = (Pubkey, Arc<dyn Executor>)>) -> Self {
         Self {
-            executor,
-            status: TransactionExecutorStatus::Cached,
+            executors: executable_keys
+                .map(|(key, executor)| {
+                    let entry = TransactionExecutorCacheEntry {
+                        executor,
+                        difference: TxBankExecutorCacheDiff::None,
+                    };
+                    (key, entry)
+                })
+                .collect(),
         }
     }
 
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache.
-    pub fn new_miss(executor: Arc<dyn Executor>) -> Self {
-        Self {
+    pub fn get(&self, key: &Pubkey) -> Option<Arc<dyn Executor>> {
+        self.executors.get(key).map(|entry| entry.executor.clone())
+    }
+
+    pub fn set(&mut self, key: Pubkey, executor: Arc<dyn Executor>, replacement: bool) {
+        let difference = if replacement {
+            TxBankExecutorCacheDiff::Updated
+        } else {
+            TxBankExecutorCacheDiff::Inserted
+        };
+        let entry = TransactionExecutorCacheEntry {
             executor,
-            status: TransactionExecutorStatus::Missing,
+            difference,
+        };
+        let _was_replaced = self.executors.insert(key, entry).is_some();
+    }
+
+    pub fn update_global_cache(
+        &self,
+        global_cache: &RwLock<BankExecutorCache>,
+        selector: impl Fn(TxBankExecutorCacheDiff) -> bool,
+    ) {
+        let executors_delta: Vec<_> = self
+            .executors
+            .iter()
+            .filter_map(|(key, entry)| {
+                selector(entry.difference).then(|| (key, entry.executor.clone()))
+            })
+            .collect();
+        if !executors_delta.is_empty() {
+            global_cache.write().unwrap().put(&executors_delta);
         }
-    }
-
-    /// Wraps an executor and tracks that it needs to be updated in the
-    /// executors cache only if the transaction succeeded.
-    pub fn new_updated(executor: Arc<dyn Executor>) -> Self {
-        Self {
-            executor,
-            status: TransactionExecutorStatus::Updated,
-        }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        self.status == TransactionExecutorStatus::Missing
-    }
-
-    pub fn is_updated(&self) -> bool {
-        self.status == TransactionExecutorStatus::Updated
-    }
-
-    pub fn get(&self) -> Arc<dyn Executor> {
-        self.executor.clone()
     }
 }
 
-/// Capacity of `CachedExecutors`
+/// Capacity of `BankExecutorCache`
 pub const MAX_CACHED_EXECUTORS: usize = 256;
 
-/// An `Executor` and its statistics tracked in `CachedExecutors`
+/// An entry of the BankExecutorCache
 #[derive(Debug)]
-pub struct CachedExecutorsEntry {
+pub struct BankExecutorCacheEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
     executor: Arc<dyn Executor>,
     pub hit_count: AtomicU64,
 }
 
-impl Clone for CachedExecutorsEntry {
+impl Clone for BankExecutorCacheEntry {
     fn clone(&self) -> Self {
         Self {
             prev_epoch_count: self.prev_epoch_count,
@@ -112,16 +128,16 @@ impl Clone for CachedExecutorsEntry {
     }
 }
 
-/// LFU Cache of executors with single-epoch memory of usage counts
+/// LFU Cache of executors which exists once per bank
 #[derive(Debug)]
-pub struct CachedExecutors {
+pub struct BankExecutorCache {
     capacity: usize,
     current_epoch: Epoch,
-    pub executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    pub executors: HashMap<Pubkey, BankExecutorCacheEntry>,
     pub stats: Stats,
 }
 
-impl Default for CachedExecutors {
+impl Default for BankExecutorCache {
     fn default() -> Self {
         Self {
             capacity: MAX_CACHED_EXECUTORS,
@@ -133,16 +149,16 @@ impl Default for CachedExecutors {
 }
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl solana_frozen_abi::abi_example::AbiExample for CachedExecutors {
+impl solana_frozen_abi::abi_example::AbiExample for BankExecutorCache {
     fn example() -> Self {
         // Delegate AbiExample impl to Default before going deep and stuck with
         // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
-        // This is safe because CachedExecutors isn't serializable by definition.
+        // This is safe because BankExecutorCache isn't serializable by definition.
         Self::default()
     }
 }
 
-impl CachedExecutors {
+impl BankExecutorCache {
     pub fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
             capacity: max_capacity,
@@ -153,7 +169,7 @@ impl CachedExecutors {
     }
 
     pub fn new_from_parent_bank_executors(
-        parent_bank_executors: &CachedExecutors,
+        parent_bank_executors: &BankExecutorCache,
         current_epoch: Epoch,
     ) -> Self {
         let executors = if parent_bank_executors.current_epoch == current_epoch {
@@ -163,7 +179,7 @@ impl CachedExecutors {
                 .executors
                 .iter()
                 .map(|(&key, entry)| {
-                    let entry = CachedExecutorsEntry {
+                    let entry = BankExecutorCacheEntry {
                         prev_epoch_count: entry.epoch_count.load(Relaxed),
                         epoch_count: AtomicU64::default(),
                         executor: entry.executor.clone(),
@@ -194,7 +210,7 @@ impl CachedExecutors {
         }
     }
 
-    pub fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
+    fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
         let mut new_executors: Vec<_> = executors
             .iter()
             .filter_map(|(key, executor)| {
@@ -242,7 +258,7 @@ impl CachedExecutors {
             }
 
             for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
-                let entry = CachedExecutorsEntry {
+                let entry = BankExecutorCacheEntry {
                     prev_epoch_count: 0,
                     epoch_count: AtomicU64::new(primer_count),
                     executor: executor.clone(),
@@ -253,7 +269,7 @@ impl CachedExecutors {
         }
     }
 
-    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
+    pub fn remove(&mut self, pubkey: &Pubkey) -> Option<BankExecutorCacheEntry> {
         let maybe_entry = self.executors.remove(pubkey);
         if let Some(entry) = maybe_entry.as_ref() {
             if entry.hit_count.load(Relaxed) == 1 {
@@ -264,7 +280,7 @@ impl CachedExecutors {
     }
 
     pub fn clear(&mut self) {
-        *self = CachedExecutors::default();
+        *self = BankExecutorCache::default();
     }
 
     pub fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
@@ -303,7 +319,7 @@ impl CachedExecutors {
     }
 }
 
-/// Statistics of the entrie `CachedExecutors`
+/// Statistics of the entire `BankExecutorCache`
 #[derive(Debug, Default)]
 pub struct Stats {
     pub hits: AtomicU64,
@@ -378,13 +394,13 @@ mod tests {
     }
 
     #[test]
-    fn test_cached_executors() {
+    fn test_executor_cache() {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
+        let mut cache = BankExecutorCache::new(3, 0);
 
         cache.put(&[(&key1, executor.clone())]);
         cache.put(&[(&key2, executor.clone())]);
@@ -423,7 +439,7 @@ mod tests {
         let key3 = solana_sdk::pubkey::new_rand();
         let key4 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
+        let mut cache = BankExecutorCache::new(3, 0);
         assert!(cache.current_epoch == 0);
 
         cache.put(&[(&key1, executor.clone())]);
@@ -433,7 +449,7 @@ mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
 
-        let mut cache = CachedExecutors::new_from_parent_bank_executors(&cache, 1);
+        let mut cache = BankExecutorCache::new_from_parent_bank_executors(&cache, 1);
         assert!(cache.current_epoch == 1);
 
         assert!(cache.get(&key2).is_some());
@@ -458,7 +474,7 @@ mod tests {
             .count();
         assert_eq!(num_retained, 1);
 
-        cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
+        cache = BankExecutorCache::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
         cache.put(&[(&key3, executor.clone())]);
@@ -466,12 +482,12 @@ mod tests {
     }
 
     #[test]
-    fn test_cached_executors_evicts_smallest() {
+    fn test_executor_cache_evicts_smallest() {
         let key1 = solana_sdk::pubkey::new_rand();
         let key2 = solana_sdk::pubkey::new_rand();
         let key3 = solana_sdk::pubkey::new_rand();
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(2, 0);
+        let mut cache = BankExecutorCache::new(2, 0);
 
         cache.put(&[(&key1, executor.clone())]);
         for _ in 0..5 {
@@ -495,8 +511,8 @@ mod tests {
     }
 
     #[test]
-    fn test_cached_executors_one_hit_wonder_counter() {
-        let mut cache = CachedExecutors::new(1, 0);
+    fn test_executor_cache_one_hit_wonder_counter() {
+        let mut cache = BankExecutorCache::new(1, 0);
 
         let one_hit_wonder = Pubkey::new_unique();
         let popular = Pubkey::new_unique();
@@ -532,23 +548,23 @@ mod tests {
         let pubkey = Pubkey::default();
         let v = [];
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            BankExecutorCache::get_primer_count_upper_bound_inclusive(&v),
             0
         );
         let v = [(&pubkey, 1)];
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
+            BankExecutorCache::get_primer_count_upper_bound_inclusive(&v),
             1
         );
         let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
         assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
+            BankExecutorCache::get_primer_count_upper_bound_inclusive(v.as_slice()),
             7
         );
     }
 
     #[test]
-    fn test_cached_executors_stats() {
+    fn test_executor_cache_stats() {
         #[derive(Debug, Default, PartialEq)]
         struct ComparableStats {
             hits: u64,
@@ -580,7 +596,7 @@ mod tests {
         }
 
         const CURRENT_EPOCH: Epoch = 0;
-        let mut cache = CachedExecutors::new(2, CURRENT_EPOCH);
+        let mut cache = BankExecutorCache::new(2, CURRENT_EPOCH);
         let mut expected_stats = ComparableStats::default();
 
         let program_id1 = Pubkey::new_unique();
@@ -623,13 +639,13 @@ mod tests {
         // make sure stats are cleared in new_from_parent
         assert_eq!(
             ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
+                &BankExecutorCache::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
             ),
             ComparableStats::default()
         );
         assert_eq!(
             ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
+                &BankExecutorCache::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
             ),
             ComparableStats::default()
         );

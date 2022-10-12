@@ -1416,7 +1416,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::Executors,
+        solana_program_runtime::executor_cache::TransactionExecutorCache,
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1466,7 +1466,7 @@ mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            executors: Rc::new(RefCell::new(Executors::default())),
+            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }
     }
 
