@@ -217,8 +217,6 @@ impl EpochRewardCalcRequestHandler {
                         .insert(signature, Arc::new(result));
                 }
             }
-        } else {
-            info!("epoch reward calc request receiver error!");
         }
     }
 }
