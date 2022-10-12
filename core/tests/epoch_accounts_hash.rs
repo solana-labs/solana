@@ -475,3 +475,99 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
         std::thread::yield_now();
     }
 }
+
+/// Ensure that EAH works well with ABS's snapshot request handling
+///
+/// Given the scenario where two banks are rooted back-to-back, where the first bank sends an
+/// EAH request and the second bank sends a snapshot request, both requests should be handled.
+#[test]
+fn test_background_services_request_handling() {
+    solana_logger::setup();
+
+    const NUM_EPOCHS_TO_TEST: u64 = 2;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+
+    let test_environment =
+        TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
+    let bank_forks = &test_environment.bank_forks;
+    let snapshot_config = &test_environment.snapshot_config;
+
+    let slots_per_epoch = test_environment
+        .genesis_config_info
+        .genesis_config
+        .epoch_schedule
+        .slots_per_epoch;
+    for _ in 0..slots_per_epoch * NUM_EPOCHS_TO_TEST {
+        let bank = {
+            let parent = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+                &parent,
+                &Pubkey::default(),
+                parent.slot() + 1,
+            ));
+
+            let transaction = system_transaction::transfer(
+                &test_environment.genesis_config_info.mint_keypair,
+                &Pubkey::new_unique(),
+                1,
+                bank.last_blockhash(),
+            );
+            bank.process_transaction(&transaction).unwrap();
+            bank.fill_bank_with_ticks_for_tests();
+
+            bank
+        };
+        debug!("new bank {}", bank.slot());
+
+        // Based on the EAH start and snapshot interval, pick a slot to mass-root all the banks in
+        // this range such that an EAH request will be sent and also a snapshot request.
+        let eah_start_slot = epoch_accounts_hash::calculation_start(&bank);
+        let set_root_slot = next_multiple_of(eah_start_slot, FULL_SNAPSHOT_INTERVAL);
+
+        if bank.block_height() == set_root_slot {
+            info!("Calling set_root() on bank {}...", bank.slot());
+            bank_forks.write().unwrap().set_root(
+                bank.slot(),
+                &test_environment
+                    .background_services
+                    .accounts_background_request_sender,
+                None,
+            );
+            info!("Calling set_root() on bank {}... DONE", bank.slot());
+
+            // wait until eah is valid
+            info!("Calculating epoch accounts hash...");
+            while bank.epoch_accounts_hash().is_none() {
+                trace!("waiting for epoch accounts hash...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            info!("Calculating epoch accounts hash... DONE");
+
+            // wait until FSS is made
+            info!("Taking full snapshot...");
+            while snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &snapshot_config.full_snapshot_archives_dir,
+            ) != Some(bank.slot())
+            {
+                trace!("waiting for full snapshot...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            info!("Taking full snapshot... DONE");
+        }
+
+        // Give the background services a chance to run
+        std::thread::yield_now();
+    }
+}
+
+// Copy the impl of `next_multiple_of` since it is nightly-only experimental.
+// https://doc.rust-lang.org/std/primitive.u64.html#method.next_multiple_of
+// https://github.com/rust-lang/rust/issues/88581
+// https://github.com/rust-lang/rust/pull/88582
+// https://github.com/jhpratt/rust/blob/727a4fc7e3f836938dfeb4a2ab237cfca612222d/library/core/src/num/uint_macros.rs#L1811-L1837
+const fn next_multiple_of(lhs: u64, rhs: u64) -> u64 {
+    match lhs % rhs {
+        0 => lhs,
+        r => lhs + (rhs - r),
+    }
+}
