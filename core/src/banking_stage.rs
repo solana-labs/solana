@@ -156,7 +156,6 @@ pub struct BankingStageStats {
     // Timing
     consume_buffered_packets_elapsed: AtomicU64,
     receive_and_buffer_packets_elapsed: AtomicU64,
-    handle_retryable_packets_elapsed: AtomicU64,
     filter_pending_packets_elapsed: AtomicU64,
     packet_conversion_elapsed: AtomicU64,
     transaction_processing_elapsed: AtomicU64,
@@ -191,9 +190,6 @@ impl BankingStageStats {
                 .load(Ordering::Relaxed)
             + self
                 .receive_and_buffer_packets_elapsed
-                .load(Ordering::Relaxed)
-            + self
-                .handle_retryable_packets_elapsed
                 .load(Ordering::Relaxed)
             + self.filter_pending_packets_elapsed.load(Ordering::Relaxed)
             + self.packet_conversion_elapsed.load(Ordering::Relaxed)
@@ -270,12 +266,6 @@ impl BankingStageStats {
                 (
                     "receive_and_buffer_packets_elapsed",
                     self.receive_and_buffer_packets_elapsed
-                        .swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "handle_retryable_packets_elapsed",
-                    self.handle_retryable_packets_elapsed
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
