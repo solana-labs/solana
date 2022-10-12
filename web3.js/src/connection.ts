@@ -3388,11 +3388,11 @@ export class Connection {
     let timeoutId;
     let subscriptionId;
     let done = false;
-
     const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
+      let intervalId: null | NodeJS.Timer = null;
       try {
         subscriptionId = this.onSignature(
           rawSignature,
@@ -3408,25 +3408,44 @@ export class Connection {
           subscriptionCommitment,
         );
 
-        (async () => {
-          const signatureStatuses = await this.getSignatureStatuses([
-            rawSignature,
-          ]);
-          const result = signatureStatuses && signatureStatuses.value[0];
-          if (result?.err) {
-            reject(result.err);
-          }
-          if (result) {
-            const response = {
-              context: signatureStatuses.context,
-              value: result,
-            };
-            done = true;
-            resolve({__type: TransactionStatus.PROCESSED, response});
-          }
-        })();
+        if (!done) {
+          const args = this._buildArgs(
+            [rawSignature],
+            commitment || this._commitment || 'finalized', // Apply connection/server default.
+          );
+          const hash = fastStableStringify(
+            ['signatureSubscribe', args],
+            true /* isArrayProp */,
+          );
+          intervalId = setInterval(() => {
+            const subscription = this._subscriptionsByHash[hash];
+            if (subscription && subscription.state === 'subscribed') {
+              (async () => {
+                const signatureStatuses = await this.getSignatureStatuses([
+                  rawSignature,
+                ]);
+                const result = signatureStatuses && signatureStatuses.value[0];
+                if (result?.err) {
+                  reject(result.err);
+                }
+                if (result) {
+                  const response = {
+                    context: signatureStatuses.context,
+                    value: result,
+                  };
+                  done = true;
+                  resolve({__type: TransactionStatus.PROCESSED, response});
+                }
+              })();
+            }
+          }, 100);
+        }
       } catch (err) {
         reject(err);
+      } finally {
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
       }
     });
 
