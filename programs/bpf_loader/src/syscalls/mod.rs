@@ -2795,8 +2795,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
-=======
     #[test]
     fn test_syscall_edwards_curve_point_validation() {
         use solana_zk_token_sdk::curve25519::curve_syscall_traits::CURVE25519_EDWARDS;
@@ -3415,7 +3413,6 @@ mod tests {
         );
     }
 
->>>>>>> 751ec864d (Add syscall curve group ops tests (#27937))
     fn create_filled_type<T: Default>(zero_init: bool) -> T {
         let mut val = T::default();
         let p = &mut val as *mut _ as *mut u8;
