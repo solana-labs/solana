@@ -561,3 +561,12 @@ impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
         Self::with_value(T::example())
     }
 }
+
+use crossbeam_channel::{unbounded, Sender};
+
+impl<T: AbiExample> AbiExample for Sender<T> {
+    fn example() -> Self {
+        let (s, _r) = unbounded();
+        s
+    }
+}
