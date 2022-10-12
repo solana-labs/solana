@@ -159,23 +159,20 @@ pub fn create_executor(
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let log_collector = invoke_context.get_log_collector();
+    let compute_budget = invoke_context.get_compute_budget();
+    let feature_set = &invoke_context.feature_set;
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
-        && invoke_context
-            .feature_set
-            .is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let register_syscall_result = syscalls::register_syscalls(
-        &invoke_context.feature_set,
-        disable_deploy_of_alloc_free_syscall,
-    );
+        && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
+    let register_syscall_result =
+        syscalls::register_syscalls(feature_set, disable_deploy_of_alloc_free_syscall);
     register_syscalls_time.stop();
     create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let syscall_registry = register_syscall_result.map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
-    let compute_budget = invoke_context.get_compute_budget();
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -188,12 +185,9 @@ pub fn create_executor(
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
         encrypt_environment_registers: true,
-        syscall_bpf_function_hash_collision: invoke_context
-            .feature_set
+        syscall_bpf_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
-        reject_callx_r10: invoke_context
-            .feature_set
-            .is_active(&reject_callx_r10::id()),
+        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
         dynamic_stack_frames: false,
         enable_sdiv: false,
         optimize_rodata: false,
