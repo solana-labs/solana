@@ -188,6 +188,7 @@ impl BackgroundServices {
 
         let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
         let accounts_hash_verifier = AccountsHashVerifier::new(
+            accounts_package_sender.clone(),
             accounts_package_receiver,
             Some(pending_snapshot_package),
             &exit,

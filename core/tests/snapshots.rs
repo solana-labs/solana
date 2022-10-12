@@ -220,6 +220,7 @@ fn run_bank_forks_snapshot_n<F>(
         SocketAddrSpace::Unspecified,
     ));
     let accounts_hash_verifier = AccountsHashVerifier::new(
+        accounts_package_sender.clone(),
         accounts_package_receiver,
         None,
         &exit,
@@ -716,6 +717,7 @@ fn test_bank_forks_incremental_snapshot(
         SocketAddrSpace::Unspecified,
     ));
     let accounts_hash_verifier = AccountsHashVerifier::new(
+        accounts_package_sender.clone(),
         accounts_package_receiver,
         None,
         &exit,
@@ -979,7 +981,7 @@ fn test_snapshots_with_background_services(
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        accounts_package_sender,
+        accounts_package_sender: accounts_package_sender.clone(),
     };
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
@@ -1000,6 +1002,7 @@ fn test_snapshots_with_background_services(
     );
 
     let accounts_hash_verifier = AccountsHashVerifier::new(
+        accounts_package_sender,
         accounts_package_receiver,
         Some(pending_snapshot_package),
         &exit,
