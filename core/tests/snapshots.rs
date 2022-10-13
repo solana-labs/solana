@@ -25,8 +25,8 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, AccountsPackageType, PendingAccountsPackage, PendingSnapshotPackage,
-            SnapshotPackage, SnapshotType,
+            AccountsPackage, AccountsPackageType, PendingSnapshotPackage, SnapshotPackage,
+            SnapshotType,
         },
         snapshot_utils::{
             self, ArchiveFormat,
@@ -211,7 +211,7 @@ fn run_bank_forks_snapshot_n<F>(
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-    let pending_accounts_package = PendingAccountsPackage::default();
+    let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
     let exit = Arc::new(AtomicBool::new(false));
     let node_id = Arc::new(Keypair::new());
     let cluster_info = Arc::new(ClusterInfo::new(
@@ -220,7 +220,8 @@ fn run_bank_forks_snapshot_n<F>(
         SocketAddrSpace::Unspecified,
     ));
     let accounts_hash_verifier = AccountsHashVerifier::new(
-        Arc::clone(&pending_accounts_package),
+        accounts_package_sender.clone(),
+        accounts_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -235,7 +236,7 @@ fn run_bank_forks_snapshot_n<F>(
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package,
+        accounts_package_sender,
     };
     for slot in 1..=last_slot {
         let mut bank = Bank::new_from_parent(&bank_forks[slot - 1], &Pubkey::default(), slot);
@@ -366,8 +367,10 @@ fn test_concurrent_snapshot_packaging(
         .unwrap();
 
     // Set up snapshotting channels
-    let real_pending_accounts_package = PendingAccountsPackage::default();
-    let fake_pending_accounts_package = PendingAccountsPackage::default();
+    let (real_accounts_package_sender, real_accounts_package_receiver) =
+        crossbeam_channel::unbounded();
+    let (fake_accounts_package_sender, _fake_accounts_package_receiver) =
+        crossbeam_channel::unbounded();
 
     // Create next MAX_CACHE_ENTRIES + 2 banks and snapshots. Every bank will get snapshotted
     // and the snapshot purging logic will run on every snapshot taken. This means the three
@@ -393,21 +396,21 @@ fn test_concurrent_snapshot_packaging(
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         bank.squash();
 
-        let pending_accounts_package = {
+        let accounts_package_sender = {
             if slot == saved_slot as u64 {
-                // Only send one package on the real pending_accounts_package so that the
+                // Only send one package on the real accounts package channel so that the
                 // packaging service doesn't take forever to run the packaging logic on all
                 // MAX_CACHE_ENTRIES later
-                &real_pending_accounts_package
+                &real_accounts_package_sender
             } else {
-                &fake_pending_accounts_package
+                &fake_accounts_package_sender
             }
         };
 
         snapshot_utils::snapshot_bank(
             &bank,
             vec![],
-            pending_accounts_package,
+            accounts_package_sender,
             bank_snapshots_dir,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
@@ -508,11 +511,7 @@ fn test_concurrent_snapshot_packaging(
     let _package_receiver = std::thread::Builder::new()
         .name("package-receiver".to_string())
         .spawn(move || {
-            let accounts_package = real_pending_accounts_package
-                .lock()
-                .unwrap()
-                .take()
-                .unwrap();
+            let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 accounts_package.snapshot_links.path(),
                 accounts_package.slot,
@@ -709,7 +708,7 @@ fn test_bank_forks_incremental_snapshot(
     let bank_forks = &mut snapshot_test_config.bank_forks;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
 
-    let pending_accounts_package = PendingAccountsPackage::default();
+    let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
     let exit = Arc::new(AtomicBool::new(false));
     let node_id = Arc::new(Keypair::new());
     let cluster_info = Arc::new(ClusterInfo::new(
@@ -718,7 +717,8 @@ fn test_bank_forks_incremental_snapshot(
         SocketAddrSpace::Unspecified,
     ));
     let accounts_hash_verifier = AccountsHashVerifier::new(
-        Arc::clone(&pending_accounts_package),
+        accounts_package_sender.clone(),
+        accounts_package_receiver,
         None,
         &exit,
         &cluster_info,
@@ -733,7 +733,7 @@ fn test_bank_forks_incremental_snapshot(
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package,
+        accounts_package_sender,
     };
 
     let mut last_full_snapshot_slot = None;
@@ -961,7 +961,7 @@ fn test_snapshots_with_background_services(
 
     let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-    let pending_accounts_package = PendingAccountsPackage::default();
+    let (accounts_package_sender, accounts_package_receiver) = unbounded();
     let pending_snapshot_package = PendingSnapshotPackage::default();
 
     let bank_forks = Arc::new(RwLock::new(snapshot_test_config.bank_forks));
@@ -981,7 +981,7 @@ fn test_snapshots_with_background_services(
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
-        pending_accounts_package: Arc::clone(&pending_accounts_package),
+        accounts_package_sender: accounts_package_sender.clone(),
     };
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
@@ -1002,7 +1002,8 @@ fn test_snapshots_with_background_services(
     );
 
     let accounts_hash_verifier = AccountsHashVerifier::new(
-        pending_accounts_package,
+        accounts_package_sender,
+        accounts_package_receiver,
         Some(pending_snapshot_package),
         &exit,
         &cluster_info,

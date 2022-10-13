@@ -22,15 +22,13 @@ use {
     tempfile::TempDir,
 };
 
-/// The PendingAccountsPackage passes an AccountsPackage from AccountsBackgroundService to
-/// AccountsHashVerifier for hashing
-pub type PendingAccountsPackage = Arc<Mutex<Option<AccountsPackage>>>;
+mod compare;
+pub use compare::*;
 
 /// The PendingSnapshotPackage passes a SnapshotPackage from AccountsHashVerifier to
 /// SnapshotPackagerService for archiving
 pub type PendingSnapshotPackage = Arc<Mutex<Option<SnapshotPackage>>>;
 
-#[derive(Debug)]
 pub struct AccountsPackage {
     pub package_type: AccountsPackageType,
     pub slot: Slot,
@@ -121,6 +119,40 @@ impl AccountsPackage {
             rent_collector: bank.rent_collector().clone(),
             enable_rehashing: bank.bank_enable_rehashing_on_accounts_hash(),
         })
+    }
+
+    /// Create a new Accounts Package where basically every field is defaulted.
+    /// Only use for tests; many of the fields are invalid!
+    pub fn default_for_tests() -> Self {
+        Self {
+            package_type: AccountsPackageType::AccountsHashVerifier,
+            slot: Slot::default(),
+            block_height: Slot::default(),
+            slot_deltas: Vec::default(),
+            snapshot_links: TempDir::new().unwrap(),
+            snapshot_storages: SnapshotStorages::default(),
+            archive_format: ArchiveFormat::Tar,
+            snapshot_version: SnapshotVersion::default(),
+            full_snapshot_archives_dir: PathBuf::default(),
+            incremental_snapshot_archives_dir: PathBuf::default(),
+            expected_capitalization: u64::default(),
+            accounts_hash_for_testing: Option::default(),
+            cluster_type: ClusterType::Development,
+            accounts: Arc::new(Accounts::default_for_tests()),
+            epoch_schedule: EpochSchedule::default(),
+            rent_collector: RentCollector::default(),
+            enable_rehashing: bool::default(),
+        }
+    }
+}
+
+impl std::fmt::Debug for AccountsPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccountsPackage")
+            .field("type", &self.package_type)
+            .field("slot", &self.slot)
+            .field("block_height", &self.block_height)
+            .finish_non_exhaustive()
     }
 }
 

@@ -56,7 +56,6 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
-        snapshot_package::PendingAccountsPackage,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             SUPPORTED_ARCHIVE_COMPRESSION,
@@ -1135,11 +1134,12 @@ fn load_bank_forks(
         );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
     let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: SnapshotConfig::new_load_only(),
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        accounts_package_sender,
     };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());

@@ -9,7 +9,7 @@ use {
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{AccountsPackageType, PendingAccountsPackage, SnapshotType},
+        snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotType},
         snapshot_utils::{self, SnapshotError},
     },
     crossbeam_channel::{Receiver, SendError, Sender},
@@ -138,7 +138,7 @@ pub enum SnapshotRequestType {
 pub struct SnapshotRequestHandler {
     pub snapshot_config: SnapshotConfig,
     pub snapshot_request_receiver: SnapshotRequestReceiver,
-    pub pending_accounts_package: PendingAccountsPackage,
+    pub accounts_package_sender: Sender<AccountsPackage>,
 }
 
 impl SnapshotRequestHandler {
@@ -292,7 +292,7 @@ impl SnapshotRequestHandler {
         let result = snapshot_utils::snapshot_bank(
             &snapshot_root_bank,
             status_cache_slot_deltas,
-            &self.pending_accounts_package,
+            &self.accounts_package_sender,
             &self.snapshot_config.bank_snapshots_dir,
             &self.snapshot_config.full_snapshot_archives_dir,
             &self.snapshot_config.incremental_snapshot_archives_dir,
