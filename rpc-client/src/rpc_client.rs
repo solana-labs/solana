@@ -308,6 +308,33 @@ impl RpcClient {
         )
     }
 
+    /// Create an HTTP `RpcClient` with specified timeout and proxy.
+    ///
+    /// The URL is an HTTP URL, usually for port 8899, as in
+    /// "http://localhost:8899".
+    ///
+    /// The client has and a default [commitment level][cl] of
+    /// [`Finalized`].
+    ///
+    /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
+    /// [`Finalized`]: solana_sdk::commitment_config::CommitmentLevel::Finalized
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use solana_rpc_client::rpc_client::RpcClient;
+    /// let url = "http://localhost::8899".to_string();
+    /// let timeout = Duration::from_secs(1);
+    /// let client = RpcClient::new_with_timeout(url, timeout);
+    /// ```
+    pub fn new_with_timeout_and_proxy<U: ToString>(url: U, timeout: Duration, proxy: reqwest::Proxy) -> Self {
+        Self::new_sender(
+            HttpSender::new_with_timeout_and_proxy(url, timeout, proxy),
+            RpcClientConfig::with_commitment(CommitmentConfig::default()),
+        )
+    }
+
     /// Create an HTTP `RpcClient` with specified timeout and [commitment level][cl].
     ///
     /// [cl]: https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment
