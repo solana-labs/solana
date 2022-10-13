@@ -85,7 +85,8 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Default public key value. (All zeros)
+   * Default public key value. The base58-encoded string representation is all ones (as seen below)
+   * The underlying BN number is 32 bytes that are all zeros
    */
   static default: PublicKey = new PublicKey('11111111111111111111111111111111');
 
