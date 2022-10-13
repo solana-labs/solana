@@ -274,12 +274,11 @@ fn test_spend_and_verify_all_nodes_env_num_nodes() {
     );
 }
 
-// TODO: Debug hang
 #[test]
 #[serial]
-#[ignore]
 fn test_two_unbalanced_stakes() {
-    solana_logger::setup_with_default(RUST_LOG_FILTER);
+    // solana_logger::setup_with_default(RUST_LOG_FILTER);
+    solana_logger::setup();
     error!("test_two_unbalanced_stakes");
     let validator_config = ValidatorConfig::default_for_test();
     let num_ticks_per_second = 100;
@@ -306,10 +305,15 @@ fn test_two_unbalanced_stakes() {
         num_ticks_per_slot,
         num_slots_per_epoch,
     );
+    println!("before close");
     cluster.close_preserve_ledgers();
+    println!("after close");
     let leader_pubkey = cluster.entry_point_info.id;
     let leader_ledger = cluster.validators[&leader_pubkey].info.ledger_path.clone();
+
+    println!("before verify");
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
+    println!("after verify");
 }
 
 #[test]
