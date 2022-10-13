@@ -7535,7 +7535,7 @@ impl AccountsDb {
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
-                // turn raw data into merkel tree hashes and sum of lamports
+                // turn raw data into merkle tree hashes and sum of lamports
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
