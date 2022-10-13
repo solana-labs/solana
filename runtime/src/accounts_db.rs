@@ -7045,6 +7045,43 @@ impl AccountsDb {
         }
     }
 
+    /// hash info about 'storages' into 'hasher'
+    /// return true iff storages are valid for loading from cache
+    fn hash_storage_info(
+        hasher: &mut impl StdHasher,
+        storages: Option<&Vec<Arc<AccountStorageEntry>>>,
+        slot: Slot,
+    ) -> bool {
+        if let Some(sub_storages) = storages {
+            if sub_storages.len() > 1 {
+                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
+                return false;
+            }
+            // hash info about this storage
+            let append_vec = sub_storages.first().unwrap();
+            append_vec.written_bytes().hash(hasher);
+            let storage_file = append_vec.accounts.get_path();
+            slot.hash(hasher);
+            storage_file.hash(hasher);
+            let amod = std::fs::metadata(storage_file);
+            if amod.is_err() {
+                return false;
+            }
+            let amod = amod.unwrap().modified();
+            if amod.is_err() {
+                return false;
+            }
+            let amod = amod
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            amod.hash(hasher);
+        }
+        // if we made it here, we have hashed info and we should try to load from the cache
+        true
+    }
+
     /// Scan through all the account storage in parallel.
     /// Returns a Vec of cache data. At this level, the vector is ordered from older slots to newer slots.
     ///   A single pubkey could be in multiple entries. The pubkey found int the latest entry is the one to use.
@@ -7122,37 +7159,9 @@ impl AccountsDb {
                         if is_first_scan_pass && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
-                        if let Some(sub_storages) = sub_storages {
-                            if sub_storages.len() > 1
-                                && !config.store_detailed_debug_info_on_failure
-                            {
-                                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
-                                // However, if we're just dumping detailed debug info store anyway.
-                                load_from_cache = false;
-                                break;
-                            }
-                            // hash info about this storage
-                            let append_vec = sub_storages.first().unwrap();
-                            append_vec.written_bytes().hash(&mut hasher);
-                            let storage_file = append_vec.accounts.get_path();
-                            slot.hash(&mut hasher);
-                            storage_file.hash(&mut hasher);
-                            let amod = std::fs::metadata(storage_file);
-                            if amod.is_err() {
-                                load_from_cache = false;
-                                break;
-                            }
-                            let amod = amod.unwrap().modified();
-                            if amod.is_err() {
-                                load_from_cache = false;
-                                break;
-                            }
-                            let amod = amod
-                                .unwrap()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            amod.hash(&mut hasher);
+                        if !Self::hash_storage_info(&mut hasher, sub_storages, slot) {
+                            load_from_cache = false;
+                            break;
                         }
                     }
                     if load_from_cache {
@@ -10281,6 +10290,22 @@ pub mod tests {
         );
     }
 
+    fn append_sample_data_to_storage(
+        storages: &SnapshotStorages,
+        pubkey: &Pubkey,
+        write_version: StoredMetaWriteVersion,
+    ) {
+        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey: *pubkey,
+            write_version,
+        };
+        storages[0][0]
+            .accounts
+            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+    }
+
     fn sample_storage_with_entries(
         tf: &TempFile,
         write_version: StoredMetaWriteVersion,
@@ -10295,15 +10320,7 @@ pub mod tests {
 
         let arc = Arc::new(data);
         let storages = vec![vec![arc]];
-        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let sm = StoredMeta {
-            data_len: 1,
-            pubkey: *pubkey,
-            write_version,
-        };
-        storages[0][0]
-            .accounts
-            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        append_sample_data_to_storage(&storages, pubkey, write_version);
         storages
     }
 
@@ -16776,6 +16793,76 @@ pub mod tests {
                     SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
                 assert_eq!(vec![slot1_ancient, slot1_plus_ancient], ancient_slots);
             }
+        }
+    }
+
+    #[test]
+    fn test_hash_storage_info() {
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let storages = None;
+            let slot = 1;
+            let load = AccountsDb::hash_storage_info(&mut hasher, storages, slot);
+            let hash = hasher.finish();
+            assert_eq!(15130871412783076140, hash);
+            assert!(load);
+        }
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let slot: Slot = 0;
+            let tf = crate::append_vec::test_utils::get_append_vec_path(
+                "test_accountsdb_scan_account_storage_no_bank",
+            );
+            let write_version1 = 0;
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
+
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash = hasher.finish();
+            // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let slot = 2; // changed this
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash2 = hasher.finish();
+            assert_ne!(hash, hash2); // slot changed, these should be different
+                                     // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            append_sample_data_to_storage(
+                &storages,
+                &solana_sdk::pubkey::new_rand(),
+                write_version1,
+            );
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash3 = hasher.finish();
+            assert_ne!(hash2, hash3); // moddate and written size changed
+                                      // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash4 = hasher.finish();
+            assert_eq!(hash4, hash3); // same
+                                      // can't assert hash here - it is a function of mod date
+            assert!(load);
+        }
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let slot: Slot = 0;
+            let slot1 = 1;
+            let tf = crate::append_vec::test_utils::get_append_vec_path(
+                "test_accountsdb_scan_account_storage_no_bank",
+            );
+            let write_version1 = 0;
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let mut storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
+            let mut storages2 = sample_storage_with_entries(&tf, write_version1, slot1, &pubkey1);
+            storages[0].push(storages2[0].remove(0));
+
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let _ = hasher.finish();
+            // cannot load because we have 2 storages
+            assert!(!load);
         }
     }
 }
