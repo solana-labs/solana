@@ -21,6 +21,7 @@ use {
     log::{log_enabled, trace, Level::Trace},
     solana_measure::measure::Measure,
     solana_program_runtime::{
+        compute_budget::ComputeBudget,
         executor_cache::Executor,
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
@@ -48,7 +49,7 @@ use {
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
             error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
-            reject_callx_r10,
+            reject_callx_r10, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -151,17 +152,16 @@ fn try_borrow_account<'a>(
     }
 }
 
-pub fn create_executor(
-    programdata_account_index: IndexOfAccount,
+pub fn create_executor<'a>(
+    programdata: &BorrowedAccount<'a>,
     programdata_offset: usize,
-    invoke_context: &mut InvokeContext,
+    feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
     create_executor_metrics: &mut executor_metrics::CreateMetrics,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
-    let log_collector = invoke_context.get_log_collector();
-    let compute_budget = invoke_context.get_compute_budget();
-    let feature_set = &invoke_context.feature_set;
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
@@ -199,13 +199,6 @@ pub fn create_executor(
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let executable = {
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context.get_current_instruction_context()?;
-        let programdata = try_borrow_account(
-            transaction_context,
-            instruction_context,
-            programdata_account_index,
-        )?;
         create_executor_metrics.program_id = programdata.get_key().to_string();
         let mut load_elf_time = Measure::start("load_elf_time");
         let executable = Executable::<ThisInstructionMeter>::from_elf(
@@ -441,15 +434,23 @@ fn process_instruction_common(
         let executor = if let Some(executor) = cached_executor {
             executor
         } else {
+            let programdata = try_borrow_account(
+                transaction_context,
+                instruction_context,
+                first_instruction_account,
+            )?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
-                first_instruction_account,
+                &programdata,
                 program_data_offset,
-                invoke_context,
+                &invoke_context.feature_set,
+                invoke_context.get_compute_budget(),
+                log_collector,
                 &mut create_executor_metrics,
                 use_jit,
                 false, /* reject_deployment_of_broken_elfs */
             )?;
+            drop(programdata);
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -675,15 +676,22 @@ fn process_loader_upgradeable_instruction(
             invoke_context.native_invoke(instruction, signers.as_slice())?;
 
             // Load and verify the program bits
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
-                first_instruction_account.saturating_add(3),
+                &buffer,
                 buffer_data_offset,
-                invoke_context,
+                &invoke_context.feature_set,
+                invoke_context.get_compute_budget(),
+                invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
                 use_jit,
                 true,
             )?;
+            drop(buffer);
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
@@ -846,15 +854,20 @@ fn process_loader_upgradeable_instruction(
             drop(programdata);
 
             // Load and verify the program bits
+            let buffer =
+                instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
-                first_instruction_account.saturating_add(2),
+                &buffer,
                 buffer_data_offset,
-                invoke_context,
+                &invoke_context.feature_set,
+                invoke_context.get_compute_budget(),
+                invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
                 use_jit,
                 true,
             )?;
+            drop(buffer);
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
@@ -1236,7 +1249,7 @@ fn process_loader_instruction(
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
     let program_id = instruction_context.get_last_program_key(transaction_context)?;
-    let program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    let mut program = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
     if program.get_owner() != program_id {
         ic_msg!(
             invoke_context,
@@ -1245,13 +1258,13 @@ fn process_loader_instruction(
         return Err(InstructionError::IncorrectProgramId);
     }
     let is_program_signer = program.is_signer();
-    drop(program);
     match limited_deserialize(instruction_data)? {
         LoaderInstruction::Write { offset, bytes } => {
             if !is_program_signer {
                 ic_msg!(invoke_context, "Program account did not sign");
                 return Err(InstructionError::MissingRequiredSignature);
             }
+            drop(program);
             write_program_data(
                 first_instruction_account,
                 offset as usize,
@@ -1266,18 +1279,16 @@ fn process_loader_instruction(
             }
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
-                first_instruction_account,
+                &program,
                 0,
-                invoke_context,
+                &invoke_context.feature_set,
+                invoke_context.get_compute_budget(),
+                invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
                 use_jit,
                 true,
             )?;
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            let transaction_context = &invoke_context.transaction_context;
-            let instruction_context = transaction_context.get_current_instruction_context()?;
-            let mut program =
-                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             invoke_context
                 .tx_executor_cache
                 .borrow_mut()
