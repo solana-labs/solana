@@ -15,11 +15,59 @@ use {
     },
     lazy_static::lazy_static,
     solana_sdk::transport::Result as TransportResult,
-    std::{net::SocketAddr, sync::Arc},
+    std::{
+        net::SocketAddr,
+        sync::{Arc, Condvar, Mutex, MutexGuard},
+    },
     tokio::runtime::Runtime,
 };
 
+const MAX_OUTSTANDING_TASK: u64 = 2000;
+
+/// A semaphore used for limiting the number of asynchronous tasks spawn to the
+/// runtime. Before spawnning a task, use acquire. After the task is done (be it
+/// succsess or failure), call release.
+struct AsyncTaskSemaphore {
+    /// Keep the counter info about the usage
+    counter: Mutex<u64>,
+    /// Conditional variable for signaling when counter is decremented
+    cond_var: Condvar,
+    /// The maximum usage allowed by this semaphore.
+    permits: u64,
+}
+
+impl AsyncTaskSemaphore {
+    fn new(permits: u64) -> Self {
+        Self {
+            counter: Mutex::new(0),
+            cond_var: Condvar::new(),
+            permits,
+        }
+    }
+
+    /// When returned, the lock has been locked and usage count has been
+    /// incremented. When the returned MutexGuard is dropped the lock is dropped
+    /// without decrementing the usage count.
+    fn acquire(&self) -> MutexGuard<u64> {
+        let mut count = self.counter.lock().unwrap();
+        *count += 1;
+        while *count >= self.permits {
+            count = self.cond_var.wait(count).unwrap();
+        }
+        count
+    }
+
+    /// Acquire the lock and decrement the usage count
+    fn release(&self) {
+        let mut count = self.counter.lock().unwrap();
+        *count -= 1;
+        self.cond_var.notify_one();
+    }
+}
+
 lazy_static! {
+    static ref ASYNC_TASK_SEMAPHORE: AsyncTaskSemaphore =
+        AsyncTaskSemaphore::new(MAX_OUTSTANDING_TASK);
     static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("quic-client")
         .enable_all()
@@ -65,21 +113,43 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]> + Send + Sync,
     {
-        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers))?;
+        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers, &mut None))?;
         Ok(())
     }
 
     fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+        let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
         //drop and detach the task
-        let _ = RUNTIME.spawn(async move { inner.send_wire_transaction(wire_transaction).await });
+
+
+        let _ = RUNTIME.spawn(async move {
+            inner
+                .send_wire_transaction(
+                    wire_transaction,
+                    &mut Some(Box::new(|| {
+                        ASYNC_TASK_SEMAPHORE.release();
+                    })),
+                )
+                .await
+        });
         Ok(())
     }
 
     fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
+        let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
-        //drop and detach the task
-        let _ = RUNTIME.spawn(async move { inner.send_wire_transaction_batch(&buffers).await });
+
+        let _ = RUNTIME.spawn(async move {
+            inner
+                .send_wire_transaction_batch(
+                    &buffers,
+                    &mut Some(Box::new(|| {
+                        ASYNC_TASK_SEMAPHORE.release();
+                    })),
+                )
+                .await
+        });
         Ok(())
     }
 }

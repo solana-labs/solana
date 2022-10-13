@@ -3,7 +3,8 @@
 //! server's flow control.
 use {
     crate::{
-        connection_cache_stats::ConnectionCacheStats, nonblocking::tpu_connection::TpuConnection,
+        connection_cache_stats::ConnectionCacheStats,
+        nonblocking::tpu_connection::{SendTransactionCallbackOption, TpuConnection},
         tpu_connection::ClientStats,
     },
     async_mutex::Mutex,
@@ -554,7 +555,11 @@ impl TpuConnection for QuicTpuConnection {
         self.client.tpu_addr()
     }
 
-    async fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    async fn send_wire_transaction_batch<T>(
+        &self,
+        buffers: &[T],
+        callback: &mut SendTransactionCallbackOption,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]> + Send + Sync,
     {
@@ -566,11 +571,19 @@ impl TpuConnection for QuicTpuConnection {
             .await;
         self.connection_stats
             .add_client_stats(&stats, len, res.is_ok());
+        if let Some(callback) = callback {
+            callback();
+        }
+
         res?;
         Ok(())
     }
 
-    async fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    async fn send_wire_transaction<T>(
+        &self,
+        wire_transaction: T,
+        callback: &mut SendTransactionCallbackOption,
+    ) -> TransportResult<()>
     where
         T: AsRef<[u8]> + Send + Sync,
     {
@@ -588,6 +601,9 @@ impl TpuConnection for QuicTpuConnection {
             self.connection_stats.add_client_stats(&stats, 1, false);
         } else {
             self.connection_stats.add_client_stats(&stats, 1, true);
+        }
+        if let Some(callback) = callback {
+            callback();
         }
         Ok(())
     }
