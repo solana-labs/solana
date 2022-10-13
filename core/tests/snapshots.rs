@@ -232,9 +232,10 @@ fn run_bank_forks_snapshot_n<F>(
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-    let request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
+        snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender,
     };
@@ -729,9 +730,10 @@ fn test_bank_forks_incremental_snapshot(
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-    let request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
+        snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender,
     };
@@ -977,9 +979,10 @@ fn test_snapshots_with_background_services(
         bank.set_callback(Some(Box::new(callback.clone())));
     }
 
-    let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let abs_request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
+        snapshot_request_sender,
         snapshot_request_receiver,
         accounts_package_sender: accounts_package_sender.clone(),
     };
