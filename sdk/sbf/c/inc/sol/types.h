@@ -1,6 +1,6 @@
 #pragma once
 /**
- * @brief Solana types for BPF programs
+ * @brief Solana types for SBF programs
  */
 
 #ifdef __cplusplus

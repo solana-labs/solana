@@ -1,0 +1,22 @@
+[package]
+name = "solana-sbf-rust-dep-crate"
+version = "1.15.0"
+description = "Solana BPF test program written in Rust"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-sbf-rust-dep-crate"
+edition = "2021"
+
+[dependencies]
+byteorder = { version = "1", default-features = false }
+# list of crates which must be buildable for bpf programs
+solana-address-lookup-table-program = { path = "../../../../programs/address-lookup-table", version = "=1.15.0" }
+solana-program = { path = "../../../../sdk/program", version = "=1.15.0" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

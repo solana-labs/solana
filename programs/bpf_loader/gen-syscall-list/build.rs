@@ -10,12 +10,12 @@ use {
 
 /**
  * Extract a list of registered syscall names and save it in a file
- * for distribution with the SDK.  This file is read by cargo-build-bpf
- * to verify undefined symbols in a .so module that cargo-build-bpf has built.
+ * for distribution with the SDK.  This file is read by cargo-build-sbf
+ * to verify undefined symbols in a .so module that cargo-build-sbf has built.
  */
 fn main() {
     let syscalls_rs_path = PathBuf::from("../src/syscalls/mod.rs");
-    let syscalls_txt_path = PathBuf::from("../../../sdk/bpf/syscalls.txt");
+    let syscalls_txt_path = PathBuf::from("../../../sdk/sbf/syscalls.txt");
     println!(
         "cargo:warning=(not a warning) Generating {1} from {0}",
         syscalls_rs_path.display(),
