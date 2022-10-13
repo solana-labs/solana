@@ -134,17 +134,7 @@ declare_syscall!(
             let a = *s1.get(i).ok_or(SyscallError::InvalidLength)?;
             let b = *s2.get(i).ok_or(SyscallError::InvalidLength)?;
             if a != b {
-                *cmp_result = if invoke_context
-                    .feature_set
-                    .is_active(&syscall_saturated_math::id())
-                {
-                    (a as i32).saturating_sub(b as i32)
-                } else {
-                    #[allow(clippy::integer_arithmetic)]
-                    {
-                        a as i32 - b as i32
-                    }
-                };
+                *cmp_result = (a as i32).saturating_sub(b as i32);
                 return Ok(0);
             };
             i = i.saturating_add(1);

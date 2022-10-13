@@ -493,17 +493,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
                 InstructionError::InvalidArgument,
             ))? as *const _ as u64;
             let addr = &account_info.data_len as *const u64 as u64;
-            let vm_addr = if invoke_context
-                .feature_set
-                .is_active(&syscall_saturated_math::id())
-            {
-                account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr))
-            } else {
-                #[allow(clippy::integer_arithmetic)]
-                {
-                    account_infos_addr + (addr - first_info_addr)
-                }
-            };
+            let vm_addr = account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr));
             let _ = translate(
                 memory_mapping,
                 AccessType::Store,
@@ -810,17 +800,8 @@ fn check_account_infos(
             .into());
         }
     } else {
-        let adjusted_len = if invoke_context
-            .feature_set
-            .is_active(&syscall_saturated_math::id())
-        {
-            num_account_infos.saturating_mul(size_of::<Pubkey>())
-        } else {
-            #[allow(clippy::integer_arithmetic)]
-            {
-                num_account_infos * size_of::<Pubkey>()
-            }
-        };
+        let adjusted_len = num_account_infos.saturating_mul(size_of::<Pubkey>());
+
         if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
             // Cap the number of account_infos a caller can pass to approximate
             // maximum that accounts that could be passed in an instruction
@@ -927,20 +908,10 @@ fn cpi_common<S: SyscallInvokeSigned>(
             *caller_account.owner = *callee_account.get_owner();
             let new_len = callee_account.get_data().len();
             if caller_account.data.len() != new_len {
-                let data_overflow = if invoke_context
-                    .feature_set
-                    .is_active(&syscall_saturated_math::id())
-                {
-                    new_len
-                        > caller_account
-                            .original_data_len
-                            .saturating_add(MAX_PERMITTED_DATA_INCREASE)
-                } else {
-                    #[allow(clippy::integer_arithmetic)]
-                    {
-                        new_len > caller_account.original_data_len + MAX_PERMITTED_DATA_INCREASE
-                    }
-                };
+                let data_overflow = new_len
+                    > caller_account
+                        .original_data_len
+                        .saturating_add(MAX_PERMITTED_DATA_INCREASE);
                 if data_overflow {
                     ic_msg!(
                         invoke_context,
