@@ -13,6 +13,7 @@ import { EpochProvider } from "./providers/epoch";
 import { ScrollAnchorProvider } from "providers/scroll-anchor";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
+import { GossipNodesProvider } from "providers/gossipNodes";
 
 if (process.env.NODE_ENV === "production") {
   Sentry.init({
@@ -28,17 +29,19 @@ root.render(
         <StatsProvider>
           <SupplyProvider>
             <RichListProvider>
-              <AccountsProvider>
-                <BlockProvider>
-                  <EpochProvider>
-                    <MintsProvider>
-                      <TransactionsProvider>
-                        <App />
-                      </TransactionsProvider>
-                    </MintsProvider>
-                  </EpochProvider>
-                </BlockProvider>
-              </AccountsProvider>
+              <GossipNodesProvider>
+                <AccountsProvider>
+                  <BlockProvider>
+                    <EpochProvider>
+                      <MintsProvider>
+                        <TransactionsProvider>
+                          <App />
+                        </TransactionsProvider>
+                      </MintsProvider>
+                    </EpochProvider>
+                  </BlockProvider>
+                </AccountsProvider>
+              </GossipNodesProvider>
             </RichListProvider>
           </SupplyProvider>
         </StatsProvider>

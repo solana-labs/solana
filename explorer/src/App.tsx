@@ -14,6 +14,7 @@ import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
 import { EpochDetailsPage } from "pages/EpochDetailsPage";
+import { GossipPage } from "pages/GossipPage";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];
@@ -30,6 +31,9 @@ function App() {
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
             <SupplyPage />
+          </Route>
+          <Route exact path={["/gossip", "/networkNodes"]}>
+            <GossipPage />
           </Route>
           <Route
             exact
