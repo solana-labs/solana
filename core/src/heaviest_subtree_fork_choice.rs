@@ -858,36 +858,31 @@ impl HeaviestSubtreeForkChoice {
         tower
             .last_voted_slot_hash()
             .and_then(|last_voted_slot_hash| {
-                let heaviest_slot_hash_on_same_voted_fork = self.best_slot(&last_voted_slot_hash);
-                if heaviest_slot_hash_on_same_voted_fork.is_none() {
-                    if !tower.is_stray_last_vote() {
-                        // Unless last vote is stray and stale, self.bast_slot(last_voted_slot) must return
-                        // Some(_), justifying to panic! here.
-                        // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
-                        // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
-                        // touched in that case as well.
-                        // In other words, except being stray, all other slots have been voted on while this
-                        // validator has been running, so we must be able to fetch best_slots for all of
-                        // them.
-                        panic!(
-                            "a bank at last_voted_slot({:?}) is a frozen bank so must have been \
-                            added to heaviest_subtree_fork_choice at time of freezing",
-                            last_voted_slot_hash,
-                        )
-                    } else {
-                        // fork_infos doesn't have corresponding data for the stale stray last vote,
-                        // meaning some inconsistency between saved tower and ledger.
-                        // (newer snapshot, or only a saved tower is moved over to new setup?)
-                        return None;
+                match self.is_candidate(&last_voted_slot_hash) {
+                    Some(true) => self.best_slot(&last_voted_slot_hash),
+                    Some(false) => None,
+                    None => {
+                        if !tower.is_stray_last_vote() {
+                            // Unless last vote is stray and stale, self.is_candidate(last_voted_slot_hash) must return
+                            // Some(_), justifying to panic! here.
+                            // Also, adjust_lockouts_after_replay() correctly makes last_voted_slot None,
+                            // if all saved votes are ancestors of replayed_root_slot. So this code shouldn't be
+                            // touched in that case as well.
+                            // In other words, except being stray, all other slots have been voted on while this
+                            // validator has been running, so we must be able to fetch best_slots for all of
+                            // them.
+                            panic!(
+                                "a bank at last_voted_slot({:?}) is a frozen bank so must have been \
+                                        added to heaviest_subtree_fork_choice at time of freezing",
+                                last_voted_slot_hash,
+                            )
+                        } else {
+                            // fork_infos doesn't have corresponding data for the stale stray last vote,
+                            // meaning some inconsistency between saved tower and ledger.
+                            // (newer snapshot, or only a saved tower is moved over to new setup?)
+                            None
+                        }
                     }
-                }
-                let heaviest_slot_hash_on_same_voted_fork =
-                    heaviest_slot_hash_on_same_voted_fork.unwrap();
-
-                if heaviest_slot_hash_on_same_voted_fork == last_voted_slot_hash {
-                    None
-                } else {
-                    Some(heaviest_slot_hash_on_same_voted_fork)
                 }
             })
     }
@@ -2957,9 +2952,10 @@ mod test {
 
         // After marking the last vote in the tower as invalid, `heaviest_slot_on_same_voted_fork()`
         // should disregard all descendants of that invalid vote
-        assert!(heaviest_subtree_fork_choice
-            .heaviest_slot_on_same_voted_fork(&tower)
-            .is_none());
+        assert_eq!(
+            heaviest_subtree_fork_choice.heaviest_slot_on_same_voted_fork(&tower),
+            None
+        );
 
         // Adding another descendant to the invalid candidate won't
         // update the best slot, even if it contains votes

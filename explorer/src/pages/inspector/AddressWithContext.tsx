@@ -4,6 +4,7 @@ import { Address } from "components/common/Address";
 import {
   Account,
   useAccountInfo,
+  useAddressLookupTable,
   useFetchAccountInfo,
 } from "providers/accounts";
 import { ClusterStatus, useCluster } from "providers/cluster";
@@ -35,6 +36,43 @@ export const programValidator = (account: Account): string | undefined => {
     return "Only executable accounts can be invoked";
   return;
 };
+
+export function AddressFromLookupTableWithContext({
+  lookupTableKey,
+  lookupTableIndex,
+}: {
+  lookupTableKey: PublicKey;
+  lookupTableIndex: number;
+}) {
+  const lookupTable = useAddressLookupTable(lookupTableKey.toBase58());
+  const fetchAccountInfo = useFetchAccountInfo();
+  React.useEffect(() => {
+    if (!lookupTable) fetchAccountInfo(lookupTableKey);
+  }, [lookupTableKey, lookupTable, fetchAccountInfo]);
+
+  let pubkey;
+  if (!lookupTable) {
+    return (
+      <span className="text-muted">
+        <span className="spinner-grow spinner-grow-sm me-2"></span>
+        Loading
+      </span>
+    );
+  } else if (typeof lookupTable === "string") {
+    return <div>Invalid Lookup Table</div>;
+  } else if (lookupTableIndex < lookupTable.state.addresses.length) {
+    pubkey = lookupTable.state.addresses[lookupTableIndex];
+  } else {
+    return <div>Invalid Lookup Table Index</div>;
+  }
+
+  return (
+    <div className="d-flex align-items-end flex-column">
+      <Address pubkey={pubkey} link />
+      <AccountInfo pubkey={pubkey} />
+    </div>
+  );
+}
 
 export function AddressWithContext({
   pubkey,

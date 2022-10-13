@@ -712,6 +712,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     49 => InstructionError::IllegalOwner,
                     50 => InstructionError::MaxAccountsDataAllocationsExceeded,
                     51 => InstructionError::MaxAccountsExceeded,
+                    52 => InstructionError::MaxInstructionTraceLengthExceeded,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -1030,6 +1031,9 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             }
                             InstructionError::MaxAccountsExceeded => {
                                 tx_by_addr::InstructionErrorType::MaxAccountsExceeded
+                            }
+                            InstructionError::MaxInstructionTraceLengthExceeded => {
+                                tx_by_addr::InstructionErrorType::MaxInstructionTraceLengthExceeded
                             }
                         } as i32,
                         custom: match instruction_error {

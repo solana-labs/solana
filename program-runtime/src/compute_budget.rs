@@ -37,6 +37,8 @@ pub struct ComputeBudget {
     pub invoke_units: u64,
     /// Maximum cross-program invocation depth allowed
     pub max_invoke_depth: usize,
+    /// Maximum cross-program invocation and instructions per transaction
+    pub max_instruction_trace_length: usize,
     /// Base number of compute units consumed to call SHA256
     pub sha256_base_cost: u64,
     /// Incremental number of units consumed by SHA256 (based on bytes)
@@ -67,6 +69,12 @@ pub struct ComputeBudget {
     pub curve25519_edwards_subtract_cost: u64,
     /// Number of compute units consumed to multiply a curve25519 edwards point
     pub curve25519_edwards_multiply_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of edwards points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_edwards_msm_base_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of edwards points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_edwards_msm_incremental_cost: u64,
     /// Number of compute units consumed to validate a curve25519 ristretto point
     pub curve25519_ristretto_validate_point_cost: u64,
     /// Number of compute units consumed to add two curve25519 ristretto points
@@ -75,6 +83,12 @@ pub struct ComputeBudget {
     pub curve25519_ristretto_subtract_cost: u64,
     /// Number of compute units consumed to multiply a curve25519 ristretto point
     pub curve25519_ristretto_multiply_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_ristretto_msm_base_cost: u64,
+    /// Number of compute units consumed for a multiscalar multiplication (msm) of ristretto points.
+    /// The total cost is calculated as `msm_base_cost + (length - 1) * msm_incremental_cost`.
+    pub curve25519_ristretto_msm_incremental_cost: u64,
     /// Optional program heap region size, if `None` then loader default
     pub heap_size: Option<usize>,
     /// Number of compute units per additional 32k heap above the default (~.5
@@ -100,6 +114,7 @@ impl ComputeBudget {
             create_program_address_units: 1500,
             invoke_units: 1000,
             max_invoke_depth: 4,
+            max_instruction_trace_length: 64,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
             sha256_max_slices: 20_000,
@@ -111,14 +126,18 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
-            curve25519_edwards_validate_point_cost: 5_000, // TODO: precisely determine curve25519 costs
-            curve25519_edwards_add_cost: 5_000,
-            curve25519_edwards_subtract_cost: 5_000,
-            curve25519_edwards_multiply_cost: 10_000,
-            curve25519_ristretto_validate_point_cost: 5_000,
-            curve25519_ristretto_add_cost: 5_000,
-            curve25519_ristretto_subtract_cost: 5_000,
-            curve25519_ristretto_multiply_cost: 10_000,
+            curve25519_edwards_validate_point_cost: 111,
+            curve25519_edwards_add_cost: 331,
+            curve25519_edwards_subtract_cost: 329,
+            curve25519_edwards_multiply_cost: 1_753,
+            curve25519_edwards_msm_base_cost: 1_870,
+            curve25519_edwards_msm_incremental_cost: 670,
+            curve25519_ristretto_validate_point_cost: 117,
+            curve25519_ristretto_add_cost: 367,
+            curve25519_ristretto_subtract_cost: 366,
+            curve25519_ristretto_multiply_cost: 1_804,
+            curve25519_ristretto_msm_base_cost: 1_870,
+            curve25519_ristretto_msm_incremental_cost: 670,
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,

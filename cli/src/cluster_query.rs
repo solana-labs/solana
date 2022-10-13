@@ -2058,7 +2058,7 @@ pub fn process_transaction_history(
                         Some(status) => format!("{:?}", status),
                     }
                 },
-                result.memo.unwrap_or_else(|| "".to_string()),
+                result.memo.unwrap_or_default(),
             );
         } else {
             println!("{}", result.signature);

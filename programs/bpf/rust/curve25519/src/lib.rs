@@ -38,6 +38,13 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
         edwards::multiply_edwards(&scalar_one, &edwards_generator).expect("multiply_edwards")
     );
 
+    msg!("multiscalar_multiply_edwards");
+    assert_eq!(
+        edwards_generator,
+        edwards::multiscalar_multiply_edwards(&[scalar_one], &[edwards_generator])
+            .expect("multiscalar_multiply_edwards"),
+    );
+
     let ristretto_identity = ristretto::PodRistrettoPoint([
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
@@ -62,6 +69,13 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
         ristretto_generator,
         ristretto::multiply_ristretto(&scalar_one, &ristretto_generator)
             .expect("multiply_ristretto")
+    );
+
+    msg!("multiscalar_multiply_ristretto");
+    assert_eq!(
+        ristretto_generator,
+        ristretto::multiscalar_multiply_ristretto(&[scalar_one], &[ristretto_generator])
+            .expect("multiscalar_multiply_ristretto"),
     );
 
     0

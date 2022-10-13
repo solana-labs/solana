@@ -120,6 +120,7 @@ ubscribers')) }}"
         labels:
           - feature-gate
         branches:
+          - v1.10
           - v1.13
   - name: v1.13 non-feature-gate backport
     conditions:
@@ -130,6 +131,7 @@ ubscribers')) }}"
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
+          - v1.10
           - v1.13
   - name: v1.14 feature-gate backport
     conditions:

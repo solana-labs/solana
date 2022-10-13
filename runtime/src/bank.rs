@@ -78,7 +78,6 @@ use {
     dashmap::{DashMap, DashSet},
     itertools::Itertools,
     log::*,
-    rand::Rng,
     rayon::{
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -88,9 +87,11 @@ use {
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
-        invoke_context::{
-            BuiltinProgram, Executor, Executors, ProcessInstructionWithContext, TransactionExecutor,
+        executor_cache::{
+            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
+            MAX_CACHED_EXECUTORS,
         },
+        invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
         log_collector::LogCollector,
         sysvar_cache::SysvarCache,
         timings::{ExecuteTimingType, ExecuteTimings},
@@ -157,7 +158,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{Deref, Div, RangeInclusive},
+        ops::{Deref, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -175,7 +176,6 @@ use {
 /// params to `verify_bank_hash`
 pub struct VerifyBankHash {
     pub test_hash_calculation: bool,
-    pub can_cached_slot_be_unflushed: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
     pub run_in_background: bool,
@@ -285,7 +285,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
+#[frozen_abi(digest = "A7T7XohiSoo8FGoCPTsaXAYYugXTkoYnBjQAdBgYHH85")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -313,272 +313,6 @@ pub struct SquashTiming {
 }
 
 type EpochCount = u64;
-
-mod executor_cache {
-    use {super::*, log};
-
-    #[derive(Debug, Default)]
-    pub struct Stats {
-        pub hits: AtomicU64,
-        pub misses: AtomicU64,
-        pub evictions: HashMap<Pubkey, u64>,
-        pub insertions: AtomicU64,
-        pub replacements: AtomicU64,
-        pub one_hit_wonders: AtomicU64,
-    }
-
-    impl Stats {
-        pub fn submit(&self, slot: Slot) {
-            let hits = self.hits.load(Relaxed);
-            let misses = self.misses.load(Relaxed);
-            let insertions = self.insertions.load(Relaxed);
-            let replacements = self.replacements.load(Relaxed);
-            let one_hit_wonders = self.one_hit_wonders.load(Relaxed);
-            let evictions: u64 = self.evictions.values().sum();
-            datapoint_info!(
-                "bank-executor-cache-stats",
-                ("slot", slot, i64),
-                ("hits", hits, i64),
-                ("misses", misses, i64),
-                ("evictions", evictions, i64),
-                ("insertions", insertions, i64),
-                ("replacements", replacements, i64),
-                ("one_hit_wonders", one_hit_wonders, i64),
-            );
-            debug!(
-                "Executor Cache Stats -- Hits: {}, Misses: {}, Evictions: {}, Insertions: {}, Replacements: {}, One-Hit-Wonders: {}",
-                hits, misses, evictions, insertions, replacements, one_hit_wonders,
-            );
-            if log_enabled!(log::Level::Trace) && !self.evictions.is_empty() {
-                let mut evictions = self.evictions.iter().collect::<Vec<_>>();
-                evictions.sort_by_key(|e| e.1);
-                let evictions = evictions
-                    .into_iter()
-                    .rev()
-                    .map(|(program_id, evictions)| {
-                        format!("  {:<44}  {}", program_id.to_string(), evictions)
-                    })
-                    .collect::<Vec<_>>();
-                let evictions = evictions.join("\n");
-                trace!(
-                    "Eviction Details:\n  {:<44}  {}\n{}",
-                    "Program",
-                    "Count",
-                    evictions
-                );
-            }
-        }
-    }
-}
-
-const MAX_CACHED_EXECUTORS: usize = 256;
-#[derive(Debug)]
-struct CachedExecutorsEntry {
-    prev_epoch_count: u64,
-    epoch_count: AtomicU64,
-    executor: Arc<dyn Executor>,
-    hit_count: AtomicU64,
-}
-
-impl Clone for CachedExecutorsEntry {
-    fn clone(&self) -> Self {
-        Self {
-            prev_epoch_count: self.prev_epoch_count,
-            epoch_count: AtomicU64::new(self.epoch_count.load(Relaxed)),
-            executor: self.executor.clone(),
-            hit_count: AtomicU64::new(self.hit_count.load(Relaxed)),
-        }
-    }
-}
-
-/// LFU Cache of executors with single-epoch memory of usage counts
-#[derive(Debug)]
-struct CachedExecutors {
-    capacity: usize,
-    current_epoch: Epoch,
-    pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
-    stats: executor_cache::Stats,
-}
-
-impl Default for CachedExecutors {
-    fn default() -> Self {
-        Self {
-            capacity: MAX_CACHED_EXECUTORS,
-            current_epoch: Epoch::default(),
-            executors: HashMap::default(),
-            stats: executor_cache::Stats::default(),
-        }
-    }
-}
-
-#[cfg(RUSTC_WITH_SPECIALIZATION)]
-impl AbiExample for CachedExecutors {
-    fn example() -> Self {
-        // Delegate AbiExample impl to Default before going deep and stuck with
-        // not easily impl-able Arc<dyn Executor> due to rust's coherence issue
-        // This is safe because CachedExecutors isn't serializable by definition.
-        Self::default()
-    }
-}
-
-impl CachedExecutors {
-    fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
-        Self {
-            capacity: max_capacity,
-            current_epoch,
-            executors: HashMap::new(),
-            stats: executor_cache::Stats::default(),
-        }
-    }
-
-    fn new_from_parent_bank_executors(
-        parent_bank_executors: &CachedExecutors,
-        current_epoch: Epoch,
-    ) -> Self {
-        let executors = if parent_bank_executors.current_epoch == current_epoch {
-            parent_bank_executors.executors.clone()
-        } else {
-            parent_bank_executors
-                .executors
-                .iter()
-                .map(|(&key, entry)| {
-                    let entry = CachedExecutorsEntry {
-                        prev_epoch_count: entry.epoch_count.load(Relaxed),
-                        epoch_count: AtomicU64::default(),
-                        executor: entry.executor.clone(),
-                        hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
-                    };
-                    (key, entry)
-                })
-                .collect()
-        };
-
-        Self {
-            capacity: parent_bank_executors.capacity,
-            current_epoch,
-            executors,
-            stats: executor_cache::Stats::default(),
-        }
-    }
-
-    fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        if let Some(entry) = self.executors.get(pubkey) {
-            self.stats.hits.fetch_add(1, Relaxed);
-            entry.epoch_count.fetch_add(1, Relaxed);
-            entry.hit_count.fetch_add(1, Relaxed);
-            Some(entry.executor.clone())
-        } else {
-            self.stats.misses.fetch_add(1, Relaxed);
-            None
-        }
-    }
-
-    fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
-        let mut new_executors: Vec<_> = executors
-            .iter()
-            .filter_map(|(key, executor)| {
-                if let Some(mut entry) = self.remove(key) {
-                    self.stats.replacements.fetch_add(1, Relaxed);
-                    entry.executor = executor.clone();
-                    let _ = self.executors.insert(**key, entry);
-                    None
-                } else {
-                    self.stats.insertions.fetch_add(1, Relaxed);
-                    Some((*key, executor))
-                }
-            })
-            .collect();
-
-        if !new_executors.is_empty() {
-            let mut counts = self
-                .executors
-                .iter()
-                .map(|(key, entry)| {
-                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                    (key, count)
-                })
-                .collect::<Vec<_>>();
-            counts.sort_unstable_by_key(|(_, count)| *count);
-
-            let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
-
-            if self.executors.len() >= self.capacity {
-                let mut least_keys = counts
-                    .iter()
-                    .take(new_executors.len())
-                    .map(|least| *least.0)
-                    .collect::<Vec<_>>();
-                for least_key in least_keys.drain(..) {
-                    let _ = self.remove(&least_key);
-                    self.stats
-                        .evictions
-                        .entry(least_key)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
-                }
-            }
-
-            for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
-                let entry = CachedExecutorsEntry {
-                    prev_epoch_count: 0,
-                    epoch_count: AtomicU64::new(primer_count),
-                    executor: executor.clone(),
-                    hit_count: AtomicU64::new(1),
-                };
-                let _ = self.executors.insert(*key, entry);
-            }
-        }
-    }
-
-    fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
-        let maybe_entry = self.executors.remove(pubkey);
-        if let Some(entry) = maybe_entry.as_ref() {
-            if entry.hit_count.load(Relaxed) == 1 {
-                self.stats.one_hit_wonders.fetch_add(1, Relaxed);
-            }
-        }
-        maybe_entry
-    }
-
-    fn clear(&mut self) {
-        *self = CachedExecutors::default();
-    }
-
-    fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
-        const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
-        #[allow(clippy::assertions_on_constants)]
-        {
-            assert!(PRIMER_COUNT_TARGET_PERCENTILE <= 100);
-        }
-        // Executor use-frequencies are assumed to fit a Pareto distribution.  Choose an
-        // upper-bound for our primer count as the actual count at the target rank to avoid
-        // an upward bias
-
-        let target_index = u64::try_from(counts.len().saturating_sub(1))
-            .ok()
-            .and_then(|counts| {
-                let index = counts
-                    .saturating_mul(PRIMER_COUNT_TARGET_PERCENTILE)
-                    .div(100); // switch to u64::saturating_div once stable
-                usize::try_from(index).ok()
-            })
-            .unwrap_or(0);
-
-        counts
-            .get(target_index)
-            .map(|(_, count)| *count)
-            .unwrap_or(0)
-    }
-
-    fn get_primer_counts(counts: &[(&Pubkey, u64)], num_counts: usize) -> Vec<u64> {
-        let max_primer_count = Self::get_primer_count_upper_bound_inclusive(counts);
-        let mut rng = rand::thread_rng();
-
-        (0..num_counts)
-            .map(|_| rng.gen_range(0, max_primer_count.saturating_add(1)))
-            .collect::<Vec<_>>()
-    }
-}
 
 #[derive(Debug)]
 pub struct BankRc {
@@ -657,7 +391,7 @@ pub struct TransactionExecutionDetails {
 pub enum TransactionExecutionResult {
     Executed {
         details: TransactionExecutionDetails,
-        executors: Rc<RefCell<Executors>>,
+        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     },
     NotExecuted(TransactionError),
 }
@@ -1099,7 +833,7 @@ impl PartialEq for Bank {
             cluster_type: _,
             lazy_rent_collection: _,
             rewards_pool_pubkeys: _,
-            cached_executors: _,
+            executor_cache: _,
             transaction_debug_keys: _,
             transaction_log_collector_config: _,
             transaction_log_collector: _,
@@ -1117,7 +851,7 @@ impl PartialEq for Bank {
             incremental_snapshot_persistence: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
-            // is added to the struct, this ParitalEq is accordingly updated.
+            // is added to the struct, this PartialEq is accordingly updated.
         } = self;
         *blockhash_queue.read().unwrap() == *other.blockhash_queue.read().unwrap()
             && ancestors == &other.ancestors
@@ -1332,7 +1066,7 @@ pub struct Bank {
     pub rewards_pool_pubkeys: Arc<HashSet<Pubkey>>,
 
     /// Cached executors
-    cached_executors: RwLock<CachedExecutors>,
+    executor_cache: RwLock<BankExecutorCache>,
 
     transaction_debug_keys: Option<Arc<HashSet<Pubkey>>>,
 
@@ -1545,7 +1279,7 @@ impl Bank {
             cluster_type: Option::<ClusterType>::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
-            cached_executors: RwLock::<CachedExecutors>::default(),
+            executor_cache: RwLock::<BankExecutorCache>::default(),
             transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
@@ -1778,20 +1512,20 @@ impl Bank {
             "rewards_pool_pubkeys_creation",
         );
 
-        let (cached_executors, cached_executors_time) = measure!(
+        let (executor_cache, executor_cache_time) = measure!(
             {
-                let parent_bank_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(CachedExecutors::new_from_parent_bank_executors(
+                let parent_bank_executors = parent.executor_cache.read().unwrap();
+                RwLock::new(BankExecutorCache::new_from_parent_bank_executors(
                     &parent_bank_executors,
                     epoch,
                 ))
             },
-            "cached_executors_creation",
+            "executor_cache_creation",
         );
 
         let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
             parent.transaction_debug_keys.clone(),
-            "transation_debug_keys_creation",
+            "transaction_debug_keys_creation",
         );
 
         let (transaction_log_collector_config, transaction_log_collector_config_time) = measure!(
@@ -1853,7 +1587,7 @@ impl Bank {
             cluster_type: parent.cluster_type,
             lazy_rent_collection: AtomicBool::new(parent.lazy_rent_collection.load(Relaxed)),
             rewards_pool_pubkeys,
-            cached_executors,
+            executor_cache,
             transaction_debug_keys,
             transaction_log_collector_config,
             transaction_log_collector: Arc::new(RwLock::new(TransactionLogCollector::default())),
@@ -2050,7 +1784,7 @@ impl Bank {
                 rewards_pool_pubkeys_time.as_us(),
                 i64
             ),
-            ("cached_executors_us", cached_executors_time.as_us(), i64),
+            ("executor_cache_us", executor_cache_time.as_us(), i64),
             (
                 "transaction_debug_keys_us",
                 transaction_debug_keys_time.as_us(),
@@ -2069,7 +1803,7 @@ impl Bank {
         );
 
         parent
-            .cached_executors
+            .executor_cache
             .read()
             .unwrap()
             .stats
@@ -2212,7 +1946,7 @@ impl Bank {
             cluster_type: Some(genesis_config.cluster_type),
             lazy_rent_collection: new(),
             rewards_pool_pubkeys: new(),
-            cached_executors: RwLock::new(CachedExecutors::new(MAX_CACHED_EXECUTORS, fields.epoch)),
+            executor_cache: RwLock::new(BankExecutorCache::new(MAX_CACHED_EXECUTORS, fields.epoch)),
             transaction_debug_keys: debug_keys,
             transaction_log_collector_config: new(),
             transaction_log_collector: new(),
@@ -3250,19 +2984,15 @@ impl Bank {
                         self.store_account(&vote_pubkey, &vote_account);
                     }
 
-                    if vote_rewards > 0 {
-                        Some((
-                            vote_pubkey,
-                            RewardInfo {
-                                reward_type: RewardType::Voting,
-                                lamports: vote_rewards as i64,
-                                post_balance: vote_account.lamports(),
-                                commission: Some(commission),
-                            },
-                        ))
-                    } else {
-                        None
-                    }
+                    Some((
+                        vote_pubkey,
+                        RewardInfo {
+                            reward_type: RewardType::Voting,
+                            lamports: vote_rewards as i64,
+                            post_balance: vote_account.lamports(),
+                            commission: Some(commission),
+                        },
+                    ))
                 },
             )
             .collect::<Vec<_>>();
@@ -4263,7 +3993,10 @@ impl Bank {
     }
 
     /// Get any cached executors needed by the transaction
-    fn get_executors(&self, accounts: &[TransactionAccount]) -> Rc<RefCell<Executors>> {
+    fn get_tx_executor_cache(
+        &self,
+        accounts: &[TransactionAccount],
+    ) -> Rc<RefCell<TransactionExecutorCache>> {
         let executable_keys: Vec<_> = accounts
             .iter()
             .filter_map(|(key, account)| {
@@ -4276,58 +4009,46 @@ impl Bank {
             .collect();
 
         if executable_keys.is_empty() {
-            return Rc::new(RefCell::new(Executors::default()));
+            return Rc::new(RefCell::new(TransactionExecutorCache::default()));
         }
 
-        let executors = {
-            let cache = self.cached_executors.read().unwrap();
-            executable_keys
-                .into_iter()
-                .filter_map(|key| {
-                    cache
-                        .get(key)
-                        .map(|executor| (*key, TransactionExecutor::new_cached(executor)))
-                })
-                .collect()
+        let tx_executor_cache = {
+            let cache = self.executor_cache.read().unwrap();
+            TransactionExecutorCache::new(
+                executable_keys
+                    .into_iter()
+                    .filter_map(|key| cache.get(key).map(|executor| (*key, executor))),
+            )
         };
 
-        Rc::new(RefCell::new(executors))
+        Rc::new(RefCell::new(tx_executor_cache))
     }
 
     /// Add executors back to the bank's cache if they were missing and not updated
-    fn store_missing_executors(&self, executors: &RefCell<Executors>) {
-        self.store_executors_internal(executors, |e| e.is_missing())
+    fn store_missing_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
+        tx_executor_cache
+            .borrow()
+            .update_global_cache(&self.executor_cache, |difference| {
+                difference == TxBankExecutorCacheDiff::Inserted
+            });
     }
 
     /// Add updated executors back to the bank's cache
-    fn store_updated_executors(&self, executors: &RefCell<Executors>) {
-        self.store_executors_internal(executors, |e| e.is_updated())
-    }
-
-    /// Helper to write a selection of executors to the bank's cache
-    fn store_executors_internal(
-        &self,
-        executors: &RefCell<Executors>,
-        selector: impl Fn(&TransactionExecutor) -> bool,
-    ) {
-        let executors = executors.borrow();
-        let dirty_executors: Vec<_> = executors
-            .iter()
-            .filter_map(|(key, executor)| selector(executor).then(|| (key, executor.get())))
-            .collect();
-
-        if !dirty_executors.is_empty() {
-            self.cached_executors.write().unwrap().put(&dirty_executors);
-        }
+    fn store_updated_executors(&self, tx_executor_cache: &RefCell<TransactionExecutorCache>) {
+        tx_executor_cache
+            .borrow()
+            .update_global_cache(&self.executor_cache, |difference| {
+                difference == TxBankExecutorCacheDiff::Updated
+            });
     }
 
     /// Remove an executor from the bank's cache
     fn remove_executor(&self, pubkey: &Pubkey) {
-        let _ = self.cached_executors.write().unwrap().remove(pubkey);
+        let _ = self.executor_cache.write().unwrap().remove(pubkey);
     }
 
     pub fn clear_executors(&self) {
-        self.cached_executors.write().unwrap().clear();
+        self.executor_cache.write().unwrap().clear();
     }
 
     /// Execute a transaction using the provided loaded accounts and update
@@ -4346,12 +4067,12 @@ impl Bank {
         error_counters: &mut TransactionErrorMetrics,
         log_messages_bytes_limit: Option<usize>,
     ) -> TransactionExecutionResult {
-        let mut get_executors_time = Measure::start("get_executors_time");
-        let executors = self.get_executors(&loaded_transaction.accounts);
-        get_executors_time.stop();
+        let mut get_tx_executor_cache_time = Measure::start("get_tx_executor_cache_time");
+        let tx_executor_cache = self.get_tx_executor_cache(&loaded_transaction.accounts);
+        get_tx_executor_cache_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.get_executors_us,
-            get_executors_time.as_us()
+            get_tx_executor_cache_time.as_us()
         );
 
         let prev_accounts_data_len = self.load_accounts_data_size();
@@ -4367,7 +4088,14 @@ impl Bank {
                 None
             },
             compute_budget.max_invoke_depth.saturating_add(1),
-            tx.message().instructions().len(),
+            if self
+                .feature_set
+                .is_active(&feature_set::limit_max_instruction_trace_length::id())
+            {
+                compute_budget.max_instruction_trace_length
+            } else {
+                std::usize::MAX
+            },
         );
         if self
             .feature_set
@@ -4402,7 +4130,7 @@ impl Bank {
             &mut transaction_context,
             self.rent_collector.rent,
             log_collector.clone(),
-            executors.clone(),
+            tx_executor_cache.clone(),
             self.feature_set.clone(),
             compute_budget,
             timings,
@@ -4420,7 +4148,7 @@ impl Bank {
         );
 
         let mut store_missing_executors_time = Measure::start("store_missing_executors_time");
-        self.store_missing_executors(&executors);
+        self.store_missing_executors(&tx_executor_cache);
         store_missing_executors_time.stop();
         saturating_add_assign!(
             timings.execute_accessories.update_executors_us,
@@ -4514,7 +4242,7 @@ impl Bank {
                 executed_units,
                 accounts_data_len_delta,
             },
-            executors,
+            tx_executor_cache,
         }
     }
 
@@ -4540,14 +4268,32 @@ impl Bank {
             .iter()
             .enumerate()
             .filter_map(|(index, res)| match res {
+                // following are retryable errors
                 Err(TransactionError::AccountInUse) => {
                     error_counters.account_in_use += 1;
                     Some(index)
                 }
-                Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                | Err(TransactionError::WouldExceedMaxVoteCostLimit)
-                | Err(TransactionError::WouldExceedMaxAccountCostLimit)
-                | Err(TransactionError::WouldExceedAccountDataBlockLimit) => Some(index),
+                Err(TransactionError::WouldExceedMaxBlockCostLimit) => {
+                    error_counters.would_exceed_max_block_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxVoteCostLimit) => {
+                    error_counters.would_exceed_max_vote_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedMaxAccountCostLimit) => {
+                    error_counters.would_exceed_max_account_cost_limit += 1;
+                    Some(index)
+                }
+                Err(TransactionError::WouldExceedAccountDataBlockLimit) => {
+                    error_counters.would_exceed_account_data_block_limit += 1;
+                    Some(index)
+                }
+                // following are non-retryable errors
+                Err(TransactionError::TooManyAccountLocks) => {
+                    error_counters.too_many_account_locks += 1;
+                    None
+                }
                 Err(_) => None,
                 Ok(_) => None,
             })
@@ -5075,9 +4821,13 @@ impl Bank {
 
         let mut store_updated_executors_time = Measure::start("store_updated_executors_time");
         for execution_result in &execution_results {
-            if let TransactionExecutionResult::Executed { details, executors } = execution_result {
+            if let TransactionExecutionResult::Executed {
+                details,
+                tx_executor_cache,
+            } = execution_result
+            {
                 if details.status.is_ok() {
-                    self.store_updated_executors(executors);
+                    self.store_updated_executors(tx_executor_cache);
                 }
             }
         }
@@ -5458,7 +5208,7 @@ impl Bank {
     ///  allow accounts hash calculation to rehash anything.
     ///  We should use whatever hash found for each account as-is.
     pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
-        true // this will be goverened by a feature later
+        true // this will be governed by a feature later
     }
 
     /// Collect rent from `accounts`
@@ -6867,21 +6617,11 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
-        let epoch_accounts_hash = self.epoch_accounts_hash();
-        let should_include_epoch_accounts_hash = self.should_include_epoch_accounts_hash();
-        if should_include_epoch_accounts_hash {
-            // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
-            // for normal clusters, as the feature gating this `if` block is always false.
-            // However, some tests enable all features, so this `if` block can be true.
-            //
-            // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
-            // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
-            // will be required for the epoch accounts hash calculation to have compleleted and
-            // for this value to be `Some`.
-            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
-                hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
-            }
-        }
+        let epoch_accounts_hash = self.should_include_epoch_accounts_hash().then(|| {
+            let epoch_accounts_hash = self.wait_get_epoch_accounts_hash();
+            hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            epoch_accounts_hash
+        });
 
         let buf = self
             .hard_forks
@@ -6908,8 +6648,8 @@ impl Bank {
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
-            if should_include_epoch_accounts_hash {
-                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash)
+            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash.as_ref())
             } else {
                 "".to_string()
             }
@@ -6933,10 +6673,31 @@ impl Bank {
             return false;
         }
 
-        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
-        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
-        let stop_slot = first_slot_in_epoch + stop_offset;
+        let stop_slot = epoch_accounts_hash::calculation_stop(self);
         self.parent_slot() < stop_slot && self.slot() >= stop_slot
+    }
+
+    /// If the epoch accounts hash should be included in this Bank, then fetch it.  If the EAH
+    /// calculation has not completed yet, this fn will block until it does complete.
+    fn wait_get_epoch_accounts_hash(&self) -> EpochAccountsHash {
+        let (epoch_accounts_hash, measure) = measure!(self
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .wait_get_epoch_accounts_hash());
+
+        datapoint_info!(
+            "bank-wait_get_epoch_accounts_hash",
+            ("slot", self.slot() as i64, i64),
+            (
+                "epoch_accounts_hash",
+                epoch_accounts_hash.as_ref().to_string(),
+                String
+            ),
+            ("waiting-time-us", measure.as_us() as i64, i64),
+        );
+        epoch_accounts_hash
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
@@ -6994,10 +6755,11 @@ impl Bank {
                             config.test_hash_calculation,
                             &epoch_schedule,
                             &rent_collector,
-                            config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
                             enable_rehashing,
+                            // true to run using bg thread pool
+                            true,
                         );
                         accounts_
                             .accounts_db
@@ -7016,10 +6778,11 @@ impl Bank {
                 config.test_hash_calculation,
                 epoch_schedule,
                 rent_collector,
-                config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
                 enable_rehashing,
+                // fg is waiting for this to run, so we can use the fg thread pool
+                false,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
@@ -7112,13 +6875,11 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
-        let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
             self.slot(),
-            can_cached_slot_be_unflushed,
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
@@ -7126,7 +6887,7 @@ impl Bank {
         )
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from tests or ledger tool
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
@@ -7182,7 +6943,6 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 Some(self.capitalization()),
-                false,
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
@@ -7209,7 +6969,6 @@ impl Bank {
                         self.slot(),
                         &self.ancestors,
                         Some(self.capitalization()),
-                        false,
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
@@ -7264,7 +7023,6 @@ impl Bank {
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
                 test_hash_calculation,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: true,
@@ -7926,14 +7684,12 @@ impl Bank {
     }
 
     /// Convenience fn to get the Epoch Accounts Hash
-    fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
-        *self
-            .rc
+    pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+        self.rc
             .accounts
             .accounts_db
-            .epoch_accounts_hash
-            .lock()
-            .unwrap()
+            .epoch_accounts_hash_manager
+            .try_get_epoch_accounts_hash()
     }
 }
 
@@ -8110,8 +7866,10 @@ pub(crate) mod tests {
             status_cache::MAX_CACHE_ENTRIES,
         },
         crossbeam_channel::{bounded, unbounded},
+        rand::Rng,
         solana_program_runtime::{
             compute_budget::MAX_COMPUTE_UNIT_LIMIT,
+            executor_cache::Executor,
             invoke_context::InvokeContext,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
@@ -8179,7 +7937,7 @@ pub(crate) mod tests {
                 executed_units: 0,
                 accounts_data_len_delta: 0,
             },
-            executors: Rc::new(RefCell::new(Executors::default())),
+            tx_executor_cache: Rc::new(RefCell::new(TransactionExecutorCache::default())),
         }
     }
 
@@ -8998,11 +8756,7 @@ pub(crate) mod tests {
 
         // Since, validator 1 and validator 2 has equal smallest stake, it comes down to comparison
         // between their pubkey.
-        let tweak_1 = if validator_1_pubkey > validator_2_pubkey {
-            1
-        } else {
-            0
-        };
+        let tweak_1 = u64::from(validator_1_pubkey > validator_2_pubkey);
         let validator_1_portion =
             ((validator_1_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + tweak_1;
         assert_eq!(
@@ -9012,11 +8766,7 @@ pub(crate) mod tests {
 
         // Since, validator 1 and validator 2 has equal smallest stake, it comes down to comparison
         // between their pubkey.
-        let tweak_2 = if validator_2_pubkey > validator_1_pubkey {
-            1
-        } else {
-            0
-        };
+        let tweak_2 = u64::from(validator_2_pubkey > validator_1_pubkey);
         let validator_2_portion =
             ((validator_2_stake_lamports * rent_to_be_distributed) as f64 / 100.0) as u64 + tweak_2;
         assert_eq!(
@@ -9035,7 +8785,7 @@ pub(crate) mod tests {
 
         // only slot history is newly created
         let sysvar_and_builtin_program_delta =
-            min_rent_excempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
+            min_rent_exempt_balance_for_sysvars(&bank, &[sysvar::slot_history::id()]);
         assert_eq!(
             previous_capitalization - (current_capitalization - sysvar_and_builtin_program_delta),
             burned_portion
@@ -10355,15 +10105,26 @@ pub(crate) mod tests {
         // verify validator rewards show up in bank1.rewards vector
         assert_eq!(
             *bank1.rewards.read().unwrap(),
-            vec![(
-                stake_id,
-                RewardInfo {
-                    reward_type: RewardType::Staking,
-                    lamports: validator_rewards as i64,
-                    post_balance: bank1.get_balance(&stake_id),
-                    commission: Some(0),
-                }
-            )]
+            vec![
+                (
+                    vote_id,
+                    RewardInfo {
+                        reward_type: RewardType::Voting,
+                        lamports: 0,
+                        post_balance: bank1.get_balance(&vote_id),
+                        commission: Some(0),
+                    }
+                ),
+                (
+                    stake_id,
+                    RewardInfo {
+                        reward_type: RewardType::Staking,
+                        lamports: validator_rewards as i64,
+                        post_balance: bank1.get_balance(&stake_id),
+                        commission: Some(0),
+                    }
+                )
+            ]
         );
         bank1.freeze();
         assert!(bank1.calculate_and_verify_capitalization(true));
@@ -10406,7 +10167,7 @@ pub(crate) mod tests {
 
         let vote_id = solana_sdk::pubkey::new_rand();
         let mut vote_account =
-            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 50, 100);
+            vote_state::create_account(&vote_id, &solana_sdk::pubkey::new_rand(), 0, 100);
         let (stake_id1, stake_account1) = crate::stakes::tests::create_stake_account(123, &vote_id);
         let (stake_id2, stake_account2) = crate::stakes::tests::create_stake_account(456, &vote_id);
 
@@ -10476,7 +10237,6 @@ pub(crate) mod tests {
         fn default_for_test() -> Self {
             Self {
                 test_hash_calculation: true,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: false,
@@ -12050,7 +11810,7 @@ pub(crate) mod tests {
             },
             |old, new| {
                 assert_eq!(
-                    old + min_rent_excempt_balance_for_sysvars(&bank1, &[sysvar::clock::id()]),
+                    old + min_rent_exempt_balance_for_sysvars(&bank1, &[sysvar::clock::id()]),
                     new
                 );
             },
@@ -15310,244 +15070,6 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_cached_executors() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let key4 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
-
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key2).is_some());
-        assert!(cache.get(&key3).is_some());
-
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key2).is_some());
-        cache.put(&[(&key4, executor.clone())]);
-        assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
-            .iter()
-            .filter_map(|key| cache.get(key))
-            .count();
-        assert_eq!(num_retained, 2);
-
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key1, &key2, &key4]
-            .iter()
-            .filter_map(|key| cache.get(key))
-            .count();
-        assert_eq!(num_retained, 2);
-    }
-
-    #[test]
-    fn test_cached_executor_eviction() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let key4 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(3, 0);
-        assert!(cache.current_epoch == 0);
-
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key1).is_some());
-
-        let mut cache = CachedExecutors::new_from_parent_bank_executors(&cache, 1);
-        assert!(cache.current_epoch == 1);
-
-        assert!(cache.get(&key2).is_some());
-        assert!(cache.get(&key2).is_some());
-        assert!(cache.get(&key3).is_some());
-        cache.put(&[(&key4, executor.clone())]);
-
-        assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
-            .iter()
-            .filter_map(|key| cache.get(key))
-            .count();
-        assert_eq!(num_retained, 2);
-
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key2, &key4]
-            .iter()
-            .filter_map(|key| cache.get(key))
-            .count();
-        assert_eq!(num_retained, 1);
-
-        cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
-        assert!(cache.current_epoch == 2);
-
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-    }
-
-    #[test]
-    fn test_cached_executors_evicts_smallest() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(2, 0);
-
-        cache.put(&[(&key1, executor.clone())]);
-        for _ in 0..5 {
-            let _ = cache.get(&key1);
-        }
-        cache.put(&[(&key2, executor.clone())]);
-        // make key1's use-count for sure greater than key2's
-        let _ = cache.get(&key1);
-
-        let mut entries = cache
-            .executors
-            .iter()
-            .map(|(k, v)| (*k, v.epoch_count.load(Relaxed)))
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|(_, v)| *v);
-        assert!(entries[0].1 < entries[1].1);
-
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&entries[0].0).is_none());
-        assert!(cache.get(&entries[1].0).is_some());
-    }
-
-    #[test]
-    fn test_cached_executors_one_hit_wonder_counter() {
-        let mut cache = CachedExecutors::new(1, 0);
-
-        let one_hit_wonder = Pubkey::new_unique();
-        let popular = Pubkey::new_unique();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-
-        // make sure we're starting from where we think we are
-        assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 0);
-
-        // add our one-hit-wonder
-        cache.put(&[(&one_hit_wonder, executor.clone())]);
-        assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
-        // displace the one-hit-wonder with "popular program"
-        cache.put(&[(&popular, executor.clone())]);
-        assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 1);
-
-        // one-hit-wonder counter incremented
-        assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 1);
-
-        // make "popular program" popular
-        cache.get(&popular).unwrap();
-        assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 2);
-
-        // evict "popular program"
-        cache.put(&[(&one_hit_wonder, executor.clone())]);
-        assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
-
-        // one-hit-wonder counter not incremented
-        assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 1);
-    }
-
-    #[test]
-    fn test_cached_executors_stats() {
-        #[derive(Debug, Default, PartialEq)]
-        struct ComparableStats {
-            hits: u64,
-            misses: u64,
-            evictions: HashMap<Pubkey, u64>,
-            insertions: u64,
-            replacements: u64,
-            one_hit_wonders: u64,
-        }
-        impl From<&executor_cache::Stats> for ComparableStats {
-            fn from(stats: &executor_cache::Stats) -> Self {
-                let executor_cache::Stats {
-                    hits,
-                    misses,
-                    evictions,
-                    insertions,
-                    replacements,
-                    one_hit_wonders,
-                } = stats;
-                ComparableStats {
-                    hits: hits.load(Relaxed),
-                    misses: misses.load(Relaxed),
-                    evictions: evictions.clone(),
-                    insertions: insertions.load(Relaxed),
-                    replacements: replacements.load(Relaxed),
-                    one_hit_wonders: one_hit_wonders.load(Relaxed),
-                }
-            }
-        }
-
-        const CURRENT_EPOCH: Epoch = 0;
-        let mut cache = CachedExecutors::new(2, CURRENT_EPOCH);
-        let mut expected_stats = ComparableStats::default();
-
-        let program_id1 = Pubkey::new_unique();
-        let program_id2 = Pubkey::new_unique();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-
-        // make sure we're starting from where we think we are
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats,);
-
-        // insert some executors
-        cache.put(&[(&program_id1, executor.clone())]);
-        cache.put(&[(&program_id2, executor.clone())]);
-        expected_stats.insertions += 2;
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
-
-        // replace a one-hit-wonder executor
-        cache.put(&[(&program_id1, executor.clone())]);
-        expected_stats.replacements += 1;
-        expected_stats.one_hit_wonders += 1;
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
-
-        // hit some executors
-        cache.get(&program_id1);
-        cache.get(&program_id1);
-        cache.get(&program_id2);
-        expected_stats.hits += 3;
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
-
-        // miss an executor
-        cache.get(&Pubkey::new_unique());
-        expected_stats.misses += 1;
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
-
-        // evict an executor
-        cache.put(&[(&Pubkey::new_unique(), executor.clone())]);
-        expected_stats.insertions += 1;
-        expected_stats.evictions.insert(program_id2, 1);
-        assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
-
-        // make sure stats are cleared in new_from_parent
-        assert_eq!(
-            ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH).stats
-            ),
-            ComparableStats::default()
-        );
-        assert_eq!(
-            ComparableStats::from(
-                &CachedExecutors::new_from_parent_bank_executors(&cache, CURRENT_EPOCH + 1).stats
-            ),
-            ComparableStats::default()
-        );
-    }
-
-    #[test]
     fn test_bank_executor_cache() {
         solana_logger::setup();
 
@@ -15578,55 +15100,53 @@ pub(crate) mod tests {
         ];
 
         // don't do any work if not dirty
-        let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key2, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key3, TransactionExecutor::new_cached(executor.clone()));
-        executors.insert(key4, TransactionExecutor::new_cached(executor.clone()));
+        let executors =
+            TransactionExecutorCache::new((0..4).map(|i| (accounts[i].0, executor.clone())));
         let executors = Rc::new(RefCell::new(executors));
         bank.store_missing_executors(&executors);
         bank.store_updated_executors(&executors);
-        let executors = bank.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 0);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
+        assert_eq!(stored_executors.borrow().executors.len(), 0);
 
         // do work
-        let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
-        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
-        executors.insert(key3, TransactionExecutor::new_updated(executor.clone()));
-        executors.insert(key4, TransactionExecutor::new_miss(executor.clone()));
+        let mut executors =
+            TransactionExecutorCache::new((2..3).map(|i| (accounts[i].0, executor.clone())));
+        executors.set(key1, executor.clone(), false);
+        executors.set(key2, executor.clone(), false);
+        executors.set(key3, executor.clone(), true);
+        executors.set(key4, executor.clone(), false);
         let executors = Rc::new(RefCell::new(executors));
 
-        // store the new_miss
+        // store Missing
         bank.store_missing_executors(&executors);
-        let stored_executors = bank.get_executors(accounts);
-        assert_eq!(stored_executors.borrow().len(), 2);
-        assert!(stored_executors.borrow().contains_key(&key1));
-        assert!(stored_executors.borrow().contains_key(&key2));
+        let stored_executors = bank.get_tx_executor_cache(accounts);
+        assert_eq!(stored_executors.borrow().executors.len(), 2);
+        assert!(stored_executors.borrow().executors.contains_key(&key1));
+        assert!(stored_executors.borrow().executors.contains_key(&key2));
 
-        // store the new_updated
+        // store Updated
         bank.store_updated_executors(&executors);
-        let stored_executors = bank.get_executors(accounts);
-        assert_eq!(stored_executors.borrow().len(), 3);
-        assert!(stored_executors.borrow().contains_key(&key1));
-        assert!(stored_executors.borrow().contains_key(&key2));
-        assert!(stored_executors.borrow().contains_key(&key3));
+        let stored_executors = bank.get_tx_executor_cache(accounts);
+        assert_eq!(stored_executors.borrow().executors.len(), 3);
+        assert!(stored_executors.borrow().executors.contains_key(&key1));
+        assert!(stored_executors.borrow().executors.contains_key(&key2));
+        assert!(stored_executors.borrow().executors.contains_key(&key3));
 
         // Check inheritance
         let bank = Bank::new_from_parent(&Arc::new(bank), &solana_sdk::pubkey::new_rand(), 1);
-        let executors = bank.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 3);
-        assert!(executors.borrow().contains_key(&key1));
-        assert!(executors.borrow().contains_key(&key2));
-        assert!(executors.borrow().contains_key(&key3));
+        let stored_executors = bank.get_tx_executor_cache(accounts);
+        assert_eq!(stored_executors.borrow().executors.len(), 3);
+        assert!(stored_executors.borrow().executors.contains_key(&key1));
+        assert!(stored_executors.borrow().executors.contains_key(&key2));
+        assert!(stored_executors.borrow().executors.contains_key(&key3));
 
         // Remove all
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
         bank.remove_executor(&key3);
         bank.remove_executor(&key4);
-        let executors = bank.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 0);
+        let stored_executors = bank.get_tx_executor_cache(accounts);
+        assert_eq!(stored_executors.borrow().executors.len(), 0);
     }
 
     #[test]
@@ -15651,37 +15171,37 @@ pub(crate) mod tests {
         ];
 
         // add one to root bank
-        let mut executors = Executors::default();
-        executors.insert(key1, TransactionExecutor::new_miss(executor.clone()));
+        let mut executors = TransactionExecutorCache::default();
+        executors.set(key1, executor.clone(), false);
         let executors = Rc::new(RefCell::new(executors));
         root.store_missing_executors(&executors);
-        let executors = root.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
+        let executors = root.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
 
         let fork1 = Bank::new_from_parent(&root, &Pubkey::default(), 1);
         let fork2 = Bank::new_from_parent(&root, &Pubkey::default(), 2);
 
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
+        let executors = fork1.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
+        let executors = fork2.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
 
-        let mut executors = Executors::default();
-        executors.insert(key2, TransactionExecutor::new_miss(executor.clone()));
+        let mut executors = TransactionExecutorCache::default();
+        executors.set(key2, executor.clone(), false);
         let executors = Rc::new(RefCell::new(executors));
         fork1.store_missing_executors(&executors);
 
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 2);
-        let executors = fork2.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
+        let executors = fork1.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 2);
+        let executors = fork2.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
 
         fork1.remove_executor(&key1);
 
-        let executors = fork1.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
-        let executors = fork2.get_executors(accounts);
-        assert_eq!(executors.borrow().len(), 1);
+        let executors = fork1.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
+        let executors = fork2.get_tx_executor_cache(accounts);
+        assert_eq!(executors.borrow().executors.len(), 1);
     }
 
     #[test]
@@ -15789,7 +15309,7 @@ pub(crate) mod tests {
         bank.store_account(vote_pubkey, &vote_account);
     }
 
-    fn min_rent_excempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
+    fn min_rent_exempt_balance_for_sysvars(bank: &Bank, sysvar_ids: &[Pubkey]) -> u64 {
         sysvar_ids
             .iter()
             .map(|sysvar_id| {
@@ -16937,7 +16457,7 @@ pub(crate) mod tests {
             load_vote_and_stake_accounts(&bank).vote_with_stake_delegations_map;
         assert_eq!(
             vote_and_stake_accounts.len(),
-            if check_owner_change { 0 } else { 1 }
+            usize::from(!check_owner_change)
         );
     }
 
@@ -17316,7 +16836,7 @@ pub(crate) mod tests {
             let instruction_context = transaction_context.get_current_instruction_context()?;
             instruction_context
                 .try_borrow_instruction_account(transaction_context, 1)?
-                .set_data(&[0; 40])?;
+                .set_data(vec![0; 40])?;
             Ok(())
         }
 
@@ -18101,26 +17621,6 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn test_executor_cache_get_primer_count_upper_bound_inclusive() {
-        let pubkey = Pubkey::default();
-        let v = [];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            0
-        );
-        let v = [(&pubkey, 1)];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            1
-        );
-        let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
-            7
-        );
-    }
-
     #[derive(Serialize, Deserialize)]
     enum MockTransferInstruction {
         Transfer(u64),
@@ -18775,7 +18275,6 @@ pub(crate) mod tests {
             sol_to_lamports(1.),
             bank.last_blockhash(),
         );
-        let number_of_instructions_at_transaction_level = tx.message().instructions.len();
         let num_accounts = tx.message().account_keys.len();
         let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(tx).unwrap();
         let mut error_counters = TransactionErrorMetrics::default();
@@ -18798,7 +18297,7 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             Some(Rent::default()),
             compute_budget.max_invoke_depth.saturating_add(1),
-            number_of_instructions_at_transaction_level,
+            compute_budget.max_instruction_trace_length,
         );
 
         assert_eq!(
@@ -18946,8 +18445,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
-        let mut transaction_context = TransactionContext::new(vec![], None, 3, 3);
-        for (index_in_trace, stack_height) in [1, 2, 1, 1, 2, 3, 2].into_iter().enumerate() {
+        let instruction_trace = [1, 2, 1, 1, 2, 3, 2];
+        let mut transaction_context =
+            TransactionContext::new(vec![], None, 3, instruction_trace.len());
+        for (index_in_trace, stack_height) in instruction_trace.into_iter().enumerate() {
             while stack_height <= transaction_context.get_instruction_context_stack_height() {
                 transaction_context.pop().unwrap();
             }

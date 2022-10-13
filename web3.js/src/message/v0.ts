@@ -42,10 +42,10 @@ export type CompileV0Args = {
 
 export type GetAccountKeysArgs =
   | {
-      accountKeysFromLookups: AccountKeysFromLookups;
+      accountKeysFromLookups?: AccountKeysFromLookups | null;
     }
   | {
-      addressLookupTableAccounts: AddressLookupTableAccount[];
+      addressLookupTableAccounts?: AddressLookupTableAccount[] | null;
     };
 
 export class MessageV0 {
@@ -77,7 +77,11 @@ export class MessageV0 {
 
   getAccountKeys(args?: GetAccountKeysArgs): MessageAccountKeys {
     let accountKeysFromLookups: AccountKeysFromLookups | undefined;
-    if (args && 'accountKeysFromLookups' in args) {
+    if (
+      args &&
+      'accountKeysFromLookups' in args &&
+      args.accountKeysFromLookups
+    ) {
       if (
         this.numAccountKeysFromLookups !=
         args.accountKeysFromLookups.writable.length +
@@ -88,7 +92,11 @@ export class MessageV0 {
         );
       }
       accountKeysFromLookups = args.accountKeysFromLookups;
-    } else if (args && 'addressLookupTableAccounts' in args) {
+    } else if (
+      args &&
+      'addressLookupTableAccounts' in args &&
+      args.addressLookupTableAccounts
+    ) {
       accountKeysFromLookups = this.resolveAddressTableLookups(
         args.addressLookupTableAccounts,
       );

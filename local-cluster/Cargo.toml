@@ -12,7 +12,7 @@ documentation = "https://docs.rs/solana-local-cluster"
 [dependencies]
 crossbeam-channel = "0.5"
 fs_extra = "1.2.0"
-itertools = "0.10.3"
+itertools = "0.10.5"
 log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.3"

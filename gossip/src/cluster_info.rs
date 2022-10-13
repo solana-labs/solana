@@ -127,6 +127,7 @@ const MAX_PRUNE_DATA_NODES: usize = 32;
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
 const GOSSIP_PING_CACHE_CAPACITY: usize = 65536;
 const GOSSIP_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
+const GOSSIP_PING_CACHE_RATE_LIMIT_DELAY: Duration = Duration::from_secs(1280 / 64);
 pub const DEFAULT_CONTACT_DEBUG_INTERVAL_MILLIS: u64 = 10_000;
 pub const DEFAULT_CONTACT_SAVE_INTERVAL_MILLIS: u64 = 60_000;
 /// Minimum serialized size of a Protocol::PullResponse packet.
@@ -265,7 +266,7 @@ pub fn make_accounts_hashes_message(
 pub(crate) type Ping = ping_pong::Ping<[u8; GOSSIP_PING_TOKEN_SIZE]>;
 
 // TODO These messages should go through the gpu pipeline for spam filtering
-#[frozen_abi(digest = "C1nR7B7CgMyUYo6h3z2KXcS38JSwF6y8jmZ6Y9Cz7XEd")]
+#[frozen_abi(digest = "9YNaHHwzwQaAaXDXW5A8k47HDuUzRYNjTAdARoAgVvPU")]
 #[derive(Serialize, Deserialize, Debug, AbiEnumVisitor, AbiExample)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Protocol {
@@ -278,6 +279,7 @@ pub(crate) enum Protocol {
     PruneMessage(Pubkey, PruneData),
     PingMessage(Ping),
     PongMessage(Pong),
+    // Update count_packets_received if new variants are added here.
 }
 
 impl Protocol {
@@ -412,6 +414,7 @@ impl ClusterInfo {
             my_contact_info: RwLock::new(contact_info),
             ping_cache: Mutex::new(PingCache::new(
                 GOSSIP_PING_CACHE_TTL,
+                GOSSIP_PING_CACHE_RATE_LIMIT_DELAY,
                 GOSSIP_PING_CACHE_CAPACITY,
             )),
             stats: GossipStats::default(),
@@ -548,7 +551,7 @@ impl ClusterInfo {
         let filename = self.contact_info_path.join("contact-info.bin");
         let tmp_filename = &filename.with_extension("tmp");
 
-        match File::create(&tmp_filename) {
+        match File::create(tmp_filename) {
             Ok(mut file) => {
                 if let Err(err) = bincode::serialize_into(&mut file, &nodes) {
                     warn!(
@@ -565,7 +568,7 @@ impl ClusterInfo {
             }
         }
 
-        match fs::rename(&tmp_filename, &filename) {
+        match fs::rename(tmp_filename, &filename) {
             Ok(()) => {
                 info!(
                     "Saved contact info for {} nodes into {}",
@@ -1097,7 +1100,7 @@ impl ClusterInfo {
     ) -> Result<(), GossipError> {
         let tpu = tpu.unwrap_or_else(|| self.my_contact_info().tpu);
         let buf = serialize(transaction)?;
-        self.socket.send_to(&buf, &tpu)?;
+        self.socket.send_to(&buf, tpu)?;
         Ok(())
     }
 
@@ -2408,18 +2411,6 @@ impl ClusterInfo {
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }
         }
-        self.stats
-            .packets_received_pull_requests_count
-            .add_relaxed(pull_requests.len() as u64);
-        self.stats
-            .packets_received_pull_responses_count
-            .add_relaxed(pull_responses.len() as u64);
-        self.stats
-            .packets_received_push_messages_count
-            .add_relaxed(push_messages.len() as u64);
-        self.stats
-            .packets_received_prune_messages_count
-            .add_relaxed(prune_messages.len() as u64);
         if self.require_stake_for_gossip(stakes) {
             for (_, data) in &mut pull_responses {
                 retain_staked(data, stakes);
@@ -2465,9 +2456,26 @@ impl ClusterInfo {
         thread_pool: &ThreadPool,
     ) -> Result<(), GossipError> {
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
-        let packets: Vec<_> = receiver.recv_timeout(RECV_TIMEOUT)?.into();
+        fn count_packets_received(packets: &PacketBatch, counts: &mut [u64; 7]) {
+            for packet in packets {
+                let k = match packet
+                    .data(..4)
+                    .and_then(|data| <[u8; 4]>::try_from(data).ok())
+                    .map(u32::from_le_bytes)
+                {
+                    Some(k @ 0..=6) => k as usize,
+                    None | Some(_) => 6,
+                };
+                counts[k] += 1;
+            }
+        }
+        let packets = receiver.recv_timeout(RECV_TIMEOUT)?;
+        let mut counts = [0u64; 7];
+        count_packets_received(&packets, &mut counts);
+        let packets = Vec::from(packets);
         let mut packets = VecDeque::from(packets);
         for packet_batch in receiver.try_iter() {
+            count_packets_received(&packet_batch, &mut counts);
             packets.extend(packet_batch.iter().cloned());
             let excess_count = packets.len().saturating_sub(MAX_GOSSIP_TRAFFIC);
             if excess_count > 0 {
@@ -2477,9 +2485,6 @@ impl ClusterInfo {
                     .add_relaxed(excess_count as u64);
             }
         }
-        self.stats
-            .packets_received_count
-            .add_relaxed(packets.len() as u64);
         let verify_packet = |packet: Packet| {
             let protocol: Protocol = packet.deserialize_slice(..).ok()?;
             protocol.sanitize().ok()?;
@@ -2490,6 +2495,30 @@ impl ClusterInfo {
             let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
             thread_pool.install(|| packets.into_par_iter().filter_map(verify_packet).collect())
         };
+        self.stats
+            .packets_received_count
+            .add_relaxed(counts.iter().sum::<u64>());
+        self.stats
+            .packets_received_pull_requests_count
+            .add_relaxed(counts[0]);
+        self.stats
+            .packets_received_pull_responses_count
+            .add_relaxed(counts[1]);
+        self.stats
+            .packets_received_push_messages_count
+            .add_relaxed(counts[2]);
+        self.stats
+            .packets_received_prune_messages_count
+            .add_relaxed(counts[3]);
+        self.stats
+            .packets_received_ping_messages_count
+            .add_relaxed(counts[4]);
+        self.stats
+            .packets_received_pong_messages_count
+            .add_relaxed(counts[5]);
+        self.stats
+            .packets_received_unknown_count
+            .add_relaxed(counts[6]);
         self.stats
             .packets_received_verified_count
             .add_relaxed(packets.len() as u64);

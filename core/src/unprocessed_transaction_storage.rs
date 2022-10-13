@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use {
     crate::{
-        banking_stage::{BankingStage, FilterForwardingResults, ForwardOption},
+        banking_stage::{self, BankingStage, FilterForwardingResults, ForwardOption},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
@@ -14,7 +14,7 @@ use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
-    std::{rc::Rc, sync::Arc},
+    std::sync::Arc,
 };
 
 const MAX_STAKED_VALIDATORS: usize = 10_000;
@@ -177,13 +177,20 @@ impl UnprocessedTransactionStorage {
 
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
-                .filter_forwardable_packets_and_add_batches(forward_packet_batches_by_accounts),
+                .filter_forwardable_packets_and_add_batches(
+                    bank,
+                    forward_packet_batches_by_accounts,
+                ),
             Self::VoteStorage(vote_storage) => vote_storage
-                .filter_forwardable_packets_and_add_batches(forward_packet_batches_by_accounts),
+                .filter_forwardable_packets_and_add_batches(
+                    bank,
+                    forward_packet_batches_by_accounts,
+                ),
         }
     }
 
@@ -196,7 +203,7 @@ impl UnprocessedTransactionStorage {
         batch_size: usize,
         processing_function: F,
     ) where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         match (self, bank) {
             (Self::LocalTransactionStorage(transaction_storage), _) => {
@@ -249,12 +256,13 @@ impl VoteStorage {
 
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
             let total_forwardable_packets = self
                 .latest_unprocessed_votes
-                .get_and_insert_forwardable_packets(forward_packet_batches_by_accounts);
+                .get_and_insert_forwardable_packets(bank, forward_packet_batches_by_accounts);
             return FilterForwardingResults {
                 total_forwardable_packets,
                 ..FilterForwardingResults::default()
@@ -265,7 +273,7 @@ impl VoteStorage {
 
     fn process_packets<F>(&mut self, bank: Arc<Bank>, batch_size: usize, mut processing_function: F)
     where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         if matches!(self.vote_source, VoteSource::Gossip) {
             panic!("Gossip vote thread should not be processing transactions");
@@ -349,17 +357,20 @@ impl ThreadLocalUnprocessedPackets {
 
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
-        BankingStage::filter_valid_packets_for_forwarding(
+        BankingStage::filter_and_forward_with_account_limits(
+            &bank,
             &mut self.unprocessed_packet_batches,
             forward_packet_batches_by_accounts,
+            banking_stage::UNPROCESSED_BUFFER_STEP_SIZE,
         )
     }
 
     fn process_packets<F>(&mut self, batch_size: usize, mut processing_function: F)
     where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         let mut retryable_packets = {
             let capacity = self.unprocessed_packet_batches.capacity();
@@ -368,7 +379,7 @@ impl ThreadLocalUnprocessedPackets {
                 MinMaxHeap::with_capacity(capacity),
             )
         };
-        let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+        let retryable_packets: MinMaxHeap<Arc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
             .chunks(batch_size)
             .into_iter()

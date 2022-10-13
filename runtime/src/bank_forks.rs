@@ -4,20 +4,34 @@ use {
     crate::{
         accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
+        epoch_accounts_hash,
         snapshot_config::SnapshotConfig,
     },
     log::*,
     solana_measure::measure::Measure,
-    solana_sdk::{clock::Slot, hash::Hash, timing},
+    solana_sdk::{clock::Slot, feature_set, hash::Hash, timing},
     std::{
         collections::{hash_map::Entry, HashMap, HashSet},
         ops::Index,
-        sync::{atomic::AtomicBool, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Arc,
+        },
         time::Instant,
     },
 };
 
 pub const MAX_ROOT_DISTANCE_FOR_VOTE_ONLY: Slot = 400;
+pub type AtomicSlot = AtomicU64;
+pub struct ReadOnlyAtomicSlot {
+    slot: Arc<AtomicSlot>,
+}
+
+impl ReadOnlyAtomicSlot {
+    pub fn get(&self) -> Slot {
+        self.slot.load(Ordering::Relaxed)
+    }
+}
 
 #[derive(Debug, Default, Copy, Clone)]
 struct SetRootMetrics {
@@ -45,7 +59,8 @@ struct SetRootTimings {
 pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,
     descendants: HashMap<Slot, HashSet<Slot>>,
-    root: Slot,
+    root: Arc<AtomicSlot>,
+
     pub snapshot_config: Option<SnapshotConfig>,
 
     pub accounts_hash_interval_slots: Slot,
@@ -84,7 +99,7 @@ impl BankForks {
 
     /// Create a map of bank slot id to the set of ancestors for the bank slot.
     pub fn ancestors(&self) -> HashMap<Slot, HashSet<Slot>> {
-        let root = self.root;
+        let root = self.root();
         self.banks
             .iter()
             .map(|(slot, bank)| {
@@ -160,7 +175,7 @@ impl BankForks {
             }
         }
         Self {
-            root,
+            root: Arc::new(AtomicSlot::new(root)),
             banks,
             descendants,
             snapshot_config: None,
@@ -219,7 +234,8 @@ impl BankForks {
         highest_confirmed_root: Option<Slot>,
     ) -> (Vec<Arc<Bank>>, SetRootMetrics) {
         let old_epoch = self.root_bank().epoch();
-        self.root = root;
+        self.root.store(root, Ordering::Relaxed);
+
         let root_bank = self
             .banks
             .get(&root)
@@ -258,7 +274,52 @@ impl BankForks {
         let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
-        if let Some(bank) = banks.iter().find(|bank| {
+
+        // handle epoch accounts hash
+        // go through all the banks, oldest first
+        // find the newest bank where we should do EAH
+        // NOTE: Instead of filter-collect-assert, `.find()` could be used instead.  Once
+        // sufficient testing guarantees only one bank will ever request an EAH, change to
+        // `.find()`.
+        let eah_banks: Vec<_> = banks
+            .iter()
+            .filter(|&&bank| self.should_request_epoch_accounts_hash(bank))
+            .collect();
+        assert!(
+            eah_banks.len() <= 1,
+            "At most one bank should request an epoch accounts hash calculation! num banks: {}, bank slots: {:?}",
+            eah_banks.len(),
+            eah_banks.iter().map(|bank| bank.slot()).collect::<Vec<_>>(),
+        );
+        if let Some(eah_bank) = eah_banks.first() {
+            debug!(
+                "sending epoch accounts hash request, slot: {}",
+                eah_bank.slot()
+            );
+            eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_in_flight(eah_bank.slot());
+
+            self.last_accounts_hash_slot = eah_bank.slot();
+            let squash_timing = eah_bank.squash();
+            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
+            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            is_root_bank_squashed = eah_bank.slot() == root;
+
+            accounts_background_request_sender
+                .send_snapshot_request(SnapshotRequest {
+                    snapshot_root_bank: Arc::clone(eah_bank),
+                    status_cache_slot_deltas: Vec::default(),
+                    request_type: SnapshotRequestType::EpochAccountsHash,
+                })
+                .expect("send epoch accounts hash request");
+        } else if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
                 && bank.block_height() % self.accounts_hash_interval_slots == 0
         }) {
@@ -300,6 +361,9 @@ impl BankForks {
             snapshot_time.stop();
             total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
+
+        drop(eah_banks);
+
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
             total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
@@ -427,7 +491,14 @@ impl BankForks {
     }
 
     pub fn root(&self) -> Slot {
-        self.root
+        self.root.load(Ordering::Relaxed)
+    }
+
+    /// Gets a read-only wrapper to an atomic slot holding the root slot.
+    pub fn get_atomic_root(&self) -> ReadOnlyAtomicSlot {
+        ReadOnlyAtomicSlot {
+            slot: self.root.clone(),
+        }
     }
 
     /// After setting a new root, prune the banks that are no longer on rooted paths
@@ -527,6 +598,22 @@ impl BankForks {
     pub fn set_accounts_hash_interval_slots(&mut self, accounts_interval_slots: u64) {
         self.accounts_hash_interval_slots = accounts_interval_slots;
     }
+
+    /// Determine if this bank should request an epoch accounts hash
+    #[must_use]
+    fn should_request_epoch_accounts_hash(&self, bank: &Bank) -> bool {
+        if !bank
+            .feature_set
+            .is_active(&feature_set::epoch_accounts_hash::id())
+        {
+            return false;
+        }
+
+        let start_slot = epoch_accounts_hash::calculation_start(bank);
+        bank.slot() > self.last_accounts_hash_slot
+            && bank.parent_slot() < start_slot
+            && bank.slot() >= start_slot
+    }
 }
 
 #[cfg(test)]
@@ -541,12 +628,13 @@ mod tests {
         },
         solana_sdk::{
             clock::UnixTimestamp,
+            epoch_schedule::EpochSchedule,
             hash::Hash,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
-            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_vote_program::vote_state::BlockTimestamp,
+        std::{sync::atomic::Ordering::Relaxed, time::Duration},
     };
 
     #[test]
@@ -644,9 +732,38 @@ mod tests {
         let slots_in_epoch = 32;
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
 
+        // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
+        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
+        // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let bg_exit = Arc::new(AtomicBool::new(false));
+        let bg_thread = {
+            let exit = Arc::clone(&bg_exit);
+            std::thread::spawn(move || {
+                while !exit.load(Relaxed) {
+                    snapshot_request_receiver
+                        .try_iter()
+                        .filter(|snapshot_request| {
+                            snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                        })
+                        .for_each(|snapshot_request| {
+                            snapshot_request
+                                .snapshot_root_bank
+                                .rc
+                                .accounts
+                                .accounts_db
+                                .epoch_accounts_hash_manager
+                                .set_invalid_for_tests();
+                        });
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            })
+        };
+
         let bank0 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks0 = BankForks::new(bank0);
-        bank_forks0.set_root(0, &AbsRequestSender::default(), None);
+        bank_forks0.set_root(0, &abs_request_sender, None);
 
         let bank1 = Bank::new_for_tests(&genesis_config);
         let mut bank_forks1 = BankForks::new(bank1);
@@ -678,7 +795,7 @@ mod tests {
 
             // Set root in bank_forks0 to truncate the ancestor history
             bank_forks0.insert(child1);
-            bank_forks0.set_root(slot, &AbsRequestSender::default(), None);
+            bank_forks0.set_root(slot, &abs_request_sender, None);
 
             // Don't set root in bank_forks1 to keep the ancestor history
             bank_forks1.insert(child2);
@@ -692,6 +809,9 @@ mod tests {
         info!("child0.ancestors: {:?}", child1.ancestors);
         info!("child1.ancestors: {:?}", child2.ancestors);
         assert_eq!(child1.hash(), child2.hash());
+
+        bg_exit.store(true, Relaxed);
+        bg_thread.join().unwrap();
     }
 
     fn make_hash_map(data: Vec<(Slot, Vec<Slot>)>) -> HashMap<Slot, HashSet<Slot>> {

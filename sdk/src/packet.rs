@@ -130,8 +130,9 @@ impl fmt::Debug for Packet {
 #[allow(clippy::uninit_assumed_init)]
 impl Default for Packet {
     fn default() -> Packet {
+        let buffer = std::mem::MaybeUninit::<[u8; PACKET_DATA_SIZE]>::uninit();
         Packet {
-            buffer: unsafe { std::mem::MaybeUninit::uninit().assume_init() },
+            buffer: unsafe { buffer.assume_init() },
             meta: Meta::default(),
         }
     }
@@ -166,6 +167,11 @@ impl Meta {
     #[inline]
     pub fn set_tracer(&mut self, is_tracer: bool) {
         self.flags.set(PacketFlags::TRACER_PACKET, is_tracer);
+    }
+
+    #[inline]
+    pub fn set_simple_vote(&mut self, is_simple_vote: bool) {
+        self.flags.set(PacketFlags::SIMPLE_VOTE_TX, is_simple_vote);
     }
 
     #[inline]

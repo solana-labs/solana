@@ -811,7 +811,7 @@ pub const DATA_START: usize = SIGNATURE_OFFSETS_SERIALIZED_SIZE + 1;
 /// See the [module documentation][md] for a complete description.
 ///
 /// [md]: self
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct SecpSignatureOffsets {
     /// Offset to 64-byte signature plus 1-byte recovery ID.
     pub signature_offset: u16,
@@ -852,7 +852,7 @@ pub fn new_secp256k1_instruction(
     let secp_pubkey = libsecp256k1::PublicKey::from_secret_key(priv_key);
     let eth_pubkey = construct_eth_pubkey(&secp_pubkey);
     let mut hasher = sha3::Keccak256::new();
-    hasher.update(&message_arr);
+    hasher.update(message_arr);
     let message_hash = hasher.finalize();
     let mut message_hash_arr = [0u8; 32];
     message_hash_arr.copy_from_slice(message_hash.as_slice());
@@ -1318,7 +1318,7 @@ pub mod test {
             data.extend(signature.serialize());
             data.push(recovery_id.serialize());
             let eth_address_offset = data.len();
-            data.extend(&eth_address);
+            data.extend(eth_address);
             let message_data_offset = data.len();
             data.extend(message);
 

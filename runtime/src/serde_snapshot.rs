@@ -688,8 +688,12 @@ where
         accounts_update_notifier,
         exit,
     );
-    *accounts_db.epoch_accounts_hash.lock().unwrap() =
-        epoch_accounts_hash.map(EpochAccountsHash::new);
+
+    if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+        accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(EpochAccountsHash::new(epoch_accounts_hash), 0);
+    }
 
     let AccountsDbFields(
         _snapshot_storages,

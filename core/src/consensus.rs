@@ -718,7 +718,7 @@ impl Tower {
 
                 // `heaviest_subtree_fork_choice` entries are not cleaned by duplicate block purging/rollback logic,
                 // so this is safe to check here. We return here if the last voted slot was rolled back/purged due to
-                // being a duplicate because `ancestors`/`descendants`/`progress` structurs may be missing this slot due
+                // being a duplicate because `ancestors`/`descendants`/`progress` structures may be missing this slot due
                 // to duplicate purging. This would cause many of the `unwrap()` checks below to fail.
                 //
                 // TODO: Handle if the last vote is on a dupe, and then we restart. The dupe won't be in
@@ -2823,7 +2823,7 @@ pub mod test {
                 OpenOptions::new()
                     .write(true)
                     .truncate(true)
-                    .open(&path)
+                    .open(path)
                     .unwrap_or_else(|_| panic!("Failed to truncate file: {:?}", path));
             },
         );
@@ -2848,11 +2848,11 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42);
+            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));
@@ -2886,11 +2886,11 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(4, 1, 42);
+            let (shreds, _) = make_slot_entries(4, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             blockstore.set_roots(std::iter::once(&3)).unwrap();
             assert!(!blockstore.is_root(0));
@@ -2917,9 +2917,9 @@ pub mod test {
         {
             let blockstore = Blockstore::open(&blockstore_path).unwrap();
 
-            let (shreds, _) = make_slot_entries(1, 0, 42);
+            let (shreds, _) = make_slot_entries(1, 0, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
-            let (shreds, _) = make_slot_entries(3, 1, 42);
+            let (shreds, _) = make_slot_entries(3, 1, 42, /*merkle_variant:*/ true);
             blockstore.insert_shreds(shreds, None, false).unwrap();
             assert!(!blockstore.is_root(0));
             assert!(!blockstore.is_root(1));

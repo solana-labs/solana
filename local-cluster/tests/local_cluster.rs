@@ -499,8 +499,10 @@ fn test_snapshot_download() {
         .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
-    let full_snapshot_archive_info =
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
+        full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
     trace!("found: {}", full_snapshot_archive_info.path().display());
 
     // Download the snapshot, then boot a validator from it.
@@ -628,6 +630,7 @@ fn test_incremental_snapshot_download() {
         .wait_for_next_incremental_snapshot(
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
         );
     trace!(
         "found: {} and {}",
@@ -720,7 +723,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     // If these intervals change, also make sure to change the loop timers accordingly.
     let accounts_hash_interval = 3;
     let incremental_snapshot_interval = accounts_hash_interval * 3;
-    let full_snapshot_interval = incremental_snapshot_interval * 3;
+    let full_snapshot_interval = incremental_snapshot_interval * 5;
 
     let num_account_paths = 3;
     let leader_snapshot_test_config = SnapshotValidatorConfig::new(
@@ -793,6 +796,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
             leader_snapshot_test_config
                 .incremental_snapshot_archives_dir
                 .path(),
+            Some(Duration::from_secs(5 * 60)),
         );
     info!(
         "Found snapshots:\n\tfull snapshot: {}\n\tincremental snapshot: {}",
@@ -1157,25 +1161,15 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
     let validator_full_snapshot_archive_for_comparison = validator_full_snapshot_archives
         .into_iter()
         .find(|validator_full_snapshot_archive| {
-            [
-                leader_full_snapshot_archive_for_comparison.slot(),
-                leader_full_snapshot_archive_for_comparison.slot() + full_snapshot_interval,
-            ]
-            .contains(&validator_full_snapshot_archive.slot())
+            validator_full_snapshot_archive.slot()
+                == leader_full_snapshot_archive_for_comparison.slot()
         })
         .expect("validator created an unexpected full snapshot");
     info!("Validator full snapshot archive for comparison: {validator_full_snapshot_archive_for_comparison:#?}");
-
-    if validator_full_snapshot_archive_for_comparison.slot()
-        == leader_full_snapshot_archive_for_comparison.slot()
-    {
-        assert_eq!(
-            validator_full_snapshot_archive_for_comparison.hash(),
-            leader_full_snapshot_archive_for_comparison.hash(),
-        );
-    } else {
-        info!("Hash check skipped due to slot mismatch");
-    }
+    assert_eq!(
+        validator_full_snapshot_archive_for_comparison.hash(),
+        leader_full_snapshot_archive_for_comparison.hash(),
+    );
 
     // And lastly, startup another node with the new snapshots to ensure they work
     let final_validator_snapshot_test_config = SnapshotValidatorConfig::new(
@@ -1269,8 +1263,10 @@ fn test_snapshot_restart_tower() {
         .unwrap()
         .full_snapshot_archives_dir;
 
-    let full_snapshot_archive_info =
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+    let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
+        full_snapshot_archives_dir,
+        Some(Duration::from_secs(5 * 60)),
+    );
 
     // Copy archive to validator's snapshot output directory
     let validator_archive_path = snapshot_utils::build_full_snapshot_archive_path(
@@ -1306,7 +1302,7 @@ fn test_snapshot_restart_tower() {
 fn test_snapshots_blockstore_floor() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 1 snapshotting leader
-    let snapshot_interval_slots = 10;
+    let snapshot_interval_slots = 100;
     let num_account_paths = 4;
 
     let leader_snapshot_test_config =
@@ -1337,7 +1333,7 @@ fn test_snapshots_blockstore_floor() {
 
     let archive_info = loop {
         let archive =
-            snapshot_utils::get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir);
+            snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir);
         if archive.is_some() {
             trace!("snapshot exists");
             break archive.unwrap();
@@ -1412,7 +1408,7 @@ fn test_snapshots_blockstore_floor() {
 #[serial]
 fn test_snapshots_restart_validity() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
-    let snapshot_interval_slots = 10;
+    let snapshot_interval_slots = 100;
     let num_account_paths = 1;
     let mut snapshot_test_config =
         setup_snapshot_validator_config(snapshot_interval_slots, num_account_paths);
@@ -1456,7 +1452,10 @@ fn test_snapshots_restart_validity() {
 
         expected_balances.extend(new_balances);
 
-        cluster.wait_for_next_full_snapshot(full_snapshot_archives_dir);
+        cluster.wait_for_next_full_snapshot(
+            full_snapshot_archives_dir,
+            Some(Duration::from_secs(5 * 60)),
+        );
 
         // Create new account paths since validator exit is not guaranteed to cleanup RPC threads,
         // which may delete the old accounts on exit at any point

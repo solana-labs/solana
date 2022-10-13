@@ -183,8 +183,8 @@ mod tests {
         assert_eq!(
             genesis_config
                 .accounts
-                .iter()
-                .map(|(_pubkey, account)| account.lamports)
+                .values()
+                .map(|account| account.lamports)
                 .sum::<u64>(),
             total_lamports,
         );

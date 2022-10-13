@@ -195,7 +195,12 @@ impl From<RpcCustomError> for Error {
             },
             RpcCustomError::UnsupportedTransactionVersion(version) => Self {
                 code: ErrorCode::ServerError(JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION),
-                message: format!("Transaction version ({}) is not supported", version),
+                message: format!(
+                    "Transaction version ({0}) is not supported by the requesting client. \
+                    Please try the request again with the following configuration parameter: \
+                    \"maxSupportedTransactionVersion\": {0}",
+                    version
+                ),
                 data: None,
             },
             RpcCustomError::MinContextSlotNotReached { context_slot } => Self {

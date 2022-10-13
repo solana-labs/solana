@@ -454,7 +454,7 @@ pub mod preserve_rent_epoch_for_rent_exempt_accounts {
     solana_sdk::declare_id!("HH3MUYReL2BvqqA3oEcAa7txju5GY6G4nxJ51zvsEjEZ");
 }
 
-pub mod enable_bpf_loader_extend_program_data_ix {
+pub mod enable_bpf_loader_extend_program_ix {
     solana_sdk::declare_id!("8Zs9W7D9MpSEtUWSQdGniZk2cNmV22y6FLJwCx53asme");
 }
 
@@ -482,14 +482,6 @@ pub mod compact_vote_state_updates {
     solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
 }
 
-pub mod sign_repair_requests {
-    solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
-}
-
-pub mod check_ping_ancestor_requests {
-    solana_sdk::declare_id!("AXLB87anNaUQtqBSsxkm4gvNzYY985aLtNtpJC94uWLJ");
-}
-
 pub mod incremental_snapshot_only_incremental_hash_calculation {
     solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
 }
@@ -514,10 +506,6 @@ pub mod cap_accounts_data_allocations_per_transaction {
     solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
 }
 
-pub mod return_none_for_zero_lamport_accounts {
-    solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
-}
-
 pub mod epoch_accounts_hash {
     solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
 }
@@ -528,6 +516,10 @@ pub mod remove_deprecated_request_unit_ix {
 
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
+}
+
+pub mod limit_max_instruction_trace_length {
+    solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
 }
 
 lazy_static! {
@@ -638,25 +630,23 @@ lazy_static! {
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
-        (enable_bpf_loader_extend_program_data_ix::id(), "enable bpf upgradeable loader ExtendProgramData instruction #25234"),
+        (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
-        (sign_repair_requests::id(), "sign repair requests #26834"),
-        (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
         (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
         (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
         (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
-        (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
+        (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -695,7 +685,7 @@ lazy_static! {
 }
 
 /// `FeatureSet` holds the set of currently active/inactive runtime features
-#[derive(AbiExample, Debug, Clone)]
+#[derive(AbiExample, Debug, Clone, Eq, PartialEq)]
 pub struct FeatureSet {
     pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,

@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     InstructionError(#[from] InstructionError),
     #[error("Invalid delegation: {0:?}")]
-    InvalidDelegation(StakeState),
+    InvalidDelegation(Box<StakeState>),
     #[error("Invalid stake account owner: {0}")]
     InvalidOwner(/*owner:*/ Pubkey),
 }
@@ -53,7 +53,7 @@ impl<T> StakeAccount<T> {
 impl StakeAccount<Delegation> {
     #[inline]
     pub(crate) fn delegation(&self) -> Delegation {
-        // Safe to unwrap here becasue StakeAccount<Delegation> will always
+        // Safe to unwrap here because StakeAccount<Delegation> will always
         // only wrap a stake-state which is a delegation.
         self.stake_state.delegation().unwrap()
     }
@@ -79,7 +79,9 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         let stake_account = StakeAccount::<()>::try_from(account)?;
         if stake_account.stake_state.delegation().is_none() {
-            return Err(Error::InvalidDelegation(stake_account.stake_state));
+            return Err(Error::InvalidDelegation(Box::new(
+                stake_account.stake_state,
+            )));
         }
         Ok(Self {
             account: stake_account.account,

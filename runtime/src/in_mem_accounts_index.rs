@@ -1053,11 +1053,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
-        let mut duplicate = vec![];
         let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
-            let new_ref_count = if v.is_cached() { 0 } else { 1 };
+            let new_ref_count = u64::from(!v.is_cached());
             disk.update(&k, |current| {
                 match current {
                     Some((current_slot_list, mut ref_count)) => {
@@ -1066,7 +1065,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         slot_list.extend_from_slice(current_slot_list);
                         slot_list.push(entry); // will never be from the same slot that already exists in the list
                         ref_count += new_ref_count;
-                        duplicate.push((slot, k));
+                        duplicates.push((slot, k));
                         Some((slot_list, ref_count))
                     }
                     None => {

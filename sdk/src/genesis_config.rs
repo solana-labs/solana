@@ -68,7 +68,7 @@ impl FromStr for ClusterType {
 }
 
 #[frozen_abi(digest = "3V3ZVRyzNhRfe8RJwDeGpeTP8xBWGGFBEbwTkvKKVjEa")]
-#[derive(Serialize, Deserialize, Debug, Clone, AbiExample)]
+#[derive(Serialize, Deserialize, Debug, Clone, AbiExample, PartialEq)]
 pub struct GenesisConfig {
     /// when the network (bootstrap validator) was started relative to the UNIX Epoch
     pub creation_time: UnixTimestamp,
@@ -197,7 +197,7 @@ impl GenesisConfig {
             )
         })?;
 
-        std::fs::create_dir_all(&ledger_path)?;
+        std::fs::create_dir_all(ledger_path)?;
 
         let mut file = File::create(Self::genesis_filename(ledger_path))?;
         file.write_all(&serialized)
@@ -343,6 +343,6 @@ mod tests {
         config.write(path).expect("write");
         let loaded_config = GenesisConfig::load(path).expect("load");
         assert_eq!(config.hash(), loaded_config.hash());
-        let _ignored = std::fs::remove_file(&path);
+        let _ignored = std::fs::remove_file(path);
     }
 }
