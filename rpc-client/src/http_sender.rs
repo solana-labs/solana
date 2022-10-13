@@ -93,7 +93,7 @@ impl HttpSender {
                 .default_headers(default_headers)
                 .timeout(timeout)
                 .pool_idle_timeout(timeout)
-                .proxy(reqwest::Proxy::all(proxy_string)?)
+                .proxy(reqwest::Proxy::all(proxy_string))
                 .build()
                 .expect("build rpc client"),
         );
