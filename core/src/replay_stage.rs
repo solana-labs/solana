@@ -2275,6 +2275,7 @@ impl ReplayStage {
                     }
 
                     let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+                    Self::send_reward_calculation_request(bank);
                     let parent_slot = bank.parent_slot();
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                         let stats = progress_lock
@@ -2361,6 +2362,7 @@ impl ReplayStage {
             replay_result.is_slot_dead = true;
         } else {
             let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
+            Self::send_reward_calculation_request(bank);
             let parent_slot = bank.parent_slot();
             let prev_leader_slot = progress.get_bank_prev_leader_slot(bank);
             let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
