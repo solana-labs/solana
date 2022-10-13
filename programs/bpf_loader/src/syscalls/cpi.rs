@@ -156,7 +156,9 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             })
             .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        let translate = |account_info: &AccountInfo, invoke_context: &InvokeContext| {
+        let translate = |invoke_context: &InvokeContext,
+                         account_info: &AccountInfo,
+                         original_data_len: usize| {
             // Translate the account from user space
 
             let lamports = {
@@ -213,7 +215,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             Ok(CallerAccount {
                 lamports,
                 owner,
-                original_data_len: 0, // set later
+                original_data_len,
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
@@ -465,7 +467,9 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             })
             .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        let translate = |account_info: &SolAccountInfo, invoke_context: &InvokeContext| {
+        let translate = |invoke_context: &InvokeContext,
+                         account_info: &SolAccountInfo,
+                         original_data_len: usize| {
             // Translate the account from user space
 
             let lamports = translate_type_mut::<u64>(
@@ -511,7 +515,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             Ok(CallerAccount {
                 lamports,
                 owner,
-                original_data_len: 0, // set later
+                original_data_len,
                 data,
                 vm_data_addr,
                 ref_to_len_in_vm,
@@ -595,7 +599,7 @@ fn get_translated_accounts<'a, T, F>(
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError>
 where
-    F: Fn(&T, &InvokeContext) -> Result<CallerAccount<'a>, EbpfError>,
+    F: Fn(&InvokeContext, &T, usize) -> Result<CallerAccount<'a>, EbpfError>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
@@ -612,6 +616,10 @@ where
             InstructionError::MissingAccount,
         ))?;
     accounts.push((*program_account_index, None));
+
+    // unwrapping here is fine: we're in a syscall and the method below fails
+    // only outside syscalls
+    let orig_data_lens = invoke_context.get_orig_account_lengths().unwrap();
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
@@ -640,11 +648,23 @@ where
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
         {
-            let mut caller_account = do_translate(
+            let original_data_len = *orig_data_lens
+                .get(instruction_account.index_in_caller as usize)
+                .ok_or_else(|| {
+                    ic_msg!(
+                        invoke_context,
+                        "Internal error: index mismatch for account {}",
+                        account_key
+                    );
+                    SyscallError::InstructionError(InstructionError::MissingAccount)
+                })?;
+
+            let caller_account = do_translate(
+                invoke_context,
                 account_infos
                     .get(caller_account_index)
                     .ok_or(SyscallError::InvalidLength)?,
-                invoke_context,
+                original_data_len,
             )?;
             {
                 // before initiating CPI, the caller may have modified the
@@ -709,19 +729,6 @@ where
                 }
             }
             let caller_account = if instruction_account.is_writable {
-                let orig_data_lens = invoke_context
-                    .get_orig_account_lengths()
-                    .map_err(SyscallError::InstructionError)?;
-                caller_account.original_data_len = *orig_data_lens
-                    .get(instruction_account.index_in_caller as usize)
-                    .ok_or_else(|| {
-                        ic_msg!(
-                            invoke_context,
-                            "Internal error: index mismatch for account {}",
-                            account_key
-                        );
-                        SyscallError::InstructionError(InstructionError::MissingAccount)
-                    })?;
                 Some(caller_account)
             } else {
                 None
