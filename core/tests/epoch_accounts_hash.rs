@@ -200,9 +200,11 @@ impl BackgroundServices {
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let accounts_background_request_sender =
+            AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_config.clone(),
+            snapshot_request_sender,
             snapshot_request_receiver,
             accounts_package_sender,
         };
