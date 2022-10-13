@@ -2,12 +2,22 @@
 
 #![cfg(feature = "full")]
 
-use crate::{
-    hash::Hash,
-    pubkey::Pubkey,
-    sanitize::SanitizeError,
-    signature::{Signature, Signer},
+use {
+    crate::{
+        hash::Hash,
+        pubkey::Pubkey,
+        sanitize::SanitizeError,
+        signature::{Signature, Signer},
+    },
+    num_enum::{IntoPrimitive, TryFromPrimitive},
 };
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(OffchainMessage::HEADER_LEN, 17);
+#[cfg(test)]
+static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN, 65515);
+#[cfg(test)]
+static_assertions::const_assert_eq!(v0::OffchainMessage::MAX_LEN_LEDGER, 1212);
 
 /// Check if given bytes contain only printable ASCII characters
 pub fn is_printable_ascii(data: &[u8]) -> bool {
@@ -24,12 +34,21 @@ pub fn is_utf8(data: &[u8]) -> bool {
     std::str::from_utf8(data).is_ok()
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, TryFromPrimitive, IntoPrimitive)]
+pub enum MessageFormat {
+    RestrictedAscii,
+    LimitedUtf8,
+    ExtendedUtf8,
+}
+
 #[allow(clippy::integer_arithmetic)]
 pub mod v0 {
     use {
-        super::{is_printable_ascii, is_utf8, OffchainMessage as Base},
+        super::{is_printable_ascii, is_utf8, MessageFormat, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
+            packet::PACKET_DATA_SIZE,
             sanitize::SanitizeError,
         },
     };
@@ -38,7 +57,7 @@ pub mod v0 {
     /// Struct always contains a non-empty valid message.
     #[derive(Debug, PartialEq, Eq, Clone)]
     pub struct OffchainMessage {
-        format: u8,
+        format: MessageFormat,
         message: Vec<u8>,
     }
 
@@ -48,7 +67,7 @@ pub mod v0 {
         // Max length of the OffchainMessage
         pub const MAX_LEN: usize = u16::MAX as usize - Base::HEADER_LEN - Self::HEADER_LEN;
         // Max Length of the OffchainMessage supported by the Ledger
-        pub const MAX_LEN_LEDGER: usize = 1232 - Base::HEADER_LEN - Self::HEADER_LEN;
+        pub const MAX_LEN_LEDGER: usize = PACKET_DATA_SIZE - Base::HEADER_LEN - Self::HEADER_LEN;
 
         /// Construct a new OffchainMessage object from the given message
         pub fn new(message: &[u8]) -> Result<Self, SanitizeError> {
@@ -56,15 +75,15 @@ pub mod v0 {
                 return Err(SanitizeError::InvalidValue);
             } else if message.len() <= OffchainMessage::MAX_LEN_LEDGER {
                 if is_printable_ascii(message) {
-                    0
+                    MessageFormat::RestrictedAscii
                 } else if is_utf8(message) {
-                    1
+                    MessageFormat::LimitedUtf8
                 } else {
                     return Err(SanitizeError::InvalidValue);
                 }
             } else if message.len() <= OffchainMessage::MAX_LEN {
                 if is_utf8(message) {
-                    2
+                    MessageFormat::ExtendedUtf8
                 } else {
                     return Err(SanitizeError::InvalidValue);
                 }
@@ -80,12 +99,10 @@ pub mod v0 {
         /// Serialize the message to bytes, including the full header
         pub fn serialize(&self, data: &mut Vec<u8>) -> Result<(), SanitizeError> {
             // invalid messages shouldn't be possible, but a quick sanity check never hurts
-            assert!(
-                self.format <= 2 && !self.message.is_empty() && self.message.len() <= Self::MAX_LEN
-            );
+            assert!(!self.message.is_empty() && self.message.len() <= Self::MAX_LEN);
             data.reserve(Self::HEADER_LEN.saturating_add(self.message.len()));
             // format
-            data.push(self.format);
+            data.push(self.format.into());
             // message length
             data.extend_from_slice(&(self.message.len() as u16).to_le_bytes());
             // message
@@ -100,19 +117,23 @@ pub mod v0 {
                 return Err(SanitizeError::ValueOutOfBounds);
             }
             // decode header
-            let format = data[0];
+            let format =
+                MessageFormat::try_from(data[0]).map_err(|_| SanitizeError::InvalidValue)?;
             let message_len = u16::from_le_bytes([data[1], data[2]]) as usize;
             // check header
-            if format > 2 || Self::HEADER_LEN.saturating_add(message_len) != data.len() {
+            if Self::HEADER_LEN.saturating_add(message_len) != data.len() {
                 return Err(SanitizeError::InvalidValue);
             }
-            let message = &data[3..];
+            let message = &data[Self::HEADER_LEN..];
             // check format
             let is_valid = match format {
-                0 => message.len() <= Self::MAX_LEN_LEDGER && is_printable_ascii(message),
-                1 => message.len() <= Self::MAX_LEN_LEDGER && is_utf8(message),
-                2 => message.len() <= Self::MAX_LEN && is_utf8(message),
-                _ => false,
+                MessageFormat::RestrictedAscii => {
+                    (message.len() <= Self::MAX_LEN_LEDGER) && is_printable_ascii(message)
+                }
+                MessageFormat::LimitedUtf8 => {
+                    (message.len() <= Self::MAX_LEN_LEDGER) && is_utf8(message)
+                }
+                MessageFormat::ExtendedUtf8 => (message.len() <= Self::MAX_LEN) && is_utf8(message),
             };
 
             if is_valid {
@@ -126,13 +147,13 @@ pub mod v0 {
         }
 
         /// Compute the SHA256 hash of the serialized off-chain message
-        pub fn hash(&self, serialized_message: &[u8]) -> Result<Hash, SanitizeError> {
+        pub fn hash(serialized_message: &[u8]) -> Result<Hash, SanitizeError> {
             let mut hasher = Hasher::default();
             hasher.hash(serialized_message);
             Ok(hasher.result())
         }
 
-        pub fn get_format(&self) -> u8 {
+        pub fn get_format(&self) -> MessageFormat {
             self.format
         }
 
@@ -191,7 +212,7 @@ impl OffchainMessage {
     /// Compute the hash of the off-chain message
     pub fn hash(&self) -> Result<Hash, SanitizeError> {
         match self {
-            Self::V0(msg) => msg.hash(&self.serialize()?),
+            Self::V0(_) => v0::OffchainMessage::hash(&self.serialize()?),
         }
     }
 
@@ -201,9 +222,9 @@ impl OffchainMessage {
         }
     }
 
-    pub fn get_format(&self) -> u32 {
+    pub fn get_format(&self) -> MessageFormat {
         match self {
-            Self::V0(msg) => msg.get_format() as u32,
+            Self::V0(msg) => msg.get_format(),
         }
     }
 
@@ -232,9 +253,11 @@ mod tests {
     fn test_offchain_message_ascii() {
         let message = OffchainMessage::new(0, b"Test Message").unwrap();
         assert_eq!(message.get_version(), 0);
-        assert_eq!(message.get_format(), 0);
+        assert_eq!(message.get_format(), MessageFormat::RestrictedAscii);
         assert_eq!(message.get_message().as_slice(), b"Test Message");
-        assert!(matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == 0));
+        assert!(
+            matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == MessageFormat::RestrictedAscii)
+        );
         let serialized = [
             255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 0, 12, 0,
             84, 101, 115, 116, 32, 77, 101, 115, 115, 97, 103, 101,
@@ -249,12 +272,14 @@ mod tests {
     fn test_offchain_message_utf8() {
         let message = OffchainMessage::new(0, "Тестовое сообщение".as_bytes()).unwrap();
         assert_eq!(message.get_version(), 0);
-        assert_eq!(message.get_format(), 1);
+        assert_eq!(message.get_format(), MessageFormat::LimitedUtf8);
         assert_eq!(
             message.get_message().as_slice(),
             "Тестовое сообщение".as_bytes()
         );
-        assert!(matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == 1));
+        assert!(
+            matches!(message, OffchainMessage::V0(ref msg) if msg.get_format() == MessageFormat::LimitedUtf8)
+        );
         let serialized = [
             255, 115, 111, 108, 97, 110, 97, 32, 111, 102, 102, 99, 104, 97, 105, 110, 0, 1, 35, 0,
             208, 162, 208, 181, 209, 129, 209, 130, 208, 190, 208, 178, 208, 190, 208, 181, 32,
