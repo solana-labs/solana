@@ -155,13 +155,13 @@ pub fn create_executor(
     programdata_account_index: IndexOfAccount,
     programdata_offset: usize,
     invoke_context: &mut InvokeContext,
+    create_executor_metrics: &mut executor_metrics::CreateMetrics,
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let log_collector = invoke_context.get_log_collector();
     let compute_budget = invoke_context.get_compute_budget();
     let feature_set = &invoke_context.feature_set;
-    let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
@@ -243,7 +243,6 @@ pub fn create_executor(
             return Err(InstructionError::ProgramFailedToCompile);
         }
     }
-    create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
     Ok(Arc::new(BpfExecutor {
         verified_executable,
         use_jit,
@@ -442,13 +441,16 @@ fn process_instruction_common(
         let executor = if let Some(executor) = cached_executor {
             executor
         } else {
+            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
                 first_instruction_account,
                 program_data_offset,
                 invoke_context,
+                &mut create_executor_metrics,
                 use_jit,
                 false, /* reject_deployment_of_broken_elfs */
             )?;
+            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let program_id = instruction_context.get_last_program_key(transaction_context)?;
@@ -673,13 +675,16 @@ fn process_loader_upgradeable_instruction(
             invoke_context.native_invoke(instruction, signers.as_slice())?;
 
             // Load and verify the program bits
+            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
                 first_instruction_account.saturating_add(3),
                 buffer_data_offset,
                 invoke_context,
+                &mut create_executor_metrics,
                 use_jit,
                 true,
             )?;
+            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
                 .borrow_mut()
@@ -841,13 +846,16 @@ fn process_loader_upgradeable_instruction(
             drop(programdata);
 
             // Load and verify the program bits
+            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
             let executor = create_executor(
                 first_instruction_account.saturating_add(2),
                 buffer_data_offset,
                 invoke_context,
+                &mut create_executor_metrics,
                 use_jit,
                 true,
             )?;
+            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
                 .borrow_mut()
@@ -1256,8 +1264,16 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let executor =
-                create_executor(first_instruction_account, 0, invoke_context, use_jit, true)?;
+            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
+            let executor = create_executor(
+                first_instruction_account,
+                0,
+                invoke_context,
+                &mut create_executor_metrics,
+                use_jit,
+                true,
+            )?;
+            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             let transaction_context = &invoke_context.transaction_context;
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let mut program =
