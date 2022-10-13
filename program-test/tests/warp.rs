@@ -344,7 +344,7 @@ async fn stake_merge_immediately_after_activation() {
         .unwrap();
     let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
     // With partition rewards, the reward is paid after reward interval
-    // So the lamports won't change at the start of the new epoch
+    // So the lamports and credits_observed won't change at the start of the new epoch
     // TODO: check lamport reward after reward interval.
     assert_eq!(stake_state.stake().unwrap().credits_observed, 100);
     assert!(stake_account.lamports == stake_lamports);
@@ -357,7 +357,10 @@ async fn stake_merge_immediately_after_activation() {
         .unwrap()
         .unwrap();
     let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
-    assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
+    // With partition rewards, the reward is paid after reward interval
+    // So the lamports and credits_observed won't change at the start of the new epoch
+    // TODO: check lamport reward after reward interval.
+    assert_eq!(stake_state.stake().unwrap().credits_observed, 200);
     assert_eq!(stake_account.lamports, stake_lamports);
 
     // sanity-check that the activation epoch was actually last epoch
