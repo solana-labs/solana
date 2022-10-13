@@ -3,6 +3,7 @@
  * @brief Solana string and memory system calls and utilities
  */
 
+#include <sol/constants.h>
 #include <sol/types.h>
 
 #ifdef __cplusplus
@@ -12,10 +13,11 @@ extern "C" {
 /**
  * Copies memory
  */
-static void sol_memcpy(void *dst, const void *src, int len) {
+static void *sol_memcpy(void *dst, const void *src, int len) {
   for (int i = 0; i < len; i++) {
     *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
   }
+  return dst;
 }
 
 /**
@@ -55,15 +57,6 @@ static size_t sol_strlen(const char *s) {
   }
   return len;
 }
-
-/**
- * Start address of the memory region used for program heap.
- */
-#define HEAP_START_ADDRESS (0x300000000)
-/**
- * Length of the heap memory region used for program heap.
- */
-#define HEAP_LENGTH (32 * 1024)
 
 /**
  * Alloc zero-initialized memory
