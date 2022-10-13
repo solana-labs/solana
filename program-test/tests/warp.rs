@@ -247,7 +247,7 @@ async fn stake_rewards_from_warp() {
         .await
         .expect("account exists")
         .unwrap();
-    // For partition rewards, the reward is paid after reward interval
+    // With partition rewards, the reward is paid after reward interval
     // So the lamports won't change at the start of the new epoch
     // TODO: check lamport reward after reward interval.
     assert!(account.lamports == stake_lamports);
@@ -343,8 +343,11 @@ async fn stake_merge_immediately_after_activation() {
         .unwrap()
         .unwrap();
     let stake_state: StakeState = deserialize(&stake_account.data).unwrap();
-    assert_eq!(stake_state.stake().unwrap().credits_observed, 300);
-    assert!(stake_account.lamports > stake_lamports);
+    // With partition rewards, the reward is paid after reward interval
+    // So the lamports won't change at the start of the new epoch
+    // TODO: check lamport reward after reward interval.
+    assert_eq!(stake_state.stake().unwrap().credits_observed, 100);
+    assert!(stake_account.lamports == stake_lamports);
 
     // check that new stake hasn't earned rewards, but that credits_observed have been advanced
     let stake_account = context
