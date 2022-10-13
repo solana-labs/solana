@@ -398,11 +398,14 @@ fn test_stake_account_lifetime() {
     // next epoch bank should pay rewards
     bank = next_epoch(&bank);
 
-    // Test that balance increased, and that the balance got staked
+    // With partitioned reward stake is no longer paid at the epoch start block, so the stake
+    // should stay unchanged.
     let staked = get_staked(&bank, &stake_pubkey);
     let balance = bank.get_balance(&stake_pubkey);
-    assert!(staked > pre_staked);
-    assert!(balance > pre_balance);
+    assert!(staked == pre_staked);
+    assert!(balance == pre_balance);
+
+    // TODO: Test that balance increased, and that the balance got staked (after reward interval)
 
     // split the stake
     let split_stake_keypair = Keypair::new();
