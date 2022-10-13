@@ -1472,6 +1472,22 @@ impl<T: IndexValue> AccountsIndex<T> {
         }
     }
 
+    pub fn get_index_key_size(&self, index: &AccountIndex, index_key: &Pubkey) -> Option<usize> {
+        match index {
+            AccountIndex::ProgramId => self.program_id_index.index.get(index_key).map(|x| x.len()),
+            AccountIndex::SplTokenOwner => self
+                .spl_token_owner_index
+                .index
+                .get(index_key)
+                .map(|x| x.len()),
+            AccountIndex::SplTokenMint => self
+                .spl_token_mint_index
+                .index
+                .get(index_key)
+                .map(|x| x.len()),
+        }
+    }
+
     /// log any secondary index counts, if non-zero
     pub(crate) fn log_secondary_indexes(&self) {
         if !self.program_id_index.index.is_empty() {
