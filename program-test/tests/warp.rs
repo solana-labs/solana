@@ -247,7 +247,10 @@ async fn stake_rewards_from_warp() {
         .await
         .expect("account exists")
         .unwrap();
-    assert!(account.lamports > stake_lamports);
+    // For partition rewards, the reward is paid after reward interval
+    // So the lamports won't change at the start of the new epoch
+    // TODO: check lamport reward after reward interval.
+    assert!(account.lamports == stake_lamports);
 
     // check that stake is fully active
     let stake_history_account = context
