@@ -44,8 +44,8 @@ impl HttpSender {
     }
 
 
-    pub fn new_with_proxy<U: ToString>(url: U, timeout: Duration, proxy_string: String) -> Self {
-        Self::new_with_timeout_and_proxy(url, timeout, proxy_string)
+    pub fn new_with_proxy<U: ToString>(url: U, timeout: Duration, proxy: reqwest::Proxy) -> Self {
+        Self::new_with_timeout_and_proxy(url, timeout, proxy)
     }
 
     /// Create an HTTP RPC sender.
@@ -78,7 +78,7 @@ impl HttpSender {
         }
     }
 
-    pub fn new_with_timeout_and_proxy<U: ToString>(url: U, timeout: Duration, proxy_string: String) -> Self {
+    pub fn new_with_timeout_and_proxy<U: ToString>(url: U, timeout: Duration, proxy: reqwest::Proxy) -> Self {
         let mut default_headers = header::HeaderMap::new();
         default_headers.append(
             header::HeaderName::from_static("solana-client"),
@@ -93,7 +93,7 @@ impl HttpSender {
                 .default_headers(default_headers)
                 .timeout(timeout)
                 .pool_idle_timeout(timeout)
-                .proxy(reqwest::Proxy::all(proxy_string))
+                .proxy(reqwest::Proxy::all(proxy))
                 .build()
                 .expect("build rpc client"),
         );
