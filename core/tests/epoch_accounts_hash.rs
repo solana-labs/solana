@@ -21,7 +21,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
+        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -186,9 +186,10 @@ impl BackgroundServices {
             false,
         );
 
-        let pending_accounts_package = PendingAccountsPackage::default();
+        let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            Arc::clone(&pending_accounts_package),
+            accounts_package_sender.clone(),
+            accounts_package_receiver,
             Some(pending_snapshot_package),
             &exit,
             &cluster_info,
@@ -199,11 +200,13 @@ impl BackgroundServices {
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let accounts_background_request_sender =
+            AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_config.clone(),
+            snapshot_request_sender,
             snapshot_request_receiver,
-            pending_accounts_package,
+            accounts_package_sender,
         };
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,

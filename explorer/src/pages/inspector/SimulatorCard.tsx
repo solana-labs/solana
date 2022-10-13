@@ -100,7 +100,8 @@ function useSimulator(message: VersionedMessage) {
       try {
         // Simulate without signers to skip signer verification
         const resp = await connection.simulateTransaction(
-          new VersionedTransaction(message)
+          new VersionedTransaction(message),
+          { replaceRecentBlockhash: true }
         );
         if (resp.value.logs === null) {
           throw new Error("Expected to receive logs from simulation");

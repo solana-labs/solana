@@ -169,7 +169,15 @@ pub mod columns {
     pub struct ErasureMeta;
 
     #[derive(Debug)]
-    /// The bank hash column
+    /// The bank hash column.
+    ///
+    /// This column family persists the bank hash of a given slot.  Note that
+    /// not every slot has a bank hash (e.g., a dead slot.)
+    ///
+    /// The bank hash of a slot is derived from hashing the delta state of all
+    /// the accounts in a slot combined with the bank hash of its parent slot.
+    /// A bank hash of a slot essentially represents all the account states at
+    /// that slot.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::FrozenHashVersioned`
