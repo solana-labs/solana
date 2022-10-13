@@ -1,6 +1,8 @@
 use {
     solana_sdk::clock::Slot,
     std::{
+        collections::HashSet,
+        net::SocketAddr,
         ops::AddAssign,
         time::{Duration, Instant},
     },
@@ -36,6 +38,9 @@ pub struct ShredFetchStats {
     pub slot_out_of_range: usize,
     pub(crate) bad_shred_type: usize,
     since: Option<Instant>,
+    pub repair_peers: HashSet<SocketAddr>,
+    pub staked_repair_peers: HashSet<SocketAddr>,
+    pub staked_repair_shreds: usize,
 }
 
 impl ProcessShredsStats {
@@ -107,6 +112,9 @@ impl ShredFetchStats {
             ("index_out_of_bounds", self.index_out_of_bounds, i64),
             ("slot_out_of_range", self.slot_out_of_range, i64),
             ("duplicate_shred", self.duplicate_shred, i64),
+            ("repair_peers", self.repair_peers.len(), i64),
+            ("staked_repair_peers", self.staked_repair_peers.len(), i64),
+            ("staked_repair_shreds", self.staked_repair_shreds, i64),
         );
         *self = Self {
             since: Some(Instant::now()),

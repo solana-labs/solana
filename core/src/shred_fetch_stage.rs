@@ -117,6 +117,23 @@ impl ShredFetchStage {
             }
 
             packet_batch.iter_mut().for_each(|packet| {
+                if repair_context.is_some() {
+                    stats.repair_peers.insert(packet.meta.socket_addr());
+                    let staked = repair_context
+                        .as_ref()
+                        .map(|(_, cluster_info)| {
+                            cluster_info
+                                .staked_repair_sockets
+                                .lock()
+                                .unwrap()
+                                .contains(&packet.meta.socket_addr())
+                        })
+                        .unwrap_or_default();
+                    if staked {
+                        stats.staked_repair_shreds += 1;
+                        stats.staked_repair_peers.insert(packet.meta.socket_addr());
+                    }
+                }
                 Self::process_packet(
                     packet,
                     &mut shreds_received,

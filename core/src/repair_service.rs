@@ -89,6 +89,8 @@ pub struct RepairStats {
     pub orphan: RepairStatsGroup,
     pub get_best_orphans_us: u64,
     pub get_best_shreds_us: u64,
+    pub repair_peers: HashSet<Pubkey>,
+    pub staked_request_count: usize,
 }
 
 #[derive(Default, Debug)]
@@ -325,6 +327,7 @@ impl RepairService {
             };
 
             let identity_keypair: &Keypair = &repair_info.cluster_info.keypair().clone();
+            let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
 
             let mut build_repairs_batch_elapsed = Measure::start("build_repairs_batch_elapsed");
             let batch: Vec<(Vec<u8>, SocketAddr)> = {
@@ -342,7 +345,7 @@ impl RepairService {
                         } else {
                             None
                         };
-                        let (to, req) = serve_repair
+                        let (peer, to, req) = serve_repair
                             .repair_request(
                                 &repair_info.cluster_slots,
                                 *repair_request,
@@ -353,6 +356,20 @@ impl RepairService {
                                 maybe_keypair,
                             )
                             .ok()?;
+                        repair_stats.repair_peers.insert(peer);
+                        let staked = epoch_staked_nodes
+                            .as_ref()
+                            .map(|nodes| nodes.contains_key(&peer))
+                            .unwrap_or_default();
+                        if staked {
+                            repair_stats.staked_request_count += 1;
+                            repair_info
+                                .cluster_info
+                                .staked_repair_sockets
+                                .lock()
+                                .unwrap()
+                                .insert(to);
+                        }
                         Some((req, to))
                     })
                     .collect()
@@ -406,6 +423,16 @@ impl RepairService {
                     .collect();
                 info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
+                    let num_staked_peers = epoch_staked_nodes
+                        .map(|nodes| {
+                            repair_stats
+                                .repair_peers
+                                .iter()
+                                .filter(|p| nodes.contains_key(p))
+                                .count()
+                        })
+                        .unwrap_or(0);
+
                     datapoint_info!(
                         "repair_service-my_requests",
                         ("repair-total", repair_total, i64),
@@ -414,6 +441,17 @@ impl RepairService {
                         ("orphan-count", repair_stats.orphan.count, i64),
                         ("repair-highest-slot", repair_stats.highest_shred.max, i64),
                         ("repair-orphan", repair_stats.orphan.max, i64),
+                        ("repair-peers-staked", num_staked_peers, i64),
+                        (
+                            "repair-peers-unstaked",
+                            repair_stats.repair_peers.len() - num_staked_peers,
+                            i64
+                        ),
+                        (
+                            "repair-staked-request-count",
+                            repair_stats.staked_request_count,
+                            i64
+                        ),
                     );
                 }
                 datapoint_info!(

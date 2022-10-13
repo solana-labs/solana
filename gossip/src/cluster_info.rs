@@ -168,6 +168,7 @@ pub struct ClusterInfo {
     instance: RwLock<NodeInstance>,
     contact_info_path: PathBuf,
     socket_addr_space: SocketAddrSpace,
+    pub staked_repair_sockets: Mutex<HashSet<SocketAddr>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
@@ -420,6 +421,7 @@ impl ClusterInfo {
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
             socket_addr_space,
+            staked_repair_sockets: Mutex::new(HashSet::default()),
         };
         me.insert_self();
         me.push_self(&HashMap::new(), None);
@@ -449,6 +451,7 @@ impl ClusterInfo {
             instance: RwLock::new(NodeInstance::new(&mut thread_rng(), *new_id, timestamp())),
             contact_info_path: PathBuf::default(),
             contact_save_interval: 0, // disabled
+            staked_repair_sockets: Mutex::new(self.staked_repair_sockets.lock().unwrap().clone()),
             ..*self
         }
     }

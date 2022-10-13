@@ -164,6 +164,7 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    repair_peers: HashSet<SocketAddr>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -520,6 +521,7 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("repair_peers", stats.repair_peers.len(), i64),
         );
 
         *stats = ServeRepairStats::default();
@@ -676,6 +678,7 @@ impl ServeRepair {
 
             let from_addr = packet.meta.socket_addr();
             stats.processed += 1;
+            stats.repair_peers.insert(from_addr);
             let rsp =
                 Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
             stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
@@ -722,6 +725,14 @@ impl ServeRepair {
         Self::repair_proto_to_bytes(&request_proto, maybe_keypair)
     }
 
+    fn normalize_stake(stake: u64) -> u64 {
+        // cap the max balance to u32 max (it should be plenty)
+        let bal = f64::from(u32::max_value()).min(stake as f64);
+        //let x = 1_f32.max((bal as f32).ln());
+        let x = 1_f32.max((bal as f32).ln().ln());
+        x as u64
+    }
+
     pub(crate) fn repair_request(
         &self,
         cluster_slots: &ClusterSlots,
@@ -731,7 +742,7 @@ impl ServeRepair {
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &mut OutstandingShredRepairs,
         identity_keypair: Option<&Keypair>,
-    ) -> Result<(SocketAddr, Vec<u8>)> {
+    ) -> Result<(Pubkey, SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication and has the desired slot, as indicated
         // by a valid tvu port location
         let slot = repair_request.slot();
@@ -740,7 +751,14 @@ impl ServeRepair {
             _ => {
                 peers_cache.pop(&slot);
                 let repair_peers = self.repair_peers(repair_validators, slot);
+                /*
                 let weights = cluster_slots.compute_weights(slot, &repair_peers);
+                let weights: Vec<_> = weights
+                    .into_iter()
+                    .map(|w| Self::normalize_stake(w))
+                    .collect();
+                */
+                let weights = vec![10_000_u64; repair_peers.len()];
                 let repair_peers = RepairPeers::new(Instant::now(), &repair_peers, &weights)?;
                 peers_cache.put(slot, repair_peers);
                 peers_cache.get(&slot).unwrap()
@@ -755,7 +773,8 @@ impl ServeRepair {
             nonce,
             identity_keypair,
         )?;
-        Ok((addr, out))
+
+        Ok((peer, addr, out))
     }
 
     pub(crate) fn repair_request_ancestor_hashes_sample_peers(
