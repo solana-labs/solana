@@ -198,25 +198,22 @@ pub fn create_executor<'a>(
         aligned_memory_mapping: true,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
-    let executable = {
-        create_executor_metrics.program_id = programdata.get_key().to_string();
-        let mut load_elf_time = Measure::start("load_elf_time");
-        let executable = Executable::<ThisInstructionMeter>::from_elf(
-            programdata
-                .get_data()
-                .get(programdata_offset..)
-                .ok_or(InstructionError::AccountDataTooSmall)?,
-            config,
-            syscall_registry,
-        );
-        load_elf_time.stop();
-        create_executor_metrics.load_elf_us = load_elf_time.as_us();
-        executable
-    }
+    let mut load_elf_time = Measure::start("load_elf_time");
+    let executable = Executable::<ThisInstructionMeter>::from_elf(
+        programdata
+            .get_data()
+            .get(programdata_offset..)
+            .ok_or(InstructionError::AccountDataTooSmall)?,
+        config,
+        syscall_registry,
+    )
     .map_err(|err| {
         ic_logger_msg!(log_collector, "{}", err);
         InstructionError::InvalidAccountData
-    })?;
+    });
+    load_elf_time.stop();
+    create_executor_metrics.load_elf_us = load_elf_time.as_us();
+    let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
@@ -434,6 +431,7 @@ fn process_instruction_common(
         let executor = if let Some(executor) = cached_executor {
             executor
         } else {
+            let program_id = *instruction_context.get_last_program_key(transaction_context)?;
             let programdata = try_borrow_account(
                 transaction_context,
                 instruction_context,
@@ -451,14 +449,12 @@ fn process_instruction_common(
                 false, /* reject_deployment_of_broken_elfs */
             )?;
             drop(programdata);
+            create_executor_metrics.program_id = program_id.to_string();
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            let transaction_context = &invoke_context.transaction_context;
-            let instruction_context = transaction_context.get_current_instruction_context()?;
-            let program_id = instruction_context.get_last_program_key(transaction_context)?;
             invoke_context
                 .tx_executor_cache
                 .borrow_mut()
-                .set(*program_id, executor.clone(), false);
+                .set(program_id, executor.clone(), false);
             executor
         };
         get_or_create_executor_time.stop();
@@ -692,6 +688,7 @@ fn process_loader_upgradeable_instruction(
                 true,
             )?;
             drop(buffer);
+            create_executor_metrics.program_id = new_program_id.to_string();
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
@@ -868,6 +865,7 @@ fn process_loader_upgradeable_instruction(
                 true,
             )?;
             drop(buffer);
+            create_executor_metrics.program_id = new_program_id.to_string();
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
@@ -1288,6 +1286,7 @@ fn process_loader_instruction(
                 use_jit,
                 true,
             )?;
+            create_executor_metrics.program_id = program.get_key().to_string();
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
             invoke_context
                 .tx_executor_cache
