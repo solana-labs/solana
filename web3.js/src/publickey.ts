@@ -85,7 +85,7 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Default public key value. (All zeros)
+   * Default public key value. (All ones)
    */
   static default: PublicKey = new PublicKey('11111111111111111111111111111111');
 
