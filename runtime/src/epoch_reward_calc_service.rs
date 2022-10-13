@@ -9,6 +9,7 @@ use {
     crossbeam_channel::{Receiver, Sender},
     log::*,
     rayon::ThreadPoolBuilder,
+    solana_measure::{measure, measure::Measure},
     solana_sdk::{clock::Slot, hash::Hash, stake_history::Epoch},
     std::{
         collections::HashMap,
@@ -177,15 +178,16 @@ impl EpochRewardCalcRequestHandler {
                 .signatures
                 .contains_key(&parent_slot)
             {
+                let mut total_time = Measure::start("total");
                 // hasn't seen the epoch boundary slot yet, load the stake_vote_delegation map and
                 // compute the signature and add (boundary_slot, signature) to map.
                 let thread_pool = ThreadPoolBuilder::new().build().unwrap();
                 let mut metrics = RewardsMetrics::default();
-                let vote_with_stake_delegations_map =
-                    bank.load_reward_calc_info(&thread_pool, &mut metrics);
+                let (vote_with_stake_delegations_map, load_calc_info_time) =
+                    measure!(bank.load_reward_calc_info(&thread_pool, &mut metrics));
 
-                let signature =
-                    bank.compute_rewards_calc_signature(&vote_with_stake_delegations_map);
+                let (signature, calc_signature_time) =
+                    measure!(bank.compute_rewards_calc_signature(&vote_with_stake_delegations_map));
 
                 self.results
                     .write()
@@ -193,6 +195,7 @@ impl EpochRewardCalcRequestHandler {
                     .signatures
                     .insert(parent_slot, signature);
 
+                let mut reward_calc_time_us: u64 = 0;
                 if !self
                     .results
                     .read()
@@ -204,18 +207,34 @@ impl EpochRewardCalcRequestHandler {
                     // (signature, rewards) to the map.
                     let parent_epoch = epoch.saturating_sub(1); // TODO
 
-                    let result = bank.do_stake_reward_calc(
-                        vote_with_stake_delegations_map,
-                        parent_epoch,
-                        &thread_pool,
-                        &mut metrics,
+                    let (result, reward_calc_time) = measure!(
+                        bank.do_stake_reward_calc(
+                            vote_with_stake_delegations_map,
+                            parent_epoch,
+                            &thread_pool,
+                            &mut metrics,
+                        ),
+                        "stake_reward_calc",
                     );
                     self.results
                         .write()
                         .unwrap()
                         .rewards
                         .insert(signature, Arc::new(result));
+                    reward_calc_time_us = reward_calc_time.as_us();
                 }
+
+                total_time.stop();
+
+                datapoint_info!(
+                    "handle_epoch_reward_calc_request_timings",
+                    ("epoch", epoch, i64),
+                    ("parent_slot", parent_slot, i64),
+                    ("load_calc_info_us", load_calc_info_time.as_us(), i64),
+                    ("calc_signature_us", calc_signature_time.as_us(), i64),
+                    ("reward_calc_us", reward_calc_time_us, i64),
+                    ("total_us", total_time.as_us(), i64),
+                );
             }
         }
     }
