@@ -32,7 +32,7 @@ pub struct CloseAccountData {
     pub ciphertext: pod::ElGamalCiphertext, // 64 bytes
 
     /// Proof that the source account available balance is zero
-    pub proof: CloseAccountProof, // 64 bytes
+    pub proof: CloseAccountProof, // 96 bytes
 }
 
 #[cfg(not(target_os = "solana"))]

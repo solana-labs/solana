@@ -61,6 +61,8 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.zero_balance_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
@@ -98,6 +100,8 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroBalanceProofError> {
+        transcript.zero_balance_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
         let C = ciphertext.commitment.get_point();
@@ -112,7 +116,7 @@ impl ZeroBalanceProof {
 
         let w_negated = -&w;
 
-        // decompress R or return verification error
+        // decompress Y or return verification error
         let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::Format)?;
         let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::Format)?;
 
