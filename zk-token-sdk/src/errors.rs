@@ -22,18 +22,12 @@ pub enum ProofError {
     ZeroBalanceProof,
     #[error("validity proof failed to verify")]
     ValidityProof,
-    #[error(
-        "`zk_token_elgamal::pod::ElGamalCiphertext` contains invalid ElGamalCiphertext ciphertext"
-    )]
-    InconsistentCTData,
-    #[error("failed to decrypt ciphertext from transfer data")]
-    Decryption,
-    #[error("discrete log number of threads not power-of-two")]
-    DiscreteLogThreads,
-    #[error("discrete log batch size too large")]
-    DiscreteLogBatchSize,
     #[error("public-key sigma proof failed to verify")]
     PubkeySigmaProof,
+    #[error("failed to decrypt ciphertext")]
+    Decryption,
+    #[error("invalid ciphertext data")]
+    CiphertextDeserialization,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
