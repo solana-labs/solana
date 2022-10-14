@@ -319,7 +319,16 @@ impl BankForks {
                     request_type: SnapshotRequestType::EpochAccountsHash,
                 })
                 .expect("send epoch accounts hash request");
-        } else if let Some(bank) = banks.iter().find(|bank| {
+        }
+        drop(eah_banks);
+
+        // After checking for EAH requests, also check for regular snapshot requests.
+        //
+        // This is needed when a snapshot request occurs in a slot after an EAH request, and is
+        // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
+        // unlikely for a validator with defaut snapshot intervals (and accounts hash verifier
+        // intervals), it *is* possible, and there are tests to exercise this possibility.
+        if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
                 && bank.block_height() % self.accounts_hash_interval_slots == 0
         }) {
@@ -361,8 +370,6 @@ impl BankForks {
             snapshot_time.stop();
             total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
-
-        drop(eah_banks);
 
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();

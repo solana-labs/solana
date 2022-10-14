@@ -104,7 +104,7 @@ export function UpgradeableProgramSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end text-uppercase">
-            <SolBalance lamports={account.lamports || 0} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
         <tr>
@@ -235,22 +235,20 @@ export function UpgradeableProgramDataSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end text-uppercase">
-            <SolBalance lamports={account.lamports || 0} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
-        {account.details?.space !== undefined && (
-          <tr>
-            <td>Data (Bytes)</td>
-            <td className="text-lg-end">
-              <Downloadable
-                data={programData.data[0]}
-                filename={`${account.pubkey.toString()}.bin`}
-              >
-                <span className="me-2">{account.details.space}</span>
-              </Downloadable>
-            </td>
-          </tr>
-        )}
+        <tr>
+          <td>Data Size (Bytes)</td>
+          <td className="text-lg-end">
+            <Downloadable
+              data={programData.data[0]}
+              filename={`${account.pubkey.toString()}.bin`}
+            >
+              <span className="me-2">{account.space}</span>
+            </Downloadable>
+          </td>
+        </tr>
         <tr>
           <td>Upgradeable</td>
           <td className="text-lg-end">
@@ -309,15 +307,13 @@ export function UpgradeableProgramBufferSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end text-uppercase">
-            <SolBalance lamports={account.lamports || 0} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
-        {account.details?.space !== undefined && (
-          <tr>
-            <td>Data (Bytes)</td>
-            <td className="text-lg-end">{account.details.space}</td>
-          </tr>
-        )}
+        <tr>
+          <td>Data Size (Bytes)</td>
+          <td className="text-lg-end">{account.space}</td>
+        </tr>
         {programBuffer.authority !== null && (
           <tr>
             <td>Deploy Authority</td>
@@ -326,14 +322,12 @@ export function UpgradeableProgramBufferSection({
             </td>
           </tr>
         )}
-        {account.details && (
-          <tr>
-            <td>Owner</td>
-            <td className="text-lg-end">
-              <Address pubkey={account.details.owner} alignRight link />
-            </td>
-          </tr>
-        )}
+        <tr>
+          <td>Owner</td>
+          <td className="text-lg-end">
+            <Address pubkey={account.owner} alignRight link />
+          </td>
+        </tr>
       </TableCardBody>
     </div>
   );

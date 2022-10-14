@@ -54,11 +54,11 @@ export function TokenAccountSection({
       case "mint": {
         const info = create(tokenAccount.info, MintAccountInfo);
 
-        if (isMetaplexNFT(account.details?.data, info)) {
+        if (isMetaplexNFT(account.data.parsed, info)) {
           return (
             <NonFungibleTokenMintAccountCard
               account={account}
-              nftData={(account.details!.data as TokenProgramData).nftData!}
+              nftData={(account.data.parsed as TokenProgramData).nftData!}
               mintInfo={info}
             />
           );

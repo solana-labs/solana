@@ -22,7 +22,7 @@ use {
  * used the call the syscall function.
  */
 fn main() {
-    let syscalls_inc_path = PathBuf::from("sdk/bpf/c/inc/sol/inc");
+    let syscalls_inc_path = PathBuf::from("sdk/sbf/c/inc/sol/inc");
 
     if syscalls_inc_path.is_dir() {
         for entry in fs::read_dir(syscalls_inc_path).expect("Can't open headers dir") {

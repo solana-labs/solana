@@ -56,7 +56,7 @@ export function AddressLookupTableAccountSection(
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end text-uppercase">
-            <SolBalance lamports={account.lamports || 0} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
         <tr>

@@ -32,6 +32,8 @@ pub enum ProofError {
     DiscreteLogThreads,
     #[error("discrete log batch size too large")]
     DiscreteLogBatchSize,
+    #[error("public-key sigma proof failed to verify")]
+    PubkeySigmaProof,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
@@ -66,5 +68,11 @@ impl From<ZeroBalanceProofError> for ProofError {
 impl From<ValidityProofError> for ProofError {
     fn from(_err: ValidityProofError) -> Self {
         Self::ValidityProof
+    }
+}
+
+impl From<PubkeySigmaProofError> for ProofError {
+    fn from(_err: PubkeySigmaProofError) -> Self {
+        Self::PubkeySigmaProof
     }
 }

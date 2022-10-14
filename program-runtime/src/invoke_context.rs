@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
         compute_budget::ComputeBudget,
-        executor_cache::{Executor, Executors, TransactionExecutor},
+        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
         pre_account::PreAccount,
@@ -121,7 +121,7 @@ pub struct InvokeContext<'a> {
     current_compute_budget: ComputeBudget,
     compute_meter: Rc<RefCell<ComputeMeter>>,
     accounts_data_meter: AccountsDataMeter,
-    executors: Rc<RefCell<Executors>>,
+    pub tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     pub feature_set: Arc<FeatureSet>,
     pub timings: ExecuteDetailsTimings,
     pub blockhash: Hash,
@@ -138,7 +138,7 @@ impl<'a> InvokeContext<'a> {
         sysvar_cache: Cow<'a, SysvarCache>,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
         compute_budget: ComputeBudget,
-        executors: Rc<RefCell<Executors>>,
+        tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
@@ -155,7 +155,7 @@ impl<'a> InvokeContext<'a> {
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
-            executors,
+            tx_executor_cache,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
             blockhash,
@@ -193,7 +193,7 @@ impl<'a> InvokeContext<'a> {
             Cow::Owned(sysvar_cache),
             Some(LogCollector::new_ref()),
             ComputeBudget::default(),
-            Rc::new(RefCell::new(Executors::default())),
+            Rc::new(RefCell::new(TransactionExecutorCache::default())),
             Arc::new(FeatureSet::all_enabled()),
             Hash::default(),
             0,
@@ -792,28 +792,6 @@ impl<'a> InvokeContext<'a> {
     /// Get this invocation's AccountsDataMeter
     pub fn get_accounts_data_meter(&self) -> &AccountsDataMeter {
         &self.accounts_data_meter
-    }
-
-    /// Cache an executor that wasn't found in the cache
-    pub fn add_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        self.executors
-            .borrow_mut()
-            .insert(*pubkey, TransactionExecutor::new_miss(executor));
-    }
-
-    /// Cache an executor that has changed
-    pub fn update_executor(&self, pubkey: &Pubkey, executor: Arc<dyn Executor>) {
-        self.executors
-            .borrow_mut()
-            .insert(*pubkey, TransactionExecutor::new_updated(executor));
-    }
-
-    /// Get the completed loader work that can be re-used across execution
-    pub fn get_executor(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.executors
-            .borrow()
-            .get(pubkey)
-            .map(|tx_executor| tx_executor.executor.clone())
     }
 
     /// Get this invocation's compute budget
