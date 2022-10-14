@@ -5977,7 +5977,8 @@ impl AccountsDb {
 
         hasher.update(&lamports.to_le_bytes());
 
-        hasher.update(&slot.to_le_bytes());
+        // upon feature activation, remove slot# from account hash
+        // hasher.update(&slot.to_le_bytes());
 
         hasher.update(&rent_epoch.to_le_bytes());
 
