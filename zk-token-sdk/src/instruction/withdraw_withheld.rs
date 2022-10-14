@@ -39,8 +39,8 @@ pub struct WithdrawWithheldTokensData {
     pub proof: WithdrawWithheldTokensProof,
 }
 
+#[cfg(not(target_os = "solana"))]
 impl WithdrawWithheldTokensData {
-    #[cfg(not(target_os = "solana"))]
     pub fn new(
         withdraw_withheld_authority_keypair: &ElGamalKeypair,
         destination_pubkey: &ElGamalPubkey,
