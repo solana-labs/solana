@@ -40,16 +40,16 @@ fast to execute, quite large in quantities, and inherently high-priority.
 
 All in all, any upcoming changes to the scheduler must accommodate to the
 divergence of these peculiar load pattern. At the same time, it shouldn't be
-over-optimized for the current pattern, introducing heuristics and/or fairness skew.
-That's because any blockchain network's scheduling imbalance can be exploited by
-malicious users. It should strictly strive for being generic/adaptive, not
-like other problem settings (i.e. trusted environments). That means,
-synthesized benchmark results should be taken with a grain of salt because they
-tend to be overly uniform, not reflecting the realistic usage.
+over-optimized for the current pattern, introducing heuristics and/or fairness
+skew.  That's because any blockchain network's scheduling imbalance can be
+exploited by malicious users. It should strictly strive for being
+generic/adaptive, not like other problem settings (i.e. trusted environments).
+That means, synthesized benchmark results should be taken with a grain of salt
+because they tend to be overly uniform, not reflecting the realistic usage.
 
 Lastly, it also can assumed that there will always be more pending non-vote
-transactions than system's capacity. From theoretical perspective, that would be because of
-[Parkinson's
+transactions than system's capacity. From theoretical perspective, that would
+be because of [Parkinson's
 law|https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization].
 
 ## Redefined scheduler's problem space
@@ -65,15 +65,15 @@ _blockspace_ in others.
 
 That property can be derived from the simple and unforgiving fact that Solana's
 block propagation must be streamed _in real time_ due to competition among
-leaders. Any stalemate would be forced to be less-populated blocks, because that
-block won't be finished to be replayed otherwise, due to the wasted time. Then,
-such blocks will be regarded as less favorable to vote by others (might not the
-case at the moment due to current fork choice, but ideally adjustments should
-be made for this to be held true for the maximum utility of the cluster itself,
-economically speaking). At the end of story, that behavior would adversely
-affect the consequential likeliness of block confirmation by other validators.
-Block proposal timings are quite severe in Solana and should be so to realize
-its promised very low-latency.
+leaders. Any stalemate would be forced to be less-populated blocks, because
+that block won't be finished to be replayed otherwise, due to the wasted time.
+Then, such blocks will be regarded as less favorable to vote by others (might
+not the case at the moment due to current fork choice, but ideally adjustments
+should be made for this to be held true for the maximum utility of the cluster
+itself, economically speaking). At the end of story, that behavior would
+adversely affect the consequential likeliness of block confirmation by other
+validators.  Block proposal timings are quite severe in Solana and should be so
+to realize its promised very low-latency.
 
 Then, it can now be said leaders are gaming to pack transactions _not to create
 idling **time** of blocktime (`slot` in solana)_, rather than _not to create
@@ -100,23 +100,24 @@ of execution threads isn't viable for supermajority's replayability. So, some
 bounded core count _N_ must be hard-coded, picked from the present common node
 setup for both staked and rpc nodes.
  
-Then, block saturation is defined as `N*CU` where N is such core count and CU is
-equivalent of 400ms for single-threaded on-chain program execution. Currently,
-compute unit are used to meter block limits indirectly. `N*CU` becomes the unit
-of measurement of _saturation_ of blocks, which can be called _blockspacetime_
-(_space_ here refers to the discrete dimension of `N`)
+Then, block saturation is defined as `N*CU` where N is such core count and CU
+is equivalent of 400ms for single-threaded on-chain program execution.
+Currently, compute unit are used to meter block limits indirectly. `N*CU`
+becomes the unit of measurement of _saturation_ of blocks, which can be called
+_blockspacetime_ (_space_ here refers to the discrete dimension of `N`)
 
-This shift of scheduling doctrine should also lead to a compromise of
-ongoing scheduling dilemma due to Solana's multi-threaded nature:
-_throughput-optimized_ (i.e. fee collection maximization, favored by validators)
-vs _latency-optimized_ (i.e. priority adherence maximization, favored by
-clients). The former is meaningfully impractical due to the aforementioned
-real-time constraints. So, throughput-optimization can be reduced to packing
-non-overlapping transactions as much as possible in the order of fees, equating
-to the later.  This middle ground compromised strategy can be defined as
-_utilization-optimized_ scheduling.
+This shift of scheduling doctrine should also lead to a compromise of ongoing
+scheduling dilemma due to Solana's multi-threaded nature:
+_throughput-optimized_ (i.e. fee collection maximization, favored by
+validators) vs _latency-optimized_ (i.e. priority adherence maximization,
+favored by clients). The former is meaningfully impractical due to the
+aforementioned real-time constraints. So, throughput-optimization can be
+reduced to packing non-overlapping transactions as much as possible in the
+order of fees, equating to the later.  This middle ground compromised strategy
+can be defined as _utilization-optimized_ scheduling.
 
-All these observation should warrant the justification of alternative scheduler.
+All these observation should warrant the justification of alternative
+scheduler.
 
 ## Proposed Solution
 
