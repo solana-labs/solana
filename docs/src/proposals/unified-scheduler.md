@@ -49,8 +49,7 @@ because they tend to be overly uniform, not reflecting the realistic usage.
 
 Lastly, it also can assumed that there will always be more pending non-vote
 transactions than system's capacity. From theoretical perspective, that would
-be because of [Parkinson's
-law|https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization].
+be because of [Parkinson's law](https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization).
 
 ## Redefined scheduler's problem space
 
