@@ -73,9 +73,9 @@ Then, such blocks will be regarded as less favorable to vote by others (might
 not the case at the moment due to current fork choice, but ideally adjustments
 should be made for this to be held true for the maximum utility of the cluster
 itself, economically speaking). At the end of story, that behavior would
-adversely affect the consequential likeliness of block confirmation by other
-validators.  Block proposal timings are quite severe in Solana and should be so
-to realize its promised very low-latency.
+adversely affect the consequential likeliness of block confirmation by the
+cluster. Block proposal timings are quite severe in Solana and should be so to
+realize its promised very low-latency.
 
 Then, it can now be said leaders are gaming to pack transactions _not to create
 idling **time** of blocktime (`slot` in solana)_, rather than _not to create
