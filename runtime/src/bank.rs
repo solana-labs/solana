@@ -3649,6 +3649,11 @@ impl Bank {
     }
 
     fn credit_epoch_rewards_in_partition(&mut self, start_slot: Slot, partition_index: u64) {
+        const SLEEP_MS: u64 = 10;
+        const MAX_WAIT_MIN: u64 = 10;
+        const MAX_WAIT_LOOP_COUNT: u64 = MAX_WAIT_MIN * 60 * 1000 / SLEEP_MS;
+
+        let mut sleep_count = 0;
         let result = loop {
             let calc = self.epoch_reward_calculator.read();
             let inner = calc.unwrap();
@@ -3660,7 +3665,14 @@ impl Bank {
             } else {
                 break None;
             }
+            sleep_count += 1;
             std::thread::sleep(Duration::from_millis(10));
+            if sleep_count > MAX_WAIT_LOOP_COUNT {
+                panic!(
+                    "Waited too long for the epoch reward calculation result. Exceeded the maximum waiting time {} minutes. ",
+                    MAX_WAIT_MIN,
+                );
+            }
         };
 
         if let Some(calc_result) = result {
