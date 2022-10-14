@@ -42,7 +42,20 @@ pub struct PubkeyProof {
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
 impl PubkeyProof {
-    /// TODO: keypair must be valid or it panics
+    /// Public-key proof constructor.
+    ///
+    /// The function does *not* hash the public key and ciphertext into the transcript. For
+    /// security, the caller (the main protocol) should hash these public key components prior to
+    /// invoking this constructor.
+    ///
+    /// This function is randomized. It uses `OsRng` internally to generate random scalars.
+    ///
+    /// This function panics if the provided keypair is not valid (i.e. secret key is not
+    /// invertible).
+    ///
+    /// * `elgamal_keypair` = The ElGamal keypair that pertains to the ElGamal public key to be
+    /// proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn new(elgamal_keypair: &ElGamalKeypair, transcript: &mut Transcript) -> Self {
         transcript.pubkey_proof_domain_sep();
 
@@ -68,6 +81,10 @@ impl PubkeyProof {
         Self { Y, z }
     }
 
+    /// Public-key proof verifier.
+    ///
+    /// * `elgamal_pubkey` - The ElGamal public key to be proved
+    /// * `transcript` - The transcript that does the bookkeeping for the Fiat-Shamir heuristic
     pub fn verify(
         self,
         elgamal_pubkey: &ElGamalPubkey,
