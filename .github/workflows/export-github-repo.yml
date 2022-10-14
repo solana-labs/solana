@@ -25,3 +25,12 @@ jobs:
           chmod +x ./ci/export-github-repo.sh
           ./ci/export-github-repo.sh web3.js/ solana-web3.js
         shell: bash
+      - name: Send Slack notifiaction
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+          color: danger
