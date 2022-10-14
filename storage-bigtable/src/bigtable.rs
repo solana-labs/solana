@@ -458,7 +458,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
-    /// Check wether a row key exist in the Bigtable
+    /// Check whether a row key exists in a `table`
     pub async fn does_row_key_exist(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
         self.refresh_access_token().await;
 
