@@ -470,6 +470,8 @@ export type GetAccountInfoConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+  /** Optional data slice to limit the returned account data */
+  dataSlice?: DataSlice;
 };
 
 /**
@@ -2396,6 +2398,8 @@ export type GetMultipleAccountsConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+  /** Optional data slice to limit the returned account data */
+  dataSlice?: DataSlice;
 };
 
 /**

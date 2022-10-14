@@ -4505,8 +4505,9 @@ describe('Connection', function () {
         const transferToKey = lookupTableAddresses[0];
         const transferToAccount = await connection.getAccountInfo(
           transferToKey,
-          'confirmed',
+          {commitment: 'confirmed', dataSlice: {length: 0, offset: 0}},
         );
+        expect(transferToAccount?.data.length).to.be.eq(0);
         expect(transferToAccount?.lamports).to.be.eq(LAMPORTS_PER_SOL);
       });
 
