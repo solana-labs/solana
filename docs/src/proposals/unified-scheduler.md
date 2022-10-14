@@ -96,11 +96,11 @@ of execution threads isn't viable for supermajority's replayability. So, some
 bounded core count _N_ must be hard-coded, picked from the present common node
 setup for both staked and rpc nodes.
  
-Then, block saturation is defined as _N*CU_ where N is such core count and CU is
+Then, block saturation is defined as `N*CU` where N is such core count and CU is
 equivalent of 400ms for single-threaded on-chain program execution. Currently,
-compute unit are used to meter block limits indirectly. _N*CU_ becomes the unit
+compute unit are used to meter block limits indirectly. `N*CU` becomes the unit
 of measurement of _saturation_ of blocks, which can be called _blockspacetime_
-(_space_ here refers to the discrete dimension of _N_)
+(_space_ here refers to the discrete dimension of `N`)
 
 This shift of scheduling doctrine should also lead to a compromise of
 ongoing scheduling dilemma due to Solana's multi-threaded nature:
