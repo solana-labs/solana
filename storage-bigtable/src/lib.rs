@@ -536,9 +536,9 @@ impl LedgerStorage {
     }
 
     /// Does the confirmed block exist in the Bigtable
-    pub async fn does_confirmed_block_exist(&self, slot: Slot) -> Result<bool> {
+    pub async fn confirmed_block_exists(&self, slot: Slot) -> Result<bool> {
         debug!(
-            "LedgerStorage::does_confirmed_block_exist request received: {:?}",
+            "LedgerStorage::confirmed_block_exists request received: {:?}",
             slot
         );
         inc_new_counter_debug!("storage-bigtable-query", 1);
