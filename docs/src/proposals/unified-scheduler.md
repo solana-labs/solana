@@ -103,17 +103,16 @@ of measurement of _saturation_ of blocks, which can be called _blockspacetime_
 (_space_ here refers to the discrete dimension of _N_)
 
 This shift of scheduling doctrine should also lead to a compromise of
-ongoing scheduling dilemma: throughput-optimized (i.e. fee collection
-maximization, favored by validators) vs latency-optimized (i.e. priority
-adherence maximization, favored by clients). The former is meaningfully
-impractical due to the aforementioned real-time constraints. So,
-throughput-opmization can be reduced to packing non-overlapping transactions as
-much as possible in the order of fees, equating to the later.
-
-Finally, this proposal defines this middle ground compromised strategy as
+ongoing scheduling dilemma due to Solana's multi-threaded nature:
+_throughput-optimized_ (i.e. fee collection maximization, favored by validators)
+vs _latency-optimized_ (i.e. priority adherence maximization, favored by
+clients). The former is meaningfully impractical due to the aforementioned
+real-time constraints. So, throughput-optimization can be reduced to packing
+non-overlapping transactions as much as possible in the order of fees, equating
+to the later.  This middle ground compromised strategy can be defined as
 _utilization-optimized_ scheduling.
 
-All these observation should lead to the justification of alternative scheduler.
+All these observation should warrant the justification of alternative scheduler.
 
 ## Proposed Solution
 
