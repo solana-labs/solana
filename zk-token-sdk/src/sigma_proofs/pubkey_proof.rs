@@ -19,7 +19,7 @@ use {
     zeroize::Zeroize,
 };
 use {
-    crate::{sigma_proofs::errors::PubkeyProofError, transcript::TranscriptProtocol},
+    crate::{sigma_proofs::errors::PubkeySigmaProofError, transcript::TranscriptProtocol},
     arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -34,14 +34,14 @@ use {
 /// Contains all the elliptic curve and scalar components that make up the sigma protocol.
 #[allow(non_snake_case)]
 #[derive(Clone)]
-pub struct PubkeyProof {
+pub struct PubkeySigmaProof {
     Y: CompressedRistretto,
     z: Scalar,
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(target_os = "solana"))]
-impl PubkeyProof {
+impl PubkeySigmaProof {
     /// Public-key proof constructor.
     ///
     /// The function does *not* hash the public key and ciphertext into the transcript. For
@@ -89,7 +89,7 @@ impl PubkeyProof {
         self,
         elgamal_pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
-    ) -> Result<(), PubkeyProofError> {
+    ) -> Result<(), PubkeySigmaProofError> {
         transcript.pubkey_proof_domain_sep();
 
         // extract the relvant scalar and Ristretto points from the input
@@ -100,7 +100,7 @@ impl PubkeyProof {
         let c = transcript.challenge_scalar(b"c");
 
         // check that the required algebraic condition holds
-        let Y = self.Y.decompress().ok_or(PubkeyProofError::Format)?;
+        let Y = self.Y.decompress().ok_or(PubkeySigmaProofError::Format)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![&self.z, &(-&c), &(-&Scalar::one())],
@@ -110,7 +110,7 @@ impl PubkeyProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(PubkeyProofError::AlgebraicRelation)
+            Err(PubkeySigmaProofError::AlgebraicRelation)
         }
     }
 
@@ -121,18 +121,18 @@ impl PubkeyProof {
         buf
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeySigmaProofError> {
         if bytes.len() != 64 {
-            return Err(PubkeyProofError::Format);
+            return Err(PubkeySigmaProofError::Format);
         }
 
         let bytes = array_ref![bytes, 0, 64];
         let (Y, z) = array_refs![bytes, 32, 32];
 
         let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(PubkeyProofError::Format)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(PubkeySigmaProofError::Format)?;
 
-        Ok(PubkeyProof { Y, z })
+        Ok(PubkeySigmaProof { Y, z })
     }
 }
 
@@ -147,7 +147,7 @@ mod test {
         let mut prover_transcript = Transcript::new(b"test");
         let mut verifier_transcript = Transcript::new(b"test");
 
-        let proof = PubkeyProof::new(&keypair, &mut prover_transcript);
+        let proof = PubkeySigmaProof::new(&keypair, &mut prover_transcript);
         assert!(proof
             .verify(&keypair.public, &mut verifier_transcript)
             .is_ok());

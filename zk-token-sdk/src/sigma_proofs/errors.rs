@@ -74,7 +74,7 @@ impl From<TranscriptError> for FeeSigmaProofError {
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum PubkeyProofError {
+pub enum PubkeySigmaProofError {
     #[error("the required algebraic relation does not hold")]
     AlgebraicRelation,
     #[error("malformed proof")]
@@ -85,7 +85,7 @@ pub enum PubkeyProofError {
     Transcript,
 }
 
-impl From<TranscriptError> for PubkeyProofError {
+impl From<TranscriptError> for PubkeySigmaProofError {
     fn from(_err: TranscriptError) -> Self {
         Self::Transcript
     }

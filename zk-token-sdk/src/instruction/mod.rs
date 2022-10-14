@@ -1,4 +1,5 @@
 pub mod close_account;
+pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
