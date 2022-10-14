@@ -18,7 +18,7 @@ use {
     subtle::ConstantTimeEq,
 };
 pub use {
-    close_account::CloseAccountData, transfer::TransferData,
+    close_account::CloseAccountData, pubkey_validity::PubkeyValidityData, transfer::TransferData,
     transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
     withdraw_withheld::WithdrawWithheldTokensData,
 };
