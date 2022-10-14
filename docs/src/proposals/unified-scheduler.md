@@ -63,7 +63,7 @@ transaction-fee market.
 
 That said, it can be characterized that this _market_ is arising from the
 scarcity of _time slice_ in the case of Solana, unlike the so-called
-_blockspace_ in others.
+_blockspace_ in other blockchains (_space_ as in data bytes/cpu cycles).
 
 That property can be derived from the simple and unforgiving fact that Solana's
 block propagation must be streamed _in real time_ due to competition among
