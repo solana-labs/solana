@@ -67,15 +67,16 @@ _blockspace_ in other blockchains (_space_ as in data bytes/cpu cycles).
 
 That property can be derived from the simple and unforgiving fact that Solana's
 block propagation must be streamed _in real time_ due to competition among
-leaders. Any stalemate would be forced to be less-populated blocks, because
+leaders (assuming multiple leaders for a given signle slot; not implemented as
+of now). Any stalemate would be forced to be less-populated blocks, because
 that block won't be finished to be replayed otherwise, due to the wasted time.
 Then, such blocks will be regarded as less favorable to vote by others (might
 not the case at the moment due to current fork choice, but ideally adjustments
 should be made for this to be held true for the maximum utility of the cluster
 itself, economically speaking). At the end of story, that behavior would
 adversely affect the consequential likeliness of block confirmation by the
-cluster. Block proposal timings are quite severe in Solana and should be so to
-realize its promised very low-latency.
+cluster. Block proposal timings are quite severe in Solana and _should be so to
+realize its promised very low-latency_.
 
 Then, it can now be said leaders are gaming to pack transactions _not to create
 idling **time** of blocktime (`slot` in solana)_, rather than _not to create
