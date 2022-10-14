@@ -23,8 +23,12 @@ describe("parseNFTokenAccounts", () => {
     ]);
     const nftAccount = parseNFTokenNFTAccount({
       pubkey: new PublicKey("FagABcRBhZH27JDtu6A1Jo9woXyoznP28QujLkxkN9Hj"),
-      details: { rawData: buffer, owner: new PublicKey(NFTOKEN_ADDRESS) },
-    } as any);
+      space: buffer.length,
+      lamports: 1,
+      executable: false,
+      data: { raw: buffer as Buffer },
+      owner: new PublicKey(NFTOKEN_ADDRESS),
+    });
     expect(nftAccount!.metadata_url).to.eq(
       "https://cdn.glow.app/n/88/78ef17c1-2b5a-468e-ae8f-7403856e9f00.json"
     );
