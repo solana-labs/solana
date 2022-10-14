@@ -7,6 +7,8 @@
 //! The protocol guarantees computational soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
+use curve25519_dalek::traits::VartimeMultiscalarMul;
+
 #[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::{
