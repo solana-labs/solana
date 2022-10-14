@@ -6,6 +6,7 @@ import {
   StakeActivationData,
   AddressLookupTableAccount,
   AddressLookupTableProgram,
+  SystemProgram,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
@@ -88,7 +89,7 @@ export type AddressLookupTableProgramData = {
   parsed: ParsedAddressLookupTableAccount;
 };
 
-export type ProgramData =
+export type ParsedData =
   | UpgradeableLoaderAccountData
   | StakeProgramData
   | TokenProgramData
@@ -98,18 +99,18 @@ export type ProgramData =
   | ConfigProgramData
   | AddressLookupTableProgramData;
 
-export interface Details {
-  executable: boolean;
-  owner: PublicKey;
-  space: number;
-  data?: ProgramData;
-  rawData?: Buffer;
+export interface AccountData {
+  parsed?: ParsedData;
+  raw?: Buffer;
 }
 
 export interface Account {
   pubkey: PublicKey;
   lamports: number;
-  details?: Details;
+  executable: boolean;
+  owner: PublicKey;
+  space: number;
+  data: AccountData;
 }
 
 type State = Cache.State<Account>;
@@ -162,12 +163,17 @@ async function fetchAccountInfo(
     const connection = new Connection(url, "confirmed");
     const result = (await connection.getParsedAccountInfo(pubkey)).value;
 
-    let lamports, details;
+    let account: Account;
     if (result === null) {
-      lamports = 0;
+      account = {
+        pubkey,
+        lamports: 0,
+        owner: SystemProgram.programId,
+        space: 0,
+        executable: false,
+        data: { raw: Buffer.alloc(0) },
+      };
     } else {
-      lamports = result.lamports;
-
       // Only save data in memory if we can decode it
       let space: number;
       if (!("parsed" in result.data)) {
@@ -176,7 +182,7 @@ async function fetchAccountInfo(
         space = result.data.space;
       }
 
-      let data: ProgramData | undefined;
+      let parsedData: ParsedData | undefined;
       if ("parsed" in result.data) {
         try {
           const info = create(result.data.parsed, ParsedInfo);
@@ -200,7 +206,7 @@ async function fetchAccountInfo(
                 }
               }
 
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed,
                 programData,
@@ -215,7 +221,7 @@ async function fetchAccountInfo(
                 ? await connection.getStakeActivation(pubkey)
                 : undefined;
 
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed,
                 activation,
@@ -223,25 +229,25 @@ async function fetchAccountInfo(
               break;
             }
             case "vote":
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed: create(info, VoteAccount),
               };
               break;
             case "nonce":
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed: create(info, NonceAccount),
               };
               break;
             case "sysvar":
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed: create(info, SysvarAccount),
               };
               break;
             case "config":
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed: create(info, ConfigAccount),
               };
@@ -250,7 +256,7 @@ async function fetchAccountInfo(
             case "address-lookup-table": {
               const parsed = create(info, ParsedAddressLookupTableAccount);
 
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed,
               };
@@ -291,14 +297,14 @@ async function fetchAccountInfo(
                 // unable to find NFT metadata account
               }
 
-              data = {
+              parsedData = {
                 program: result.data.program,
                 parsed,
                 nftData,
               };
               break;
             default:
-              data = undefined;
+              parsedData = undefined;
           }
         } catch (error) {
           reportError(error, { url, address: pubkey.toBase58() });
@@ -308,19 +314,23 @@ async function fetchAccountInfo(
       // If we cannot parse account layout as native spl account
       // then keep raw data for other components to decode
       let rawData: Buffer | undefined;
-      if (!data && !("parsed" in result.data)) {
+      if (!parsedData && !("parsed" in result.data)) {
         rawData = result.data;
       }
 
-      details = {
+      account = {
+        pubkey,
+        lamports: result.lamports,
         space,
         executable: result.executable,
         owner: result.owner,
-        data,
-        rawData,
+        data: {
+          parsed: parsedData,
+          raw: rawData,
+        },
       };
     }
-    data = { pubkey, lamports, details };
+    data = account;
     fetchStatus = FetchStatus.Fetched;
   } catch (error) {
     if (cluster !== Cluster.Custom) {
@@ -413,16 +423,20 @@ export function useMintAccountInfo(
 ): MintAccountInfo | undefined {
   const accountInfo = useAccountInfo(address);
   return React.useMemo(() => {
-    if (address === undefined) return;
+    if (address === undefined || accountInfo?.data === undefined) return;
+    const account = accountInfo.data;
 
     try {
-      const data = accountInfo?.data?.details?.data;
-      if (!data) return;
-      if (data.program !== "spl-token" || data.parsed.type !== "mint") {
+      const parsedData = account.data.parsed;
+      if (!parsedData) return;
+      if (
+        parsedData.program !== "spl-token" ||
+        parsedData.parsed.type !== "mint"
+      ) {
         return;
       }
 
-      return create(data.parsed.info, MintAccountInfo);
+      return create(parsedData.parsed.info, MintAccountInfo);
     } catch (err) {
       reportError(err, { address });
     }
@@ -433,16 +447,20 @@ export function useTokenAccountInfo(
   address: string | undefined
 ): TokenAccountInfo | undefined {
   const accountInfo = useAccountInfo(address);
-  if (address === undefined) return;
+  if (address === undefined || accountInfo?.data === undefined) return;
+  const account = accountInfo.data;
 
   try {
-    const data = accountInfo?.data?.details?.data;
-    if (!data) return;
-    if (data.program !== "spl-token" || data.parsed.type !== "account") {
+    const parsedData = account.data.parsed;
+    if (!parsedData) return;
+    if (
+      parsedData.program !== "spl-token" ||
+      parsedData.parsed.type !== "account"
+    ) {
       return;
     }
 
-    return create(data.parsed.info, TokenAccountInfo);
+    return create(parsedData.parsed.info, TokenAccountInfo);
   } catch (err) {
     reportError(err, { address });
   }
@@ -452,24 +470,24 @@ export function useAddressLookupTable(
   address: string | undefined
 ): AddressLookupTableAccount | undefined | string {
   const accountInfo = useAccountInfo(address);
-  if (address === undefined) return;
-  if (accountInfo?.data?.details === undefined) return;
-  if (accountInfo.data.lamports === 0) return "Lookup Table Not Found";
-  const { data, rawData } = accountInfo.data.details;
+  if (address === undefined || accountInfo?.data === undefined) return;
+  const account = accountInfo.data;
+  if (account.lamports === 0) return "Lookup Table Not Found";
+  const { parsed: parsedData, raw: rawData } = account.data;
 
   const key = new PublicKey(address);
-  if (data && data.program === "address-lookup-table") {
-    if (data.parsed.type === "lookupTable") {
+  if (parsedData && parsedData.program === "address-lookup-table") {
+    if (parsedData.parsed.type === "lookupTable") {
       return new AddressLookupTableAccount({
         key,
-        state: data.parsed.info,
+        state: parsedData.parsed.info,
       });
-    } else if (data.parsed.type === "uninitialized") {
+    } else if (parsedData.parsed.type === "uninitialized") {
       return "Lookup Table Uninitialized";
     }
   } else if (
     rawData &&
-    accountInfo.data.details.owner.equals(AddressLookupTableProgram.programId)
+    account.owner.equals(AddressLookupTableProgram.programId)
   ) {
     try {
       return new AddressLookupTableAccount({

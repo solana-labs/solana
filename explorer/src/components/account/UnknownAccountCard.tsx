@@ -8,10 +8,8 @@ import { useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
 export function UnknownAccountCard({ account }: { account: Account }) {
-  const { details, lamports } = account;
   const { cluster } = useCluster();
   const { tokenRegistry } = useTokenRegistry();
-  if (lamports === undefined) return null;
 
   const label = addressLabel(account.pubkey.toBase58(), cluster, tokenRegistry);
   return (
@@ -36,32 +34,26 @@ export function UnknownAccountCard({ account }: { account: Account }) {
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end">
-            <SolBalance lamports={lamports} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
 
-        {details?.space !== undefined && (
-          <tr>
-            <td>Allocated Data Size</td>
-            <td className="text-lg-end">{details.space} byte(s)</td>
-          </tr>
-        )}
+        <tr>
+          <td>Allocated Data Size</td>
+          <td className="text-lg-end">{account.space} byte(s)</td>
+        </tr>
 
-        {details && (
-          <tr>
-            <td>Assigned Program Id</td>
-            <td className="text-lg-end">
-              <Address pubkey={details.owner} alignRight link />
-            </td>
-          </tr>
-        )}
+        <tr>
+          <td>Assigned Program Id</td>
+          <td className="text-lg-end">
+            <Address pubkey={account.owner} alignRight link />
+          </td>
+        </tr>
 
-        {details && (
-          <tr>
-            <td>Executable</td>
-            <td className="text-lg-end">{details.executable ? "Yes" : "No"}</td>
-          </tr>
-        )}
+        <tr>
+          <td>Executable</td>
+          <td className="text-lg-end">{account.executable ? "Yes" : "No"}</td>
+        </tr>
       </TableCardBody>
     </div>
   );
