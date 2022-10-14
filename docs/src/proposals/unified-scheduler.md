@@ -47,10 +47,12 @@ generic/adaptive, not like other problem settings (i.e. trusted environments).
 That means, synthesized benchmark results should be taken with a grain of salt
 because they tend to be overly uniform, not reflecting the realistic usage.
 
-Lastly, it also can assumed that there will always be more pending non-vote
+Lastly, it also can be assumed that there will always be more pending non-vote
 transactions than system's capacity. From theoretical perspective, that would
-be because of [Parkinson's law](https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization).
-From empirical perspective, this should have been true for very long time.
+be because of [Parkinson's law](https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization),
+with the _base_ cost of transactions being nearly-zero for Solana. Also, from
+empirical perspective, this has been true for very long time. This means
+scheduler never be starved for incoming tasks.
 
 ## Redefined scheduler's problem space
 
