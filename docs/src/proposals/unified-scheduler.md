@@ -112,7 +112,7 @@ This shift of scheduling doctrine should also lead to a compromise of ongoing
 scheduling dilemma due to Solana's multi-threaded nature:
 _throughput-optimized_ (i.e. fee collection maximization, favored by
 validators) vs _latency-optimized_ (i.e. priority adherence maximization,
-favored by clients). The former is meaningfully impractical due to the
+favored by users). The former is meaningfully impractical due to the
 aforementioned real-time constraints. So, throughput-optimization can be
 reduced to packing non-overlapping transactions as much as possible in the
 order of fees, equating to the later.  This middle ground compromised strategy
