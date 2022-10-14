@@ -545,7 +545,7 @@ impl LedgerStorage {
         let mut bigtable = self.connection.client();
 
         let does_block_exist = bigtable
-            .does_row_key_exist("blocks", slot_to_blocks_key(slot))
+            .row_key_exists("blocks", slot_to_blocks_key(slot))
             .await?;
 
         Ok(does_block_exist)

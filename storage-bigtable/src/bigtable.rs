@@ -459,7 +459,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     }
 
     /// Check whether a row key exists in a `table`
-    pub async fn does_row_key_exist(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
+    pub async fn row_key_exists(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
         self.refresh_access_token().await;
 
         let response = self
