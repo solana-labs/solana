@@ -56,8 +56,9 @@ this reason, the EAH calculation must take place in the background.
 In order for all the validators to calculate the same accounts hash, the
 calculation must be based on the same view of all accounts.  This means the EAH
 must be based on a predetermined slot.  This will be known as the `start slot`.
-The `start slot` is calculated as an offset from the first slot of an epoch.
-This offset will be known as the `start offset`. 
+The `start slot` is calculated as an offset into the epoch.  This offset will
+be known as the `start offset`.  Formally, the `start slot` is the first root
+*greater-than-or-equal-to* `first slot in epoch + start offset`.
 
 Similarly, all the validators must save the EAH into a bank at a predetermined
 slot, and offset from the first slot of an epoch.  This will be known as the
@@ -65,7 +66,7 @@ slot, and offset from the first slot of an epoch.  This will be known as the
 
 * The `start offset` will be set at one-quarter into the epoch.
 * The `stop offset` will be set at three-quarters into the epoch.
-* For epochs with 432,000 slots, the `start offset` will be 108,00 and the
+* For epochs with 432,000 slots, the `start offset` will be 108,000 and the
   `stop offset` will be 324,000.
 
 These constants may be changed in the future, or may be determined at runtime.
@@ -76,11 +77,7 @@ The main justifications for these values are:
 2. The bank to save the EAH into—the `stop offset`—should be sufficiently far
    in the future to guarantee all validators are able to complete the accounts
    hash calculation in time.
-3. The EAH window, `start offset` to `stop offset`, should be small.  The
-   validator will need to keep around all the state for the accounts at the
-   `start slot` while the EAH calculation is occurring; this is expensive, and
-   that duration should be minimized.
-4. The `start offset` should be *after* the `rewarding interval`
+3. The `start offset` should be *after* the `rewarding interval`
    (from [Partitioned Inflationary Rewards Distribution](https://github.com/solana-labs/solana/pull/27455)).
 
 Once the EAH calculation is complete, it must be saved somewhere.  Since this
@@ -101,10 +98,10 @@ processed first/instead of other requests.
 
 #### Snapshots
 
-A snapshot contains all the state necessarily to reconstruct the cluster as of
-a certain slot.  A snapshot taken early in the epoch will need to contain the
-EAH so that the `stop slot` can include it.  Consider the following scenarios
-within an epoch where a snapshot is requested for slot `X`:
+A snapshot contains all the state necessary to reconstruct the cluster as of a
+certain slot.  A snapshot may then need to contain the EAH so that the `stop
+slot` can include it.  Consider the following scenarios within an epoch where a
+snapshot is requested for slot `X`:
 
 
 ##### 1. `X >= first slot in epoch` and `X < start slot`
@@ -118,36 +115,27 @@ in order to take a snapshot in this scenario.
 The EAH *must* be included in the snapshot.  Since the snapshot process always
 calculates the accounts hash, no additional calculations are required.  The
 accounts hash calculation result will be used both to store in the snapshot as
-the EAH, and for the snapshot hash.
+the EAH, and for the snapshot hash (which is used at load-time for verification).
 
 
 ##### 3. `X > start slot` and `X < stop slot`
 
-If a snapshot is requested *after* the `start slot` but *before* the EAH
-calculation has completed, then it will be impossible to create a snapshot with
-the correct EAH.  The snapshot process will wait until the EAH calculation has
-completed before proceeding.
+If a snapshot is requested to be created *after* the `start slot` but *before*
+the EAH calculation has completed, then it will be impossible to create a
+snapshot with the correct EAH.  The snapshot process will wait until the EAH
+calculation has completed before proceeding.
 
 
 ##### 4. `X == stop slot`
 
-The EAH has been calculated for this epoch, and will be included in the
-snapshot.  No further handling is required.
+The EAH has been calculated for this epoch, and has been included in the `stop
+slot` bank.  No further handling is required; the snapshot does not need to
+contain the EAH.
 
 
 ##### 5. `X > stop slot` and `X <= last slot in epoch`
 
-Same as (4); the EAH has been calculated for this epoch, and will be included
-in the snapshot.  No further handling is required.
-
-
-#### Ledger-Tool
-
-Ledger-tool is used to create snapshots, so it must also be made aware of EAH.
-If a new snapshot is to be created at slot `X`, where `X > start slot` and `X <
-stop slot`, then an EAH calculation *must* occur.  It will be necessary that
-the slot the ledger-tool loads from, slot `S`, satisfies `X <= start slot`, so
-that an EAH calculation *can* occur.
+Same as (4).
 
 
 #### Corner Cases
@@ -179,6 +167,7 @@ In these examples the observed behavior of the EAH is different than when using
 the normal 432,000 slots per epoch.  The EAH is still valid and correct with a
 small number of slots per epoch; it now has a delay of one epoch.  Since the
 epochs themselves can be much faster, security is not reduced.
+
 
 #### Implementation Alternatives
 
