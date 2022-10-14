@@ -152,13 +152,12 @@ fn try_borrow_account<'a>(
     }
 }
 
-pub fn create_executor<'a>(
-    programdata: &BorrowedAccount<'a>,
-    programdata_offset: usize,
+pub fn create_executor_from_bytes(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     create_executor_metrics: &mut executor_metrics::CreateMetrics,
+    programdata: &[u8],
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
@@ -199,18 +198,12 @@ pub fn create_executor<'a>(
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut load_elf_time = Measure::start("load_elf_time");
-    let executable = Executable::<ThisInstructionMeter>::from_elf(
-        programdata
-            .get_data()
-            .get(programdata_offset..)
-            .ok_or(InstructionError::AccountDataTooSmall)?,
-        config,
-        syscall_registry,
-    )
-    .map_err(|err| {
-        ic_logger_msg!(log_collector, "{}", err);
-        InstructionError::InvalidAccountData
-    });
+    let executable =
+        Executable::<ThisInstructionMeter>::from_elf(programdata, config, syscall_registry)
+            .map_err(|err| {
+                ic_logger_msg!(log_collector, "{}", err);
+                InstructionError::InvalidAccountData
+            });
     load_elf_time.stop();
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
@@ -392,7 +385,7 @@ fn process_instruction_common(
             return Err(InstructionError::IncorrectProgramId);
         }
 
-        let program_data_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
+        let programdata_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
             if let UpgradeableLoaderState::Program {
                 programdata_address,
             } = program.get_state()?
@@ -438,13 +431,15 @@ fn process_instruction_common(
                 first_instruction_account,
             )?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-            let executor = create_executor(
-                &programdata,
-                program_data_offset,
+            let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
                 log_collector,
                 &mut create_executor_metrics,
+                programdata
+                    .get_data()
+                    .get(programdata_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
                 use_jit,
                 false, /* reject_deployment_of_broken_elfs */
             )?;
@@ -677,13 +672,15 @@ fn process_loader_upgradeable_instruction(
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-            let executor = create_executor(
-                &buffer,
-                buffer_data_offset,
+            let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
                 invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
+                buffer
+                    .get_data()
+                    .get(buffer_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
                 use_jit,
                 true,
             )?;
@@ -854,13 +851,15 @@ fn process_loader_upgradeable_instruction(
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-            let executor = create_executor(
-                &buffer,
-                buffer_data_offset,
+            let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
                 invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
+                buffer
+                    .get_data()
+                    .get(buffer_data_offset..)
+                    .ok_or(InstructionError::AccountDataTooSmall)?,
                 use_jit,
                 true,
             )?;
@@ -1276,13 +1275,12 @@ fn process_loader_instruction(
                 return Err(InstructionError::MissingRequiredSignature);
             }
             let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-            let executor = create_executor(
-                &program,
-                0,
+            let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
                 invoke_context.get_log_collector(),
                 &mut create_executor_metrics,
+                program.get_data(),
                 use_jit,
                 true,
             )?;
