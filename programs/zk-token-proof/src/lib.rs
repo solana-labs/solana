@@ -70,5 +70,9 @@ pub fn process_instruction(
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             verify::<TransferWithFeeData>(invoke_context)
         }
+        ProofInstruction::VerifyPubkeyValidity => {
+            ic_msg!(invoke_context, "VerifyPubkeyValidity");
+            verify::<PubkeyValidityData>(invoke_context)
+        }
     }
 }
