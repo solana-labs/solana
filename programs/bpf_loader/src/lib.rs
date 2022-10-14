@@ -22,7 +22,7 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor_cache::Executor,
+        executor_cache::{Executor, TransactionExecutorCache},
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
         log_collector::LogCollector,
@@ -65,7 +65,12 @@ use {
             BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
         },
     },
-    std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
+    std::{
+        cell::{RefCell, RefMut},
+        fmt::Debug,
+        rc::Rc,
+        sync::Arc,
+    },
     thiserror::Error,
 };
 
@@ -152,7 +157,7 @@ fn try_borrow_account<'a>(
     }
 }
 
-pub fn create_executor_from_bytes(
+fn create_executor_from_bytes(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -230,6 +235,82 @@ pub fn create_executor_from_bytes(
         verified_executable,
         use_jit,
     }))
+}
+
+pub fn create_executor_from_account(
+    feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    log_collector: Option<Rc<RefCell<LogCollector>>>,
+    tx_executor_cache: Option<RefMut<TransactionExecutorCache>>,
+    program: &BorrowedAccount,
+    programdata: &BorrowedAccount,
+    use_jit: bool,
+) -> Result<(Arc<dyn Executor>, Option<executor_metrics::CreateMetrics>), InstructionError> {
+    if !check_loader_id(program.get_owner()) {
+        ic_logger_msg!(
+            log_collector,
+            "Executable account not owned by the BPF loader"
+        );
+        return Err(InstructionError::IncorrectProgramId);
+    }
+
+    let programdata_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
+        if let UpgradeableLoaderState::Program {
+            programdata_address,
+        } = program.get_state()?
+        {
+            if &programdata_address != programdata.get_key() {
+                ic_logger_msg!(
+                    log_collector,
+                    "Wrong ProgramData account for this Program account"
+                );
+                return Err(InstructionError::InvalidArgument);
+            }
+            if !matches!(
+                programdata.get_state()?,
+                UpgradeableLoaderState::ProgramData {
+                    slot: _,
+                    upgrade_authority_address: _,
+                }
+            ) {
+                ic_logger_msg!(log_collector, "Program has been closed");
+                return Err(InstructionError::InvalidAccountData);
+            }
+            UpgradeableLoaderState::size_of_programdata_metadata()
+        } else {
+            ic_logger_msg!(log_collector, "Invalid Program account");
+            return Err(InstructionError::InvalidAccountData);
+        }
+    } else {
+        0
+    };
+
+    if let Some(ref tx_executor_cache) = tx_executor_cache {
+        if let Some(executor) = tx_executor_cache.get(program.get_key()) {
+            return Ok((executor, None));
+        }
+    }
+
+    let mut create_executor_metrics = executor_metrics::CreateMetrics {
+        program_id: program.get_key().to_string(),
+        ..executor_metrics::CreateMetrics::default()
+    };
+    let executor = create_executor_from_bytes(
+        feature_set,
+        compute_budget,
+        log_collector,
+        &mut create_executor_metrics,
+        programdata
+            .get_data()
+            .get(programdata_offset..)
+            .ok_or(InstructionError::AccountDataTooSmall)?,
+        use_jit,
+        false, /* reject_deployment_of_broken_elfs */
+    )?;
+    if let Some(mut tx_executor_cache) = tx_executor_cache {
+        tx_executor_cache.set(*program.get_key(), executor.clone(), false);
+    }
+    Ok((executor, Some(create_executor_metrics)))
 }
 
 fn write_program_data(
@@ -377,86 +458,35 @@ fn process_instruction_common(
             invoke_context.get_stack_height() > 1
         );
 
-        if !check_loader_id(program.get_owner()) {
-            ic_logger_msg!(
-                log_collector,
-                "Executable account not owned by the BPF loader"
-            );
-            return Err(InstructionError::IncorrectProgramId);
-        }
-
-        let programdata_offset = if bpf_loader_upgradeable::check_id(program.get_owner()) {
-            if let UpgradeableLoaderState::Program {
-                programdata_address,
-            } = program.get_state()?
-            {
-                if programdata_address != *first_account_key {
-                    ic_logger_msg!(
-                        log_collector,
-                        "Wrong ProgramData account for this Program account"
-                    );
-                    return Err(InstructionError::InvalidArgument);
-                }
-                if !matches!(
-                    instruction_context
-                        .try_borrow_program_account(transaction_context, first_instruction_account)?
-                        .get_state()?,
-                    UpgradeableLoaderState::ProgramData {
-                        slot: _,
-                        upgrade_authority_address: _,
-                    }
-                ) {
-                    ic_logger_msg!(log_collector, "Program has been closed");
-                    return Err(InstructionError::InvalidAccountData);
-                }
-                UpgradeableLoaderState::size_of_programdata_metadata()
-            } else {
-                ic_logger_msg!(log_collector, "Invalid Program account");
-                return Err(InstructionError::InvalidAccountData);
-            }
+        let programdata = if program_account_index == first_instruction_account {
+            None
         } else {
-            0
-        };
-        drop(program);
-
-        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
-        let cached_executor = invoke_context.tx_executor_cache.borrow().get(program_id);
-        let executor = if let Some(executor) = cached_executor {
-            executor
-        } else {
-            let program_id = *instruction_context.get_last_program_key(transaction_context)?;
-            let programdata = try_borrow_account(
+            Some(try_borrow_account(
                 transaction_context,
                 instruction_context,
                 first_instruction_account,
-            )?;
-            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
-            let executor = create_executor_from_bytes(
-                &invoke_context.feature_set,
-                invoke_context.get_compute_budget(),
-                log_collector,
-                &mut create_executor_metrics,
-                programdata
-                    .get_data()
-                    .get(programdata_offset..)
-                    .ok_or(InstructionError::AccountDataTooSmall)?,
-                use_jit,
-                false, /* reject_deployment_of_broken_elfs */
-            )?;
-            drop(programdata);
-            create_executor_metrics.program_id = program_id.to_string();
-            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
-            invoke_context
-                .tx_executor_cache
-                .borrow_mut()
-                .set(program_id, executor.clone(), false);
-            executor
+            )?)
         };
+        let mut get_or_create_executor_time = Measure::start("get_or_create_executor_time");
+        let (executor, create_executor_metrics) = create_executor_from_account(
+            &invoke_context.feature_set,
+            invoke_context.get_compute_budget(),
+            log_collector,
+            Some(invoke_context.tx_executor_cache.borrow_mut()),
+            &program,
+            programdata.as_ref().unwrap_or(&program),
+            use_jit,
+        )?;
+        drop(program);
+        drop(programdata);
         get_or_create_executor_time.stop();
         saturating_add_assign!(
             invoke_context.timings.get_or_create_executor_us,
             get_or_create_executor_time.as_us()
         );
+        if let Some(create_executor_metrics) = create_executor_metrics {
+            create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
+        }
 
         executor.execute(program_account_index, invoke_context)
     } else {
