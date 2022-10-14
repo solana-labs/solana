@@ -43,10 +43,14 @@ divergence of these peculiar load pattern. At the same time, it shouldn't be
 over-optimized for the current pattern, introducing heuristics and/or fairness skew.
 That's because any blockchain network's scheduling imbalance can be exploited by
 malicious users. It should strictly strive for being generic/adaptive, not
-like other problem settings (i.e. trusted environments).
+like other problem settings (i.e. trusted environments). That means,
+synthesized benchmark results should be taken with a grain of salt because they
+tend to be overly uniform, not reflecting the realistic usage.
 
-That means, synthesized benchmark results should be taken with a grain of salt
-because they tend to be overly uniform, not reflecting the realistic usage.
+Lastly, it also can assumed that there will always be more pending non-vote
+transactions than system's capacity. From theoretical perspective, that would be because of
+[Parkinson's
+law|https://en.wikipedia.org/wiki/Parkinson%27s_law#Generalization].
 
 ## Redefined scheduler's problem space
 
@@ -66,12 +70,12 @@ block won't be finished to be replayed otherwise, due to the wasted time. Then,
 such blocks will be regarded as less favorable to vote by others (might not the
 case at the moment due to current fork choice, but ideally adjustments should
 be made for this to be held true for the maximum utility of the cluster itself,
-economically speaking). At the end of story, that illogical behavior would adversely
+economically speaking). At the end of story, that behavior would adversely
 affect the consequential likeliness of block confirmation by other validators.
-Block proposal timings are quite severe in Solana and should be so to
-realize its promised very low-latency.
+Block proposal timings are quite severe in Solana and should be so to realize
+its promised very low-latency.
 
-Then, it can now be said leader are gaming to pack transactions _not to create
+Then, it can now be said leaders are gaming to pack transactions _not to create
 idling **time** of blocktime (`slot` in solana)_, rather than _not to create
 empty **space** of blockspace_.
 
