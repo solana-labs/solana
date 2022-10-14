@@ -21,6 +21,9 @@ use {
 };
 pub const MERKLE_FANOUT: usize = 16;
 
+/// the data passed through the processing functions
+pub type SortedDataByPubkey = Vec<Vec<CalculateHashIntermediate>>;
+
 #[derive(Default, Debug)]
 pub struct PreviousPass {
     pub reduced_hashes: Vec<Vec<Hash>>,
@@ -743,7 +746,7 @@ impl AccountsHash {
 
     fn de_dup_and_eliminate_zeros<'a>(
         &self,
-        sorted_data_by_pubkey: &'a [Vec<Vec<CalculateHashIntermediate>>],
+        sorted_data_by_pubkey: &'a [SortedDataByPubkey],
         stats: &mut HashStats,
         max_bin: usize,
     ) -> (Vec<Vec<&'a Hash>>, u64) {
@@ -791,7 +794,7 @@ impl AccountsHash {
         min_index: usize,
         bin: usize,
         first_items: &'a mut Vec<Pubkey>,
-        pubkey_division: &'b [Vec<Vec<CalculateHashIntermediate>>],
+        pubkey_division: &'b [SortedDataByPubkey],
         indexes: &'a mut [usize],
         first_item_to_pubkey_division: &'a mut Vec<usize>,
     ) -> &'b CalculateHashIntermediate {
@@ -834,7 +837,7 @@ impl AccountsHash {
     //   c. unreduced count (ie. including duplicates and zero lamport)
     fn de_dup_accounts_in_parallel<'a>(
         &self,
-        pubkey_division: &'a [Vec<Vec<CalculateHashIntermediate>>],
+        pubkey_division: &'a [SortedDataByPubkey],
         pubkey_bin: usize,
     ) -> (Vec<&'a Hash>, u64, usize) {
         let len = pubkey_division.len();
@@ -943,7 +946,7 @@ impl AccountsHash {
     //     vec: [..] - items which fit in the containing bin. Sorted by: Pubkey, higher Slot, higher Write version (if pubkey =)
     pub fn rest_of_hash_calculation(
         &self,
-        data_sections_by_pubkey: Vec<Vec<Vec<CalculateHashIntermediate>>>,
+        data_sections_by_pubkey: Vec<SortedDataByPubkey>,
         mut stats: &mut HashStats,
         is_last_pass: bool,
         mut previous_state: PreviousPass,
@@ -1076,9 +1079,7 @@ pub mod tests {
         assert_eq!(AccountsHash::div_ceil(10, 0), 0);
     }
 
-    fn for_rest(
-        original: &[CalculateHashIntermediate],
-    ) -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+    fn for_rest(original: &[CalculateHashIntermediate]) -> Vec<SortedDataByPubkey> {
         vec![vec![original.to_vec()]]
     }
 
@@ -1151,7 +1152,7 @@ pub mod tests {
         0
     }
 
-    fn empty_data() -> Vec<Vec<Vec<CalculateHashIntermediate>>> {
+    fn empty_data() -> Vec<SortedDataByPubkey> {
         vec![vec![vec![]]]
     }
 
@@ -1694,7 +1695,7 @@ pub mod tests {
     }
 
     fn test_de_dup_accounts_in_parallel(
-        account_maps: &[Vec<Vec<CalculateHashIntermediate>>],
+        account_maps: &[SortedDataByPubkey],
     ) -> (Vec<&Hash>, u64, usize) {
         AccountsHash::default().de_dup_accounts_in_parallel(account_maps, 0)
     }
