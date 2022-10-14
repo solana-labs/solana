@@ -33,7 +33,6 @@ use {
     solana_test_validator::{TestValidator, TestValidatorGenesis},
 };
 
-// TODO
 #[test]
 fn test_stake_redelegation() {
     let mint_keypair = Keypair::new();
