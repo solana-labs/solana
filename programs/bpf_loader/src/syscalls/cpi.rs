@@ -285,7 +285,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             invoke_context,
         )?;
 
-        translate_accounts(
+        translate_and_update_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -519,7 +519,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             invoke_context,
         )?;
 
-        translate_accounts(
+        translate_and_update_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -619,7 +619,9 @@ where
     Ok((account_infos, account_info_keys))
 }
 
-fn translate_accounts<'a, T, F>(
+// Finish translating accounts, build CallerAccount values and update callee
+// accounts in preparation of executing the callee.
+fn translate_and_update_accounts<'a, T, F>(
     instruction_accounts: &[InstructionAccount],
     program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
