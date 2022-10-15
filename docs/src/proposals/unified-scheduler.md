@@ -82,8 +82,8 @@ Then, it can now be said leaders are gaming to pack transactions _not to create
 idling **time** of blocktime (`slot` in solana)_, rather than _not to create
 empty **space** of blockspace_.
 
-That limits transaction reordering capability severely due to this very tight
-time constraints. In other words, searching for more lucrative transaction
+That limits transaction reordering capability due to this tight time
+constraints. In other words, searching for more lucrative transaction
 arrangement in the realam of NP-complete solution is just risking the binary
 opportunity cost. That's because this activity would be regarded against the
 best interest of whole cluster. Then, supermajority of others are eager to
