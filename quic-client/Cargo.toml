@@ -1,0 +1,19 @@
+[package]
+name = "solana-quic-client"
+version = "1.15.0"
+description = "Solana Quic Client"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-quic-client"
+edition = "2021"
+
+[dependencies]
+solana-metrics = { path = "../metrics", version = "=1.15.0" }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
+solana-streamer = { path = "../streamer", version = "=1.15.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.15.0" }
+
+[dev-dependencies]
+solana-logger = { path = "../logger", version = "=1.15.0" }

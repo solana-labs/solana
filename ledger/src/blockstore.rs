@@ -11,8 +11,8 @@ use {
         },
         blockstore_meta::*,
         blockstore_options::{
-            AccessType, BlockstoreOptions, BlockstoreRocksFifoOptions, LedgerColumnOptions,
-            ShredStorageType,
+            AccessType, BlockstoreOptions, LedgerColumnOptions, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+            BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
         },
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
@@ -429,15 +429,9 @@ impl Blockstore {
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the root directory doesn't exist
         fs::create_dir_all(ledger_path)?;
-        Database::destroy(
-            &Path::new(ledger_path).join(ShredStorageType::RocksLevel.blockstore_directory()),
+        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)).and(
+            Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)),
         )
-        .and(Database::destroy(
-            &Path::new(ledger_path).join(
-                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-                    .blockstore_directory(),
-            ),
-        ))
     }
 
     /// Returns the SlotMeta of the specified slot.
@@ -4062,7 +4056,7 @@ macro_rules! create_new_tmp_ledger_fifo {
             $genesis_config,
             $crate::blockstore_options::LedgerColumnOptions {
                 shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
-                    $crate::blockstore_options::BlockstoreRocksFifoOptions::default(),
+                    $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
                 ),
                 ..$crate::blockstore_options::LedgerColumnOptions::default()
             },
@@ -4089,7 +4083,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
             $genesis_config,
             $crate::blockstore_options::LedgerColumnOptions {
                 shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
-                    $crate::blockstore_options::BlockstoreRocksFifoOptions::default(),
+                    $crate::blockstore_options::BlockstoreRocksFifoOptions::new_for_tests(),
                 ),
                 ..$crate::blockstore_options::LedgerColumnOptions::default()
             },
@@ -4389,7 +4383,7 @@ pub mod tests {
     use {
         super::*,
         crate::{
-            blockstore_options::BlockstoreRocksFifoOptions,
+            blockstore_options::{BlockstoreRocksFifoOptions, ShredStorageType},
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             leader_schedule::{FixedSchedule, LeaderSchedule},
             shred::{max_ticks_per_n_shreds, ShredFlags},
@@ -4463,7 +4457,7 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(ShredStorageType::RocksLevel.blockstore_directory())
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)
             .exists());
     }
 
@@ -4478,7 +4472,7 @@ pub mod tests {
             BlockstoreOptions {
                 column_options: LedgerColumnOptions {
                     shred_storage_type: ShredStorageType::RocksFifo(
-                        BlockstoreRocksFifoOptions::default(),
+                        BlockstoreRocksFifoOptions::new_for_tests(),
                     ),
                     ..LedgerColumnOptions::default()
                 },
@@ -4492,10 +4486,7 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(
-                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-                    .blockstore_directory()
-            )
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)
             .exists());
     }
 

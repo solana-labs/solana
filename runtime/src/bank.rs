@@ -175,7 +175,6 @@ use {
 /// params to `verify_bank_hash`
 pub struct VerifyBankHash {
     pub test_hash_calculation: bool,
-    pub can_cached_slot_be_unflushed: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
     pub run_in_background: bool,
@@ -6882,6 +6881,11 @@ impl Bank {
             // will be required for the epoch accounts hash calculation to have completed and
             // for this value to be `Some`.
             if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+                debug!(
+                    "including epoch accounts hash, slot: {}, hash: {:?}",
+                    self.slot(),
+                    epoch_accounts_hash
+                );
                 hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
             } else {
                 warn!("bank {}: epoch_accounts_hash was None but should have been included in this bank's hash!", self.slot());
@@ -6997,7 +7001,6 @@ impl Bank {
                             config.test_hash_calculation,
                             &epoch_schedule,
                             &rent_collector,
-                            config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
                             enable_rehashing,
@@ -7019,7 +7022,6 @@ impl Bank {
                 config.test_hash_calculation,
                 epoch_schedule,
                 rent_collector,
-                config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
                 enable_rehashing,
@@ -7115,13 +7117,11 @@ impl Bank {
         Ok(sanitized_tx)
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from ledger-tool or tests
     fn calculate_capitalization(&self, debug_verify: bool) -> u64 {
-        let can_cached_slot_be_unflushed = true; // implied yes
         self.rc.accounts.calculate_capitalization(
             &self.ancestors,
             self.slot(),
-            can_cached_slot_be_unflushed,
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
@@ -7129,7 +7129,7 @@ impl Bank {
         )
     }
 
-    /// only called at startup vs steady-state runtime
+    /// only called from tests or ledger tool
     pub fn calculate_and_verify_capitalization(&self, debug_verify: bool) -> bool {
         let calculated = self.calculate_capitalization(debug_verify);
         let expected = self.capitalization();
@@ -7185,7 +7185,6 @@ impl Bank {
                 self.slot(),
                 &self.ancestors,
                 Some(self.capitalization()),
-                false,
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
@@ -7212,7 +7211,6 @@ impl Bank {
                         self.slot(),
                         &self.ancestors,
                         Some(self.capitalization()),
-                        false,
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
@@ -7267,7 +7265,6 @@ impl Bank {
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
                 test_hash_calculation,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: true,
@@ -7929,7 +7926,7 @@ impl Bank {
     }
 
     /// Convenience fn to get the Epoch Accounts Hash
-    fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+    pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
         *self
             .rc
             .accounts
@@ -10482,7 +10479,6 @@ pub(crate) mod tests {
         fn default_for_test() -> Self {
             Self {
                 test_hash_calculation: true,
-                can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: false,
