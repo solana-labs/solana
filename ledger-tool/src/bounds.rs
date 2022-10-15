@@ -2,9 +2,7 @@ use {
     clap::{App, Arg, ArgMatches, SubCommand},
     serde::Serialize,
     solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
-    solana_ledger::{
-        blockstore::Blockstore,
-    },
+    solana_ledger::blockstore::Blockstore,
     std::{
         fmt::{Display, Formatter, Result},
         process::exit,
@@ -80,13 +78,9 @@ impl Display for SlotBounds {
     }
 }
 
-pub fn bounds_process_command(
-    blockstore: Blockstore,
-    matches: &ArgMatches,
-) {
+pub fn bounds_process_command(blockstore: Blockstore, matches: &ArgMatches) {
     match blockstore.slot_meta_iterator(0) {
         Ok(metas) => {
-            
             let output_format = OutputFormat::from_matches(matches, "output_format", false);
             let all = matches.is_present("all");
 
@@ -98,7 +92,7 @@ pub fn bounds_process_command(
                     OutputFormat::Json | OutputFormat::JsonCompact => {
                         println!("{}", output_format.formatted_string(&slot_bounds))
                     }
-                    _ => println!("Ledger is empty")
+                    _ => println!("Ledger is empty"),
                 }
             } else {
                 let first = slots.first().unwrap();
