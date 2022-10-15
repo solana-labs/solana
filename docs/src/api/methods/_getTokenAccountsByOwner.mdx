@@ -39,7 +39,7 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
-  href="#configuring-state-commitment"
+  href="/api#configuring-state-commitment"
 ></Field>
 
 <Field name="minContextSlot" type="number" optional={true}>
@@ -54,7 +54,7 @@ and `length: <usize>` fields; only available for
 
 </Field>
 
-<Field name="encoding" type="string" optional={true} href="#parsed-responses">
+<Field name="encoding" type="string" optional={true} href="/api#parsed-responses">
 
 Encoding format for Account data
 
@@ -89,7 +89,7 @@ The result will be an RpcResponse JSON object with `value` equal to an array of 
   - `executable: <bool>` - boolean indicating if the account contains a program \(and is strictly read-only\)
   - `rentEpoch: <u64>` - the epoch at which this account will next owe rent, as u64
 
-When the data is requested with the `jsonParsed` encoding a format similar to that of the [Token Balances Structure](jsonrpc-api.md#token-balances-structure) can be expected inside the structure, both for the `tokenAmount` and the `delegatedAmount` - with the latter being an optional object.
+When the data is requested with the `jsonParsed` encoding a format similar to that of the [Token Balances Structure](/api#token-balances-structure) can be expected inside the structure, both for the `tokenAmount` and the `delegatedAmount` - with the latter being an optional object.
 
 </CodeParams>
 

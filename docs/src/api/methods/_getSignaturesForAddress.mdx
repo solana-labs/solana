@@ -32,7 +32,7 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
-  href="#configuring-state-commitment"
+  href="/api#configuring-state-commitment"
 ></Field>
 
 <Field name="minContextSlot" type="number" optional={true}>
@@ -68,7 +68,7 @@ signature information with the following fields:
 - `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch)
   of when transaction was processed. null if not available.
 - `confirmationStatus: <string|null>` - The transaction's cluster confirmation status;
-  Either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  Either `processed`, `confirmed`, or `finalized`. See [Commitment](/api#configuring-state-commitment)
   for more on optimistic confirmation.
 
 </CodeParams>

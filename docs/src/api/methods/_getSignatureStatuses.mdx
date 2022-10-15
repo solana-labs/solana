@@ -53,7 +53,7 @@ An array of `RpcResponse<object>` consisting of either:
   - `err: <object|null>` - Error if transaction failed, null if transaction succeeded.
     See [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
   - `confirmationStatus: <string|null>` - The transaction's cluster confirmation status;
-    Either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
+    Either `processed`, `confirmed`, or `finalized`. See [Commitment](/api#configuring-state-commitment) for more on optimistic confirmation.
   - DEPRECATED: `status: <object>` - Transaction status
     - `"Ok": <null>` - Transaction was successful
     - `"Err": <ERR>` - Transaction failed with TransactionError

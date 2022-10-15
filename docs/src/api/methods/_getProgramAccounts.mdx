@@ -30,7 +30,7 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
-  href="#configuring-state-commitment"
+  href="/api#configuring-state-commitment"
 ></Field>
 
 <Field name="minContextSlot" type="number" optional={true}>
@@ -41,7 +41,7 @@ Configuration object containing the following fields:
   wrap the result in an RpcResponse JSON object
 </Field>
 
-<Field name="encoding" type="string" optional={true} defaultValue={"json"} href="#parsed-responses">
+<Field name="encoding" type="string" optional={true} defaultValue={"json"} href="/api#parsed-responses">
 
 encoding format for the returned Account data
 
@@ -53,7 +53,7 @@ encoding format for the returned Account data
 - `base64` will return base64 encoded data for Account data of any size.
 - `base64+zstd` compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and
   base64-encodes the result.
-- [`jsonParsed` encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state
+- [`jsonParsed` encoding](/api#parsed-responses) attempts to use program-specific state
   parsers to return more human-readable and explicit account state data.
 - If `jsonParsed` is requested but a parser cannot be found, the field falls back
   to `base64` encoding, detectable when the `data` field is type `<string>`.

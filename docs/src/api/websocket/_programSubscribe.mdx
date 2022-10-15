@@ -32,7 +32,7 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
-  href="#configuring-state-commitment"
+  href="/api#configuring-state-commitment"
 ></Field>
 
 <Field name="filters" type="array" optional={true}>
@@ -42,7 +42,7 @@ filter criteria to be included in results
 
 </Field>
 
-<Field name="encoding" type="string" optional={true} href="#parsed-responses">
+<Field name="encoding" type="string" optional={true} href="/api#parsed-responses">
 
 Encoding format for Account data
 
@@ -51,7 +51,7 @@ Encoding format for Account data
 <details>
 
 - `base58` is slow.
-- [`jsonParsed`](#parsed-responses">) encoding attempts to use program-specific
+- [`jsonParsed`](/api#parsed-responses">) encoding attempts to use program-specific
   state parsers to return more human-readable and explicit account state data.
 - If `jsonParsed` is requested but a parser cannot be found, the field falls
   back to `base64` encoding, detectable when the `data` field is type `string`.
@@ -125,7 +125,7 @@ Encoding format for Account data
 
 #### Notification format
 
-The notification format is a <b>single</b> program account object as seen in the [getProgramAccounts](jsonrpc-api.md#getProgramAccounts) RPC HTTP method.
+The notification format is a <b>single</b> program account object as seen in the [getProgramAccounts](/api#getProgramAccounts) RPC HTTP method.
 
 Base58 encoding:
 

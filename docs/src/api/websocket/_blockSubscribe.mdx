@@ -50,7 +50,7 @@ Configuration object containing the following fields:
   name="commitment"
   type="string"
   optional={true}
-  href="#configuring-state-commitment"
+  href="/api#configuring-state-commitment"
 ></Field>
 
 <Field name="transactionDetails" default="full" type="string" optional={true}>
@@ -61,7 +61,7 @@ Configuration object containing the following fields:
   whether to populate the `rewards` array.
 </Field>
 
-<Field name="encoding" type="string" defaultValue="base64" optional={true} href="#parsed-responses">
+<Field name="encoding" type="string" defaultValue="base64" optional={true} href="/api#parsed-responses">
 
 Encoding format for Account data
 
@@ -134,7 +134,7 @@ The notification will be an object with the following fields:
 
 - `slot: <u64>` - The corresponding slot.
 - `err: <object|null>` - Error if something went wrong publishing the notification otherwise null.
-- `block: <object|null>` - A block object as seen in the [getBlock](jsonrpc-api.md#getblock) RPC HTTP method.
+- `block: <object|null>` - A block object as seen in the [getBlock](/api#getblock) RPC HTTP method.
 
 ```json
 {

@@ -8,7 +8,7 @@ After connecting to the RPC PubSub websocket at `ws://<ADDRESS>/`:
 
 - Submit subscription requests to the websocket using the methods below
 - Multiple subscriptions may be active at once
-- Many subscriptions take the optional [`commitment` parameter](#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `finalized`.
+- Many subscriptions take the optional [`commitment` parameter](/api#configuring-state-commitment), defining how finalized a change should be to trigger a notification. For subscriptions, if commitment is unspecified, the default value is `finalized`.
 
 ## RPC PubSub WebSocket Endpoint
 
