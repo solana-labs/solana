@@ -1,0 +1,72 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getBlockHeight
+
+Returns the current block height of the node
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+</Parameter>
+
+### Result:
+
+- `<u64>` - Current block height
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc":"2.0","id":1,
+    "method":"getBlockHeight"
+  }
+'
+```
+
+Result:
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": 1233,
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

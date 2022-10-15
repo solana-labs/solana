@@ -1,0 +1,77 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## requestAirdrop
+
+Requests an airdrop of lamports to a Pubkey
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  Pubkey of account to receive lamports, as a base-58 encoded string
+</Parameter>
+
+<Parameter type={"integer"} required={true}>
+  lamports to airdrop, as a "u64"
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+</Parameter>
+
+### Result:
+
+`<string>` - Transaction Signature of the airdrop, as a base-58 encoded string
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0", "id": 1,
+    "method": "requestAirdrop",
+    "params": [
+      "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri",
+      1000000000
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

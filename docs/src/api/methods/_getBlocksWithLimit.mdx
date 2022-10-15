@@ -1,0 +1,83 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getBlocksWithLimit
+
+Returns a list of confirmed blocks starting at the given slot
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"u64"} required={true}>
+  start_slot, as <code>u64</code> integer
+</Parameter>
+
+<Parameter type={"u64"} optional={true}>
+  limit, as <code>u64</code> integer (must be no more than 500,000 blocks higher
+  than the <code>start_slot</code>)
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following field:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  defaultValue="finalized"
+  href="#configuring-state-commitment"
+>
+
+- "processed" is not supported
+
+</Field>
+
+</Parameter>
+
+### Result:
+
+The result field will be an array of u64 integers listing confirmed blocks
+starting at `start_slot` for up to `limit` blocks, inclusive.
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id":1,
+    "method":"getBlocksWithLimit",
+    "params":[5, 3]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [5, 6, 7],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

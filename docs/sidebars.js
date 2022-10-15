@@ -1,4 +1,6 @@
 module.exports = {
+  // load the API specific sidebars file
+  ...require("./sidebars/api.js"),
   introductionSidebar: [
     {
       type: "category",

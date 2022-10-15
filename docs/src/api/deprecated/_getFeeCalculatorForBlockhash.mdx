@@ -1,0 +1,96 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getFeeCalculatorForBlockhash
+
+:::warning DEPRECATED
+This method is expected to be removed in solana-core v2.0
+**Please use [isBlockhashValid](#isblockhashvalid) or [getFeeForMessage](#getfeeformessage) instead**
+:::
+
+Returns the fee calculator associated with the query blockhash, or `null` if the blockhash has expired
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  query blockhash, as a base-58 encoded string
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+</Parameter>
+
+### Result:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `<null>` - if the query blockhash has expired; or
+- `<object>` - otherwise, a JSON object containing:
+  - `feeCalculator: <object>` - `FeeCalculator` object describing the cluster fee rate at the queried blockhash
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getFeeCalculatorForBlockhash",
+    "params": [
+      "GJxqhuxcgfn5Tcj6y3f8X4FeCDd2RQ6SnEMo1AAxrPRZ"
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 221
+    },
+    "value": {
+      "feeCalculator": {
+        "lamportsPerSignature": 5000
+      }
+    }
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

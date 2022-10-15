@@ -1,0 +1,97 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## signatureSubscribe
+
+Subscribe to a transaction signature to receive notification when a given transaction is committed. On `signatureNotification` - the subscription is automatically cancelled.
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  Transaction Signature, as base-58 encoded string
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+</Parameter>
+
+### Result:
+
+`<integer>` - subscription id (needed to unsubscribe)
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "signatureSubscribe",
+  "params": [
+    "2EBVM6cB8vAAD93Ktr6Vd8p67XPbQzCJX47MpReuiCXJAtcjaxpvWpcg9Ege1Nr5Tk3a2GFrByT7WPBjdsTycY9b",
+    {
+      "commitment": "finalized"
+    }
+  ]
+}
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": 0, "id": 1 }
+```
+
+</CodeSnippets>
+</DocSideBySide>
+
+#### Notification Format:
+
+The notification will be an RpcResponse JSON object with value containing an object with:
+
+- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+
+Example:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "signatureNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5207624
+      },
+      "value": {
+        "err": null
+      }
+    },
+    "subscription": 24006
+  }
+}
+```
+
+</DocBlock>

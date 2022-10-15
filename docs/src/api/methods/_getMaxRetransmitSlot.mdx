@@ -1,0 +1,48 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getMaxRetransmitSlot
+
+Get the max slot seen from retransmit stage.
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+**None**
+
+### Result:
+
+`<u64>` - Slot number
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1, "method":"getMaxRetransmitSlot"}
+'
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": 1234, "id": 1 }
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

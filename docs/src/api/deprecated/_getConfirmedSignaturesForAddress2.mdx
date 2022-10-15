@@ -1,0 +1,114 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getConfirmedSignaturesForAddress2
+
+:::warning DEPRECATED
+This method is expected to be removed in solana-core v2.0
+**Please use [getSignaturesForAddress](#getsignaturesforaddress) instead**
+:::
+
+Returns signatures for confirmed transactions that include the given address in
+their `accountKeys` list. Returns signatures backwards in time from the
+provided signature or most recent confirmed block
+
+<DocSideBySide>
+
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  account address, as base-58 encoded string
+</Parameter>
+
+<Parameter type={"object"} optional={true}>
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  defaultValue="finalized"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+<Field name="limit" type="number" optional={true}>
+  maximum transaction signatures to return (between 1 and 1,000, default:
+  1,000).
+</Field>
+
+<Field name="before" type="string" optional={true}>
+  start searching backwards from this transaction signature. (If not provided
+  the search starts from the top of the highest max confirmed block.)
+</Field>
+
+<Field name="until" type="string" optional={true}>
+  search until this transaction signature, if found before limit reached.
+</Field>
+
+</Parameter>
+
+### Result:
+
+The result field will be an array of `<object>`, ordered
+from newest to oldest transaction, containing transaction signature information with the following fields:
+
+- `signature: <string>` - transaction signature as base-58 encoded string
+- `slot: <u64>` - The slot that contains the block with the transaction
+- `err: <object|null>` - Error if transaction failed, null if transaction succeeded. [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+- `memo: <string|null>` - Memo associated with the transaction, null if no memo is present
+- `blockTime: <i64|null>` - estimated production time, as Unix timestamp (seconds since the Unix epoch) of when transaction was processed. null if not available.
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getConfirmedSignaturesForAddress2",
+    "params": [
+      "Vote111111111111111111111111111111111111111",
+      {
+        "limit": 1
+      }
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "err": null,
+      "memo": null,
+      "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+      "slot": 114,
+      "blockTime": null
+    }
+  ],
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

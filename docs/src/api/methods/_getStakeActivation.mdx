@@ -1,0 +1,94 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getStakeActivation
+
+Returns epoch activation information for a stake account
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+  Pubkey of stake Account to query, as base-58 encoded string
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+<Field name="minContextSlot" type="number" optional={true}>
+  The minimum slot that the request can be evaluated at
+</Field>
+
+<Field name="epoch" type="u64" optional={true}>
+  epoch for which to calculate activation details. If parameter not provided,
+  defaults to current epoch.
+</Field>
+
+</Parameter>
+
+### Result:
+
+The result will be a JSON object with the following fields:
+
+- `state: <string>` - the stake account's activation state,
+  either: `active`, `inactive`, `activating`, or `deactivating`
+- `active: <u64>` - stake active during the epoch
+- `inactive: <u64>` - stake inactive during the epoch
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getStakeActivation",
+    "params": [
+      "CYRJWqiSjLitBAcRxPvWpgX3s5TvmN2SuRY3eEYypFvT",
+      {
+        "epoch": 4
+      }
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "active": 124429280,
+    "inactive": 73287840,
+    "state": "activating"
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

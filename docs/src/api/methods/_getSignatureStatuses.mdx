@@ -1,0 +1,113 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## getSignatureStatuses
+
+Returns the statuses of a list of signatures.
+
+:::info
+Unless the `searchTransactionHistory` configuration parameter is included,
+this method only searches the recent status cache of signatures, which
+retains statuses for all active slots plus `MAX_RECENT_BLOCKHASHES` rooted slots.
+:::
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"array"} optional={true}>
+  An array of transaction signatures to confirm, as base-58 encoded strings (up
+  to a maximum of 256)
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field name="searchTransactionHistory" type="bool" optional={true}>
+
+if `true` - a Solana node will search its ledger cache for any signatures not
+found in the recent status cache
+
+</Field>
+
+</Parameter>
+
+### Result:
+
+An array of `RpcResponse<object>` consisting of either:
+
+- `<null>` - Unknown transaction, or
+- `<object>`
+  - `slot: <u64>` - The slot the transaction was processed
+  - `confirmations: <usize|null>` - Number of blocks since signature confirmation, null if rooted, as well as finalized by a supermajority of the cluster
+  - `err: <object|null>` - Error if transaction failed, null if transaction succeeded.
+    See [TransactionError definitions](https://github.com/solana-labs/solana/blob/c0c60386544ec9a9ec7119229f37386d9f070523/sdk/src/transaction/error.rs#L13)
+  - `confirmationStatus: <string|null>` - The transaction's cluster confirmation status;
+    Either `processed`, `confirmed`, or `finalized`. See [Commitment](jsonrpc-api.md#configuring-state-commitment) for more on optimistic confirmation.
+  - DEPRECATED: `status: <object>` - Transaction status
+    - `"Ok": <null>` - Transaction was successful
+    - `"Err": <ERR>` - Transaction failed with TransactionError
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getSignatureStatuses",
+    "params": [
+      [
+        "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW"
+      ],
+      {
+        "searchTransactionHistory": true
+      }
+    ]
+  }
+'
+```
+
+### Response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 82
+    },
+    "value": [
+      {
+        "slot": 48,
+        "confirmations": null,
+        "err": null,
+        "status": {
+          "Ok": null
+        },
+        "confirmationStatus": "finalized"
+      },
+      null
+    ]
+  },
+  "id": 1
+}
+```
+
+</CodeSnippets>
+</DocSideBySide>
+</DocBlock>

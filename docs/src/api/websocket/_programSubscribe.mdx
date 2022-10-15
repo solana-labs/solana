@@ -1,0 +1,199 @@
+import {
+  DocBlock,
+  DocSideBySide,
+  CodeParams,
+  Parameter,
+  Field,
+  Values,
+  CodeSnippets,
+} from "../../../components/CodeDocBlock";
+
+<DocBlock>
+
+## programSubscribe
+
+Subscribe to a program to receive notifications when the lamports or data for an account owned by the given program changes
+
+<DocSideBySide>
+<CodeParams>
+
+### Parameters:
+
+<Parameter type={"string"} required={true}>
+
+Pubkey of the `program_id`, as base-58 encoded string
+
+</Parameter>
+
+<Parameter type={"object"} optional={true}> 
+Configuration object containing the following fields:
+
+<Field
+  name="commitment"
+  type="string"
+  optional={true}
+  href="#configuring-state-commitment"
+></Field>
+
+<Field name="filters" type="array" optional={true}>
+
+filter results using various [filter objects](#filters); account must meet all
+filter criteria to be included in results
+
+</Field>
+
+<Field name="encoding" type="string" optional={true} href="#parsed-responses">
+
+Encoding format for Account data
+
+<Values values={["base58", "base64", "base64+zstd", "jsonParsed"]} />
+
+<details>
+
+- `base58` is slow.
+- [`jsonParsed`](#parsed-responses">) encoding attempts to use program-specific
+  state parsers to return more human-readable and explicit account state data.
+- If `jsonParsed` is requested but a parser cannot be found, the field falls
+  back to `base64` encoding, detectable when the `data` field is type `string`.
+
+</details>
+
+</Field>
+
+</Parameter>
+
+### Result:
+
+`<integer>` - Subscription id \(needed to unsubscribe\)
+
+</CodeParams>
+
+<CodeSnippets>
+
+### Code sample:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "base64",
+      "commitment": "finalized"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "jsonParsed"
+    }
+  ]
+}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "programSubscribe",
+  "params": [
+    "11111111111111111111111111111111",
+    {
+      "encoding": "base64",
+      "filters": [
+        {
+          "dataSize": 80
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Response:
+
+```json
+{ "jsonrpc": "2.0", "result": 24040, "id": 1 }
+```
+
+</CodeSnippets>
+</DocSideBySide>
+
+#### Notification format
+
+The notification format is a <b>single</b> program account object as seen in the [getProgramAccounts](jsonrpc-api.md#getProgramAccounts) RPC HTTP method.
+
+Base58 encoding:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "programNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5208469
+      },
+      "value": {
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
+        "account": {
+          "data": [
+            "11116bv5nS2h3y12kD1yUKeMZvGcKLSjQgX6BeV7u1FrjeJcKfsHPXHRDEHrBesJhZyqnnq9qJeUuF7WHxiuLuL5twc38w2TXNLxnDbjmuR",
+            "base58"
+          ],
+          "executable": false,
+          "lamports": 33594,
+          "owner": "11111111111111111111111111111111",
+          "rentEpoch": 636
+        }
+      }
+    },
+    "subscription": 24040
+  }
+}
+```
+
+Parsed-JSON encoding:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "programNotification",
+  "params": {
+    "result": {
+      "context": {
+        "slot": 5208469
+      },
+      "value": {
+        "pubkey": "H4vnBqifaSACnKa7acsxstsY1iV1bvJNxsCY7enrd1hq",
+        "account": {
+          "data": {
+            "program": "nonce",
+            "parsed": {
+              "type": "initialized",
+              "info": {
+                "authority": "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
+                "blockhash": "LUaQTmM7WbMRiATdMMHaRGakPtCkc2GHtH57STKXs6k",
+                "feeCalculator": {
+                  "lamportsPerSignature": 5000
+                }
+              }
+            }
+          },
+          "executable": false,
+          "lamports": 33594,
+          "owner": "11111111111111111111111111111111",
+          "rentEpoch": 636
+        }
+      }
+    },
+    "subscription": 24040
+  }
+}
+```
+
+</DocBlock>

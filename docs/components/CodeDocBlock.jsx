@@ -65,6 +65,15 @@ export function CodeSnippets({ children }) {
         width: "50%",
       }}
     >
+      {/* <p
+        style={{
+          fontSize: "1.24rem",
+          fontWeight: "700",
+        }}
+      >
+        Code Sample:
+      </p> */}
+
       {children}
     </section>
   );
@@ -75,16 +84,23 @@ export function Parameter({
   type = null,
   required = null,
   optional = null,
+  href = null,
   children,
 }) {
   // format the Parameter's name
-  if (name) name = <code>{name}</code>;
+  // if (name) name = <code>{name}</code>;
+  // format the Parameter's name
+  if (name) {
+    name = <span style={{ fontWeight: "700" }}>{name}</span>;
+
+    if (href) name = <Link href={href}>{name}</Link>;
+  }
 
   // format the Parameter's type
   if (type) type = <code>{type}</code>;
 
   // format the `required` flag
-  if (required)
+  if (required) {
     required = (
       <span
         style={{
@@ -96,8 +112,9 @@ export function Parameter({
         required
       </span>
     );
+  }
   // format the `optional` flag
-  else if (optional)
+  else if (optional) {
     optional = (
       <span
         style={{
@@ -109,6 +126,7 @@ export function Parameter({
         optional
       </span>
     );
+  }
 
   return (
     <section
@@ -139,6 +157,7 @@ export function Field({
   href = null,
   values = null,
   required = null,
+  defaultValue = null,
   optional = null,
   children,
 }) {
@@ -159,8 +178,23 @@ export function Field({
     ));
   }
 
+  // format the `defaultValue` flag
+  if (defaultValue) {
+    defaultValue = (
+      <span
+        style={{
+          margin: "0 .5rem",
+          color: "#767676",
+          fontWeight: "600",
+        }}
+      >
+        Default: <code>{defaultValue.toString()}</code>
+      </span>
+    );
+  }
+
   // format the `required` flag
-  if (required)
+  if (required) {
     required = (
       <span
         style={{
@@ -172,8 +206,9 @@ export function Field({
         required
       </span>
     );
+  }
   // format the `optional` flag
-  else if (optional)
+  else if (optional) {
     optional = (
       <span
         style={{
@@ -185,12 +220,13 @@ export function Field({
         optional
       </span>
     );
+  }
 
   return (
     <section
       style={{
         // padding: "1em 0em",
-        margin: "1em 0em",
+        margin: "1em 0em 1em 1em",
         // borderTop: "1px solid #414141",
         // borderBottom: "1px solid #414141",
       }}
@@ -203,6 +239,7 @@ export function Field({
       >
         {name && name} {type && type} {required && required}{" "}
         {optional && optional}
+        {defaultValue && defaultValue}
       </p>
 
       <section
@@ -228,6 +265,19 @@ export function Values({ values = null }) {
     ));
   }
 
-  return <p style={{}}>{values}</p>;
-  // return <p style={{}}>Values: {values}</p>;
+  // return <p style={{}}>{values}</p>;
+  return (
+    <p style={{}}>
+      <span
+        style={{
+          marginRight: "1rem",
+          // color: "#767676",
+          fontWeight: "600",
+        }}
+      >
+        Values:
+      </span>{" "}
+      {values}
+    </p>
+  );
 }

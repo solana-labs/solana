@@ -1,7 +1,5 @@
 ---
 title: JSON RPC API
-# displayed_sidebar: null
-hide_table_of_contents: true
 ---
 
 Solana nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.org/specification) specification.
@@ -244,13 +242,6 @@ infrastructure. This request will always return a HTTP 200 OK response with a bo
 2. "ok" is always returned if no known validators are provided.
 
 ## JSON RPC API Reference
-
-
-
-import GetAccountInfo from "../../api/_getAccountInfo.mdx"
-
-<GetAccountInfo />
-
 
 ### getAccountInfo
 
