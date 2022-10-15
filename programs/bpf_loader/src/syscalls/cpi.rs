@@ -969,6 +969,14 @@ fn cpi_common<S: SyscallInvokeSigned>(
     Ok(())
 }
 
+// Update the given account after executing CPI.
+//
+// caller_account and callee_account describe to the same account. At CPI exit
+// callee_account might include changes the callee has made to the account
+// after executing.
+//
+// This method updates caller_account so the CPI caller can see the callee's
+// changes.
 fn update_caller_account(
     invoke_context: &InvokeContext,
     memory_mapping: &MemoryMapping,
