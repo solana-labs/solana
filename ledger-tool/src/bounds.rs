@@ -93,7 +93,14 @@ pub fn bounds_process_command(
             let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
             let mut slot_bounds = SlotBounds::default();
 
-            if !slots.is_empty() {
+            if slots.is_empty() {
+                match output_format {
+                    OutputFormat::Json | OutputFormat::JsonCompact => {
+                        println!("{}", output_format.formatted_string(&slot_bounds))
+                    }
+                    _ => println!("Ledger is empty")
+                }
+            } else {
                 let first = slots.first().unwrap();
                 let last = slots.last().unwrap_or(first);
 
@@ -167,8 +174,6 @@ pub fn bounds_process_command(
                         } else {
                             println!("  with no rooted slots")
                         }
-                    } else {
-                        println!("Ledger is empty")
                     }
                 }
             }
