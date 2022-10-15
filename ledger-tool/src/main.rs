@@ -1,6 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::{bigtable::*, ledger_path::*},
+    crate::{bigtable::*, bounds::*, ledger_path::*},
     chrono::{DateTime, Utc},
     clap::{
         crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
@@ -105,6 +105,7 @@ use {
 };
 
 mod bigtable;
+mod bounds;
 mod ledger_path;
 
 #[derive(PartialEq, Eq)]
@@ -1736,18 +1737,8 @@ fn main() {
             .about("Prints the hash of the working bank after reading the ledger")
             .arg(&max_genesis_archive_unpacked_size_arg)
         )
+        .bounds_subcommand()
         .subcommand(
-            SubCommand::with_name("bounds")
-            .about("Print lowest and highest non-empty slots. \
-                    Note that there may be empty slots within the bounds")
-            .arg(
-                Arg::with_name("all")
-                    .long("all")
-                    .takes_value(false)
-                    .required(false)
-                    .help("Additionally print all the non-empty slots within the bounds"),
-            )
-        ).subcommand(
             SubCommand::with_name("json")
             .about("Print the ledger in JSON format")
             .arg(&starting_slot_arg)
