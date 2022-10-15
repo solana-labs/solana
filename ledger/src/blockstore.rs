@@ -177,7 +177,6 @@ pub struct Blockstore {
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
-    no_compaction: bool,
     pub slots_stats: SlotsStats,
 }
 
@@ -335,7 +334,6 @@ impl Blockstore {
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
-            no_compaction: false,
             slots_stats: SlotsStats::default(),
         };
         if initialize_transaction_status_index {
@@ -408,18 +406,6 @@ impl Blockstore {
             }
             walk.forward();
         }
-    }
-
-    /// Whether to disable compaction in [`Blockstore::compact_storage`], which is used
-    /// by the ledger cleanup service and `solana_core::validator::backup_and_clear_blockstore`.
-    ///
-    /// Note that this setting is not related to the RocksDB's background
-    /// compaction.
-    ///
-    /// To disable RocksDB's background compaction, open the Blockstore
-    /// with AccessType::PrimaryForMaintenance.
-    pub fn set_no_compaction(&mut self, no_compaction: bool) {
-        self.no_compaction = no_compaction;
     }
 
     /// Deletes the blockstore at the specified path.
@@ -7377,10 +7363,7 @@ pub mod tests {
         assert_eq!(counter, 2);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(
-        simulate_compaction: bool,
-        simulate_ledger_cleanup_service: bool,
-    ) {
+    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -7496,20 +7479,12 @@ pub mod tests {
         assert_eq!(are_missing, (false, false, false));
         assert_existing_always();
 
-        if simulate_compaction {
-            blockstore.set_max_expired_slot(lowest_cleanup_slot);
-            // force compaction filters to run across whole key range.
-            blockstore
-                .compact_storage(Slot::min_value(), Slot::max_value())
-                .unwrap();
-        }
-
         if simulate_ledger_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
         }
 
         let are_missing = check_for_missing();
-        if simulate_compaction || simulate_ledger_cleanup_service {
+        if simulate_ledger_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
             assert_eq!(are_missing, (true, true, true));
@@ -7521,27 +7496,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_with_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, true);
+    fn test_lowest_cleanup_slot_and_special_cfs_with_ledger_cleanup_service_simulation() {
+        do_test_lowest_cleanup_slot_and_special_cfs(true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_without_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, false);
-    }
-
-    #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_with_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, true);
-    }
-
-    #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_without_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, false);
+    fn test_lowest_cleanup_slot_and_special_cfs_without_ledger_cleanup_service_simulation() {
+        do_test_lowest_cleanup_slot_and_special_cfs(false);
     }
 
     #[test]
