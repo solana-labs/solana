@@ -639,9 +639,6 @@ where
         .get_current_instruction_context()
         .map_err(SyscallError::InstructionError)?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
-    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
-        .feature_set
-        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     let program_account_index = program_indices
         .last()
@@ -659,7 +656,8 @@ where
         if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
             continue; // Skip duplicate account
         }
-        let mut callee_account = instruction_context
+
+        let callee_account = instruction_context
             .try_borrow_instruction_account(
                 transaction_context,
                 instruction_account.index_in_caller,
@@ -669,6 +667,7 @@ where
             .transaction_context
             .get_key_of_account_at_index(instruction_account.index_in_transaction)
             .map_err(SyscallError::InstructionError)?;
+
         if callee_account.is_executable() {
             // Use the known account
             consume_compute_meter(
@@ -692,6 +691,7 @@ where
                     SyscallError::InstructionError(InstructionError::MissingAccount)
                 })?;
 
+            // build the CallerAccount corresponding to this account.
             let caller_account =
                 do_translate(
                     invoke_context,
@@ -704,68 +704,13 @@ where
                         .ok_or(SyscallError::InvalidLength)?,
                     original_data_len,
                 )?;
-            {
-                // before initiating CPI, the caller may have modified the
-                // account (caller_account). We need to update the corresponding
-                // BorrowedAccount (callee_account) so the callee can see the
-                // changes.
 
-                if callee_account.get_lamports() != *caller_account.lamports {
-                    callee_account
-                        .set_lamports(*caller_account.lamports)
-                        .map_err(SyscallError::InstructionError)?;
-                }
-                // The redundant check helps to avoid the expensive data comparison if we can
-                match callee_account
-                    .can_data_be_resized(caller_account.data.len())
-                    .and_then(|_| callee_account.can_data_be_changed())
-                {
-                    Ok(()) => callee_account
-                        .set_data_from_slice(caller_account.data)
-                        .map_err(SyscallError::InstructionError)?,
-                    Err(err) if callee_account.get_data() != caller_account.data => {
-                        return Err(EbpfError::UserError(Box::new(BpfError::SyscallError(
-                            SyscallError::InstructionError(err),
-                        ))));
-                    }
-                    _ => {}
-                }
-                if !is_disable_cpi_setting_executable_and_rent_epoch_active
-                    && callee_account.is_executable() != caller_account.executable
-                {
-                    callee_account
-                        .set_executable(caller_account.executable)
-                        .map_err(SyscallError::InstructionError)?;
-                }
-                // Change the owner at the end so that we are allowed to change the lamports and data before
-                if callee_account.get_owner() != caller_account.owner {
-                    callee_account
-                        .set_owner(caller_account.owner.as_ref())
-                        .map_err(SyscallError::InstructionError)?;
-                }
-                drop(callee_account);
-                let callee_account = invoke_context
-                    .transaction_context
-                    .get_account_at_index(instruction_account.index_in_transaction)
-                    .map_err(SyscallError::InstructionError)?;
-                if !is_disable_cpi_setting_executable_and_rent_epoch_active
-                    && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
-                {
-                    if invoke_context
-                        .feature_set
-                        .is_active(&enable_early_verification_of_account_modifications::id())
-                    {
-                        return Err(SyscallError::InstructionError(
-                            InstructionError::RentEpochModified,
-                        )
-                        .into());
-                    } else {
-                        callee_account
-                            .borrow_mut()
-                            .set_rent_epoch(caller_account.rent_epoch);
-                    }
-                }
-            }
+            // before initiating CPI, the caller may have modified the
+            // account (caller_account). We need to update the corresponding
+            // BorrowedAccount (callee_account) so the callee can see the
+            // changes.
+            update_callee_account(invoke_context, &caller_account, callee_account)?;
+
             let caller_account = if instruction_account.is_writable {
                 Some(caller_account)
             } else {
@@ -899,12 +844,15 @@ fn cpi_common<S: SyscallInvokeSigned>(
     signers_seeds_len: u64,
     memory_mapping: &mut MemoryMapping,
 ) -> Result<u64, EbpfError> {
+    // CPI entry.
+    //
+    // Translate the inputs to the syscall and synchronize the caller's account
+    // changes so the callee can see them.
     consume_compute_meter(
         invoke_context,
         invoke_context.get_compute_budget().invoke_units,
     )?;
 
-    // Translate and verify caller's data
     let instruction = S::translate_instruction(instruction_addr, memory_mapping, invoke_context)?;
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
@@ -933,7 +881,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
         invoke_context,
     )?;
 
-    // Process instruction
+    // Process the callee instruction
     let mut compute_units_consumed = 0;
     invoke_context
         .process_instruction(
@@ -965,6 +913,86 @@ fn cpi_common<S: SyscallInvokeSigned>(
                 caller_account,
                 &callee_account,
             )?;
+        }
+    }
+
+    Ok(SUCCESS)
+}
+
+// Update the given account before executing CPI.
+//
+// caller_account and callee_account describe to the same account. At CPI entry
+// caller_account might include changes the caller has made to the account
+// before executing CPI.
+//
+// This method updates callee_account so the CPI callee can see the caller's
+// changes.
+fn update_callee_account(
+    invoke_context: &InvokeContext,
+    caller_account: &CallerAccount,
+    mut callee_account: BorrowedAccount<'_>,
+) -> Result<(), EbpfError> {
+    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
+        .feature_set
+        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
+
+    if callee_account.get_lamports() != *caller_account.lamports {
+        callee_account
+            .set_lamports(*caller_account.lamports)
+            .map_err(SyscallError::InstructionError)?;
+    }
+
+    // The redundant check helps to avoid the expensive data comparison if we can
+    match callee_account
+        .can_data_be_resized(caller_account.data.len())
+        .and_then(|_| callee_account.can_data_be_changed())
+    {
+        Ok(()) => callee_account
+            .set_data_from_slice(caller_account.data)
+            .map_err(SyscallError::InstructionError)?,
+        Err(err) if callee_account.get_data() != caller_account.data => {
+            return Err(EbpfError::UserError(Box::new(BpfError::SyscallError(
+                SyscallError::InstructionError(err),
+            ))));
+        }
+        _ => {}
+    }
+
+    if !is_disable_cpi_setting_executable_and_rent_epoch_active
+        && callee_account.is_executable() != caller_account.executable
+    {
+        callee_account
+            .set_executable(caller_account.executable)
+            .map_err(SyscallError::InstructionError)?;
+    }
+
+    // Change the owner at the end so that we are allowed to change the lamports and data before
+    if callee_account.get_owner() != caller_account.owner {
+        callee_account
+            .set_owner(caller_account.owner.as_ref())
+            .map_err(SyscallError::InstructionError)?;
+    }
+
+    // BorrowedAccount doesn't allow changing the rent epoch. Drop it and use
+    // AccountSharedData directly.
+    let index_in_transaction = callee_account.get_index_in_transaction();
+    drop(callee_account);
+    let callee_account = invoke_context
+        .transaction_context
+        .get_account_at_index(index_in_transaction)
+        .map_err(SyscallError::InstructionError)?;
+    if !is_disable_cpi_setting_executable_and_rent_epoch_active
+        && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
+    {
+        if invoke_context
+            .feature_set
+            .is_active(&enable_early_verification_of_account_modifications::id())
+        {
+            return Err(SyscallError::InstructionError(InstructionError::RentEpochModified).into());
+        } else {
+            callee_account
+                .borrow_mut()
+                .set_rent_epoch(caller_account.rent_epoch);
         }
     }
 
@@ -1202,6 +1230,87 @@ mod tests {
                 SyscallError::InstructionError(InstructionError::InvalidRealloc)
             )
         ));
+    }
+
+    #[test]
+    fn test_update_callee_account_lamports_owner() {
+        let transaction_accounts = one_instruction_account(vec![]);
+        let account = transaction_accounts[1].1.clone();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account =
+            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let get_callee = || {
+            instruction_context
+                .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+                .unwrap()
+        };
+        let callee_account = get_callee();
+
+        *caller_account.lamports = 42;
+        *caller_account.owner = Pubkey::new_unique();
+
+        update_callee_account(&invoke_context, &mut caller_account, callee_account).unwrap();
+
+        let callee_account = get_callee();
+        assert_eq!(callee_account.get_lamports(), 42);
+        assert_eq!(caller_account.owner, callee_account.get_owner());
+    }
+
+    #[test]
+    fn test_update_callee_account_data() {
+        let transaction_accounts = one_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account =
+            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let get_callee = || {
+            instruction_context
+                .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+                .unwrap()
+        };
+        let callee_account = get_callee();
+
+        let mut data = b"foo".to_vec();
+        caller_account.data = &mut data;
+
+        update_callee_account(&invoke_context, &mut caller_account, callee_account).unwrap();
+
+        let callee_account = get_callee();
+        assert_eq!(callee_account.get_data(), caller_account.data);
     }
 
     pub type TestTransactionAccount = (Pubkey, AccountSharedData, bool);
