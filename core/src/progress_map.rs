@@ -39,6 +39,7 @@ impl ReplaySlotStats {
     pub fn report_stats(
         &self,
         slot: Slot,
+        num_txs: usize,
         num_entries: usize,
         num_shreds: u64,
         bank_complete_time_us: u64,
@@ -71,6 +72,7 @@ impl ReplaySlotStats {
                     i64
                 ),
                 ("bank_complete_time_us", bank_complete_time_us, i64),
+                ("total_transactions", num_txs as i64, i64),
                 ("total_entries", num_entries as i64, i64),
                 ("total_shreds", num_shreds as i64, i64),
                 // Everything inside the `eager!` block will be eagerly expanded before
