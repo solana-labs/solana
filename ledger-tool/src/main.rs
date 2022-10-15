@@ -4154,69 +4154,16 @@ fn main() {
                 }
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore = open_blockstore(
-                    &ledger_path,
-                    AccessType::Secondary,
-                    wal_recovery_mode,
-                    &shred_storage_type,
-                    force_update_to_open,
+                bounds_process_command(
+                    open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                        force_update_to_open,
+                    ),
+                    arg_matches,
                 );
-                match blockstore.slot_meta_iterator(0) {
-                    Ok(metas) => {
-                        let all = arg_matches.is_present("all");
-
-                        let slots: Vec<_> = metas.map(|(slot, _)| slot).collect();
-                        if slots.is_empty() {
-                            println!("Ledger is empty");
-                        } else {
-                            let first = slots.first().unwrap();
-                            let last = slots.last().unwrap_or(first);
-                            if first != last {
-                                println!(
-                                    "Ledger has data for {} slots {:?} to {:?}",
-                                    slots.len(),
-                                    first,
-                                    last
-                                );
-                                if all {
-                                    println!("Non-empty slots: {slots:?}");
-                                }
-                            } else {
-                                println!("Ledger has data for slot {first:?}");
-                            }
-                        }
-                        if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
-                            let mut first_rooted = 0;
-                            let mut last_rooted = 0;
-                            let mut total_rooted = 0;
-                            for (i, slot) in rooted.into_iter().enumerate() {
-                                if i == 0 {
-                                    first_rooted = slot;
-                                }
-                                last_rooted = slot;
-                                total_rooted += 1;
-                            }
-                            let mut count_past_root = 0;
-                            for slot in slots.iter().rev() {
-                                if *slot > last_rooted {
-                                    count_past_root += 1;
-                                } else {
-                                    break;
-                                }
-                            }
-                            println!(
-                                "  with {total_rooted} rooted slots from {first_rooted:?} to {last_rooted:?}"
-                            );
-                            println!("  and {count_past_root} slots past the last root");
-                        } else {
-                            println!("  with no rooted slots");
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("Unable to read the Ledger: {err:?}");
-                        exit(1);
-                    }
-                };
             }
             ("analyze-storage", _) => {
                 analyze_storage(

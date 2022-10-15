@@ -1,15 +1,12 @@
 use {
-    crate::open_blockstore,
     clap::{App, Arg, ArgMatches, SubCommand},
     serde::Serialize,
     solana_cli_output::{OutputFormat, QuietDisplay, VerboseDisplay},
     solana_ledger::{
         blockstore::Blockstore,
-        blockstore_options::{AccessType, BlockstoreRecoveryMode, ShredStorageType},
     },
     std::{
         fmt::{Display, Formatter, Result},
-        path::PathBuf,
         process::exit,
     },
 };
@@ -46,6 +43,18 @@ pub struct SlotInfo {
     from_last: Option<u64>,
 }
 
+impl Display for SlotInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        writeln!(f, "Start: {}", &self.start)?;
+        writeln!(f, "End: {}", &self.end)?;
+        writeln!(f, "Total: {}", &self.total)?;
+        if let Some(from_last) = &self.from_last {
+            writeln!(f, "From Last: {}", from_last)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SlotBounds {
@@ -60,25 +69,21 @@ impl QuietDisplay for SlotBounds {}
 
 impl Display for SlotBounds {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        todo!()
+        if let Some(total_slots) = &self.total_slots {
+            writeln!(f, "Total Slots: {}", total_slots)?;
+
+            if let Some(rooted_slots) = &self.rooted_slots {
+                writeln!(f, "Rooted Slots: {}", rooted_slots)?;
+            }
+        }
+        Ok(())
     }
 }
 
 pub fn bounds_process_command(
+    blockstore: Blockstore,
     matches: &ArgMatches,
-    ledger_path: &PathBuf,
-    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
-    shred_storage_type: &ShredStorageType,
-    force_update_to_open: bool,
 ) {
-    let blockstore = open_blockstore(
-        &ledger_path,
-        AccessType::Secondary,
-        wal_recovery_mode,
-        &shred_storage_type,
-        force_update_to_open,
-    );
-
     match blockstore.slot_meta_iterator(0) {
         Ok(metas) => {
             
@@ -132,8 +137,7 @@ pub fn bounds_process_command(
             // Print collected data
             match output_format {
                 OutputFormat::Json | OutputFormat::JsonCompact => {
-                    // output_format.formatted_string(&slot_bounds)
-                    todo!()
+                    println!("{}", output_format.formatted_string(&slot_bounds))
                 }
                 _ => {
                     // Simple text print in other cases.
