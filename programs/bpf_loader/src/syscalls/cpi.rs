@@ -277,26 +277,15 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, EbpfError> {
-        let account_infos = translate_slice::<AccountInfo>(
-            memory_mapping,
+        let (account_infos, account_info_keys) = translate_account_infos(
             account_infos_addr,
             account_infos_len,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
+            |account_info: &AccountInfo| account_info.key as *const _ as u64,
+            memory_mapping,
+            invoke_context,
         )?;
-        check_account_infos(account_infos.len(), invoke_context)?;
-        let account_info_keys = account_infos
-            .iter()
-            .map(|account_info| {
-                translate_type::<Pubkey>(
-                    memory_mapping,
-                    account_info.key as *const _ as u64,
-                    invoke_context.get_check_aligned(),
-                )
-            })
-            .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        get_translated_accounts(
+        translate_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -522,26 +511,15 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, EbpfError> {
-        let account_infos = translate_slice::<SolAccountInfo>(
-            memory_mapping,
+        let (account_infos, account_info_keys) = translate_account_infos(
             account_infos_addr,
             account_infos_len,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
+            |account_info: &SolAccountInfo| account_info.key_addr,
+            memory_mapping,
+            invoke_context,
         )?;
-        check_account_infos(account_infos.len(), invoke_context)?;
-        let account_info_keys = account_infos
-            .iter()
-            .map(|account_info| {
-                translate_type::<Pubkey>(
-                    memory_mapping,
-                    account_info.key_addr,
-                    invoke_context.get_check_aligned(),
-                )
-            })
-            .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        get_translated_accounts(
+        translate_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
@@ -609,7 +587,39 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
     }
 }
 
-fn get_translated_accounts<'a, T, F>(
+fn translate_account_infos<'a, T, F>(
+    account_infos_addr: u64,
+    account_infos_len: u64,
+    key_addr: F,
+    memory_mapping: &mut MemoryMapping,
+    invoke_context: &mut InvokeContext,
+) -> Result<(&'a [T], Vec<&'a Pubkey>), EbpfError>
+where
+    F: Fn(&T) -> u64,
+{
+    let account_infos = translate_slice::<T>(
+        memory_mapping,
+        account_infos_addr,
+        account_infos_len,
+        invoke_context.get_check_aligned(),
+        invoke_context.get_check_size(),
+    )?;
+    check_account_infos(account_infos.len(), invoke_context)?;
+    let account_info_keys = account_infos
+        .iter()
+        .map(|account_info| {
+            translate_type::<Pubkey>(
+                memory_mapping,
+                key_addr(account_info),
+                invoke_context.get_check_aligned(),
+            )
+        })
+        .collect::<Result<Vec<_>, EbpfError>>()?;
+
+    Ok((account_infos, account_info_keys))
+}
+
+fn translate_accounts<'a, T, F>(
     instruction_accounts: &[InstructionAccount],
     program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
