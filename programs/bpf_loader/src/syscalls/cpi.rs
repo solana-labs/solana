@@ -8,9 +8,10 @@ use {
         },
         transaction_context::BorrowedAccount,
     },
+    std::mem,
 };
 
-/// Account data as stored in the caller address space during CPI, translated to host memory.
+/// Host side representation of AccountInfo or SolAccountInfo passed to the CPI syscall.
 ///
 /// At the start of a CPI, this can be different from the data stored in the
 /// corresponding BorrowedAccount, and needs to be synched.
@@ -27,7 +28,146 @@ struct CallerAccount<'a> {
     rent_epoch: u64,
 }
 
-impl<'a> CallerAccount<'a> {}
+impl<'a> CallerAccount<'a> {
+    // Create a CallerAccount given an AccountInfo.
+    fn from_account_info(
+        invoke_context: &InvokeContext,
+        memory_mapping: &MemoryMapping,
+        _vm_addr: u64,
+        account_info: &AccountInfo,
+        original_data_len: usize,
+    ) -> Result<CallerAccount<'a>, EbpfError> {
+        // account_info points to host memory. The addresses used internally are
+        // in vm space so they need to be translated.
+
+        let lamports = {
+            // Double translate lamports out of RefCell
+            let ptr = translate_type::<u64>(
+                memory_mapping,
+                account_info.lamports.as_ptr() as u64,
+                invoke_context.get_check_aligned(),
+            )?;
+            translate_type_mut::<u64>(memory_mapping, *ptr, invoke_context.get_check_aligned())?
+        };
+        let owner = translate_type_mut::<Pubkey>(
+            memory_mapping,
+            account_info.owner as *const _ as u64,
+            invoke_context.get_check_aligned(),
+        )?;
+
+        let (data, vm_data_addr, ref_to_len_in_vm) = {
+            // Double translate data out of RefCell
+            let data = *translate_type::<&[u8]>(
+                memory_mapping,
+                account_info.data.as_ptr() as *const _ as u64,
+                invoke_context.get_check_aligned(),
+            )?;
+
+            consume_compute_meter(
+                invoke_context,
+                (data.len() as u64)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+
+            let translated = translate(
+                memory_mapping,
+                AccessType::Store,
+                (account_info.data.as_ptr() as *const u64 as u64)
+                    .saturating_add(size_of::<u64>() as u64),
+                8,
+            )? as *mut u64;
+            let ref_to_len_in_vm = unsafe { &mut *translated };
+            let vm_data_addr = data.as_ptr() as u64;
+            (
+                translate_slice_mut::<u8>(
+                    memory_mapping,
+                    vm_data_addr,
+                    data.len() as u64,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?,
+                vm_data_addr,
+                ref_to_len_in_vm,
+            )
+        };
+
+        Ok(CallerAccount {
+            lamports,
+            owner,
+            original_data_len,
+            data,
+            vm_data_addr,
+            ref_to_len_in_vm,
+            executable: account_info.executable,
+            rent_epoch: account_info.rent_epoch,
+        })
+    }
+
+    // Create a CallerAccount given a SolAccountInfo.
+    fn from_sol_account_info(
+        invoke_context: &InvokeContext,
+        memory_mapping: &MemoryMapping,
+        vm_addr: u64,
+        account_info: &SolAccountInfo,
+        original_data_len: usize,
+    ) -> Result<CallerAccount<'a>, EbpfError> {
+        // account_info points to host memory. The addresses used internally are
+        // in vm space so they need to be translated.
+
+        let lamports = translate_type_mut::<u64>(
+            memory_mapping,
+            account_info.lamports_addr,
+            invoke_context.get_check_aligned(),
+        )?;
+        let owner = translate_type_mut::<Pubkey>(
+            memory_mapping,
+            account_info.owner_addr,
+            invoke_context.get_check_aligned(),
+        )?;
+        let vm_data_addr = account_info.data_addr;
+
+        consume_compute_meter(
+            invoke_context,
+            account_info
+                .data_len
+                .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+        )?;
+
+        let data = translate_slice_mut::<u8>(
+            memory_mapping,
+            vm_data_addr,
+            account_info.data_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        // we already have the host addr we want: &mut account_info.data_len.
+        // The account info might be read only in the vm though, so we translate
+        // to ensure we can write. This is tested by programs/sbf/rust/ro_modify
+        // which puts SolAccountInfo in rodata.
+        let data_len_vm_addr = vm_addr
+            .saturating_add(&account_info.data_len as *const u64 as u64)
+            .saturating_sub(account_info as *const _ as *const u64 as u64);
+        let data_len_addr = translate(
+            memory_mapping,
+            AccessType::Store,
+            data_len_vm_addr,
+            size_of::<u64>() as u64,
+        )?;
+        let ref_to_len_in_vm = unsafe { &mut *(data_len_addr as *mut u64) };
+
+        Ok(CallerAccount {
+            lamports,
+            owner,
+            original_data_len,
+            data,
+            vm_data_addr,
+            ref_to_len_in_vm,
+            executable: account_info.executable,
+            rent_epoch: account_info.rent_epoch,
+        })
+    }
+}
 
 type TranslatedAccounts<'a> = Vec<(IndexOfAccount, Option<CallerAccount<'a>>)>;
 
@@ -156,81 +296,15 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             })
             .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        let translate = |invoke_context: &InvokeContext,
-                         account_info: &AccountInfo,
-                         original_data_len: usize| {
-            // Translate the account from user space
-
-            let lamports = {
-                // Double translate lamports out of RefCell
-                let ptr = translate_type::<u64>(
-                    memory_mapping,
-                    account_info.lamports.as_ptr() as u64,
-                    invoke_context.get_check_aligned(),
-                )?;
-                translate_type_mut::<u64>(memory_mapping, *ptr, invoke_context.get_check_aligned())?
-            };
-            let owner = translate_type_mut::<Pubkey>(
-                memory_mapping,
-                account_info.owner as *const _ as u64,
-                invoke_context.get_check_aligned(),
-            )?;
-
-            let (data, vm_data_addr, ref_to_len_in_vm) = {
-                // Double translate data out of RefCell
-                let data = *translate_type::<&[u8]>(
-                    memory_mapping,
-                    account_info.data.as_ptr() as *const _ as u64,
-                    invoke_context.get_check_aligned(),
-                )?;
-
-                consume_compute_meter(
-                    invoke_context,
-                    (data.len() as u64)
-                        .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
-                )?;
-
-                let translated = translate(
-                    memory_mapping,
-                    AccessType::Store,
-                    (account_info.data.as_ptr() as *const u64 as u64)
-                        .saturating_add(size_of::<u64>() as u64),
-                    8,
-                )? as *mut u64;
-                let ref_to_len_in_vm = unsafe { &mut *translated };
-                let vm_data_addr = data.as_ptr() as u64;
-                (
-                    translate_slice_mut::<u8>(
-                        memory_mapping,
-                        vm_data_addr,
-                        data.len() as u64,
-                        invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
-                    )?,
-                    vm_data_addr,
-                    ref_to_len_in_vm,
-                )
-            };
-
-            Ok(CallerAccount {
-                lamports,
-                owner,
-                original_data_len,
-                data,
-                vm_data_addr,
-                ref_to_len_in_vm,
-                executable: account_info.executable,
-                rent_epoch: account_info.rent_epoch,
-            })
-        };
-
         get_translated_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
             account_infos,
+            account_infos_addr,
             invoke_context,
-            translate,
+            memory_mapping,
+            CallerAccount::from_account_info,
         )
     }
 
@@ -467,70 +541,15 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             })
             .collect::<Result<Vec<_>, EbpfError>>()?;
 
-        let translate = |invoke_context: &InvokeContext,
-                         account_info: &SolAccountInfo,
-                         original_data_len: usize| {
-            // Translate the account from user space
-
-            let lamports = translate_type_mut::<u64>(
-                memory_mapping,
-                account_info.lamports_addr,
-                invoke_context.get_check_aligned(),
-            )?;
-            let owner = translate_type_mut::<Pubkey>(
-                memory_mapping,
-                account_info.owner_addr,
-                invoke_context.get_check_aligned(),
-            )?;
-            let vm_data_addr = account_info.data_addr;
-
-            consume_compute_meter(
-                invoke_context,
-                account_info
-                    .data_len
-                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
-            )?;
-
-            let data = translate_slice_mut::<u8>(
-                memory_mapping,
-                vm_data_addr,
-                account_info.data_len,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
-            )?;
-
-            let first_info_addr = account_infos.first().ok_or(SyscallError::InstructionError(
-                InstructionError::InvalidArgument,
-            ))? as *const _ as u64;
-            let addr = &account_info.data_len as *const u64 as u64;
-            let vm_addr = account_infos_addr.saturating_add(addr.saturating_sub(first_info_addr));
-            let _ = translate(
-                memory_mapping,
-                AccessType::Store,
-                vm_addr,
-                size_of::<u64>() as u64,
-            )?;
-            let ref_to_len_in_vm = unsafe { &mut *(addr as *mut u64) };
-
-            Ok(CallerAccount {
-                lamports,
-                owner,
-                original_data_len,
-                data,
-                vm_data_addr,
-                ref_to_len_in_vm,
-                executable: account_info.executable,
-                rent_epoch: account_info.rent_epoch,
-            })
-        };
-
         get_translated_accounts(
             instruction_accounts,
             program_indices,
             &account_info_keys,
             account_infos,
+            account_infos_addr,
             invoke_context,
-            translate,
+            memory_mapping,
+            CallerAccount::from_sol_account_info,
         )
     }
 
@@ -595,11 +614,13 @@ fn get_translated_accounts<'a, T, F>(
     program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
+    account_infos_addr: u64,
     invoke_context: &mut InvokeContext,
+    memory_mapping: &MemoryMapping,
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, EbpfError>
 where
-    F: Fn(&InvokeContext, &T, usize) -> Result<CallerAccount<'a>, EbpfError>,
+    F: Fn(&InvokeContext, &MemoryMapping, u64, &T, usize) -> Result<CallerAccount<'a>, EbpfError>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
@@ -659,13 +680,18 @@ where
                     SyscallError::InstructionError(InstructionError::MissingAccount)
                 })?;
 
-            let caller_account = do_translate(
-                invoke_context,
-                account_infos
-                    .get(caller_account_index)
-                    .ok_or(SyscallError::InvalidLength)?,
-                original_data_len,
-            )?;
+            let caller_account =
+                do_translate(
+                    invoke_context,
+                    memory_mapping,
+                    account_infos_addr.saturating_add(
+                        caller_account_index.saturating_mul(mem::size_of::<T>()) as u64,
+                    ),
+                    account_infos
+                        .get(caller_account_index)
+                        .ok_or(SyscallError::InvalidLength)?,
+                    original_data_len,
+                )?;
             {
                 // before initiating CPI, the caller may have modified the
                 // account (caller_account). We need to update the corresponding
