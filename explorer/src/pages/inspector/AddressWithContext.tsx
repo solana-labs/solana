@@ -20,8 +20,6 @@ export const createFeePayerValidator = (
     if (account.lamports === 0) return "Account doesn't exist";
     if (!account.owner.equals(SystemProgram.programId))
       return "Only system-owned accounts can pay fees";
-    // TODO: Actually nonce accounts can pay fees too
-    if (account.space > 0) return "Only unallocated accounts can pay fees";
     if (account.lamports < feeLamports) {
       return "Insufficient funds for fees";
     }
@@ -42,13 +40,8 @@ export function AddressFromLookupTableWithContext({
   lookupTableKey: PublicKey;
   lookupTableIndex: number;
 }) {
-  const lookupTable = useAddressLookupTable(lookupTableKey.toBase58());
-  const fetchAccountInfo = useFetchAccountInfo();
-  React.useEffect(() => {
-    if (!lookupTable) fetchAccountInfo(lookupTableKey);
-  }, [lookupTableKey, lookupTable, fetchAccountInfo]);
-
-  let pubkey;
+  const lookupTableInfo = useAddressLookupTable(lookupTableKey.toBase58());
+  const lookupTable = lookupTableInfo && lookupTableInfo[0];
   if (!lookupTable) {
     return (
       <span className="text-muted">
@@ -58,18 +51,17 @@ export function AddressFromLookupTableWithContext({
     );
   } else if (typeof lookupTable === "string") {
     return <div>Invalid Lookup Table</div>;
-  } else if (lookupTableIndex < lookupTable.state.addresses.length) {
-    pubkey = lookupTable.state.addresses[lookupTableIndex];
-  } else {
+  } else if (lookupTableIndex >= lookupTable.state.addresses.length) {
     return <div>Invalid Lookup Table Index</div>;
+  } else {
+    const pubkey = lookupTable.state.addresses[lookupTableIndex];
+    return (
+      <div className="d-flex align-items-end flex-column">
+        <Address pubkey={pubkey} link />
+        <AccountInfo pubkey={pubkey} />
+      </div>
+    );
   }
-
-  return (
-    <div className="d-flex align-items-end flex-column">
-      <Address pubkey={pubkey} link />
-      <AccountInfo pubkey={pubkey} />
-    </div>
-  );
 }
 
 export function AddressWithContext({
@@ -102,7 +94,7 @@ function AccountInfo({
   // Fetch account on load
   React.useEffect(() => {
     if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchAccount(pubkey);
+      fetchAccount(pubkey, "skip");
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -129,9 +121,10 @@ function AccountInfo({
     <span className="text-muted">
       {`Owned by ${ownerLabel || ownerAddress}.`}
       {` Balance is ${lamportsToSolString(account.lamports)} SOL.`}
-      {` Size is ${new Intl.NumberFormat("en-US").format(
-        account.space
-      )} byte(s).`}
+      {account.space !== undefined &&
+        ` Size is ${new Intl.NumberFormat("en-US").format(
+          account.space
+        )} byte(s).`}
     </span>
   );
 }

@@ -38,10 +38,12 @@ export function UnknownAccountCard({ account }: { account: Account }) {
           </td>
         </tr>
 
-        <tr>
-          <td>Allocated Data Size</td>
-          <td className="text-lg-end">{account.space} byte(s)</td>
-        </tr>
+        {account.space !== undefined && (
+          <tr>
+            <td>Allocated Data Size</td>
+            <td className="text-lg-end">{account.space} byte(s)</td>
+          </tr>
+        )}
 
         <tr>
           <td>Assigned Program Id</td>

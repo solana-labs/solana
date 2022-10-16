@@ -7,6 +7,7 @@ import {
   AddressLookupTableAccount,
   AddressLookupTableProgram,
   SystemProgram,
+  ParsedAccountData,
 } from "@solana/web3.js";
 import { useCluster, Cluster } from "../cluster";
 import { HistoryProvider } from "./history";
@@ -109,242 +110,324 @@ export interface Account {
   lamports: number;
   executable: boolean;
   owner: PublicKey;
-  space: number;
+  space?: number;
   data: AccountData;
 }
 
 type State = Cache.State<Account>;
 type Dispatch = Cache.Dispatch<Account>;
+type Fetchers = { [mode in FetchAccountDataMode]: MultipleAccountFetcher };
 
+const FetchersContext = React.createContext<Fetchers | undefined>(undefined);
 const StateContext = React.createContext<State | undefined>(undefined);
 const DispatchContext = React.createContext<Dispatch | undefined>(undefined);
 
+class MultipleAccountFetcher {
+  pubkeys: PublicKey[] = [];
+  fetchTimeout?: NodeJS.Timeout;
+
+  constructor(
+    private dispatch: Dispatch,
+    private cluster: Cluster,
+    private url: string,
+    private dataMode: FetchAccountDataMode
+  ) {}
+  fetch = (pubkey: PublicKey) => {
+    if (this.pubkeys !== undefined) this.pubkeys.push(pubkey);
+    if (this.fetchTimeout === undefined) {
+      this.fetchTimeout = setTimeout(() => {
+        this.fetchTimeout = undefined;
+        if (this.pubkeys !== undefined) {
+          const pubkeys = this.pubkeys;
+          this.pubkeys = [];
+
+          const { dispatch, cluster, url, dataMode } = this;
+          fetchMultipleAccounts({ dispatch, pubkeys, cluster, url, dataMode });
+        }
+      }, 100);
+    }
+  };
+}
+
+export type FetchAccountDataMode = "parsed" | "raw" | "skip";
+
 type AccountsProviderProps = { children: React.ReactNode };
 export function AccountsProvider({ children }: AccountsProviderProps) {
-  const { url } = useCluster();
+  const { cluster, url } = useCluster();
   const [state, dispatch] = Cache.useReducer<Account>(url);
+  const [fetchers, setFetchers] = React.useState<Fetchers>(() => ({
+    skip: new MultipleAccountFetcher(dispatch, cluster, url, "skip"),
+    raw: new MultipleAccountFetcher(dispatch, cluster, url, "raw"),
+    parsed: new MultipleAccountFetcher(dispatch, cluster, url, "parsed"),
+  }));
 
   // Clear accounts cache whenever cluster is changed
   React.useEffect(() => {
     dispatch({ type: ActionType.Clear, url });
-  }, [dispatch, url]);
+    setFetchers({
+      skip: new MultipleAccountFetcher(dispatch, cluster, url, "skip"),
+      raw: new MultipleAccountFetcher(dispatch, cluster, url, "raw"),
+      parsed: new MultipleAccountFetcher(dispatch, cluster, url, "parsed"),
+    });
+  }, [dispatch, cluster, url]);
 
   return (
     <StateContext.Provider value={state}>
       <DispatchContext.Provider value={dispatch}>
-        <TokensProvider>
-          <HistoryProvider>
-            <RewardsProvider>
-              <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
-            </RewardsProvider>
-          </HistoryProvider>
-        </TokensProvider>
+        <FetchersContext.Provider value={fetchers}>
+          <TokensProvider>
+            <HistoryProvider>
+              <RewardsProvider>
+                <FlaggedAccountsProvider>{children}</FlaggedAccountsProvider>
+              </RewardsProvider>
+            </HistoryProvider>
+          </TokensProvider>
+        </FetchersContext.Provider>
       </DispatchContext.Provider>
     </StateContext.Provider>
   );
 }
 
-async function fetchAccountInfo(
-  dispatch: Dispatch,
-  pubkey: PublicKey,
-  cluster: Cluster,
-  url: string
-) {
-  dispatch({
-    type: ActionType.Update,
-    key: pubkey.toBase58(),
-    status: Cache.FetchStatus.Fetching,
-    url,
-  });
+async function fetchMultipleAccounts({
+  dispatch,
+  pubkeys,
+  dataMode,
+  cluster,
+  url,
+}: {
+  dispatch: Dispatch;
+  pubkeys: PublicKey[];
+  dataMode: FetchAccountDataMode;
+  cluster: Cluster;
+  url: string;
+}) {
+  for (let pubkey of pubkeys) {
+    dispatch({
+      type: ActionType.Update,
+      key: pubkey.toBase58(),
+      status: Cache.FetchStatus.Fetching,
+      url,
+    });
+  }
 
-  let data;
-  let fetchStatus;
-  try {
-    const connection = new Connection(url, "confirmed");
-    const result = (await connection.getParsedAccountInfo(pubkey)).value;
+  const BATCH_SIZE = 100;
+  const connection = new Connection(url, "confirmed");
 
-    let account: Account;
-    if (result === null) {
-      account = {
-        pubkey,
-        lamports: 0,
-        owner: SystemProgram.programId,
-        space: 0,
-        executable: false,
-        data: { raw: Buffer.alloc(0) },
-      };
-    } else {
-      // Only save data in memory if we can decode it
-      let space: number;
-      if (!("parsed" in result.data)) {
-        space = result.data.length;
+  let nextBatchStart = 0;
+  while (nextBatchStart < pubkeys.length) {
+    const batch = pubkeys.slice(nextBatchStart, nextBatchStart + BATCH_SIZE);
+    nextBatchStart += BATCH_SIZE;
+
+    try {
+      let results;
+      if (dataMode === "parsed") {
+        results = (await connection.getMultipleParsedAccounts(batch)).value;
+      } else if (dataMode === "raw") {
+        results = await connection.getMultipleAccountsInfo(batch);
       } else {
-        space = result.data.space;
+        results = await connection.getMultipleAccountsInfo(batch, {
+          dataSlice: { length: 0, offset: 0 },
+        });
       }
 
-      let parsedData: ParsedData | undefined;
-      if ("parsed" in result.data) {
-        try {
-          const info = create(result.data.parsed, ParsedInfo);
-          switch (result.data.program) {
-            case "bpf-upgradeable-loader": {
-              const parsed = create(info, UpgradeableLoaderAccount);
+      for (let i = 0; i < batch.length; i++) {
+        const pubkey = batch[i];
+        const result = results[i];
 
-              // Fetch program data to get program upgradeability info
-              let programData: ProgramDataAccountInfo | undefined;
-              if (parsed.type === "program") {
-                const result = (
-                  await connection.getParsedAccountInfo(parsed.info.programData)
-                ).value;
-                if (
-                  result &&
-                  "parsed" in result.data &&
-                  result.data.program === "bpf-upgradeable-loader"
-                ) {
-                  const info = create(result.data.parsed, ParsedInfo);
-                  programData = create(info, ProgramDataAccount).info;
-                }
-              }
-
-              parsedData = {
-                program: result.data.program,
-                parsed,
-                programData,
-              };
-
-              break;
+        let account: Account;
+        if (result === null) {
+          account = {
+            pubkey,
+            lamports: 0,
+            owner: SystemProgram.programId,
+            space: 0,
+            executable: false,
+            data: { raw: Buffer.alloc(0) },
+          };
+        } else {
+          let space: number | undefined = undefined;
+          let parsedData: ParsedData | undefined;
+          if ("parsed" in result.data) {
+            const accountData: ParsedAccountData = result.data;
+            space = result.data.space;
+            try {
+              parsedData = await handleParsedAccountData(
+                connection,
+                pubkey,
+                accountData
+              );
+            } catch (error) {
+              reportError(error, { url, address: pubkey.toBase58() });
             }
-            case "stake": {
-              const parsed = create(info, StakeAccount);
-              const isDelegated = parsed.type === "delegated";
-              const activation = isDelegated
-                ? await connection.getStakeActivation(pubkey)
-                : undefined;
-
-              parsedData = {
-                program: result.data.program,
-                parsed,
-                activation,
-              };
-              break;
-            }
-            case "vote":
-              parsedData = {
-                program: result.data.program,
-                parsed: create(info, VoteAccount),
-              };
-              break;
-            case "nonce":
-              parsedData = {
-                program: result.data.program,
-                parsed: create(info, NonceAccount),
-              };
-              break;
-            case "sysvar":
-              parsedData = {
-                program: result.data.program,
-                parsed: create(info, SysvarAccount),
-              };
-              break;
-            case "config":
-              parsedData = {
-                program: result.data.program,
-                parsed: create(info, ConfigAccount),
-              };
-              break;
-
-            case "address-lookup-table": {
-              const parsed = create(info, ParsedAddressLookupTableAccount);
-
-              parsedData = {
-                program: result.data.program,
-                parsed,
-              };
-
-              break;
-            }
-
-            case "spl-token":
-              const parsed = create(info, TokenAccount);
-              let nftData;
-
-              try {
-                // Generate a PDA and check for a Metadata Account
-                if (parsed.type === "mint") {
-                  const metadata = await Metadata.load(
-                    connection,
-                    await Metadata.getPDA(pubkey)
-                  );
-                  if (metadata) {
-                    // We have a valid Metadata account. Try and pull edition data.
-                    const editionInfo = await getEditionInfo(
-                      metadata,
-                      connection
-                    );
-                    const id = pubkeyToString(pubkey);
-                    const metadataJSON = await getMetaDataJSON(
-                      id,
-                      metadata.data
-                    );
-                    nftData = {
-                      metadata: metadata.data,
-                      json: metadataJSON,
-                      editionInfo,
-                    };
-                  }
-                }
-              } catch (error) {
-                // unable to find NFT metadata account
-              }
-
-              parsedData = {
-                program: result.data.program,
-                parsed,
-                nftData,
-              };
-              break;
-            default:
-              parsedData = undefined;
           }
-        } catch (error) {
-          reportError(error, { url, address: pubkey.toBase58() });
+
+          // If we cannot parse account layout as native spl account
+          // then keep raw data for other components to decode
+          let rawData: Buffer | undefined;
+          if (
+            !parsedData &&
+            !("parsed" in result.data) &&
+            dataMode !== "skip"
+          ) {
+            space = result.data.length;
+            rawData = result.data;
+          }
+
+          account = {
+            pubkey,
+            lamports: result.lamports,
+            executable: result.executable,
+            owner: result.owner,
+            space,
+            data: {
+              parsed: parsedData,
+              raw: rawData,
+            },
+          };
+        }
+
+        dispatch({
+          type: ActionType.Update,
+          status: FetchStatus.Fetched,
+          data: account,
+          key: pubkey.toBase58(),
+          url,
+        });
+      }
+    } catch (error) {
+      if (cluster !== Cluster.Custom) {
+        reportError(error, { url });
+      }
+
+      for (let pubkey of batch) {
+        dispatch({
+          type: ActionType.Update,
+          status: FetchStatus.FetchFailed,
+          key: pubkey.toBase58(),
+          url,
+        });
+      }
+    }
+  }
+}
+
+async function handleParsedAccountData(
+  connection: Connection,
+  accountKey: PublicKey,
+  accountData: ParsedAccountData
+): Promise<ParsedData | undefined> {
+  const info = create(accountData.parsed, ParsedInfo);
+  switch (accountData.program) {
+    case "bpf-upgradeable-loader": {
+      const parsed = create(info, UpgradeableLoaderAccount);
+
+      // Fetch program data to get program upgradeability info
+      let programData: ProgramDataAccountInfo | undefined;
+      if (parsed.type === "program") {
+        const result = (
+          await connection.getParsedAccountInfo(parsed.info.programData)
+        ).value;
+        if (
+          result &&
+          "parsed" in result.data &&
+          result.data.program === "bpf-upgradeable-loader"
+        ) {
+          const info = create(result.data.parsed, ParsedInfo);
+          programData = create(info, ProgramDataAccount).info;
         }
       }
 
-      // If we cannot parse account layout as native spl account
-      // then keep raw data for other components to decode
-      let rawData: Buffer | undefined;
-      if (!parsedData && !("parsed" in result.data)) {
-        rawData = result.data;
-      }
-
-      account = {
-        pubkey,
-        lamports: result.lamports,
-        space,
-        executable: result.executable,
-        owner: result.owner,
-        data: {
-          parsed: parsedData,
-          raw: rawData,
-        },
+      return {
+        program: accountData.program,
+        parsed,
+        programData,
       };
     }
-    data = account;
-    fetchStatus = FetchStatus.Fetched;
-  } catch (error) {
-    if (cluster !== Cluster.Custom) {
-      reportError(error, { url });
+
+    case "stake": {
+      const parsed = create(info, StakeAccount);
+      const isDelegated = parsed.type === "delegated";
+      const activation = isDelegated
+        ? await connection.getStakeActivation(accountKey)
+        : undefined;
+
+      return {
+        program: accountData.program,
+        parsed,
+        activation,
+      };
     }
-    fetchStatus = FetchStatus.FetchFailed;
+
+    case "vote": {
+      return {
+        program: accountData.program,
+        parsed: create(info, VoteAccount),
+      };
+    }
+
+    case "nonce": {
+      return {
+        program: accountData.program,
+        parsed: create(info, NonceAccount),
+      };
+    }
+
+    case "sysvar": {
+      return {
+        program: accountData.program,
+        parsed: create(info, SysvarAccount),
+      };
+    }
+
+    case "config": {
+      return {
+        program: accountData.program,
+        parsed: create(info, ConfigAccount),
+      };
+    }
+
+    case "address-lookup-table": {
+      const parsed = create(info, ParsedAddressLookupTableAccount);
+      return {
+        program: accountData.program,
+        parsed,
+      };
+    }
+
+    case "spl-token": {
+      const parsed = create(info, TokenAccount);
+      let nftData;
+
+      try {
+        // Generate a PDA and check for a Metadata Account
+        if (parsed.type === "mint") {
+          const metadata = await Metadata.load(
+            connection,
+            await Metadata.getPDA(accountKey)
+          );
+          if (metadata) {
+            // We have a valid Metadata account. Try and pull edition data.
+            const editionInfo = await getEditionInfo(metadata, connection);
+            const id = pubkeyToString(accountKey);
+            const metadataJSON = await getMetaDataJSON(id, metadata.data);
+            nftData = {
+              metadata: metadata.data,
+              json: metadataJSON,
+              editionInfo,
+            };
+          }
+        }
+      } catch (error) {
+        // unable to find NFT metadata account
+      }
+
+      return {
+        program: accountData.program,
+        parsed,
+        nftData,
+      };
+    }
   }
-  dispatch({
-    type: ActionType.Update,
-    status: fetchStatus,
-    data,
-    key: pubkey.toBase58(),
-    url,
-  });
 }
 
 const IMAGE_MIME_TYPE_REGEX = /data:image\/(svg\+xml|png|jpeg|gif)/g;
@@ -447,72 +530,83 @@ export function useTokenAccountInfo(
   address: string | undefined
 ): TokenAccountInfo | undefined {
   const accountInfo = useAccountInfo(address);
-  if (address === undefined || accountInfo?.data === undefined) return;
-  const account = accountInfo.data;
+  return React.useMemo(() => {
+    if (address === undefined || accountInfo?.data === undefined) return;
+    const account = accountInfo.data;
 
-  try {
-    const parsedData = account.data.parsed;
-    if (!parsedData) return;
-    if (
-      parsedData.program !== "spl-token" ||
-      parsedData.parsed.type !== "account"
-    ) {
-      return;
+    try {
+      const parsedData = account.data.parsed;
+      if (!parsedData) return;
+      if (
+        parsedData.program !== "spl-token" ||
+        parsedData.parsed.type !== "account"
+      ) {
+        return;
+      }
+
+      return create(parsedData.parsed.info, TokenAccountInfo);
+    } catch (err) {
+      reportError(err, { address });
     }
-
-    return create(parsedData.parsed.info, TokenAccountInfo);
-  } catch (err) {
-    reportError(err, { address });
-  }
+  }, [address, accountInfo]);
 }
 
 export function useAddressLookupTable(
-  address: string | undefined
-): AddressLookupTableAccount | undefined | string {
+  address: string
+): [AddressLookupTableAccount | string | undefined, FetchStatus] | undefined {
   const accountInfo = useAccountInfo(address);
-  if (address === undefined || accountInfo?.data === undefined) return;
-  const account = accountInfo.data;
-  if (account.lamports === 0) return "Lookup Table Not Found";
-  const { parsed: parsedData, raw: rawData } = account.data;
+  return React.useMemo(() => {
+    if (accountInfo === undefined) return;
+    const account = accountInfo.data;
+    if (account === undefined) return [account, accountInfo.status];
+    if (account.lamports === 0)
+      return ["Lookup Table Not Found", accountInfo.status];
+    const { parsed: parsedData, raw: rawData } = account.data;
 
-  const key = new PublicKey(address);
-  if (parsedData && parsedData.program === "address-lookup-table") {
-    if (parsedData.parsed.type === "lookupTable") {
-      return new AddressLookupTableAccount({
-        key,
-        state: parsedData.parsed.info,
-      });
-    } else if (parsedData.parsed.type === "uninitialized") {
-      return "Lookup Table Uninitialized";
+    const key = new PublicKey(address);
+    if (parsedData && parsedData.program === "address-lookup-table") {
+      if (parsedData.parsed.type === "lookupTable") {
+        return [
+          new AddressLookupTableAccount({
+            key,
+            state: parsedData.parsed.info,
+          }),
+          accountInfo.status,
+        ];
+      } else if (parsedData.parsed.type === "uninitialized") {
+        return ["Lookup Table Uninitialized", accountInfo.status];
+      }
+    } else if (
+      rawData &&
+      account.owner.equals(AddressLookupTableProgram.programId)
+    ) {
+      try {
+        return [
+          new AddressLookupTableAccount({
+            key,
+            state: AddressLookupTableAccount.deserialize(rawData),
+          }),
+          accountInfo.status,
+        ];
+      } catch {}
     }
-  } else if (
-    rawData &&
-    account.owner.equals(AddressLookupTableProgram.programId)
-  ) {
-    try {
-      return new AddressLookupTableAccount({
-        key,
-        state: AddressLookupTableAccount.deserialize(rawData),
-      });
-    } catch {}
-  }
 
-  return "Invalid Lookup Table";
+    return ["Invalid Lookup Table", accountInfo.status];
+  }, [address, accountInfo]);
 }
 
 export function useFetchAccountInfo() {
-  const dispatch = React.useContext(DispatchContext);
-  if (!dispatch) {
+  const fetchers = React.useContext(FetchersContext);
+  if (!fetchers) {
     throw new Error(
       `useFetchAccountInfo must be used within a AccountsProvider`
     );
   }
 
-  const { cluster, url } = useCluster();
   return React.useCallback(
-    (pubkey: PublicKey) => {
-      fetchAccountInfo(dispatch, pubkey, cluster, url);
+    (pubkey: PublicKey, dataMode: FetchAccountDataMode) => {
+      fetchers[dataMode].fetch(pubkey);
     },
-    [dispatch, cluster, url]
+    [fetchers]
   );
 }

@@ -25,7 +25,7 @@ export function MetaplexNFTHeader({
 
   React.useEffect(() => {
     if (collectionAddress && !collectionMintInfo) {
-      fetchAccountInfo(new PublicKey(collectionAddress));
+      fetchAccountInfo(new PublicKey(collectionAddress), "parsed");
     }
   }, [fetchAccountInfo, collectionAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 

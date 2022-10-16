@@ -1,7 +1,8 @@
 import React from "react";
 import { PublicKey, VersionedMessage } from "@solana/web3.js";
 import { Address } from "components/common/Address";
-import { useAddressLookupTable, useFetchAccountInfo } from "providers/accounts";
+import { useAddressLookupTable } from "providers/accounts";
+import { FetchStatus } from "providers/cache";
 
 export function AddressTableLookupsCard({
   message,
@@ -80,31 +81,38 @@ function LookupRow({
   lookupTableIndex: number;
   readOnly: boolean;
 }) {
-  const lookupTable = useAddressLookupTable(lookupTableKey.toBase58());
-  const fetchAccountInfo = useFetchAccountInfo();
-  React.useEffect(() => {
-    if (!lookupTable) fetchAccountInfo(lookupTableKey);
-  }, [lookupTableKey, lookupTable, fetchAccountInfo]);
+  const lookupTableInfo = useAddressLookupTable(lookupTableKey.toBase58());
+
+  const loadingComponent = (
+    <span className="text-muted">
+      <span className="spinner-grow spinner-grow-sm me-2"></span>
+      Loading
+    </span>
+  );
 
   let resolvedKeyComponent;
-  if (!lookupTable) {
-    resolvedKeyComponent = (
-      <span className="text-muted">
-        <span className="spinner-grow spinner-grow-sm me-2"></span>
-        Loading
-      </span>
-    );
-  } else if (typeof lookupTable === "string") {
-    resolvedKeyComponent = (
-      <span className="text-muted">Invalid Lookup Table</span>
-    );
-  } else if (lookupTableIndex < lookupTable.state.addresses.length) {
-    const resolvedKey = lookupTable.state.addresses[lookupTableIndex];
-    resolvedKeyComponent = <Address pubkey={resolvedKey} link />;
+  if (!lookupTableInfo) {
+    resolvedKeyComponent = loadingComponent;
   } else {
-    resolvedKeyComponent = (
-      <span className="text-muted">Invalid Lookup Table Index</span>
-    );
+    const [lookupTable, status] = lookupTableInfo;
+    if (status === FetchStatus.Fetching) {
+      resolvedKeyComponent = loadingComponent;
+    } else if (status === FetchStatus.FetchFailed || !lookupTable) {
+      resolvedKeyComponent = (
+        <span className="text-muted">Failed to fetch Lookup Table</span>
+      );
+    } else if (typeof lookupTable === "string") {
+      resolvedKeyComponent = (
+        <span className="text-muted">Invalid Lookup Table</span>
+      );
+    } else if (lookupTableIndex >= lookupTable.state.addresses.length) {
+      resolvedKeyComponent = (
+        <span className="text-muted">Invalid Lookup Table Index</span>
+      );
+    } else {
+      const resolvedKey = lookupTable.state.addresses[lookupTableIndex];
+      resolvedKeyComponent = <Address pubkey={resolvedKey} link />;
+    }
   }
 
   return (
