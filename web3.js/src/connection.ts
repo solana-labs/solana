@@ -3173,6 +3173,32 @@ export class Connection {
   /**
    * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
    */
+  async getMultipleParsedAccounts(
+    publicKeys: PublicKey[],
+    rawConfig?: GetMultipleAccountsConfig,
+  ): Promise<
+    RpcResponseAndContext<(AccountInfo<Buffer | ParsedAccountData> | null)[]>
+  > {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
+    const keys = publicKeys.map(key => key.toBase58());
+    const args = this._buildArgs([keys], commitment, 'jsonParsed', config);
+    const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
+    const res = create(
+      unsafeRes,
+      jsonRpcResultAndContext(array(nullable(ParsedAccountInfoResult))),
+    );
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get info for accounts ${keys}`,
+      );
+    }
+    return res.result;
+  }
+
+  /**
+   * Fetch all the account info for multiple accounts specified by an array of public keys, return with context
+   */
   async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
     commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
