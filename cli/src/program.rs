@@ -1269,18 +1269,18 @@ fn get_programs(
     authority_pubkey: Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> Result<CliUpgradeablePrograms, Box<dyn std::error::Error>> {
-    let mut filters = vec![RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+    let mut filters = vec![RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
         0,
-        &[3, 0, 0, 0],
+        vec![3, 0, 0, 0],
     ))];
     if let Some(authority_pubkey) = authority_pubkey {
-        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
             ACCOUNT_TYPE_SIZE + SLOT_SIZE,
-            &[1],
+            vec![1],
         )));
-        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
             ACCOUNT_TYPE_SIZE + SLOT_SIZE + OPTION_SIZE,
-            authority_pubkey.as_ref(),
+            authority_pubkey.as_ref().to_vec(),
         )));
     }
 
@@ -1299,7 +1299,7 @@ fn get_programs(
         {
             let mut bytes = vec![2, 0, 0, 0];
             bytes.extend_from_slice(programdata_address.as_ref());
-            let filters = vec![RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &bytes))];
+            let filters = vec![RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, bytes))];
 
             let results = get_accounts_with_filter(rpc_client, filters, 0)?;
             if results.len() != 1 {
