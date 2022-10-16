@@ -24,9 +24,6 @@ else
     # prepare result file
     awk '/{ "type": .* }/' results.json > sanitized-results.json
 
-    # upload to buildkite
-    buildkite-test-collector < sanitized-results.json
-
     # upload to datadog
     cargo2junit > results.xml < sanitized-results.json
     datadog-ci junit upload --service solana results.xml
