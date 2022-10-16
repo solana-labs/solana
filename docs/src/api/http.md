@@ -1,5 +1,5 @@
 ---
-title: JSON RPC API
+title: JSON RPC HTTP Methods
 displayed_sidebar: apiHttpMethodsSidebar
 hide_table_of_contents: true
 ---

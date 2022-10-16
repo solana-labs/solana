@@ -1,4 +1,21 @@
 module.exports = {
+  apiSidebar: [
+    {
+      type: "link",
+      href: "/api",
+      label: "JSON RPC API",
+    },
+    {
+      type: "doc",
+      id: "api/http",
+      label: "HTTP Methods",
+    },
+    {
+      type: "doc",
+      id: "api/websocket",
+      label: "Websocket Methods",
+    },
+  ],
   apiHttpMethodsSidebar: [
     {
       type: "link",
@@ -6,12 +23,13 @@ module.exports = {
       label: "JSON RPC API",
     },
     {
-      type: "link",
-      href: "/api/websocket",
-      label: "Websocket API",
+      type: "doc",
+      id: "api/websocket",
+      label: "Websocket Methods",
     },
     {
       type: "category",
+      link: { type: "doc", id: "api/http" },
       label: "HTTP Methods",
       collapsed: false,
       items: [
@@ -359,12 +377,13 @@ module.exports = {
       label: "JSON RPC API",
     },
     {
-      type: "link",
-      href: "/api/websocket",
-      label: "Websocket API",
+      type: "doc",
+      id: "api/http",
+      label: "HTTP Methods",
     },
     {
       type: "category",
+      link: { type: "doc", id: "api/websocket" },
       label: "Websocket Methods",
       collapsed: false,
       items: [
