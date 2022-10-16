@@ -6,9 +6,11 @@ hide_table_of_contents: true
 
 Solana nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.org/specification) specification.
 
-To interact with a Solana node inside a JavaScript application, use the
-[solana-web3.js](https://github.com/solana-labs/solana-web3.js) library, which
-gives a convenient interface for the RPC methods.
+:::info
+For JavaScript applications, use the [@solana/web3.js](https://github.com/solana-labs/solana-web3.js) library as a convenient interface for the RPC methods to interact with a Solana node.
+
+For an PubSub connection to a Solana node, use the [Websocket API](./websocket.md).
+:::
 
 ## RPC HTTP Endpoint
 
