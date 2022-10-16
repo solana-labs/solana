@@ -81,7 +81,7 @@ export function UpgradeableProgramSection({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
@@ -218,7 +218,7 @@ export function UpgradeableProgramDataSection({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
@@ -238,17 +238,19 @@ export function UpgradeableProgramDataSection({
             <SolBalance lamports={account.lamports} />
           </td>
         </tr>
-        <tr>
-          <td>Data Size (Bytes)</td>
-          <td className="text-lg-end">
-            <Downloadable
-              data={programData.data[0]}
-              filename={`${account.pubkey.toString()}.bin`}
-            >
-              <span className="me-2">{account.space}</span>
-            </Downloadable>
-          </td>
-        </tr>
+        {account.space !== undefined && (
+          <tr>
+            <td>Data Size (Bytes)</td>
+            <td className="text-lg-end">
+              <Downloadable
+                data={programData.data[0]}
+                filename={`${account.pubkey.toString()}.bin`}
+              >
+                <span className="me-2">{account.space}</span>
+              </Downloadable>
+            </td>
+          </tr>
+        )}
         <tr>
           <td>Upgradeable</td>
           <td className="text-lg-end">
@@ -290,7 +292,7 @@ export function UpgradeableProgramBufferSection({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
@@ -310,10 +312,12 @@ export function UpgradeableProgramBufferSection({
             <SolBalance lamports={account.lamports} />
           </td>
         </tr>
-        <tr>
-          <td>Data Size (Bytes)</td>
-          <td className="text-lg-end">{account.space}</td>
-        </tr>
+        {account.space !== undefined && (
+          <tr>
+            <td>Data Size (Bytes)</td>
+            <td className="text-lg-end">{account.space}</td>
+          </tr>
+        )}
         {programBuffer.authority !== null && (
           <tr>
             <td>Deploy Authority</td>

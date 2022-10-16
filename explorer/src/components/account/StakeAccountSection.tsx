@@ -108,7 +108,7 @@ function OverviewCard({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
