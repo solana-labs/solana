@@ -34,17 +34,17 @@ export function SimulatorCard({ message }: { message: VersionedMessage }) {
         <div className="card-header">
           <h3 className="card-header-title">Transaction Simulation</h3>
           <button className="btn btn-sm d-flex btn-white" onClick={simulate}>
-            Simulate
+            {simulationError ? "Retry" : "Simulate"}
           </button>
         </div>
-        {simulationError ? (
-          <div className="card-body">
-            Failed to run simulation:
-            <span className="text-warning ms-2">{simulationError}</span>
-          </div>
-        ) : (
-          <div className="card-body text-muted">
-            <ul>
+        <div className="card-body">
+          {simulationError ? (
+            <>
+              Simulation Failure:
+              <span className="text-warning ms-2">{simulationError}</span>
+            </>
+          ) : (
+            <ul className="text-muted">
               <li>
                 Simulation is free and will run this transaction against the
                 latest confirmed ledger state.
@@ -54,8 +54,8 @@ export function SimulatorCard({ message }: { message: VersionedMessage }) {
                 be disabled.
               </li>
             </ul>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
@@ -103,12 +103,21 @@ function useSimulator(message: VersionedMessage) {
           new VersionedTransaction(message),
           { replaceRecentBlockhash: true }
         );
+
         if (resp.value.logs === null) {
           throw new Error("Expected to receive logs from simulation");
         }
 
-        // Prettify logs
-        setLogs(parseProgramLogs(resp.value.logs, resp.value.err, cluster));
+        if (
+          resp.value.logs.length === 0 &&
+          typeof resp.value.err === "string"
+        ) {
+          setLogs(null);
+          setError(resp.value.err);
+        } else {
+          // Prettify logs
+          setLogs(parseProgramLogs(resp.value.logs, resp.value.err, cluster));
+        }
       } catch (err) {
         console.error(err);
         setLogs(null);
