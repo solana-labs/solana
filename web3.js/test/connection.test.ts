@@ -3214,8 +3214,9 @@ describe('Connection', function () {
   if (process.env.TEST_LIVE) {
     describe('token methods', () => {
       const connection = new Connection(url, 'confirmed');
-      const newAccount = Keypair.generate().publicKey;
+      const newAccount = PublicKey.unique();
 
+      let payerKeypair = new Keypair();
       let testTokenMintPubkey: PublicKey;
       let testOwnerKeypair: Keypair;
       let testTokenAccountPubkey: PublicKey;
@@ -3225,7 +3226,6 @@ describe('Connection', function () {
       before(async function () {
         this.timeout(30 * 1000);
 
-        const payerKeypair = new Keypair();
         await connection.confirmTransaction(
           await connection.requestAirdrop(payerKeypair.publicKey, 100000000000),
         );
@@ -3380,6 +3380,55 @@ describe('Connection', function () {
             expect(data.parsed).to.be.ok;
           }
         }
+      });
+
+      it('get multiple parsed token accounts', async () => {
+        const accounts = (
+          await connection.getMultipleParsedAccounts([
+            testTokenAccountPubkey,
+            testTokenMintPubkey,
+            payerKeypair.publicKey,
+            newAccount,
+          ])
+        ).value;
+        expect(accounts.length).to.eq(4);
+
+        const parsedTokenAccount = accounts[0];
+        if (parsedTokenAccount) {
+          const data = parsedTokenAccount.data;
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
+          } else {
+            expect(data.program).to.eq('spl-token');
+            expect(data.parsed).to.be.ok;
+          }
+        } else {
+          expect(parsedTokenAccount).to.be.ok;
+        }
+
+        const parsedTokenMint = accounts[1];
+        if (parsedTokenMint) {
+          const data = parsedTokenMint.data;
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
+          } else {
+            expect(data.program).to.eq('spl-token');
+            expect(data.parsed).to.be.ok;
+          }
+        } else {
+          expect(parsedTokenMint).to.be.ok;
+        }
+
+        const unparsedPayerAccount = accounts[2];
+        if (unparsedPayerAccount) {
+          const data = unparsedPayerAccount.data;
+          expect(Buffer.isBuffer(data)).to.be.true;
+        } else {
+          expect(unparsedPayerAccount).to.be.ok;
+        }
+
+        const unknownAccount = accounts[3];
+        expect(unknownAccount).to.not.be.ok;
       });
 
       it('get parsed token program accounts', async () => {
