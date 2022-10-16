@@ -23,6 +23,7 @@ import { SimulatorCard } from "./SimulatorCard";
 import { MIN_MESSAGE_LENGTH, RawInput } from "./RawInputCard";
 import { InstructionsSection } from "./InstructionsSection";
 import base58 from "bs58";
+import { useFetchAccountInfo } from "providers/accounts";
 
 export type TransactionData = {
   rawMessage: Uint8Array;
@@ -268,6 +269,13 @@ function LoadedView({
   onClear: () => void;
 }) {
   const { message, rawMessage, signatures } = transaction;
+
+  const fetchAccountInfo = useFetchAccountInfo();
+  React.useEffect(() => {
+    for (let lookup of message.addressTableLookups) {
+      fetchAccountInfo(lookup.accountKey, "parsed");
+    }
+  }, [message, fetchAccountInfo]);
 
   return (
     <>

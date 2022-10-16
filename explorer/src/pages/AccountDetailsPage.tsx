@@ -173,7 +173,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
   // Fetch account on load
   React.useEffect(() => {
     if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchAccount(pubkey);
+      fetchAccount(pubkey, "parsed");
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -303,7 +303,12 @@ function DetailsSections({
     info.status === FetchStatus.FetchFailed ||
     info.data?.lamports === undefined
   ) {
-    return <ErrorCard retry={() => fetchAccount(pubkey)} text="Fetch Failed" />;
+    return (
+      <ErrorCard
+        retry={() => fetchAccount(pubkey, "parsed")}
+        text="Fetch Failed"
+      />
+    );
   }
 
   const account = info.data;
