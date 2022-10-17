@@ -356,9 +356,9 @@ impl<'a> TypeContext<'a> for Context {
         let (bank_fields, mut accounts_db_fields) =
             Self::deserialize_bank_fields(stream_reader).unwrap();
         accounts_db_fields.3.snapshot_hash = *accounts_hash;
-        let rhs = bank_fields;
-        let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
-        let hard_forks = RwLock::new(rhs.hard_forks.clone());
+        let mut rhs = bank_fields;
+        let blockhash_queue = RwLock::new(std::mem::take(&mut rhs.blockhash_queue));
+        let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
         let epoch_accounts_hash = epoch_accounts_hash.or(rhs.epoch_accounts_hash.as_ref());
 
