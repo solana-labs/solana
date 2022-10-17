@@ -169,6 +169,23 @@ small number of slots per epoch; it now has a delay of one epoch.  Since the
 epochs themselves can be much faster, security is not reduced.
 
 
+#### Warping
+
+Warping introduces corner cases into EAH because many slots may be skipped,
+including the entire range of `start slot` to `stop slot`.
+
+When warping from before `stop slot` to after, the new bank will include the
+existing EAH in its hash during `freeze()`.  If the bank's parent is from
+before `start slot`, then a new EAH calculation will not have been requested.
+This is safe because warping cannot be used on a live cluster; only for a new
+cluster or tests/debugging.  This means _when_ the EAH was calculated is not
+germane.
+
+When warping from before `start slot` to after, an EAH calculation will be
+requested the next time `set_root()` is called.  Therefore the EAH will be
+based on this new bank.  This is also safe and correct.
+
+
 #### Implementation Alternatives
 
 ##### Perform the EAH calculation in the foreground
