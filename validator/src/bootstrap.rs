@@ -41,6 +41,10 @@ use {
     },
 };
 
+/// When downloading snapshots, wait at most this long for snapshot hashes from _all_ known
+/// validators.  Afterwards, wait for snapshot hashes from _any_ know validator.
+const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
+
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
 #[derive(Debug)]
@@ -651,8 +655,8 @@ fn get_rpc_nodes(
 
         let know_validators_to_wait_for = if newer_cluster_snapshot_timeout
             .as_ref()
-            .map(|timer: &Instant| timer.elapsed().as_secs())
-            < Some(60)
+            .map(|timer: &Instant| timer.elapsed() < WAIT_FOR_ALL_KNOWN_VALIDATORS)
+            .unwrap_or(true)
         {
             KnownValidatorsToWaitFor::All
         } else {
