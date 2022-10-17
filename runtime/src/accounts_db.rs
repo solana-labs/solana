@@ -137,6 +137,9 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+/// used by tests for 'include_slot_in_hash' parameter
+pub const INCLUDE_SLOT_IN_HASH_TESTS: bool = true;
+
 pub enum StoreReclaims {
     /// normal reclaim mode
     Default,
@@ -564,15 +567,16 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey) -> Hash {
+    pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey, include_slot: bool) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
                 slot,
                 stored_account_meta,
                 &stored_account_meta.meta.pubkey,
+                include_slot,
             ),
             LoadedAccount::Cached(cached_account) => {
-                AccountsDb::hash_account(slot, &cached_account.account, pubkey)
+                AccountsDb::hash_account(slot, &cached_account.account, pubkey, include_slot)
             }
         }
     }
@@ -2029,8 +2033,11 @@ impl<'a> AppendVecScan for ScanState<'a> {
         if self.config.check_hash
             && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
         {
+            // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
+            let include_slot_in_hash = true;
             // this will not be supported anymore
-            let computed_hash = loaded_account.compute_hash(self.current_slot, pubkey);
+            let computed_hash =
+                loaded_account.compute_hash(self.current_slot, pubkey, include_slot_in_hash);
             if computed_hash != source_item.hash {
                 info!(
                     "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -3681,11 +3688,14 @@ impl AccountsDb {
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
             create_and_insert_store_elapsed = time.as_micros() as u64;
 
+            // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
+            let include_slot_in_hash = true; // this is irrelevant because we are reading from append vecs
+
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             store_accounts_timing = self.store_accounts_frozen(
-                (slot, &accounts[..]),
+                (slot, &accounts[..], include_slot_in_hash),
                 Some(&hashes),
                 Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
@@ -4094,10 +4104,12 @@ impl AccountsDb {
         accounts: &AccountsToStore,
         storage_selector: StorageSelector,
     ) -> StoreAccountsTiming {
+        let include_slot_in_hash = false; // irrelevant because we're reading from append vecs which already have hashes
+
         let (accounts, hashes) = accounts.get(storage_selector);
 
         self.store_accounts_frozen(
-            (ancient_slot, accounts),
+            (ancient_slot, accounts, include_slot_in_hash),
             Some(hashes),
             Some(ancient_store),
             None,
@@ -5936,6 +5948,7 @@ impl AccountsDb {
         account: &T,
         pubkey: &Pubkey,
         rent_epoch: Epoch,
+        include_slot: bool,
     ) -> Hash {
         Self::hash_account_data(
             slot,
@@ -5945,10 +5958,16 @@ impl AccountsDb {
             rent_epoch,
             account.data(),
             pubkey,
+            include_slot,
         )
     }
 
-    pub fn hash_account<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey) -> Hash {
+    pub fn hash_account<T: ReadableAccount>(
+        slot: Slot,
+        account: &T,
+        pubkey: &Pubkey,
+        include_slot: bool,
+    ) -> Hash {
         Self::hash_account_data(
             slot,
             account.lamports(),
@@ -5957,6 +5976,7 @@ impl AccountsDb {
             account.rent_epoch(),
             account.data(),
             pubkey,
+            include_slot,
         )
     }
 
@@ -5968,6 +5988,7 @@ impl AccountsDb {
         rent_epoch: Epoch,
         data: &[u8],
         pubkey: &Pubkey,
+        include_slot: bool,
     ) -> Hash {
         if lamports == 0 {
             return Hash::default();
@@ -5977,8 +5998,10 @@ impl AccountsDb {
 
         hasher.update(&lamports.to_le_bytes());
 
-        // upon feature activation, remove slot# from account hash
-        // hasher.update(&slot.to_le_bytes());
+        if include_slot {
+            // upon feature activation, remove slot# from account hash
+            hasher.update(&slot.to_le_bytes());
+        }
 
         hasher.update(&rent_epoch.to_le_bytes());
 
@@ -6367,8 +6390,9 @@ impl AccountsDb {
             // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
+            let include_slot_in_hash = true; // irrelevant - account will already be hashed since it was used in bank hash previously
             self.store_accounts_frozen(
-                (slot, &accounts[..]),
+                (slot, &accounts[..], include_slot_in_hash),
                 Some(&hashes),
                 Some(&flushed_store),
                 None,
@@ -6386,7 +6410,7 @@ impl AccountsDb {
                     hashes.push(hash);
                 });
                 self.store_accounts_frozen(
-                    (slot, &accounts[..]),
+                    (slot, &accounts[..], include_slot_in_hash),
                     Some(&hashes),
                     Some(&flushed_store),
                     None,
@@ -6486,6 +6510,7 @@ impl AccountsDb {
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
         txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>> + 'a>,
+        include_slot_in_hash: bool,
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -6511,7 +6536,13 @@ impl AccountsDb {
 
                 self.notify_account_at_accounts_update(slot, meta, &account, signature);
 
-                let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
+                let cached_account = self.accounts_cache.store(
+                    slot,
+                    &meta.pubkey,
+                    account,
+                    hash,
+                    include_slot_in_hash,
+                );
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
@@ -6578,7 +6609,13 @@ impl AccountsDb {
                     }
                 };
 
-            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)
+            self.write_accounts_to_cache(
+                slot,
+                hashes,
+                &accounts_and_meta_to_store,
+                signature_iter,
+                accounts.include_slot_in_hash(),
+            )
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
@@ -6594,7 +6631,12 @@ impl AccountsDb {
                     let mut hashes = Vec::with_capacity(len);
                     for index in 0..accounts.len() {
                         let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                        let hash = Self::hash_account(slot, account, pubkey);
+                        let hash = Self::hash_account(
+                            slot,
+                            account,
+                            pubkey,
+                            accounts.include_slot_in_hash(),
+                        );
                         hashes.push(hash);
                     }
                     hash_time.stop();
@@ -6770,8 +6812,10 @@ impl AccountsDb {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
+                                                // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
+                                                let include_slot = true;
                                                 let computed_hash =
-                                                    loaded_account.compute_hash(*slot, pubkey);
+                                                    loaded_account.compute_hash(*slot, pubkey, include_slot);
                                                 if computed_hash != loaded_hash {
                                                     info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
                                                     mismatch_found
@@ -8150,7 +8194,12 @@ impl AccountsDb {
     /// Store the account update.
     /// only called by tests
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.store((slot, accounts), false, None, StoreReclaims::Default);
+        self.store(
+            (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
+            false,
+            None,
+            StoreReclaims::Default,
+        );
     }
 
     fn store<'a, T: ReadableAccount + Sync + ZeroLamport>(
@@ -8883,8 +8932,9 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.maybe_throttle_index_generation();
+                let include_slot_in_hash = true; // temporary
                 self.store_accounts_frozen(
-                    (*slot, &add[..]),
+                    (*slot, &add[..], include_slot_in_hash),
                     Some(&hashes[..]),
                     None,
                     None,

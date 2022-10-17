@@ -24,6 +24,8 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     /// are there accounts from multiple slots
     /// only used for an assert
     fn contains_multiple_slots(&self) -> bool;
+    /// true iff hashing these accounts should include the slot
+    fn include_slot_in_hash(&self) -> bool;
 }
 
 /// accounts that are moving from 'old_slot' to 'target_slot'
@@ -36,6 +38,9 @@ pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
     pub target_slot: Slot,
     /// slot where accounts are currently stored
     pub old_slot: Slot,
+    /// true if hashing an account should include the slot
+    /// temporarily here until feature activation
+    pub include_slot_in_hash: bool,
 }
 
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccountsMovingSlots<'a, T> {
@@ -58,9 +63,15 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccounts
     fn contains_multiple_slots(&self) -> bool {
         false
     }
+    fn include_slot_in_hash(&self) -> bool {
+        self.include_slot_in_hash
+    }
 }
 
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a Pubkey, &'a T)]) {
+/// last bool is 'include_slot_in_hash'
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+    for (Slot, &'a [(&'a Pubkey, &'a T)], bool)
+{
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
     }
@@ -80,11 +91,15 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     fn contains_multiple_slots(&self) -> bool {
         false
     }
+    fn include_slot_in_hash(&self) -> bool {
+        self.2
+    }
 }
 
 /// this tuple contains slot info PER account
+/// last bool is include_slot_in_hash
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
-    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)])
+    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)], bool)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
@@ -111,6 +126,9 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
         } else {
             false
         }
+    }
+    fn include_slot_in_hash(&self) -> bool {
+        self.2
     }
 }
 

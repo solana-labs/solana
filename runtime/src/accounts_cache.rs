@@ -71,6 +71,7 @@ impl SlotCacheInner {
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
         slot: Slot,
+        include_slot_in_hash: bool,
     ) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
@@ -78,6 +79,7 @@ impl SlotCacheInner {
             hash: RwLock::new(hash.map(|h| *h.borrow())),
             slot,
             pubkey: *pubkey,
+            include_slot_in_hash,
         });
         if let Some(old) = self.cache.insert(*pubkey, item.clone()) {
             self.same_account_writes.fetch_add(1, Ordering::Relaxed);
@@ -143,6 +145,8 @@ pub struct CachedAccountInner {
     hash: RwLock<Option<Hash>>,
     slot: Slot,
     pubkey: Pubkey,
+    /// temporarily here during feature activation
+    pub include_slot_in_hash: bool,
 }
 
 impl CachedAccountInner {
@@ -156,6 +160,7 @@ impl CachedAccountInner {
                     self.slot,
                     &self.account,
                     &self.pubkey,
+                    self.include_slot_in_hash,
                 );
                 *self.hash.write().unwrap() = Some(hash);
                 hash
@@ -227,6 +232,7 @@ impl AccountsCache {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
+        include_slot_in_hash: bool,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
@@ -239,7 +245,7 @@ impl AccountsCache {
                 .or_insert(self.new_inner())
                 .clone());
 
-        slot_cache.insert(pubkey, account, hash, slot)
+        slot_cache.insert(pubkey, account, hash, slot, include_slot_in_hash)
     }
 
     pub fn load(&self, slot: Slot, pubkey: &Pubkey) -> Option<CachedAccount> {

@@ -1201,6 +1201,7 @@ impl Accounts {
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         preserve_rent_epoch_for_rent_exempt_accounts: bool,
+        include_slot_in_hash: bool,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
@@ -1211,8 +1212,10 @@ impl Accounts {
             lamports_per_signature,
             preserve_rent_epoch_for_rent_exempt_accounts,
         );
-        self.accounts_db
-            .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
+        self.accounts_db.store_cached(
+            (slot, &accounts_to_store[..], include_slot_in_hash),
+            Some(&txn_signatures),
+        );
     }
 
     pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport>(
