@@ -28,12 +28,13 @@ Transaction fees offer many benefits in the Solana [economic design](#basic-econ
 Many blockchain networks \(e.g. Bitcoin and Ethereum\), rely on inflationary _protocol-based rewards_ to secure the network in the short-term. Over the long-term, these networks will increasingly rely on _transaction fees_ to sustain security.
 
 The same is true on Solana. Specifically:
-- A fixed portion (initially 50%) of each transaction fee is _burned_ (destroyed), with the remaining fee going to the current [leader](./terminology.md#leader) processing the transaction.
+
+- A fixed proportion (initially 50%) of each transaction fee is _burned_ (destroyed), with the remaining going to the current [leader](./terminology.md#leader) processing the transaction.
 - A scheduled global inflation rate provides a source for [rewards](./implemented-proposals/staking-rewards.md) distributed to [Solana Validators](../src/running-validator.md).
 
 ### Why burn some fees?
 
-As mentioned above, a fixed proportion of each transaction fee is _burned_ (destroyed). Because leaders still get to keep a portion of these fees, they are incentivized to include as many transactions as possible in their blocks. The burnt portion of the fees cements the economic value of SOL and thus sustains the Solana network's crypto-economic security.
+As mentioned above, a fixed proportion of each transaction fee is _burned_ (destroyed). This is intended to cement the economic value of SOL and thus sustain the network's security. Unlike a scheme where transactions fees are completely burned, leaders are still incentivized to include as many transactions as possible in their slots.
 
 Burnt fees can also help prevent malicious validators from censoring transactions by being considered in [fork](./terminology.md#fork) selection.
 
