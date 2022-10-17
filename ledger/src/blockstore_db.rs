@@ -145,7 +145,12 @@ pub mod columns {
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// The orphans column
+    /// The orphans column.
+    ///
+    /// This column family tracks whether a slot has a parent.  Slots without a
+    /// parent are by definition orphan slots.  Orphans will have an entry in
+    /// this column family with true value.  Once an orphan slot has a parent,
+    /// its entry in this column will be deleted.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: bool
