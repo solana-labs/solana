@@ -653,7 +653,7 @@ fn get_rpc_nodes(
             }
         }
 
-        let know_validators_to_wait_for = if newer_cluster_snapshot_timeout
+        let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
             .as_ref()
             .map(|timer: &Instant| timer.elapsed() < WAIT_FOR_ALL_KNOWN_VALIDATORS)
             .unwrap_or(true)
