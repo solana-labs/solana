@@ -1,9 +1,6 @@
 import { useCluster } from "providers/cluster";
-import { Connection } from "@solana/web3.js";
 import React, { useState, useEffect } from "react";
-
-const STATUS_API_ENDPOINT: string =
-  "https://status.solana.com/api/v2/status.json";
+import axios from "axios";
 
 const PING_PERIOD_IN_MS: number = 3000;
 
@@ -16,36 +13,18 @@ const container = {
   fontWeight: "bold" as "bold",
 };
 function NetworkStatusNotifier() {
-  const healthyStatus = "All Systems Operational";
+  const healthyStatus = "ok";
   const [currentDownStatus, setCurrentErrorState] =
     useState<string>(healthyStatus);
   const [hasDownTime, setHasDownTime] = useState<boolean>(false);
-  const { cluster, url } = useCluster();
+
+  const { url, name } = useCluster();
 
   useEffect(() => {
-    const connection = new Connection(url, "finalized");
-
     let timer = setInterval(async () => {
-      const nodes = await connection.getClusterNodes();
+      const statusDesc = await makeAHealthCheckCall(url);
 
-      console.log(nodes[0].getHealth());
-
-      // try {
-      //   const response = await fetch("https://api.mainnet-beta.solana.com", {
-      //     // Adding method type
-      //     method: "POST",
-
-      //     // Adding body or contents to send
-      //     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getHealth" }),
-      //   });
-      //   console.log(response);
-      // } catch (error) {
-      //   console.log(error);
-      // }
-      console.log("This changed");
-      const res = await makeGetRequest(STATUS_API_ENDPOINT);
-      const statusDesc = res.status.description;
-      if (currentDownStatus !== statusDesc) {
+      if (statusDesc !== currentDownStatus) {
         setHasDownTime(statusDesc !== healthyStatus);
         setCurrentErrorState(statusDesc);
       }
@@ -54,14 +33,13 @@ function NetworkStatusNotifier() {
     return () => {
       clearTimeout(timer);
     };
-  }, []);
+  }, [url]);
 
   return (
     <div style={container}>
       {hasDownTime && (
         <div>
-          Solana network may be down. Downtime Detail:
-          {currentDownStatus}
+          {name} cluster may be down. Downtime Detail: {currentDownStatus}
         </div>
       )}
     </div>
@@ -70,7 +48,21 @@ function NetworkStatusNotifier() {
 
 export default NetworkStatusNotifier;
 
-async function makeGetRequest(url: string): Promise<any> {
-  const res = await fetch(url);
-  return await res.json();
-}
+const makeAHealthCheckCall = async (url: string): Promise<any> => {
+  try {
+    const config = {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+    const data = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getHealth",
+    };
+    const res = await axios.post(url, data, config);
+    return res.data.result;
+  } catch (error) {
+    //ignore the error for now but Will check for other error handling mechanism in future.
+  }
+};
