@@ -1,4 +1,5 @@
 use {
+    crate::accounts_db::IncludeSlotInHash,
     dashmap::DashMap,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
@@ -71,7 +72,7 @@ impl SlotCacheInner {
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
         slot: Slot,
-        include_slot_in_hash: bool,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let data_len = account.data().len() as u64;
         let item = Arc::new(CachedAccountInner {
@@ -146,7 +147,8 @@ pub struct CachedAccountInner {
     slot: Slot,
     pubkey: Pubkey,
     /// temporarily here during feature activation
-    pub include_slot_in_hash: bool,
+    /// since we calculate the hash later, or in the background, we need knowledge of whether this slot uses the slot in the hash or not
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl CachedAccountInner {
@@ -232,7 +234,7 @@ impl AccountsCache {
         pubkey: &Pubkey,
         account: AccountSharedData,
         hash: Option<impl Borrow<Hash>>,
-        include_slot_in_hash: bool,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> CachedAccount {
         let slot_cache = self.slot_cache(slot).unwrap_or_else(||
             // DashMap entry.or_insert() returns a RefMut, essentially a write lock,

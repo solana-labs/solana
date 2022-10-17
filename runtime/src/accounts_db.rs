@@ -137,22 +137,41 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+/// temporary enum during feature activation of
+/// ignore slot when calculating an account hash #28420
+#[derive(Debug, Clone, Copy)]
+pub enum IncludeSlotInHash {
+    /// this is the status quo, prior to feature activation
+    /// INCLUDE the slot in the account hash calculation
+    IncludeSlot,
+    /// this is the value once feature activation occurs
+    /// do NOT include the slot in the account hash calculation
+    RemoveSlot,
+    /// this option should not be used.
+    /// If it is, this is a panic worthy event.
+    /// There are code paths where the feature activation status isn't known, but this value should not possibly be used.
+    IrrelevantAssertOnUse,
+}
+
 /// used by tests for 'include_slot_in_hash' parameter
-pub const INCLUDE_SLOT_IN_HASH_TESTS: bool = true;
+/// Tests just need to be self-consistent, so any value should work here.
+pub const INCLUDE_SLOT_IN_HASH_TESTS: IncludeSlotInHash = IncludeSlotInHash::IncludeSlot;
 
 // This value is irrelevant because we are reading from append vecs and the hash is already computed and saved.
 // The hash will just be loaded from the append vec as opposed to being calculated initially.
-// A shrink involves reading from an append vec and writing alive accounts to a new append vec.
-// So, by definition, we will just read hashes and write hashes. The hash will not be recalculated.
+// A shrink-type operation involves reading from an append vec and writing a subset of the read accounts to a new append vec.
+// So, by definition, we will just read hashes and write hashes. The hash will not be calculated.
 // The 'store' apis are shared, such that the initial store from a bank (where we need to know whether to include the slot)
 // must include a feature-based value for 'include_slot_in_hash'. Other uses, specifically shrink, do NOT need to pass this
 // parameter, but the shared api requires a value.
-pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK: bool = true;
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION: IncludeSlotInHash =
+    IncludeSlotInHash::IrrelevantAssertOnUse;
 
 // This value is irrelevant because the the debug-only check_hash debug option is not possible to enable at the moment.
 // This has been true for some time now, due to fallout from disabling rewrites.
 // The check_hash debug option can be re-enabled once this feature and the 'rent_epoch' features are enabled.
-pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH: bool = true;
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH: IncludeSlotInHash =
+    IncludeSlotInHash::IrrelevantAssertOnUse;
 
 pub enum StoreReclaims {
     /// normal reclaim mode
@@ -581,7 +600,12 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey, include_slot: bool) -> Hash {
+    pub fn compute_hash(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        include_slot: IncludeSlotInHash,
+    ) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
                 slot,
@@ -3707,7 +3731,11 @@ impl AccountsDb {
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             store_accounts_timing = self.store_accounts_frozen(
-                (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK),
+                (
+                    slot,
+                    &accounts[..],
+                    INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+                ),
                 Some(&hashes),
                 Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
@@ -4122,7 +4150,7 @@ impl AccountsDb {
             (
                 ancient_slot,
                 accounts,
-                INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK,
+                INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
             ),
             Some(hashes),
             Some(ancient_store),
@@ -5962,7 +5990,7 @@ impl AccountsDb {
         account: &T,
         pubkey: &Pubkey,
         rent_epoch: Epoch,
-        include_slot: bool,
+        include_slot: IncludeSlotInHash,
     ) -> Hash {
         Self::hash_account_data(
             slot,
@@ -5980,7 +6008,7 @@ impl AccountsDb {
         slot: Slot,
         account: &T,
         pubkey: &Pubkey,
-        include_slot: bool,
+        include_slot: IncludeSlotInHash,
     ) -> Hash {
         Self::hash_account_data(
             slot,
@@ -6002,7 +6030,7 @@ impl AccountsDb {
         rent_epoch: Epoch,
         data: &[u8],
         pubkey: &Pubkey,
-        include_slot: bool,
+        include_slot: IncludeSlotInHash,
     ) -> Hash {
         if lamports == 0 {
             return Hash::default();
@@ -6012,9 +6040,15 @@ impl AccountsDb {
 
         hasher.update(&lamports.to_le_bytes());
 
-        if include_slot {
-            // upon feature activation, stop including slot# in the account hash
-            hasher.update(&slot.to_le_bytes());
+        match include_slot {
+            IncludeSlotInHash::IncludeSlot => {
+                // upon feature activation, stop including slot# in the account hash
+                hasher.update(&slot.to_le_bytes());
+            }
+            IncludeSlotInHash::RemoveSlot => {}
+            IncludeSlotInHash::IrrelevantAssertOnUse => {
+                panic!("IncludeSlotInHash is irrelevant, but we are calculating hash");
+            }
         }
 
         hasher.update(&rent_epoch.to_le_bytes());
@@ -6404,7 +6438,8 @@ impl AccountsDb {
             // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
-            let include_slot_in_hash = true; // irrelevant - account will already be hashed since it was used in bank hash previously
+            // irrelevant - account will already be hashed since it was used in bank hash previously
+            let include_slot_in_hash = IncludeSlotInHash::IrrelevantAssertOnUse;
             self.store_accounts_frozen(
                 (slot, &accounts[..], include_slot_in_hash),
                 Some(&hashes),
@@ -6524,7 +6559,7 @@ impl AccountsDb {
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
         txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>> + 'a>,
-        include_slot_in_hash: bool,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -8945,7 +8980,7 @@ impl AccountsDb {
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.maybe_throttle_index_generation();
                 // filler accounts are debug only and their hash is irrelevant anyway, so any value is ok here.
-                let include_slot_in_hash = true;
+                let include_slot_in_hash = INCLUDE_SLOT_IN_HASH_TESTS;
                 self.store_accounts_frozen(
                     (*slot, &add[..], include_slot_in_hash),
                     Some(&hashes[..]),
@@ -9718,7 +9753,6 @@ pub mod tests {
         }
     }
 
-    /// last bool is 'include_slot_in_hash'
     /// This impl exists until this feature is activated:
     ///  ignore slot when calculating an account hash #28420
     /// For now, all test code will continue to work thanks to this impl
@@ -9743,7 +9777,7 @@ pub mod tests {
         fn contains_multiple_slots(&self) -> bool {
             false
         }
-        fn include_slot_in_hash(&self) -> bool {
+        fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
         }
     }
@@ -9779,7 +9813,7 @@ pub mod tests {
                 false
             }
         }
-        fn include_slot_in_hash(&self) -> bool {
+        fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
         }
     }

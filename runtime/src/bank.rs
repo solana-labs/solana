@@ -44,7 +44,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, IncludeSlotInHash, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
@@ -1154,8 +1154,7 @@ impl StakeReward {
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-/// last bool is include_slot_in_hash
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], bool) {
+impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
@@ -1175,7 +1174,7 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], b
     fn contains_multiple_slots(&self) -> bool {
         false
     }
-    fn include_slot_in_hash(&self) -> bool {
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
 }
@@ -5319,10 +5318,15 @@ impl Bank {
     }
 
     /// true if we should include the slot in account hash
-    fn include_slot_in_hash(&self) -> bool {
-        !self
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        if self
             .feature_set
             .is_active(&feature_set::account_hash_ignore_slot::ID)
+        {
+            IncludeSlotInHash::RemoveSlot
+        } else {
+            IncludeSlotInHash::IncludeSlot
+        }
     }
 
     /// convert 'partition' to a pubkey range and 'collect_rent_in_range'

@@ -1,5 +1,8 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
-use solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey};
+use {
+    crate::accounts_db::IncludeSlotInHash,
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
+};
 
 /// abstract access to pubkey, account, slot, target_slot of either:
 /// a. (slot, &[&Pubkey, &ReadableAccount])
@@ -25,7 +28,7 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     /// only used for an assert
     fn contains_multiple_slots(&self) -> bool;
     /// true iff hashing these accounts should include the slot
-    fn include_slot_in_hash(&self) -> bool;
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash;
 }
 
 /// accounts that are moving from 'old_slot' to 'target_slot'
@@ -38,9 +41,8 @@ pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
     pub target_slot: Slot,
     /// slot where accounts are currently stored
     pub old_slot: Slot,
-    /// true if hashing an account should include the slot
     /// This is temporarily here until feature activation.
-    pub include_slot_in_hash: bool,
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccountsMovingSlots<'a, T> {
@@ -63,16 +65,15 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccounts
     fn contains_multiple_slots(&self) -> bool {
         false
     }
-    fn include_slot_in_hash(&self) -> bool {
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.include_slot_in_hash
     }
 }
 
-/// last bool is 'include_slot_in_hash'
-/// This parameter exists until this feature is activated:
+/// The last parameter exists until this feature is activated:
 ///  ignore slot when calculating an account hash #28420
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
-    for (Slot, &'a [(&'a Pubkey, &'a T)], bool)
+    for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
@@ -93,15 +94,14 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
     fn contains_multiple_slots(&self) -> bool {
         false
     }
-    fn include_slot_in_hash(&self) -> bool {
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
 }
 
 /// this tuple contains slot info PER account
-/// last bool is include_slot_in_hash
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
-    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)], bool)
+    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)], IncludeSlotInHash)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
@@ -129,7 +129,7 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
             false
         }
     }
-    fn include_slot_in_hash(&self) -> bool {
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
     }
 }

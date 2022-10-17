@@ -372,7 +372,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 (
                     slot,
                     &accounts[..],
-                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK,
+                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
                 ),
                 Some(&hashes),
                 Some(&new_storage),

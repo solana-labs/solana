@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
+            BankHashInfo, IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -1201,7 +1201,7 @@ impl Accounts {
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         preserve_rent_epoch_for_rent_exempt_accounts: bool,
-        include_slot_in_hash: bool,
+        include_slot_in_hash: IncludeSlotInHash,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
