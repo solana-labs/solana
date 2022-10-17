@@ -224,7 +224,7 @@ pub fn is_upgrade_instruction(instruction_data: &[u8]) -> bool {
 }
 
 pub fn is_set_authority_instruction(instruction_data: &[u8]) -> bool {
-    !instruction_data.is_empty() && 4 == instruction_data[0]
+    !instruction_data.is_empty() && (4 == instruction_data[0] || 7 == instruction_data[0])
 }
 
 pub fn is_close_instruction(instruction_data: &[u8]) -> bool {
@@ -264,6 +264,27 @@ pub fn set_upgrade_authority(
         metas.push(AccountMeta::new_readonly(*address, false));
     }
     Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::SetAuthority, metas)
+}
+
+/// Returns the instructions required to set a program's authority. If using this instruction, the new authority
+/// must sign .
+pub fn set_upgrade_authority_checked(
+    program_address: &Pubkey,
+    current_authority_address: &Pubkey,
+    new_authority_address: &Pubkey,
+) -> Instruction {
+    let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
+
+    let metas = vec![
+        AccountMeta::new(programdata_address, false),
+        AccountMeta::new_readonly(*current_authority_address, true),
+        AccountMeta::new_readonly(*new_authority_address, true),
+    ];
+    Instruction::new_with_bincode(
+        id(),
+        &UpgradeableLoaderInstruction::SetAuthorityChecked,
+        metas,
+    )
 }
 
 /// Returns the instructions required to close a buffer account
@@ -452,6 +473,10 @@ mod tests {
         assert_is_instruction(
             is_set_authority_instruction,
             UpgradeableLoaderInstruction::SetAuthority {},
+        );
+        assert_is_instruction(
+            is_set_authority_instruction,
+            UpgradeableLoaderInstruction::SetAuthorityChecked {},
         );
     }
 
