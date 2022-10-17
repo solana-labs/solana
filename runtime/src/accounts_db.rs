@@ -12354,6 +12354,8 @@ pub mod tests {
         assert_eq!(bank_hash.stats.num_executable_accounts, 1);
     }
 
+    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
+    #[ignore]
     #[test]
     fn test_calculate_accounts_hash_check_hash_mismatch() {
         solana_logger::setup();
@@ -12412,6 +12414,8 @@ pub mod tests {
         }
     }
 
+    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
+    #[ignore]
     #[test]
     fn test_calculate_accounts_hash_check_hash() {
         solana_logger::setup();
