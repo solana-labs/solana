@@ -182,7 +182,7 @@ all_test_steps() {
     timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      queue: "gcp"
+      queue: "solana"
 EOF
   else
     annotate --style info \
