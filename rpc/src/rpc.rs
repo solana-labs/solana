@@ -5484,7 +5484,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": "",
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
         });
         assert_eq!(result, expected);
@@ -5502,6 +5503,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([base64::encode(&data), "base64"]);
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5510,6 +5512,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([base64::encode(&data[1..3]), "base64"]);
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5518,6 +5521,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = bs58::encode(&data[1..3]).into_string();
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5561,7 +5565,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
             null,
             {
@@ -5569,7 +5574,8 @@ pub mod tests {
                 "lamports": 42,
                 "data": [base64::encode(&data), "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 5,
             }
         ]);
         assert_eq!(result.value, expected);
@@ -5593,7 +5599,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base58"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
             null,
             {
@@ -5601,7 +5608,8 @@ pub mod tests {
                 "lamports": 42,
                 "data": [bs58::encode(&data).into_string(), "base58"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 5,
             }
         ]);
         assert_eq!(result.value, expected);
@@ -5838,7 +5846,8 @@ pub mod tests {
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
                             "lamports": rent_exempt_amount,
-                            "rentEpoch": 0
+                            "rentEpoch": 0,
+                            "space": 0,
                         }
                     ],
                     "err":null,
