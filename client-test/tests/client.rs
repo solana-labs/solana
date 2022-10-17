@@ -182,6 +182,7 @@ fn test_account_subscription() {
             "data": "",
             "executable": false,
             "rentEpoch": 0,
+            "space": 0,
         },
     });
 
