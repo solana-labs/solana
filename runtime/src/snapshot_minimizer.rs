@@ -368,9 +368,12 @@ impl<'a> SnapshotMinimizer<'a> {
             }
 
             let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
-            let include_slot_in_hash = true; // this is irrelevant. We are rewriting existing storages, so hash will always exist
             self.accounts_db().store_accounts_frozen(
-                (slot, &accounts[..], include_slot_in_hash),
+                (
+                    slot,
+                    &accounts[..],
+                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK,
+                ),
                 Some(&hashes),
                 Some(&new_storage),
                 Some(Box::new(write_versions.into_iter())),

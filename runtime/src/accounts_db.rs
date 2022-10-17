@@ -140,6 +140,20 @@ const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 /// used by tests for 'include_slot_in_hash' parameter
 pub const INCLUDE_SLOT_IN_HASH_TESTS: bool = true;
 
+// This value is irrelevant because we are reading from append vecs and the hash is already computed and saved.
+// The hash will just be loaded from the append vec as opposed to being calculated initially.
+// A shrink involves reading from an append vec and writing alive accounts to a new append vec.
+// So, by definition, we will just read hashes and write hashes. The hash will not be recalculated.
+// The 'store' apis are shared, such that the initial store from a bank (where we need to know whether to include the slot)
+// must include a feature-based value for 'include_slot_in_hash'. Other uses, specifically shrink, do NOT need to pass this
+// parameter, but the shared api requires a value.
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK: bool = true;
+
+// This value is irrelevant because the the debug-only check_hash debug option is not possible to enable at the moment.
+// This has been true for some time now, due to fallout from disabling rewrites.
+// The check_hash debug option can be re-enabled once this feature and the 'rent_epoch' features are enabled.
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH: bool = true;
+
 pub enum StoreReclaims {
     /// normal reclaim mode
     Default,
@@ -2033,13 +2047,12 @@ impl<'a> AppendVecScan for ScanState<'a> {
         if self.config.check_hash
             && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
         {
-            // this is irrelevant because:
-            // 1. this option is not supported atm
-            // 2. we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
-            let include_slot_in_hash = true;
             // this will not be supported anymore
-            let computed_hash =
-                loaded_account.compute_hash(self.current_slot, pubkey, include_slot_in_hash);
+            let computed_hash = loaded_account.compute_hash(
+                self.current_slot,
+                pubkey,
+                INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH,
+            );
             if computed_hash != source_item.hash {
                 info!(
                     "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -3690,14 +3703,11 @@ impl AccountsDb {
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
             create_and_insert_store_elapsed = time.as_micros() as u64;
 
-            // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
-            let include_slot_in_hash = true; // this is irrelevant because we are reading from append vecs
-
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             store_accounts_timing = self.store_accounts_frozen(
-                (slot, &accounts[..], include_slot_in_hash),
+                (slot, &accounts[..], INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK),
                 Some(&hashes),
                 Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
@@ -4106,12 +4116,14 @@ impl AccountsDb {
         accounts: &AccountsToStore,
         storage_selector: StorageSelector,
     ) -> StoreAccountsTiming {
-        let include_slot_in_hash = false; // irrelevant because we're reading from append vecs which already have hashes
-
         let (accounts, hashes) = accounts.get(storage_selector);
 
         self.store_accounts_frozen(
-            (ancient_slot, accounts, include_slot_in_hash),
+            (
+                ancient_slot,
+                accounts,
+                INCLUDE_SLOT_IN_HASH_IRRELEVANT_SHRINK,
+            ),
             Some(hashes),
             Some(ancient_store),
             None,
@@ -6814,12 +6826,8 @@ impl AccountsDb {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
-                                                // this is irrelevant because:
-                                                // 1. the option to check hashes here is not supported atm
-                                                // 2. we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
-                                                let include_slot = true;
                                                 let computed_hash =
-                                                    loaded_account.compute_hash(*slot, pubkey, include_slot);
+                                                    loaded_account.compute_hash(*slot, pubkey, INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH);
                                                 if computed_hash != loaded_hash {
                                                     info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
                                                     mismatch_found
@@ -8936,7 +8944,8 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.maybe_throttle_index_generation();
-                let include_slot_in_hash = true; // temporary
+                // filler accounts are debug only and their hash is irrelevant anyway, so any value is ok here.
+                let include_slot_in_hash = true;
                 self.store_accounts_frozen(
                     (*slot, &add[..], include_slot_in_hash),
                     Some(&hashes[..]),

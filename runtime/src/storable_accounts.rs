@@ -39,7 +39,7 @@ pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
     /// slot where accounts are currently stored
     pub old_slot: Slot,
     /// true if hashing an account should include the slot
-    /// temporarily here until feature activation
+    /// This is temporarily here until feature activation.
     pub include_slot_in_hash: bool,
 }
 
