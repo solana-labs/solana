@@ -340,8 +340,6 @@ impl SnapshotRequestHandler {
                         rent_collector: snapshot_root_bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
-                        enable_rehashing: snapshot_root_bank
-                            .bank_enable_rehashing_on_accounts_hash(),
                     },
                 )
                 .unwrap();
