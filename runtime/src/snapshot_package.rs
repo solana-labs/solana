@@ -46,7 +46,6 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
-    pub enable_rehashing: bool,
 }
 
 impl AccountsPackage {
@@ -117,7 +116,6 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
-            enable_rehashing: bank.bank_enable_rehashing_on_accounts_hash(),
         })
     }
 
@@ -141,7 +139,6 @@ impl AccountsPackage {
             accounts: Arc::new(Accounts::default_for_tests()),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
-            enable_rehashing: bool::default(),
         }
     }
 }
