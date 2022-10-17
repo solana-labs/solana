@@ -147,4 +147,17 @@ pub enum UpgradeableLoaderInstruction {
         /// Number of bytes to extend the program data.
         additional_bytes: u32,
     },
+
+    /// Set a new authority that is allowed to write the buffer or upgrade the
+    /// program.
+    ///
+    /// This instruction differs from SetAuthority in that the new authority is a
+    /// required signer.
+    ///
+    /// # Account references
+    ///   0. `[writable]` The Buffer or ProgramData account to change the
+    ///      authority of.
+    ///   1. `[signer]` The current authority.
+    ///   2. `[signer]` The new authority.
+    SetAuthorityChecked,
 }

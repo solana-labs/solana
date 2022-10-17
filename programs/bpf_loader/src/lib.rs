@@ -495,6 +495,82 @@ fn process_instruction_common(
     }
 }
 
+fn process_set_authority(
+    instruction_context: &InstructionContext,
+    transaction_context: &TransactionContext,
+    log_collector: &Option<Rc<RefCell<LogCollector>>>,
+    new_authority_must_sign: bool,
+) -> Result<(), InstructionError> {
+    instruction_context.check_number_of_instruction_accounts(2)?;
+    let mut account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+    let present_authority_key = transaction_context.get_key_of_account_at_index(
+        instruction_context.get_index_of_instruction_account_in_transaction(1)?,
+    )?;
+    let new_authority = instruction_context
+        .get_index_of_instruction_account_in_transaction(2)
+        .and_then(|index_in_transaction| {
+            transaction_context.get_key_of_account_at_index(index_in_transaction)
+        })
+        .ok();
+
+    match account.get_state()? {
+        UpgradeableLoaderState::Buffer { authority_address } => {
+            if new_authority.is_none() {
+                ic_logger_msg!(log_collector, "Buffer authority is not optional");
+                return Err(InstructionError::IncorrectAuthority);
+            }
+            if authority_address.is_none() {
+                ic_logger_msg!(log_collector, "Buffer is immutable");
+                return Err(InstructionError::Immutable);
+            }
+            if authority_address != Some(*present_authority_key) {
+                ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
+                return Err(InstructionError::IncorrectAuthority);
+            }
+            if !instruction_context.is_instruction_account_signer(1)? {
+                ic_logger_msg!(log_collector, "Buffer authority did not sign");
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            account.set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: new_authority.cloned(),
+            })?;
+        }
+        UpgradeableLoaderState::ProgramData {
+            slot,
+            upgrade_authority_address,
+        } => {
+            if upgrade_authority_address.is_none() {
+                ic_logger_msg!(log_collector, "Program not upgradeable");
+                return Err(InstructionError::Immutable);
+            }
+            if upgrade_authority_address != Some(*present_authority_key) {
+                ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
+                return Err(InstructionError::IncorrectAuthority);
+            }
+            if !instruction_context.is_instruction_account_signer(1)? {
+                ic_logger_msg!(log_collector, "Upgrade authority did not sign");
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            if new_authority_must_sign && !instruction_context.is_instruction_account_signer(2)? {
+                ic_logger_msg!(log_collector, "New authority did not sign");
+                return Err(InstructionError::MissingRequiredSignature);
+            }
+            account.set_state(&UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: new_authority.cloned(),
+            })?;
+        }
+        _ => {
+            ic_logger_msg!(log_collector, "Account does not support authorities");
+            return Err(InstructionError::InvalidArgument);
+        }
+    }
+
+    ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
+
+    Ok(())
+}
+
 fn process_loader_upgradeable_instruction(
     first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
@@ -913,69 +989,20 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::SetAuthority => {
-            instruction_context.check_number_of_instruction_accounts(2)?;
-            let mut account =
-                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-            let present_authority_key = transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_of_instruction_account_in_transaction(1)?,
+            process_set_authority(
+                instruction_context,
+                transaction_context,
+                &log_collector,
+                false,
             )?;
-            let new_authority = instruction_context
-                .get_index_of_instruction_account_in_transaction(2)
-                .and_then(|index_in_transaction| {
-                    transaction_context.get_key_of_account_at_index(index_in_transaction)
-                })
-                .ok();
-
-            match account.get_state()? {
-                UpgradeableLoaderState::Buffer { authority_address } => {
-                    if new_authority.is_none() {
-                        ic_logger_msg!(log_collector, "Buffer authority is not optional");
-                        return Err(InstructionError::IncorrectAuthority);
-                    }
-                    if authority_address.is_none() {
-                        ic_logger_msg!(log_collector, "Buffer is immutable");
-                        return Err(InstructionError::Immutable);
-                    }
-                    if authority_address != Some(*present_authority_key) {
-                        ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
-                        return Err(InstructionError::IncorrectAuthority);
-                    }
-                    if !instruction_context.is_instruction_account_signer(1)? {
-                        ic_logger_msg!(log_collector, "Buffer authority did not sign");
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
-                    account.set_state(&UpgradeableLoaderState::Buffer {
-                        authority_address: new_authority.cloned(),
-                    })?;
-                }
-                UpgradeableLoaderState::ProgramData {
-                    slot,
-                    upgrade_authority_address,
-                } => {
-                    if upgrade_authority_address.is_none() {
-                        ic_logger_msg!(log_collector, "Program not upgradeable");
-                        return Err(InstructionError::Immutable);
-                    }
-                    if upgrade_authority_address != Some(*present_authority_key) {
-                        ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
-                        return Err(InstructionError::IncorrectAuthority);
-                    }
-                    if !instruction_context.is_instruction_account_signer(1)? {
-                        ic_logger_msg!(log_collector, "Upgrade authority did not sign");
-                        return Err(InstructionError::MissingRequiredSignature);
-                    }
-                    account.set_state(&UpgradeableLoaderState::ProgramData {
-                        slot,
-                        upgrade_authority_address: new_authority.cloned(),
-                    })?;
-                }
-                _ => {
-                    ic_logger_msg!(log_collector, "Account does not support authorities");
-                    return Err(InstructionError::InvalidArgument);
-                }
-            }
-
-            ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
+        }
+        UpgradeableLoaderInstruction::SetAuthorityChecked => {
+            process_set_authority(
+                instruction_context,
+                transaction_context,
+                &log_collector,
+                true,
+            )?;
         }
         UpgradeableLoaderInstruction::Close => {
             instruction_context.check_number_of_instruction_accounts(2)?;
@@ -3600,6 +3627,192 @@ mod tests {
                 (upgrade_authority_address, upgrade_authority_account),
             ],
             vec![programdata_meta, upgrade_authority_meta],
+            Err(InstructionError::InvalidArgument),
+        );
+    }
+
+    #[test]
+    fn test_bpf_loader_upgradeable_set_upgrade_authority_checked() {
+        let instruction =
+            bincode::serialize(&UpgradeableLoaderInstruction::SetAuthorityChecked).unwrap();
+        let loader_id = bpf_loader_upgradeable::id();
+        let slot = 0;
+        let upgrade_authority_address = Pubkey::new_unique();
+        let upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
+        let new_upgrade_authority_address = Pubkey::new_unique();
+        let new_upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
+        let program_address = Pubkey::new_unique();
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
+        let mut programdata_account = AccountSharedData::new(
+            1,
+            UpgradeableLoaderState::size_of_programdata(0),
+            &bpf_loader_upgradeable::id(),
+        );
+        programdata_account
+            .set_state(&UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: Some(upgrade_authority_address),
+            })
+            .unwrap();
+        let programdata_meta = AccountMeta {
+            pubkey: programdata_address,
+            is_signer: false,
+            is_writable: true,
+        };
+        let upgrade_authority_meta = AccountMeta {
+            pubkey: upgrade_authority_address,
+            is_signer: true,
+            is_writable: false,
+        };
+        let new_upgrade_authority_meta = AccountMeta {
+            pubkey: new_upgrade_authority_address,
+            is_signer: true,
+            is_writable: false,
+        };
+
+        // Case: Set to new authority
+        let accounts = process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+                (
+                    new_upgrade_authority_address,
+                    new_upgrade_authority_account.clone(),
+                ),
+            ],
+            vec![
+                programdata_meta.clone(),
+                upgrade_authority_meta.clone(),
+                new_upgrade_authority_meta.clone(),
+            ],
+            Ok(()),
+        );
+
+        let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
+        assert_eq!(
+            state,
+            UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: Some(new_upgrade_authority_address),
+            }
+        );
+
+        // Case: Authority did not sign
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                AccountMeta {
+                    pubkey: upgrade_authority_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                new_upgrade_authority_meta.clone(),
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Case: New authority did not sign
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                upgrade_authority_meta.clone(),
+                AccountMeta {
+                    pubkey: new_upgrade_authority_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::MissingRequiredSignature),
+        );
+
+        // Case: wrong authority
+        let invalid_upgrade_authority_address = Pubkey::new_unique();
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (
+                    invalid_upgrade_authority_address,
+                    upgrade_authority_account.clone(),
+                ),
+                (new_upgrade_authority_address, new_upgrade_authority_account),
+            ],
+            vec![
+                programdata_meta.clone(),
+                AccountMeta {
+                    pubkey: invalid_upgrade_authority_address,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                new_upgrade_authority_meta.clone(),
+            ],
+            Err(InstructionError::IncorrectAuthority),
+        );
+
+        // Case: No authority
+        programdata_account
+            .set_state(&UpgradeableLoaderState::ProgramData {
+                slot,
+                upgrade_authority_address: None,
+            })
+            .unwrap();
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                upgrade_authority_meta.clone(),
+                new_upgrade_authority_meta.clone(),
+            ],
+            Err(InstructionError::Immutable),
+        );
+
+        // Case: Not a ProgramData account
+        programdata_account
+            .set_state(&UpgradeableLoaderState::Program {
+                programdata_address: Pubkey::new_unique(),
+            })
+            .unwrap();
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account),
+            ],
+            vec![
+                programdata_meta,
+                upgrade_authority_meta,
+                new_upgrade_authority_meta,
+            ],
             Err(InstructionError::InvalidArgument),
         );
     }
