@@ -4406,7 +4406,9 @@ pub mod tests {
             transaction_context::TransactionReturnData,
         },
         solana_storage_proto::convert::generated,
-        solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance},
+        solana_transaction_status::{
+            InnerInstruction, InnerInstructions, Reward, Rewards, TransactionTokenBalance,
+        },
         std::{thread::Builder, time::Duration},
     };
 
@@ -6838,7 +6840,10 @@ pub mod tests {
         let post_balances_vec = vec![3, 2, 1];
         let inner_instructions_vec = vec![InnerInstructions {
             index: 0,
-            instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+            instructions: vec![InnerInstruction {
+                instruction: CompiledInstruction::new(1, &(), vec![0]),
+                stack_height: Some(2),
+            }],
         }];
         let log_messages_vec = vec![String::from("Test message\n")];
         let pre_token_balances_vec = vec![];
@@ -7570,7 +7575,10 @@ pub mod tests {
                 }
                 let inner_instructions = Some(vec![InnerInstructions {
                     index: 0,
-                    instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+                    instructions: vec![InnerInstruction {
+                        instruction: CompiledInstruction::new(1, &(), vec![0]),
+                        stack_height: Some(2),
+                    }],
                 }]);
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);
@@ -7687,7 +7695,10 @@ pub mod tests {
                 }
                 let inner_instructions = Some(vec![InnerInstructions {
                     index: 0,
-                    instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+                    instructions: vec![InnerInstruction {
+                        instruction: CompiledInstruction::new(1, &(), vec![0]),
+                        stack_height: Some(2),
+                    }],
                 }]);
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);
