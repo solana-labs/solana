@@ -649,19 +649,20 @@ fn get_rpc_nodes(
             }
         }
 
+        let know_validators_to_wait_for = if newer_cluster_snapshot_timeout
+            .as_ref()
+            .map(|timer: &Instant| timer.elapsed().as_secs())
+            < Some(60)
+        {
+            KnownValidatorsToWaitFor::All
+        } else {
+            KnownValidatorsToWaitFor::Any
+        };
         let peer_snapshot_hashes = get_peer_snapshot_hashes(
             cluster_info,
             &rpc_peers,
             validator_config.known_validators.as_ref(),
-            if newer_cluster_snapshot_timeout
-                .as_ref()
-                .map(|timer: &Instant| timer.elapsed().as_secs())
-                < Some(60)
-            {
-                KnownValidatorsToWaitFor::All
-            } else {
-                KnownValidatorsToWaitFor::Any
-            },
+            known_validators_to_wait_for,
             bootstrap_config.incremental_snapshot_fetch,
         );
         if peer_snapshot_hashes.is_empty() {
