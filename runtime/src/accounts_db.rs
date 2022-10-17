@@ -2033,7 +2033,9 @@ impl<'a> AppendVecScan for ScanState<'a> {
         if self.config.check_hash
             && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
         {
-            // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
+            // this is irrelevant because:
+            // 1. this option is not supported atm
+            // 2. we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
             let include_slot_in_hash = true;
             // this will not be supported anymore
             let computed_hash =
@@ -5999,7 +6001,7 @@ impl AccountsDb {
         hasher.update(&lamports.to_le_bytes());
 
         if include_slot {
-            // upon feature activation, remove slot# from account hash
+            // upon feature activation, stop including slot# in the account hash
             hasher.update(&slot.to_le_bytes());
         }
 
@@ -6812,7 +6814,9 @@ impl AccountsDb {
                                             let loaded_hash = loaded_account.loaded_hash();
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
-                                                // this is irrelevant because we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
+                                                // this is irrelevant because:
+                                                // 1. the option to check hashes here is not supported atm
+                                                // 2. we are reading from append vecs and the hash is already computed and saved and will just be loaded from the append vec
                                                 let include_slot = true;
                                                 let computed_hash =
                                                     loaded_account.compute_hash(*slot, pubkey, include_slot);
@@ -9705,6 +9709,72 @@ pub mod tests {
         }
     }
 
+    /// last bool is 'include_slot_in_hash'
+    /// This impl exists until this feature is activated:
+    ///  ignore slot when calculating an account hash #28420
+    /// For now, all test code will continue to work thanks to this impl
+    /// Tests will use INCLUDE_SLOT_IN_HASH_TESTS for 'include_slot_in_hash' calls.
+    impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a Pubkey, &'a T)]) {
+        fn pubkey(&self, index: usize) -> &Pubkey {
+            self.1[index].0
+        }
+        fn account(&self, index: usize) -> &T {
+            self.1[index].1
+        }
+        fn slot(&self, _index: usize) -> Slot {
+            // per-index slot is not unique per slot when per-account slot is not included in the source data
+            self.target_slot()
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+        fn contains_multiple_slots(&self) -> bool {
+            false
+        }
+        fn include_slot_in_hash(&self) -> bool {
+            INCLUDE_SLOT_IN_HASH_TESTS
+        }
+    }
+
+    /// this tuple contains slot info PER account
+    /// last bool is include_slot_in_hash
+    impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+        for (Slot, &'a [(&'a Pubkey, &'a T, Slot)])
+    {
+        fn pubkey(&self, index: usize) -> &Pubkey {
+            self.1[index].0
+        }
+        fn account(&self, index: usize) -> &T {
+            self.1[index].1
+        }
+        fn slot(&self, index: usize) -> Slot {
+            // note that this could be different than 'target_slot()' PER account
+            self.1[index].2
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+        fn contains_multiple_slots(&self) -> bool {
+            let len = self.len();
+            if len > 0 {
+                let slot = self.slot(0);
+                // true if any item has a different slot than the first item
+                (1..len).any(|i| slot != self.slot(i))
+            } else {
+                false
+            }
+        }
+        fn include_slot_in_hash(&self) -> bool {
+            INCLUDE_SLOT_IN_HASH_TESTS
+        }
+    }
+
     #[test]
     fn test_retain_roots_within_one_epoch_range() {
         let mut roots = vec![0, 1, 2];
@@ -9785,7 +9855,12 @@ pub mod tests {
                 1,
                 AccountSharedData::default().owner(),
             ));
-            let hash = AccountsDb::hash_account(slot, &raw_accounts[i], &raw_expected[i].pubkey);
+            let hash = AccountsDb::hash_account(
+                slot,
+                &raw_accounts[i],
+                &raw_expected[i].pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS,
+            );
             if slot == 1 {
                 assert_eq!(hash, expected_hashes[i]);
             }
@@ -12188,12 +12263,22 @@ pub mod tests {
         };
 
         assert_eq!(
-            AccountsDb::hash_account(slot, &stored_account, &stored_account.meta.pubkey),
+            AccountsDb::hash_account(
+                slot,
+                &stored_account,
+                &stored_account.meta.pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS
+            ),
             expected_account_hash,
             "StoredAccountMeta's data layout might be changed; update hashing if needed."
         );
         assert_eq!(
-            AccountsDb::hash_account(slot, &account, &stored_account.meta.pubkey),
+            AccountsDb::hash_account(
+                slot,
+                &account,
+                &stored_account.meta.pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS
+            ),
             expected_account_hash,
             "Account-based hashing must be consistent with StoredAccountMeta-based one."
         );
@@ -16059,8 +16144,14 @@ pub mod tests {
         for rent in 0..3 {
             account.set_rent_epoch(rent);
             assert_eq!(
-                AccountsDb::hash_account(slot, &account, &pubkey),
-                AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
+                AccountsDb::hash_account(slot, &account, &pubkey, INCLUDE_SLOT_IN_HASH_TESTS),
+                AccountsDb::hash_account_with_rent_epoch(
+                    slot,
+                    &account,
+                    &pubkey,
+                    rent,
+                    INCLUDE_SLOT_IN_HASH_TESTS
+                )
             );
         }
     }

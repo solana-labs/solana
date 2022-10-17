@@ -333,7 +333,7 @@ impl AccountsCache {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+    use {super::*, crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS};
 
     #[test]
     fn test_remove_slots_le() {
@@ -346,6 +346,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(&Hash::default()),
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
         // If the cache is told the size limit is 0, it should return the one slot
         let removed = cache.remove_slots_le(0);
@@ -364,6 +365,7 @@ pub mod tests {
             &Pubkey::new_unique(),
             AccountSharedData::new(1, 0, &Pubkey::default()),
             Some(&Hash::default()),
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
 
         // If the cache is told the size limit is 0, it should return nothing, because there's no
