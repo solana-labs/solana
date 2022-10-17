@@ -4086,7 +4086,7 @@ impl Bank {
             } else {
                 None
             },
-            compute_budget.max_invoke_depth.saturating_add(1),
+            compute_budget.max_invoke_stack_height,
             if self
                 .feature_set
                 .is_active(&feature_set::limit_max_instruction_trace_length::id())
@@ -18267,7 +18267,7 @@ pub(crate) mod tests {
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             Some(Rent::default()),
-            compute_budget.max_invoke_depth.saturating_add(1),
+            compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
 

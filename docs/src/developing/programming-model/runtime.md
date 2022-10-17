@@ -84,7 +84,7 @@ max_units: 1,400,000,
 log_u64_units: 100,
 create_program address units: 1500,
 invoke_units: 1000,
-max_invoke_depth: 4,
+max_invoke_stack_height: 5,
 max_instruction_trace_length: 64,
 max_call_depth: 64,
 stack_frame_size: 4096,
@@ -97,7 +97,7 @@ Then any transaction:
 - Could execute 1,400,000 BPF instructions, if it did nothing else.
 - Cannot exceed 4k of stack usage.
 - Cannot exceed a BPF call depth of 64.
-- Cannot exceed 4 levels of cross-program invocations.
+- Cannot exceed invoke stack height of 5 (4 levels of cross-program invocations).
 
 > **NOTE:** Since the compute budget is consumed incrementally as the transaction executes,
 > the total budget consumption will be a combination of the various costs of the
