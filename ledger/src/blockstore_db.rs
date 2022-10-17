@@ -134,14 +134,23 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// The slot metadata column
+    /// The slot metadata column.
+    ///
+    /// This column family tracks the status of the received shred data for a
+    /// given slot.  Tracking the progress as the slot fills up allows us to
+    /// know if the slot (or pieces of the slot) are ready to be replayed.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::SlotMeta`
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// The orphans column
+    /// The orphans column.
+    ///
+    /// This column family tracks whether a slot has a parent.  Slots without a
+    /// parent are by definition orphan slots.  Orphans will have an entry in
+    /// this column family with true value.  Once an orphan slot has a parent,
+    /// its entry in this column will be deleted.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: bool
@@ -162,9 +171,16 @@ pub mod columns {
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
-    /// The erasure meta column
+    /// The erasure meta column.
     ///
-    /// index type: (u64, u64)
+    /// This column family stores ErasureMeta which includes metadata about
+    /// dropped network packets (or erasures) that can be used to recover
+    /// missing data shreds.
+    ///
+    /// Its index type is ErasureSetId, which consists of a Slot ID
+    /// and a FEC (Forward Error Correction) set index.
+    ///
+    /// index type: `ErasureSetId` (Slot, fec_set_index: u64)
     /// value type: `blockstore_meta::ErasureMeta`
     pub struct ErasureMeta;
 

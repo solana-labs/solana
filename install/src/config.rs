@@ -63,6 +63,7 @@ impl Config {
             create_dir_all(outdir)?;
         }
         let mut file = File::create(config_file)?;
+        file.write_all(b"---\n")?;
         file.write_all(&serialized.into_bytes())?;
 
         Ok(())

@@ -2564,6 +2564,7 @@ impl ReplayStage {
 
                 r_replay_stats.report_stats(
                     bank.slot(),
+                    r_replay_progress.num_txs,
                     r_replay_progress.num_entries,
                     r_replay_progress.num_shreds,
                     bank_complete_time.as_us(),
