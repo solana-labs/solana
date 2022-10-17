@@ -120,6 +120,52 @@ impl AccountsPackage {
             rent_collector: bank.rent_collector().clone(),
         })
     }
+<<<<<<< HEAD
+=======
+
+    /// Create a new Accounts Package where basically every field is defaulted.
+    /// Only use for tests; many of the fields are invalid!
+    pub fn default_for_tests() -> Self {
+        Self {
+            package_type: AccountsPackageType::AccountsHashVerifier,
+            slot: Slot::default(),
+            block_height: Slot::default(),
+            slot_deltas: Vec::default(),
+            snapshot_links: TempDir::new().unwrap(),
+            snapshot_storages: SnapshotStorages::default(),
+            archive_format: ArchiveFormat::Tar,
+            snapshot_version: SnapshotVersion::default(),
+            full_snapshot_archives_dir: PathBuf::default(),
+            incremental_snapshot_archives_dir: PathBuf::default(),
+            expected_capitalization: u64::default(),
+            accounts_hash_for_testing: Option::default(),
+            cluster_type: ClusterType::Development,
+            accounts: Arc::new(Accounts::default_for_tests()),
+            epoch_schedule: EpochSchedule::default(),
+            rent_collector: RentCollector::default(),
+        }
+    }
+}
+
+impl std::fmt::Debug for AccountsPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccountsPackage")
+            .field("type", &self.package_type)
+            .field("slot", &self.slot)
+            .field("block_height", &self.block_height)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Accounts packages are sent to the Accounts Hash Verifier for processing.  There are multiple
+/// types of accounts packages, which are specified as variants in this enum.  All accounts
+/// packages do share some processing: such as calculating the accounts hash.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AccountsPackageType {
+    AccountsHashVerifier,
+    Snapshot(SnapshotType),
+    EpochAccountsHash,
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
 }
 
 pub struct SnapshotPackage {

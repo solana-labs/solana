@@ -45,7 +45,11 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
+<<<<<<< HEAD
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
+=======
+        epoch_accounts_hash::EpochAccountsHashManager,
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -1793,26 +1797,22 @@ trait AppendVecScan: Send + Sync + Clone {
 /// These would have been captured in a fn from within the scan function.
 /// Some of these are constant across all pubkeys, some are constant across a slot.
 /// Some could be unique per pubkey.
-struct ScanState<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> {
+struct ScanState<'a> {
     /// slot we're currently scanning
     current_slot: Slot,
     /// accumulated results
     accum: BinnedHashData,
-    /// max slot (inclusive) that we're calculating accounts hash on
-    max_slot_info: SlotInfoInEpoch,
     bin_calculator: &'a PubkeyBinCalculator24,
     bin_range: &'a Range<usize>,
     config: &'a CalcAccountsHashConfig<'a>,
     mismatch_found: Arc<AtomicU64>,
-    stats: &'a crate::accounts_hash::HashStats,
-    find_unskipped_slot: &'a T,
     filler_account_suffix: Option<&'a Pubkey>,
     range: usize,
     sort_time: Arc<AtomicU64>,
     pubkey_to_bin_index: usize,
 }
 
-impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for ScanState<'a, T> {
+impl<'a> AppendVecScan for ScanState<'a> {
     fn set_slot(&mut self, slot: Slot) {
         self.current_slot = slot;
     }
@@ -1841,6 +1841,7 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
         };
 
         let loaded_hash = loaded_account.loaded_hash();
+<<<<<<< HEAD
         let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
             loaded_account,
             &loaded_hash,
@@ -1855,6 +1856,8 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
         );
         let loaded_hash = new_hash.unwrap_or(loaded_hash);
 
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
         let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
 
         if self.config.check_hash
@@ -6255,8 +6258,6 @@ impl AccountsDb {
         let total_lamports = Mutex::<u64>::new(0);
         let stats = HashStats::default();
 
-        let max_slot_info = SlotInfoInEpoch::new(max_slot, config.epoch_schedule);
-
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -6289,10 +6290,8 @@ impl AccountsDb {
                                     .get_loaded_account()
                                     .and_then(
                                         |loaded_account| {
-                                            let find_unskipped_slot = |slot: Slot| {
-                                                self.find_unskipped_slot(slot, config.ancestors)
-                                            };
                                             let loaded_hash = loaded_account.loaded_hash();
+<<<<<<< HEAD
                                             let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
                                                 &loaded_account,
                                                 &loaded_hash,
@@ -6306,6 +6305,8 @@ impl AccountsDb {
                                                 self.filler_account_suffix.as_ref(),
                                             );
                                             let loaded_hash = new_hash.unwrap_or(loaded_hash);
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
@@ -6415,7 +6416,11 @@ impl AccountsDb {
             false,
             &EpochSchedule::default(),
             &RentCollector::default(),
+<<<<<<< HEAD
             false,
+=======
+            true,
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
         )
     }
 
@@ -6890,22 +6895,15 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = Arc::new(AtomicU64::new(0));
 
-        let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
-
-        let max_slot_info =
-            SlotInfoInEpoch::new(storage.max_slot_inclusive(), config.epoch_schedule);
         let scanner = ScanState {
             current_slot: Slot::default(),
             accum: BinnedHashData::default(),
             bin_calculator: &bin_calculator,
             config,
             mismatch_found: mismatch_found.clone(),
-            max_slot_info,
-            find_unskipped_slot: &find_unskipped_slot,
             filler_account_suffix,
             range,
             bin_range,
-            stats,
             sort_time: sort_time.clone(),
             pubkey_to_bin_index: 0,
         };
@@ -7094,7 +7092,10 @@ impl AccountsDb {
         test_hash_calculation: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+<<<<<<< HEAD
         can_cached_slot_be_unflushed: bool,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
         use_bg_thread_pool: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
@@ -11127,13 +11128,21 @@ pub mod tests {
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
+<<<<<<< HEAD
                 &RentCollector::default()
+=======
+                &RentCollector::default(),
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
             ),
             accounts.update_accounts_hash(
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
+<<<<<<< HEAD
                 &RentCollector::default()
+=======
+                &RentCollector::default(),
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
             )
         );
     }
@@ -11436,7 +11445,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             )
             .unwrap();
@@ -11841,7 +11853,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Ok(_)
@@ -11856,7 +11871,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Err(MissingBankHash)
@@ -11880,7 +11898,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Err(MismatchedBankHash)
@@ -11910,7 +11931,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Ok(_)
@@ -11933,14 +11957,21 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Ok(_)
         );
 
         assert_matches!(
+<<<<<<< HEAD
             db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, false),
+=======
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false,),
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -11967,7 +11998,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Ok(_)
@@ -12012,7 +12046,10 @@ pub mod tests {
                 true,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                 false,
             ),
             Err(MismatchedBankHash)
@@ -12632,7 +12669,10 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
+<<<<<<< HEAD
                     false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                     false,
                 )
                 .unwrap();
@@ -12646,7 +12686,10 @@ pub mod tests {
                     true,
                     &EpochSchedule::default(),
                     &RentCollector::default(),
+<<<<<<< HEAD
                     false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
                     false,
                 )
                 .unwrap();

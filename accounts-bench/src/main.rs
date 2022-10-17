@@ -137,7 +137,11 @@ fn main() {
                 false,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+<<<<<<< HEAD
                 false,
+=======
+                true,
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
             );
             time_store.stop();
             if results != results_store {

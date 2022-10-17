@@ -126,7 +126,10 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             &RentCollector::default(),
             false,
             false,
+<<<<<<< HEAD
             false,
+=======
+>>>>>>> 28a89a1d9 (remove expected rent collection and rehashing completely (#28422))
             false,
         ))
     });
