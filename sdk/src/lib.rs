@@ -47,6 +47,7 @@ pub mod inflation;
 pub mod log;
 pub mod native_loader;
 pub mod nonce_account;
+pub mod offchain_message;
 pub mod packet;
 pub mod poh_config;
 pub mod precompiles;
