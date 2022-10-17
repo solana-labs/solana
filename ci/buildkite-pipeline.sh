@@ -182,7 +182,11 @@ all_test_steps() {
     timeout_in_minutes: 25
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
+<<<<<<< HEAD
       - "queue=solana"
+=======
+      queue: "solana"
+>>>>>>> 18e07852d (ci: move `stable-sbf` job to `solana` queue)
 EOF
   else
     annotate --style info \
