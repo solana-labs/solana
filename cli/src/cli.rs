@@ -25,6 +25,7 @@ use {
         decode_error::DecodeError,
         hash::Hash,
         instruction::InstructionError,
+        offchain_message::OffchainMessage,
         pubkey::Pubkey,
         signature::{Signature, Signer, SignerError},
         stake::{instruction::LockupArgs, state::Lockup},
@@ -440,6 +441,14 @@ pub enum CliCommand {
     },
     // Address lookup table commands
     AddressLookupTable(AddressLookupTableCliCommand),
+    SignOffchainMessage {
+        message: OffchainMessage,
+    },
+    VerifyOffchainSignature {
+        signer_pubkey: Option<Pubkey>,
+        signature: Signature,
+        message: OffchainMessage,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -470,6 +479,8 @@ pub enum CliError {
     RpcRequestError(String),
     #[error("Keypair file not found: {0}")]
     KeypairFileNotFound(String),
+    #[error("Invalid signature")]
+    InvalidSignature,
 }
 
 impl From<Box<dyn error::Error>> for CliError {
@@ -821,6 +832,12 @@ pub fn parse_command(
             })
         }
         ("transfer", Some(matches)) => parse_transfer(matches, default_signer, wallet_manager),
+        ("sign-offchain-message", Some(matches)) => {
+            parse_sign_offchain_message(matches, default_signer, wallet_manager)
+        }
+        ("verify-offchain-signature", Some(matches)) => {
+            parse_verify_offchain_signature(matches, default_signer, wallet_manager)
+        }
         //
         ("", None) => {
             eprintln!("{}", matches.usage());
@@ -1634,11 +1651,18 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             derived_address_program_id.as_ref(),
             compute_unit_price.as_ref(),
         ),
-
         // Address Lookup Table Commands
         CliCommand::AddressLookupTable(subcommand) => {
             process_address_lookup_table_subcommand(rpc_client, config, subcommand)
         }
+        CliCommand::SignOffchainMessage { message } => {
+            process_sign_offchain_message(config, message)
+        }
+        CliCommand::VerifyOffchainSignature {
+            signer_pubkey,
+            signature,
+            message,
+        } => process_verify_offchain_signature(config, signer_pubkey, signature, message),
     }
 }
 
@@ -2013,7 +2037,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(keypair_file)),
+                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
                 signers: vec![],
             }
         );
@@ -2027,6 +2051,43 @@ mod tests {
             CliCommandInfo {
                 command: CliCommand::ResolveSigner(Some(pubkey.to_string())),
                 signers: vec![],
+            }
+        );
+
+        // Test SignOffchainMessage
+        let test_sign_offchain = test_commands.clone().get_matches_from(vec![
+            "test",
+            "sign-offchain-message",
+            "Test Message",
+        ]);
+        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        assert_eq!(
+            parse_command(&test_sign_offchain, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::SignOffchainMessage {
+                    message: message.clone()
+                },
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test VerifyOffchainSignature
+        let signature = keypair.sign_message(&message.serialize().unwrap());
+        let test_verify_offchain = test_commands.clone().get_matches_from(vec![
+            "test",
+            "verify-offchain-signature",
+            "Test Message",
+            &signature.to_string(),
+        ]);
+        assert_eq!(
+            parse_command(&test_verify_offchain, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::VerifyOffchainSignature {
+                    signer_pubkey: None,
+                    signature,
+                    message
+                },
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
         );
     }
@@ -2375,6 +2436,23 @@ mod tests {
 
         config.command = CliCommand::GetTransactionCount;
         assert!(process_command(&config).is_err());
+
+        let message = OffchainMessage::new(0, b"Test Message").unwrap();
+        config.command = CliCommand::SignOffchainMessage {
+            message: message.clone(),
+        };
+        config.signers = vec![&keypair];
+        let result = process_command(&config);
+        assert!(result.is_ok());
+
+        config.command = CliCommand::VerifyOffchainSignature {
+            signer_pubkey: None,
+            signature: result.unwrap().parse().unwrap(),
+            message,
+        };
+        config.signers = vec![&keypair];
+        let result = process_command(&config);
+        assert!(result.is_ok());
     }
 
     #[test]
