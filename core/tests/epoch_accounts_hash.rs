@@ -320,7 +320,6 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
-                        enable_rehashing: true,
                     },
                 )
                 .unwrap();

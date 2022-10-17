@@ -55,7 +55,6 @@ use {
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
@@ -5204,13 +5203,6 @@ impl Bank {
         }
     }
 
-    /// If we are skipping rewrites for bank hash, then we don't want to
-    ///  allow accounts hash calculation to rehash anything.
-    ///  We should use whatever hash found for each account as-is.
-    pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
-        true // this will be governed by a feature later
-    }
-
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -6415,22 +6407,7 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
-            Some((mut account, storage_slot)) => {
-                ExpectedRentCollection::maybe_update_rent_epoch_on_load(
-                    &mut account,
-                    &SlotInfoInEpoch::new_small(storage_slot),
-                    &SlotInfoInEpoch::new_small(self.slot()),
-                    self.epoch_schedule(),
-                    self.rent_collector(),
-                    pubkey,
-                    &self.rewrites_skipped_this_slot,
-                );
-
-                Some((account, storage_slot))
-            }
-            None => None,
-        }
+        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
     }
 
     pub fn get_program_accounts(
@@ -6734,7 +6711,6 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
-        let enable_rehashing = self.bank_enable_rehashing_on_accounts_hash();
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6757,7 +6733,6 @@ impl Bank {
                             &rent_collector,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
-                            enable_rehashing,
                             // true to run using bg thread pool
                             true,
                         );
@@ -6780,7 +6755,6 @@ impl Bank {
                 rent_collector,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
-                enable_rehashing,
                 // fg is waiting for this to run, so we can use the fg thread pool
                 false,
             );
@@ -6883,7 +6857,6 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
-            self.bank_enable_rehashing_on_accounts_hash(),
         )
     }
 
@@ -6946,7 +6919,6 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
-                self.bank_enable_rehashing_on_accounts_hash(),
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -6972,7 +6944,6 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
-                        self.bank_enable_rehashing_on_accounts_hash(),
                     );
             }
 
