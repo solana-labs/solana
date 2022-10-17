@@ -41,6 +41,7 @@ import {
 import {Message, MessageHeader, MessageV0, VersionedMessage} from './message';
 import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
 import assert from './utils/assert';
+import {Cluster} from './utils/cluster';
 import {sleep} from './utils/sleep';
 import {toBuffer} from './utils/to-buffer';
 import {
@@ -2649,6 +2650,8 @@ export type FetchMiddleware = (
 export type ConnectionConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
+  /** Optional cluster name */
+  cluster?: Cluster;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
   wsEndpoint?: string;
   /** Optional HTTP headers object */
@@ -2657,9 +2660,9 @@ export type ConnectionConfig = {
   fetch?: FetchFn;
   /** Optional fetch middleware callback */
   fetchMiddleware?: FetchMiddleware;
-  /** Optional Disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
+  /** Optionally disable retrying calls when server responds with HTTP 429 (Too Many Requests) */
   disableRetryOnRateLimit?: boolean;
-  /** time to allow for the server to initially process a transaction (in milliseconds) */
+  /** Optional time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
 };
 
@@ -2673,6 +2676,7 @@ const COMMON_HTTP_HEADERS = {
  */
 export class Connection {
   /** @internal */ _commitment?: Commitment;
+  /** @internal */ _cluster?: Cluster;
   /** @internal */ _confirmTransactionInitialTimeout?: number;
   /** @internal */ _rpcEndpoint: string;
   /** @internal */ _rpcWsEndpoint: string;
@@ -2758,6 +2762,7 @@ export class Connection {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
       this._commitment = commitmentOrConfig.commitment;
+      this._cluster = commitmentOrConfig.cluster;
       this._confirmTransactionInitialTimeout =
         commitmentOrConfig.confirmTransactionInitialTimeout;
       wsEndpoint = commitmentOrConfig.wsEndpoint;
@@ -2822,6 +2827,13 @@ export class Connection {
    */
   get commitment(): Commitment | undefined {
     return this._commitment;
+  }
+
+  /**
+   * The cluster the RPC endpoint uses
+   */
+  get cluster(): Cluster | undefined {
+    return this._cluster;
   }
 
   /**
