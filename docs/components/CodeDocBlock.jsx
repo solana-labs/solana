@@ -1,147 +1,45 @@
 import React from "react";
 import Link from "@docusaurus/Link";
 // import clsx from "clsx";
-// import styles from "../src/pages/styles.module.css";
+import styles from "../src/pages/CodeDocBlock.module.css";
 
 export function DocBlock({ children }) {
-  return (
-    <section
-      className=""
-      style={{
-        borderTop: "1px solid #414141",
-        paddingTop: "3rem",
-        // display: "flex",
-        // justifyContent: "space-between",
-        marginTop: "5rem",
-        // width: "100%",
-        // "align-items": "center",
-      }}
-    >
-      {children}
-    </section>
-  );
+  return <section className={styles.DocBlock}>{children}</section>;
 }
 
 export function DocSideBySide({ children }) {
-  return (
-    <section
-      className=""
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        marginTop: "2rem",
-        // width: "100%",
-        // "align-items": "center",
-      }}
-    >
-      {children}
-    </section>
-  );
+  return <section className={styles.DocSideBySide}>{children}</section>;
 }
 
 export function CodeParams({ children }) {
-  return (
-    <section
-      className=""
-      style={{
-        display: "block",
-        // "background-color": "red",
-        marginRight: "3.0rem",
-        width: "50%",
-      }}
-    >
-      {children}
-    </section>
-  );
+  return <section className={styles.CodeParams}>{children}</section>;
 }
 
 export function CodeSnippets({ children }) {
   return (
-    <section
-      className=""
-      style={{
-        display: "block",
-        // "background-color": "red",
-        width: "50%",
-      }}
-    >
-      {/* <p
-        style={{
-          fontSize: "1.24rem",
-          fontWeight: "700",
-        }}
-      >
-        Code Sample:
-      </p> */}
+    <section className={styles.CodeSnippets}>
+      {/* <p className={styles.Heading}>Code Sample:</p> */}
 
       {children}
     </section>
   );
 }
 
-export function Parameter({
-  name = null,
-  type = null,
-  required = null,
-  optional = null,
-  href = null,
-  children,
-}) {
-  // format the Parameter's name
-  // if (name) name = <code>{name}</code>;
-  // format the Parameter's name
-  if (name) {
-    name = <span style={{ fontWeight: "700" }}>{name}</span>;
-
-    if (href) name = <Link href={href}>{name}</Link>;
-  }
-
-  // format the Parameter's type
-  if (type) type = <code>{type}</code>;
-
-  // format the `required` flag
-  if (required) {
-    required = (
-      <span
-        style={{
-          margin: "0 .5rem",
-          color: "#767676",
-          fontWeight: "600",
-        }}
-      >
-        required
-      </span>
-    );
-  }
-  // format the `optional` flag
-  else if (optional) {
-    optional = (
-      <span
-        style={{
-          margin: "0 .5rem",
-          color: "#767676",
-          fontWeight: "600",
-        }}
-      >
-        optional
-      </span>
-    );
-  }
+/*
+  Display a single Parameter
+*/
+export function Parameter(props) {
+  const {
+    name = null,
+    type = null,
+    required = null,
+    optional = null,
+    children,
+  } = computeHeader(props);
 
   return (
-    <section
-      style={{
-        padding: "1em 0em",
-        marginBottom: "1em",
-        borderTop: "1px solid #414141",
-        // borderBottom: "1px solid #414141",
-      }}
-    >
-      <p
-        style={{
-          fontFamily: "mono",
-        }}
-      >
+    <section className={styles.Parameter}>
+      <p className={styles.ParameterHeader}>
         {name && name} {type && type} {required && required}{" "}
         {optional && optional}
       </p>
@@ -151,7 +49,61 @@ export function Parameter({
   );
 }
 
-export function Field({
+/*
+  Display a single Parameter's field data 
+*/
+export function Field(props) {
+  const {
+    name = null,
+    type = null,
+    values = null,
+    required = null,
+    defaultValue = null,
+    optional = null,
+    children,
+  } = computeHeader(props);
+
+  return (
+    <section className={styles.Field}>
+      <p className={styles.ParameterHeader}>
+        {name && name} {type && type} {required && required}{" "}
+        {optional && optional}
+        {defaultValue && defaultValue}
+      </p>
+
+      <section>
+        {values && values}
+
+        {children}
+      </section>
+    </section>
+  );
+}
+
+/*
+  Parse an array of string values to display
+*/
+export function Values({ values = null }) {
+  // format the Parameter's values
+  if (values && Array.isArray(values) && values?.length) {
+    values = values.map((value) => (
+      <code style={{ marginRight: ".5em" }} key={value}>
+        {value}
+      </code>
+    ));
+  }
+
+  return (
+    <p style={{}}>
+      <span className={styles.SubHeading}>Values:</span>&nbsp;{values}
+    </p>
+  );
+}
+
+/*
+  Compute the formatted Parameter and Field component's header meta data
+*/
+function computeHeader({
   name = null,
   type = null,
   href = null,
@@ -163,7 +115,7 @@ export function Field({
 }) {
   // format the Parameter's name
   if (name) {
-    name = <span style={{ fontWeight: "700" }}>{name}</span>;
+    name = <span className={styles.ParameterName}>{name}</span>;
 
     if (href) name = <Link href={href}>{name}</Link>;
   }
@@ -181,13 +133,7 @@ export function Field({
   // format the `defaultValue` flag
   if (defaultValue) {
     defaultValue = (
-      <span
-        style={{
-          margin: "0 .5rem",
-          color: "#767676",
-          fontWeight: "600",
-        }}
-      >
+      <span className={styles.FlagItem}>
         Default: <code>{defaultValue.toString()}</code>
       </span>
     );
@@ -195,89 +141,21 @@ export function Field({
 
   // format the `required` flag
   if (required) {
-    required = (
-      <span
-        style={{
-          margin: "0 .5rem",
-          color: "#767676",
-          fontWeight: "600",
-        }}
-      >
-        required
-      </span>
-    );
+    required = <span className={styles.FlagItem}>required</span>;
   }
   // format the `optional` flag
   else if (optional) {
-    optional = (
-      <span
-        style={{
-          margin: "0 .5rem",
-          color: "#767676",
-          fontWeight: "600",
-        }}
-      >
-        optional
-      </span>
-    );
+    optional = <span className={styles.FlagItem}>optional</span>;
   }
 
-  return (
-    <section
-      style={{
-        // padding: "1em 0em",
-        margin: "1em 0em 1em 1em",
-        // borderTop: "1px solid #414141",
-        // borderBottom: "1px solid #414141",
-      }}
-    >
-      <p
-        style={{
-          fontFamily: "mono",
-          padding: ".1em 0em",
-        }}
-      >
-        {name && name} {type && type} {required && required}{" "}
-        {optional && optional}
-        {defaultValue && defaultValue}
-      </p>
-
-      <section
-        style={{
-          padding: "0em 1em",
-        }}
-      >
-        {values && values}
-
-        {children}
-      </section>
-    </section>
-  );
-}
-
-export function Values({ values = null }) {
-  // format the Parameter's values
-  if (values && Array.isArray(values)) {
-    values = values.map((value) => (
-      <code style={{ marginRight: ".5em" }} key={value}>
-        {value}
-      </code>
-    ));
-  }
-
-  // return <p style={{}}>{values}</p>;
-  return (
-    <p style={{}}>
-      <span
-        style={{
-          marginRight: "1rem",
-          // color: "#767676",
-          fontWeight: "600",
-        }}
-      >
-        Values:
-      </span>{" "}
-      {values}
-    </p>
-  );
+  return {
+    name,
+    type,
+    href,
+    values,
+    required,
+    defaultValue,
+    optional,
+    children,
+  };
 }
