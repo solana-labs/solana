@@ -3703,12 +3703,11 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut dead_storages = vec![];
-        let mut find_alive_elapsed = 0;
-        let mut create_and_insert_store_elapsed = 0;
-        let mut write_storage_elapsed = 0;
+        let mut create_and_insert_store_elapsed_us = 0;
+        let mut write_storage_elapsed = Measure::start("empty_by_default");
         let mut store_accounts_timing = StoreAccountsTiming::default();
+        let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if aligned_total > 0 {
-            let mut start = Measure::start("find_alive_elapsed");
             let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
@@ -3722,11 +3721,10 @@ impl AccountsDb {
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
-            start.stop();
-            find_alive_elapsed = start.as_us();
+            find_alive_elapsed.stop();
 
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
-            create_and_insert_store_elapsed = time.as_micros() as u64;
+            create_and_insert_store_elapsed_us = time.as_micros() as u64;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3751,7 +3749,7 @@ impl AccountsDb {
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
             // Purge old, overwritten storage entries
-            let mut start = Measure::start("write_storage_elapsed");
+            write_storage_elapsed = Measure::start("write_storage_elapsed");
             let remaining_stores = self.mark_dirty_dead_stores(
                 slot,
                 &mut dead_storages,
@@ -3772,8 +3770,7 @@ impl AccountsDb {
                     slot, remaining_stores
                 );
             }
-            start.stop();
-            write_storage_elapsed = start.as_us();
+            write_storage_elapsed.stop();
         }
         rewrite_elapsed.stop();
 
@@ -3789,10 +3786,10 @@ impl AccountsDb {
             .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
         shrink_stats
             .find_alive_elapsed
-            .fetch_add(find_alive_elapsed, Ordering::Relaxed);
+            .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
         shrink_stats
             .create_and_insert_store_elapsed
-            .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
+            .fetch_add(create_and_insert_store_elapsed_us, Ordering::Relaxed);
         shrink_stats.store_accounts_elapsed.fetch_add(
             store_accounts_timing.store_accounts_elapsed,
             Ordering::Relaxed,
@@ -3807,7 +3804,7 @@ impl AccountsDb {
         );
         shrink_stats
             .write_storage_elapsed
-            .fetch_add(write_storage_elapsed, Ordering::Relaxed);
+            .fetch_add(write_storage_elapsed.as_us(), Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
