@@ -73,7 +73,10 @@ mod tests {
 
     async fn check_send_one(connection: &UdpTpuConnection, reader: &UdpSocket) {
         let packet = vec![111u8; PACKET_DATA_SIZE];
-        connection.send_wire_transaction(&packet, &mut None).await.unwrap();
+        connection
+            .send_wire_transaction(&packet, &mut None)
+            .await
+            .unwrap();
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(reader, &mut packets[..]).await.unwrap();
         assert_eq!(1, recv);
