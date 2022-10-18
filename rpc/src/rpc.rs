@@ -5172,11 +5172,7 @@ pub mod tests {
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
         async fn use_client(client: rpc_minimal::gen_client::Client) -> u64 {
-            client
-                .get_reward_interval(None)
-                .await
-                .unwrap()
-                .value
+            client.get_reward_interval(None).await.unwrap().value
         }
 
         let fut = async {

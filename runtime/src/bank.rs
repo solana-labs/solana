@@ -2236,6 +2236,7 @@ impl Bank {
         if let Some((_start_slot, start_height)) = self.epoch_reward_calc_start {
             let height = self.block_height();
             let credit_start = start_height + self.get_reward_calculation_interval() + 1;
+            assert!(height < start_height + 1 + self.get_reward_interval());
             if height < credit_start {
                 return true;
             }
@@ -2247,6 +2248,7 @@ impl Bank {
         if let Some((_start_slot, start_height)) = self.epoch_reward_calc_start {
             let height = self.block_height();
             let credit_start = start_height + self.get_reward_calculation_interval() + 1;
+            assert!(height < start_height + 1 + self.get_reward_interval());
             if height >= credit_start {
                 return true;
             }
