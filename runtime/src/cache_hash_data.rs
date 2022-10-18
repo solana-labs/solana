@@ -1,9 +1,8 @@
 //! Cached data for hashing accounts
+#[cfg(test)]
+use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
-    crate::{
-        accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats,
-        pubkey_bins::PubkeyBinCalculator24,
-    },
+    crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -36,6 +35,7 @@ impl CacheHashDataFile {
         self.get_slice(0)
     }
 
+    #[cfg(test)]
     /// Populate 'accumulator' from entire contents of the cache file.
     pub(crate) fn load_all(
         &self,
@@ -201,6 +201,7 @@ impl CacheHashData {
         parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
+    #[cfg(test)]
     /// load from 'file_name' into 'accumulator'
     pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
         &self,
