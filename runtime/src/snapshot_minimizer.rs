@@ -368,9 +368,12 @@ impl<'a> SnapshotMinimizer<'a> {
             }
 
             let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
-
             self.accounts_db().store_accounts_frozen(
-                (slot, &accounts[..]),
+                (
+                    slot,
+                    &accounts[..],
+                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+                ),
                 Some(&hashes),
                 Some(&new_storage),
                 Some(Box::new(write_versions.into_iter())),

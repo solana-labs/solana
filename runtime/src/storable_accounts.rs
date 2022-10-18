@@ -1,5 +1,8 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
-use solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey};
+use {
+    crate::accounts_db::IncludeSlotInHash,
+    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
+};
 
 /// abstract access to pubkey, account, slot, target_slot of either:
 /// a. (slot, &[&Pubkey, &ReadableAccount])
@@ -24,6 +27,8 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     /// are there accounts from multiple slots
     /// only used for an assert
     fn contains_multiple_slots(&self) -> bool;
+    /// true iff hashing these accounts should include the slot
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash;
 }
 
 /// accounts that are moving from 'old_slot' to 'target_slot'
@@ -36,6 +41,8 @@ pub struct StorableAccountsMovingSlots<'a, T: ReadableAccount + Sync> {
     pub target_slot: Slot,
     /// slot where accounts are currently stored
     pub old_slot: Slot,
+    /// This is temporarily here until feature activation.
+    pub include_slot_in_hash: IncludeSlotInHash,
 }
 
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccountsMovingSlots<'a, T> {
@@ -58,9 +65,16 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for StorableAccounts
     fn contains_multiple_slots(&self) -> bool {
         false
     }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.include_slot_in_hash
+    }
 }
 
-impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a Pubkey, &'a T)]) {
+/// The last parameter exists until this feature is activated:
+///  ignore slot when calculating an account hash #28420
+impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+    for (Slot, &'a [(&'a Pubkey, &'a T)], IncludeSlotInHash)
+{
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
     }
@@ -80,11 +94,14 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a
     fn contains_multiple_slots(&self) -> bool {
         false
     }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
 }
 
 /// this tuple contains slot info PER account
 impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
-    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)])
+    for (Slot, &'a [(&'a Pubkey, &'a T, Slot)], IncludeSlotInHash)
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
         self.1[index].0
@@ -112,12 +129,16 @@ impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
             false
         }
     }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
+        crate::accounts_db::INCLUDE_SLOT_IN_HASH_TESTS,
         solana_sdk::account::{AccountSharedData, WritableAccount},
     };
 
@@ -142,11 +163,13 @@ pub mod tests {
         let test3 = (
             slot,
             &vec![(&pk, &account, slot), (&pk, &account, slot)][..],
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
         assert!(!test3.contains_multiple_slots());
         let test3 = (
             slot,
             &vec![(&pk, &account, slot), (&pk, &account, slot + 1)][..],
+            INCLUDE_SLOT_IN_HASH_TESTS,
         );
         assert!(test3.contains_multiple_slots());
     }
@@ -178,13 +201,14 @@ pub mod tests {
                         two.push((&raw.0, &raw.1)); // 2 item tuple
                         three.push((&raw.0, &raw.1, raw.2)); // 3 item tuple, including slot
                     });
-                    let test2 = (target_slot, &two[..]);
-                    let test3 = (target_slot, &three[..]);
+                    let test2 = (target_slot, &two[..], INCLUDE_SLOT_IN_HASH_TESTS);
+                    let test3 = (target_slot, &three[..], INCLUDE_SLOT_IN_HASH_TESTS);
                     let old_slot = starting_slot;
                     let test_moving_slots = StorableAccountsMovingSlots {
                         accounts: &two[..],
                         target_slot,
                         old_slot,
+                        include_slot_in_hash: INCLUDE_SLOT_IN_HASH_TESTS,
                     };
                     compare(&test2, &test3);
                     compare(&test2, &test_moving_slots);

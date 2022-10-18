@@ -490,6 +490,10 @@ pub mod disable_cpi_setting_executable_and_rent_epoch {
     solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
 }
 
+pub mod account_hash_ignore_slot {
+    solana_sdk::declare_id!("SVn36yVApPLYsa8koK3qUcy14zXDnqkNYWyUh1f4oK1");
+}
+
 pub mod relax_authority_signer_check_for_lookup_table_creation {
     solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
 }
@@ -632,6 +636,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (account_hash_ignore_slot::id(), "ignore slot when calculating an account hash #28420"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),

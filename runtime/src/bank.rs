@@ -44,7 +44,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, IncludeSlotInHash, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
@@ -1154,7 +1154,7 @@ impl StakeReward {
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
+impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
@@ -1173,6 +1173,9 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
     }
     fn contains_multiple_slots(&self) -> bool {
         false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
     }
 }
 
@@ -2957,7 +2960,7 @@ impl Bank {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards));
+        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -4801,6 +4804,7 @@ impl Bank {
             &durable_nonce,
             lamports_per_signature,
             self.preserve_rent_epoch_for_rent_exempt_accounts(),
+            self.include_slot_in_hash(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
@@ -5262,7 +5266,8 @@ impl Bank {
                 let (hash, measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
                     self.slot(),
                     account,
-                    pubkey
+                    pubkey,
+                    self.include_slot_in_hash(),
                 ));
                 time_hashing_skipped_rewrites_us += measure.as_us();
                 rewrites_skipped.push((*pubkey, hash));
@@ -5293,7 +5298,11 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) = measure!(self.store_accounts((self.slot(), &accounts_to_store[..])));
+            let (_, measure) = measure!(self.store_accounts((
+                self.slot(),
+                &accounts_to_store[..],
+                self.include_slot_in_hash()
+            )));
             time_storing_accounts_us += measure.as_us();
         }
 
@@ -5305,6 +5314,18 @@ impl Bank {
             time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
             num_accounts: accounts.len(),
+        }
+    }
+
+    /// true if we should include the slot in account hash
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        if self
+            .feature_set
+            .is_active(&feature_set::account_hash_ignore_slot::id())
+        {
+            IncludeSlotInHash::RemoveSlot
+        } else {
+            IncludeSlotInHash::IncludeSlot
         }
     }
 
@@ -6169,7 +6190,11 @@ impl Bank {
         pubkey: &Pubkey,
         account: &T,
     ) {
-        self.store_accounts((self.slot(), &[(pubkey, account)][..]))
+        self.store_accounts((
+            self.slot(),
+            &[(pubkey, account)][..],
+            self.include_slot_in_hash(),
+        ))
     }
 
     pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport>(
