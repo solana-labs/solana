@@ -2,8 +2,6 @@
 set -e
 cd "$(dirname "$0")/.."
 
-# kick the ci job
-
 cargo="$(readlink -f "./cargo")"
 
 source ci/_
