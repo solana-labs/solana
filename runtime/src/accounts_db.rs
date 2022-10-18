@@ -3995,13 +3995,9 @@ impl AccountsDb {
             .get_prior(slot)
     }
 
-    /// get a sorted list of slots older than an epoch
-    /// squash those slots into ancient append vecs
-    fn shrink_ancient_slots(&self) {
-        if !self.ancient_append_vecs {
-            return;
-        }
-
+    /// return all slots that are more than one epoch old and thus could already be an ancient append vec
+    /// or which could need to be combined into a new or existing ancient append vec
+    fn get_sorted_potential_ancient_slots(&self) -> Vec<Slot> {
         // If we squash accounts in a slot that is still within an epoch of a hash calculation's max slot, then
         //  we could calculate the wrong rent_epoch and slot for an individual account and thus the wrong overall accounts hash.
         // So, only squash accounts in slots that are more than 1 epoch older than the last hash calculation.
@@ -4009,7 +4005,17 @@ impl AccountsDb {
         let mut old_slots =
             self.get_roots_less_than(self.get_accounts_hash_complete_one_epoch_old());
         old_slots.sort_unstable();
-        self.combine_ancient_slots(old_slots);
+        old_slots
+    }
+
+    /// get a sorted list of slots older than an epoch
+    /// squash those slots into ancient append vecs
+    fn shrink_ancient_slots(&self) {
+        if !self.ancient_append_vecs {
+            return;
+        }
+
+        self.combine_ancient_slots(self.get_sorted_potential_ancient_slots());
     }
 
     /// create new ancient append vec
@@ -16789,5 +16795,56 @@ pub mod tests {
             // cannot load because we have 2 storages
             assert!(!load);
         }
+    }
+
+    #[test]
+    fn test_get_accounts_hash_complete_one_epoch_old() {
+        let db = AccountsDb::new_single_for_tests();
+        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), 0);
+        let epoch_schedule = EpochSchedule::default();
+        let completed_slot = epoch_schedule.slots_per_epoch;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), 0);
+        let offset = 1;
+        let completed_slot = completed_slot + offset;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        let earliest = AccountsDb::get_slot_one_epoch_prior(completed_slot, &epoch_schedule);
+        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), earliest);
+        let offset = 5;
+        let completed_slot = completed_slot + offset;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        let earliest = AccountsDb::get_slot_one_epoch_prior(completed_slot, &epoch_schedule);
+        assert_eq!(db.get_accounts_hash_complete_one_epoch_old(), earliest);
+    }
+
+    #[test]
+    fn test_get_sorted_potential_ancient_slots() {
+        let db = AccountsDb::new_single_for_tests();
+        assert!(db.get_sorted_potential_ancient_slots().is_empty());
+        let root0 = 0;
+        db.add_root(root0);
+        let root1 = 1;
+        let root2 = 2;
+        db.add_root(root1);
+        assert!(db.get_sorted_potential_ancient_slots().is_empty());
+        let epoch_schedule = EpochSchedule::default();
+        let completed_slot = epoch_schedule.slots_per_epoch;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        // get_sorted_potential_ancient_slots uses 'less than' as opposed to 'less or equal'
+        // so, we need to get more than an epoch away to get the first valid root
+        assert!(db.get_sorted_potential_ancient_slots().is_empty());
+        let completed_slot = epoch_schedule.slots_per_epoch + root1;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root0]);
+        let completed_slot = epoch_schedule.slots_per_epoch + root2;
+        db.notify_accounts_hash_calculated_complete(completed_slot, &epoch_schedule);
+        assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root0, root1]);
+        db.accounts_index
+            .roots_tracker
+            .write()
+            .unwrap()
+            .alive_roots
+            .remove(&root0);
+        assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root1]);
     }
 }
