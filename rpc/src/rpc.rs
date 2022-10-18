@@ -5129,6 +5129,35 @@ pub mod tests {
     }
 
     #[test]
+    fn test_rpc_get_reward_interval() {
+        let genesis = create_genesis_config(20);
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRewardInterval",}"#;
+        let res = io.handle_request_sync(&req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value":20,
+                },
+            "id": 1,
+        });
+        let result = serde_json::from_str::<Value>(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
+    }
+
+    #[test]
     fn test_rpc_get_cluster_nodes() {
         let rpc = RpcHandler::start();
         let request = create_test_request("getClusterNodes", None);

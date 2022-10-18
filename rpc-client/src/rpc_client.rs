@@ -3644,7 +3644,6 @@ impl RpcClient {
         )
     }
 
-     
     /// Returns information about the epoch reward interval.
     ///
     /// This method uses the configured default [commitment level][cl].
@@ -3655,7 +3654,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getRewardInterval`] RPC method.
     ///
-    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval 
+    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
     ///
     /// # Examples
     ///

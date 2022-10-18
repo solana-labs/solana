@@ -330,6 +330,10 @@ mod tests {
         let test_request = RpcRequest::GetTokenLargestAccounts;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "getTokenLargestAccounts");
+
+        let test_request = RpcRequest::GetRewardInterval;
+        let request = test_request.build_request_json(1, Value::Null);
+        assert_eq!(request["method"], "getRewardInterval");
     }
 
     #[test]
