@@ -291,7 +291,7 @@ impl BankForks {
             if self.snapshot_config.is_some()
                 && accounts_background_request_sender.is_snapshot_creation_enabled()
             {
-                if bank.is_startup_verification_complete() {
+                if bank.is_startup_verification_complete() && !bank.in_reward_interval() {
                     // Save off the status cache because these may get pruned if another
                     // `set_root()` is called before the snapshots package can be generated
                     let status_cache_slot_deltas =
@@ -308,6 +308,11 @@ impl BankForks {
                             bank_slot, e
                         );
                     }
+                } else if bank.in_reward_interval() {
+                    info!(
+                        "Not sending snapshot request for bank: {}, bank is in reward interval",
+                        bank_slot
+                    );
                 } else {
                     info!("Not sending snapshot request for bank: {}, startup verification is incomplete", bank_slot);
                 }
