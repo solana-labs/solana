@@ -5158,6 +5158,39 @@ pub mod tests {
     }
 
     #[test]
+    fn test_rpc_get_reward_interval_via_client() {
+        let genesis = create_genesis_config(20);
+        let bank = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
+        let connection_cache = Arc::new(ConnectionCache::default());
+        let meta = JsonRpcRequestProcessor::new_from_bank(
+            &bank,
+            SocketAddrSpace::Unspecified,
+            connection_cache,
+        );
+
+        let mut io = MetaIoHandler::default();
+        io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
+
+        async fn use_client(client: rpc_minimal::gen_client::Client, mint_pubkey: Pubkey) -> u64 {
+            client
+                .get_reward_interval(None)
+                .await
+                .unwrap()
+                .value
+        }
+
+        let fut = async {
+            let (client, server) =
+                local::connect_with_metadata::<rpc_minimal::gen_client::Client, _, _>(&io, meta);
+            let client = use_client(client, mint_pubkey);
+
+            futures::join!(client, server)
+        };
+        let (response, _) = futures::executor::block_on(fut);
+        assert_eq!(response, 150);
+    }
+
+    #[test]
     fn test_rpc_get_cluster_nodes() {
         let rpc = RpcHandler::start();
         let request = create_test_request("getClusterNodes", None);
