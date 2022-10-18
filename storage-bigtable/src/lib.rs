@@ -544,11 +544,11 @@ impl LedgerStorage {
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
 
-        let does_block_exist = bigtable
+        let block_exists = bigtable
             .row_key_exists("blocks", slot_to_blocks_key(slot))
             .await?;
 
-        Ok(does_block_exist)
+        Ok(block_exists)
     }
 
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
