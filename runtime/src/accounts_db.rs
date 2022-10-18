@@ -4171,6 +4171,7 @@ impl AccountsDb {
 
     /// get the storages from 'slot' to squash
     /// or None if this slot should be skipped
+    /// side effect could be updating 'current_ancient'
     fn get_storages_to_move_to_ancient_append_vec(
         &self,
         slot: Slot,
@@ -4319,23 +4320,21 @@ impl AccountsDb {
                     });
             });
 
-            let mut create_and_insert_store_elapsed = 0;
-
             let alive_accounts = alive_accounts_collect.into_inner().unwrap();
             let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
             let alive_total = alive_total_collect.load(Ordering::Relaxed);
             index_read_elapsed.stop();
             let aligned_total: u64 = Self::page_align(alive_total as u64);
+            let total_starting_accounts = len;
             // could follow what shrink does more closely
-            if stored_accounts.is_empty() {
+            if total_starting_accounts == 0 {
                 continue; // skipping slot with no useful accounts to write
             }
 
-            let total_starting_accounts = stored_accounts.len();
             let total_accounts_after_shrink = alive_accounts.len();
 
             let (_, time) = self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
-            create_and_insert_store_elapsed += time.as_micros() as u64;
+            let mut create_and_insert_store_elapsed = time.as_micros() as u64;
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
