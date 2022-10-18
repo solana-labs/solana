@@ -11,7 +11,10 @@ use {
     itertools::Itertools,
     log::*,
     regex::Regex,
-    serde::Serialize,
+    serde::{
+        ser::{SerializeSeq, Serializer},
+        Serialize,
+    },
     serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
@@ -20,6 +23,7 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
+    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
     },
@@ -39,6 +43,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
+        accounts::Accounts,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
@@ -46,7 +51,7 @@ use {
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, RewardCalculationEvent},
+        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
@@ -3377,52 +3382,69 @@ fn main() {
                 });
 
                 let bank = bank_forks.read().unwrap().working_bank();
-                let mut measure = Measure::start("getting accounts");
-                let accounts: BTreeMap<_, _> = bank
-                    .get_all_accounts_with_modified_slots()
-                    .unwrap()
-                    .into_iter()
-                    .filter(|(pubkey, _account, _slot)| {
-                        include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                    })
-                    .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
-                    .collect();
-                measure.stop();
-                info!("{}", measure);
-
-                let mut measure = Measure::start("calculating total accounts stats");
-                let total_accounts_stats = bank.calculate_total_accounts_stats(
-                    accounts
-                        .iter()
-                        .map(|(pubkey, (account, _slot))| (pubkey, account)),
-                );
-                measure.stop();
-                info!("{}", measure);
-
-                let print_account_contents = !arg_matches.is_present("no_account_contents");
-                if print_account_contents {
-                    let print_account_data = !arg_matches.is_present("no_account_data");
-                    let print_encoding_format = match arg_matches.value_of("encoding") {
-                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
-                        Some("base64") => UiAccountEncoding::Base64,
-                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base64,
+                let mut serializer = serde_json::Serializer::new(stdout());
+                let (summarize, mut json_serializer) =
+                    match OutputFormat::from_matches(arg_matches, "output_format", false) {
+                        OutputFormat::Json | OutputFormat::JsonCompact => {
+                            (false, Some(serializer.serialize_seq(None).unwrap()))
+                        }
+                        _ => (true, None),
                     };
-                    let mut measure = Measure::start("printing account contents");
-                    for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(
-                            &pubkey,
-                            &account,
-                            Some(slot),
-                            print_account_data,
-                            print_encoding_format,
-                        );
-                    }
-                    measure.stop();
-                    info!("{}", measure);
-                }
+                let mut total_accounts_stats = TotalAccountsStats::default();
+                let rent_collector = bank.rent_collector();
+                let print_account_contents = !arg_matches.is_present("no_account_contents");
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let data_encoding = match arg_matches.value_of("encoding") {
+                    Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+                    Some("base64") => UiAccountEncoding::Base64,
+                    Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+                    _ => UiAccountEncoding::Base64,
+                };
+                let cli_account_new_config = CliAccountNewConfig {
+                    data_encoding,
+                    ..CliAccountNewConfig::default()
+                };
+                let scan_func = |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+                    if let Some((pubkey, account, slot)) = some_account_tuple
+                        .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
+                    {
+                        if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
+                            return;
+                        }
 
-                println!("{:#?}", total_accounts_stats);
+                        total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
+                        if print_account_contents {
+                            if let Some(json_serializer) = json_serializer.as_mut() {
+                                let cli_account = CliAccount::new_with_config(
+                                    pubkey,
+                                    &account,
+                                    &cli_account_new_config,
+                                );
+                                json_serializer.serialize_element(&cli_account).unwrap();
+                            } else {
+                                output_account(
+                                    pubkey,
+                                    &account,
+                                    Some(slot),
+                                    print_account_data,
+                                    data_encoding,
+                                );
+                            }
+                        }
+                    }
+                };
+                let mut measure = Measure::start("scanning accounts");
+                bank.scan_all_accounts_with_modified_slots(scan_func)
+                    .unwrap();
+                measure.stop();
+                info!("{}", measure);
+                if let Some(json_serializer) = json_serializer {
+                    json_serializer.end().unwrap();
+                }
+                if summarize {
+                    println!("\n{:#?}", total_accounts_stats);
+                }
             }
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
