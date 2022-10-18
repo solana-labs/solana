@@ -3704,7 +3704,7 @@ impl AccountsDb {
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut dead_storages = vec![];
         let mut create_and_insert_store_elapsed_us = 0;
-        let mut write_storage_elapsed = Measure::start("empty_by_default");
+        let mut write_storage_elapsed_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if aligned_total > 0 {
@@ -3749,7 +3749,7 @@ impl AccountsDb {
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
             // Purge old, overwritten storage entries
-            write_storage_elapsed = Measure::start("write_storage_elapsed");
+            let mut write_storage_elapsed = Measure::start("write_storage_elapsed");
             let remaining_stores = self.mark_dirty_dead_stores(
                 slot,
                 &mut dead_storages,
@@ -3771,6 +3771,7 @@ impl AccountsDb {
                 );
             }
             write_storage_elapsed.stop();
+            write_storage_elapsed_us = write_storage_elapsed.as_us();
         }
         rewrite_elapsed.stop();
 
@@ -3783,7 +3784,7 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed,
-            write_storage_elapsed,
+            write_storage_elapsed_us,
             total_starting_accounts - total_accounts_after_shrink,
             original_bytes,
             aligned_total,
@@ -3801,7 +3802,7 @@ impl AccountsDb {
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed: Measure,
-        write_storage_elapsed: Measure,
+        write_storage_elapsed_us: u64,
         accounts_removed: usize,
         original_bytes: u64,
         aligned_total: u64,
@@ -3832,7 +3833,7 @@ impl AccountsDb {
         );
         shrink_stats
             .write_storage_elapsed
-            .fetch_add(write_storage_elapsed.as_us(), Ordering::Relaxed);
+            .fetch_add(write_storage_elapsed_us, Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
