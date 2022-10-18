@@ -1113,10 +1113,10 @@ fn test_snapshots_with_background_services(
             .as_ref()
     );
 
-    // Stop the background services
+    // Stop the background services, ignore any errors
     info!("Shutting down background services...");
     exit.store(true, Ordering::Relaxed);
-    accounts_background_service.join().unwrap();
-    accounts_hash_verifier.join().unwrap();
-    snapshot_packager_service.join().unwrap();
+    _ = accounts_background_service.join();
+    _ = accounts_hash_verifier.join();
+    _ = snapshot_packager_service.join();
 }
