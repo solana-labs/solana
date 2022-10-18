@@ -40,7 +40,6 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
-crossbeam-channel = "0.5"
 rand_chacha = "0.2.2"
 solana-logger = { path = "../logger", version = "=1.15.0" }
 solana-perf = { path = "../perf", version = "=1.15.0" }
