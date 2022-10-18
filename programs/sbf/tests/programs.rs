@@ -234,7 +234,11 @@ fn run_program(name: &str) -> u64 {
         let executable = Executable::<ThisInstructionMeter>::from_elf(
             &data,
             config,
-            register_syscalls(invoke_context, true /* no sol_alloc_free */).unwrap(),
+            register_syscalls(
+                &invoke_context.feature_set,
+                true, /* no sol_alloc_free */
+            )
+            .unwrap(),
         )
         .unwrap();
 

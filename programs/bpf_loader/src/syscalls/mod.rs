@@ -28,6 +28,7 @@ use {
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+        feature_set::FeatureSet,
         feature_set::{
             self, blake3_syscall_enabled, check_physical_overlapping, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
@@ -151,18 +152,12 @@ macro_rules! register_feature_gated_syscall {
 }
 
 pub fn register_syscalls(
-    invoke_context: &mut InvokeContext,
+    feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError> {
-    let blake3_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&blake3_syscall_enabled::id());
-    let curve25519_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&curve25519_syscall_enabled::id());
-    let disable_fees_sysvar = invoke_context
-        .feature_set
-        .is_active(&disable_fees_sysvar::id());
+    let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
+    let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
+    let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let is_abi_v2 = false;
 
     let mut syscall_registry = SyscallRegistry::default();
