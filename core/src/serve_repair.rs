@@ -900,16 +900,11 @@ impl ServeRepair {
                 }
                 packet.meta.set_discard(true);
                 stats.ping_count += 1;
-                // Respond both with and without domain so that the other node
-                // will accept the response regardless of its upgrade status.
-                // TODO: remove domain = false once cluster is upgraded.
-                for domain in [false, true] {
-                    if let Ok(pong) = Pong::new(domain, &ping, keypair) {
-                        let pong = RepairProtocol::Pong(pong);
-                        if let Ok(pong_bytes) = serialize(&pong) {
-                            let from_addr = packet.meta.socket_addr();
-                            pending_pongs.push((pong_bytes, from_addr));
-                        }
+                if let Ok(pong) = Pong::new(&ping, keypair) {
+                    let pong = RepairProtocol::Pong(pong);
+                    if let Ok(pong_bytes) = serialize(&pong) {
+                        let from_addr = packet.meta.socket_addr();
+                        pending_pongs.push((pong_bytes, from_addr));
                     }
                 }
             }
