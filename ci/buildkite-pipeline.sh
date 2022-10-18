@@ -24,6 +24,12 @@ annotate() {
   fi
 }
 
+# Assume everyting needs to be tested when this file or any Dockerfile changes
+mandatory_affected_files=()
+mandatory_affected_files+=(^ci/buildkite-pipeline.sh)
+mandatory_affected_files+=(^ci/docker-rust/Dockerfile)
+mandatory_affected_files+=(^ci/docker-rust-nightly/Dockerfile)
+
 # Checks if a CI pull request affects one or more path patterns.  Each
 # pattern argument is checked in series. If one of them found to be affected,
 # return immediately as such.
@@ -42,8 +48,7 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  # Assume everyting needs to be tested when any Dockerfile changes
-  for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
+  for pattern in "${mandatory_affected_files[@]}" "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
         if [[ ! $file =~ ${pattern:1} ]]; then
