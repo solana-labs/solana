@@ -3779,45 +3779,47 @@ impl AccountsDb {
 
         self.drop_or_recycle_stores(dead_storages);
 
-        self.shrink_stats
+        let shrink_stats = &self.shrink_stats;
+
+        shrink_stats
             .num_slots_shrunk
             .fetch_add(1, Ordering::Relaxed);
-        self.shrink_stats
+        shrink_stats
             .index_read_elapsed
             .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
+        shrink_stats
             .find_alive_elapsed
             .fetch_add(find_alive_elapsed, Ordering::Relaxed);
-        self.shrink_stats
+        shrink_stats
             .create_and_insert_store_elapsed
             .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
-        self.shrink_stats.store_accounts_elapsed.fetch_add(
+        shrink_stats.store_accounts_elapsed.fetch_add(
             store_accounts_timing.store_accounts_elapsed,
             Ordering::Relaxed,
         );
-        self.shrink_stats.update_index_elapsed.fetch_add(
+        shrink_stats.update_index_elapsed.fetch_add(
             store_accounts_timing.update_index_elapsed,
             Ordering::Relaxed,
         );
-        self.shrink_stats.handle_reclaims_elapsed.fetch_add(
+        shrink_stats.handle_reclaims_elapsed.fetch_add(
             store_accounts_timing.handle_reclaims_elapsed,
             Ordering::Relaxed,
         );
-        self.shrink_stats
+        shrink_stats
             .write_storage_elapsed
             .fetch_add(write_storage_elapsed, Ordering::Relaxed);
-        self.shrink_stats
+        shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats.accounts_removed.fetch_add(
+        shrink_stats.accounts_removed.fetch_add(
             total_starting_accounts - total_accounts_after_shrink,
             Ordering::Relaxed,
         );
-        self.shrink_stats.bytes_removed.fetch_add(
+        shrink_stats.bytes_removed.fetch_add(
             original_bytes.saturating_sub(aligned_total),
             Ordering::Relaxed,
         );
-        self.shrink_stats
+        shrink_stats
             .bytes_written
             .fetch_add(aligned_total, Ordering::Relaxed);
 
