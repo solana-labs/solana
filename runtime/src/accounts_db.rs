@@ -38,8 +38,7 @@ use {
         active_stats::{ActiveStatItem, ActiveStats},
         ancestors::Ancestors,
         ancient_append_vecs::{
-            get_ancient_append_vec_capacity, is_ancient, is_full_ancient, AccountsToStore,
-            StorageSelector,
+            get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         bank::Rewrites,
@@ -4212,27 +4211,22 @@ impl AccountsDb {
         let storage = all_storages.first().unwrap();
         let accounts = &storage.accounts;
 
-        // randomly shrink ancient slots
-        // this exercises the ancient shrink code more often
-        let random_shrink =
-            can_randomly_shrink && thread_rng().gen_range(0, 100) == 0 && is_ancient(accounts);
-
-        if is_full_ancient(accounts) || random_shrink {
-            if self.is_candidate_for_shrink(storage, true) || random_shrink {
-                // we are full, but we are a candidate for shrink, so either append us to the previous append vec
-                // or recreate us as a new append vec and eliminate some contents
+        if is_ancient(accounts) {
+            // randomly shrink ancient slots
+            // this exercises the ancient shrink code more often
+            if self.is_candidate_for_shrink(storage, true)
+                || (can_randomly_shrink
+                    && thread_rng().gen_range(0, 100) == 0
+                    && is_ancient(accounts))
+            {
+                // we are a candidate for shrink, so either append us to the previous append vec
+                // or recreate us as a new append vec and eliminate the dead accounts
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
                 self.shrink_ancient_stats
                     .ancient_append_vecs_shrunk
                     .fetch_add(1, Ordering::Relaxed);
                 return true;
             }
-            // since we skipped an ancient append vec, we don't want to append to whatever append vec USED to be the current one
-            *current_ancient = None;
-            return false; // skip this full ancient append vec completely
-        }
-
-        if is_ancient(accounts) {
             // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
             *current_ancient = Some((slot, Arc::clone(storage)));
             return false; // we're done with this slot - this slot IS the ancient append vec
@@ -17127,6 +17121,7 @@ pub mod tests {
         assert_eq!(current_ancient.0, slot2_ancient);
 
         // now try a full ancient append vec
+        // current is None
         let slot3_full_ancient = 3;
         let mut current_ancient = None;
         let full_ancient_3 = make_full_ancient_append_vec(&db, slot3_full_ancient);
@@ -17137,9 +17132,14 @@ pub mod tests {
             false,
         );
         assert!(!should_move);
-        assert!(current_ancient.is_none());
+        let current_ancient = current_ancient.unwrap();
+        assert_eq!(
+            current_ancient.1.append_vec_id(),
+            full_ancient_3.append_vec_id()
+        );
+        assert_eq!(current_ancient.0, slot3_full_ancient);
 
-        // now set current_ancient to something and see if it still goes to None
+        // now set current_ancient to something
         let mut current_ancient = Some((slot1_ancient, ancient1.clone()));
         let should_move = db.should_move_to_ancient_append_vec(
             &vec![full_ancient_3.clone()],
@@ -17148,7 +17148,12 @@ pub mod tests {
             false,
         );
         assert!(!should_move);
-        assert!(current_ancient.is_none());
+        let current_ancient = current_ancient.unwrap();
+        assert_eq!(
+            current_ancient.1.append_vec_id(),
+            full_ancient_3.append_vec_id()
+        );
+        assert_eq!(current_ancient.0, slot3_full_ancient);
 
         // now mark the full ancient as candidate for shrink
         adjust_alive_bytes(&full_ancient_3, 0);
@@ -17185,7 +17190,7 @@ pub mod tests {
 
     fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>) {
         let vecs = vec![vec![ancient.clone()]];
-        while !is_full_ancient(&ancient.accounts) {
+        for _ in 0..100 {
             append_sample_data_to_storage(&vecs, &Pubkey::default(), 0);
         }
         adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
@@ -17195,13 +17200,5 @@ pub mod tests {
         let full = db.create_ancient_append_vec(slot).0.unwrap().1;
         make_ancient_append_vec_full(&full);
         full
-    }
-
-    #[test]
-    fn test_make_full_ancient_append_vec() {
-        let db = AccountsDb::new_single_for_tests();
-        let full = make_full_ancient_append_vec(&db, 1);
-        assert!(is_ancient(&full.accounts));
-        assert!(is_full_ancient(&full.accounts));
     }
 }
