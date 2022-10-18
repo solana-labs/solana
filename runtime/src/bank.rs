@@ -6589,6 +6589,15 @@ impl Bank {
         self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
+    pub fn scan_all_accounts_with_modified_slots<F>(&self, scan_func: F) -> ScanResult<()>
+    where
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
+    {
+        self.rc
+            .accounts
+            .scan_all(&self.ancestors, self.bank_id, scan_func)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
