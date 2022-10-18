@@ -122,7 +122,6 @@ impl TpuConnection for QuicTpuConnection {
         let inner = self.inner.clone();
         //drop and detach the task
 
-
         let _ = RUNTIME.spawn(async move {
             inner
                 .send_wire_transaction(
