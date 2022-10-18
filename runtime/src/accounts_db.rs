@@ -4304,7 +4304,7 @@ impl AccountsDb {
                         let LoadAccountsIndexForShrink {
                             alive_total,
                             mut alive_accounts,
-                            unrefed_pubkeys,
+                            mut unrefed_pubkeys,
                         } = self.load_accounts_index_for_shrink(stored_accounts);
 
                         // collect
@@ -4315,7 +4315,7 @@ impl AccountsDb {
                         unrefed_pubkeys_collect
                             .lock()
                             .unwrap()
-                            .push(unrefed_pubkeys);
+                            .append(&mut unrefed_pubkeys);
                         alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
                     });
             });
@@ -4421,10 +4421,7 @@ impl AccountsDb {
             );
 
             if !all_are_zero_lamports {
-                self.add_uncleaned_pubkeys_after_shrink(
-                    slot,
-                    unrefed_pubkeys.into_iter().flatten().cloned(),
-                );
+                self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
             }
 
             start.stop();
