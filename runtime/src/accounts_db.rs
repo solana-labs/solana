@@ -137,6 +137,42 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+/// temporary enum during feature activation of
+/// ignore slot when calculating an account hash #28420
+#[derive(Debug, Clone, Copy)]
+pub enum IncludeSlotInHash {
+    /// this is the status quo, prior to feature activation
+    /// INCLUDE the slot in the account hash calculation
+    IncludeSlot,
+    /// this is the value once feature activation occurs
+    /// do NOT include the slot in the account hash calculation
+    RemoveSlot,
+    /// this option should not be used.
+    /// If it is, this is a panic worthy event.
+    /// There are code paths where the feature activation status isn't known, but this value should not possibly be used.
+    IrrelevantAssertOnUse,
+}
+
+/// used by tests for 'include_slot_in_hash' parameter
+/// Tests just need to be self-consistent, so any value should work here.
+pub const INCLUDE_SLOT_IN_HASH_TESTS: IncludeSlotInHash = IncludeSlotInHash::IncludeSlot;
+
+// This value is irrelevant because we are reading from append vecs and the hash is already computed and saved.
+// The hash will just be loaded from the append vec as opposed to being calculated initially.
+// A shrink-type operation involves reading from an append vec and writing a subset of the read accounts to a new append vec.
+// So, by definition, we will just read hashes and write hashes. The hash will not be calculated.
+// The 'store' apis are shared, such that the initial store from a bank (where we need to know whether to include the slot)
+// must include a feature-based value for 'include_slot_in_hash'. Other uses, specifically shrink, do NOT need to pass this
+// parameter, but the shared api requires a value.
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION: IncludeSlotInHash =
+    IncludeSlotInHash::IrrelevantAssertOnUse;
+
+// This value is irrelevant because the the debug-only check_hash debug option is not possible to enable at the moment.
+// This has been true for some time now, due to fallout from disabling rewrites.
+// The check_hash debug option can be re-enabled once this feature and the 'rent_epoch' features are enabled.
+pub const INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH: IncludeSlotInHash =
+    IncludeSlotInHash::IrrelevantAssertOnUse;
+
 pub enum StoreReclaims {
     /// normal reclaim mode
     Default,
@@ -564,15 +600,21 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn compute_hash(&self, slot: Slot, pubkey: &Pubkey) -> Hash {
+    pub fn compute_hash(
+        &self,
+        slot: Slot,
+        pubkey: &Pubkey,
+        include_slot: IncludeSlotInHash,
+    ) -> Hash {
         match self {
             LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
                 slot,
                 stored_account_meta,
                 &stored_account_meta.meta.pubkey,
+                include_slot,
             ),
             LoadedAccount::Cached(cached_account) => {
-                AccountsDb::hash_account(slot, &cached_account.account, pubkey)
+                AccountsDb::hash_account(slot, &cached_account.account, pubkey, include_slot)
             }
         }
     }
@@ -2030,7 +2072,11 @@ impl<'a> AppendVecScan for ScanState<'a> {
             && !AccountsDb::is_filler_account_helper(pubkey, self.filler_account_suffix)
         {
             // this will not be supported anymore
-            let computed_hash = loaded_account.compute_hash(self.current_slot, pubkey);
+            let computed_hash = loaded_account.compute_hash(
+                self.current_slot,
+                pubkey,
+                INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH,
+            );
             if computed_hash != source_item.hash {
                 info!(
                     "hash mismatch found: computed: {}, loaded: {}, pubkey: {}",
@@ -3685,7 +3731,11 @@ impl AccountsDb {
             // without use of rather wide locks in this whole function, because we're
             // mutating rooted slots; There should be no writers to them.
             store_accounts_timing = self.store_accounts_frozen(
-                (slot, &accounts[..]),
+                (
+                    slot,
+                    &accounts[..],
+                    INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+                ),
                 Some(&hashes),
                 Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
@@ -4103,7 +4153,11 @@ impl AccountsDb {
         let (accounts, hashes) = accounts.get(storage_selector);
 
         self.store_accounts_frozen(
-            (ancient_slot, accounts),
+            (
+                ancient_slot,
+                accounts,
+                INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+            ),
             Some(hashes),
             Some(ancient_store),
             None,
@@ -5942,6 +5996,7 @@ impl AccountsDb {
         account: &T,
         pubkey: &Pubkey,
         rent_epoch: Epoch,
+        include_slot: IncludeSlotInHash,
     ) -> Hash {
         Self::hash_account_data(
             slot,
@@ -5951,10 +6006,16 @@ impl AccountsDb {
             rent_epoch,
             account.data(),
             pubkey,
+            include_slot,
         )
     }
 
-    pub fn hash_account<T: ReadableAccount>(slot: Slot, account: &T, pubkey: &Pubkey) -> Hash {
+    pub fn hash_account<T: ReadableAccount>(
+        slot: Slot,
+        account: &T,
+        pubkey: &Pubkey,
+        include_slot: IncludeSlotInHash,
+    ) -> Hash {
         Self::hash_account_data(
             slot,
             account.lamports(),
@@ -5963,6 +6024,7 @@ impl AccountsDb {
             account.rent_epoch(),
             account.data(),
             pubkey,
+            include_slot,
         )
     }
 
@@ -5974,6 +6036,7 @@ impl AccountsDb {
         rent_epoch: Epoch,
         data: &[u8],
         pubkey: &Pubkey,
+        include_slot: IncludeSlotInHash,
     ) -> Hash {
         if lamports == 0 {
             return Hash::default();
@@ -5983,7 +6046,16 @@ impl AccountsDb {
 
         hasher.update(&lamports.to_le_bytes());
 
-        hasher.update(&slot.to_le_bytes());
+        match include_slot {
+            IncludeSlotInHash::IncludeSlot => {
+                // upon feature activation, stop including slot# in the account hash
+                hasher.update(&slot.to_le_bytes());
+            }
+            IncludeSlotInHash::RemoveSlot => {}
+            IncludeSlotInHash::IrrelevantAssertOnUse => {
+                panic!("IncludeSlotInHash is irrelevant, but we are calculating hash");
+            }
+        }
 
         hasher.update(&rent_epoch.to_le_bytes());
 
@@ -6372,8 +6444,10 @@ impl AccountsDb {
             // will be able to find the account in storage
             let flushed_store =
                 self.create_and_insert_store(slot, aligned_total_size, "flush_slot_cache");
+            // irrelevant - account will already be hashed since it was used in bank hash previously
+            let include_slot_in_hash = IncludeSlotInHash::IrrelevantAssertOnUse;
             self.store_accounts_frozen(
-                (slot, &accounts[..]),
+                (slot, &accounts[..], include_slot_in_hash),
                 Some(&hashes),
                 Some(&flushed_store),
                 None,
@@ -6391,7 +6465,7 @@ impl AccountsDb {
                     hashes.push(hash);
                 });
                 self.store_accounts_frozen(
-                    (slot, &accounts[..]),
+                    (slot, &accounts[..], include_slot_in_hash),
                     Some(&hashes),
                     Some(&flushed_store),
                     None,
@@ -6491,6 +6565,7 @@ impl AccountsDb {
         hashes: Option<&[impl Borrow<Hash>]>,
         accounts_and_meta_to_store: &[(StoredMeta, Option<&impl ReadableAccount>)],
         txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>> + 'a>,
+        include_slot_in_hash: IncludeSlotInHash,
     ) -> Vec<AccountInfo> {
         let len = accounts_and_meta_to_store.len();
         let hashes = hashes.map(|hashes| {
@@ -6516,7 +6591,13 @@ impl AccountsDb {
 
                 self.notify_account_at_accounts_update(slot, meta, &account, signature);
 
-                let cached_account = self.accounts_cache.store(slot, &meta.pubkey, account, hash);
+                let cached_account = self.accounts_cache.store(
+                    slot,
+                    &meta.pubkey,
+                    account,
+                    hash,
+                    include_slot_in_hash,
+                );
                 // hash this account in the bg
                 match &self.sender_bg_hasher {
                     Some(ref sender) => {
@@ -6583,7 +6664,13 @@ impl AccountsDb {
                     }
                 };
 
-            self.write_accounts_to_cache(slot, hashes, &accounts_and_meta_to_store, signature_iter)
+            self.write_accounts_to_cache(
+                slot,
+                hashes,
+                &accounts_and_meta_to_store,
+                signature_iter,
+                accounts.include_slot_in_hash(),
+            )
         } else {
             match hashes {
                 Some(hashes) => self.write_accounts_to_storage(
@@ -6599,7 +6686,12 @@ impl AccountsDb {
                     let mut hashes = Vec::with_capacity(len);
                     for index in 0..accounts.len() {
                         let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                        let hash = Self::hash_account(slot, account, pubkey);
+                        let hash = Self::hash_account(
+                            slot,
+                            account,
+                            pubkey,
+                            accounts.include_slot_in_hash(),
+                        );
                         hashes.push(hash);
                     }
                     hash_time.stop();
@@ -6776,7 +6868,7 @@ impl AccountsDb {
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
-                                                    loaded_account.compute_hash(*slot, pubkey);
+                                                    loaded_account.compute_hash(*slot, pubkey, INCLUDE_SLOT_IN_HASH_IRRELEVANT_CHECK_HASH);
                                                 if computed_hash != loaded_hash {
                                                     info!("hash mismatch found: computed: {}, loaded: {}, pubkey: {}", computed_hash, loaded_hash, pubkey);
                                                     mismatch_found
@@ -8117,7 +8209,12 @@ impl AccountsDb {
     /// Store the account update.
     /// only called by tests
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.store((slot, accounts), false, None, StoreReclaims::Default);
+        self.store(
+            (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
+            false,
+            None,
+            StoreReclaims::Default,
+        );
     }
 
     fn store<'a, T: ReadableAccount + Sync + ZeroLamport>(
@@ -8850,8 +8947,10 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.maybe_throttle_index_generation();
+                // filler accounts are debug only and their hash is irrelevant anyway, so any value is ok here.
+                let include_slot_in_hash = INCLUDE_SLOT_IN_HASH_TESTS;
                 self.store_accounts_frozen(
-                    (*slot, &add[..]),
+                    (*slot, &add[..], include_slot_in_hash),
                     Some(&hashes[..]),
                     None,
                     None,
@@ -9623,6 +9722,71 @@ pub mod tests {
         }
     }
 
+    /// This impl exists until this feature is activated:
+    ///  ignore slot when calculating an account hash #28420
+    /// For now, all test code will continue to work thanks to this impl
+    /// Tests will use INCLUDE_SLOT_IN_HASH_TESTS for 'include_slot_in_hash' calls.
+    impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T> for (Slot, &'a [(&'a Pubkey, &'a T)]) {
+        fn pubkey(&self, index: usize) -> &Pubkey {
+            self.1[index].0
+        }
+        fn account(&self, index: usize) -> &T {
+            self.1[index].1
+        }
+        fn slot(&self, _index: usize) -> Slot {
+            // per-index slot is not unique per slot when per-account slot is not included in the source data
+            self.target_slot()
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+        fn contains_multiple_slots(&self) -> bool {
+            false
+        }
+        fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+            INCLUDE_SLOT_IN_HASH_TESTS
+        }
+    }
+
+    /// this tuple contains slot info PER account
+    /// last bool is include_slot_in_hash
+    impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
+        for (Slot, &'a [(&'a Pubkey, &'a T, Slot)])
+    {
+        fn pubkey(&self, index: usize) -> &Pubkey {
+            self.1[index].0
+        }
+        fn account(&self, index: usize) -> &T {
+            self.1[index].1
+        }
+        fn slot(&self, index: usize) -> Slot {
+            // note that this could be different than 'target_slot()' PER account
+            self.1[index].2
+        }
+        fn target_slot(&self) -> Slot {
+            self.0
+        }
+        fn len(&self) -> usize {
+            self.1.len()
+        }
+        fn contains_multiple_slots(&self) -> bool {
+            let len = self.len();
+            if len > 0 {
+                let slot = self.slot(0);
+                // true if any item has a different slot than the first item
+                (1..len).any(|i| slot != self.slot(i))
+            } else {
+                false
+            }
+        }
+        fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+            INCLUDE_SLOT_IN_HASH_TESTS
+        }
+    }
+
     #[test]
     fn test_retain_roots_within_one_epoch_range() {
         let mut roots = vec![0, 1, 2];
@@ -9703,7 +9867,12 @@ pub mod tests {
                 1,
                 AccountSharedData::default().owner(),
             ));
-            let hash = AccountsDb::hash_account(slot, &raw_accounts[i], &raw_expected[i].pubkey);
+            let hash = AccountsDb::hash_account(
+                slot,
+                &raw_accounts[i],
+                &raw_expected[i].pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS,
+            );
             if slot == 1 {
                 assert_eq!(hash, expected_hashes[i]);
             }
@@ -12157,12 +12326,22 @@ pub mod tests {
         };
 
         assert_eq!(
-            AccountsDb::hash_account(slot, &stored_account, &stored_account.meta.pubkey),
+            AccountsDb::hash_account(
+                slot,
+                &stored_account,
+                &stored_account.meta.pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS
+            ),
             expected_account_hash,
             "StoredAccountMeta's data layout might be changed; update hashing if needed."
         );
         assert_eq!(
-            AccountsDb::hash_account(slot, &account, &stored_account.meta.pubkey),
+            AccountsDb::hash_account(
+                slot,
+                &account,
+                &stored_account.meta.pubkey,
+                INCLUDE_SLOT_IN_HASH_TESTS
+            ),
             expected_account_hash,
             "Account-based hashing must be consistent with StoredAccountMeta-based one."
         );
@@ -12195,6 +12374,8 @@ pub mod tests {
         assert_eq!(bank_hash.stats.num_executable_accounts, 1);
     }
 
+    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
+    #[ignore]
     #[test]
     fn test_calculate_accounts_hash_check_hash_mismatch() {
         solana_logger::setup();
@@ -12253,6 +12434,8 @@ pub mod tests {
         }
     }
 
+    // this test tests check_hash=true, which is unsupported behavior at the moment. It cannot be enabled by anything but these tests.
+    #[ignore]
     #[test]
     fn test_calculate_accounts_hash_check_hash() {
         solana_logger::setup();
@@ -16028,8 +16211,14 @@ pub mod tests {
         for rent in 0..3 {
             account.set_rent_epoch(rent);
             assert_eq!(
-                AccountsDb::hash_account(slot, &account, &pubkey),
-                AccountsDb::hash_account_with_rent_epoch(slot, &account, &pubkey, rent)
+                AccountsDb::hash_account(slot, &account, &pubkey, INCLUDE_SLOT_IN_HASH_TESTS),
+                AccountsDb::hash_account_with_rent_epoch(
+                    slot,
+                    &account,
+                    &pubkey,
+                    rent,
+                    INCLUDE_SLOT_IN_HASH_TESTS
+                )
             );
         }
     }
