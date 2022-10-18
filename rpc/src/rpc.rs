@@ -5143,7 +5143,7 @@ pub mod tests {
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRewardInterval"}"#;
-        let res = io.handle_request_sync(&req, meta);
+        let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
