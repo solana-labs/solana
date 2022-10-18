@@ -87,7 +87,7 @@ use {
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
         executor_cache::{
-            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
+            BankExecutorCache, Executor, TransactionExecutorCache, TxBankExecutorCacheDiff,
             MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
@@ -101,6 +101,7 @@ use {
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
             INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
@@ -4042,6 +4043,73 @@ impl Bank {
             .update_global_cache(&self.executor_cache, |difference| {
                 difference == TxBankExecutorCacheDiff::Updated
             });
+    }
+
+    #[allow(dead_code)] // Preparation for BankExecutorCache rework
+    fn create_executor(&self, pubkey: &Pubkey) -> Result<Arc<dyn Executor>> {
+        let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
+            program
+        } else {
+            return Err(TransactionError::ProgramAccountNotFound);
+        };
+        let mut transaction_accounts = vec![(*pubkey, program)];
+        let is_upgradeable_loader =
+            bpf_loader_upgradeable::check_id(transaction_accounts[0].1.owner());
+        if is_upgradeable_loader {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = transaction_accounts[0].1.state()
+            {
+                if let Some(programdata_account) =
+                    self.get_account_with_fixed_root(&programdata_address)
+                {
+                    transaction_accounts.push((programdata_address, programdata_account));
+                } else {
+                    return Err(TransactionError::ProgramAccountNotFound);
+                }
+            } else {
+                return Err(TransactionError::ProgramAccountNotFound);
+            }
+        }
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            Some(sysvar::rent::Rent::default()),
+            1,
+            1,
+        );
+        let instruction_context = transaction_context
+            .get_next_instruction_context()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        instruction_context.configure(if is_upgradeable_loader { &[0, 1] } else { &[0] }, &[], &[]);
+        transaction_context
+            .push()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let program = instruction_context
+            .try_borrow_program_account(&transaction_context, 0)
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let programdata = if is_upgradeable_loader {
+            Some(
+                instruction_context
+                    .try_borrow_program_account(&transaction_context, 1)
+                    .map_err(|err| TransactionError::InstructionError(0, err))?,
+            )
+        } else {
+            None
+        };
+        solana_bpf_loader_program::create_executor_from_account(
+            &self.feature_set,
+            &self.runtime_config.compute_budget.unwrap_or_default(),
+            None, // log_collector
+            None, // tx_executor_cache
+            &program,
+            programdata.as_ref().unwrap_or(&program),
+            self.runtime_config.bpf_jit,
+        )
+        .map(|(executor, _create_executor_metrics)| executor)
+        .map_err(|err| TransactionError::InstructionError(0, err))
     }
 
     /// Remove an executor from the bank's cache
