@@ -3,6 +3,7 @@
 use {
     self::{
         broadcast_duplicates_run::{BroadcastDuplicatesConfig, BroadcastDuplicatesRun},
+        broadcast_duplicate_blocks_run::{BroadcastDuplicateBlocksConfig, BroadcastDuplicateBlocksRun},
         broadcast_fake_shreds_run::BroadcastFakeShredsRun,
         broadcast_metrics::*,
         fail_entry_verification_broadcast_run::FailEntryVerificationBroadcastRun,
@@ -46,6 +47,7 @@ use {
 };
 
 pub mod broadcast_duplicates_run;
+pub mod broadcast_duplicate_blocks_run;
 mod broadcast_fake_shreds_run;
 pub mod broadcast_metrics;
 pub(crate) mod broadcast_utils;
@@ -72,6 +74,7 @@ pub enum BroadcastStageType {
     FailEntryVerification,
     BroadcastFakeShreds,
     BroadcastDuplicates(BroadcastDuplicatesConfig),
+    BroadcastDuplicateBlocks(BroadcastDuplicateBlocksConfig),
 }
 
 impl BroadcastStageType {
@@ -130,6 +133,17 @@ impl BroadcastStageType {
                 blockstore,
                 bank_forks,
                 BroadcastDuplicatesRun::new(shred_version, config.clone()),
+            ),
+
+            BroadcastStageType::BroadcastDuplicateBlocks(config) => BroadcastStage::new(
+                sock,
+                cluster_info,
+                receiver,
+                retransmit_slots_receiver,
+                exit_sender,
+                blockstore,
+                bank_forks,
+                BroadcastDuplicateBlocksRun::new(shred_version, config.clone()),
             ),
         }
     }

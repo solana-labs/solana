@@ -7,7 +7,10 @@ use {
     log::*,
     serial_test::serial,
     solana_core::{
-        broadcast_stage::BroadcastStageType,
+        broadcast_stage:: {
+            broadcast_duplicate_blocks_run::BroadcastDuplicateBlocksConfig,
+            BroadcastStageType,
+        },
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
@@ -1523,6 +1526,23 @@ fn test_fake_shreds_broadcast_leader() {
     cluster.check_for_new_roots(
         16,
         "test_fake_shreds_broadcast_leader",
+        SocketAddrSpace::Unspecified,
+    );
+}
+
+#[test]
+#[serial]
+#[allow(unused_attributes)]
+fn test_duplicate_blocks_broadcast_leader() {
+    let node_stakes = vec![300, 100];
+    let config = BroadcastDuplicateBlocksConfig {
+        num_duplicates: 2,
+        num_entries_to_remove: 2,
+    };
+    let (cluster, _) = test_faulty_node(BroadcastStageType::BroadcastDuplicateBlocks(config), node_stakes);
+    cluster.check_for_new_roots(
+        16,
+        "test_duplicate_blocks_broadcast_leader",
         SocketAddrSpace::Unspecified,
     );
 }
