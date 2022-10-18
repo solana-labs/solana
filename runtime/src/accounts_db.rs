@@ -224,6 +224,12 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
+struct LoadAccountsIndexForShrink<'a> {
+    alive_total: usize,
+    alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
+    unrefed_pubkeys: Vec<&'a Pubkey>,
+}
+
 pub struct GetUniqueAccountsResult<'a> {
     pub stored_accounts: Vec<(Pubkey, FoundStoredAccount<'a>)>,
     pub original_bytes: u64,
@@ -3518,19 +3524,18 @@ impl AccountsDb {
     fn load_accounts_index_for_shrink<'a>(
         &'a self,
         accounts: &'a [(Pubkey, FoundStoredAccount<'a>)],
-        count: usize,
-        alive_accounts: &mut Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
-        mut unrefed_pubkeys: Option<&mut Vec<&'a Pubkey>>,
-    ) -> usize {
+    ) -> LoadAccountsIndexForShrink<'a> {
+        let count = accounts.len();
+        let mut alive_accounts = Vec::with_capacity(count);
+        let mut unrefed_pubkeys = Vec::with_capacity(count);
+
         let mut alive_total = 0;
 
         let mut alive = 0;
         let mut dead = 0;
         let mut index = 0;
         self.accounts_index.scan(
-            accounts[..std::cmp::min(accounts.len(), count)]
-                .iter()
-                .map(|(key, _)| key),
+            accounts.iter().map(|(key, _)| key),
             |pubkey, slots_refs| {
                 let mut result = AccountsIndexScanResult::None;
                 if let Some((slot_list, _ref_count)) = slots_refs {
@@ -3547,9 +3552,7 @@ impl AccountsDb {
                         // It would have had a ref to the storage from the initial store, but it will
                         // not exist in the re-written slot. Unref it to keep the index consistent with
                         // rewriting the storage entries.
-                        if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
-                            unrefed_pubkeys.push(pubkey);
-                        }
+                        unrefed_pubkeys.push(pubkey);
                         result = AccountsIndexScanResult::Unref;
                         dead += 1;
                     } else {
@@ -3571,7 +3574,11 @@ impl AccountsDb {
             .dead_accounts
             .fetch_add(dead, Ordering::Relaxed);
 
-        alive_total
+        LoadAccountsIndexForShrink {
+            alive_total,
+            alive_accounts,
+            unrefed_pubkeys,
+        }
     }
 
     /// get all accounts in all the storages passed in
@@ -3643,30 +3650,26 @@ impl AccountsDb {
 
         self.thread_pool_clean.install(|| {
             let chunk_size = 50; // # accounts/thread
-            let chunks = len / chunk_size + 1;
-            (0..chunks).into_par_iter().for_each(|chunk| {
-                let skip = chunk * chunk_size;
+            stored_accounts
+                .par_chunks(chunk_size)
+                .for_each(|stored_accounts| {
+                    let LoadAccountsIndexForShrink {
+                        alive_total,
+                        mut alive_accounts,
+                        mut unrefed_pubkeys,
+                    } = self.load_accounts_index_for_shrink(stored_accounts);
 
-                let mut alive_accounts = Vec::with_capacity(chunk_size);
-                let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
-                let alive_total = self.load_accounts_index_for_shrink(
-                    &stored_accounts[skip..],
-                    chunk_size,
-                    &mut alive_accounts,
-                    Some(&mut unrefed_pubkeys),
-                );
-
-                // collect
-                alive_accounts_collect
-                    .lock()
-                    .unwrap()
-                    .append(&mut alive_accounts);
-                unrefed_pubkeys_collect
-                    .lock()
-                    .unwrap()
-                    .append(&mut unrefed_pubkeys);
-                alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
-            });
+                    // collect
+                    alive_accounts_collect
+                        .lock()
+                        .unwrap()
+                        .append(&mut alive_accounts);
+                    unrefed_pubkeys_collect
+                        .lock()
+                        .unwrap()
+                        .append(&mut unrefed_pubkeys);
+                    alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+                });
         });
 
         let alive_accounts = alive_accounts_collect.into_inner().unwrap();
@@ -4294,30 +4297,26 @@ impl AccountsDb {
 
             self.thread_pool_clean.install(|| {
                 let chunk_size = 50; // # accounts/thread
-                let chunks = len / chunk_size + 1;
-                (0..chunks).into_par_iter().for_each(|chunk| {
-                    let skip = chunk * chunk_size;
+                stored_accounts
+                    .par_chunks(chunk_size)
+                    .for_each(|stored_accounts| {
+                        let LoadAccountsIndexForShrink {
+                            alive_total,
+                            mut alive_accounts,
+                            unrefed_pubkeys,
+                        } = self.load_accounts_index_for_shrink(stored_accounts);
 
-                    let mut alive_accounts = Vec::with_capacity(chunk_size);
-                    let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
-                    let alive_total = self.load_accounts_index_for_shrink(
-                        &stored_accounts[skip..],
-                        chunk_size,
-                        &mut alive_accounts,
-                        Some(&mut unrefed_pubkeys),
-                    );
-
-                    // collect
-                    alive_accounts_collect
-                        .lock()
-                        .unwrap()
-                        .append(&mut alive_accounts);
-                    unrefed_pubkeys_collect
-                        .lock()
-                        .unwrap()
-                        .push(unrefed_pubkeys);
-                    alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
-                });
+                        // collect
+                        alive_accounts_collect
+                            .lock()
+                            .unwrap()
+                            .append(&mut alive_accounts);
+                        unrefed_pubkeys_collect
+                            .lock()
+                            .unwrap()
+                            .push(unrefed_pubkeys);
+                        alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+                    });
             });
 
             let mut create_and_insert_store_elapsed = 0;
