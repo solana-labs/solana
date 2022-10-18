@@ -225,7 +225,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 pub struct GetUniqueAccountsResult<'a> {
-    pub stored_accounts: HashMap<Pubkey, FoundStoredAccount<'a>>,
+    pub stored_accounts: Vec<(Pubkey, FoundStoredAccount<'a>)>,
     pub original_bytes: u64,
     store_ids: Vec<AppendVecId>,
 }
@@ -3608,6 +3608,11 @@ impl AccountsDb {
                 store.append_vec_id()
             })
             .collect();
+
+        // sort by pubkey to keep account index lookups close
+        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
         GetUniqueAccountsResult {
             stored_accounts,
             original_bytes,
@@ -3625,10 +3630,6 @@ impl AccountsDb {
             original_bytes,
             store_ids,
         } = self.get_unique_accounts_from_storages(stores);
-
-        // sort by pubkey to keep account index lookups close
-        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
         let alive_total_collect = AtomicUsize::new(0);
@@ -4279,13 +4280,6 @@ impl AccountsDb {
                 original_bytes,
                 store_ids: _,
             } = self.get_unique_accounts_from_storages(old_storages.iter());
-
-            // sort by pubkey to keep account index lookups close
-            let stored_accounts = {
-                let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-                stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-                stored_accounts
-            };
 
             let mut index_read_elapsed = Measure::start("index_read_elapsed");
             let alive_total_collect = AtomicUsize::new(0);
