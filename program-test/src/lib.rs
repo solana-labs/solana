@@ -395,6 +395,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .set_return_data(caller, data.to_vec())
             .unwrap();
     }
+
+    fn sol_get_stack_height(&self) -> u64 {
+        let invoke_context = get_invoke_context();
+        invoke_context.get_stack_height().try_into().unwrap()
+    }
 }
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
