@@ -3643,6 +3643,7 @@ impl AccountsDb {
         &'a self,
         stores: I,
         stored_accounts: &'b mut Vec<(Pubkey, FoundStoredAccount<'b>)>,
+        stats: &ShrinkStats,
     ) -> ShrinkCollect<'b>
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
@@ -3660,7 +3661,7 @@ impl AccountsDb {
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
         let unrefed_pubkeys_collect = Mutex::new(Vec::with_capacity(len));
-        self.shrink_stats
+        stats
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
 
@@ -3722,7 +3723,7 @@ impl AccountsDb {
             unrefed_pubkeys,
             alive_accounts,
             total_starting_accounts,
-        } = self.shrink_collect(stores, &mut stored_accounts);
+        } = self.shrink_collect(stores, &mut stored_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(aligned_total, original_bytes, store_ids.len()) {
@@ -4326,7 +4327,11 @@ impl AccountsDb {
                 alive_accounts,
                 total_starting_accounts,
                 ..
-            } = self.shrink_collect(old_storages.iter(), &mut stored_accounts);
+            } = self.shrink_collect(
+                old_storages.iter(),
+                &mut stored_accounts,
+                &self.shrink_ancient_stats.shrink_stats,
+            );
 
             // could follow what shrink does more closely
             if total_starting_accounts == 0 {
