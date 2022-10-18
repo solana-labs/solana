@@ -113,6 +113,7 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
+    GetRewardInterval,
 }
 
 #[allow(deprecated)]
@@ -188,6 +189,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetRewardInterval => "getRewardInterval",
         };
 
         write!(f, "{}", method)

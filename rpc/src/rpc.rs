@@ -645,6 +645,11 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(&bank, bank.get_balance(pubkey)))
     }
 
+    pub fn get_reward_interval(&self, config: RpcContextConfig) -> Result<RpcResponse<u64>> {
+        let bank = self.get_bank_with_config(config)?;
+        Ok(new_response(&bank, bank.get_reward_interval()))
+    }
+
     fn get_recent_blockhash(
         &self,
         commitment: Option<CommitmentConfig>,
@@ -2606,6 +2611,13 @@ pub mod rpc_minimal {
             options: Option<RpcLeaderScheduleConfigWrapper>,
             config: Option<RpcLeaderScheduleConfig>,
         ) -> Result<Option<RpcLeaderSchedule>>;
+
+        #[rpc(meta, name = "getRewardInterval")]
+        fn get_reward_interval(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>>;
     }
 
     pub struct MinimalImpl;
@@ -2768,6 +2780,15 @@ pub mod rpc_minimal {
                     }
                     schedule_by_identity
                 }))
+        }
+
+        fn get_reward_interval(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>> {
+            debug!("get_reward_interval rpc request received");
+            meta.get_reward_interval(config.unwrap_or_default())
         }
     }
 }
