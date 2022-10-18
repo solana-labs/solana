@@ -5142,13 +5142,13 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRewardInterval",}"#;
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getRewardInterval"}"#;
         let res = io.handle_request_sync(&req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
             "result": {
                 "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":20,
+                "value":150,
                 },
             "id": 1,
         });
