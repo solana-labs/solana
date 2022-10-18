@@ -4362,7 +4362,7 @@ impl AccountsDb {
             }
 
             let (_, time) = self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
-            let mut create_and_insert_store_elapsed = time.as_micros() as u64;
+            let mut create_and_insert_store_elapsed_us = time.as_micros() as u64;
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
@@ -4408,7 +4408,7 @@ impl AccountsDb {
             if to_store.has_overflow() {
                 // we need a new ancient append vec
                 let result = self.create_ancient_append_vec(slot);
-                create_and_insert_store_elapsed += result.1.as_micros() as u64;
+                create_and_insert_store_elapsed_us += result.1.as_micros() as u64;
                 current_ancient = result.0;
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
@@ -4462,69 +4462,18 @@ impl AccountsDb {
             // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            self.shrink_ancient_stats
-                .shrink_stats
-                .index_read_elapsed
-                .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .create_and_insert_store_elapsed
-                .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .store_accounts_elapsed
-                .fetch_add(
-                    store_accounts_timing.store_accounts_elapsed,
-                    Ordering::Relaxed,
-                );
-            self.shrink_ancient_stats
-                .shrink_stats
-                .update_index_elapsed
-                .fetch_add(
-                    store_accounts_timing.update_index_elapsed,
-                    Ordering::Relaxed,
-                );
-            self.shrink_ancient_stats
-                .shrink_stats
-                .handle_reclaims_elapsed
-                .fetch_add(
-                    store_accounts_timing.handle_reclaims_elapsed,
-                    Ordering::Relaxed,
-                );
-            self.shrink_ancient_stats
-                .shrink_stats
-                .write_storage_elapsed
-                .fetch_add(write_storage_elapsed.as_us(), Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .rewrite_elapsed
-                .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .accounts_removed
-                .fetch_add(
-                    total_starting_accounts - alive_accounts.len(),
-                    Ordering::Relaxed,
-                );
-            self.shrink_ancient_stats
-                .shrink_stats
-                .bytes_removed
-                .fetch_add(
-                    original_bytes.saturating_sub(aligned_total),
-                    Ordering::Relaxed,
-                );
-            self.shrink_ancient_stats
-                .shrink_stats
-                .bytes_written
-                .fetch_add(aligned_total, Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .find_alive_elapsed
-                .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
-            self.shrink_ancient_stats
-                .shrink_stats
-                .num_slots_shrunk
-                .fetch_add(1, Ordering::Relaxed);
+            Self::update_shrink_stats(
+                &self.shrink_ancient_stats.shrink_stats,
+                index_read_elapsed,
+                find_alive_elapsed,
+                create_and_insert_store_elapsed_us,
+                store_accounts_timing,
+                rewrite_elapsed,
+                write_storage_elapsed.as_us(),
+                total_starting_accounts - alive_accounts.len(),
+                original_bytes,
+                aligned_total,
+            );
         }
 
         if !dropped_roots.is_empty() {
