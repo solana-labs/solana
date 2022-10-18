@@ -172,7 +172,7 @@ impl BroadcastDuplicateBlocksRun {
             process_stats.num_merkle_data_shreds += data_shreds.len();
             process_stats.num_merkle_coding_shreds += coding_shreds.len();
         }
-        
+
         let next_shred_index = match data_shreds.iter().map(Shred::index).max() {
             Some(index) => index + 1,
             None => next_shred_index,
@@ -221,8 +221,6 @@ impl BroadcastDuplicateBlocksRun {
         let _ = self.record(&brecv, blockstore);
         Ok(())
     }
-
-
 
     fn process_receive_results(
         &mut self,
@@ -290,7 +288,7 @@ impl BroadcastDuplicateBlocksRun {
             &mut process_stats,
             false,
         ));
-        
+
         let mut new_entries = receive_results.entries.clone();
         for duplicate_index in 0..self.config.num_duplicates-1 {
             if let Some(last_entry) = new_entries.last() {
@@ -328,7 +326,7 @@ impl BroadcastDuplicateBlocksRun {
                         // Adding a tick
                         new_entries.push(Entry::new(&new_last_hash, 1, vec![]));
                     }
-                            
+    
                     shreds_to_send.push(self.entries_to_shreds(
                        keypair,
                         &new_entries,
@@ -343,7 +341,7 @@ impl BroadcastDuplicateBlocksRun {
             }
             self.prev_entry_hashes[duplicate_index] = Some(new_entries.last().unwrap().hash);
         }
-        
+
         // Insert the first data shred synchronously so that blockstore stores
         // that the leader started this block. This must be done before the
         // blocks are sent out over the wire. By contrast Self::insert skips
