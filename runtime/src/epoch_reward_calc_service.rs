@@ -54,6 +54,9 @@ pub struct EpochRewardResult<T> {
 
     /// Map from slot to reward calculation request hash
     signatures: HashMap<Slot, Hash>,
+
+    /// Current epoch
+    epoch: u64,
 }
 
 /// Default Trait
@@ -70,6 +73,7 @@ impl<T> EpochRewardResult<T> {
         Self {
             rewards: HashMap::new(),
             signatures: HashMap::new(),
+            epoch: 0,
         }
     }
 
@@ -97,6 +101,14 @@ impl<T> EpochRewardResult<T> {
     pub fn clear(&mut self) {
         self.rewards.clear();
         self.signatures.clear();
+    }
+
+    /// Clear old epoch results
+    pub fn relinquish(&mut self, epoch: u64) {
+        if epoch > self.epoch {
+            self.clear();
+            self.epoch = epoch;
+        }
     }
 }
 
@@ -170,6 +182,8 @@ impl EpochRewardCalcRequestHandler {
                 "handle reward calculation request: epoch {} parent_slot {}",
                 epoch, parent_slot
             );
+
+            self.results.write().unwrap().relinquish(epoch);
 
             if !self
                 .results
