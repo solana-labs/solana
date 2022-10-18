@@ -4172,20 +4172,30 @@ impl AccountsDb {
         slot: Slot,
         current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
     ) -> Option<SnapshotStorage> {
+        let can_randomly_shrink = true;
         self.get_storages_for_slot(slot).and_then(|all_storages| {
-            self.should_move_to_ancient_append_vec(&all_storages, current_ancient, slot)
-                .then_some(all_storages)
+            self.should_move_to_ancient_append_vec(
+                &all_storages,
+                current_ancient,
+                slot,
+                can_randomly_shrink,
+            )
+            .then_some(all_storages)
         })
     }
 
     /// return true if the accounts in this slot should be moved to an ancient append vec
     /// otherwise, return false and the caller can skip this slot
     /// side effect could be updating 'current_ancient'
-    pub fn should_move_to_ancient_append_vec(
+    /// can_randomly_shrink: true if ancient append vecs that otherwise don't qualify to be shrunk can be randomly shrunk
+    ///  this is convenient for a running system
+    ///  this is not useful for testing
+    fn should_move_to_ancient_append_vec(
         &self,
         all_storages: &SnapshotStorage,
         current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
         slot: Slot,
+        can_randomly_shrink: bool,
     ) -> bool {
         if all_storages.len() != 1 {
             // we are dealing with roots that are more than 1 epoch old. I chose not to support or test the case where we have > 1 append vec per slot.
@@ -4199,7 +4209,8 @@ impl AccountsDb {
 
         // randomly shrink ancient slots
         // this exercises the ancient shrink code more often
-        let random_shrink = thread_rng().gen_range(0, 100) == 0 && is_ancient(accounts);
+        let random_shrink =
+            can_randomly_shrink && thread_rng().gen_range(0, 100) == 0 && is_ancient(accounts);
 
         if is_full_ancient(accounts) || random_shrink {
             if self.is_candidate_for_shrink(storage, true) || random_shrink {
@@ -17049,5 +17060,159 @@ pub mod tests {
             .alive_roots
             .remove(&root0);
         assert_eq!(db.get_sorted_potential_ancient_slots(), vec![root1]);
+    }
+
+    #[test]
+    fn test_should_move_to_ancient_append_vec() {
+        solana_logger::setup();
+        let db = AccountsDb::new_single_for_tests();
+        let slot5 = 5;
+        let tf = crate::append_vec::test_utils::get_append_vec_path(
+            "test_should_move_to_ancient_append_vec",
+        );
+        let write_version1 = 0;
+        let pubkey1 = solana_sdk::pubkey::new_rand();
+        let storages = sample_storage_with_entries(&tf, write_version1, slot5, &pubkey1)
+            .pop()
+            .unwrap();
+        let mut current_ancient = None;
+
+        let should_move =
+            db.should_move_to_ancient_append_vec(&storages, &mut current_ancient, slot5, false);
+        assert!(current_ancient.is_none());
+        // slot is not ancient, so it is good to move
+        assert!(should_move);
+
+        // try 2 storages in 1 slot, should not be able to move
+        current_ancient = Some((slot5, Arc::clone(&storages[0]))); // just 'some', contents don't matter
+        let two_storages = vec![storages[0].clone(), storages[0].clone()];
+        let should_move =
+            db.should_move_to_ancient_append_vec(&two_storages, &mut current_ancient, slot5, false);
+        assert!(current_ancient.is_none());
+        assert!(!should_move);
+
+        current_ancient = Some((slot5, Arc::clone(&storages[0]))); // just 'some', contents don't matter
+        let expected = current_ancient.clone().unwrap();
+        let should_move =
+            db.should_move_to_ancient_append_vec(&storages, &mut current_ancient, slot5, false);
+        // should have kept the same 'current_ancient'
+        let current = current_ancient.unwrap();
+        assert_eq!(current.0, slot5);
+        assert_eq!(current.1.slot(), slot5);
+        assert_eq!(current.1.slot(), expected.1.slot());
+        assert_eq!(current.1.append_vec_id(), expected.1.append_vec_id());
+
+        // slot is not ancient, so it is good to move
+        assert!(should_move);
+
+        // now, create an ancient slot and make sure that it does NOT think it needs to be moved and that it becomes the ancient append vec to use
+        let mut current_ancient = None;
+        let slot1_ancient = 1;
+        let ancient1 = db.create_ancient_append_vec(slot1_ancient).0.unwrap().1;
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![ancient1.clone()],
+            &mut current_ancient,
+            slot1_ancient,
+            false,
+        );
+        assert!(!should_move);
+        let current_ancient = current_ancient.unwrap();
+        assert_eq!(current_ancient.1.append_vec_id(), ancient1.append_vec_id());
+        assert_eq!(current_ancient.0, slot1_ancient);
+
+        // current is ancient1
+        // try to move ancient2
+        // current should become ancient2
+        let slot2_ancient = 2;
+        let mut current_ancient = Some((slot1_ancient, ancient1.clone()));
+        let ancient2 = db.create_ancient_append_vec(slot2_ancient).0.unwrap().1;
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![ancient2.clone()],
+            &mut current_ancient,
+            slot2_ancient,
+            false,
+        );
+        assert!(!should_move);
+        let current_ancient = current_ancient.unwrap();
+        assert_eq!(current_ancient.1.append_vec_id(), ancient2.append_vec_id());
+        assert_eq!(current_ancient.0, slot2_ancient);
+
+        // now try a full ancient append vec
+        let slot3_full_ancient = 3;
+        let mut current_ancient = None;
+        let full_ancient_3 = make_full_ancient_append_vec(&db, slot3_full_ancient);
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![full_ancient_3.clone()],
+            &mut current_ancient,
+            slot3_full_ancient,
+            false,
+        );
+        assert!(!should_move);
+        assert!(current_ancient.is_none());
+
+        // now set current_ancient to something and see if it still goes to None
+        let mut current_ancient = Some((slot1_ancient, ancient1.clone()));
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![full_ancient_3.clone()],
+            &mut current_ancient,
+            slot3_full_ancient,
+            false,
+        );
+        assert!(!should_move);
+        assert!(current_ancient.is_none());
+
+        // now mark the full ancient as candidate for shrink
+        adjust_alive_bytes(&full_ancient_3, 0);
+
+        // should shrink here, returning none for current
+        let mut current_ancient = None;
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![full_ancient_3.clone()],
+            &mut current_ancient,
+            slot3_full_ancient,
+            false,
+        );
+        assert!(should_move);
+        assert!(current_ancient.is_none());
+
+        // should return true here, returning current from prior
+        // now set current_ancient to something and see if it still goes to None
+        let mut current_ancient = Some((slot1_ancient, ancient1.clone()));
+        let should_move = db.should_move_to_ancient_append_vec(
+            &vec![full_ancient_3],
+            &mut current_ancient,
+            slot3_full_ancient,
+            false,
+        );
+        assert!(should_move);
+        let current_ancient = current_ancient.unwrap();
+        assert_eq!(current_ancient.1.append_vec_id(), ancient1.append_vec_id());
+        assert_eq!(current_ancient.0, slot1_ancient);
+    }
+
+    fn adjust_alive_bytes(storage: &Arc<AccountStorageEntry>, alive_bytes: usize) {
+        storage.alive_bytes.store(alive_bytes, Ordering::Release);
+    }
+
+    fn make_ancient_append_vec_full(ancient: &Arc<AccountStorageEntry>) {
+        let vecs = vec![vec![ancient.clone()]];
+        while !is_full_ancient(&ancient.accounts) {
+            append_sample_data_to_storage(&vecs, &Pubkey::default(), 0);
+        }
+        adjust_alive_bytes(ancient, ancient.total_bytes() as usize);
+    }
+
+    fn make_full_ancient_append_vec(db: &AccountsDb, slot: Slot) -> Arc<AccountStorageEntry> {
+        let full = db.create_ancient_append_vec(slot).0.unwrap().1;
+        make_ancient_append_vec_full(&full);
+        full
+    }
+
+    #[test]
+    fn test_make_full_ancient_append_vec() {
+        let db = AccountsDb::new_single_for_tests();
+        let full = make_full_ancient_append_vec(&db, 1);
+        assert!(is_ancient(&full.accounts));
+        assert!(is_full_ancient(&full.accounts));
     }
 }
