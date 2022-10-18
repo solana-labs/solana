@@ -1,11 +1,15 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_clap_utils::input_parsers::pubkey_of,
-    solana_cli::{cli::CliConfig, program::process_deploy},
+    solana_cli::{
+        cli::{process_command, CliCommand, CliConfig},
+        program::ProgramCliCommand,
+    },
     solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
@@ -228,24 +232,27 @@ fn run_transactions_dos(
     if program_account.is_err() {
         let mut config = CliConfig::default();
         let (program_keypair, program_location) = program_options
-            .as_ref()
             .expect("If the program doesn't exist, need to provide program keypair to deploy");
         info!(
             "processing deploy: {:?} key: {}",
             program_account,
             program_keypair.pubkey()
         );
-        config.signers = vec![payer_keypairs[0], program_keypair];
-        process_deploy(
-            client.clone(),
-            &config,
-            program_location,
-            Some(1),
-            false,
-            true,
-            true, /* skip_fee_check */
-        )
-        .expect("deploy didn't pass");
+        config.signers = vec![payer_keypairs[0], &program_keypair];
+        config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+            program_location: Some(program_location),
+            program_signer_index: Some(1),
+            program_pubkey: None,
+            buffer_signer_index: None,
+            buffer_pubkey: None,
+            allow_excessive_balance: true,
+            upgrade_authority_signer_index: 0,
+            is_final: true,
+            max_len: None,
+            skip_fee_check: true, // skip_fee_check
+        });
+
+        process_command(&config).expect("deploy didn't pass");
     } else {
         info!("Found program account. Skipping deploy..");
         assert!(program_account.unwrap().executable);
