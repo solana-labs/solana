@@ -565,7 +565,6 @@ fn network_run_pull(
                 bytes += serialized_size(&rsp).unwrap() as usize;
                 msgs += rsp.len();
                 if let Some(node) = network.get(&from) {
-                    node.gossip.mark_pull_request_creation_time(from, now);
                     let mut stats = ProcessPullStats::default();
                     let (vers, vers_expired_timeout, failed_inserts) = node
                         .gossip

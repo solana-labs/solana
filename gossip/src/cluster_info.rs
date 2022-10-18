@@ -1487,12 +1487,6 @@ impl ClusterInfo {
         self.append_entrypoint_to_pulls(thread_pool, &mut pulls);
         let num_requests = pulls.values().map(Vec::len).sum::<usize>() as u64;
         self.stats.new_pull_requests_count.add_relaxed(num_requests);
-        {
-            let _st = ScopedTimer::from(&self.stats.mark_pull_request);
-            for peer in pulls.keys() {
-                self.gossip.mark_pull_request_creation_time(peer.id, now);
-            }
-        }
         let self_info = CrdsData::LegacyContactInfo(self.my_contact_info());
         let self_info = CrdsValue::new_signed(self_info, &self.keypair());
         let pulls = pulls
@@ -4704,17 +4698,6 @@ RPC Enabled Nodes: 1"#;
         assert_eq!(
             (0, 0, NO_ENTRIES),
             cluster_info.handle_pull_response(&entrypoint_pubkey, data, &timeouts)
-        );
-
-        let now = timestamp();
-        for peer in peers {
-            cluster_info
-                .gossip
-                .mark_pull_request_creation_time(peer, now);
-        }
-        assert_eq!(
-            cluster_info.gossip.pull.pull_request_time().len(),
-            CRDS_UNIQUE_PUBKEY_CAPACITY
         );
     }
 
