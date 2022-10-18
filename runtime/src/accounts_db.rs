@@ -3776,8 +3776,36 @@ impl AccountsDb {
 
         self.drop_or_recycle_stores(dead_storages);
 
-        let shrink_stats = &self.shrink_stats;
+        Self::update_shrink_stats(
+            &self.shrink_stats,
+            index_read_elapsed,
+            find_alive_elapsed,
+            create_and_insert_store_elapsed_us,
+            store_accounts_timing,
+            rewrite_elapsed,
+            write_storage_elapsed,
+            total_starting_accounts - total_accounts_after_shrink,
+            original_bytes,
+            aligned_total,
+        );
+        self.shrink_stats.report();
 
+        total_accounts_after_shrink
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn update_shrink_stats(
+        shrink_stats: &ShrinkStats,
+        index_read_elapsed: Measure,
+        find_alive_elapsed: Measure,
+        create_and_insert_store_elapsed_us: u64,
+        store_accounts_timing: StoreAccountsTiming,
+        rewrite_elapsed: Measure,
+        write_storage_elapsed: Measure,
+        accounts_removed: usize,
+        original_bytes: u64,
+        aligned_total: u64,
+    ) {
         shrink_stats
             .num_slots_shrunk
             .fetch_add(1, Ordering::Relaxed);
@@ -3808,10 +3836,9 @@ impl AccountsDb {
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        shrink_stats.accounts_removed.fetch_add(
-            total_starting_accounts - total_accounts_after_shrink,
-            Ordering::Relaxed,
-        );
+        shrink_stats
+            .accounts_removed
+            .fetch_add(accounts_removed, Ordering::Relaxed);
         shrink_stats.bytes_removed.fetch_add(
             original_bytes.saturating_sub(aligned_total),
             Ordering::Relaxed,
@@ -3819,10 +3846,6 @@ impl AccountsDb {
         shrink_stats
             .bytes_written
             .fetch_add(aligned_total, Ordering::Relaxed);
-
-        self.shrink_stats.report();
-
-        total_accounts_after_shrink
     }
 
     /// get stores for 'slot'
