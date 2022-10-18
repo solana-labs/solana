@@ -73,7 +73,7 @@ mod tests {
 
     async fn check_send_one(connection: &UdpTpuConnection, reader: &UdpSocket) {
         let packet = vec![111u8; PACKET_DATA_SIZE];
-        connection.send_wire_transaction(&packet).await.unwrap();
+        connection.send_wire_transaction(&packet, &mut None).await.unwrap();
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(reader, &mut packets[..]).await.unwrap();
         assert_eq!(1, recv);
@@ -82,7 +82,7 @@ mod tests {
     async fn check_send_batch(connection: &UdpTpuConnection, reader: &UdpSocket) {
         let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
         connection
-            .send_wire_transaction_batch(&packets)
+            .send_wire_transaction_batch(&packets, &mut None)
             .await
             .unwrap();
         let mut packets = vec![Packet::default(); 32];
