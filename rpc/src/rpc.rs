@@ -5171,7 +5171,7 @@ pub mod tests {
         let mut io = MetaIoHandler::default();
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
-        async fn use_client(client: rpc_minimal::gen_client::Client, mint_pubkey: Pubkey) -> u64 {
+        async fn use_client(client: rpc_minimal::gen_client::Client) -> u64 {
             client
                 .get_reward_interval(None)
                 .await
@@ -5182,7 +5182,7 @@ pub mod tests {
         let fut = async {
             let (client, server) =
                 local::connect_with_metadata::<rpc_minimal::gen_client::Client, _, _>(&io, meta);
-            let client = use_client(client, mint_pubkey);
+            let client = use_client(client);
 
             futures::join!(client, server)
         };
