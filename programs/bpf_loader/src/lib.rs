@@ -495,82 +495,6 @@ fn process_instruction_common(
     }
 }
 
-fn process_set_authority(
-    instruction_context: &InstructionContext,
-    transaction_context: &TransactionContext,
-    log_collector: &Option<Rc<RefCell<LogCollector>>>,
-    new_authority_must_sign: bool,
-) -> Result<(), InstructionError> {
-    instruction_context.check_number_of_instruction_accounts(2)?;
-    let mut account = instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-    let present_authority_key = transaction_context.get_key_of_account_at_index(
-        instruction_context.get_index_of_instruction_account_in_transaction(1)?,
-    )?;
-    let new_authority = instruction_context
-        .get_index_of_instruction_account_in_transaction(2)
-        .and_then(|index_in_transaction| {
-            transaction_context.get_key_of_account_at_index(index_in_transaction)
-        })
-        .ok();
-
-    match account.get_state()? {
-        UpgradeableLoaderState::Buffer { authority_address } => {
-            if new_authority.is_none() {
-                ic_logger_msg!(log_collector, "Buffer authority is not optional");
-                return Err(InstructionError::IncorrectAuthority);
-            }
-            if authority_address.is_none() {
-                ic_logger_msg!(log_collector, "Buffer is immutable");
-                return Err(InstructionError::Immutable);
-            }
-            if authority_address != Some(*present_authority_key) {
-                ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
-                return Err(InstructionError::IncorrectAuthority);
-            }
-            if !instruction_context.is_instruction_account_signer(1)? {
-                ic_logger_msg!(log_collector, "Buffer authority did not sign");
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            account.set_state(&UpgradeableLoaderState::Buffer {
-                authority_address: new_authority.cloned(),
-            })?;
-        }
-        UpgradeableLoaderState::ProgramData {
-            slot,
-            upgrade_authority_address,
-        } => {
-            if upgrade_authority_address.is_none() {
-                ic_logger_msg!(log_collector, "Program not upgradeable");
-                return Err(InstructionError::Immutable);
-            }
-            if upgrade_authority_address != Some(*present_authority_key) {
-                ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
-                return Err(InstructionError::IncorrectAuthority);
-            }
-            if !instruction_context.is_instruction_account_signer(1)? {
-                ic_logger_msg!(log_collector, "Upgrade authority did not sign");
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            if new_authority_must_sign && !instruction_context.is_instruction_account_signer(2)? {
-                ic_logger_msg!(log_collector, "New authority did not sign");
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            account.set_state(&UpgradeableLoaderState::ProgramData {
-                slot,
-                upgrade_authority_address: new_authority.cloned(),
-            })?;
-        }
-        _ => {
-            ic_logger_msg!(log_collector, "Account does not support authorities");
-            return Err(InstructionError::InvalidArgument);
-        }
-    }
-
-    ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
-
-    Ok(())
-}
-
 fn process_loader_upgradeable_instruction(
     first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
@@ -989,20 +913,72 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "Upgraded program {:?}", new_program_id);
         }
         UpgradeableLoaderInstruction::SetAuthority => {
-            process_set_authority(
-                instruction_context,
-                transaction_context,
-                &log_collector,
-                false,
+            instruction_context.check_number_of_instruction_accounts(2)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            let present_authority_key = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(1)?,
             )?;
+            let new_authority = instruction_context
+                .get_index_of_instruction_account_in_transaction(2)
+                .and_then(|index_in_transaction| {
+                    transaction_context.get_key_of_account_at_index(index_in_transaction)
+                })
+                .ok();
+
+            match account.get_state()? {
+                UpgradeableLoaderState::Buffer { authority_address } => {
+                    if new_authority.is_none() {
+                        ic_logger_msg!(log_collector, "Buffer authority is not optional");
+                        return Err(InstructionError::IncorrectAuthority);
+                    }
+                    if authority_address.is_none() {
+                        ic_logger_msg!(log_collector, "Buffer is immutable");
+                        return Err(InstructionError::Immutable);
+                    }
+                    if authority_address != Some(*present_authority_key) {
+                        ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
+                        return Err(InstructionError::IncorrectAuthority);
+                    }
+                    if !instruction_context.is_instruction_account_signer(1)? {
+                        ic_logger_msg!(log_collector, "Buffer authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    account.set_state(&UpgradeableLoaderState::Buffer {
+                        authority_address: new_authority.cloned(),
+                    })?;
+                }
+                UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address,
+                } => {
+                    if upgrade_authority_address.is_none() {
+                        ic_logger_msg!(log_collector, "Program not upgradeable");
+                        return Err(InstructionError::Immutable);
+                    }
+                    if upgrade_authority_address != Some(*present_authority_key) {
+                        ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
+                        return Err(InstructionError::IncorrectAuthority);
+                    }
+                    if !instruction_context.is_instruction_account_signer(1)? {
+                        ic_logger_msg!(log_collector, "Upgrade authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    account.set_state(&UpgradeableLoaderState::ProgramData {
+                        slot,
+                        upgrade_authority_address: new_authority.cloned(),
+                    })?;
+                }
+                _ => {
+                    ic_logger_msg!(log_collector, "Account does not support authorities");
+                    return Err(InstructionError::InvalidArgument);
+                }
+            }
+
+            ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
-            process_set_authority(
-                instruction_context,
-                transaction_context,
-                &log_collector,
-                true,
-            )?;
+            todo!()
         }
         UpgradeableLoaderInstruction::Close => {
             instruction_context.check_number_of_instruction_accounts(2)?;
