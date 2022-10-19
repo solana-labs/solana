@@ -117,7 +117,10 @@ impl UiAccount {
                 {
                     UiAccountData::Json(parsed_data)
                 } else {
-                    UiAccountData::Binary(base64::encode(account.data()), UiAccountEncoding::Base64)
+                    UiAccountData::Binary(
+                        base64::encode(slice_data(account.data(), data_slice_config)),
+                        UiAccountEncoding::Base64,
+                    )
                 }
             }
         };
