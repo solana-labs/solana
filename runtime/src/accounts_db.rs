@@ -4361,17 +4361,14 @@ impl AccountsDb {
                 continue; // skipping slot with no useful accounts to write
             }
 
-            let total_accounts_after_shrink = alive_accounts.len();
-
             let (_, time) = self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
             let mut create_and_insert_store_elapsed = time.as_micros() as u64;
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
-            let mut start = Measure::start("find_alive_elapsed");
+            let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
             let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
-            start.stop();
-            let find_alive_elapsed = start.as_us();
+            find_alive_elapsed.stop();
 
             let all_are_zero_lamports = !alive_accounts
                 .iter()
@@ -4432,13 +4429,13 @@ impl AccountsDb {
                     &to_store,
                     StorageSelector::Overflow,
                 );
-                store_accounts_timing.store_accounts_elapsed = timing.store_accounts_elapsed;
-                store_accounts_timing.update_index_elapsed = timing.update_index_elapsed;
-                store_accounts_timing.handle_reclaims_elapsed = timing.handle_reclaims_elapsed;
+                store_accounts_timing.store_accounts_elapsed += timing.store_accounts_elapsed;
+                store_accounts_timing.update_index_elapsed += timing.update_index_elapsed;
+                store_accounts_timing.handle_reclaims_elapsed += timing.handle_reclaims_elapsed;
             }
             rewrite_elapsed.stop();
 
-            let mut start = Measure::start("mark_dirty_dead_stores");
+            let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
             // Purge old, overwritten storage entries
             let mut dead_storages = vec![];
             self.mark_dirty_dead_stores(
@@ -4454,9 +4451,7 @@ impl AccountsDb {
                 self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
             }
 
-            start.stop();
-
-            let write_storage_elapsed = start.as_us();
+            write_storage_elapsed.stop();
 
             self.drop_or_recycle_stores(dead_storages);
 
@@ -4499,7 +4494,7 @@ impl AccountsDb {
             self.shrink_ancient_stats
                 .shrink_stats
                 .write_storage_elapsed
-                .fetch_add(write_storage_elapsed, Ordering::Relaxed);
+                .fetch_add(write_storage_elapsed.as_us(), Ordering::Relaxed);
             self.shrink_ancient_stats
                 .shrink_stats
                 .rewrite_elapsed
@@ -4508,7 +4503,7 @@ impl AccountsDb {
                 .shrink_stats
                 .accounts_removed
                 .fetch_add(
-                    total_starting_accounts - total_accounts_after_shrink,
+                    total_starting_accounts - alive_accounts.len(),
                     Ordering::Relaxed,
                 );
             self.shrink_ancient_stats
@@ -4525,7 +4520,7 @@ impl AccountsDb {
             self.shrink_ancient_stats
                 .shrink_stats
                 .find_alive_elapsed
-                .fetch_add(find_alive_elapsed, Ordering::Relaxed);
+                .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
             self.shrink_ancient_stats
                 .shrink_stats
                 .num_slots_shrunk
