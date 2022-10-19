@@ -656,7 +656,6 @@ fn test_bank_forks_incremental_snapshot(
     solana_logger::setup();
 
     const REWARD_INTERVAL: Slot = 150;
-
     const SET_ROOT_INTERVAL: Slot = 2;
     const INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = SET_ROOT_INTERVAL * 2;
     const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot =
@@ -873,13 +872,15 @@ fn test_snapshots_with_background_services(
 ) {
     solana_logger::setup();
 
+    const REWARD_INTERVAL: Slot = 150;
     const SET_ROOT_INTERVAL_SLOTS: Slot = 2;
     const BANK_SNAPSHOT_INTERVAL_SLOTS: Slot = SET_ROOT_INTERVAL_SLOTS * 2;
     const INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = BANK_SNAPSHOT_INTERVAL_SLOTS * 3;
     const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot =
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 5;
-    const LAST_SLOT: Slot =
-        FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 3 + INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2;
+    const LAST_SLOT: Slot = FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 3
+        + INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2
+        + REWARD_INTERVAL;
 
     info!("Running snapshots with background services test...");
     trace!(
@@ -1010,7 +1011,9 @@ fn test_snapshots_with_background_services(
         // Sleep for a second when making a snapshot archive so the background services get a
         // chance to run (and since FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS is a multiple of
         // INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS, we only need to check the one here).
-        if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
+        if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0
+            && !bank.in_reward_calc_interval()
+        {
             std::thread::sleep(Duration::from_secs(1));
         }
     }
