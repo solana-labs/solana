@@ -725,7 +725,9 @@ fn test_bank_forks_incremental_snapshot(
 
         // Since AccountsBackgroundService isn't running, manually make a full snapshot archive
         // at the right interval
-        if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS) {
+        if snapshot_utils::should_take_full_snapshot(slot, FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS)
+            && !bank.in_reward_interval()
+        {
             make_full_snapshot_archive(&bank, &snapshot_test_config.snapshot_config).unwrap();
         }
         // Similarly, make an incremental snapshot archive at the right interval, but only if
@@ -737,7 +739,8 @@ fn test_bank_forks_incremental_snapshot(
             slot,
             INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
             last_full_snapshot_slot,
-        ) && slot != last_full_snapshot_slot.unwrap()
+        ) && !bank.in_reward_interval()
+            && slot != last_full_snapshot_slot.unwrap()
         {
             make_incremental_snapshot_archive(
                 &bank,
