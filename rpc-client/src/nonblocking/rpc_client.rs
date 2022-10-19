@@ -3530,10 +3530,8 @@ impl RpcClient {
     /// # Ok::<(), Error>(())
     /// ```
     pub async fn get_reward_interval(&self) -> ClientResult<u64> {
-        Ok(self
-            .get_reward_interval_with_commitment(self.commitment())
-            .await?
-            .value)
+        self.get_reward_interval_with_commitment(self.commitment())
+            .await
     }
 
     /// Returns information about the reward interval.
@@ -3549,14 +3547,9 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::client_error::Error;
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// # use solana_sdk::{
-    /// #     signature::Signer,
-    /// #     signer::keypair::Keypair,
-    /// #     commitment_config::CommitmentConfig,
-    /// # };
+    /// # use solana_sdk::signature::Signer;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
-    /// #     let alice = Keypair::new();
     /// let commitment_config = CommitmentConfig::processed();
     /// let balance = rpc_client.get_reward_interval_with_commitment(
     ///     commitment_config,
@@ -3568,7 +3561,7 @@ impl RpcClient {
     pub async fn get_reward_interval_with_commitment(
         &self,
         commitment_config: CommitmentConfig,
-    ) -> RpcResult<u64> {
+    ) -> ClientResult<u64> {
         self.send(
             RpcRequest::GetRewardInterval,
             json!([self.maybe_map_commitment(commitment_config).await?]),
