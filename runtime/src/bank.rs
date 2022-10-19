@@ -3690,6 +3690,9 @@ impl Bank {
             let stake_rewards = &calc_result.0;
             let vote_account_rewards = &calc_result.1;
 
+            let total_stake_rewards = stake_rewards.len();
+            let total_vote_rewards = vote_rewards.len();
+
             self.store_stake_accounts_in_partition(stake_rewards, partition_index, &mut metrics);
             self.store_vote_accounts_in_partition(
                 vote_account_rewards,
@@ -3728,6 +3731,8 @@ impl Bank {
                     metrics.store_vote_accounts_count,
                     i64
                 ),
+                ("total_stake_accounts_count", total_stake_rewards, i64),
+                ("total_vote_accounts_count", total_vote_rewards, i64),
             )
         }
     }
