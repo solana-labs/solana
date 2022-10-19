@@ -3733,8 +3733,8 @@ impl Bank {
                 ),
                 ("total_stake_accounts_count", total_stake_rewards_len, i64),
                 ("total_vote_accounts_count", total_vote_rewards_len, i64),
-                ("pre_capitalization", pre_capitalization, i64);
-                ("post_capitalization", self.capitalization(), i64);
+                ("pre_capitalization", pre_capitalization, i64),
+                ("post_capitalization", self.capitalization(), i64),
             );
         }
     }
