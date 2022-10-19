@@ -286,12 +286,17 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         let packets: Vec<_> = shreds
             .iter()
             .filter_map(|shred| {
+<<<<<<< HEAD
                 let addr = cluster_nodes
                     .get_broadcast_addrs(shred, &root_bank, DATA_PLANE_FANOUT, socket_addr_space)
                     .first()
                     .copied()?;
                 let node = nodes.iter().find(|node| node.tvu == addr)?;
                 if !socket_addr_space.check(&node.tvu) {
+=======
+                let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
+                if !ContactInfo::is_valid_address(&node.tvu, socket_addr_space) {
+>>>>>>> 274d9ea60 (Check for valid address in broadcast (#28432))
                     return None;
                 }
                 if self
