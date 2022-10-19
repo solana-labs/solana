@@ -872,15 +872,13 @@ fn test_snapshots_with_background_services(
 ) {
     solana_logger::setup();
 
-    const REWARD_INTERVAL: Slot = 150;
     const SET_ROOT_INTERVAL_SLOTS: Slot = 2;
     const BANK_SNAPSHOT_INTERVAL_SLOTS: Slot = SET_ROOT_INTERVAL_SLOTS * 2;
     const INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = BANK_SNAPSHOT_INTERVAL_SLOTS * 3;
     const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot =
         INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 5;
-    const LAST_SLOT: Slot = FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 3
-        + INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2
-        + REWARD_INTERVAL;
+    const LAST_SLOT: Slot =
+        FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 3 + INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2;
 
     info!("Running snapshots with background services test...");
     trace!(
