@@ -1080,14 +1080,66 @@ mod tests {
         solana_program_runtime::invoke_context::{
             prepare_mock_invoke_context, MockInvokeContextPreparation,
         },
-        solana_rbpf::{memory_region::MemoryRegion, vm::Config},
+        solana_rbpf::{ebpf::MM_INPUT_START, memory_region::MemoryRegion, vm::Config},
         solana_sdk::{
             account::{Account, AccountSharedData},
+            clock::Epoch,
             rent::Rent,
             transaction_context::TransactionContext,
         },
-        std::{mem, ptr, slice},
+        std::{cell::Cell, mem, ptr, slice},
     };
+
+    #[test]
+    fn test_caller_account_from_account_info() {
+        let transaction_accounts = one_instruction_account(b"foo".to_vec());
+        let account = transaction_accounts[1].1.clone();
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let key = Pubkey::new_unique();
+        let vm_addr = MM_INPUT_START;
+        let (_mem, region) = MockAccountInfo {
+            key: key.clone(),
+            is_signer: false,
+            is_writable: false,
+            lamports: account.lamports(),
+            data: account.data(),
+            owner: account.owner().clone(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
+        }
+        .into_region(vm_addr);
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+
+        let account_info = translate_type::<AccountInfo>(&memory_mapping, vm_addr, false).unwrap();
+
+        let caller_account = CallerAccount::from_account_info(
+            &invoke_context,
+            &memory_mapping,
+            vm_addr,
+            account_info,
+            account.data().len(),
+        )
+        .unwrap();
+        assert_eq!(*caller_account.lamports, account.lamports());
+        assert_eq!(caller_account.owner, account.owner());
+        assert_eq!(caller_account.original_data_len, account.data().len());
+        assert_eq!(
+            *caller_account.ref_to_len_in_vm as usize,
+            account.data().len()
+        );
+        assert_eq!(caller_account.data, account.data());
+        assert_eq!(caller_account.executable, account.executable());
+        assert_eq!(caller_account.rent_epoch, account.rent_epoch());
+    }
+
     #[test]
     fn test_update_caller_account_lamports_owner() {
         let transaction_accounts = one_instruction_account(vec![]);
@@ -1249,11 +1301,6 @@ mod tests {
         let mut mock_caller_account =
             MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
 
-        let config = Config {
-            aligned_memory_mapping: false,
-            ..Config::default()
-        };
-
         let mut caller_account = mock_caller_account.caller_account();
 
         let get_callee = || {
@@ -1289,11 +1336,6 @@ mod tests {
 
         let mut mock_caller_account =
             MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
-
-        let config = Config {
-            aligned_memory_mapping: false,
-            ..Config::default()
-        };
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1464,6 +1506,101 @@ mod tests {
             ),
             (Pubkey::new_unique(), account.clone(), true),
         ]
+    }
+
+    struct MockAccountInfo<'a> {
+        pub key: Pubkey,
+        pub is_signer: bool,
+        pub is_writable: bool,
+        lamports: u64,
+        data: &'a [u8],
+        owner: Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+    }
+
+    impl<'a> MockAccountInfo<'a> {
+        fn into_region(self, vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
+            let size = mem::size_of::<AccountInfo>()
+                + mem::size_of::<Pubkey>() * 2
+                + mem::size_of::<RcBox<RefCell<&mut u64>>>()
+                + mem::size_of::<u64>()
+                + mem::size_of::<RcBox<RefCell<&mut [u8]>>>()
+                + self.data.len();
+            let mut data = vec![0; size];
+
+            let vm_addr = vm_addr as usize;
+            let key_addr = vm_addr + mem::size_of::<AccountInfo>();
+            let lamports_cell_addr = key_addr + mem::size_of::<Pubkey>();
+            let lamports_addr = lamports_cell_addr + mem::size_of::<RcBox<RefCell<&mut u64>>>();
+            let owner_addr = lamports_addr + mem::size_of::<u64>();
+            let data_cell_addr = owner_addr + mem::size_of::<Pubkey>();
+            let data_addr = data_cell_addr + mem::size_of::<RcBox<RefCell<&mut [u8]>>>();
+
+            let info = AccountInfo {
+                key: unsafe { (key_addr as *const Pubkey).as_ref() }.unwrap(),
+                is_signer: self.is_signer,
+                is_writable: self.is_writable,
+                lamports: unsafe {
+                    Rc::from_raw((lamports_cell_addr + RcBox::<&mut u64>::VALUE_OFFSET) as *const _)
+                },
+                data: unsafe {
+                    Rc::from_raw((data_cell_addr + RcBox::<&mut [u8]>::VALUE_OFFSET) as *const _)
+                },
+                owner: unsafe { (owner_addr as *const Pubkey).as_ref() }.unwrap(),
+                executable: self.executable,
+                rent_epoch: self.rent_epoch,
+            };
+
+            unsafe {
+                ptr::write_unaligned(data.as_mut_ptr().cast(), info);
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + key_addr - vm_addr) as *mut _,
+                    self.key,
+                );
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + lamports_cell_addr - vm_addr) as *mut _,
+                    RcBox::new(RefCell::new((lamports_addr as *mut u64).as_mut().unwrap())),
+                );
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + lamports_addr - vm_addr) as *mut _,
+                    self.lamports,
+                );
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + owner_addr - vm_addr) as *mut _,
+                    self.owner,
+                );
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + data_cell_addr - vm_addr) as *mut _,
+                    RcBox::new(RefCell::new(slice::from_raw_parts_mut(
+                        data_addr as *mut u8,
+                        self.data.len(),
+                    ))),
+                );
+                data[data_addr - vm_addr..].copy_from_slice(self.data);
+            }
+
+            let region = MemoryRegion::new_writable(data.as_mut_slice(), vm_addr as u64);
+            (data, region)
+        }
+    }
+
+    #[repr(C)]
+    struct RcBox<T> {
+        strong: Cell<usize>,
+        weak: Cell<usize>,
+        value: T,
+    }
+
+    impl<T> RcBox<T> {
+        const VALUE_OFFSET: usize = mem::size_of::<Cell<usize>>() * 2;
+        fn new(value: T) -> RcBox<T> {
+            RcBox {
+                strong: Cell::new(0),
+                weak: Cell::new(0),
+                value,
+            }
+        }
     }
 
     fn is_zeroed(data: &[u8]) -> bool {
