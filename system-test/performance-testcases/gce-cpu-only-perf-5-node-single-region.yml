@@ -3,6 +3,7 @@ steps:
     label: "GCE - CPU Only 5 Node Single Zone"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
       TEST_DURATION_SECONDS: 600

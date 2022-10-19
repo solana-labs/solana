@@ -3,6 +3,7 @@ steps:
     label: "GCE - 1 hour perf stability"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
       TEST_DURATION_SECONDS: 3600

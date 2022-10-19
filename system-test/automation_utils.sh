@@ -292,6 +292,52 @@ EOF
   "$SLACK_WEBHOOK_URL"
 }
 
+function upload_results_to_discord() {
+  echo --- Uploading results to Discord Performance Results App
+
+  if [[ -z $DISCORD_WEBHOOK_URL ]] ; then
+    echo "DISCORD_WEBHOOK_URL undefined"
+    exit 1
+  fi
+
+  [[ -n $BUILDKITE_MESSAGE ]] || BUILDKITE_MESSAGE="Message not defined"
+
+  COMMIT=$(git rev-parse HEAD)
+  COMMIT_BUTTON_TEXT="$(echo "$COMMIT" | head -c 8)"
+  COMMIT_URL="https://github.com/solana-labs/solana/commit/${COMMIT}"
+
+  if [[ -n $BUILDKITE_BUILD_URL ]] ; then
+    BUILD_BUTTON_TEXT="Build Kite Job"
+  else
+    BUILD_BUTTON_TEXT="Build URL not defined"
+    BUILDKITE_BUILD_URL="https://buildkite.com/solana-labs/"
+  fi
+
+  GRAFANA_URL="https://internal-metrics.solana.com:3000/d/monitor-${CHANNEL:-edge}/cluster-telemetry-${CHANNEL:-edge}?var-testnet=${TESTNET_TAG:-testnet-automation}&from=${TESTNET_START_UNIX_MSECS:-0}&to=${TESTNET_FINISH_UNIX_MSECS:-0}"
+
+  [[ -n $RESULT_DETAILS ]] || RESULT_DETAILS="Undefined"
+  SANITIZED_RESULT=${RESULT_DETAILS//$'\n'/"\n"}
+
+  [[ -n $TEST_CONFIGURATION ]] || TEST_CONFIGURATION="Undefined"
+
+  curl "$DISCORD_WEBHOOK_URL" \
+      -X POST \
+      -H "Content-Type: application/json" \
+      -d @- <<EOF
+{
+  "username": "System Performance Test",
+  "content": "\
+**$BUILDKITE_MESSAGE**\n\
+[$COMMIT_BUTTON_TEXT](<$COMMIT_URL>) | [$BUILD_BUTTON_TEXT](<$BUILDKITE_BUILD_URL>) | [Grafana](<$GRAFANA_URL>)\n\
+Test Configuration:\n\
+\`\`\`$TEST_CONFIGURATION\`\`\`\n\
+Result Details:\n\
+\`\`\`$SANITIZED_RESULT\`\`\`\n\
+"
+}
+EOF
+}
+
 function get_net_launch_software_version_launch_args() {
   declare channel="${1?}"
   declare artifact_basename="${2?}"

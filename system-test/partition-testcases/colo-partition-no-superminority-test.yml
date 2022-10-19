@@ -3,6 +3,7 @@ steps:
     label: "Colo - CPU Only - Complete Loss 4 Partitions"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-cpu-only"
       NUMBER_OF_VALIDATOR_NODES: 2

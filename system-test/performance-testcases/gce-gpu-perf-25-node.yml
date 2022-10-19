@@ -3,6 +3,7 @@ steps:
     label: "GCE - GPU Enabled 25 Nodes"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-gpu-enabled"
       TEST_DURATION_SECONDS: 600

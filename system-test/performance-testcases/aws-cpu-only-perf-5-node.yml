@@ -3,6 +3,7 @@ steps:
     label: "AWS - CPU Only 5 Node"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "ec2"
       TESTNET_TAG: "aws-perf-cpu-only"
       TEST_DURATION_SECONDS: 600

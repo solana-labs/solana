@@ -3,6 +3,7 @@ steps:
     label: "COLO performance testnet GPU enabled - High Tx Count (reduced validator and client count)"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-gpu-enabled"
       ENABLE_GPU: "true"
