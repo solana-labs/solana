@@ -978,7 +978,70 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
-            todo!()
+            instruction_context.check_number_of_instruction_accounts(3)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            let present_authority_key = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(1)?,
+            )?;
+            let new_authority_key = transaction_context.get_key_of_account_at_index(
+                instruction_context.get_index_of_instruction_account_in_transaction(2)?,
+            )?;
+
+            match account.get_state()? {
+                UpgradeableLoaderState::Buffer { authority_address } => {
+                    if authority_address.is_none() {
+                        ic_logger_msg!(log_collector, "Buffer is immutable");
+                        return Err(InstructionError::Immutable);
+                    }
+                    if authority_address != Some(*present_authority_key) {
+                        ic_logger_msg!(log_collector, "Incorrect buffer authority provided");
+                        return Err(InstructionError::IncorrectAuthority);
+                    }
+                    if !instruction_context.is_instruction_account_signer(1)? {
+                        ic_logger_msg!(log_collector, "Buffer authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    if !instruction_context.is_instruction_account_signer(2)? {
+                        ic_logger_msg!(log_collector, "New authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    account.set_state(&UpgradeableLoaderState::Buffer {
+                        authority_address: Some(*new_authority_key),
+                    })?;
+                }
+                UpgradeableLoaderState::ProgramData {
+                    slot,
+                    upgrade_authority_address,
+                } => {
+                    if upgrade_authority_address.is_none() {
+                        ic_logger_msg!(log_collector, "Program not upgradeable");
+                        return Err(InstructionError::Immutable);
+                    }
+                    if upgrade_authority_address != Some(*present_authority_key) {
+                        ic_logger_msg!(log_collector, "Incorrect upgrade authority provided");
+                        return Err(InstructionError::IncorrectAuthority);
+                    }
+                    if !instruction_context.is_instruction_account_signer(1)? {
+                        ic_logger_msg!(log_collector, "Upgrade authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    if !instruction_context.is_instruction_account_signer(2)? {
+                        ic_logger_msg!(log_collector, "New authority did not sign");
+                        return Err(InstructionError::MissingRequiredSignature);
+                    }
+                    account.set_state(&UpgradeableLoaderState::ProgramData {
+                        slot,
+                        upgrade_authority_address: Some(*new_authority_key),
+                    })?;
+                }
+                _ => {
+                    ic_logger_msg!(log_collector, "Account does not support authorities");
+                    return Err(InstructionError::InvalidArgument);
+                }
+            }
+
+            ic_logger_msg!(log_collector, "New authority {:?}", new_authority_key);
         }
         UpgradeableLoaderInstruction::Close => {
             instruction_context.check_number_of_instruction_accounts(2)?;
@@ -3679,7 +3742,7 @@ mod tests {
             }
         );
 
-        // Case: Authority did not sign
+        // Case: present authority not in instruction
         process_instruction(
             &loader_id,
             &[],
@@ -3687,6 +3750,41 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
+                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                new_upgrade_authority_meta.clone(),
+            ],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Case: new authority not in instruction
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                upgrade_authority_meta.clone(),
+            ],
+            Err(InstructionError::NotEnoughAccountKeys),
+        );
+
+        // Case: present authority did not sign
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
             ],
             vec![
                 programdata_meta.clone(),
@@ -3708,6 +3806,7 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
+                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
             ],
             vec![
                 programdata_meta.clone(),
@@ -3721,7 +3820,7 @@ mod tests {
             Err(InstructionError::MissingRequiredSignature),
         );
 
-        // Case: wrong authority
+        // Case: wrong present authority
         let invalid_upgrade_authority_address = Pubkey::new_unique();
         process_instruction(
             &loader_id,
@@ -3747,7 +3846,7 @@ mod tests {
             Err(InstructionError::IncorrectAuthority),
         );
 
-        // Case: No authority
+        // Case: programdata is immutable
         programdata_account
             .set_state(&UpgradeableLoaderState::ProgramData {
                 slot,
