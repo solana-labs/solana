@@ -5604,7 +5604,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
             null,
             {
@@ -5612,7 +5613,8 @@ pub mod tests {
                 "lamports": 42,
                 "data": [base64::encode(&data[1..3]), "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 5,
             }
         ]);
         assert_eq!(
