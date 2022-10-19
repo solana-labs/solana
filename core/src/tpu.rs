@@ -100,6 +100,7 @@ impl Tpu {
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
+        tpu_enable_udp: bool,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -125,6 +126,7 @@ impl Tpu {
             poh_recorder,
             tpu_coalesce_ms,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
+            tpu_enable_udp,
         );
 
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
