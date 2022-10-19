@@ -15209,6 +15209,39 @@ pub(crate) mod tests {
         assert!(stored_executors.borrow().executors.contains_key(&key2));
         assert!(stored_executors.borrow().executors.contains_key(&key3));
 
+        // Force compilation of an executor
+        let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        let programdata_key = solana_sdk::pubkey::new_rand();
+        let mut program_account = AccountSharedData::new_data(
+            40,
+            &UpgradeableLoaderState::Program {
+                programdata_address: programdata_key,
+            },
+            &bpf_loader_upgradeable::id(),
+        )
+        .unwrap();
+        program_account.set_executable(true);
+        program_account.set_rent_epoch(1);
+        let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+        let mut programdata_account = AccountSharedData::new(
+            40,
+            programdata_data_offset + elf.len(),
+            &bpf_loader_upgradeable::id(),
+        );
+        programdata_account
+            .set_state(&UpgradeableLoaderState::ProgramData {
+                slot: 42,
+                upgrade_authority_address: None,
+            })
+            .unwrap();
+        programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+        programdata_account.set_rent_epoch(1);
+        bank.store_account_and_update_capitalization(&key1, &program_account);
+        bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
+        bank.create_executor(&key1).unwrap();
+
         // Remove all
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
