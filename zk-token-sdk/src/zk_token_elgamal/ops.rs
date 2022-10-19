@@ -14,7 +14,7 @@ const G: PodRistrettoPoint = PodRistrettoPoint([
 ]);
 
 /// Add two ElGamal ciphertexts
-pub fn add_ciphertexts(
+pub fn add(
     left_ciphertext: &pod::ElGamalCiphertext,
     right_ciphertext: &pod::ElGamalCiphertext,
 ) -> Option<pod::ElGamalCiphertext> {
@@ -32,7 +32,7 @@ pub fn add_ciphertexts(
 }
 
 /// Multiply an ElGamal ciphertext by a scalar
-pub fn multiply_ciphertext(
+pub fn multiply(
     scalar: &PodScalar,
     ciphertext: &pod::ElGamalCiphertext,
 ) -> Option<pod::ElGamalCiphertext> {
@@ -55,10 +55,9 @@ pub fn add_with_lo_hi(
     right_ciphertext_hi: &pod::ElGamalCiphertext,
 ) -> Option<pod::ElGamalCiphertext> {
     let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
-    let shifted_right_ciphertext_hi = multiply_ciphertext(&shift_scalar, right_ciphertext_hi)?;
-    let combined_right_ciphertext =
-        add_ciphertexts(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
-    add_ciphertexts(left_ciphertext, &combined_right_ciphertext)
+    let shifted_right_ciphertext_hi = multiply(&shift_scalar, right_ciphertext_hi)?;
+    let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
+    add(left_ciphertext, &combined_right_ciphertext)
 }
 
 /// Subtract two ElGamal ciphertexts
@@ -86,9 +85,8 @@ pub fn subtract_with_lo_hi(
     right_ciphertext_hi: &pod::ElGamalCiphertext,
 ) -> Option<pod::ElGamalCiphertext> {
     let shift_scalar = to_scalar(1_u64 << SHIFT_BITS);
-    let shifted_right_ciphertext_hi = multiply_ciphertext(&shift_scalar, right_ciphertext_hi)?;
-    let combined_right_ciphertext =
-        add_ciphertexts(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
+    let shifted_right_ciphertext_hi = multiply(&shift_scalar, right_ciphertext_hi)?;
+    let combined_right_ciphertext = add(right_ciphertext_lo, &shifted_right_ciphertext_hi)?;
     subtract(left_ciphertext, &combined_right_ciphertext)
 }
 
@@ -165,7 +163,7 @@ mod tests {
         let transfer_amount_ct = public.encrypt_with(55_u64, &open);
         let transfer_amount_pod: pod::ElGamalCiphertext = transfer_amount_ct.into();
 
-        let sum = ops::add_ciphertexts(&spendable_balance, &transfer_amount_pod).unwrap();
+        let sum = ops::add(&spendable_balance, &transfer_amount_pod).unwrap();
 
         let expected: pod::ElGamalCiphertext = public.encrypt_with(55_u64, &open).into();
         assert_eq!(expected, sum);
