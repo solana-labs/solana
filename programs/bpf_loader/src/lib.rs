@@ -3750,12 +3750,12 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
-                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+                (
+                    new_upgrade_authority_address,
+                    new_upgrade_authority_account.clone(),
+                ),
             ],
-            vec![
-                programdata_meta.clone(),
-                new_upgrade_authority_meta.clone(),
-            ],
+            vec![programdata_meta.clone(), new_upgrade_authority_meta.clone()],
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
@@ -3767,12 +3767,12 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
-                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+                (
+                    new_upgrade_authority_address,
+                    new_upgrade_authority_account.clone(),
+                ),
             ],
-            vec![
-                programdata_meta.clone(),
-                upgrade_authority_meta.clone(),
-            ],
+            vec![programdata_meta.clone(), upgrade_authority_meta.clone()],
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
@@ -3784,7 +3784,10 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
-                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+                (
+                    new_upgrade_authority_address,
+                    new_upgrade_authority_account.clone(),
+                ),
             ],
             vec![
                 programdata_meta.clone(),
@@ -3806,7 +3809,10 @@ mod tests {
             vec![
                 (programdata_address, programdata_account.clone()),
                 (upgrade_authority_address, upgrade_authority_account.clone()),
-                (new_upgrade_authority_address, new_upgrade_authority_account.clone()),
+                (
+                    new_upgrade_authority_address,
+                    new_upgrade_authority_account.clone(),
+                ),
             ],
             vec![
                 programdata_meta.clone(),
@@ -4066,7 +4072,8 @@ mod tests {
 
     #[test]
     fn test_bpf_loader_upgradeable_set_buffer_authority_checked() {
-        let instruction = bincode::serialize(&UpgradeableLoaderInstruction::SetAuthorityChecked).unwrap();
+        let instruction =
+            bincode::serialize(&UpgradeableLoaderInstruction::SetAuthorityChecked).unwrap();
         let loader_id = bpf_loader_upgradeable::id();
         let invalid_authority_address = Pubkey::new_unique();
         let authority_address = Pubkey::new_unique();
@@ -4134,10 +4141,7 @@ mod tests {
             &[],
             &instruction,
             transaction_accounts.clone(),
-            vec![
-                buffer_meta.clone(),
-                new_authority_meta.clone(),
-            ],
+            vec![buffer_meta.clone(), new_authority_meta.clone()],
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
@@ -4147,10 +4151,7 @@ mod tests {
             &[],
             &instruction,
             transaction_accounts.clone(),
-            vec![
-                buffer_meta.clone(),
-                authority_meta.clone(),
-            ],
+            vec![buffer_meta.clone(), authority_meta.clone()],
             Err(InstructionError::NotEnoughAccountKeys),
         );
 
@@ -4226,7 +4227,11 @@ mod tests {
             &[],
             &instruction,
             transaction_accounts.clone(),
-            vec![buffer_meta.clone(), authority_meta.clone(), new_authority_meta.clone()],
+            vec![
+                buffer_meta.clone(),
+                authority_meta.clone(),
+                new_authority_meta.clone(),
+            ],
             Err(InstructionError::InvalidArgument),
         );
 
@@ -4251,7 +4256,6 @@ mod tests {
             ],
             Err(InstructionError::Immutable),
         );
-
     }
 
     #[test]
