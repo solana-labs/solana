@@ -248,6 +248,24 @@ pub fn set_buffer_authority(
     )
 }
 
+/// Returns the instructions required to set a buffers's authority. If using this instruction, the new authority
+/// must sign.
+pub fn set_buffer_authority_checked(
+    buffer_address: &Pubkey,
+    current_authority_address: &Pubkey,
+    new_authority_address: &Pubkey,
+) -> Instruction {
+    Instruction::new_with_bincode(
+        id(),
+        &UpgradeableLoaderInstruction::SetAuthorityChecked,
+        vec![
+            AccountMeta::new(*buffer_address, false),
+            AccountMeta::new_readonly(*current_authority_address, true),
+            AccountMeta::new_readonly(*new_authority_address, false),
+        ],
+    )
+}
+
 /// Returns the instructions required to set a program's authority.
 pub fn set_upgrade_authority(
     program_address: &Pubkey,
@@ -267,7 +285,7 @@ pub fn set_upgrade_authority(
 }
 
 /// Returns the instructions required to set a program's authority. If using this instruction, the new authority
-/// must sign .
+/// must sign.
 pub fn set_upgrade_authority_checked(
     program_address: &Pubkey,
     current_authority_address: &Pubkey,
