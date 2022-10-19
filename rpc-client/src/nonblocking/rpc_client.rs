@@ -3547,13 +3547,11 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::client_error::Error;
     /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    /// # use solana_sdk::signature::Signer;
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let commitment_config = CommitmentConfig::processed();
-    /// let balance = rpc_client.get_reward_interval_with_commitment(
-    ///     commitment_config,
-    /// ).await?;
+    /// let balance = rpc_client.get_reward_interval_with_commitment(commitment_config).await?;
     /// #     Ok::<(), Error>(())
     /// # })?;
     /// # Ok::<(), Error>(())
