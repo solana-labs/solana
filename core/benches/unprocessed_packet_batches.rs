@@ -235,7 +235,7 @@ fn buffer_iter_desc_and_forward(
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
         let _ = transaction_storage.filter_forwardable_packets_and_add_batches(
-            &current_bank,
+            current_bank,
             &mut forward_packet_batches_by_accounts,
         );
     }

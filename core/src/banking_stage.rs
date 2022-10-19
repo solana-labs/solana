@@ -991,7 +991,7 @@ impl BankingStage {
         // already processed), then add to forwarding buffer.
         let filter_forwarding_result = unprocessed_transaction_storage
             .filter_forwardable_packets_and_add_batches(
-                &current_bank,
+                current_bank,
                 &mut forward_packet_batches_by_accounts,
             );
         slot_metrics_tracker.increment_transactions_from_packets_us(
@@ -1848,7 +1848,7 @@ impl BankingStage {
                 .enumerate()
                 .filter_map(|(i, deserialized_packet)| {
                     deserialized_packet
-                        .compute_sanitized_transaction(
+                        .build_sanitized_transaction(
                             &bank.feature_set,
                             bank.vote_only_bank(),
                             bank.as_ref(),

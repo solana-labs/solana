@@ -230,12 +230,12 @@ impl LatestUnprocessedVotes {
     /// Votes from validators with 0 stakes are ignored
     pub fn get_and_insert_forwardable_packets(
         &self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
-            bank,
+            &bank,
             self.latest_votes_per_pubkey.read().unwrap().keys(),
         )
         .collect_vec();
@@ -597,7 +597,7 @@ mod tests {
 
         // Don't forward 0 stake accounts
         let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&bank, &mut forward_packet_batches_by_accounts);
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
         assert_eq!(0, forwarded);
         assert_eq!(
             0,
@@ -619,7 +619,7 @@ mod tests {
 
         // Don't forward votes from gossip
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
-            &Arc::new(bank),
+            Arc::new(bank),
             &mut forward_packet_batches_by_accounts,
         );
 
@@ -644,7 +644,7 @@ mod tests {
 
         // Forward from TPU
         let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&bank, &mut forward_packet_batches_by_accounts);
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 
         assert_eq!(1, forwarded);
         assert_eq!(
@@ -659,7 +659,7 @@ mod tests {
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
         let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(&bank, &mut forward_packet_batches_by_accounts);
+            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 
         assert_eq!(0, forwarded);
         assert_eq!(

@@ -163,7 +163,7 @@ impl UnprocessedTransactionStorage {
 
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
@@ -255,7 +255,7 @@ impl VoteStorage {
 
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
@@ -363,7 +363,7 @@ impl ThreadLocalUnprocessedPackets {
 
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         self.filter_and_forward_with_account_limits(
@@ -379,7 +379,7 @@ impl ThreadLocalUnprocessedPackets {
     /// Added valid and sanitized packets to forwarding queue.
     fn filter_and_forward_with_account_limits(
         &mut self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         forward_buffer: &mut ForwardPacketBatchesByAccounts,
         batch_size: usize,
     ) -> FilterForwardingResults {
@@ -428,7 +428,7 @@ impl ThreadLocalUnprocessedPackets {
                             (sanitized_transactions, transaction_to_packet_indexes),
                             packet_conversion_time,
                         ): ((Vec<SanitizedTransaction>, Vec<usize>), _) = measure!(
-                            self.sanitize_unforwarded_packets(&packets_to_process, bank,),
+                            self.sanitize_unforwarded_packets(&packets_to_process, &bank,),
                             "sanitize_packet",
                         );
                         saturating_add_assign!(
@@ -437,7 +437,7 @@ impl ThreadLocalUnprocessedPackets {
                         );
 
                         let (forwardable_transaction_indexes, filter_packets_time) = measure!(
-                            Self::filter_invalid_transactions(&sanitized_transactions, bank,),
+                            Self::filter_invalid_transactions(&sanitized_transactions, &bank,),
                             "filter_packets",
                         );
                         saturating_add_assign!(
