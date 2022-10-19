@@ -931,7 +931,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         Some(Rent::default()),
-        compute_budget.max_invoke_depth.saturating_add(1),
+        compute_budget.max_invoke_stack_height,
         compute_budget.max_instruction_trace_length,
     );
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
@@ -967,7 +967,7 @@ pub fn mock_process_instruction(
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
         Some(Rent::default()),
-        compute_budget.max_invoke_depth.saturating_add(1),
+        compute_budget.max_invoke_stack_height,
         compute_budget.max_instruction_trace_length,
     );
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
@@ -1190,7 +1190,7 @@ mod tests {
         let mut transaction_context = TransactionContext::new(
             accounts,
             Some(Rent::default()),
-            ComputeBudget::default().max_invoke_depth,
+            ComputeBudget::default().max_invoke_stack_height,
             MAX_DEPTH,
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);

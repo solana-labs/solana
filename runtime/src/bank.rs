@@ -44,7 +44,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, IncludeSlotInHash, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
@@ -55,7 +55,6 @@ use {
         cost_tracker::CostTracker,
         epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
@@ -1155,7 +1154,7 @@ impl StakeReward {
 }
 
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
-impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
+impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward], IncludeSlotInHash) {
     fn pubkey(&self, index: usize) -> &Pubkey {
         &self.1[index].stake_pubkey
     }
@@ -1174,6 +1173,9 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
     }
     fn contains_multiple_slots(&self) -> bool {
         false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
     }
 }
 
@@ -2958,7 +2960,7 @@ impl Bank {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards));
+        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -4087,7 +4089,7 @@ impl Bank {
             } else {
                 None
             },
-            compute_budget.max_invoke_depth.saturating_add(1),
+            compute_budget.max_invoke_stack_height,
             if self
                 .feature_set
                 .is_active(&feature_set::limit_max_instruction_trace_length::id())
@@ -4802,6 +4804,7 @@ impl Bank {
             &durable_nonce,
             lamports_per_signature,
             self.preserve_rent_epoch_for_rent_exempt_accounts(),
+            self.include_slot_in_hash(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
@@ -5204,13 +5207,6 @@ impl Bank {
         }
     }
 
-    /// If we are skipping rewrites for bank hash, then we don't want to
-    ///  allow accounts hash calculation to rehash anything.
-    ///  We should use whatever hash found for each account as-is.
-    pub fn bank_enable_rehashing_on_accounts_hash(&self) -> bool {
-        true // this will be governed by a feature later
-    }
-
     /// Collect rent from `accounts`
     ///
     /// This fn is called inside a parallel loop from `collect_rent_in_partition()`.  Avoid adding
@@ -5270,7 +5266,8 @@ impl Bank {
                 let (hash, measure) = measure!(crate::accounts_db::AccountsDb::hash_account(
                     self.slot(),
                     account,
-                    pubkey
+                    pubkey,
+                    self.include_slot_in_hash(),
                 ));
                 time_hashing_skipped_rewrites_us += measure.as_us();
                 rewrites_skipped.push((*pubkey, hash));
@@ -5301,7 +5298,11 @@ impl Bank {
         if !accounts_to_store.is_empty() {
             // TODO: Maybe do not call `store_accounts()` here.  Instead return `accounts_to_store`
             // and have `collect_rent_in_partition()` perform all the stores.
-            let (_, measure) = measure!(self.store_accounts((self.slot(), &accounts_to_store[..])));
+            let (_, measure) = measure!(self.store_accounts((
+                self.slot(),
+                &accounts_to_store[..],
+                self.include_slot_in_hash()
+            )));
             time_storing_accounts_us += measure.as_us();
         }
 
@@ -5313,6 +5314,18 @@ impl Bank {
             time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
             num_accounts: accounts.len(),
+        }
+    }
+
+    /// true if we should include the slot in account hash
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        if self
+            .feature_set
+            .is_active(&feature_set::account_hash_ignore_slot::id())
+        {
+            IncludeSlotInHash::RemoveSlot
+        } else {
+            IncludeSlotInHash::IncludeSlot
         }
     }
 
@@ -6177,7 +6190,11 @@ impl Bank {
         pubkey: &Pubkey,
         account: &T,
     ) {
-        self.store_accounts((self.slot(), &[(pubkey, account)][..]))
+        self.store_accounts((
+            self.slot(),
+            &[(pubkey, account)][..],
+            self.include_slot_in_hash(),
+        ))
     }
 
     pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport>(
@@ -6415,22 +6432,7 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
-            Some((mut account, storage_slot)) => {
-                ExpectedRentCollection::maybe_update_rent_epoch_on_load(
-                    &mut account,
-                    &SlotInfoInEpoch::new_small(storage_slot),
-                    &SlotInfoInEpoch::new_small(self.slot()),
-                    self.epoch_schedule(),
-                    self.rent_collector(),
-                    pubkey,
-                    &self.rewrites_skipped_this_slot,
-                );
-
-                Some((account, storage_slot))
-            }
-            None => None,
-        }
+        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
     }
 
     pub fn get_program_accounts(
@@ -6734,7 +6736,6 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
-        let enable_rehashing = self.bank_enable_rehashing_on_accounts_hash();
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6757,7 +6758,6 @@ impl Bank {
                             &rent_collector,
                             config.ignore_mismatch,
                             config.store_hash_raw_data_for_debug,
-                            enable_rehashing,
                             // true to run using bg thread pool
                             true,
                         );
@@ -6780,7 +6780,6 @@ impl Bank {
                 rent_collector,
                 config.ignore_mismatch,
                 config.store_hash_raw_data_for_debug,
-                enable_rehashing,
                 // fg is waiting for this to run, so we can use the fg thread pool
                 false,
             );
@@ -6883,7 +6882,6 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
-            self.bank_enable_rehashing_on_accounts_hash(),
         )
     }
 
@@ -6946,7 +6944,6 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
-                self.bank_enable_rehashing_on_accounts_hash(),
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -6972,7 +6969,6 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
-                        self.bank_enable_rehashing_on_accounts_hash(),
                     );
             }
 
@@ -18296,7 +18292,7 @@ pub(crate) mod tests {
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             Some(Rent::default()),
-            compute_budget.max_invoke_depth.saturating_add(1),
+            compute_budget.max_invoke_stack_height,
             compute_budget.max_instruction_trace_length,
         );
 

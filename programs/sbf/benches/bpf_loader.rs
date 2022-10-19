@@ -110,7 +110,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(&invoke_context.feature_set, true).unwrap(),
         )
         .unwrap();
 
@@ -238,7 +238,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
         let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(&invoke_context.feature_set, true).unwrap(),
         )
         .unwrap();
 
@@ -285,7 +285,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         let executable = Executable::<ThisInstructionMeter>::from_elf(
             &elf,
             Config::default(),
-            register_syscalls(invoke_context, true).unwrap(),
+            register_syscalls(&invoke_context.feature_set, true).unwrap(),
         )
         .unwrap();
 
