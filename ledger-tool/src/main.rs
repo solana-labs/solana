@@ -1491,6 +1491,13 @@ fn main() {
         .multiple(true)
         .help("Specify the configuration file for the Geyser plugin.");
 
+    let accounts_data_encoding_arg = Arg::with_name("encoding")
+        .long("encoding")
+        .takes_value(true)
+        .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
+        .default_value("base58")
+        .help("Print account data in specified format when printing account contents.");
+
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
@@ -1668,6 +1675,7 @@ fn main() {
             SubCommand::with_name("genesis")
             .about("Prints the ledger's genesis config")
             .arg(&max_genesis_archive_unpacked_size_arg)
+            .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("accounts")
                     .long("accounts")
@@ -1680,15 +1688,6 @@ fn main() {
                     .takes_value(false)
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
-            )
-            .arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
-                    .requires("accounts")
-                    .help("Print account data in specified format when printing account contents."),
             )
         )
         .subcommand(
@@ -2023,6 +2022,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
+            .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -2039,13 +2039,6 @@ fn main() {
                 .long("no-account-data")
                 .takes_value(false)
                 .help("Do not print account data when printing account contents."),
-            ).arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
-                    .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
