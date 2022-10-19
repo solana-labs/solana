@@ -382,29 +382,24 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        if encoding == UiAccountEncoding::Base58 {
-            println!("  data: '{}'", bs58::encode(account.data()).into_string());
-            println!("  encoding: \"base58\"");
-        } else {
-            let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-            match account_data {
-                UiAccountData::Binary(data, data_encoding) => {
-                    println!("  data: '{}'", data);
-                    println!(
-                        "  encoding: {}",
-                        serde_json::to_string(&data_encoding).unwrap()
-                    );
-                }
-                UiAccountData::Json(account_data) => {
-                    println!(
-                        "  data: '{}'",
-                        serde_json::to_string(&account_data).unwrap()
-                    );
-                    println!("  encoding: \"jsonParsed\"");
-                }
-                UiAccountData::LegacyBinary(_) => {}
-            };
-        }
+        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        match account_data {
+            UiAccountData::Binary(data, data_encoding) => {
+                println!("  data: '{}'", data);
+                println!(
+                    "  encoding: {}",
+                    serde_json::to_string(&data_encoding).unwrap()
+                );
+            }
+            UiAccountData::Json(account_data) => {
+                println!(
+                    "  data: '{}'",
+                    serde_json::to_string(&account_data).unwrap()
+                );
+                println!("  encoding: \"jsonParsed\"");
+            }
+            UiAccountData::LegacyBinary(_) => {}
+        };
     }
 }
 
@@ -1685,8 +1680,8 @@ fn main() {
                 Arg::with_name("encoding")
                     .long("encoding")
                     .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
+                    .possible_values(&["base64", "base64+zstd", "jsonParsed"])
+                    .default_value("base64")
                     .requires("accounts")
                     .help("Print account data in specified format when printing account contents."),
             )
@@ -2043,8 +2038,8 @@ fn main() {
                 Arg::with_name("encoding")
                     .long("encoding")
                     .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
+                    .possible_values(&["base64", "base64+zstd", "jsonParsed"])
+                    .default_value("base64")
                     .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
@@ -2350,7 +2345,7 @@ fn main() {
                         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
                         Some("base64") => UiAccountEncoding::Base64,
                         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base58,
+                        _ => UiAccountEncoding::Base64,
                     };
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
@@ -3403,7 +3398,7 @@ fn main() {
                         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
                         Some("base64") => UiAccountEncoding::Base64,
                         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base58,
+                        _ => UiAccountEncoding::Base64,
                     };
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
