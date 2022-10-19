@@ -354,7 +354,7 @@ mod tests {
             let packet = build_deserialized_packet_for_test(10, &hot_account, requested_cu);
             let tx = packet
                 .immutable_section()
-                .compute_sanitized_transaction(
+                .build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     false, //votes_only,
                     SimpleAddressLoader::Disabled,
@@ -375,7 +375,7 @@ mod tests {
                 build_deserialized_packet_for_test(100, &hot_account, 1 /*requested_cu*/);
             let tx = packet
                 .immutable_section()
-                .compute_sanitized_transaction(
+                .build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     false, //votes_only,
                     SimpleAddressLoader::Disabled,
@@ -396,7 +396,7 @@ mod tests {
                 build_deserialized_packet_for_test(100, &other_account, 1 /*requested_cu*/);
             let tx = packet
                 .immutable_section()
-                .compute_sanitized_transaction(
+                .build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     false, //votes_only,
                     SimpleAddressLoader::Disabled,

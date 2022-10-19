@@ -101,7 +101,7 @@ impl ImmutableDeserializedPacket {
 
     // This function deserializes packets into transactions, computes the blake3 hash of transaction
     // messages, and verifies secp256k1 instructions.
-    pub fn compute_sanitized_transaction(
+    pub fn build_sanitized_transaction(
         &self,
         feature_set: &Arc<feature_set::FeatureSet>,
         votes_only: bool,

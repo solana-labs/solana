@@ -502,7 +502,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -512,7 +512,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -531,7 +531,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -541,7 +541,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -560,7 +560,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -570,7 +570,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                tx.immutable_section().compute_sanitized_transaction(
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,

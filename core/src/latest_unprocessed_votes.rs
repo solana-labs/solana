@@ -250,7 +250,7 @@ impl LatestUnprocessedVotes {
                     if !vote.is_vote_taken() && !vote.is_forwarded() {
                         let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
                         if let Some(sanitized_vote_transaction) = deserialized_vote_packet
-                            .compute_sanitized_transaction(
+                            .build_sanitized_transaction(
                                 &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),

@@ -532,7 +532,7 @@ impl ThreadLocalUnprocessedPackets {
                         .is_forwarded(deserialized_packet)
                     {
                         deserialized_packet
-                            .compute_sanitized_transaction(
+                            .build_sanitized_transaction(
                                 &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),
