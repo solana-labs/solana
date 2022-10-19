@@ -674,6 +674,7 @@ impl Validator {
             ledger_path,
             &bank_forks,
             &leader_schedule_cache,
+            &accounts_background_request_sender,
         )?;
 
         if config.process_ledger_before_services {
@@ -1675,6 +1676,7 @@ fn maybe_warp_slot(
     ledger_path: &Path,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
+    accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = match config.snapshot_config.as_ref() {
@@ -1705,7 +1707,7 @@ fn maybe_warp_slot(
         ));
         bank_forks.set_root(
             warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+            accounts_background_request_sender,
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
