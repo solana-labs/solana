@@ -20322,7 +20322,6 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let mut metrics = RewardsStoreMetrics::default();
         let n = 1234;
 
         let stake_rewards = (0..n).map(|_| StakeReward::random()).collect::<Vec<_>>();
