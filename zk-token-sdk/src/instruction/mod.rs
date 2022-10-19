@@ -61,7 +61,7 @@ pub fn split_u64(
 #[cfg(not(target_os = "solana"))]
 pub fn combine_lo_hi_u64(amount_lo: u64, amount_hi: u64, bit_length: usize) -> u64 {
     // TODO: check bit_length
-    amount_lo + amount_hi << bit_length
+    amount_lo + (amount_hi << bit_length)
 }
 
 #[cfg(not(target_os = "solana"))]

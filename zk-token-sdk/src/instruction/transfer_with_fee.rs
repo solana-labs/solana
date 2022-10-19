@@ -18,9 +18,8 @@ use {
         },
         range_proof::RangeProof,
         sigma_proofs::{
-            equality_proof::CtxtCommEqualityProof,
-            fee_proof::FeeSigmaProof,
-            validity_proof::{AggregatedValidityProof, ValidityProof},
+            equality_proof::CtxtCommEqualityProof, fee_proof::FeeSigmaProof,
+            validity_proof::AggregatedValidityProof,
         },
         transcript::TranscriptProtocol,
     },
