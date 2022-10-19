@@ -3751,12 +3751,11 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut dead_storages = vec![];
-        let mut find_alive_elapsed = 0;
-        let mut create_and_insert_store_elapsed = 0;
-        let mut write_storage_elapsed = 0;
+        let mut create_and_insert_store_elapsed_us = 0;
+        let mut write_storage_elapsed_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
+        let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if aligned_total > 0 {
-            let mut start = Measure::start("find_alive_elapsed");
             let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
@@ -3770,11 +3769,10 @@ impl AccountsDb {
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
-            start.stop();
-            find_alive_elapsed = start.as_us();
+            find_alive_elapsed.stop();
 
             let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
-            create_and_insert_store_elapsed = time.as_micros() as u64;
+            create_and_insert_store_elapsed_us = time.as_micros() as u64;
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3799,7 +3797,7 @@ impl AccountsDb {
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
             // Purge old, overwritten storage entries
-            let mut start = Measure::start("write_storage_elapsed");
+            let mut write_storage_elapsed = Measure::start("write_storage_elapsed");
             let remaining_stores = self.mark_dirty_dead_stores(
                 slot,
                 &mut dead_storages,
@@ -3820,58 +3818,83 @@ impl AccountsDb {
                     slot, remaining_stores
                 );
             }
-            start.stop();
-            write_storage_elapsed = start.as_us();
+            write_storage_elapsed.stop();
+            write_storage_elapsed_us = write_storage_elapsed.as_us();
         }
         rewrite_elapsed.stop();
 
         self.drop_or_recycle_stores(dead_storages);
 
-        self.shrink_stats
-            .num_slots_shrunk
-            .fetch_add(1, Ordering::Relaxed);
-        self.shrink_stats
-            .index_read_elapsed
-            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
-            .find_alive_elapsed
-            .fetch_add(find_alive_elapsed, Ordering::Relaxed);
-        self.shrink_stats
-            .create_and_insert_store_elapsed
-            .fetch_add(create_and_insert_store_elapsed, Ordering::Relaxed);
-        self.shrink_stats.store_accounts_elapsed.fetch_add(
-            store_accounts_timing.store_accounts_elapsed,
-            Ordering::Relaxed,
-        );
-        self.shrink_stats.update_index_elapsed.fetch_add(
-            store_accounts_timing.update_index_elapsed,
-            Ordering::Relaxed,
-        );
-        self.shrink_stats.handle_reclaims_elapsed.fetch_add(
-            store_accounts_timing.handle_reclaims_elapsed,
-            Ordering::Relaxed,
-        );
-        self.shrink_stats
-            .write_storage_elapsed
-            .fetch_add(write_storage_elapsed, Ordering::Relaxed);
-        self.shrink_stats
-            .rewrite_elapsed
-            .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats.accounts_removed.fetch_add(
+        Self::update_shrink_stats(
+            &self.shrink_stats,
+            index_read_elapsed,
+            find_alive_elapsed,
+            create_and_insert_store_elapsed_us,
+            store_accounts_timing,
+            rewrite_elapsed,
+            write_storage_elapsed_us,
             total_starting_accounts - total_accounts_after_shrink,
-            Ordering::Relaxed,
+            original_bytes,
+            aligned_total,
         );
-        self.shrink_stats.bytes_removed.fetch_add(
-            original_bytes.saturating_sub(aligned_total),
-            Ordering::Relaxed,
-        );
-        self.shrink_stats
-            .bytes_written
-            .fetch_add(aligned_total, Ordering::Relaxed);
-
         self.shrink_stats.report();
 
         total_accounts_after_shrink
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn update_shrink_stats(
+        shrink_stats: &ShrinkStats,
+        index_read_elapsed: Measure,
+        find_alive_elapsed: Measure,
+        create_and_insert_store_elapsed_us: u64,
+        store_accounts_timing: StoreAccountsTiming,
+        rewrite_elapsed: Measure,
+        write_storage_elapsed_us: u64,
+        accounts_removed: usize,
+        original_bytes: u64,
+        aligned_total: u64,
+    ) {
+        shrink_stats
+            .num_slots_shrunk
+            .fetch_add(1, Ordering::Relaxed);
+        shrink_stats
+            .index_read_elapsed
+            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
+        shrink_stats
+            .find_alive_elapsed
+            .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
+        shrink_stats
+            .create_and_insert_store_elapsed
+            .fetch_add(create_and_insert_store_elapsed_us, Ordering::Relaxed);
+        shrink_stats.store_accounts_elapsed.fetch_add(
+            store_accounts_timing.store_accounts_elapsed,
+            Ordering::Relaxed,
+        );
+        shrink_stats.update_index_elapsed.fetch_add(
+            store_accounts_timing.update_index_elapsed,
+            Ordering::Relaxed,
+        );
+        shrink_stats.handle_reclaims_elapsed.fetch_add(
+            store_accounts_timing.handle_reclaims_elapsed,
+            Ordering::Relaxed,
+        );
+        shrink_stats
+            .write_storage_elapsed
+            .fetch_add(write_storage_elapsed_us, Ordering::Relaxed);
+        shrink_stats
+            .rewrite_elapsed
+            .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
+        shrink_stats
+            .accounts_removed
+            .fetch_add(accounts_removed, Ordering::Relaxed);
+        shrink_stats.bytes_removed.fetch_add(
+            original_bytes.saturating_sub(aligned_total),
+            Ordering::Relaxed,
+        );
+        shrink_stats
+            .bytes_written
+            .fetch_add(aligned_total, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
