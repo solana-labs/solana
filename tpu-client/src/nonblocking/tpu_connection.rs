@@ -17,9 +17,6 @@ pub enum NonblockingConnection {
     UdpTpuConnection,
 }
 
-pub type SendTransactionCallback = Box<dyn FnMut() + Sync + Send>;
-pub type SendTransactionCallbackOption = Option<SendTransactionCallback>;
-
 #[async_trait]
 #[enum_dispatch(NonblockingConnection)]
 pub trait TpuConnection {
@@ -28,27 +25,17 @@ pub trait TpuConnection {
     async fn serialize_and_send_transaction(
         &self,
         transaction: &VersionedTransaction,
-        callback: &mut SendTransactionCallbackOption,
     ) -> TransportResult<()> {
         let wire_transaction =
             bincode::serialize(transaction).expect("serialize Transaction in send_batch");
-        self.send_wire_transaction(&wire_transaction, callback)
-            .await
+        self.send_wire_transaction(&wire_transaction).await
     }
 
-    async fn send_wire_transaction<T>(
-        &self,
-        wire_transaction: T,
-        callback: &mut SendTransactionCallbackOption,
-    ) -> TransportResult<()>
+    async fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
     where
         T: AsRef<[u8]> + Send + Sync;
 
-    async fn send_wire_transaction_batch<T>(
-        &self,
-        buffers: &[T],
-        callback: &mut SendTransactionCallbackOption,
-    ) -> TransportResult<()>
+    async fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
     where
         T: AsRef<[u8]> + Send + Sync;
 }

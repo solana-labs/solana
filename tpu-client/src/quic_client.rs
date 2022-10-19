@@ -104,6 +104,24 @@ impl QuicTpuConnection {
     }
 }
 
+async fn send_wire_transaction_async(
+    connection: Arc<NonblockingQuicTpuConnection>,
+    wire_transaction: Vec<u8>,
+) -> TransportResult<()> {
+    let result = connection.send_wire_transaction(wire_transaction).await;
+    ASYNC_TASK_SEMAPHORE.release();
+    result
+}
+
+async fn send_wire_transaction_batch_async(
+    connection: Arc<NonblockingQuicTpuConnection>,
+    buffers: Vec<Vec<u8>>,
+) -> TransportResult<()> {
+    let result = connection.send_wire_transaction_batch(&buffers).await;
+    ASYNC_TASK_SEMAPHORE.release();
+    result
+}
+
 impl TpuConnection for QuicTpuConnection {
     fn tpu_addr(&self) -> &SocketAddr {
         self.inner.tpu_addr()
@@ -113,42 +131,24 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]> + Send + Sync,
     {
-        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers, &mut None))?;
+        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers))?;
         Ok(())
     }
 
     fn send_wire_transaction_async(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
         let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
-        //drop and detach the task
 
-        let _ = RUNTIME.spawn(async move {
-            inner
-                .send_wire_transaction(
-                    wire_transaction,
-                    &mut Some(Box::new(|| {
-                        ASYNC_TASK_SEMAPHORE.release();
-                    })),
-                )
-                .await
-        });
+        let _ = RUNTIME
+            .spawn(async move { send_wire_transaction_async(inner, wire_transaction).await });
         Ok(())
     }
 
     fn send_wire_transaction_batch_async(&self, buffers: Vec<Vec<u8>>) -> TransportResult<()> {
         let _lock = ASYNC_TASK_SEMAPHORE.acquire();
         let inner = self.inner.clone();
-
-        let _ = RUNTIME.spawn(async move {
-            inner
-                .send_wire_transaction_batch(
-                    &buffers,
-                    &mut Some(Box::new(|| {
-                        ASYNC_TASK_SEMAPHORE.release();
-                    })),
-                )
-                .await
-        });
+        let _ =
+            RUNTIME.spawn(async move { send_wire_transaction_batch_async(inner, buffers).await });
         Ok(())
     }
 }

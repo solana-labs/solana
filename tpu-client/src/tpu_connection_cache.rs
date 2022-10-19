@@ -341,9 +341,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            nonblocking::tpu_connection::{
-                SendTransactionCallbackOption, TpuConnection as NonblockingTpuConnection,
-            },
+            nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
             tpu_connection::TpuConnection as BlockingTpuConnection,
         },
         async_trait::async_trait,
@@ -470,21 +468,13 @@ mod tests {
         fn tpu_addr(&self) -> &SocketAddr {
             &self.addr
         }
-        async fn send_wire_transaction<T>(
-            &self,
-            _wire_transaction: T,
-            _callback: &mut SendTransactionCallbackOption,
-        ) -> TransportResult<()>
+        async fn send_wire_transaction<T>(&self, _wire_transaction: T) -> TransportResult<()>
         where
             T: AsRef<[u8]> + Send + Sync,
         {
             unimplemented!()
         }
-        async fn send_wire_transaction_batch<T>(
-            &self,
-            _buffers: &[T],
-            _callback: &mut SendTransactionCallbackOption,
-        ) -> TransportResult<()>
+        async fn send_wire_transaction_batch<T>(&self, _buffers: &[T]) -> TransportResult<()>
         where
             T: AsRef<[u8]> + Send + Sync,
         {
