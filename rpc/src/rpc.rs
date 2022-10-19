@@ -420,7 +420,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice.is_some())?;
 
         let response = get_encoded_account(&bank, pubkey, encoding, data_slice)?;
         Ok(new_response(&bank, response))
@@ -442,7 +441,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
-        check_slice_and_encoding(&encoding, data_slice.is_some())?;
 
         let accounts = pubkeys
             .into_iter()
@@ -478,7 +476,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         optimize_filters(&mut filters);
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
@@ -1901,7 +1898,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![];
@@ -1952,7 +1948,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -2289,29 +2284,6 @@ pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Resul
         ));
     }
     Ok(())
-}
-
-fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
-    match encoding {
-        UiAccountEncoding::JsonParsed => {
-            if data_slice_is_some {
-                let message =
-                    "Sliced account data can only be encoded using binary (base 58) or base64 encoding."
-                        .to_string();
-                Err(error::Error {
-                    code: error::ErrorCode::InvalidRequest,
-                    message,
-                    data: None,
-                })
-            } else {
-                Ok(())
-            }
-        }
-        UiAccountEncoding::Binary
-        | UiAccountEncoding::Base58
-        | UiAccountEncoding::Base64
-        | UiAccountEncoding::Base64Zstd => Ok(()),
-    }
 }
 
 fn get_encoded_account(
@@ -5529,12 +5501,12 @@ pub mod tests {
                 json!([address, {"encoding": "jsonParsed", "dataSlice": {"length": 2, "offset": 1}}]),
             ),
         );
-        let response = parse_failure_response(rpc.handle_request_sync(request));
-        let expected = (
-            ErrorCode::InvalidRequest.code(),
-            String::from("Sliced account data can only be encoded using binary (base 58) or base64 encoding."),
+        let result: Value = parse_success_result(rpc.handle_request_sync(request));
+        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        assert_eq!(
+            result["value"]["data"], expected,
+            "should use data slice if parsing fails"
         );
-        assert_eq!(response, expected);
     }
 
     #[test]
@@ -5625,12 +5597,28 @@ pub mod tests {
                 {"encoding": "jsonParsed", "dataSlice": {"length": 2, "offset": 1}},
             ])),
         );
-        let response = parse_failure_response(rpc.handle_request_sync(request));
-        let expected = (
-            ErrorCode::InvalidRequest.code(),
-            String::from("Sliced account data can only be encoded using binary (base 58) or base64 encoding."),
+        let result: RpcResponse<Value> = parse_success_result(rpc.handle_request_sync(request));
+        let expected = json!([
+            {
+                "owner": "11111111111111111111111111111111",
+                "lamports": TEST_MINT_LAMPORTS,
+                "data": ["", "base64"],
+                "executable": false,
+                "rentEpoch": 0
+            },
+            null,
+            {
+                "owner": "11111111111111111111111111111111",
+                "lamports": 42,
+                "data": [base64::encode(&data[1..3]), "base64"],
+                "executable": false,
+                "rentEpoch": 0
+            }
+        ]);
+        assert_eq!(
+            result.value, expected,
+            "should use data slice if parsing fails"
         );
-        assert_eq!(response, expected);
     }
 
     #[test]
