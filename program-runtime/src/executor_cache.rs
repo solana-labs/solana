@@ -29,7 +29,7 @@ pub trait Executor: Debug + Send + Sync {
 
 /// Relation between a TransactionExecutorCacheEntry and its matching BankExecutorCacheEntry
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TxBankExecutorCacheDiff {
     /// The TransactionExecutorCacheEntry did not change and is the same as the BankExecutorCacheEntry.
     None,
