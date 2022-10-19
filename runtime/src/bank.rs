@@ -20352,6 +20352,17 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_reward_interval_normal() {
+        let (mut genesis_config, _mint_keypair) =
+            create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        genesis_config.epoch_schedule = EpochSchedule::custom(432000, 432000, false);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert_eq!(bank.get_reward_calculation_interval(), 100);
+        assert_eq!(bank.get_reward_credit_interval(), 50);
+    }
+
+    #[test]
     fn test_reward_interval_cap() {
         let (mut genesis_config, _mint_keypair) =
             create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
@@ -20363,12 +20374,12 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn test_reward_interval() {
+    fn test_reward_interval_warmup() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
         let bank = Bank::new_for_tests(&genesis_config);
-        assert_eq!(bank.get_reward_calculation_interval(), 100);
-        assert_eq!(bank.get_reward_credit_interval(), 50);
+        assert_eq!(bank.get_reward_calculation_interval(), 1);
+        assert_eq!(bank.get_reward_credit_interval(), 1);
     }
 
     #[test]
