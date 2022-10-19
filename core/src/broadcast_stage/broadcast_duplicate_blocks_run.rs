@@ -268,7 +268,6 @@ impl BroadcastDuplicateBlocksRun {
         // 2) Convert entries to shreds and coding shreds
         let is_last_in_slot = last_tick_height == bank.max_tick_height();
         let reference_tick = bank.tick_height() % bank.ticks_per_slot();
-        let num_entries = receive_results.entries.len();
         // Update the recent blockhash based on transactions in the entries
         for entry in &receive_results.entries {
             if !entry.transactions.is_empty() {
@@ -404,9 +403,9 @@ impl BroadcastDuplicateBlocksRun {
         blockstore_sender.send((shreds_to_send[0].data_shreds.clone(), batch_info.clone()))?;
 
         let slot = bank.slot();
-            shreds_to_send.into_iter().map(|x| {
-                self.send_shreds(x, &batch_info, slot, socket_sender, blockstore_sender)
-        });
+        let _: Result<Vec<_>> = shreds_to_send.into_iter().map(|x| {
+            self.send_shreds(x, &batch_info, slot, socket_sender, blockstore_sender)
+        }).collect();
 
         coding_send_time.stop();
 
@@ -433,22 +432,23 @@ impl BroadcastDuplicateBlocksRun {
         slot: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
-    ) {
+    ) -> Result<()>{
         // Send data shreds
         debug_assert!(data.data_shreds.iter().all(|shred| shred.slot() == slot));
-        socket_sender.send((data.data_shreds.clone(), batch_info.clone()));
+        socket_sender.send((data.data_shreds.clone(), batch_info.clone()))?;
         if data.touch_blockstore {
-            blockstore_sender.send((data.data_shreds, batch_info.clone()));
+            blockstore_sender.send((data.data_shreds, batch_info.clone()))?;
         }
 
         // Send coding shreds
         debug_assert!(data.coding_shreds
         .iter()
         .all(|shred| shred.slot() == slot));
-        socket_sender.send((data.coding_shreds.clone(), batch_info.clone()));
+        socket_sender.send((data.coding_shreds.clone(), batch_info.clone()))?;
         if data.touch_blockstore {
-            blockstore_sender.send((data.coding_shreds, batch_info.clone()));
+            blockstore_sender.send((data.coding_shreds, batch_info.clone()))?;
         }
+        Ok(())
     }
 
     fn insert(
@@ -661,7 +661,12 @@ mod test {
     #[test]
     fn test_interrupted_slot_last_shred() {
         let keypair = Arc::new(Keypair::new());
-        let mut run = BroadcastDuplicateBlocksRun::new(0);
+        let mut run = BroadcastDuplicateBlocksRun::new(
+            0,
+            BroadcastDuplicateBlocksConfig {
+                num_duplicates: 1,
+                num_entries_to_remove: 1,
+            });
 
         // Set up the slot to be interrupted
         let next_shred_index = 10;
@@ -715,7 +720,12 @@ mod test {
         };
 
         // Step 1: Make an incomplete transmission for slot 0
-        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(0);
+        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(
+            0,
+            BroadcastDuplicateBlocksConfig {
+                num_duplicates: 1,
+                num_entries_to_remove: 1,
+            });
         broadcast_duplicate_blocks_run
             .test_process_receive_results(
                 &leader_keypair,
@@ -836,7 +846,12 @@ mod test {
         let (bsend, brecv) = unbounded();
         let (ssend, _srecv) = unbounded();
         let mut last_tick_height = 0;
-        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(0);
+        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(
+            0,
+            BroadcastDuplicateBlocksConfig {
+                num_duplicates: 1,
+                num_entries_to_remove: 1,
+            });
         let mut process_ticks = |num_ticks| {
             let ticks = create_ticks(num_ticks, 0, genesis_config.hash());
             last_tick_height += (ticks.len() - 1) as u64;
@@ -866,13 +881,13 @@ mod test {
         }
         // At least as many coding shreds as data shreds.
         assert!(shreds.len() >= 29 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 29);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 29*2);
         process_ticks(75);
         while let Ok((recv_shreds, _)) = brecv.recv_timeout(Duration::from_secs(1)) {
             shreds.extend(recv_shreds.deref().clone());
         }
         assert!(shreds.len() >= 33 * 2);
-        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 33);
+        assert_eq!(shreds.iter().filter(|shred| shred.is_data()).count(), 33*2);
     }
 
     #[test]
@@ -892,7 +907,12 @@ mod test {
             last_tick_height: ticks.len() as u64,
         };
 
-        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(0);
+        let mut broadcast_duplicate_blocks_run = BroadcastDuplicateBlocksRun::new(
+            0,
+            BroadcastDuplicateBlocksConfig {
+                num_duplicates: 1,
+                num_entries_to_remove: 1,
+            });
         broadcast_duplicate_blocks_run
             .test_process_receive_results(
                 &leader_keypair,
