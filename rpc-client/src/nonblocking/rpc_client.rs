@@ -3542,7 +3542,7 @@ impl RpcClient {
     ///
     /// This method corresponds directly to the [`getRewardInterval`] RPC method.
     ///
-    /// [`getBalance`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
+    /// [`getRewardInterval`]: https://docs.solana.com/developing/clients/jsonrpc-api#getrewardinterval
     ///
     /// # Examples
     ///
