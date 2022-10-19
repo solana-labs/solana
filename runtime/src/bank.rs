@@ -2988,9 +2988,6 @@ impl Bank {
             foundation_rate,
         } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
 
-        // TODO
-        // let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-
         let rewarded_epoch = prev_epoch;
         let rewards = validator_rewards;
         let credits_auto_rewind = self.credits_auto_rewind();
@@ -3008,10 +3005,6 @@ impl Bank {
             vote_with_stake_delegations_map,
         );
 
-        // TODO
-        //let new_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
-        //let validator_rewards_paid = new_vote_balance_and_staked - old_vote_balance_and_staked;
-
         datapoint_warn!(
             "epoch_rewards_calc",
             ("slot", self.slot, i64),
@@ -3019,12 +3012,7 @@ impl Bank {
             ("validator_rate", validator_rate, f64),
             ("foundation_rate", foundation_rate, f64),
             ("epoch_duration_in_years", prev_epoch_duration_in_years, f64),
-            // ("validator_rewards", validator_rewards_paid, i64),
-            // ("active_stake", active_stake, i64),
             ("pre_capitalization", capitalization, i64),
-            ("post_capitalization", self.capitalization(), i64),
-            // ("num_stake_accounts", num_stake_accounts as i64, i64),
-            // ("num_vote_accounts", num_vote_accounts as i64, i64),
         );
 
         let vote_rewards = self.convert_to_vote_reward_vec(vote_rewards_map);
@@ -3493,19 +3481,18 @@ impl Bank {
         &self,
         stake_rewards: &[StakeReward],
         partition_index: u64,
-        metrics: &mut RewardsStoreMetrics,
-    ) -> usize {
+    ) -> (usize, i64) {
         // store stake account even if staker's reward is 0
         // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
 
         let n = stake_rewards.len() as u64;
+        let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
         self.store_accounts((self.slot(), &stake_rewards[begin..end]));
-        m.stop();
-        metrics.store_stake_accounts_us += m.as_us();
-        metrics.store_stake_accounts_count += end - begin;
-        end - begin
+        for a in &stake_rewards[begin..end] {
+            total += a.stake_reward_info.lamports;
+        }
+        (end - begin, total)
     }
 
     fn store_vote_accounts(
@@ -3593,24 +3580,22 @@ impl Bank {
         &self,
         vote_account_rewards: &[VoteReward],
         partition_index: u64,
-        metrics: &mut RewardsStoreMetrics,
-    ) -> usize {
-        let mut m = Measure::start("store_vote_accounts");
+    ) -> (usize, i64) {
         let n = vote_account_rewards.len() as u64;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
 
         let mut c = 0;
+        let mut total: i64 = 0;
         for vote_reward in vote_account_rewards.iter().take(end).skip(begin) {
             if let Some(vote_account) = &vote_reward.vote_account {
                 self.store_account(&vote_reward.vote_pubkey, vote_account);
                 c += 1;
             }
+            if let Some(vote_reward_info) = &vote_reward.vote_reward_info {
+                total += vote_reward_info.lamports;
+            }
         }
-
-        m.stop();
-        metrics.store_vote_accounts_us += m.as_us();
-        metrics.store_vote_accounts_count += c;
-        c
+        (c, total)
     }
 
     fn update_reward_history(
@@ -3690,21 +3675,36 @@ impl Bank {
             let stake_rewards = &calc_result.0;
             let vote_account_rewards = &calc_result.1;
 
-            let total_stake_rewards = stake_rewards.len();
-            let total_vote_rewards = vote_account_rewards.len();
+            let pre_capitalization = self.capitalization();
 
-            self.store_stake_accounts_in_partition(stake_rewards, partition_index, &mut metrics);
-            self.store_vote_accounts_in_partition(
-                vote_account_rewards,
-                partition_index,
-                &mut metrics,
-            );
+            let total_stake_rewards_len = stake_rewards.len();
+            let total_vote_rewards_len = vote_account_rewards.len();
+
+            let mut m = Measure::start("store_stake_account");
+            let (stake_store_counts, total_stake_rewards) =
+                self.store_stake_accounts_in_partition(stake_rewards, partition_index);
+            m.stop();
+            metrics.store_stake_accounts_us += m.as_us();
+            metrics.store_stake_accounts_count += stake_store_counts;
+
+            let mut m = Measure::start("store_vote_account");
+            let (vote_store_counts, total_vote_rewards) =
+                self.store_vote_accounts_in_partition(vote_account_rewards, partition_index);
+
+            m.stop();
+            metrics.store_vote_accounts_us += m.as_us();
+            metrics.store_vote_accounts_count += vote_store_counts;
 
             self.update_reward_history_in_partition(
                 stake_rewards,
                 vote_account_rewards,
                 partition_index,
             );
+
+            let validator_rewards_paid: u64 =
+                u64::try_from(total_stake_rewards + total_vote_rewards).unwrap();
+            self.capitalization
+                .fetch_add(validator_rewards_paid, AcqRel);
 
             datapoint_info!(
                 "bank-credit_epoch_rewards_in_partition",
@@ -3731,9 +3731,11 @@ impl Bank {
                     metrics.store_vote_accounts_count,
                     i64
                 ),
-                ("total_stake_accounts_count", total_stake_rewards, i64),
-                ("total_vote_accounts_count", total_vote_rewards, i64),
-            )
+                ("total_stake_accounts_count", total_stake_rewards_len, i64),
+                ("total_vote_accounts_count", total_vote_rewards_len, i64),
+                ("pre_capitalization", pre_capitalization, i64);
+                ("post_capitalization", self.capitalization(), i64);
+            );
         }
     }
 
@@ -20330,16 +20332,9 @@ pub(crate) mod tests {
         let mut t2 = 0;
 
         for partition_index in 0..bank.get_reward_credit_interval() {
-            let n1 = bank.store_stake_accounts_in_partition(
-                &stake_rewards,
-                partition_index,
-                &mut metrics,
-            );
-            let n2 = bank.store_vote_accounts_in_partition(
-                &vote_account_rewards,
-                partition_index,
-                &mut metrics,
-            );
+            let (n1, _) = bank.store_stake_accounts_in_partition(&stake_rewards, partition_index);
+            let (n2, _) =
+                bank.store_vote_accounts_in_partition(&vote_account_rewards, partition_index);
 
             let (nn1, nn2) = bank.update_reward_history_in_partition(
                 &stake_rewards,
