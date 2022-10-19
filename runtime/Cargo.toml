@@ -41,6 +41,7 @@ regex = "1.6.0"
 serde = { version = "1.0.144", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.15.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.15.0" }
 solana-config-program = { path = "../programs/config", version = "=1.15.0" }

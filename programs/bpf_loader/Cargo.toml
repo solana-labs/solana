@@ -24,7 +24,6 @@ thiserror = "1.0"
 
 [dev-dependencies]
 rand = "0.7.3"
-solana-runtime = { path = "../../runtime", version = "=1.15.0" }
 
 [lib]
 crate-type = ["lib"]
