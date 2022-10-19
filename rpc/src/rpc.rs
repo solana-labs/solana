@@ -5148,7 +5148,7 @@ pub mod tests {
             "jsonrpc": "2.0",
             "result": {
                 "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":150,
+                "value":2,
                 },
             "id": 1,
         });
@@ -5183,7 +5183,7 @@ pub mod tests {
             futures::join!(client, server)
         };
         let (response, _) = futures::executor::block_on(fut);
-        assert_eq!(response, 150);
+        assert_eq!(response, 2);
     }
 
     #[test]
