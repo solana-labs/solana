@@ -49,7 +49,6 @@ pub struct BroadcastDuplicateBlocksRun {
 struct BroadcastShredsData {
     data_shreds: Arc<Vec<Shred>>,
     coding_shreds: Arc<Vec<Shred>>,
-    sendout_delay_ms: u16,
     touch_blockstore: bool,
 }
 
@@ -147,7 +146,6 @@ impl BroadcastDuplicateBlocksRun {
                         return BroadcastShredsData {
                             data_shreds: Arc::new(Vec::default()),
                             coding_shreds: Arc::new(Vec::default()),
-                            sendout_delay_ms: 0,
                             touch_blockstore: false,
                         };
                     }
@@ -192,7 +190,6 @@ impl BroadcastDuplicateBlocksRun {
         BroadcastShredsData {
             data_shreds: Arc::new(data_shreds),
             coding_shreds: Arc::new(coding_shreds),
-            sendout_delay_ms: 0,
             touch_blockstore: !is_fake,
         }
     }
