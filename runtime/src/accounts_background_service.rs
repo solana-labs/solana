@@ -273,14 +273,11 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type,
+            request_type: _,
         } = snapshot_request;
 
-        // we should not rely on the state of this validator until startup verification is complete (unless handling an EAH request)
-        assert!(
-            snapshot_root_bank.is_startup_verification_complete()
-                || request_type == SnapshotRequestType::EpochAccountsHash
-        );
+        // we should not rely on the state of this validator until startup verification is complete
+        assert!(snapshot_root_bank.is_startup_verification_complete());
 
         if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
@@ -609,13 +606,22 @@ impl AccountsBackgroundService {
                     // request for `N` to the snapshot request channel before setting a root `R > N`, and
                     // snapshot_request_handler.handle_requests() will always look for the latest
                     // available snapshot in the channel.
-                    let snapshot_block_height_option_result = request_handlers
-                        .handle_snapshot_requests(
-                            accounts_db_caching_enabled,
-                            test_hash_calculation,
-                            non_snapshot_time,
-                            &mut last_full_snapshot_slot,
-                        );
+                    //
+                    // NOTE: We must wait for startup verification to complete before handling
+                    // snapshot requests.  This is because startup verification and snapshot
+                    // request handling can both kick off accounts hash calculations in background
+                    // threads, and these must not happen concurrently.
+                    let snapshot_block_height_option_result = bank
+                        .is_startup_verification_complete()
+                        .then(|| {
+                            request_handlers.handle_snapshot_requests(
+                                accounts_db_caching_enabled,
+                                test_hash_calculation,
+                                non_snapshot_time,
+                                &mut last_full_snapshot_slot,
+                            )
+                        })
+                        .flatten();
                     if snapshot_block_height_option_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
