@@ -1803,11 +1803,19 @@ impl Bank {
     }
 
     pub fn get_reward_calculation_interval(&self) -> u64 {
-        (self.epoch_schedule.slots_per_epoch / 10).min(100).max(1)
+        if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
+            1
+        } else {
+            (self.epoch_schedule.slots_per_epoch / 10).min(100).max(1)
+        }
     }
 
     pub fn get_reward_credit_interval(&self) -> u64 {
-        (self.epoch_schedule.slots_per_epoch / 20).min(50).max(1)
+        if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
+            1
+        } else {
+            (self.epoch_schedule.slots_per_epoch / 20).min(50).max(1)
+        }
     }
 
     pub fn get_reward_interval(&self) -> u64 {
