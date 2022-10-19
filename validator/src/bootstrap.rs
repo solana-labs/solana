@@ -41,15 +41,10 @@ use {
     },
 };
 
-<<<<<<< HEAD
-=======
 /// When downloading snapshots, wait at most this long for snapshot hashes from _all_ known
 /// validators.  Afterwards, wait for snapshot hashes from _any_ know validator.
 const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
 
-pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
-
->>>>>>> 1e79053dd (Requires known validators to have all snapshot hashes at bootstrap (#28284))
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
     pub no_genesis_fetch: bool,
