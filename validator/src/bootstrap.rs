@@ -41,6 +41,10 @@ use {
     },
 };
 
+/// When downloading snapshots, wait at most this long for snapshot hashes from _all_ known
+/// validators.  Afterwards, wait for snapshot hashes from _any_ know validator.
+const WAIT_FOR_ALL_KNOWN_VALIDATORS: Duration = Duration::from_secs(60);
+
 pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
 #[derive(Debug)]
@@ -649,10 +653,20 @@ fn get_rpc_nodes(
             }
         }
 
+        let known_validators_to_wait_for = if newer_cluster_snapshot_timeout
+            .as_ref()
+            .map(|timer: &Instant| timer.elapsed() < WAIT_FOR_ALL_KNOWN_VALIDATORS)
+            .unwrap_or(true)
+        {
+            KnownValidatorsToWaitFor::All
+        } else {
+            KnownValidatorsToWaitFor::Any
+        };
         let peer_snapshot_hashes = get_peer_snapshot_hashes(
             cluster_info,
             &rpc_peers,
             validator_config.known_validators.as_ref(),
+            known_validators_to_wait_for,
             bootstrap_config.incremental_snapshot_fetch,
         );
         if peer_snapshot_hashes.is_empty() {
@@ -734,14 +748,16 @@ fn get_peer_snapshot_hashes(
     cluster_info: &ClusterInfo,
     rpc_peers: &[ContactInfo],
     known_validators: Option<&HashSet<Pubkey>>,
+    known_validators_to_wait_for: KnownValidatorsToWaitFor,
     incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes =
         get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
-    if known_validators.is_some() {
+    if let Some(known_validators) = known_validators {
         let known_snapshot_hashes = get_snapshot_hashes_from_known_validators(
             cluster_info,
             known_validators,
+            known_validators_to_wait_for,
             incremental_snapshot_fetch,
         );
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
@@ -771,7 +787,8 @@ type KnownSnapshotHashes = HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>;
 /// This applies to both full and incremental snapshot hashes.
 fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
-    known_validators: Option<&HashSet<Pubkey>>,
+    known_validators: &HashSet<Pubkey>,
+    known_validators_to_wait_for: KnownValidatorsToWaitFor,
     incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
@@ -790,19 +807,82 @@ fn get_snapshot_hashes_from_known_validators(
             .map(|hashes| (hashes.base, hashes.hashes))
     };
 
-    known_validators
-        .map(|known_validators| {
-            build_known_snapshot_hashes(
-                known_validators,
-                get_full_snapshot_hashes_for_node,
-                get_incremental_snapshot_hashes_for_node,
-                incremental_snapshot_fetch,
-            )
-        })
-        .unwrap_or_else(|| {
-            trace!("No known validators, so no known snapshot hashes");
-            KnownSnapshotHashes::new()
-        })
+    if !do_known_validators_have_all_snapshot_hashes(
+        known_validators,
+        known_validators_to_wait_for,
+        get_full_snapshot_hashes_for_node,
+        get_incremental_snapshot_hashes_for_node,
+        incremental_snapshot_fetch,
+    ) {
+        debug!(
+            "Snapshot hashes have note been discovered from known validators. \
+            This likely means the gossip tables are not fully populated. \
+            We will sleep and retry..."
+        );
+        return KnownSnapshotHashes::default();
+    }
+
+    build_known_snapshot_hashes(
+        known_validators,
+        get_full_snapshot_hashes_for_node,
+        get_incremental_snapshot_hashes_for_node,
+        incremental_snapshot_fetch,
+    )
+}
+
+/// Check if we can discover snapshot hashes for the known validators.
+///
+/// This is a work-around to ensure the gossip tables are populated enough so that the bootstrap
+/// process will download both full and incremental snapshots.  If the incremental snapshot hashes
+/// are not yet populated from gossip, then it is possible (and has been seen often) to only
+/// discover full snapshots—and ones that are very old (up to 25,000 slots)—but *not* discover any
+/// of their associated incremental snapshots.
+///
+/// This function will return false if we do not yet have snapshot hashes from known validators;
+/// and true otherwise.  Either require snapshot hashes from *all* or *any* of the known validators
+/// based on the `KnownValidatorsToWaitFor` parameter.
+fn do_known_validators_have_all_snapshot_hashes<'a, F1, F2>(
+    known_validators: impl IntoIterator<Item = &'a Pubkey>,
+    known_validators_to_wait_for: KnownValidatorsToWaitFor,
+    get_full_snapshot_hashes_for_node: F1,
+    get_incremental_snapshot_hashes_for_node: F2,
+    incremental_snapshot_fetch: bool,
+) -> bool
+where
+    F1: Fn(&'a Pubkey) -> Vec<(Slot, Hash)>,
+    F2: Fn(&'a Pubkey) -> Option<((Slot, Hash), Vec<(Slot, Hash)>)>,
+{
+    let node_has_full_snapshot_hashes = |node| !get_full_snapshot_hashes_for_node(node).is_empty();
+    let node_has_incremental_snapshot_hashes = |node| {
+        get_incremental_snapshot_hashes_for_node(node)
+            .map(|(_, hashes)| !hashes.is_empty())
+            .unwrap_or(false)
+    };
+
+    // Does this node have all the snapshot hashes?
+    // If incremental snapshots are disabled, only check for full snapshot hashes; otherwise check
+    // for both full and incremental snapshot hashes.
+    let node_has_all_snapshot_hashes = |node| {
+        node_has_full_snapshot_hashes(node)
+            && (!incremental_snapshot_fetch || node_has_incremental_snapshot_hashes(node))
+    };
+
+    match known_validators_to_wait_for {
+        KnownValidatorsToWaitFor::All => known_validators
+            .into_iter()
+            .all(node_has_all_snapshot_hashes),
+        KnownValidatorsToWaitFor::Any => known_validators
+            .into_iter()
+            .any(node_has_all_snapshot_hashes),
+    }
+}
+
+/// When waiting for snapshot hashes from the known validators, should we wait for *all* or *any*
+/// of them?
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum KnownValidatorsToWaitFor {
+    All,
+    Any,
 }
 
 /// Build the known snapshot hashes from a set of nodes.
