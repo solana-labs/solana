@@ -1077,10 +1077,14 @@ fn update_caller_account(
 mod tests {
     use {
         super::*,
+        crate::allocator_bump::BpfAllocator,
         solana_program_runtime::invoke_context::{
             prepare_mock_invoke_context, MockInvokeContextPreparation,
         },
-        solana_rbpf::{ebpf::MM_INPUT_START, memory_region::MemoryRegion, vm::Config},
+        solana_rbpf::{
+            aligned_memory::AlignedMemory, ebpf::MM_INPUT_START, memory_region::MemoryRegion,
+            vm::Config,
+        },
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
@@ -1353,6 +1357,78 @@ mod tests {
 
         let callee_account = get_callee();
         assert_eq!(callee_account.get_data(), caller_account.data);
+    }
+
+    #[test]
+    fn test_translate_accounts_rust() {
+        let transaction_accounts = one_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+        let key = transaction_accounts[1].0.clone();
+        let original_data_len = account.data().len();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1, 1]);
+        let mut invoke_context = invoke_context_builder.invoke_context();
+        invoke_context
+            .set_syscall_context(
+                true,
+                true,
+                vec![original_data_len],
+                Rc::new(RefCell::new(BpfAllocator::new(
+                    AlignedMemory::with_capacity(0),
+                    0,
+                ))),
+            )
+            .unwrap();
+
+        let vm_addr = MM_INPUT_START;
+        let (_mem, region) = MockAccountInfo {
+            key: key.clone(),
+            is_signer: false,
+            is_writable: false,
+            lamports: account.lamports(),
+            data: account.data(),
+            owner: account.owner().clone(),
+            executable: account.executable(),
+            rent_epoch: account.rent_epoch(),
+        }
+        .into_region(vm_addr);
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+
+        let accounts = SyscallInvokeSignedRust::translate_accounts(
+            &[
+                InstructionAccount {
+                    index_in_transaction: 1,
+                    index_in_caller: 0,
+                    index_in_callee: 0,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                InstructionAccount {
+                    index_in_transaction: 1,
+                    index_in_caller: 0,
+                    index_in_callee: 0,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ],
+            &[0],
+            vm_addr,
+            1,
+            &mut memory_mapping,
+            &mut invoke_context,
+        )
+        .unwrap();
+        assert_eq!(accounts.len(), 2);
+        assert!(accounts[0].1.is_none());
+        let caller_account = accounts[1].1.as_ref().unwrap();
+        assert_eq!(caller_account.data, account.data());
+        assert_eq!(caller_account.original_data_len, original_data_len);
     }
 
     pub type TestTransactionAccount = (Pubkey, AccountSharedData, bool);
