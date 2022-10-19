@@ -3,6 +3,7 @@ steps:
     label: "Partition recovery on GCE"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       ENABLE_GPU: "false"
       NUMBER_OF_VALIDATOR_NODES: 9

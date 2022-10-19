@@ -3,6 +3,7 @@ steps:
     label: "GCE - 2 even partitions with full loss"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
       NUMBER_OF_VALIDATOR_NODES: 5

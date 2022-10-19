@@ -3,6 +3,7 @@ steps:
     label: "GCE - CPU Only 5 Node - Partial Loss 3 Partitions"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
       NUMBER_OF_VALIDATOR_NODES: 5
