@@ -2134,7 +2134,6 @@ mod tests {
         std::{
             borrow::Cow,
             collections::HashSet,
-            error::Error,
             path::Path,
             sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
@@ -4244,72 +4243,6 @@ mod tests {
 
         assert_eq!(expected_units, units);
         assert_eq!(expected_us, us);
-    }
-
-    #[test]
-    fn test_unprocessed_transaction_storage_insert() -> Result<(), Box<dyn Error>> {
-        let keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let pubkey = solana_sdk::pubkey::new_rand();
-
-        let small_transfer = Packet::from_data(
-            None,
-            system_transaction::transfer(&keypair, &pubkey, 1, Hash::new_unique()),
-        )?;
-        let mut vote = Packet::from_data(
-            None,
-            new_vote_state_update_transaction(
-                VoteStateUpdate::default(),
-                Hash::new_unique(),
-                &keypair,
-                &vote_keypair,
-                &vote_keypair,
-                None,
-            ),
-        )?;
-        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
-        let big_transfer = Packet::from_data(
-            None,
-            system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
-        )?;
-
-        for thread_type in [
-            ThreadType::Transactions,
-            ThreadType::Voting(VoteSource::Gossip),
-            ThreadType::Voting(VoteSource::Tpu),
-        ] {
-            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
-                UnprocessedPacketBatches::with_capacity(100),
-                thread_type,
-            );
-            transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
-                ImmutableDeserializedPacket::new(vote.clone(), None)?,
-                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
-            ]);
-            let deserialized_packets = transaction_storage
-                .iter()
-                .map(|packet| packet.immutable_section().original_packet().clone())
-                .collect_vec();
-            assert_eq!(3, deserialized_packets.len());
-            assert!(deserialized_packets.contains(&small_transfer));
-            assert!(deserialized_packets.contains(&vote));
-            assert!(deserialized_packets.contains(&big_transfer));
-        }
-
-        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
-            let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
-                Arc::new(LatestUnprocessedVotes::new()),
-                vote_source,
-            );
-            transaction_storage.insert_batch(vec![
-                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
-                ImmutableDeserializedPacket::new(vote.clone(), None)?,
-                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
-            ]);
-            assert_eq!(1, transaction_storage.len());
-        }
-        Ok(())
     }
 
     #[test]

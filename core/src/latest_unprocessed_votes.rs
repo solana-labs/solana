@@ -643,8 +643,10 @@ mod tests {
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Forward from TPU
-        let forwarded = latest_unprocessed_votes
-            .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
+        let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
+            bank.clone(),
+            &mut forward_packet_batches_by_accounts,
+        );
 
         assert_eq!(1, forwarded);
         assert_eq!(
