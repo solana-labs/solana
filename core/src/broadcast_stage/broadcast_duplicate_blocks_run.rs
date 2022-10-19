@@ -326,7 +326,7 @@ impl BroadcastDuplicateBlocksRun {
                         // Adding a tick
                         new_entries.push(Entry::new(&new_last_hash, 1, vec![]));
                     }
-    
+
                     shreds_to_send.push(self.entries_to_shreds(
                        keypair,
                         &new_entries,
