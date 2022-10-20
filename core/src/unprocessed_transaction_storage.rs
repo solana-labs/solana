@@ -7,7 +7,9 @@ use {
             LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
             VoteSource,
         },
-        unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
+        unprocessed_packet_batches::{
+            DeserializedPacket, PacketBatchInsertionMetrics, UnprocessedPacketBatches,
+        },
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
@@ -47,12 +49,54 @@ pub enum ThreadType {
     Transactions,
 }
 
-#[derive(Debug, Default)]
-pub struct InsertPacketBatchSummary {
-    pub(crate) num_dropped_packets: usize,
-    pub(crate) num_dropped_gossip_vote_packets: usize,
-    pub(crate) num_dropped_tpu_vote_packets: usize,
-    pub(crate) num_dropped_tracer_packets: usize,
+#[derive(Debug)]
+pub(crate) enum InsertPacketBatchSummary {
+    VoteBatchInsertionMetrics(VoteBatchInsertionMetrics),
+    PacketBatchInsertionMetrics(PacketBatchInsertionMetrics),
+}
+
+impl InsertPacketBatchSummary {
+    pub fn total_dropped_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => {
+                metrics.num_dropped_gossip + metrics.num_dropped_tpu
+            }
+            Self::PacketBatchInsertionMetrics(metrics) => metrics.num_dropped_packets,
+        }
+    }
+
+    pub fn dropped_gossip_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => metrics.num_dropped_gossip,
+            _ => 0,
+        }
+    }
+
+    pub fn dropped_tpu_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => metrics.num_dropped_tpu,
+            _ => 0,
+        }
+    }
+
+    pub fn dropped_tracer_packets(&self) -> usize {
+        match self {
+            Self::PacketBatchInsertionMetrics(metrics) => metrics.num_dropped_tracer_packets,
+            _ => 0,
+        }
+    }
+}
+
+impl From<VoteBatchInsertionMetrics> for InsertPacketBatchSummary {
+    fn from(metrics: VoteBatchInsertionMetrics) -> Self {
+        Self::VoteBatchInsertionMetrics(metrics)
+    }
+}
+
+impl From<PacketBatchInsertionMetrics> for InsertPacketBatchSummary {
+    fn from(metrics: PacketBatchInsertionMetrics) -> Self {
+        Self::PacketBatchInsertionMetrics(metrics)
+    }
 }
 
 fn filter_processed_packets<'a, F>(
@@ -149,15 +193,17 @@ impl UnprocessedTransactionStorage {
         }
     }
 
-    pub fn insert_batch(
+    pub(crate) fn insert_batch(
         &mut self,
         deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> InsertPacketBatchSummary {
         match self {
-            Self::VoteStorage(vote_storage) => vote_storage.insert_batch(deserialized_packets),
-            Self::LocalTransactionStorage(transaction_storage) => {
-                transaction_storage.insert_batch(deserialized_packets)
+            Self::VoteStorage(vote_storage) => {
+                InsertPacketBatchSummary::from(vote_storage.insert_batch(deserialized_packets))
             }
+            Self::LocalTransactionStorage(transaction_storage) => InsertPacketBatchSummary::from(
+                transaction_storage.insert_batch(deserialized_packets),
+            ),
         }
     }
 
@@ -230,27 +276,19 @@ impl VoteStorage {
     fn insert_batch(
         &mut self,
         deserialized_packets: Vec<ImmutableDeserializedPacket>,
-    ) -> InsertPacketBatchSummary {
-        let VoteBatchInsertionMetrics {
-            num_dropped_gossip,
-            num_dropped_tpu,
-        } = self.latest_unprocessed_votes.insert_batch(
-            deserialized_packets
-                .into_iter()
-                .filter_map(|deserialized_packet| {
-                    LatestValidatorVotePacket::new_from_immutable(
-                        Arc::new(deserialized_packet),
-                        self.vote_source,
-                    )
-                    .ok()
-                }),
-        );
-        InsertPacketBatchSummary {
-            num_dropped_packets: num_dropped_gossip + num_dropped_tpu,
-            num_dropped_gossip_vote_packets: num_dropped_gossip,
-            num_dropped_tpu_vote_packets: num_dropped_tpu,
-            ..InsertPacketBatchSummary::default()
-        }
+    ) -> VoteBatchInsertionMetrics {
+        self.latest_unprocessed_votes
+            .insert_batch(
+                deserialized_packets
+                    .into_iter()
+                    .filter_map(|deserialized_packet| {
+                        LatestValidatorVotePacket::new_from_immutable(
+                            Arc::new(deserialized_packet),
+                            self.vote_source,
+                        )
+                        .ok()
+                    }),
+            )
     }
 
     fn filter_forwardable_packets_and_add_batches(
@@ -347,18 +385,12 @@ impl ThreadLocalUnprocessedPackets {
     fn insert_batch(
         &mut self,
         deserialized_packets: Vec<ImmutableDeserializedPacket>,
-    ) -> InsertPacketBatchSummary {
-        let (num_dropped_packets, num_dropped_tracer_packets) =
-            self.unprocessed_packet_batches.insert_batch(
-                deserialized_packets
-                    .into_iter()
-                    .map(DeserializedPacket::from_immutable_section),
-            );
-        InsertPacketBatchSummary {
-            num_dropped_packets,
-            num_dropped_tracer_packets,
-            ..InsertPacketBatchSummary::default()
-        }
+    ) -> PacketBatchInsertionMetrics {
+        self.unprocessed_packet_batches.insert_batch(
+            deserialized_packets
+                .into_iter()
+                .map(DeserializedPacket::from_immutable_section),
+        )
     }
 
     fn filter_forwardable_packets_and_add_batches(

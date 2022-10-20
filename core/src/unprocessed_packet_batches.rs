@@ -70,6 +70,12 @@ impl Ord for DeserializedPacket {
     }
 }
 
+#[derive(Debug)]
+pub struct PacketBatchInsertionMetrics {
+    pub(crate) num_dropped_packets: usize,
+    pub(crate) num_dropped_tracer_packets: usize,
+}
+
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
 /// PacketBatch's received from sigverify. Banking thread continuously scans the buffer
 /// to pick proper packets to add to the block.
@@ -111,7 +117,7 @@ impl UnprocessedPacketBatches {
     pub fn insert_batch(
         &mut self,
         deserialized_packets: impl Iterator<Item = DeserializedPacket>,
-    ) -> (usize, usize) {
+    ) -> PacketBatchInsertionMetrics {
         let mut num_dropped_packets = 0;
         let mut num_dropped_tracer_packets = 0;
         for deserialized_packet in deserialized_packets {
@@ -127,7 +133,10 @@ impl UnprocessedPacketBatches {
                 }
             }
         }
-        (num_dropped_packets, num_dropped_tracer_packets)
+        PacketBatchInsertionMetrics {
+            num_dropped_packets,
+            num_dropped_tracer_packets,
+        }
     }
 
     /// Pushes a new `deserialized_packet` into the unprocessed packet batches if it does not already

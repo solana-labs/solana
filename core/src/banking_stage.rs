@@ -147,7 +147,6 @@ pub struct BankingStageStats {
     pub(crate) dropped_duplicated_packets_count: AtomicUsize,
     newly_buffered_packets_count: AtomicUsize,
     current_buffered_packets_count: AtomicUsize,
-    current_buffered_packet_batches_count: AtomicUsize,
     rebuffered_packets_count: AtomicUsize,
     consumed_buffered_packets_count: AtomicUsize,
     forwarded_transaction_count: AtomicUsize,
@@ -185,9 +184,6 @@ impl BankingStageStats {
                 .load(Ordering::Relaxed) as u64
             + self.newly_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self.current_buffered_packets_count.load(Ordering::Relaxed) as u64
-            + self
-                .current_buffered_packet_batches_count
-                .load(Ordering::Relaxed) as u64
             + self.rebuffered_packets_count.load(Ordering::Relaxed) as u64
             + self.consumed_buffered_packets_count.load(Ordering::Relaxed) as u64
             + self
@@ -236,12 +232,6 @@ impl BankingStageStats {
                 (
                     "newly_buffered_packets_count",
                     self.newly_buffered_packets_count.swap(0, Ordering::Relaxed) as i64,
-                    i64
-                ),
-                (
-                    "current_buffered_packet_batches_count",
-                    self.current_buffered_packet_batches_count
-                        .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -1997,10 +1987,6 @@ impl BankingStage {
         banking_stage_stats
             .newly_buffered_packets_count
             .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
-        // TODO: One of these metrics can be deleted (duplicate)
-        banking_stage_stats
-            .current_buffered_packet_batches_count
-            .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
         banking_stage_stats
             .current_buffered_packets_count
             .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
@@ -2032,10 +2018,10 @@ impl BankingStage {
                 .accumulate_insert_packet_batches_summary(&insert_packet_batches_summary);
             saturating_add_assign!(
                 *dropped_packets_count,
-                insert_packet_batches_summary.num_dropped_packets
+                insert_packet_batches_summary.total_dropped_packets()
             );
             tracer_packet_stats.increment_total_exceeded_banking_stage_buffer(
-                insert_packet_batches_summary.num_dropped_tracer_packets,
+                insert_packet_batches_summary.dropped_tracer_packets(),
             );
         }
     }

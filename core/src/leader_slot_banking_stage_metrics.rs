@@ -537,13 +537,13 @@ impl LeaderSlotMetricsTracker {
         insert_packet_batches_summary: &InsertPacketBatchSummary,
     ) {
         self.increment_exceeded_buffer_limit_dropped_packets_count(
-            insert_packet_batches_summary.num_dropped_packets as u64,
+            insert_packet_batches_summary.total_dropped_packets() as u64,
         );
         self.increment_dropped_gossip_vote_count(
-            insert_packet_batches_summary.num_dropped_gossip_vote_packets as u64,
+            insert_packet_batches_summary.dropped_gossip_packets() as u64,
         );
         self.increment_dropped_tpu_vote_count(
-            insert_packet_batches_summary.num_dropped_tpu_vote_packets as u64,
+            insert_packet_batches_summary.dropped_tpu_packets() as u64
         );
     }
 

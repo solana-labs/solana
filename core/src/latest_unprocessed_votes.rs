@@ -125,7 +125,8 @@ pub(crate) fn weighted_random_order_by_stake<'a>(
     pubkey_with_weight.into_iter().map(|(_, pubkey)| pubkey)
 }
 
-pub struct VoteBatchInsertionMetrics {
+#[derive(Default, Debug)]
+pub(crate) struct VoteBatchInsertionMetrics {
     pub(crate) num_dropped_gossip: usize,
     pub(crate) num_dropped_tpu: usize,
 }
@@ -154,7 +155,7 @@ impl LatestUnprocessedVotes {
         self.len() == 0
     }
 
-    pub fn insert_batch(
+    pub(crate) fn insert_batch(
         &self,
         votes: impl Iterator<Item = LatestValidatorVotePacket>,
     ) -> VoteBatchInsertionMetrics {
