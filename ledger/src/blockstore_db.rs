@@ -200,7 +200,10 @@ pub mod columns {
     pub struct BankHash;
 
     #[derive(Debug)]
-    /// The root column
+    /// The root column.
+    ///
+    /// This column family persists whether a slot is a root.  Slots on the
+    /// main fork will be inserted into this column when they are finalized.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: bool
