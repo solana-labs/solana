@@ -2553,9 +2553,7 @@ pub fn process_delegate_stake(
         })?;
 
         let sanity_check_result = match vote_state.root_slot {
-            None => Err(CliError::BadParameter(
-                "Unable to delegate. Vote account has no root slot".to_string(),
-            )),
+            None => Ok(()), // New vote account no need to sanity check
             Some(root_slot) => {
                 let min_root_slot = rpc_client
                     .get_slot()?
