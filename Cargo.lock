@@ -5396,6 +5396,7 @@ dependencies = [
  "lazy_static",
  "nix",
  "reqwest",
+ "scopeguard",
  "semver 1.0.14",
  "serde",
  "serde_yaml 0.9.13",

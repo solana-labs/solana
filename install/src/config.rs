@@ -86,3 +86,79 @@ impl Config {
         self.releases_dir.join(release_id)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use {
+        super::*,
+        scopeguard::defer,
+        std::{
+            env,
+            fs::{read_to_string, remove_file},
+        },
+    };
+
+    #[test]
+    fn test_save() {
+        let root_dir = env::var("CARGO_MANIFEST_DIR").expect("$CARGO_MANIFEST_DIR");
+        let json_rpc_url = "https://api.mainnet-beta.solana.com";
+        let pubkey = Pubkey::default();
+        let config_name = "config.yaml";
+        let config_path = format!("{}/{}", root_dir, config_name);
+
+        let config = Config::new(&root_dir, json_rpc_url, &pubkey, None);
+
+        assert_eq!(config.save(config_name), Ok(()));
+        defer! {
+            remove_file(&config_path).unwrap();
+        }
+
+        assert_eq!(
+            read_to_string(&config_path).unwrap(),
+            format!(
+                "---
+json_rpc_url: https://api.mainnet-beta.solana.com
+update_manifest_pubkey:
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+- 0
+current_update_manifest: null
+update_poll_secs: 3600
+explicit_release: null
+releases_dir: {}/releases
+active_release_dir: {}/active_release
+",
+                root_dir, root_dir
+            ),
+        );
+    }
+}
