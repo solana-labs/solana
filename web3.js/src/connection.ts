@@ -3386,18 +3386,21 @@ export class Connection {
 
     const subscriptionCommitment = commitment || this.commitment;
     let timeoutId;
-    let subscriptionId;
+    let signatureSubscriptionId: number | undefined;
+    let disposeSignatureSubscriptionStateChangeObserver:
+      | SubscriptionStateChangeDisposeFn
+      | undefined;
     let done = false;
+
     const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
-      let intervalId: null | NodeJS.Timer = null;
       try {
-        subscriptionId = this.onSignature(
+        signatureSubscriptionId = this.onSignature(
           rawSignature,
           (result: SignatureResult, context: Context) => {
-            subscriptionId = undefined;
+            signatureSubscriptionId = undefined;
             const response = {
               context,
               value: result,
@@ -3407,48 +3410,48 @@ export class Connection {
           },
           subscriptionCommitment,
         );
-
-        if (!done) {
-          const args = this._buildArgs(
-            [rawSignature],
-            commitment || this._commitment || 'finalized', // Apply connection/server default.
-          );
-          const hash = fastStableStringify(
-            ['signatureSubscribe', args],
-            true /* isArrayProp */,
-          );
-          intervalId = setInterval(() => {
-            const subscription = this._subscriptionsByHash[hash];
-            if (subscription && subscription.state === 'subscribed') {
-              (async () => {
-                const signatureStatuses = await this.getSignatureStatuses([
-                  rawSignature,
-                ]);
-                const result = signatureStatuses && signatureStatuses.value[0];
-                if (result?.err) {
-                  reject(result.err);
-                }
-                if (result) {
-                  const response = {
-                    context: signatureStatuses.context,
-                    value: result,
-                  };
-                  done = true;
-                  resolve({__type: TransactionStatus.PROCESSED, response});
-                }
-                if (intervalId) {
-                  clearInterval(intervalId);
-                }
-              })();
+        const subscriptionSetupPromise = new Promise<void>(
+          resolveSubscriptionSetup => {
+            if (signatureSubscriptionId == null) {
+              resolveSubscriptionSetup();
+            } else {
+              disposeSignatureSubscriptionStateChangeObserver =
+                this._onSubscriptionStateChange(
+                  signatureSubscriptionId,
+                  nextState => {
+                    if (nextState === 'subscribed') {
+                      resolveSubscriptionSetup();
+                    }
+                  },
+                );
             }
-          }, 100);
-        }
+          },
+        );
+        (async () => {
+          await subscriptionSetupPromise;
+          if (done) return;
+          const response = await this.getSignatureStatus(rawSignature);
+          if (done) return;
+          if (response == null) {
+            return;
+          }
+          const {context, value} = response;
+          if (value?.err) {
+            reject(value.err);
+          }
+          if (value) {
+            done = true;
+            resolve({
+              __type: TransactionStatus.PROCESSED,
+              response: {
+                context,
+                value,
+              },
+            });
+          }
+        })();
       } catch (err) {
         reject(err);
-      } finally {
-        if (intervalId) {
-          clearInterval(intervalId);
-        }
       }
     });
 
@@ -3519,8 +3522,11 @@ export class Connection {
       }
     } finally {
       clearTimeout(timeoutId);
-      if (subscriptionId) {
-        this.removeSignatureListener(subscriptionId);
+      if (disposeSignatureSubscriptionStateChangeObserver) {
+        disposeSignatureSubscriptionStateChangeObserver();
+      }
+      if (signatureSubscriptionId) {
+        this.removeSignatureListener(signatureSubscriptionId);
       }
     }
     return result;
@@ -5192,7 +5198,7 @@ export class Connection {
 
   /**
    * @internal
-   */ // @ts-ignore
+   */
   private _onSubscriptionStateChange(
     clientSubscriptionId: ClientSubscriptionId,
     callback: SubscriptionStateChangeCallback,

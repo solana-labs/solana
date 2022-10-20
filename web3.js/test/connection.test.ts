@@ -3,7 +3,8 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import {useFakeTimers, SinonFakeTimers} from 'sinon';
+import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
+import sinonChai from 'sinon-chai';
 
 import {
   Authorized,
@@ -67,6 +68,7 @@ import {MessageV0} from '../src/message/v0';
 import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
+use(sinonChai);
 
 const verifySignatureStatus = (
   status: SignatureStatus | null,
@@ -964,25 +966,6 @@ describe('Connection', function () {
           expect(result.value).to.have.property('err', null);
         }).timeout(60 * 1000);
 
-        it('confirms transactions that was already confirmed before', async () => {
-          let result = await connection.confirmTransaction(
-            {
-              signature,
-              ...latestBlockhash,
-            },
-            'processed',
-          );
-          let result2 = await connection.confirmTransaction(
-            {
-              signature,
-              ...latestBlockhash,
-            },
-            'processed',
-          );
-          expect(result.value).to.have.property('err', null);
-          expect(result2.value).to.have.property('err', null);
-        }).timeout(60 * 1000);
-
         it('throws when confirming using a blockhash whose last valid blockheight has passed', async () => {
           const confirmationPromise = connection.confirmTransaction({
             signature,
@@ -1017,13 +1000,6 @@ describe('Connection', function () {
           params: [mockSignature, {commitment: 'finalized'}],
           result: new Promise(() => {}),
         });
-
-        await mockRpcResponse({
-          method: 'getSignatureStatuses',
-          params: [[mockSignature]],
-          value: [null],
-          withContext: true,
-        });
         const timeoutPromise = connection.confirmTransaction(mockSignature);
 
         // Advance the clock past all waiting timers, notably the expiry timer.
@@ -1034,37 +1010,6 @@ describe('Connection', function () {
         );
       });
 
-      it('confirm transaction - by signature status', async () => {
-        const mockSignature =
-          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
-
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise(() => {}),
-        });
-
-        await mockRpcResponse({
-          method: 'getSignatureStatuses',
-          params: [[mockSignature]],
-          value: [
-            {
-              slot: 0,
-              confirmations: 11,
-              status: {Ok: null},
-              err: null,
-            },
-          ],
-          withContext: true,
-        });
-        const promise = connection.confirmTransaction(mockSignature);
-
-        // Advance the clock past all waiting timers, notably the expiry timer.
-        clock.runAllAsync();
-
-        await expect(promise).not.to.be.rejected;
-      });
-
       it('confirm transaction - block height exceeded', async () => {
         const mockSignature =
           '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
@@ -1073,13 +1018,6 @@ describe('Connection', function () {
           method: 'signatureSubscribe',
           params: [mockSignature, {commitment: 'finalized'}],
           result: new Promise(() => {}), // Never resolve this = never get a response.
-        });
-
-        await mockRpcResponse({
-          method: 'getSignatureStatuses',
-          params: [[mockSignature]],
-          value: [null],
-          withContext: true,
         });
 
         const lastValidBlockHeight = 3;
@@ -1197,6 +1135,85 @@ describe('Connection', function () {
           value: {err: null},
         });
       });
+
+      it('confirm transaction - does not check the signature status before the signature subscription comes alive', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: {err: null},
+          subscriptionEstablishmentPromise: new Promise(() => {}), // Never resolve.
+        });
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .never();
+        connection.confirmTransaction(mockSignature);
+        getSignatureStatusesExpectation.verify();
+      });
+
+      it('confirm transaction - checks the signature status once the signature subscription comes alive', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: {err: null},
+        });
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .once();
+
+        const confirmationPromise =
+          connection.confirmTransaction(mockSignature);
+        clock.runAllAsync();
+
+        await expect(confirmationPromise).to.eventually.deep.equal({
+          context: {slot: 11},
+          value: {err: null},
+        });
+        getSignatureStatusesExpectation.verify();
+      });
+
+      // FIXME: This test does not work.
+      // it('confirm transaction - confirms transaction when signature status check yields confirmation before signature subscription does', async () => {
+      //   const mockSignature =
+      //     'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+      //   // Keep the subscription from ever returning data.
+      //   await mockRpcMessage({
+      //     method: 'signatureSubscribe',
+      //     params: [mockSignature, {commitment: 'finalized'}],
+      //     result: new Promise(() => {}), // Never resolve.
+      //   });
+      //   clock.runAllAsync();
+
+      //   const confirmationPromise =
+      //     connection.confirmTransaction(mockSignature);
+      //   clock.runAllAsync();
+
+      //   // Return a signature status through the RPC API.
+      //   await mockRpcResponse({
+      //     method: 'getSignatureStatuses',
+      //     params: [[mockSignature]],
+      //     value: [
+      //       {
+      //         slot: 0,
+      //         confirmations: 11,
+      //         status: {Ok: null},
+      //         err: null,
+      //       },
+      //     ],
+      //   });
+      //   clock.runAllAsync();
+
+      //   await expect(confirmationPromise).to.eventually.deep.equal({
+      //     context: {slot: 11},
+      //     value: {err: null},
+      //   });
+      // });
     });
   }
 
