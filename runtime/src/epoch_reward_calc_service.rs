@@ -211,9 +211,9 @@ impl EpochRewardCalcRequestHandler {
             );
 
             let mut calc_metrics = RewardsCalcMetrics {
-                epoch: epoch,
+                epoch,
                 slot: bank.slot(),
-                parent_slot: parent_slot,
+                parent_slot,
                 ..RewardsCalcMetrics::default()
             };
 
