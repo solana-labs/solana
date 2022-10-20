@@ -97,6 +97,7 @@ describe('Subscriptions', () => {
               lamports: 0,
               owner: PublicKey.default.toBase58(),
               rentEpoch: 0,
+              space: 0,
             },
           },
         });
@@ -210,6 +211,7 @@ describe('Subscriptions', () => {
                 lamports: 0,
                 owner: PublicKey.default.toBase58(),
                 rentEpoch: 0,
+                space: 0,
               },
             },
           },
