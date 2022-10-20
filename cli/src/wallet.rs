@@ -10,7 +10,6 @@ use {
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
     clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
-    solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_clap_utils::{
         compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
@@ -28,7 +27,7 @@ use {
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
-    solana_rpc_client_api::{config::RpcTransactionConfig, response::RpcKeyedAccount},
+    solana_rpc_client_api::config::RpcTransactionConfig,
     solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -570,19 +569,7 @@ pub fn process_show_account(
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
     let data = account.data.clone();
-    let cli_account = CliAccount {
-        keyed_account: RpcKeyedAccount {
-            pubkey: account_pubkey.to_string(),
-            account: UiAccount::encode(
-                account_pubkey,
-                &account,
-                UiAccountEncoding::Base64,
-                None,
-                None,
-            ),
-        },
-        use_lamports_unit,
-    };
+    let cli_account = CliAccount::new(account_pubkey, &account, use_lamports_unit);
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
 
