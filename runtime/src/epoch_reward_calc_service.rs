@@ -150,6 +150,33 @@ impl<T> EpochRewardCalculator<T> {
     }
 }
 
+/// Epoch rewards calculation metrics
+#[derive(Debug, Default)]
+pub(crate) struct RewardsCalcMetrics {
+    epoch: Epoch,
+    slot: Slot,
+    parent_slot: Slot,
+    load_calc_info_time_us: u64,
+    calc_signature_time_us: u64,
+    reward_calc_time_us: u64,
+    total_time_us: u64,
+}
+
+impl RewardsCalcMetrics {
+    pub fn report(self) {
+        datapoint_info!(
+            "handle_epoch_reward_calc_request_timings",
+            ("epoch", self.epoch, i64),
+            ("parent_slot", self.parent_slot, i64),
+            ("slot", self.slot, i64),
+            ("load_calc_info_us", self.load_calc_info_time_us, i64),
+            ("calc_signature_us", self.calc_signature_time_us, i64),
+            ("reward_calc_us", self.reward_calc_time_us, i64),
+            ("total_us", self.total_time_us, i64),
+        );
+    }
+}
+
 /// EpochRewardCalcRequestHandler
 ///   Handler for incoming epoch reward calculation requests
 pub struct EpochRewardCalcRequestHandler {
@@ -183,6 +210,13 @@ impl EpochRewardCalcRequestHandler {
                 epoch, parent_slot
             );
 
+            let mut calc_metrics = RewardsCalcMetrics {
+                epoch: epoch,
+                slot: bank.slot(),
+                parent_slot: parent_slot,
+                ..RewardsCalcMetrics::default()
+            };
+
             self.results.write().unwrap().relinquish(epoch);
 
             if !self
@@ -199,9 +233,11 @@ impl EpochRewardCalcRequestHandler {
                 let mut metrics = RewardsMetrics::default();
                 let (vote_with_stake_delegations_map, load_calc_info_time) =
                     measure!(bank.load_reward_calc_info(&thread_pool, &mut metrics));
+                calc_metrics.load_calc_info_time_us = load_calc_info_time.as_us();
 
                 let (signature, calc_signature_time) =
                     measure!(bank.compute_rewards_calc_signature(&vote_with_stake_delegations_map));
+                calc_metrics.calc_signature_time_us = calc_signature_time.as_us();
 
                 self.results
                     .write()
@@ -209,7 +245,6 @@ impl EpochRewardCalcRequestHandler {
                     .signatures
                     .insert(parent_slot, signature);
 
-                let mut reward_calc_time_us: u64 = 0;
                 if !self
                     .results
                     .read()
@@ -235,20 +270,13 @@ impl EpochRewardCalcRequestHandler {
                         .unwrap()
                         .rewards
                         .insert(signature, Arc::new(result));
-                    reward_calc_time_us = reward_calc_time.as_us();
+                    calc_metrics.reward_calc_time_us = reward_calc_time.as_us();
                 }
 
                 total_time.stop();
 
-                datapoint_info!(
-                    "handle_epoch_reward_calc_request_timings",
-                    ("epoch", epoch, i64),
-                    ("parent_slot", parent_slot, i64),
-                    ("load_calc_info_us", load_calc_info_time.as_us(), i64),
-                    ("calc_signature_us", calc_signature_time.as_us(), i64),
-                    ("reward_calc_us", reward_calc_time_us, i64),
-                    ("total_us", total_time.as_us(), i64),
-                );
+                calc_metrics.total_time_us = total_time.as_us();
+                calc_metrics.report();
             }
         }
     }

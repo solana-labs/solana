@@ -213,7 +213,7 @@ pub(crate) struct RewardsStoreMetrics {
     post_capitalization: u64,
 }
 
-impl RewardStoreMetrics {
+impl RewardsStoreMetrics {
     fn report(&self) {
         datapoint_info!(
             "bank-credit_epoch_rewards_in_partition",
@@ -3717,7 +3717,7 @@ impl Bank {
                 epoch: self.epoch(),
                 slot: self.slot(),
                 parent_slot: self.parent_slot(),
-                ..RewardsStoreMetrics::Default(),
+                ..RewardsStoreMetrics::default()
             };
             let stake_rewards = &calc_result.0;
             let vote_account_rewards = &calc_result.1;
@@ -3753,7 +3753,7 @@ impl Bank {
             self.capitalization
                 .fetch_add(validator_rewards_paid, AcqRel);
 
-            metric.report();
+            metrics.report();
         }
     }
 
