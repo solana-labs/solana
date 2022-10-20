@@ -16,10 +16,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
-    solana_runtime::{
-        accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-        cost_model::CostModel,
-    },
+    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
@@ -38,6 +35,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+const TRANSFER_TRANSACTION_COST: u32 = 1470;
 
 fn check_txs(
     receiver: &Arc<Receiver<WorkingBankEntry>>,
@@ -167,6 +166,7 @@ fn make_transfer_transaction_with_compute_unit_price(
     let instructions = vec![
         system_instruction::transfer(&from_pubkey, to, lamports),
         ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COST),
     ];
     let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
@@ -401,12 +401,8 @@ fn main() {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(
-            &bank,
-            &blockstore,
-            None,
-            Some(leader_schedule_cache.clone()),
-        );
+        let (exit, poh_recorder, poh_service, signal_receiver) =
+            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
@@ -442,7 +438,6 @@ fn main() {
         let mut tx_total_us = 0;
         let base_tx_count = bank.transaction_count();
         let mut txs_processed = 0;
-        let mut root = 1;
         let collector = solana_sdk::pubkey::new_rand();
         let mut total_sent = 0;
         for current_iteration_index in 0..iterations {
