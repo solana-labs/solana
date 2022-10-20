@@ -230,6 +230,7 @@ describe('Connection', function () {
         data: ['', 'base64'],
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
       {
         owner: '11111111111111111111111111111111',
@@ -237,6 +238,7 @@ describe('Connection', function () {
         data: ['', 'base64'],
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
     ];
 
@@ -262,6 +264,7 @@ describe('Connection', function () {
         data: Buffer.from([]),
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
       {
         owner: new PublicKey('11111111111111111111111111111111'),
@@ -269,6 +272,7 @@ describe('Connection', function () {
         data: Buffer.from([]),
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
     ];
 
@@ -3935,6 +3939,7 @@ describe('Connection', function () {
           lamports: LAMPORTS_PER_SOL - 5000,
           owner: SystemProgram.programId.toBase58(),
           rentEpoch: 0,
+          space: 0,
         },
       ]);
     });
