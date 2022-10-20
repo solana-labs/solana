@@ -4,14 +4,18 @@ use {
         GetTransactionPriorityDetails, TransactionPriorityDetails,
     },
     solana_sdk::{
+        feature_set,
         hash::Hash,
         message::Message,
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{SanitizedVersionedTransaction, VersionedTransaction},
+        transaction::{
+            AddressLoader, SanitizedTransaction, SanitizedVersionedTransaction,
+            VersionedTransaction,
+        },
     },
-    std::{cmp::Ordering, mem::size_of},
+    std::{cmp::Ordering, mem::size_of, sync::Arc},
     thiserror::Error,
 };
 
@@ -93,6 +97,28 @@ impl ImmutableDeserializedPacket {
 
     pub fn compute_unit_limit(&self) -> u64 {
         self.priority_details.compute_unit_limit
+    }
+
+    // This function deserializes packets into transactions, computes the blake3 hash of transaction
+    // messages, and verifies secp256k1 instructions.
+    pub fn build_sanitized_transaction(
+        &self,
+        feature_set: &Arc<feature_set::FeatureSet>,
+        votes_only: bool,
+        address_loader: impl AddressLoader,
+    ) -> Option<SanitizedTransaction> {
+        if votes_only && !self.is_simple_vote() {
+            return None;
+        }
+        let tx = SanitizedTransaction::try_new(
+            self.transaction().clone(),
+            *self.message_hash(),
+            self.is_simple_vote(),
+            address_loader,
+        )
+        .ok()?;
+        tx.verify_precompiles(feature_set).ok()?;
+        Some(tx)
     }
 }
 
