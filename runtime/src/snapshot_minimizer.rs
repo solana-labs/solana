@@ -365,7 +365,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 write_versions.push(alive_account.account.meta.write_version);
             }
 
-            let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
+            let new_storage = self.accounts_db().get_store_for_shrink(slot, aligned_total);
             self.accounts_db().store_accounts_frozen(
                 (
                     slot,
