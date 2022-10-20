@@ -927,7 +927,7 @@ mod tests {
                 total_forwardable_tracer_packets,
                 ..
             } = transaction_storage.filter_forwardable_packets_and_add_batches(
-                current_bank.clone(),
+                current_bank,
                 &mut forward_packet_batches_by_accounts,
             );
             assert_eq!(
