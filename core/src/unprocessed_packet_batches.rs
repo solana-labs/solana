@@ -3,11 +3,7 @@ use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-    solana_sdk::{
-        feature_set,
-        hash::Hash,
-        transaction::{AddressLoader, SanitizedTransaction, Transaction},
-    },
+    solana_sdk::{hash::Hash, transaction::Transaction},
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -74,6 +70,12 @@ impl Ord for DeserializedPacket {
     }
 }
 
+#[derive(Debug)]
+pub struct PacketBatchInsertionMetrics {
+    pub(crate) num_dropped_packets: usize,
+    pub(crate) num_dropped_tracer_packets: usize,
+}
+
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
 /// PacketBatch's received from sigverify. Banking thread continuously scans the buffer
 /// to pick proper packets to add to the block.
@@ -115,7 +117,7 @@ impl UnprocessedPacketBatches {
     pub fn insert_batch(
         &mut self,
         deserialized_packets: impl Iterator<Item = DeserializedPacket>,
-    ) -> (usize, usize) {
+    ) -> PacketBatchInsertionMetrics {
         let mut num_dropped_packets = 0;
         let mut num_dropped_tracer_packets = 0;
         for deserialized_packet in deserialized_packets {
@@ -131,7 +133,10 @@ impl UnprocessedPacketBatches {
                 }
             }
         }
-        (num_dropped_packets, num_dropped_tracer_packets)
+        PacketBatchInsertionMetrics {
+            num_dropped_packets,
+            num_dropped_tracer_packets,
+        }
     }
 
     /// Pushes a new `deserialized_packet` into the unprocessed packet batches if it does not already
@@ -283,7 +288,7 @@ impl UnprocessedPacketBatches {
     }
 
     pub fn mark_accepted_packets_as_forwarded(
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        &mut self,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         accepted_packet_indexes: &[usize],
     ) {
@@ -291,7 +296,7 @@ impl UnprocessedPacketBatches {
             .iter()
             .for_each(|accepted_packet_index| {
                 let accepted_packet = packets_to_process[*accepted_packet_index].clone();
-                if let Some(deserialized_packet) = buffered_packet_batches
+                if let Some(deserialized_packet) = self
                     .message_hash_to_transaction
                     .get_mut(accepted_packet.message_hash())
                 {
@@ -322,30 +327,6 @@ pub fn transactions_to_deserialized_packets(
         .collect()
 }
 
-// This function deserializes packets into transactions, computes the blake3 hash of transaction
-// messages, and verifies secp256k1 instructions. A list of sanitized transactions are returned
-// with their packet indexes.
-#[allow(clippy::needless_collect)]
-pub fn transaction_from_deserialized_packet(
-    deserialized_packet: &ImmutableDeserializedPacket,
-    feature_set: &Arc<feature_set::FeatureSet>,
-    votes_only: bool,
-    address_loader: impl AddressLoader,
-) -> Option<SanitizedTransaction> {
-    if votes_only && !deserialized_packet.is_simple_vote() {
-        return None;
-    }
-    let tx = SanitizedTransaction::try_new(
-        deserialized_packet.transaction().clone(),
-        *deserialized_packet.message_hash(),
-        deserialized_packet.is_simple_vote(),
-        address_loader,
-    )
-    .ok()?;
-    tx.verify_precompiles(feature_set).ok()?;
-    Some(tx)
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -357,6 +338,7 @@ mod tests {
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
+        std::sync::Arc,
     };
 
     fn simple_deserialized_packet() -> DeserializedPacket {
@@ -529,8 +511,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -540,8 +521,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -560,8 +540,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -571,8 +550,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -591,8 +569,7 @@ mod tests {
 
             let mut votes_only = false;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,
@@ -602,8 +579,7 @@ mod tests {
 
             votes_only = true;
             let txs = packet_vector.iter().filter_map(|tx| {
-                transaction_from_deserialized_packet(
-                    tx.immutable_section(),
+                tx.immutable_section().build_sanitized_transaction(
                     &Arc::new(FeatureSet::default()),
                     votes_only,
                     SimpleAddressLoader::Disabled,

@@ -1,22 +1,28 @@
-#![allow(dead_code)]
 use {
     crate::{
-        banking_stage::{self, BankingStage, FilterForwardingResults, ForwardOption},
+        banking_stage::{FilterForwardingResults, ForwardOption},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
-            self, LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
+            LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
             VoteSource,
         },
-        unprocessed_packet_batches::{self, DeserializedPacket, UnprocessedPacketBatches},
+        unprocessed_packet_batches::{
+            DeserializedPacket, PacketBatchInsertionMetrics, UnprocessedPacketBatches,
+        },
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::PacketBatch,
+    solana_measure::measure,
     solana_runtime::bank::Bank,
+    solana_sdk::{
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, saturating_add_assign,
+        transaction::SanitizedTransaction,
+    },
     std::sync::Arc,
 };
 
+pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 const MAX_STAKED_VALIDATORS: usize = 10_000;
 
 #[derive(Debug)]
@@ -43,12 +49,54 @@ pub enum ThreadType {
     Transactions,
 }
 
-#[derive(Debug, Default)]
-pub struct InsertPacketBatchesSummary {
-    pub(crate) num_dropped_packets: usize,
-    pub(crate) num_dropped_gossip_vote_packets: usize,
-    pub(crate) num_dropped_tpu_vote_packets: usize,
-    pub(crate) num_dropped_tracer_packets: usize,
+#[derive(Debug)]
+pub(crate) enum InsertPacketBatchSummary {
+    VoteBatchInsertionMetrics(VoteBatchInsertionMetrics),
+    PacketBatchInsertionMetrics(PacketBatchInsertionMetrics),
+}
+
+impl InsertPacketBatchSummary {
+    pub fn total_dropped_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => {
+                metrics.num_dropped_gossip + metrics.num_dropped_tpu
+            }
+            Self::PacketBatchInsertionMetrics(metrics) => metrics.num_dropped_packets,
+        }
+    }
+
+    pub fn dropped_gossip_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => metrics.num_dropped_gossip,
+            _ => 0,
+        }
+    }
+
+    pub fn dropped_tpu_packets(&self) -> usize {
+        match self {
+            Self::VoteBatchInsertionMetrics(metrics) => metrics.num_dropped_tpu,
+            _ => 0,
+        }
+    }
+
+    pub fn dropped_tracer_packets(&self) -> usize {
+        match self {
+            Self::PacketBatchInsertionMetrics(metrics) => metrics.num_dropped_tracer_packets,
+            _ => 0,
+        }
+    }
+}
+
+impl From<VoteBatchInsertionMetrics> for InsertPacketBatchSummary {
+    fn from(metrics: VoteBatchInsertionMetrics) -> Self {
+        Self::VoteBatchInsertionMetrics(metrics)
+    }
+}
+
+impl From<PacketBatchInsertionMetrics> for InsertPacketBatchSummary {
+    fn from(metrics: PacketBatchInsertionMetrics) -> Self {
+        Self::PacketBatchInsertionMetrics(metrics)
+    }
 }
 
 fn filter_processed_packets<'a, F>(
@@ -145,33 +193,17 @@ impl UnprocessedTransactionStorage {
         }
     }
 
-    pub fn deserialize_and_insert_batch(
+    pub(crate) fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
-    ) -> InsertPacketBatchesSummary {
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
+    ) -> InsertPacketBatchSummary {
         match self {
             Self::VoteStorage(vote_storage) => {
-                let VoteBatchInsertionMetrics {
-                    num_dropped_gossip,
-                    num_dropped_tpu,
-                } = vote_storage.deserialize_and_insert_batch(packet_batch, packet_indexes);
-                InsertPacketBatchesSummary {
-                    num_dropped_packets: num_dropped_gossip + num_dropped_tpu,
-                    num_dropped_gossip_vote_packets: num_dropped_gossip,
-                    num_dropped_tpu_vote_packets: num_dropped_tpu,
-                    ..InsertPacketBatchesSummary::default()
-                }
+                InsertPacketBatchSummary::from(vote_storage.insert_batch(deserialized_packets))
             }
-            Self::LocalTransactionStorage(transaction_storage) => {
-                let (num_dropped_packets, num_dropped_tracer_packets) =
-                    transaction_storage.deserialize_and_insert_batch(packet_batch, packet_indexes);
-                InsertPacketBatchesSummary {
-                    num_dropped_packets,
-                    num_dropped_tracer_packets,
-                    ..InsertPacketBatchesSummary::default()
-                }
-            }
+            Self::LocalTransactionStorage(transaction_storage) => InsertPacketBatchSummary::from(
+                transaction_storage.insert_batch(deserialized_packets),
+            ),
         }
     }
 
@@ -241,17 +273,22 @@ impl VoteStorage {
         self.latest_unprocessed_votes.clear_forwarded_packets();
     }
 
-    fn deserialize_and_insert_batch(
+    fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
     ) -> VoteBatchInsertionMetrics {
         self.latest_unprocessed_votes
-            .insert_batch(latest_unprocessed_votes::deserialize_packets(
-                packet_batch,
-                packet_indexes,
-                self.vote_source,
-            ))
+            .insert_batch(
+                deserialized_packets
+                    .into_iter()
+                    .filter_map(|deserialized_packet| {
+                        LatestValidatorVotePacket::new_from_immutable(
+                            Arc::new(deserialized_packet),
+                            self.vote_source,
+                        )
+                        .ok()
+                    }),
+            )
     }
 
     fn filter_forwardable_packets_and_add_batches(
@@ -345,13 +382,14 @@ impl ThreadLocalUnprocessedPackets {
         self.unprocessed_packet_batches.clear();
     }
 
-    fn deserialize_and_insert_batch(
+    fn insert_batch(
         &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
-    ) -> (usize, usize) {
+        deserialized_packets: Vec<ImmutableDeserializedPacket>,
+    ) -> PacketBatchInsertionMetrics {
         self.unprocessed_packet_batches.insert_batch(
-            unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
+            deserialized_packets
+                .into_iter()
+                .map(DeserializedPacket::from_immutable_section),
         )
     }
 
@@ -360,11 +398,298 @@ impl ThreadLocalUnprocessedPackets {
         bank: Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
-        BankingStage::filter_and_forward_with_account_limits(
-            &bank,
-            &mut self.unprocessed_packet_batches,
+        self.filter_and_forward_with_account_limits(
+            bank,
             forward_packet_batches_by_accounts,
-            banking_stage::UNPROCESSED_BUFFER_STEP_SIZE,
+            UNPROCESSED_BUFFER_STEP_SIZE,
+        )
+    }
+
+    /// Filter out packets that fail to sanitize, or are no longer valid (could be
+    /// too old, a duplicate of something already processed). Doing this in batches to avoid
+    /// checking bank's blockhash and status cache per transaction which could be bad for performance.
+    /// Added valid and sanitized packets to forwarding queue.
+    fn filter_and_forward_with_account_limits(
+        &mut self,
+        bank: Arc<Bank>,
+        forward_buffer: &mut ForwardPacketBatchesByAccounts,
+        batch_size: usize,
+    ) -> FilterForwardingResults {
+        let mut total_forwardable_tracer_packets: usize = 0;
+        let mut total_tracer_packets_in_buffer: usize = 0;
+        let mut total_forwardable_packets: usize = 0;
+        let mut total_packet_conversion_us: u64 = 0;
+        let mut total_filter_packets_us: u64 = 0;
+        let mut dropped_tx_before_forwarding_count: usize = 0;
+
+        let mut original_priority_queue = self.swap_priority_queue();
+
+        // indicates if `forward_buffer` still accept more packets, see details at
+        // `ForwardPacketBatchesByAccounts.rs`.
+        let mut accepting_packets = true;
+        // batch iterate through self.unprocessed_packet_batches in desc priority order
+        let retained_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket>> =
+            original_priority_queue
+                .drain_desc()
+                .chunks(batch_size)
+                .into_iter()
+                .flat_map(|packets_to_process| {
+                    let packets_to_process = packets_to_process.into_iter().collect_vec();
+
+                    // Vec<bool> of same size of `packets_to_process`, each indicates
+                    // corresponding packet is tracer packet.
+                    let tracer_packet_indexes = packets_to_process
+                        .iter()
+                        .map(|deserialized_packet| {
+                            deserialized_packet
+                                .original_packet()
+                                .meta
+                                .is_tracer_packet()
+                        })
+                        .collect::<Vec<_>>();
+                    saturating_add_assign!(
+                        total_tracer_packets_in_buffer,
+                        tracer_packet_indexes
+                            .iter()
+                            .filter(|is_tracer| **is_tracer)
+                            .count()
+                    );
+
+                    if accepting_packets {
+                        let (
+                            (sanitized_transactions, transaction_to_packet_indexes),
+                            packet_conversion_time,
+                        ): ((Vec<SanitizedTransaction>, Vec<usize>), _) = measure!(
+                            self.sanitize_unforwarded_packets(&packets_to_process, &bank,),
+                            "sanitize_packet",
+                        );
+                        saturating_add_assign!(
+                            total_packet_conversion_us,
+                            packet_conversion_time.as_us()
+                        );
+
+                        let (forwardable_transaction_indexes, filter_packets_time) = measure!(
+                            Self::filter_invalid_transactions(&sanitized_transactions, &bank,),
+                            "filter_packets",
+                        );
+                        saturating_add_assign!(
+                            total_filter_packets_us,
+                            filter_packets_time.as_us()
+                        );
+
+                        for forwardable_transaction_index in &forwardable_transaction_indexes {
+                            saturating_add_assign!(total_forwardable_packets, 1);
+                            let forwardable_packet_index =
+                                transaction_to_packet_indexes[*forwardable_transaction_index];
+                            if tracer_packet_indexes[forwardable_packet_index] {
+                                saturating_add_assign!(total_forwardable_tracer_packets, 1);
+                            }
+                        }
+
+                        let accepted_packet_indexes = Self::add_filtered_packets_to_forward_buffer(
+                            forward_buffer,
+                            &packets_to_process,
+                            &sanitized_transactions,
+                            &transaction_to_packet_indexes,
+                            &forwardable_transaction_indexes,
+                            &mut dropped_tx_before_forwarding_count,
+                        );
+                        accepting_packets =
+                            accepted_packet_indexes.len() == forwardable_transaction_indexes.len();
+
+                        self.unprocessed_packet_batches
+                            .mark_accepted_packets_as_forwarded(
+                                &packets_to_process,
+                                &accepted_packet_indexes,
+                            );
+
+                        self.collect_retained_packets(
+                            &packets_to_process,
+                            &Self::prepare_filtered_packet_indexes(
+                                &transaction_to_packet_indexes,
+                                &forwardable_transaction_indexes,
+                            ),
+                        )
+                    } else {
+                        // skip sanitizing and filtering if not longer able to add more packets for forwarding
+                        saturating_add_assign!(
+                            dropped_tx_before_forwarding_count,
+                            packets_to_process.len()
+                        );
+                        packets_to_process
+                    }
+                })
+                .collect();
+
+        // replace packet priority queue
+        self.unprocessed_packet_batches.packet_priority_queue = retained_priority_queue;
+
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding",
+            dropped_tx_before_forwarding_count
+        );
+
+        FilterForwardingResults {
+            total_forwardable_packets,
+            total_tracer_packets_in_buffer,
+            total_forwardable_tracer_packets,
+            total_packet_conversion_us,
+            total_filter_packets_us,
+        }
+    }
+
+    /// Take self.unprocessed_packet_batches's priority_queue out, leave empty MinMaxHeap in its place.
+    fn swap_priority_queue(&mut self) -> MinMaxHeap<Arc<ImmutableDeserializedPacket>> {
+        let capacity = self.unprocessed_packet_batches.capacity();
+        std::mem::replace(
+            &mut self.unprocessed_packet_batches.packet_priority_queue,
+            MinMaxHeap::with_capacity(capacity),
+        )
+    }
+
+    /// sanitize un-forwarded packet into SanitizedTransaction for validation and forwarding.
+    fn sanitize_unforwarded_packets(
+        &mut self,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        bank: &Arc<Bank>,
+    ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
+        // Get ref of ImmutableDeserializedPacket
+        let deserialized_packets = packets_to_process.iter().map(|p| &**p);
+        let (transactions, transaction_to_packet_indexes): (Vec<SanitizedTransaction>, Vec<usize>) =
+            deserialized_packets
+                .enumerate()
+                .filter_map(|(packet_index, deserialized_packet)| {
+                    if !self
+                        .unprocessed_packet_batches
+                        .is_forwarded(deserialized_packet)
+                    {
+                        deserialized_packet
+                            .build_sanitized_transaction(
+                                &bank.feature_set,
+                                bank.vote_only_bank(),
+                                bank.as_ref(),
+                            )
+                            .map(|transaction| (transaction, packet_index))
+                    } else {
+                        None
+                    }
+                })
+                .unzip();
+
+        // report metrics
+        inc_new_counter_info!("banking_stage-packet_conversion", 1);
+        let unsanitized_packets_filtered_count =
+            packets_to_process.len().saturating_sub(transactions.len());
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding",
+            unsanitized_packets_filtered_count
+        );
+
+        (transactions, transaction_to_packet_indexes)
+    }
+
+    /// Checks sanitized transactions against bank, returns valid transaction indexes
+    fn filter_invalid_transactions(
+        transactions: &[SanitizedTransaction],
+        bank: &Arc<Bank>,
+    ) -> Vec<usize> {
+        let filter = vec![Ok(()); transactions.len()];
+        let results = bank.check_transactions_with_forwarding_delay(
+            transactions,
+            &filter,
+            FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
+        );
+        // report metrics
+        let filtered_out_transactions_count = transactions.len().saturating_sub(results.len());
+        inc_new_counter_info!(
+            "banking_stage-dropped_tx_before_forwarding",
+            filtered_out_transactions_count
+        );
+
+        results
+            .iter()
+            .enumerate()
+            .filter_map(
+                |(tx_index, (result, _))| if result.is_ok() { Some(tx_index) } else { None },
+            )
+            .collect_vec()
+    }
+
+    fn prepare_filtered_packet_indexes(
+        transaction_to_packet_indexes: &[usize],
+        retained_transaction_indexes: &[usize],
+    ) -> Vec<usize> {
+        retained_transaction_indexes
+            .iter()
+            .map(|tx_index| transaction_to_packet_indexes[*tx_index])
+            .collect_vec()
+    }
+
+    /// try to add filtered forwardable and valid packets to forward buffer;
+    /// returns vector of packet indexes that were accepted for forwarding.
+    fn add_filtered_packets_to_forward_buffer(
+        forward_buffer: &mut ForwardPacketBatchesByAccounts,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        transactions: &[SanitizedTransaction],
+        transaction_to_packet_indexes: &[usize],
+        forwardable_transaction_indexes: &[usize],
+        dropped_tx_before_forwarding_count: &mut usize,
+    ) -> Vec<usize> {
+        let mut added_packets_count: usize = 0;
+        let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
+        for forwardable_transaction_index in forwardable_transaction_indexes {
+            let sanitized_transaction = &transactions[*forwardable_transaction_index];
+            let forwardable_packet_index =
+                transaction_to_packet_indexes[*forwardable_transaction_index];
+            let immutable_deserialized_packet =
+                packets_to_process[forwardable_packet_index].clone();
+            if !forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet)
+            {
+                break;
+            }
+            accepted_packet_indexes.push(forwardable_packet_index);
+            saturating_add_assign!(added_packets_count, 1);
+        }
+
+        // count the packets not being forwarded in this batch
+        saturating_add_assign!(
+            *dropped_tx_before_forwarding_count,
+            forwardable_transaction_indexes.len() - added_packets_count
+        );
+
+        accepted_packet_indexes
+    }
+
+    fn collect_retained_packets(
+        &mut self,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        retained_packet_indexes: &[usize],
+    ) -> Vec<Arc<ImmutableDeserializedPacket>> {
+        self.remove_non_retained_packets(packets_to_process, retained_packet_indexes);
+        retained_packet_indexes
+            .iter()
+            .map(|i| packets_to_process[*i].clone())
+            .collect_vec()
+    }
+
+    /// remove packets from UnprocessedPacketBatches.message_hash_to_transaction after they have
+    /// been removed from UnprocessedPacketBatches.packet_priority_queue
+    fn remove_non_retained_packets(
+        &mut self,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket>],
+        retained_packet_indexes: &[usize],
+    ) {
+        filter_processed_packets(
+            retained_packet_indexes
+                .iter()
+                .chain(std::iter::once(&packets_to_process.len())),
+            |start, end| {
+                for processed_packet in &packets_to_process[start..end] {
+                    self.unprocessed_packet_batches
+                        .message_hash_to_transaction
+                        .remove(processed_packet.message_hash());
+                }
+            },
         )
     }
 
@@ -372,13 +697,7 @@ impl ThreadLocalUnprocessedPackets {
     where
         F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
-        let mut retryable_packets = {
-            let capacity = self.unprocessed_packet_batches.capacity();
-            std::mem::replace(
-                &mut self.unprocessed_packet_batches.packet_priority_queue,
-                MinMaxHeap::with_capacity(capacity),
-            )
-        };
+        let mut retryable_packets = self.swap_priority_queue();
         let retryable_packets: MinMaxHeap<Arc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
             .chunks(batch_size)
@@ -388,25 +707,10 @@ impl ThreadLocalUnprocessedPackets {
                 if let Some(retryable_transaction_indexes) =
                     processing_function(&packets_to_process)
                 {
-                    // Remove the non-retryable packets, packets that were either:
-                    // 1) Successfully processed
-                    // 2) Failed but not retryable
-                    filter_processed_packets(
-                        retryable_transaction_indexes
-                            .iter()
-                            .chain(std::iter::once(&packets_to_process.len())),
-                        |start, end| {
-                            for processed_packet in &packets_to_process[start..end] {
-                                self.unprocessed_packet_batches
-                                    .message_hash_to_transaction
-                                    .remove(processed_packet.message_hash());
-                            }
-                        },
-                    );
-                    retryable_transaction_indexes
-                        .iter()
-                        .map(|i| packets_to_process[*i].clone())
-                        .collect_vec()
+                    self.collect_retained_packets(
+                        &packets_to_process,
+                        &retryable_transaction_indexes,
+                    )
                 } else {
                     packets_to_process
                 }
@@ -427,7 +731,21 @@ impl ThreadLocalUnprocessedPackets {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_perf::packet::{Packet, PacketFlags},
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signer},
+            system_transaction,
+            transaction::Transaction,
+        },
+        solana_vote_program::{
+            vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+        },
+        std::error::Error,
+    };
 
     #[test]
     fn test_filter_processed_packets() {
@@ -478,5 +796,215 @@ mod tests {
         };
         filter_processed_packets(retryable_indexes.iter(), f);
         assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
+    }
+
+    #[test]
+    fn test_filter_and_forward_with_account_limits() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10);
+        let current_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let simple_transactions: Vec<Transaction> = (0..256)
+            .map(|_id| {
+                // packets are deserialized upon receiving, failed packets will not be
+                // forwarded; Therefore we need to create real packets here.
+                let key1 = Keypair::new();
+                system_transaction::transfer(
+                    &mint_keypair,
+                    &key1.pubkey(),
+                    genesis_config.rent.minimum_balance(0),
+                    genesis_config.hash(),
+                )
+            })
+            .collect_vec();
+
+        let mut packets: Vec<DeserializedPacket> = simple_transactions
+            .iter()
+            .enumerate()
+            .map(|(packets_id, transaction)| {
+                let mut p = Packet::from_data(None, transaction).unwrap();
+                p.meta.port = packets_id as u16;
+                p.meta.set_tracer(true);
+                DeserializedPacket::new(p).unwrap()
+            })
+            .collect_vec();
+
+        // all packets are forwarded
+        {
+            let buffered_packet_batches: UnprocessedPacketBatches =
+                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                buffered_packet_batches,
+                ThreadType::Transactions,
+            );
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+
+            let FilterForwardingResults {
+                total_forwardable_packets,
+                total_tracer_packets_in_buffer,
+                total_forwardable_tracer_packets,
+                ..
+            } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                current_bank.clone(),
+                &mut forward_packet_batches_by_accounts,
+            );
+            assert_eq!(total_forwardable_packets, 256);
+            assert_eq!(total_tracer_packets_in_buffer, 256);
+            assert_eq!(total_forwardable_tracer_packets, 256);
+
+            // packets in a batch are forwarded in arbitrary order; verify the ports match after
+            // sorting
+            let expected_ports: Vec<_> = (0..256).collect();
+            let mut forwarded_ports: Vec<_> = forward_packet_batches_by_accounts
+                .iter_batches()
+                .flat_map(|batch| {
+                    batch
+                        .get_forwardable_packets()
+                        .into_iter()
+                        .map(|p| p.meta.port)
+                })
+                .collect();
+            forwarded_ports.sort_unstable();
+            assert_eq!(expected_ports, forwarded_ports);
+        }
+
+        // some packets are forwarded
+        {
+            let num_already_forwarded = 16;
+            for packet in &mut packets[0..num_already_forwarded] {
+                packet.forwarded = true;
+            }
+            let buffered_packet_batches: UnprocessedPacketBatches =
+                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                buffered_packet_batches,
+                ThreadType::Transactions,
+            );
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            let FilterForwardingResults {
+                total_forwardable_packets,
+                total_tracer_packets_in_buffer,
+                total_forwardable_tracer_packets,
+                ..
+            } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                current_bank.clone(),
+                &mut forward_packet_batches_by_accounts,
+            );
+            assert_eq!(
+                total_forwardable_packets,
+                packets.len() - num_already_forwarded
+            );
+            assert_eq!(total_tracer_packets_in_buffer, packets.len());
+            assert_eq!(
+                total_forwardable_tracer_packets,
+                packets.len() - num_already_forwarded
+            );
+        }
+
+        // some packets are invalid (already processed)
+        {
+            let num_already_processed = 16;
+            for tx in &simple_transactions[0..num_already_processed] {
+                assert_eq!(current_bank.process_transaction(tx), Ok(()));
+            }
+            let buffered_packet_batches: UnprocessedPacketBatches =
+                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                buffered_packet_batches,
+                ThreadType::Transactions,
+            );
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            let FilterForwardingResults {
+                total_forwardable_packets,
+                total_tracer_packets_in_buffer,
+                total_forwardable_tracer_packets,
+                ..
+            } = transaction_storage.filter_forwardable_packets_and_add_batches(
+                current_bank,
+                &mut forward_packet_batches_by_accounts,
+            );
+            assert_eq!(
+                total_forwardable_packets,
+                packets.len() - num_already_processed
+            );
+            assert_eq!(total_tracer_packets_in_buffer, packets.len());
+            assert_eq!(
+                total_forwardable_tracer_packets,
+                packets.len() - num_already_processed
+            );
+        }
+    }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_insert() -> Result<(), Box<dyn Error>> {
+        let keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let small_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1, Hash::new_unique()),
+        )?;
+        let mut vote = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::default(),
+                Hash::new_unique(),
+                &keypair,
+                &vote_keypair,
+                &vote_keypair,
+                None,
+            ),
+        )?;
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let big_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
+        )?;
+
+        for thread_type in [
+            ThreadType::Transactions,
+            ThreadType::Voting(VoteSource::Gossip),
+            ThreadType::Voting(VoteSource::Tpu),
+        ] {
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                UnprocessedPacketBatches::with_capacity(100),
+                thread_type,
+            );
+            transaction_storage.insert_batch(vec![
+                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
+                ImmutableDeserializedPacket::new(vote.clone(), None)?,
+                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
+            ]);
+            let deserialized_packets = transaction_storage
+                .iter()
+                .map(|packet| packet.immutable_section().original_packet().clone())
+                .collect_vec();
+            assert_eq!(3, deserialized_packets.len());
+            assert!(deserialized_packets.contains(&small_transfer));
+            assert!(deserialized_packets.contains(&vote));
+            assert!(deserialized_packets.contains(&big_transfer));
+        }
+
+        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
+            let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
+                Arc::new(LatestUnprocessedVotes::new()),
+                vote_source,
+            );
+            transaction_storage.insert_batch(vec![
+                ImmutableDeserializedPacket::new(small_transfer.clone(), None)?,
+                ImmutableDeserializedPacket::new(vote.clone(), None)?,
+                ImmutableDeserializedPacket::new(big_transfer.clone(), None)?,
+            ]);
+            assert_eq!(1, transaction_storage.len());
+        }
+        Ok(())
     }
 }

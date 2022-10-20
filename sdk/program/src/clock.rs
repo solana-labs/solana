@@ -108,6 +108,10 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY_GPU: usize = 2;
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
 pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
+/// Transaction forwarding, which leader to forward to and how long to hold
+pub const FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET: u64 = 2;
+pub const HOLD_TRANSACTIONS_SLOT_OFFSET: u64 = 20;
+
 /// The unit of time given to a leader for encoding a block.
 ///
 /// It is some some number of _ticks_ long.

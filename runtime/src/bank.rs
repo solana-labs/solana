@@ -83,6 +83,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
+    solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
@@ -105,7 +106,7 @@ use {
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
             INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-            SECONDS_PER_DAY,
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU, SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -141,7 +142,7 @@ use {
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
+            self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
@@ -7735,6 +7736,36 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .try_get_epoch_accounts_hash()
+    }
+
+    /// Checks a batch of sanitized transactions again bank for age and status
+    pub fn check_transactions_with_forwarding_delay(
+        &self,
+        transactions: &[SanitizedTransaction],
+        filter: &[transaction::Result<()>],
+        forward_transactions_to_leader_at_slot_offset: u64,
+    ) -> Vec<TransactionCheckResult> {
+        let mut error_counters = TransactionErrorMetrics::default();
+        // The following code also checks if the blockhash for a transaction is too old
+        // The check accounts for
+        //  1. Transaction forwarding delay
+        //  2. The slot at which the next leader will actually process the transaction
+        // Drop the transaction if it will expire by the time the next node receives and processes it
+        let api = perf_libs::api();
+        let max_tx_fwd_delay = if api.is_none() {
+            MAX_TRANSACTION_FORWARDING_DELAY
+        } else {
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        };
+
+        self.check_transactions(
+            transactions,
+            filter,
+            (MAX_PROCESSING_AGE)
+                .saturating_sub(max_tx_fwd_delay)
+                .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
+            &mut error_counters,
+        )
     }
 }
 
