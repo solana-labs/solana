@@ -150,25 +150,25 @@ pub enum VoteInstruction {
 
 impl VoteInstruction {
     pub fn is_simple_vote(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Vote(_)
-            | Self::VoteSwitch(_, _)
-            | Self::UpdateVoteState(_)
-            | Self::UpdateVoteStateSwitch(_, _)
-            | Self::CompactUpdateVoteState(_)
-            | Self::CompactUpdateVoteStateSwitch(_, _) => true,
-            _ => false,
-        }
+                | Self::VoteSwitch(_, _)
+                | Self::UpdateVoteState(_)
+                | Self::UpdateVoteStateSwitch(_, _)
+                | Self::CompactUpdateVoteState(_)
+                | Self::CompactUpdateVoteStateSwitch(_, _),
+        )
     }
 
     pub fn is_single_vote_state_update(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::UpdateVoteState(_)
-            | Self::UpdateVoteStateSwitch(_, _)
-            | Self::CompactUpdateVoteState(_)
-            | Self::CompactUpdateVoteStateSwitch(_, _) => true,
-            _ => false,
-        }
+                | Self::UpdateVoteStateSwitch(_, _)
+                | Self::CompactUpdateVoteState(_)
+                | Self::CompactUpdateVoteStateSwitch(_, _),
+        )
     }
 
     /// Only to be used on vote instructions (guard with is_simple_vote),  panics otherwise
