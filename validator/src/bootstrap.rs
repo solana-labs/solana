@@ -1189,7 +1189,7 @@ mod with_incremental_snapshots {
                     incremental_snapshot_fetch,
                 ) {
                     debug!(
-                        "Snapshot hashes have note been discovered from known validators. \
+                        "Snapshot hashes have not been discovered from known validators. \
                         This likely means the gossip tables are not fully populated. \
                         We will sleep and retry..."
                     );
