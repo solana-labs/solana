@@ -51,6 +51,7 @@ use {
         },
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
+        big_mod_exp::BigModExpParams,
     },
     std::{
         alloc::Layout,
@@ -62,6 +63,8 @@ use {
         sync::Arc,
     },
     thiserror::Error as ThisError,
+    num_bigint::BigUint,
+    num_traits::{One, Zero},
 };
 
 mod cpi;
@@ -285,6 +288,9 @@ pub fn register_syscalls(
 
     // Log data
     syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
+
+    // Big mod exp
+    syscall_registry.register_syscall_by_name(b"sol_big_mod_exp", SyscallBigModExp::call)?;
 
     Ok(syscall_registry)
 }
@@ -1645,6 +1651,85 @@ declare_syscall!(
                 }
             }
         }
+        Ok(0)
+    }
+);
+
+declare_syscall!(
+    /// Big integer modular exponentiation
+    SyscallBigModExp,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        params: u64,
+        return_value: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        let budget = invoke_context.get_compute_budget();
+        invoke_context.get_compute_meter().consume(
+                budget.syscall_base_cost.saturating_add(
+                    budget.big_modular_exponentiation_cost
+                )
+        )?;
+
+        let params = &translate_slice::<BigModExpParams>(
+                memory_mapping,
+                params,
+                1,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+        )?[0];
+
+        let base = translate_slice::<u8>(
+                memory_mapping,
+                params.base as *const _ as * const u8 as u64,
+                params.base_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+        )?;
+
+        let exponent = translate_slice::<u8>(
+                memory_mapping,
+                params.exponent as *const _ as * const u8 as u64,
+                params.exponent_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+        )?;
+
+        let modulus = translate_slice::<u8>(
+                memory_mapping,
+                params.modulus as *const _ as * const u8 as u64,
+                params.modulus_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+        )?;
+
+        let base = BigUint::from_bytes_be(base);
+        let exponent = BigUint::from_bytes_be(exponent);
+        let modulus = BigUint::from_bytes_be(modulus);
+
+        let value = if modulus.is_zero() || modulus.is_one() {
+            vec![0_u8; params.modulus_len as usize]
+        }
+        else{
+            let res = base.modpow(&exponent, &modulus);
+            let res = res.to_bytes_be();
+            let mut value = vec![0_u8; params.modulus_len as usize - res.len()];
+            value.extend(res);
+            value
+        };
+
+        let return_value = translate_slice_mut::<u8>(
+                memory_mapping,
+                return_value,
+                params.modulus_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size()
+        )?;
+        return_value.copy_from_slice(value.as_slice());
+
         Ok(0)
     }
 );
