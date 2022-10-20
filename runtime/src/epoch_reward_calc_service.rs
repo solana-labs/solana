@@ -152,7 +152,7 @@ impl<T> EpochRewardCalculator<T> {
 
 /// Epoch rewards calculation metrics
 #[derive(Debug, Default)]
-pub(crate) struct RewardsCalcMetrics {
+struct RewardsCalcMetrics {
     epoch: Epoch,
     slot: Slot,
     parent_slot: Slot,

@@ -186,7 +186,7 @@ pub struct VerifyBankHash {
 }
 
 #[derive(Debug, Default)]
-pub struct RewardsMetrics {
+pub(crate) struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
     calculate_points_us: AtomicU64,
     redeem_rewards_us: u64,
@@ -199,7 +199,7 @@ pub struct RewardsMetrics {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct RewardsStoreMetrics {
+struct RewardsStoreMetrics {
     epoch: Epoch,
     slot: Slot,
     parent_slot: Slot,
@@ -2964,9 +2964,8 @@ impl Bank {
         }
     }
 
-    pub fn load_reward_calc_info(
+    pub(crate) fn load_reward_calc_info(
         &self,
-        //prev_epoch: Epoch,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
     ) -> DashMap<Pubkey, VoteWithStakeDelegations> {
@@ -3013,7 +3012,7 @@ impl Bank {
         vote_with_stake_delegations_map
     }
 
-    pub fn do_stake_reward_calc(
+    pub(crate) fn do_stake_reward_calc(
         &self,
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
         prev_epoch: Epoch,
