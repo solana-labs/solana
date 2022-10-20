@@ -8,7 +8,7 @@ pub struct DynamicLayoutArray<'a, T> {
     _element_type: std::marker::PhantomData<&'a T>,
     element_count: u32,
     values_stride: u32,
-    values_offset: u32,
+    pub values_offset: u32,
 }
 
 impl<'a, T> DynamicLayoutArray<'a, T> {

@@ -4,12 +4,15 @@
 #[cfg(target_os = "solana")]
 use crate::instruction::AccountPropertyUpdate;
 #[cfg(not(target_os = "solana"))]
-use crate::{
-    account::WritableAccount,
-    rent::Rent,
-    system_instruction::{
-        MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+use {
+    crate::{
+        account::WritableAccount,
+        rent::Rent,
+        system_instruction::{
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+        },
     },
+    solana_program::syscalls::{MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN},
 };
 use {
     crate::{
@@ -17,6 +20,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
     },
+    solana_memory_management::dynamic_layout::DynamicLayoutArray,
     std::{
         cell::{RefCell, RefMut},
         collections::HashSet,
@@ -83,7 +87,7 @@ pub type IndexOfAccount = u16;
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct InstructionAccount {
     /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: IndexOfAccount,
@@ -104,6 +108,15 @@ pub struct InstructionAccount {
 /// An account key and the matching account
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+#[cfg(not(target_os = "solana"))]
+const HOST_ALIGN: usize = 8;
+
+#[cfg(not(target_os = "solana"))]
+const INSTRUCTION_TRACE_CPI_PREALLOCATION: usize = std::mem::size_of::<InstructionContext>()
+    + MAX_CPI_INSTRUCTION_DATA_LEN as usize
+    + MAX_CPI_INSTRUCTION_ACCOUNTS as usize * std::mem::size_of::<InstructionAccount>()
+    + HOST_ALIGN;
+
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
@@ -116,7 +129,8 @@ pub struct TransactionContext {
     instruction_stack_capacity: usize,
     instruction_trace_capacity: usize,
     instruction_stack: Vec<usize>,
-    instruction_trace: Vec<InstructionContext>,
+    instruction_trace: Vec<u8>,
+    instruction_context_offsets: Vec<usize>,
     return_data: TransactionReturnData,
     accounts_resize_delta: RefCell<i64>,
     #[cfg(not(target_os = "solana"))]
@@ -147,7 +161,8 @@ impl TransactionContext {
             instruction_stack_capacity,
             instruction_trace_capacity,
             instruction_stack: Vec::with_capacity(instruction_stack_capacity),
-            instruction_trace: vec![InstructionContext::default()],
+            instruction_trace: vec![0u8; INSTRUCTION_TRACE_CPI_PREALLOCATION],
+            instruction_context_offsets: vec![0],
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
             rent,
@@ -225,7 +240,7 @@ impl TransactionContext {
     /// Not counting the last empty InstructionContext which is always pre-reserved for the next instruction.
     /// See also `get_next_instruction_context()`.
     pub fn get_instruction_trace_length(&self) -> usize {
-        self.instruction_trace.len().saturating_sub(1)
+        self.instruction_context_offsets.len().saturating_sub(1)
     }
 
     /// Gets an InstructionContext by its index in the trace
@@ -233,9 +248,16 @@ impl TransactionContext {
         &self,
         index_in_trace: usize,
     ) -> Result<&InstructionContext, InstructionError> {
-        self.instruction_trace
+        let instruction_context_offset = *self
+            .instruction_context_offsets
             .get(index_in_trace)
-            .ok_or(InstructionError::CallDepth)
+            .ok_or(InstructionError::CallDepth)?;
+        Ok(unsafe {
+            &*(self
+                .instruction_trace
+                .as_ptr()
+                .add(instruction_context_offset) as *const InstructionContext)
+        })
     }
 
     /// Gets an InstructionContext by its nesting level in the stack
@@ -248,7 +270,7 @@ impl TransactionContext {
             .get(nesting_level)
             .ok_or(InstructionError::CallDepth)?;
         let instruction_context = self.get_instruction_context_at_index_in_trace(index_in_trace)?;
-        debug_assert_eq!(instruction_context.nesting_level, nesting_level);
+        debug_assert_eq!(instruction_context.nesting_level as usize, nesting_level);
         Ok(instruction_context)
     }
 
@@ -278,21 +300,21 @@ impl TransactionContext {
     pub fn get_next_instruction_context(
         &mut self,
     ) -> Result<&mut InstructionContext, InstructionError> {
-        self.instruction_trace
-            .last_mut()
-            .ok_or(InstructionError::CallDepth)
+        let instruction_context_offset = *self
+            .instruction_context_offsets
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        Ok(unsafe {
+            &mut *(self
+                .instruction_trace
+                .as_mut_ptr()
+                .add(instruction_context_offset) as *mut InstructionContext)
+        })
     }
 
     /// Pushes the next InstructionContext
     #[cfg(not(target_os = "solana"))]
     pub fn push(&mut self) -> Result<(), InstructionError> {
-        let nesting_level = self.get_instruction_context_stack_height();
-        let caller_instruction_context = self
-            .instruction_trace
-            .last()
-            .ok_or(InstructionError::CallDepth)?;
-        let callee_instruction_accounts_lamport_sum =
-            self.instruction_accounts_lamport_sum(caller_instruction_context)?;
         if !self.instruction_stack.is_empty()
             && self.is_early_verification_of_account_modifications_enabled()
         {
@@ -307,17 +329,41 @@ impl TransactionContext {
                 return Err(InstructionError::UnbalancedInstruction);
             }
         }
-        {
+        let nesting_level = self.get_instruction_context_stack_height();
+        let callee_instruction_accounts_lamport_sum = self.instruction_accounts_lamport_sum(
+            self.get_instruction_context_at_index_in_trace(self.get_instruction_trace_length())?,
+        )?;
+        let start_offset = *self
+            .instruction_context_offsets
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        let aligned_end_offset = {
             let mut instruction_context = self.get_next_instruction_context()?;
-            instruction_context.nesting_level = nesting_level;
+            instruction_context.nesting_level = nesting_level as u8;
             instruction_context.instruction_accounts_lamport_sum =
                 callee_instruction_accounts_lamport_sum;
-        }
+            let offset_of_instruction_data_in_instruction_context =
+                (&instruction_context.instruction_data as *const _ as usize)
+                    .saturating_sub(instruction_context as *const InstructionContext as usize);
+            start_offset
+                .saturating_add(offset_of_instruction_data_in_instruction_context)
+                .saturating_add(instruction_context.instruction_data.end_offset())
+                .saturating_add(HOST_ALIGN)
+                .saturating_sub(1)
+                & !HOST_ALIGN.saturating_sub(1)
+        };
+        debug_assert!(
+            aligned_end_offset.saturating_sub(start_offset) <= INSTRUCTION_TRACE_CPI_PREALLOCATION
+        );
         let index_in_trace = self.get_instruction_trace_length();
         if index_in_trace >= self.instruction_trace_capacity {
             return Err(InstructionError::MaxInstructionTraceLengthExceeded);
         }
-        self.instruction_trace.push(InstructionContext::default());
+        self.instruction_context_offsets.push(aligned_end_offset);
+        self.instruction_trace.resize(
+            aligned_end_offset.saturating_add(INSTRUCTION_TRACE_CPI_PREALLOCATION),
+            0,
+        );
         if nesting_level >= self.instruction_stack_capacity {
             return Err(InstructionError::CallDepth);
         }
@@ -332,25 +378,30 @@ impl TransactionContext {
             return Err(InstructionError::CallDepth);
         }
         // Verify (before we pop) that the total sum of all lamports in this instruction did not change
-        let detected_an_unbalanced_instruction =
-            if self.is_early_verification_of_account_modifications_enabled() {
-                self.get_current_instruction_context()
-                    .and_then(|instruction_context| {
-                        // Verify all executable accounts have no outstanding refs
-                        for account_index in instruction_context.program_accounts.iter() {
-                            self.get_account_at_index(*account_index)?
-                                .try_borrow_mut()
-                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-                        }
-                        self.instruction_accounts_lamport_sum(instruction_context)
-                            .map(|instruction_accounts_lamport_sum| {
-                                instruction_context.instruction_accounts_lamport_sum
-                                    != instruction_accounts_lamport_sum
-                            })
-                    })
-            } else {
-                Ok(false)
-            };
+        let detected_an_unbalanced_instruction = if self
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            self.get_current_instruction_context()
+                .and_then(|instruction_context| {
+                    // Verify all executable accounts have no outstanding refs
+                    for program_account_index in
+                        0..instruction_context.get_number_of_program_accounts()
+                    {
+                        let index_in_transaction = instruction_context
+                            .get_index_of_program_account_in_transaction(program_account_index)?;
+                        self.get_account_at_index(index_in_transaction)?
+                            .try_borrow_mut()
+                            .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                    }
+                    self.instruction_accounts_lamport_sum(instruction_context)
+                        .map(|instruction_accounts_lamport_sum| {
+                            instruction_context.instruction_accounts_lamport_sum
+                                != instruction_accounts_lamport_sum
+                        })
+                })
+        } else {
+            Ok(false)
+        };
         // Always pop, even if we `detected_an_unbalanced_instruction`
         self.instruction_stack.pop();
         if detected_an_unbalanced_instruction? {
@@ -431,34 +482,66 @@ pub struct TransactionReturnData {
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-pub struct InstructionContext {
-    nesting_level: usize,
+#[derive(Debug, Clone)]
+pub struct InstructionContext<'a> {
+    program_accounts: DynamicLayoutArray<'a, IndexOfAccount>,
+    instruction_accounts: DynamicLayoutArray<'a, InstructionAccount>,
+    instruction_data: DynamicLayoutArray<'a, u8>,
+    nesting_level: u8,
     instruction_accounts_lamport_sum: u128,
-    program_accounts: Vec<IndexOfAccount>,
-    instruction_accounts: Vec<InstructionAccount>,
-    instruction_data: Vec<u8>,
 }
 
-impl InstructionContext {
+impl<'a> InstructionContext<'a> {
     /// Used together with TransactionContext::get_next_instruction_context()
-    #[cfg(not(target_os = "solana"))]
     pub fn configure(
         &mut self,
         program_accounts: &[IndexOfAccount],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) {
-        self.program_accounts = program_accounts.to_vec();
-        self.instruction_accounts = instruction_accounts.to_vec();
-        self.instruction_data = instruction_data.to_vec();
+        self.program_accounts.initialize_as_consecutive(
+            std::mem::size_of::<InstructionContext>(),
+            program_accounts.len(),
+        );
+        self.instruction_accounts.initialize_as_consecutive(
+            self.program_accounts.end_offset(),
+            instruction_accounts.len(),
+        );
+        self.instruction_data.initialize_as_consecutive(
+            self.instruction_accounts.end_offset(),
+            instruction_data.len(),
+        );
+        self.program_accounts.values_offset = self.program_accounts.values_offset.saturating_sub(
+            (&self.program_accounts as *const _ as u32).saturating_sub(self as *const Self as u32),
+        );
+        self.instruction_accounts.values_offset =
+            self.instruction_accounts.values_offset.saturating_sub(
+                (&self.instruction_accounts as *const _ as u32)
+                    .saturating_sub(self as *const Self as u32),
+            );
+        self.instruction_data.values_offset = self.instruction_data.values_offset.saturating_sub(
+            (&self.instruction_data as *const _ as u32).saturating_sub(self as *const Self as u32),
+        );
+        for (dst, src) in self
+            .program_accounts
+            .iter_mut()
+            .zip(program_accounts.iter())
+        {
+            *dst = *src as u16;
+        }
+        self.instruction_accounts
+            .as_mut_slice()
+            .copy_from_slice(instruction_accounts);
+        self.instruction_data
+            .as_mut_slice()
+            .copy_from_slice(instruction_data);
     }
 
     /// How many Instructions were on the stack after this one was pushed
     ///
     /// That is the number of nested parent Instructions plus one (itself).
     pub fn get_stack_height(&self) -> usize {
-        self.nesting_level.saturating_add(1)
+        self.nesting_level.saturating_add(1) as usize
     }
 
     /// Returns the sum of lamports of the instruction accounts in this Instruction
@@ -490,7 +573,7 @@ impl InstructionContext {
 
     /// Data parameter for the programs `process_instruction` handler
     pub fn get_instruction_data(&self) -> &[u8] {
-        &self.instruction_data
+        self.instruction_data.as_slice()
     }
 
     /// Searches for a program account by its key
@@ -569,8 +652,8 @@ impl InstructionContext {
     }
 
     /// Gets the key of the last program account of this Instruction
-    pub fn get_last_program_key<'a, 'b: 'a>(
-        &'a self,
+    pub fn get_last_program_key<'b: 'a>(
+        &self,
         transaction_context: &'b TransactionContext,
     ) -> Result<&'b Pubkey, InstructionError> {
         self.get_index_of_program_account_in_transaction(
@@ -581,7 +664,7 @@ impl InstructionContext {
         })
     }
 
-    fn try_borrow_account<'a, 'b: 'a>(
+    fn try_borrow_account<'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
         index_in_transaction: IndexOfAccount,
@@ -603,7 +686,7 @@ impl InstructionContext {
     }
 
     /// Gets the last program account of this Instruction
-    pub fn try_borrow_last_program_account<'a, 'b: 'a>(
+    pub fn try_borrow_last_program_account<'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
@@ -616,7 +699,7 @@ impl InstructionContext {
     }
 
     /// Tries to borrow a program account from this Instruction
-    pub fn try_borrow_program_account<'a, 'b: 'a>(
+    pub fn try_borrow_program_account<'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
         program_account_index: IndexOfAccount,
@@ -631,7 +714,7 @@ impl InstructionContext {
     }
 
     /// Gets an instruction account of this Instruction
-    pub fn try_borrow_instruction_account<'a, 'b: 'a>(
+    pub fn try_borrow_instruction_account<'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
         instruction_account_index: IndexOfAccount,
@@ -692,7 +775,7 @@ impl InstructionContext {
 #[derive(Debug)]
 pub struct BorrowedAccount<'a> {
     transaction_context: &'a TransactionContext,
-    instruction_context: &'a InstructionContext,
+    instruction_context: &'a InstructionContext<'a>,
     index_in_transaction: IndexOfAccount,
     index_in_instruction: IndexOfAccount,
     account: RefMut<'a, AccountSharedData>,
