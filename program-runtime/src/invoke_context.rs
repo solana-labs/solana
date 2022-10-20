@@ -595,9 +595,10 @@ impl<'a> InvokeContext<'a> {
         let instruction_accounts = duplicate_indicies
             .into_iter()
             .map(|duplicate_index| {
-                Ok(*deduplicated_instruction_accounts
+                Ok(deduplicated_instruction_accounts
                     .get(duplicate_index)
-                    .ok_or(InstructionError::NotEnoughAccountKeys)?)
+                    .ok_or(InstructionError::NotEnoughAccountKeys)?
+                    .clone())
             })
             .collect::<Result<Vec<InstructionAccount>, InstructionError>>()?;
 

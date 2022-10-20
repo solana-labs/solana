@@ -87,7 +87,7 @@ pub type IndexOfAccount = u16;
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionAccount {
     /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: IndexOfAccount,
@@ -484,11 +484,15 @@ pub struct TransactionReturnData {
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
 #[derive(Debug, Clone)]
 pub struct InstructionContext<'a> {
-    program_accounts: DynamicLayoutArray<'a, IndexOfAccount>,
-    instruction_accounts: DynamicLayoutArray<'a, InstructionAccount>,
-    instruction_data: DynamicLayoutArray<'a, u8>,
     nesting_level: u8,
     instruction_accounts_lamport_sum: u128,
+    instruction_data: DynamicLayoutArray<'a, u8>,
+    program_accounts: DynamicLayoutArray<'a, IndexOfAccount>,
+    instruction_account_index_in_transaction: DynamicLayoutArray<'a, IndexOfAccount>,
+    instruction_account_index_in_caller: DynamicLayoutArray<'a, IndexOfAccount>,
+    instruction_account_index_in_callee: DynamicLayoutArray<'a, IndexOfAccount>,
+    instruction_account_is_signer: DynamicLayoutArray<'a, bool>,
+    instruction_account_is_writable: DynamicLayoutArray<'a, bool>,
 }
 
 impl<'a> InstructionContext<'a> {
@@ -503,20 +507,71 @@ impl<'a> InstructionContext<'a> {
             std::mem::size_of::<InstructionContext>(),
             program_accounts.len(),
         );
-        self.instruction_accounts.initialize_as_consecutive(
-            self.program_accounts.end_offset(),
-            instruction_accounts.len(),
-        );
+        self.instruction_account_index_in_transaction
+            .initialize_as_consecutive(
+                self.program_accounts.end_offset(),
+                instruction_accounts.len(),
+            );
+        self.instruction_account_index_in_caller
+            .initialize_as_consecutive(
+                self.instruction_account_index_in_transaction.end_offset(),
+                instruction_accounts.len(),
+            );
+        self.instruction_account_index_in_callee
+            .initialize_as_consecutive(
+                self.instruction_account_index_in_caller.end_offset(),
+                instruction_accounts.len(),
+            );
+        self.instruction_account_is_signer
+            .initialize_as_consecutive(
+                self.instruction_account_index_in_callee.end_offset(),
+                instruction_accounts.len(),
+            );
+        self.instruction_account_is_writable
+            .initialize_as_consecutive(
+                self.instruction_account_is_signer.end_offset(),
+                instruction_accounts.len(),
+            );
         self.instruction_data.initialize_as_consecutive(
-            self.instruction_accounts.end_offset(),
+            self.instruction_account_is_writable.end_offset(),
             instruction_data.len(),
         );
         self.program_accounts.values_offset = self.program_accounts.values_offset.saturating_sub(
             (&self.program_accounts as *const _ as u32).saturating_sub(self as *const Self as u32),
         );
-        self.instruction_accounts.values_offset =
-            self.instruction_accounts.values_offset.saturating_sub(
-                (&self.instruction_accounts as *const _ as u32)
+        self.instruction_account_index_in_transaction.values_offset = self
+            .instruction_account_index_in_transaction
+            .values_offset
+            .saturating_sub(
+                (&self.instruction_account_index_in_transaction as *const _ as u32)
+                    .saturating_sub(self as *const Self as u32),
+            );
+        self.instruction_account_index_in_caller.values_offset = self
+            .instruction_account_index_in_caller
+            .values_offset
+            .saturating_sub(
+                (&self.instruction_account_index_in_caller as *const _ as u32)
+                    .saturating_sub(self as *const Self as u32),
+            );
+        self.instruction_account_index_in_callee.values_offset = self
+            .instruction_account_index_in_callee
+            .values_offset
+            .saturating_sub(
+                (&self.instruction_account_index_in_callee as *const _ as u32)
+                    .saturating_sub(self as *const Self as u32),
+            );
+        self.instruction_account_is_signer.values_offset = self
+            .instruction_account_is_signer
+            .values_offset
+            .saturating_sub(
+                (&self.instruction_account_is_signer as *const _ as u32)
+                    .saturating_sub(self as *const Self as u32),
+            );
+        self.instruction_account_is_writable.values_offset = self
+            .instruction_account_is_writable
+            .values_offset
+            .saturating_sub(
+                (&self.instruction_account_is_writable as *const _ as u32)
                     .saturating_sub(self as *const Self as u32),
             );
         self.instruction_data.values_offset = self.instruction_data.values_offset.saturating_sub(
@@ -529,9 +584,41 @@ impl<'a> InstructionContext<'a> {
         {
             *dst = *src as u16;
         }
-        self.instruction_accounts
-            .as_mut_slice()
-            .copy_from_slice(instruction_accounts);
+        for (dst, src) in self
+            .instruction_account_index_in_transaction
+            .iter_mut()
+            .zip(instruction_accounts.iter())
+        {
+            *dst = src.index_in_transaction as u16;
+        }
+        for (dst, src) in self
+            .instruction_account_index_in_caller
+            .iter_mut()
+            .zip(instruction_accounts.iter())
+        {
+            *dst = src.index_in_caller as u16;
+        }
+        for (dst, src) in self
+            .instruction_account_index_in_callee
+            .iter_mut()
+            .zip(instruction_accounts.iter())
+        {
+            *dst = src.index_in_callee as u16;
+        }
+        for (dst, src) in self
+            .instruction_account_is_signer
+            .iter_mut()
+            .zip(instruction_accounts.iter())
+        {
+            *dst = src.is_signer;
+        }
+        for (dst, src) in self
+            .instruction_account_is_writable
+            .iter_mut()
+            .zip(instruction_accounts.iter())
+        {
+            *dst = src.is_writable;
+        }
         self.instruction_data
             .as_mut_slice()
             .copy_from_slice(instruction_data);
@@ -556,7 +643,7 @@ impl<'a> InstructionContext<'a> {
 
     /// Number of accounts in this Instruction (without program accounts)
     pub fn get_number_of_instruction_accounts(&self) -> IndexOfAccount {
-        self.instruction_accounts.len() as IndexOfAccount
+        self.instruction_account_index_in_transaction.len() as IndexOfAccount
     }
 
     /// Assert that enough account were supplied to this Instruction
@@ -599,12 +686,12 @@ impl<'a> InstructionContext<'a> {
         transaction_context: &TransactionContext,
         pubkey: &Pubkey,
     ) -> Option<IndexOfAccount> {
-        self.instruction_accounts
+        self.instruction_account_index_in_transaction
             .iter()
-            .position(|instruction_account| {
+            .position(|index_in_transaction| {
                 transaction_context
                     .account_keys
-                    .get(instruction_account.index_in_transaction as usize)
+                    .get(*index_in_transaction as usize)
                     == Some(pubkey)
             })
             .map(|index| index as IndexOfAccount)
@@ -626,11 +713,10 @@ impl<'a> InstructionContext<'a> {
         &self,
         instruction_account_index: IndexOfAccount,
     ) -> Result<IndexOfAccount, InstructionError> {
-        Ok(self
-            .instruction_accounts
+        Ok(*self
+            .instruction_account_index_in_transaction
             .get(instruction_account_index as usize)
-            .ok_or(InstructionError::NotEnoughAccountKeys)?
-            .index_in_transaction as IndexOfAccount)
+            .ok_or(InstructionError::NotEnoughAccountKeys)?)
     }
 
     /// Returns `Some(instruction_account_index)` if this is a duplicate
@@ -639,11 +725,10 @@ impl<'a> InstructionContext<'a> {
         &self,
         instruction_account_index: IndexOfAccount,
     ) -> Result<Option<IndexOfAccount>, InstructionError> {
-        let index_in_callee = self
-            .instruction_accounts
+        let index_in_callee = *self
+            .instruction_account_index_in_callee
             .get(instruction_account_index as usize)
-            .ok_or(InstructionError::NotEnoughAccountKeys)?
-            .index_in_callee;
+            .ok_or(InstructionError::NotEnoughAccountKeys)?;
         Ok(if index_in_callee == instruction_account_index {
             None
         } else {
@@ -734,11 +819,10 @@ impl<'a> InstructionContext<'a> {
         &self,
         instruction_account_index: IndexOfAccount,
     ) -> Result<bool, InstructionError> {
-        Ok(self
-            .instruction_accounts
+        Ok(*self
+            .instruction_account_is_signer
             .get(instruction_account_index as usize)
-            .ok_or(InstructionError::MissingAccount)?
-            .is_signer)
+            .ok_or(InstructionError::MissingAccount)?)
     }
 
     /// Returns whether an instruction account is writable
@@ -746,11 +830,10 @@ impl<'a> InstructionContext<'a> {
         &self,
         instruction_account_index: IndexOfAccount,
     ) -> Result<bool, InstructionError> {
-        Ok(self
-            .instruction_accounts
+        Ok(*self
+            .instruction_account_is_writable
             .get(instruction_account_index as usize)
-            .ok_or(InstructionError::MissingAccount)?
-            .is_writable)
+            .ok_or(InstructionError::MissingAccount)?)
     }
 
     /// Calculates the set of all keys of signer instruction accounts in this Instruction
@@ -759,11 +842,14 @@ impl<'a> InstructionContext<'a> {
         transaction_context: &TransactionContext,
     ) -> Result<HashSet<Pubkey>, InstructionError> {
         let mut result = HashSet::new();
-        for instruction_account in self.instruction_accounts.iter() {
-            if instruction_account.is_signer {
+        for (index_in_transaction, is_signer) in self
+            .instruction_account_index_in_transaction
+            .iter()
+            .zip(self.instruction_account_is_signer.iter())
+        {
+            if *is_signer {
                 result.insert(
-                    *transaction_context
-                        .get_key_of_account_at_index(instruction_account.index_in_transaction)?,
+                    *transaction_context.get_key_of_account_at_index(*index_in_transaction)?,
                 );
             }
         }
