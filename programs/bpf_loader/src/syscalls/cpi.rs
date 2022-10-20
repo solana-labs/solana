@@ -1105,12 +1105,12 @@ mod tests {
         let key = Pubkey::new_unique();
         let vm_addr = MM_INPUT_START;
         let (_mem, region) = MockAccountInfo {
-            key: key.clone(),
+            key,
             is_signer: false,
             is_writable: false,
             lamports: account.lamports(),
             data: account.data(),
-            owner: account.owner().clone(),
+            owner: *account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         }
@@ -1171,7 +1171,7 @@ mod tests {
         let mut caller_account = mock_caller_account.caller_account();
 
         let mut callee_account = instruction_context
-            .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
             .unwrap();
 
         callee_account.set_lamports(42).unwrap();
@@ -1230,7 +1230,7 @@ mod tests {
         let mut caller_account = mock_caller_account.caller_account();
 
         let mut callee_account = instruction_context
-            .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
             .unwrap();
 
         for (new_value, expected_realloc_size) in [
@@ -1305,11 +1305,11 @@ mod tests {
         let mut mock_caller_account =
             MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
 
-        let mut caller_account = mock_caller_account.caller_account();
+        let caller_account = mock_caller_account.caller_account();
 
         let get_callee = || {
             instruction_context
-                .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
                 .unwrap()
         };
         let callee_account = get_callee();
@@ -1317,7 +1317,7 @@ mod tests {
         *caller_account.lamports = 42;
         *caller_account.owner = Pubkey::new_unique();
 
-        update_callee_account(&invoke_context, &mut caller_account, callee_account).unwrap();
+        update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
 
         let callee_account = get_callee();
         assert_eq!(callee_account.get_lamports(), 42);
@@ -1345,7 +1345,7 @@ mod tests {
 
         let get_callee = || {
             instruction_context
-                .try_borrow_instruction_account(&invoke_context.transaction_context, 0)
+                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
                 .unwrap()
         };
         let callee_account = get_callee();
@@ -1353,7 +1353,7 @@ mod tests {
         let mut data = b"foo".to_vec();
         caller_account.data = &mut data;
 
-        update_callee_account(&invoke_context, &mut caller_account, callee_account).unwrap();
+        update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
 
         let callee_account = get_callee();
         assert_eq!(callee_account.get_data(), caller_account.data);
@@ -1363,7 +1363,7 @@ mod tests {
     fn test_translate_accounts_rust() {
         let transaction_accounts = one_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
-        let key = transaction_accounts[1].0.clone();
+        let key = transaction_accounts[1].0;
         let original_data_len = account.data().len();
 
         let mut invoke_context_builder =
@@ -1383,12 +1383,12 @@ mod tests {
 
         let vm_addr = MM_INPUT_START;
         let (_mem, region) = MockAccountInfo {
-            key: key.clone(),
+            key,
             is_signer: false,
             is_writable: false,
             lamports: account.lamports(),
             data: account.data(),
-            owner: account.owner().clone(),
+            owner: *account.owner(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
         }
@@ -1580,7 +1580,7 @@ mod tests {
                 }),
                 false,
             ),
-            (Pubkey::new_unique(), account.clone(), true),
+            (Pubkey::new_unique(), account, true),
         ]
     }
 
