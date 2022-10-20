@@ -24,7 +24,7 @@ export function VoteAccountSection({
     <div className="card">
       <AccountHeader
         title="Vote Account"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>

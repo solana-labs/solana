@@ -27,6 +27,7 @@ import {
 import { InstructionsSection } from "src/components/inspector/InstructionsSection";
 import base58 from "bs58";
 import { dummyUrl } from "src/constants/urls";
+import { useFetchAccountInfo } from "src/providers/accounts";
 
 export type TransactionData = {
   rawMessage: Uint8Array;
@@ -289,6 +290,13 @@ function LoadedView({
   onClear: () => void;
 }) {
   const { message, rawMessage, signatures } = transaction;
+
+  const fetchAccountInfo = useFetchAccountInfo();
+  React.useEffect(() => {
+    for (let lookup of message.addressTableLookups) {
+      fetchAccountInfo(lookup.accountKey, "parsed");
+    }
+  }, [message, fetchAccountInfo]);
 
   return (
     <>

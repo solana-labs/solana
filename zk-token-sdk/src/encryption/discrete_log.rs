@@ -17,7 +17,7 @@
 #![cfg(not(target_os = "solana"))]
 
 use {
-    crate::errors::ProofError,
+    crate::encryption::errors::EncryptionError,
     curve25519_dalek::{
         constants::RISTRETTO_BASEPOINT_POINT as G,
         ristretto::RistrettoPoint,
@@ -100,10 +100,10 @@ impl DiscreteLog {
     }
 
     /// Adjusts number of threads in a discrete log instance.
-    pub fn num_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
+    pub fn num_threads(&mut self, num_threads: usize) -> Result<(), EncryptionError> {
         // number of threads must be a positive power-of-two integer
         if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > 65536 {
-            return Err(ProofError::DiscreteLogThreads);
+            return Err(EncryptionError::DiscreteLogThreads);
         }
 
         self.num_threads = num_threads;
@@ -117,9 +117,9 @@ impl DiscreteLog {
     pub fn set_compression_batch_size(
         &mut self,
         compression_batch_size: usize,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), EncryptionError> {
         if compression_batch_size >= TWO16 as usize {
-            return Err(ProofError::DiscreteLogBatchSize);
+            return Err(EncryptionError::DiscreteLogBatchSize);
         }
         self.compression_batch_size = compression_batch_size;
 

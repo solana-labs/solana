@@ -96,14 +96,6 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
     MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
 }
 
-/// true iff storage is ancient size and is almost completely full
-pub fn is_full_ancient(storage: &AppendVec) -> bool {
-    // not sure of slop amount here. Maybe max account size with 10MB data?
-    // append vecs can't usually be made entirely full
-    let threshold_bytes = 10_000;
-    is_ancient(storage) && storage.remaining_bytes() < threshold_bytes
-}
-
 /// is this a max-size append vec designed to be used as an ancient append vec?
 pub fn is_ancient(storage: &AppendVec) -> bool {
     storage.capacity() >= get_ancient_append_vec_capacity()
@@ -219,30 +211,6 @@ pub mod tests {
             let av = AppendVec::new(&tf.path, true, size as usize);
 
             assert_eq!(expected_ancient, is_ancient(&av));
-            assert!(!is_full_ancient(&av));
         }
-    }
-
-    #[test]
-    fn test_is_full_ancient() {
-        let size = get_ancient_append_vec_capacity();
-        let tf = crate::append_vec::test_utils::get_append_vec_path("test_is_ancient");
-        let (_temp_dirs, _paths) = get_temp_accounts_paths(1).unwrap();
-        let av = AppendVec::new(&tf.path, true, size as usize);
-        assert!(is_ancient(&av));
-        assert!(!is_full_ancient(&av));
-        let overhead = 400;
-        let data_len = size - overhead;
-        let mut account = AccountSharedData::default();
-        account.set_data(vec![0; data_len as usize]);
-
-        let sm = StoredMeta {
-            write_version: 0,
-            pubkey: Pubkey::new(&[0; 32]),
-            data_len: data_len as u64,
-        };
-        av.append_accounts(&[(sm, Some(&account))], &[Hash::default()]);
-        assert!(is_ancient(&av));
-        assert!(is_full_ancient(&av), "Remaining: {}", av.remaining_bytes());
     }
 }

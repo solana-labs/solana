@@ -33,6 +33,7 @@ use {
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
+        offchain_message::OffchainMessage,
         pubkey::Pubkey,
         signature::Signature,
         stake,
@@ -274,6 +275,71 @@ impl WalletSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(compute_unit_price_arg()),
         )
+        .subcommand(
+            SubCommand::with_name("sign-offchain-message")
+                .about("Sign off-chain message")
+                .arg(
+                    Arg::with_name("message")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("STRING")
+                        .required(true)
+                        .help("The message text to be signed")
+                )
+                .arg(
+                    Arg::with_name("version")
+                        .long("version")
+                        .takes_value(true)
+                        .value_name("VERSION")
+                        .required(false)
+                        .default_value("0")
+                        .validator(|p| match p.parse::<u8>() {
+                            Err(_) => Err(String::from("Must be unsigned integer")),
+                            Ok(_) => { Ok(()) }
+                        })
+                        .help("The off-chain message version")
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("verify-offchain-signature")
+                .about("Verify off-chain message signature")
+                .arg(
+                    Arg::with_name("message")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("STRING")
+                        .required(true)
+                        .help("The text of the original message")
+                )
+                .arg(
+                    Arg::with_name("signature")
+                        .index(2)
+                        .value_name("SIGNATURE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The message signature to verify")
+                )
+                .arg(
+                    Arg::with_name("version")
+                        .long("version")
+                        .takes_value(true)
+                        .value_name("VERSION")
+                        .required(false)
+                        .default_value("0")
+                        .validator(|p| match p.parse::<u8>() {
+                            Err(_) => Err(String::from("Must be unsigned integer")),
+                            Ok(_) => { Ok(()) }
+                        })
+                        .help("The off-chain message version")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("signer")
+                        .long("signer")
+                        .value_name("PUBKEY")
+                        .required(false),
+                        "The pubkey of the message signer (if different from config default)")
+                )
+        )
     }
 }
 
@@ -444,6 +510,54 @@ pub fn parse_transfer(
             compute_unit_price,
         },
         signers: signer_info.signers,
+    })
+}
+
+pub fn parse_sign_offchain_message(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let version: u8 = value_of(matches, "version").unwrap();
+    let message_text: String = value_of(matches, "message")
+        .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
+    let message = OffchainMessage::new(version, message_text.as_bytes())
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::SignOffchainMessage { message },
+        signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
+    })
+}
+
+pub fn parse_verify_offchain_signature(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let version: u8 = value_of(matches, "version").unwrap();
+    let message_text: String = value_of(matches, "message")
+        .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
+    let message = OffchainMessage::new(version, message_text.as_bytes())
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+
+    let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;
+    let signers = if signer_pubkey.is_some() {
+        vec![]
+    } else {
+        vec![default_signer.signer_from_path(matches, wallet_manager)?]
+    };
+
+    let signature = value_of(matches, "signature")
+        .ok_or_else(|| CliError::BadParameter("SIGNATURE".to_string()))?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::VerifyOffchainSignature {
+            signer_pubkey,
+            signature,
+            message,
+        },
+        signers,
     })
 }
 
@@ -777,5 +891,31 @@ pub fn process_transfer(
             rpc_client.send_and_confirm_transaction_with_spinner(&tx)
         };
         log_instruction_custom_error::<SystemError>(result, config)
+    }
+}
+
+pub fn process_sign_offchain_message(
+    config: &CliConfig,
+    message: &OffchainMessage,
+) -> ProcessResult {
+    Ok(message.sign(config.signers[0])?.to_string())
+}
+
+pub fn process_verify_offchain_signature(
+    config: &CliConfig,
+    signer_pubkey: &Option<Pubkey>,
+    signature: &Signature,
+    message: &OffchainMessage,
+) -> ProcessResult {
+    let signer = if let Some(pubkey) = signer_pubkey {
+        *pubkey
+    } else {
+        config.signers[0].pubkey()
+    };
+
+    if message.verify(&signer, signature)? {
+        Ok("Signature is valid".to_string())
+    } else {
+        Err(CliError::InvalidSignature.into())
     }
 }

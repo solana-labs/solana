@@ -189,6 +189,7 @@ fn main() {
         let serialized = serde_yaml::to_string(&accounts).unwrap();
         let path = Path::new(&client_ids_and_stake_file);
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
         return;
     }

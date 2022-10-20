@@ -28,7 +28,7 @@ export function NFTokenAccountSection({ account }: { account: Account }) {
 
 const NFTCard = ({ nft }: { nft: NftokenTypes.NftAccount }) => {
   const fetchInfo = useFetchAccountInfo();
-  const refresh = () => fetchInfo(new PublicKey(nft.address));
+  const refresh = () => fetchInfo(new PublicKey(nft.address), "parsed");
 
   return (
     <div className="card">
@@ -163,7 +163,7 @@ const CollectionCard = ({
   collection: NftokenTypes.CollectionAccount;
 }) => {
   const fetchInfo = useFetchAccountInfo();
-  const refresh = () => fetchInfo(new PublicKey(collection.address));
+  const refresh = () => fetchInfo(new PublicKey(collection.address), "parsed");
 
   return (
     <div className="card">

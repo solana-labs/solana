@@ -17,12 +17,9 @@ export const createFeePayerValidator = (
   feeLamports: number
 ): AccountValidator => {
   return (account: Account): string | undefined => {
-    if (account.details === undefined) return "Account doesn't exist";
-    if (!account.details.owner.equals(SystemProgram.programId))
+    if (account.lamports === 0) return "Account doesn't exist";
+    if (!account.owner.equals(SystemProgram.programId))
       return "Only system-owned accounts can pay fees";
-    // TODO: Actually nonce accounts can pay fees too
-    if (account.details.space > 0)
-      return "Only unallocated accounts can pay fees";
     if (account.lamports < feeLamports) {
       return "Insufficient funds for fees";
     }
@@ -31,9 +28,8 @@ export const createFeePayerValidator = (
 };
 
 export const programValidator = (account: Account): string | undefined => {
-  if (account.details === undefined) return "Account doesn't exist";
-  if (!account.details.executable)
-    return "Only executable accounts can be invoked";
+  if (account.lamports === 0) return "Account doesn't exist";
+  if (!account.executable) return "Only executable accounts can be invoked";
   return;
 };
 
@@ -44,13 +40,8 @@ export function AddressFromLookupTableWithContext({
   lookupTableKey: PublicKey;
   lookupTableIndex: number;
 }) {
-  const lookupTable = useAddressLookupTable(lookupTableKey.toBase58());
-  const fetchAccountInfo = useFetchAccountInfo();
-  React.useEffect(() => {
-    if (!lookupTable) fetchAccountInfo(lookupTableKey);
-  }, [lookupTableKey, lookupTable, fetchAccountInfo]);
-
-  let pubkey;
+  const lookupTableInfo = useAddressLookupTable(lookupTableKey.toBase58());
+  const lookupTable = lookupTableInfo && lookupTableInfo[0];
   if (!lookupTable) {
     return (
       <span className="text-muted">
@@ -60,18 +51,17 @@ export function AddressFromLookupTableWithContext({
     );
   } else if (typeof lookupTable === "string") {
     return <div>Invalid Lookup Table</div>;
-  } else if (lookupTableIndex < lookupTable.state.addresses.length) {
-    pubkey = lookupTable.state.addresses[lookupTableIndex];
-  } else {
+  } else if (lookupTableIndex >= lookupTable.state.addresses.length) {
     return <div>Invalid Lookup Table Index</div>;
+  } else {
+    const pubkey = lookupTable.state.addresses[lookupTableIndex];
+    return (
+      <div className="d-flex align-items-end flex-column">
+        <Address pubkey={pubkey} link />
+        <AccountInfo pubkey={pubkey} />
+      </div>
+    );
   }
-
-  return (
-    <div className="d-flex align-items-end flex-column">
-      <Address pubkey={pubkey} link />
-      <AccountInfo pubkey={pubkey} />
-    </div>
-  );
 }
 
 export function AddressWithContext({
@@ -104,11 +94,12 @@ function AccountInfo({
   // Fetch account on load
   React.useEffect(() => {
     if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchAccount(pubkey);
+      fetchAccount(pubkey, "skip");
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!info?.data)
+  const account = info?.data;
+  if (!account)
     return (
       <span className="text-muted">
         <span className="spinner-grow spinner-grow-sm me-2"></span>
@@ -116,24 +107,24 @@ function AccountInfo({
       </span>
     );
 
-  const errorMessage = validator && validator(info.data);
+  const errorMessage = validator && validator(account);
   if (errorMessage) return <span className="text-warning">{errorMessage}</span>;
 
-  if (!info.data.details) {
-    return <span className="text-muted">Account doesn&apos;t exist</span>;
+  if (account.lamports === 0) {
+    return <span className="text-muted">Account doesn't exist</span>;
   }
 
-  const owner = info.data.details.owner;
-  const ownerAddress = owner.toBase58();
+  const ownerAddress = account.owner.toBase58();
   const ownerLabel = addressLabel(ownerAddress, cluster);
 
   return (
     <span className="text-muted">
       {`Owned by ${ownerLabel || ownerAddress}.`}
-      {` Balance is ${lamportsToSolString(info.data.lamports)} SOL.`}
-      {` Size is ${new Intl.NumberFormat("en-US").format(
-        info.data.details.space
-      )} byte(s).`}
+      {` Balance is ${lamportsToSolString(account.lamports)} SOL.`}
+      {account.space !== undefined &&
+        ` Size is ${new Intl.NumberFormat("en-US").format(
+          account.space
+        )} byte(s).`}
     </span>
   );
 }

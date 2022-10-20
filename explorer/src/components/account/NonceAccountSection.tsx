@@ -21,7 +21,7 @@ export function NonceAccountSection({
     <div className="card">
       <AccountHeader
         title="Nonce Account"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>

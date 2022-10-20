@@ -58,7 +58,7 @@ function StakeConfigCard({
     <div className="card">
       <AccountHeader
         title="Stake Config"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>
@@ -91,7 +91,7 @@ function ValidatorInfoCard({
     <div className="card">
       <AccountHeader
         title="Validator Info"
-        refresh={() => refresh(account.pubkey)}
+        refresh={() => refresh(account.pubkey, "parsed")}
       />
 
       <TableCardBody>

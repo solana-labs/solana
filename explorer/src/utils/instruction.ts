@@ -102,48 +102,33 @@ export function getTokenInstructionName(
 
   if ("parsed" in ix) {
     if (ix.program === "spl-token") {
-      name = getTokenProgramInstructionName(ix, signatureInfo);
+      return getTokenProgramInstructionName(ix, signatureInfo);
     } else {
       return undefined;
     }
-  } else if (
-    transactionInstruction &&
-    isSerumInstruction(transactionInstruction)
-  ) {
+  }
+
+  if (transactionInstruction) {
     try {
-      name = parseSerumInstructionTitle(transactionInstruction);
+      if (isSerumInstruction(transactionInstruction)) {
+        return parseSerumInstructionTitle(transactionInstruction);
+      } else if (isTokenSwapInstruction(transactionInstruction)) {
+        return parseTokenSwapInstructionTitle(transactionInstruction);
+      } else if (isTokenLendingInstruction(transactionInstruction)) {
+        return parseTokenLendingInstructionTitle(transactionInstruction);
+      }
     } catch (error) {
       reportError(error, { signature: signatureInfo.signature });
       return undefined;
     }
-  } else if (
-    transactionInstruction &&
-    isTokenSwapInstruction(transactionInstruction)
+  }
+
+  if (
+    ix.accounts.findIndex((account) => account.equals(TOKEN_PROGRAM_ID)) >= 0
   ) {
-    try {
-      name = parseTokenSwapInstructionTitle(transactionInstruction);
-    } catch (error) {
-      reportError(error, { signature: signatureInfo.signature });
-      return undefined;
-    }
-  } else if (
-    transactionInstruction &&
-    isTokenLendingInstruction(transactionInstruction)
-  ) {
-    try {
-      name = parseTokenLendingInstructionTitle(transactionInstruction);
-    } catch (error) {
-      reportError(error, { signature: signatureInfo.signature });
-      return undefined;
-    }
+    name = "Unknown (Inner)";
   } else {
-    if (
-      ix.accounts.findIndex((account) => account.equals(TOKEN_PROGRAM_ID)) >= 0
-    ) {
-      name = "Unknown (Inner)";
-    } else {
-      return undefined;
-    }
+    return undefined;
   }
 
   return name;

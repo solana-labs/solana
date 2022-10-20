@@ -458,6 +458,31 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
+    /// Check whether a row key exists in a `table`
+    pub async fn row_key_exists(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
+                rows_limit: 1,
+                rows: Some(RowSet {
+                    row_keys: vec![row_key.into_bytes()],
+                    row_ranges: vec![],
+                }),
+                filter: Some(RowFilter {
+                    filter: Some(row_filter::Filter::StripValueTransformer(true)),
+                }),
+            })
+            .await?
+            .into_inner();
+
+        let rows = self.decode_read_rows_response(response).await?;
+        Ok(!rows.is_empty())
+    }
+
     /// Get latest data from `table`.
     ///
     /// All column families are accepted, and only the latest version of each column cell will be

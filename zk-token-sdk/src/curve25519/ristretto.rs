@@ -214,6 +214,28 @@ mod target_arch {
             None
         }
     }
+
+    pub fn multiscalar_multiply_ristretto(
+        scalars: &[PodScalar],
+        points: &[PodRistrettoPoint],
+    ) -> Option<PodRistrettoPoint> {
+        let mut result_point = PodRistrettoPoint::zeroed();
+        let result = unsafe {
+            solana_program::syscalls::sol_curve_multiscalar_mul(
+                CURVE25519_RISTRETTO,
+                scalars.as_ptr() as *const u8,
+                points.as_ptr() as *const u8,
+                points.len() as u64,
+                &mut result_point.0 as *mut u8,
+            )
+        };
+
+        if result == 0 {
+            Some(result_point)
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]

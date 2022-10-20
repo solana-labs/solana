@@ -14,9 +14,9 @@ extern "C" {
  * Panics
  *
  * Prints the line number where the panic occurred and then causes
- * the BPF VM to immediately halt execution. No accounts' data are updated
+ * the SBF VM to immediately halt execution. No accounts' data are updated
  */
-/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/assert.inc AND RUN `cargo run --bin gen-headers` */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/sbf/c/inc/sol/inc/assert.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_panic_(const char *, uint64_t, uint64_t, uint64_t);
 #else
