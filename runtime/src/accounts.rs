@@ -4,7 +4,7 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
+            BankHashInfo, IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -787,7 +787,6 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
-        enable_rehashing: bool,
     ) -> u64 {
         let use_index = false;
         let is_startup = true;
@@ -804,7 +803,6 @@ impl Accounts {
                 epoch_schedule,
                 rent_collector,
                 is_startup,
-                enable_rehashing,
             )
             .1
     }
@@ -822,7 +820,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         ignore_mismatch: bool,
         store_detailed_debug_info: bool,
-        enable_rehashing: bool,
         use_bg_thread_pool: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
@@ -834,7 +831,6 @@ impl Accounts {
             rent_collector,
             ignore_mismatch,
             store_detailed_debug_info,
-            enable_rehashing,
             use_bg_thread_pool,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
@@ -1205,6 +1201,7 @@ impl Accounts {
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
         preserve_rent_epoch_for_rent_exempt_accounts: bool,
+        include_slot_in_hash: IncludeSlotInHash,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
@@ -1215,8 +1212,10 @@ impl Accounts {
             lamports_per_signature,
             preserve_rent_epoch_for_rent_exempt_accounts,
         );
-        self.accounts_db
-            .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
+        self.accounts_db.store_cached(
+            (slot, &accounts_to_store[..], include_slot_in_hash),
+            Some(&txn_signatures),
+        );
     }
 
     pub fn store_accounts_cached<'a, T: ReadableAccount + Sync + ZeroLamport>(

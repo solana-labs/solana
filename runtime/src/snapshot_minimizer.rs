@@ -309,8 +309,6 @@ impl<'a> SnapshotMinimizer<'a> {
         } = self
             .accounts_db()
             .get_unique_accounts_from_storages(storages.iter());
-        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
         let keep_accounts_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
         let purge_pubkeys_collect = Mutex::new(Vec::with_capacity(stored_accounts.len()));
@@ -368,9 +366,12 @@ impl<'a> SnapshotMinimizer<'a> {
             }
 
             let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
-
             self.accounts_db().store_accounts_frozen(
-                (slot, &accounts[..]),
+                (
+                    slot,
+                    &accounts[..],
+                    crate::accounts_db::INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+                ),
                 Some(&hashes),
                 Some(&new_storage),
                 Some(Box::new(write_versions.into_iter())),
