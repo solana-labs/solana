@@ -199,11 +199,53 @@ pub struct RewardsMetrics {
 }
 
 #[derive(Debug, Default)]
-pub struct RewardsStoreMetrics {
+pub(crate) struct RewardsStoreMetrics {
+    epoch: Epoch,
+    slot: Slot,
+    parent_slot: Slot,
     store_stake_accounts_us: u64,
     store_vote_accounts_us: u64,
     store_stake_accounts_count: usize,
     store_vote_accounts_count: usize,
+    total_stake_accounts_count: usize,
+    total_vote_accounts_count: usize,
+    pre_capitalization: u64,
+    post_capitalization: u64,
+}
+
+impl RewardStoreMetrics {
+    fn report(&self) {
+        datapoint_info!(
+            "bank-credit_epoch_rewards_in_partition",
+            ("epoch", self.epoch, i64),
+            ("slot", self.slot, i64),
+            ("parent_slot", self.parent_slot, i64),
+            ("store_stake_accounts_us", self.store_stake_accounts_us, i64),
+            ("store_vote_accounts_us", self.store_vote_accounts_us, i64),
+            (
+                "store_stake_accounts_count",
+                self.store_stake_accounts_count,
+                i64
+            ),
+            (
+                "store_vote_accounts_count",
+                self.store_vote_accounts_count,
+                i64
+            ),
+            (
+                "total_stake_accounts_count",
+                self.total_stake_accounts_count,
+                i64
+            ),
+            (
+                "total_vote_accounts_count",
+                self.total_vote_accounts_count,
+                i64
+            ),
+            ("pre_capitalization", self.pre_capitalization, i64),
+            ("post_capitalization", self.post_capitalization, i64),
+        );
+    }
 }
 
 mod address_lookup_table;
@@ -3664,21 +3706,26 @@ impl Bank {
             std::thread::sleep(Duration::from_millis(10));
             if sleep_count > MAX_WAIT_LOOP_COUNT {
                 panic!(
-                    "Waited too long for the epoch reward calculation result. Exceeded the maximum waiting time {} minutes. ",
+                    "Waiting too long for the epoch reward calculation result. Exceeded the maximum waiting time of {} minutes. ",
                     MAX_WAIT_MIN,
                 );
             }
         };
 
         if let Some(calc_result) = result {
-            let mut metrics = RewardsStoreMetrics::default();
+            let mut metrics = RewardsStoreMetrics {
+                epoch: self.epoch(),
+                slot: self.slot(),
+                parent_slot: self.parent_slot(),
+                ..RewardsStoreMetrics::Default(),
+            };
             let stake_rewards = &calc_result.0;
             let vote_account_rewards = &calc_result.1;
 
-            let pre_capitalization = self.capitalization();
+            metrics.pre_capitalization = self.capitalization();
 
-            let total_stake_rewards_len = stake_rewards.len();
-            let total_vote_rewards_len = vote_account_rewards.len();
+            metrics.total_stake_accounts_count = stake_rewards.len();
+            metrics.total_vote_accounts_count = vote_account_rewards.len();
 
             let mut m = Measure::start("store_stake_account");
             let (stake_store_counts, total_stake_rewards) =
@@ -3706,36 +3753,7 @@ impl Bank {
             self.capitalization
                 .fetch_add(validator_rewards_paid, AcqRel);
 
-            datapoint_info!(
-                "bank-credit_epoch_rewards_in_partition",
-                ("epoch", self.epoch(), i64),
-                ("slot", self.slot(), i64),
-                ("parent_slot", self.parent_slot(), i64),
-                (
-                    "store_stake_accounts_us",
-                    metrics.store_vote_accounts_us,
-                    i64
-                ),
-                (
-                    "store_vote_accounts_us",
-                    metrics.store_vote_accounts_us,
-                    i64
-                ),
-                (
-                    "store_stake_accounts_count",
-                    metrics.store_stake_accounts_count,
-                    i64
-                ),
-                (
-                    "store_vote_accounts_count",
-                    metrics.store_vote_accounts_count,
-                    i64
-                ),
-                ("total_stake_accounts_count", total_stake_rewards_len, i64),
-                ("total_vote_accounts_count", total_vote_rewards_len, i64),
-                ("pre_capitalization", pre_capitalization, i64),
-                ("post_capitalization", self.capitalization(), i64),
-            );
+            metric.report();
         }
     }
 
