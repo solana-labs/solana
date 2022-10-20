@@ -502,9 +502,14 @@ pub fn deserialize_parameters_aligned(
                         borrowed_account.set_data_length(post_len)?;
                         let allocated_bytes = post_len.saturating_sub(*pre_len);
                         if allocated_bytes > 0 {
-                            borrowed_account.get_data_mut()?
-                                [*pre_len..pre_len.saturating_add(allocated_bytes)]
-                                .copy_from_slice(&data[0..allocated_bytes]);
+                            borrowed_account
+                                .get_data_mut()?
+                                .get_mut(*pre_len..pre_len.saturating_add(allocated_bytes))
+                                .ok_or(InstructionError::InvalidArgument)?
+                                .copy_from_slice(
+                                    data.get(0..allocated_bytes)
+                                        .ok_or(InstructionError::InvalidArgument)?,
+                                );
                         }
                     }
                     Err(err) if borrowed_account.get_data().len() != post_len => return Err(err),

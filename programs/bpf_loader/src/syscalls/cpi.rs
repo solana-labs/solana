@@ -114,7 +114,7 @@ impl<'a> CallerAccount<'a> {
             let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
                 memory_mapping,
                 if bpf_account_data_direct_mapping {
-                    vm_data_addr + original_data_len as u64
+                    vm_data_addr.saturating_add(original_data_len as u64)
                 } else {
                     vm_data_addr
                 },
@@ -189,7 +189,7 @@ impl<'a> CallerAccount<'a> {
         let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
             memory_mapping,
             if bpf_account_data_direct_mapping {
-                vm_data_addr + original_data_len as u64
+                vm_data_addr.saturating_add(original_data_len as u64)
             } else {
                 vm_data_addr
             },
@@ -1033,10 +1033,15 @@ fn update_callee_account(
                 callee_account.set_data_length(post_len)?;
                 let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
                 if !is_loader_deprecated && realloc_bytes_used > 0 {
-                    callee_account.get_data_mut()?[caller_account.original_data_len..post_len]
+                    callee_account
+                        .get_data_mut()?
+                        .get_mut(caller_account.original_data_len..post_len)
+                        .ok_or(SyscallError::InvalidLength)?
                         .copy_from_slice(
-                            &caller_account.account_data_or_only_realloc_padding
-                                [0..realloc_bytes_used],
+                            caller_account
+                                .account_data_or_only_realloc_padding
+                                .get(0..realloc_bytes_used)
+                                .ok_or(SyscallError::InvalidLength)?,
                         );
                 }
             }
@@ -1052,7 +1057,7 @@ fn update_callee_account(
             .and_then(|_| callee_account.can_data_be_changed())
         {
             Ok(()) => callee_account
-                .set_data_from_slice(&caller_account.account_data_or_only_realloc_padding)?,
+                .set_data_from_slice(caller_account.account_data_or_only_realloc_padding)?,
             Err(err)
                 if callee_account.get_data()
                     != caller_account.account_data_or_only_realloc_padding =>
@@ -1127,20 +1132,14 @@ fn update_caller_account(
             .iter()
             .position(|memory_region| memory_region.vm_addr == caller_account.vm_data_addr)
             .ok_or(Box::new(InstructionError::ProgramEnvironmentSetupFailure))?;
+        let region = regions.get(memory_region_index).unwrap();
         let account_region = if let Ok(data) = callee_account.get_data_mut() {
-            let data = unsafe {
-                std::slice::from_raw_parts_mut(
-                    data.as_mut_ptr(),
-                    regions[memory_region_index].len as usize,
-                )
-            };
+            let data =
+                unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr(), region.len as usize) };
             MemoryRegion::new_writable(data, caller_account.vm_data_addr)
         } else {
             let data = unsafe {
-                std::slice::from_raw_parts(
-                    callee_account.get_data().as_ptr(),
-                    regions[memory_region_index].len as usize,
-                )
+                std::slice::from_raw_parts(callee_account.get_data().as_ptr(), region.len as usize)
             };
             MemoryRegion::new_readonly(data, caller_account.vm_data_addr)
         };
@@ -1181,7 +1180,9 @@ fn update_caller_account(
         caller_account.account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
             memory_mapping,
             if bpf_account_data_direct_mapping {
-                caller_account.vm_data_addr + caller_account.original_data_len as u64
+                caller_account
+                    .vm_data_addr
+                    .saturating_add(caller_account.original_data_len as u64)
             } else {
                 caller_account.vm_data_addr
             },
@@ -1231,8 +1232,10 @@ fn update_caller_account(
         }
         to_slice.copy_from_slice(from_slice);
     } else if !is_loader_deprecated && realloc_bytes_used > 0 {
-        let to_slice =
-            &mut caller_account.account_data_or_only_realloc_padding[0..realloc_bytes_used];
+        let to_slice = caller_account
+            .account_data_or_only_realloc_padding
+            .get_mut(0..realloc_bytes_used)
+            .ok_or(SyscallError::InvalidLength)?;
         let from_slice = callee_account
             .get_data()
             .get(caller_account.original_data_len..post_len)
