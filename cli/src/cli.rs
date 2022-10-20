@@ -167,6 +167,7 @@ pub enum CliCommand {
         compute_unit_price: Option<u64>,
     },
     // Program Deployment
+    Deploy,
     Program(ProgramCliCommand),
     // Stake Commands
     CreateStakeAccount {
@@ -672,6 +673,11 @@ pub fn parse_command(
         }
         ("upgrade-nonce-account", Some(matches)) => parse_upgrade_nonce_account(matches),
         // Program Deployment
+        ("deploy", Some(_matches)) => clap::Error::with_description(
+            "`solana deploy` has been replaced with `solana program deploy`",
+            clap::ErrorKind::UnrecognizedSubcommand,
+        )
+        .exit(),
         ("program", Some(matches)) => {
             parse_program_subcommand(matches, default_signer, wallet_manager)
         }
@@ -1074,6 +1080,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
 
         // Program Deployment
+        CliCommand::Deploy => {
+            // This command is not supported any longer
+            // Error message is printed on the previous stage
+            std::process::exit(1);
+        }
 
         // Deploy a custom program to the chain
         CliCommand::Program(program_subcommand) => {

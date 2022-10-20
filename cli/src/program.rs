@@ -403,6 +403,11 @@ impl ProgramSubCommands for App<'_, '_> {
                         ),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("deploy")
+                .about("Deploy has been removed. Use `solana program deploy` instead to deploy upgradeable programs")
+                .setting(AppSettings::Hidden)
+        )
     }
 }
 
