@@ -864,6 +864,10 @@ impl Cluster for LocalCluster {
         (node, entry_point_info)
     }
 
+    fn set_entry_point(&mut self, entry_point_info: ContactInfo) {
+        self.entry_point_info = entry_point_info;
+    }
+
     fn restart_node(
         &mut self,
         pubkey: &Pubkey,
