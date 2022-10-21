@@ -63,7 +63,7 @@ use {
     rand::{thread_rng, Rng},
     rayon::{prelude::*, ThreadPool},
     serde::{Deserialize, Serialize},
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -3771,8 +3771,8 @@ impl AccountsDb {
             }
             find_alive_elapsed.stop();
 
-            let (shrunken_store, time) = self.get_store_for_shrink(slot, aligned_total);
-            create_and_insert_store_elapsed_us = time.as_micros() as u64;
+            let (shrunken_store, time) = measure!(self.get_store_for_shrink(slot, aligned_total));
+            create_and_insert_store_elapsed_us = time.as_us();
 
             // here, we're writing back alive_accounts. That should be an atomic operation
             // without use of rather wide locks in this whole function, because we're
@@ -3953,13 +3953,12 @@ impl AccountsDb {
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
-    /// return a store that can contain 'aligned_total' bytes and the time it took to execute
+    /// return a store that can contain 'aligned_total' bytes
     pub(crate) fn get_store_for_shrink(
         &self,
         slot: Slot,
         aligned_total: u64,
-    ) -> (Arc<AccountStorageEntry>, Duration) {
-        let mut start = Measure::start("create_and_insert_store_elapsed");
+    ) -> Arc<AccountStorageEntry> {
         let shrunken_store = if let Some(new_store) =
             self.try_recycle_and_insert_store(slot, aligned_total, aligned_total + 1024)
         {
@@ -3977,8 +3976,7 @@ impl AccountsDb {
                 self.create_and_insert_store(slot, aligned_total, "shrink")
             }
         };
-        start.stop();
-        (shrunken_store, Duration::from_micros(start.as_us()))
+        shrunken_store
     }
 
     // Reads all accounts in given slot's AppendVecs and filter only to alive,
@@ -4140,13 +4138,9 @@ impl AccountsDb {
         self.combine_ancient_slots(self.get_sorted_potential_ancient_slots());
     }
 
-    /// create new ancient append vec
-    /// return it and the elapsed time for metrics
-    fn create_ancient_append_vec(
-        &self,
-        slot: Slot,
-    ) -> (Option<(Slot, Arc<AccountStorageEntry>)>, Duration) {
-        let (new_ancient_storage, time) =
+    /// create and return new ancient append vec
+    fn create_ancient_append_vec(&self, slot: Slot) -> Arc<AccountStorageEntry> {
+        let new_ancient_storage =
             self.get_store_for_shrink(slot, get_ancient_append_vec_capacity());
         info!(
             "ancient_append_vec: creating initial ancient append vec: {}, size: {}, id: {}",
@@ -4154,7 +4148,7 @@ impl AccountsDb {
             get_ancient_append_vec_capacity(),
             new_ancient_storage.append_vec_id(),
         );
-        (Some((slot, new_ancient_storage)), time)
+        new_ancient_storage
     }
 
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
@@ -4347,9 +4341,9 @@ impl AccountsDb {
             if current_ancient.is_none() {
                 // our oldest slot is not an append vec of max size, or we filled the previous one.
                 // So, create a new ancient append vec at 'slot'
-                let (new_ancient_append_vec, duration) = self.create_ancient_append_vec(slot);
-                current_ancient = new_ancient_append_vec;
-                create_and_insert_store_elapsed_us += duration.as_micros() as u64;
+                let (new_ancient_append_vec, time) = measure!(self.create_ancient_append_vec(slot));
+                current_ancient = Some((slot, new_ancient_append_vec));
+                create_and_insert_store_elapsed_us += time.as_us();
             }
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
@@ -4395,9 +4389,9 @@ impl AccountsDb {
             // handle accounts from 'slot' which did not fit into the current ancient append vec
             if to_store.has_overflow() {
                 // we need a new ancient append vec
-                let result = self.create_ancient_append_vec(slot);
-                create_and_insert_store_elapsed_us += result.1.as_micros() as u64;
-                current_ancient = result.0;
+                let (new_ancient, time) = measure!(self.create_ancient_append_vec(slot));
+                create_and_insert_store_elapsed_us += time.as_us();
+                current_ancient = Some((slot, new_ancient));
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
                 info!(
@@ -16807,13 +16801,9 @@ pub mod tests {
             };
 
             let db = AccountsDb::new_single_for_tests();
-            let ancient = db.create_ancient_append_vec(slot1_ancient).0.unwrap().1;
-            let ancient_1_plus = db
-                .create_ancient_append_vec(slot1_plus_ancient)
-                .0
-                .unwrap()
-                .1;
-            let ancient3 = db.create_ancient_append_vec(slot3_ancient).0.unwrap().1;
+            let ancient = db.create_ancient_append_vec(slot1_ancient);
+            let ancient_1_plus = db.create_ancient_append_vec(slot1_plus_ancient);
+            let ancient3 = db.create_ancient_append_vec(slot3_ancient);
             let temp_dir = TempDir::new().unwrap();
             let path = temp_dir.path();
             let id = 1;
@@ -17059,7 +17049,7 @@ pub mod tests {
         // now, create an ancient slot and make sure that it does NOT think it needs to be moved and that it becomes the ancient append vec to use
         let mut current_ancient = None;
         let slot1_ancient = 1;
-        let ancient1 = db.create_ancient_append_vec(slot1_ancient).0.unwrap().1;
+        let ancient1 = db.create_ancient_append_vec(slot1_ancient);
         let should_move = db.should_move_to_ancient_append_vec(
             &vec![ancient1.clone()],
             &mut current_ancient,
@@ -17076,7 +17066,7 @@ pub mod tests {
         // current should become ancient2
         let slot2_ancient = 2;
         let mut current_ancient = Some((slot1_ancient, ancient1.clone()));
-        let ancient2 = db.create_ancient_append_vec(slot2_ancient).0.unwrap().1;
+        let ancient2 = db.create_ancient_append_vec(slot2_ancient);
         let should_move = db.should_move_to_ancient_append_vec(
             &vec![ancient2.clone()],
             &mut current_ancient,
@@ -17165,7 +17155,7 @@ pub mod tests {
     }
 
     fn make_full_ancient_append_vec(db: &AccountsDb, slot: Slot) -> Arc<AccountStorageEntry> {
-        let full = db.create_ancient_append_vec(slot).0.unwrap().1;
+        let full = db.create_ancient_append_vec(slot);
         make_ancient_append_vec_full(&full);
         full
     }
