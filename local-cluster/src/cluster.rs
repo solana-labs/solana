@@ -62,4 +62,5 @@ pub trait Cluster {
         config: ValidatorConfig,
         socket_addr_space: SocketAddrSpace,
     );
+    fn set_entry_point(&mut self, entry_point_info: ContactInfo);
 }
