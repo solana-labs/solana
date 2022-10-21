@@ -496,6 +496,10 @@ pub mod vote_state_update_root_fix {
     solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
 }
 
+pub mod on_load_preserve_rent_epoch_for_rent_exempt_accounts {
+    solana_sdk::declare_id!("CpkdQmspsaZZ8FVAouQTtTWZkc8eeQ7V3uj7dWz543rZ");
+}
+
 pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
@@ -615,6 +619,7 @@ lazy_static! {
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
+        (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
