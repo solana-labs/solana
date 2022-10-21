@@ -1095,6 +1095,45 @@ mod tests {
     };
 
     #[test]
+    fn test_translate_instruction() {
+        let transaction_accounts = one_instruction_account(b"foo".to_vec());
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let mut invoke_context = invoke_context_builder.invoke_context();
+
+        let program_id = Pubkey::new_unique();
+        let accounts = vec![AccountMeta {
+            pubkey: Pubkey::new_unique(),
+            is_signer: true,
+            is_writable: false,
+        }];
+        let data = b"ins data".to_vec();
+        let vm_addr = MM_INPUT_START;
+        let (_mem, region) = MockInstruction {
+            program_id,
+            accounts: accounts.clone(),
+            data: data.clone(),
+        }
+        .into_region(vm_addr);
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+
+        let ins = SyscallInvokeSignedRust::translate_instruction(
+            vm_addr,
+            &mut memory_mapping,
+            &mut invoke_context,
+        )
+        .unwrap();
+        assert_eq!(ins.program_id, program_id);
+        assert_eq!(ins.accounts, accounts);
+        assert_eq!(ins.data, data);
+    }
+
+    #[test]
     fn test_caller_account_from_account_info() {
         let transaction_accounts = one_instruction_account(b"foo".to_vec());
         let account = transaction_accounts[1].1.clone();
@@ -1582,6 +1621,51 @@ mod tests {
             ),
             (Pubkey::new_unique(), account, true),
         ]
+    }
+
+    struct MockInstruction {
+        program_id: Pubkey,
+        accounts: Vec<AccountMeta>,
+        data: Vec<u8>,
+    }
+
+    impl MockInstruction {
+        fn into_region(self, vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
+            let accounts_len = mem::size_of::<AccountMeta>() * self.accounts.len();
+
+            let size = mem::size_of::<Instruction>() + accounts_len + self.data.len();
+
+            let mut data = vec![0; size];
+
+            let vm_addr = vm_addr as usize;
+            let accounts_addr = vm_addr + mem::size_of::<Instruction>();
+            let data_addr = accounts_addr + accounts_len;
+
+            let ins = Instruction {
+                program_id: self.program_id,
+                accounts: unsafe {
+                    Vec::from_raw_parts(
+                        accounts_addr as *mut _,
+                        self.accounts.len(),
+                        self.accounts.len(),
+                    )
+                },
+                data: unsafe {
+                    Vec::from_raw_parts(data_addr as *mut _, self.data.len(), self.data.len())
+                },
+            };
+
+            unsafe {
+                ptr::write_unaligned(data.as_mut_ptr().cast(), ins);
+                data[accounts_addr - vm_addr..][..accounts_len].copy_from_slice(
+                    slice::from_raw_parts(self.accounts.as_ptr().cast(), accounts_len),
+                );
+                data[data_addr - vm_addr..].copy_from_slice(&self.data);
+            }
+
+            let region = MemoryRegion::new_writable(data.as_mut_slice(), vm_addr as u64);
+            (data, region)
+        }
     }
 
     struct MockAccountInfo<'a> {
