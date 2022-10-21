@@ -78,7 +78,7 @@ impl<T> EpochRewardResult<T> {
     }
 
     /// Get epoch result from slot
-    pub fn get(&self, slot: Slot) -> Option<Arc<T>> {
+    fn get(&self, slot: Slot) -> Option<Arc<T>> {
         if let Some(signature) = self.signatures.get(&slot) {
             if let Some(result) = self.rewards.get(signature) {
                 return Some(result.clone());
@@ -88,23 +88,25 @@ impl<T> EpochRewardResult<T> {
     }
 
     /// Get number of rewards results
-    pub fn rewards_len(&self) -> usize {
+    #[cfg(test)]
+    fn rewards_len(&self) -> usize {
         self.rewards.len()
     }
 
     /// Get number of epoch reward calculation signatures
-    pub fn signatures_len(&self) -> usize {
+    #[cfg(test)]
+    fn signatures_len(&self) -> usize {
         self.signatures.len()
     }
 
     /// Clear epoch reward calculation results
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.rewards.clear();
         self.signatures.clear();
     }
 
     /// Clear old epoch results
-    pub fn relinquish(&mut self, epoch: u64) {
+    fn relinquish(&mut self, epoch: u64) {
         if epoch > self.epoch {
             self.clear();
             self.epoch = epoch;
