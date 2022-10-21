@@ -1,6 +1,5 @@
 //! A service to calculate stake rewards at epoch boundary
 //!
-
 use {
     crate::{
         bank::{Bank, RewardsMetrics, StakeVoteAccountRewardResult},
@@ -23,7 +22,7 @@ use {
     },
 };
 
-/// Epoch reward calculation request with current epoch and target bank
+/// Request for epoch reward calculation with current epoch and target bank
 #[derive(AbiExample, Debug)]
 pub struct EpochRewardCalcRequest {
     /// current epoch
@@ -46,13 +45,13 @@ pub type EpochRewardCalcRequestSender = Sender<EpochRewardCalcRequest>;
 /// Receiver of EpochRewardCalcRequest
 pub type EpochRewardCalcRequestReceiver = Receiver<EpochRewardCalcRequest>;
 
-/// Epoch reward computation result indexed by slot and calc request signature
+/// Epoch reward computation results indexed by slots and signatures of the calculation requests
 #[derive(AbiExample, Debug)]
 pub struct EpochRewardResult<T> {
-    /// Map from reward calculate request hash to reward result
+    /// Map from reward calculation request signature (i.e. hash) to reward result
     rewards: HashMap<Hash, Arc<T>>,
 
-    /// Map from slot to reward calculation request hash
+    /// Map from slot to reward calculation request signature (i.e. hash)
     signatures: HashMap<Slot, Hash>,
 
     /// Current epoch
@@ -77,7 +76,8 @@ impl<T> EpochRewardResult<T> {
         }
     }
 
-    /// Get epoch result from slot
+    /// Get epoch result from the given slot
+    /// Return None if the result is not available yet.
     fn get(&self, slot: Slot) -> Option<Arc<T>> {
         if let Some(signature) = self.signatures.get(&slot) {
             if let Some(result) = self.rewards.get(signature) {
@@ -87,13 +87,13 @@ impl<T> EpochRewardResult<T> {
         None
     }
 
-    /// Get number of rewards results
+    /// Get number of rewards results (for test)
     #[cfg(test)]
     fn rewards_len(&self) -> usize {
         self.rewards.len()
     }
 
-    /// Get number of epoch reward calculation signatures
+    /// Get number of epoch reward calculation signatures (for test)
     #[cfg(test)]
     fn signatures_len(&self) -> usize {
         self.signatures.len()
@@ -105,7 +105,7 @@ impl<T> EpochRewardResult<T> {
         self.signatures.clear();
     }
 
-    /// Clear old epoch results
+    /// Delete old reward calculate results from previous epoch, i.e. before the given epoch
     fn relinquish(&mut self, epoch: u64) {
         if epoch > self.epoch {
             self.clear();
@@ -146,12 +146,12 @@ impl<T> EpochRewardCalculator<T> {
         self.results.read().unwrap().get(slot)
     }
 
-    /// Clear epoch reward calculation result
+    /// Delete epoch reward calculation results
     pub fn clear(&self) {
         self.results.write().unwrap().clear();
     }
 
-    /// Clear epoch reward calculation result
+    /// Delete epoch reward calculation results from previous epoch, i.e. before the given epoch.
     pub fn relinquish(&mut self, epoch: u64) {
         self.results.write().unwrap().relinquish(epoch);
     }
@@ -170,6 +170,7 @@ struct RewardsCalcMetrics {
 }
 
 impl RewardsCalcMetrics {
+    /// Submit metrics
     pub fn report(self) {
         datapoint_info!(
             "handle_epoch_reward_calc_request_timings",
@@ -297,7 +298,7 @@ pub struct EpochRewardCalcService {
 }
 
 impl EpochRewardCalcService {
-    /// Create service
+    /// Create and start EpochRewardCalcService
     pub fn new(handler: EpochRewardCalcRequestHandler, exit: &Arc<AtomicBool>) -> Self {
         info!("EpochRewardsCalcService active");
         let exit = exit.clone();
@@ -341,7 +342,7 @@ impl EpochRewardCalcService {
         (epoch_reward_calc_receiver, results)
     }
 
-    /// Handler thread join
+    /// Join handler thread
     pub fn join(self) -> thread::Result<()> {
         self.t_background.join()
     }
@@ -578,7 +579,7 @@ mod test {
             slot += 1;
         }
 
-        // In real validator, block store ledger would have initiated a reward calculation. And the
+        // In real validator, block store ledger would have initiated a reward calculation. And
         // the result should be available by now. However, in this test, we don't set up the block
         // store.  Therefore, we simulate bank replay from block store by sending a request for
         // calculation from reward bank directly.
@@ -613,7 +614,7 @@ mod test {
         service.join().expect("epoch_reward_calc_service completed");
     }
 
-    /// A test for epoch reward calc progress
+    /// A test for epoch reward calculation progress
     #[test]
     fn test_epoch_reward_calc_progress() {
         let mut genesis = create_genesis_config(10);
