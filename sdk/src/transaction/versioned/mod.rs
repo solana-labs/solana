@@ -68,7 +68,7 @@ impl From<Transaction> for VersionedTransaction {
 impl VersionedTransaction {
     /// Signs a versioned message and if successful, returns a signed
     /// transaction.
-    pub fn try_new<T: Signers>(
+    pub fn try_new<T: Signers + ?Sized>(
         message: VersionedMessage,
         keypairs: &T,
     ) -> std::result::Result<Self, SignerError> {
