@@ -1134,6 +1134,36 @@ mod tests {
     }
 
     #[test]
+    fn test_translate_signers() {
+        let transaction_accounts = one_instruction_account(b"foo".to_vec());
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let program_id = Pubkey::new_unique();
+        let (derived_key, bump_seed) = Pubkey::find_program_address(&[b"foo"], &program_id);
+
+        let vm_addr = MM_INPUT_START;
+        let (_mem, region) = mock_signers(&[b"foo", &[bump_seed]], vm_addr);
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mut memory_mapping = MemoryMapping::new(vec![region], &config).unwrap();
+
+        let signers = SyscallInvokeSignedRust::translate_signers(
+            &program_id,
+            vm_addr,
+            1,
+            &mut memory_mapping,
+            &invoke_context,
+        )
+        .unwrap();
+        assert_eq!(signers[0], derived_key);
+    }
+
+    #[test]
     fn test_caller_account_from_account_info() {
         let transaction_accounts = one_instruction_account(b"foo".to_vec());
         let account = transaction_accounts[1].1.clone();
@@ -1666,6 +1696,47 @@ mod tests {
             let region = MemoryRegion::new_writable(data.as_mut_slice(), vm_addr as u64);
             (data, region)
         }
+    }
+
+    fn mock_signers(signers: &[&[u8]], vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
+        let slice_size = mem::size_of::<&[()]>();
+        let size = signers
+            .iter()
+            .fold(slice_size, |size, signer| size + slice_size + signer.len());
+
+        let vm_addr = vm_addr as usize;
+        let mut slices_addr = vm_addr + slice_size;
+
+        let mut data = vec![0; size];
+        unsafe {
+            ptr::write_unaligned(
+                data.as_mut_ptr().cast(),
+                slice::from_raw_parts::<&[&[u8]]>(slices_addr as *const _, signers.len()),
+            );
+        }
+
+        let mut signers_addr = slices_addr + signers.len() * slice_size;
+
+        for signer in signers {
+            unsafe {
+                ptr::write_unaligned(
+                    (data.as_mut_ptr() as usize + slices_addr - vm_addr) as *mut _,
+                    slice::from_raw_parts::<&[u8]>(signers_addr as *const _, signer.len()),
+                );
+            }
+            slices_addr += slice_size;
+            signers_addr += signer.len();
+        }
+
+        let slices_addr = vm_addr + slice_size;
+        let mut signers_addr = slices_addr + signers.len() * slice_size;
+        for signer in signers {
+            data[signers_addr - vm_addr..][..signer.len()].copy_from_slice(signer);
+            signers_addr += signer.len();
+        }
+
+        let region = MemoryRegion::new_writable(data.as_mut_slice(), vm_addr as u64);
+        (data, region)
     }
 
     struct MockAccountInfo<'a> {
