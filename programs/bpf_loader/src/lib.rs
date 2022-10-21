@@ -3750,6 +3750,23 @@ mod tests {
             }
         );
 
+        // Case: set to same authority
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            vec![
+                (programdata_address, programdata_account.clone()),
+                (upgrade_authority_address, upgrade_authority_account.clone()),
+            ],
+            vec![
+                programdata_meta.clone(),
+                upgrade_authority_meta.clone(),
+                upgrade_authority_meta.clone(),
+            ],
+            Ok(()),
+        );
+
         // Case: present authority not in instruction
         process_instruction(
             &loader_id,
@@ -4141,6 +4158,20 @@ mod tests {
             UpgradeableLoaderState::Buffer {
                 authority_address: Some(new_authority_address),
             }
+        );
+
+        // Case: set to same authority
+        process_instruction(
+            &loader_id,
+            &[],
+            &instruction,
+            transaction_accounts.clone(),
+            vec![
+                buffer_meta.clone(),
+                authority_meta.clone(),
+                authority_meta.clone(),
+            ],
+            Ok(()),
         );
 
         // Case: Missing current authority
