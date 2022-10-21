@@ -213,7 +213,7 @@ pub mod solana_sdk {
         }
 
         impl VersionedTransaction {
-            pub fn try_new<T: Signers>(
+            pub fn try_new<T: Signers + ?Sized>(
                 message: VersionedMessage,
                 _keypairs: &T,
             ) -> std::result::Result<Self, SignerError> {
@@ -230,7 +230,7 @@ pub mod solana_sdk {
         }
 
         impl Transaction {
-            pub fn new<T: Signers>(
+            pub fn new<T: Signers + ?Sized>(
                 _from_keypairs: &T,
                 _message: Message,
                 _recent_blockhash: Hash,
@@ -252,7 +252,7 @@ pub mod solana_sdk {
                 }
             }
 
-            pub fn new_signed_with_payer<T: Signers>(
+            pub fn new_signed_with_payer<T: Signers + ?Sized>(
                 instructions: &[Instruction],
                 payer: Option<&Pubkey>,
                 signing_keypairs: &T,
@@ -262,9 +262,9 @@ pub mod solana_sdk {
                 Self::new(signing_keypairs, message, recent_blockhash)
             }
 
-            pub fn sign<T: Signers>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
+            pub fn sign<T: Signers + ?Sized>(&mut self, _keypairs: &T, _recent_blockhash: Hash) {}
 
-            pub fn try_sign<T: Signers>(
+            pub fn try_sign<T: Signers + ?Sized>(
                 &mut self,
                 _keypairs: &T,
                 _recent_blockhash: Hash,
