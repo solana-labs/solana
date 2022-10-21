@@ -46,6 +46,7 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix,
             error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
             reject_callx_r10,
         },
@@ -978,6 +979,13 @@ fn process_loader_upgradeable_instruction(
             ic_logger_msg!(log_collector, "New authority {:?}", new_authority);
         }
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
+            if !invoke_context
+                .feature_set
+                .is_active(&enable_bpf_loader_set_authority_checked_ix::id())
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
             instruction_context.check_number_of_instruction_accounts(3)?;
             let mut account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
