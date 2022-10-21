@@ -46,9 +46,6 @@ pub struct ConnectionCache {
 struct ConnectionPool {
     /// The connections in the pool
     connections: Vec<Arc<BaseTpuConnection>>,
-
-    /// Connections in this pool share the same endpoint
-    endpoint: Option<Arc<QuicLazyInitializedEndpoint>>,
 }
 
 impl ConnectionPool {
@@ -89,7 +86,7 @@ impl ConnectionCache {
             key: priv_key,
         });
         self.endpoint = Arc::new(QuicLazyInitializedEndpoint::new(
-            self.client_certificate.clone()
+            self.client_certificate.clone(),
         ));
         Ok(())
     }
@@ -115,16 +112,6 @@ impl ConnectionCache {
 
     pub fn use_quic(&self) -> bool {
         self.use_quic
-    }
-
-    fn create_endpoint(&self, force_use_udp: bool) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic() && !force_use_udp {
-            Some(Arc::new(QuicLazyInitializedEndpoint::new(
-                self.client_certificate.clone(),
-            )))
-        } else {
-            None
-        }
     }
 
     fn compute_max_parallel_streams(&self) -> usize {
@@ -161,21 +148,16 @@ impl ConnectionCache {
         // Read again, as it is possible that between read lock dropped and the write lock acquired
         // another thread could have setup the connection.
 
-        let (to_create_connection, endpoint) =
-            map.get(addr)
-                .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
-                    (
-                        pool.need_new_connection(self.connection_pool_size),
-                        pool.endpoint.clone(),
-                    )
-                });
+        let to_create_connection = map.get(addr).map_or(true, |pool| {
+            pool.need_new_connection(self.connection_pool_size)
+        });
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
             let connection = if !self.use_quic() || force_use_udp {
                 BaseTpuConnection::Udp(self.tpu_udp_socket.clone())
             } else {
                 BaseTpuConnection::Quic(Arc::new(QuicClient::new(
-                    endpoint.as_ref().unwrap().clone(),
+                    self.endpoint.clone(),
                     *addr,
                     self.compute_max_parallel_streams(),
                 )))
@@ -203,7 +185,6 @@ impl ConnectionCache {
                 Entry::Vacant(entry) => {
                     entry.insert(ConnectionPool {
                         connections: vec![connection],
-                        endpoint,
                     });
                 }
             }
@@ -369,9 +350,7 @@ impl Default for ConnectionCache {
             key: priv_key,
         });
 
-        let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(
-            client_certificate.clone()
-        ));
+        let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(client_certificate.clone()));
 
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
