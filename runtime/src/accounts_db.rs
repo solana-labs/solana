@@ -4157,24 +4157,6 @@ impl AccountsDb {
         (Some((slot, new_ancient_storage)), time)
     }
 
-    /// return true if created
-    /// also return elapsed time for metrics
-    fn maybe_create_ancient_append_vec(
-        &self,
-        current_ancient: &mut Option<(Slot, Arc<AccountStorageEntry>)>,
-        slot: Slot,
-    ) -> (bool, Duration) {
-        if current_ancient.is_none() {
-            // our oldest slot is not an append vec of max size, or we filled the previous one.
-            // So, create a new ancient append vec at 'slot'
-            let result = self.create_ancient_append_vec(slot);
-            *current_ancient = result.0;
-            (true, result.1)
-        } else {
-            (false, Duration::default())
-        }
-    }
-
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
         self.storage.map.get(&slot).map(|storages| {
             // per slot, get the storages. There should usually only be 1.
@@ -4361,8 +4343,14 @@ impl AccountsDb {
                 continue; // skipping slot with no useful accounts to write
             }
 
-            let (_, time) = self.maybe_create_ancient_append_vec(&mut current_ancient, slot);
-            let mut create_and_insert_store_elapsed_us = time.as_micros() as u64;
+            let mut create_and_insert_store_elapsed_us = 0;
+            if current_ancient.is_none() {
+                // our oldest slot is not an append vec of max size, or we filled the previous one.
+                // So, create a new ancient append vec at 'slot'
+                let (new_ancient_append_vec, duration) = self.create_ancient_append_vec(slot);
+                current_ancient = new_ancient_append_vec;
+                create_and_insert_store_elapsed_us += duration.as_micros() as u64;
+            }
             let (ancient_slot, ancient_store) =
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
