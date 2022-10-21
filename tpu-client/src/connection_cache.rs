@@ -39,6 +39,7 @@ pub struct ConnectionCache {
     use_quic: bool,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     maybe_client_pubkey: Option<Pubkey>,
+    endpoint: Arc<QuicLazyInitializedEndpoint>,
 }
 
 /// Models the pool of connections
@@ -87,6 +88,9 @@ impl ConnectionCache {
             certificates: certs,
             key: priv_key,
         });
+        self.endpoint = Arc::new(QuicLazyInitializedEndpoint::new(
+            self.client_certificate.clone()
+        ));
         Ok(())
     }
 
@@ -359,6 +363,16 @@ impl Default for ConnectionCache {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         )
         .expect("Failed to initialize QUIC client certificates");
+
+        let client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+
+        let endpoint = Arc::new(QuicLazyInitializedEndpoint::new(
+            client_certificate.clone()
+        ));
+
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
@@ -368,10 +382,8 @@ impl Default for ConnectionCache {
                 solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
                     .expect("Unable to bind to UDP socket"),
             ),
-            client_certificate: Arc::new(QuicClientCertificate {
-                certificates: certs,
-                key: priv_key,
-            }),
+            client_certificate,
+            endpoint,
             use_quic: DEFAULT_TPU_USE_QUIC,
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
