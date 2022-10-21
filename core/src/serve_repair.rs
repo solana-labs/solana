@@ -86,8 +86,11 @@ static_assertions::const_assert_eq!(MAX_ANCESTOR_RESPONSES, 30);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ShredRepairType {
+    /// Requesting `MAX_ORPHAN_REPAIR_RESPONSES ` parent shreds
     Orphan(Slot),
+    /// Requesting any shred with index greater than or equal to the particular index
     HighestShred(Slot, u64),
+    /// Requesting the missing shred at a particular index
     Shred(Slot, u64),
 }
 
