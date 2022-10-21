@@ -369,6 +369,7 @@ impl RepairWeight {
                 continue;
             }
             // Ignore trees that were merged in a previous iteration
+            // TODO: why would this ever be false
             if self.trees.contains_key(&heaviest_tree_root) {
                 let new_orphan_root = self.update_orphan_ancestors(
                     blockstore,
@@ -452,7 +453,7 @@ impl RepairWeight {
     }
 
     // Attempts to chain the orphan subtree rooted at `orphan_tree_root`
-    // to any earlier subtree with new any ancestry information in `blockstore`.
+    // to any earlier subtree with new ancestry information in `blockstore`.
     // Returns the earliest known ancestor of `heaviest_tree_root`.
     fn update_orphan_ancestors(
         &mut self,
@@ -480,6 +481,8 @@ impl RepairWeight {
                 let num_skip = usize::from(parent_tree_root.is_some());
 
                 for ancestor in new_ancestors.iter().skip(num_skip).rev() {
+                    // We temporarily use orphan_tree_root as the tree root and later
+                    // rename tree root to either the parent_tree_root or the earliest_ancestor
                     self.slot_to_tree.insert(*ancestor, orphan_tree_root);
                     heaviest_tree.add_root_parent((*ancestor, Hash::default()));
                 }

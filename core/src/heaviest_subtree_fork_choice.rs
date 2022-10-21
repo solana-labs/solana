@@ -92,7 +92,8 @@ struct ForkInfo {
     // rooted at this slot
     stake_voted_subtree: ForkWeight,
     // Best slot in the subtree rooted at this slot, does not
-    // have to be a direct child in `children`
+    // have to be a direct child in `children`. This is the slot whose subtree
+    // is the heaviest.
     best_slot: SlotHashKey,
     parent: Option<SlotHashKey>,
     children: Vec<SlotHashKey>,
@@ -316,7 +317,7 @@ impl HeaviestSubtreeForkChoice {
         let root_parent_info = ForkInfo {
             stake_voted_at: 0,
             stake_voted_subtree: root_info.stake_voted_subtree,
-            // The `best_slot` of a leaf is itself
+            // The `best_slot` does not change
             best_slot: root_info.best_slot,
             children: vec![self.root],
             parent: None,
@@ -375,8 +376,8 @@ impl HeaviestSubtreeForkChoice {
         self.propagate_new_leaf(&slot_hash_key, &parent)
     }
 
-    // Returns if the given `maybe_best_child` is the heaviest among the children
-    // it's parent
+    // Returns true if the given `maybe_best_child` is the heaviest among the children
+    // of the parent. Breaks ties by slot # (lower is heavier).
     fn is_best_child(&self, maybe_best_child: &SlotHashKey) -> bool {
         let maybe_best_child_weight = self.stake_voted_subtree(maybe_best_child).unwrap();
         let parent = self.parent(maybe_best_child);
