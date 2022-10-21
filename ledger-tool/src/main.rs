@@ -374,7 +374,7 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        println!("  data: '{}'", bs58::encode(account.data()).into_string());
+        println!("  data: '{}'", base64::encode(account.data()));
     }
 }
 
