@@ -140,7 +140,7 @@ pub fn parse_bpf_upgradeable_loader(
             })
         }
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
-            check_num_bpf_upgradeable_loader_accounts(&instruction.accounts, 2)?;
+            check_num_bpf_upgradeable_loader_accounts(&instruction.accounts, 3)?;
             Ok(ParsedInstructionEnum {
                 instruction_type: "setAuthority".to_string(),
                 info: json!({
