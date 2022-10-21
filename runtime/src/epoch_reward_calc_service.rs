@@ -150,6 +150,11 @@ impl<T> EpochRewardCalculator<T> {
     pub fn clear(&self) {
         self.results.write().unwrap().clear();
     }
+
+    /// Clear epoch reward calculation result
+    pub fn relinquish(&mut self, epoch: u64) {
+        self.results.write().unwrap().relinquish(epoch);
+    }
 }
 
 /// Epoch rewards calculation metrics
@@ -458,8 +463,8 @@ mod test {
         assert_eq!(results.read().unwrap().signatures_len(), 3);
         assert_eq!(results.read().unwrap().rewards_len(), 2);
 
-        // clear calculation results and assert none
-        results.write().unwrap().clear();
+        // move to next epoch, clear calculation results, and assert no more calculation results
+        results.write().unwrap().relinquish(1);
         assert_eq!(results.read().unwrap().signatures_len(), 0);
         assert_eq!(results.read().unwrap().rewards_len(), 0);
         assert!(calculator.get(slot).is_none());
