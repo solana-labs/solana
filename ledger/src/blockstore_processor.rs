@@ -991,7 +991,7 @@ fn confirm_full_slot(
     let skip_verification = !opts.poh_verify;
     let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
-    let _did_process_entries = confirm_slot(
+    let _more_entries_to_process = confirm_slot(
         blockstore,
         bank,
         &mut confirmation_timing,

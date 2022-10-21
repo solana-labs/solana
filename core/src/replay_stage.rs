@@ -1728,12 +1728,12 @@ impl ReplayStage {
         // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
         // will break!
 
-        let mut did_process_entries = true;
+        let mut more_entries_to_process = true;
         // more entries may have been received while replaying this slot.
         // looping over this ensures that slots will be processed as fast as possible with the
         // lowest latency.
-        while did_process_entries {
-            did_process_entries = blockstore_processor::confirm_slot(
+        while more_entries_to_process {
+            more_entries_to_process = blockstore_processor::confirm_slot(
                 blockstore,
                 bank,
                 &mut w_replay_stats,
