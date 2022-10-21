@@ -991,7 +991,7 @@ fn confirm_full_slot(
     let skip_verification = !opts.poh_verify;
     let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
-    confirm_slot(
+    let _did_process_entries = confirm_slot(
         blockstore,
         bank,
         &mut confirmation_timing,
@@ -1131,7 +1131,7 @@ pub fn confirm_slot(
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
-) -> result::Result<(), BlockstoreProcessorError> {
+) -> result::Result<bool, BlockstoreProcessorError> {
     let slot = bank.slot();
 
     let slot_entries_load_result = {
@@ -1148,6 +1148,11 @@ pub fn confirm_slot(
         load_result
     }?;
 
+    if slot_entries_load_result.0.is_empty() {
+        return Ok(false);
+    }
+    let slot_full = slot_entries_load_result.2;
+
     confirm_slot_entries(
         bank,
         slot_entries_load_result,
@@ -1160,7 +1165,9 @@ pub fn confirm_slot(
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
-    )
+    )?;
+
+    Ok(!slot_full)
 }
 
 #[allow(clippy::too_many_arguments)]

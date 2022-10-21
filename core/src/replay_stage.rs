@@ -1727,20 +1727,27 @@ impl ReplayStage {
         // All errors must lead to marking the slot as dead, otherwise,
         // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
         // will break!
-        blockstore_processor::confirm_slot(
-            blockstore,
-            bank,
-            &mut w_replay_stats,
-            &mut w_replay_progress,
-            false,
-            transaction_status_sender,
-            Some(replay_vote_sender),
-            None,
-            verify_recyclers,
-            false,
-            log_messages_bytes_limit,
-            prioritization_fee_cache,
-        )?;
+
+        let mut did_process_entries = true;
+        // more entries may have been received while replaying this slot.
+        // looping over this ensures that slots will be processed as fast as possible with the
+        // lowest latency.
+        while did_process_entries {
+            did_process_entries = blockstore_processor::confirm_slot(
+                blockstore,
+                bank,
+                &mut w_replay_stats,
+                &mut w_replay_progress,
+                false,
+                transaction_status_sender,
+                Some(replay_vote_sender),
+                None,
+                verify_recyclers,
+                false,
+                log_messages_bytes_limit,
+                prioritization_fee_cache,
+            )?;
+        }
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
         Ok(tx_count)
