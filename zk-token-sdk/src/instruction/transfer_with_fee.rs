@@ -44,7 +44,7 @@ const TRANSFER_AMOUNT_LO_NEGATED_BITS: usize = 16;
 #[cfg(not(target_os = "solana"))]
 const TRANSFER_AMOUNT_HI_BITS: usize = 32;
 #[cfg(not(target_os = "solana"))]
-const TRANSFER_DELTA_BITS: usize = 64;
+const TRANSFER_DELTA_BITS: usize = 48;
 
 #[cfg(not(target_os = "solana"))]
 lazy_static::lazy_static! {
@@ -450,64 +450,36 @@ impl TransferWithFeeProof {
 
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
-        let range_proof = if TRANSFER_AMOUNT_LO_BITS == 32 {
-            RangeProof::new(
-                vec![
-                    source_new_balance,
-                    transfer_amount_lo,
-                    transfer_amount_hi,
-                    delta_fee,
-                    MAX_FEE_BASIS_POINTS - delta_fee,
-                ],
-                vec![
-                    TRANSFER_SOURCE_AMOUNT_BITS,
-                    TRANSFER_AMOUNT_LO_BITS,
-                    TRANSFER_AMOUNT_HI_BITS,
-                    TRANSFER_DELTA_BITS,
-                    TRANSFER_DELTA_BITS,
-                ],
-                vec![
-                    &opening_source,
-                    opening_lo,
-                    opening_hi,
-                    &opening_claimed,
-                    &opening_claimed_negated,
-                ],
-                transcript,
-            )
-        } else {
-            let transfer_amount_lo_negated =
-                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo;
-            let opening_lo_negated = &PedersenOpening::default() - opening_lo;
-
-            RangeProof::new(
-                vec![
-                    source_new_balance,
-                    transfer_amount_lo,
-                    transfer_amount_lo_negated,
-                    transfer_amount_hi,
-                    delta_fee,
-                    MAX_FEE_BASIS_POINTS - delta_fee,
-                ],
-                vec![
-                    TRANSFER_SOURCE_AMOUNT_BITS,
-                    TRANSFER_AMOUNT_LO_BITS,
-                    TRANSFER_AMOUNT_LO_NEGATED_BITS,
-                    TRANSFER_AMOUNT_HI_BITS,
-                    TRANSFER_DELTA_BITS,
-                    TRANSFER_DELTA_BITS,
-                ],
-                vec![
-                    &opening_source,
-                    opening_lo,
-                    &opening_lo_negated,
-                    opening_hi,
-                    &opening_claimed,
-                    &opening_claimed_negated,
-                ],
-                transcript,
-            )
-        };
+        let range_proof = RangeProof::new(
+            vec![
+                source_new_balance,
+                transfer_amount_lo as u64,
+                transfer_amount_hi as u64,
+                delta_fee,
+                MAX_FEE_BASIS_POINTS - delta_fee,
+                fee_amount_lo,
+                fee_amount_hi,
+            ],
+            vec![
+                TRANSFER_SOURCE_AMOUNT_BITS, // 64
+                TRANSFER_AMOUNT_LO_BITS,     // 16
+                TRANSFER_AMOUNT_HI_BITS,     // 32
+                TRANSFER_DELTA_BITS,         // 32
+                TRANSFER_DELTA_BITS,         // 32
+                16,
+                32,
+            ],
+            vec![
+                &opening_source,
+                opening_lo,
+                opening_hi,
+                &opening_claimed,
+                &opening_claimed_negated,
+                opening_fee_lo,
+                opening_fee_hi,
+            ],
+            transcript,
+        );
 
         Self {
             new_source_commitment: pod_new_source_commitment,
@@ -616,34 +588,19 @@ impl TransferWithFeeProof {
         let new_source_commitment = self.new_source_commitment.try_into()?;
         let claimed_commitment_negated = &(*COMMITMENT_MAX_FEE_BASIS_POINTS) - &claimed_commitment;
 
-        if TRANSFER_AMOUNT_LO_BITS == 32 {
-            range_proof.verify(
-                vec![
-                    &new_source_commitment,
-                    &ciphertext_lo.commitment,
-                    &ciphertext_hi.commitment,
-                    &claimed_commitment,
-                    &claimed_commitment_negated,
-                ],
-                vec![64, 32, 32, 64, 64],
-                transcript,
-            )?;
-        } else {
-            let commitment_lo_negated = &(*COMMITMENT_MAX) - &ciphertext_lo.commitment;
-
-            range_proof.verify(
-                vec![
-                    &new_source_commitment,
-                    &ciphertext_lo.commitment,
-                    &commitment_lo_negated,
-                    &ciphertext_hi.commitment,
-                    &claimed_commitment,
-                    &claimed_commitment_negated,
-                ],
-                vec![64, 16, 16, 32, 64, 64],
-                transcript,
-            )?;
-        }
+        range_proof.verify(
+            vec![
+                &new_source_commitment,
+                &ciphertext_lo.commitment,
+                &ciphertext_hi.commitment,
+                &claimed_commitment,
+                &claimed_commitment_negated,
+                &fee_ciphertext_lo.commitment,
+                &fee_ciphertext_hi.commitment,
+            ],
+            vec![64, 16, 32, 48, 48, 16, 32],
+            transcript,
+        )?;
 
         Ok(())
     }
