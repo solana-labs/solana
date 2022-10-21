@@ -147,6 +147,7 @@ pub struct StreamStats {
 
 impl StreamStats {
     pub fn report(&self) {
+        info!("Reporting stats");
         datapoint_info!(
             "quic-connections",
             (
@@ -307,6 +308,7 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
+    wait_for_chunk_timeout_ms: u64,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let runtime = rt();
     let task = {
@@ -322,6 +324,7 @@ pub fn spawn_server(
             max_staked_connections,
             max_unstaked_connections,
             stats,
+            wait_for_chunk_timeout_ms,
         )
     }?;
     let handle = thread::Builder::new()
@@ -367,6 +370,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            2,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -422,6 +426,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            2,
         )
         .unwrap();
 
@@ -464,6 +469,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
+            2,
         )
         .unwrap();
 
