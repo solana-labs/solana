@@ -265,7 +265,7 @@ pub fn set_buffer_authority_checked(
         vec![
             AccountMeta::new(*buffer_address, false),
             AccountMeta::new_readonly(*current_authority_address, true),
-            AccountMeta::new_readonly(*new_authority_address, false),
+            AccountMeta::new_readonly(*new_authority_address, true),
         ],
     )
 }
