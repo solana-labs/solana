@@ -400,6 +400,7 @@ fn compute_recieve_window(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
