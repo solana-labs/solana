@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
-bs58 = "0.4.0"
+base64 = "0.13.0"
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"

@@ -5480,7 +5480,7 @@ name = "solana-ledger-tool"
 version = "1.13.5"
 dependencies = [
  "assert_cmd",
- "bs58",
+ "base64 0.13.0",
  "bytecount",
  "clap 2.33.3",
  "crossbeam-channel",

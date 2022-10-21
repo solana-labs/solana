@@ -2679,7 +2679,7 @@ fn main() {
                         println!("  - slot: {}", slot);
                         println!("  - rent_epoch: {}", account.rent_epoch());
                         if print_account_data {
-                            println!("  - data: '{}'", bs58::encode(account.data()).into_string());
+                            println!("  - data: '{}'", base64::encode(account.data()));
                         }
                         println!("  - data_len: {}", data_len);
                     }
