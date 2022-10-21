@@ -3831,7 +3831,7 @@ export class Connection {
 
     const res = create(unsafeRes, jsonRpcResultAndContext(nullable(number())));
     if ('error' in res) {
-      throw new SolanaJSONRPCError(res.error, 'failed to get slot');
+      throw new SolanaJSONRPCError(res.error, 'failed to get fee for message');
     }
     if (res.result === null) {
       throw new Error('invalid blockhash');
