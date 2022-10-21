@@ -142,7 +142,7 @@ pub fn parse_bpf_upgradeable_loader(
         UpgradeableLoaderInstruction::SetAuthorityChecked => {
             check_num_bpf_upgradeable_loader_accounts(&instruction.accounts, 3)?;
             Ok(ParsedInstructionEnum {
-                instruction_type: "setAuthority".to_string(),
+                instruction_type: "setAuthorityChecked".to_string(),
                 info: json!({
                     "account": account_keys[instruction.accounts[0] as usize].to_string(),
                     "authority": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -548,6 +548,39 @@ mod test {
     }
 
     #[test]
+    fn test_parse_bpf_upgradeable_loader_set_buffer_authority_checked_ix() {
+        let buffer_address = Pubkey::new_unique();
+        let current_authority_address = Pubkey::new_unique();
+        let new_authority_address = Pubkey::new_unique();
+        let instruction = bpf_loader_upgradeable::set_buffer_authority_checked(
+            &buffer_address,
+            &current_authority_address,
+            &new_authority_address,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_bpf_upgradeable_loader(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "setAuthorityChecked".to_string(),
+                info: json!({
+                    "account": buffer_address.to_string(),
+                    "authority": current_authority_address.to_string(),
+                    "newAuthority": new_authority_address.to_string(),
+                }),
+            }
+        );
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+    }
+
+    #[test]
     fn test_parse_bpf_upgradeable_loader_set_upgrade_authority_ix() {
         let program_address = Pubkey::new_unique();
         let current_authority_address = Pubkey::new_unique();
@@ -622,6 +655,44 @@ mod test {
         assert!(parse_bpf_upgradeable_loader(
             &message.instructions[0],
             &AccountKeys::new(&keys, None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_bpf_upgradeable_loader_set_upgrade_authority_checked_ix() {
+        let program_address = Pubkey::new_unique();
+        let current_authority_address = Pubkey::new_unique();
+        let new_authority_address = Pubkey::new_unique();
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_address.as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
+        let instruction = bpf_loader_upgradeable::set_upgrade_authority_checked(
+            &program_address,
+            &current_authority_address,
+            &new_authority_address,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_bpf_upgradeable_loader(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "setAuthorityChecked".to_string(),
+                info: json!({
+                    "account": programdata_address.to_string(),
+                    "authority": current_authority_address.to_string(),
+                    "newAuthority": new_authority_address.to_string(),
+                }),
+            }
+        );
+
+        assert!(parse_bpf_upgradeable_loader(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
     }
