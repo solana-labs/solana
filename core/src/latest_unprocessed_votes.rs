@@ -53,16 +53,15 @@ impl LatestValidatorVotePacket {
             .ok_or(DeserializedPacketError::VoteTransactionError)?;
 
         match limited_deserialize::<VoteInstruction>(&instruction.data) {
-            Ok(VoteInstruction::UpdateVoteState(vote_state_update))
-            | Ok(VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _))
-            | Ok(VoteInstruction::CompactUpdateVoteState(vote_state_update))
-            | Ok(VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _)) => {
+            Ok(vote_state_update_instruction)
+                if vote_state_update_instruction.is_single_vote_state_update() =>
+            {
                 let &pubkey = message
                     .message
                     .static_account_keys()
                     .get(0)
                     .ok_or(DeserializedPacketError::VoteTransactionError)?;
-                let slot = vote_state_update.last_voted_slot().unwrap_or(0);
+                let slot = vote_state_update_instruction.last_voted_slot().unwrap_or(0);
 
                 Ok(Self {
                     vote: Some(vote),

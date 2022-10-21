@@ -105,7 +105,7 @@ impl VoteTransaction {
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
         match self {
-            VoteTransaction::Vote(vote) => vote.slots.last().copied(),
+            VoteTransaction::Vote(vote) => vote.last_voted_slot(),
             VoteTransaction::VoteStateUpdate(vote_state_update)
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.last_voted_slot()
