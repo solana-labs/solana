@@ -151,15 +151,20 @@ impl TransferData {
         let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
-            Role::Source => ciphertext_lo.source_handle,
-            Role::Dest => ciphertext_lo.destination_handle,
-            Role::Auditor => ciphertext_lo.auditor_handle,
+            Role::Source => Some(ciphertext_lo.source_handle),
+            Role::Destination => Some(ciphertext_lo.destination_handle),
+            Role::Auditor => Some(ciphertext_lo.auditor_handle),
+            Role::WithdrawWithheldAuthority => None,
         };
 
-        Ok(ElGamalCiphertext {
-            commitment: ciphertext_lo.commitment,
-            handle: handle_lo,
-        })
+        if let Some(handle) = handle_lo {
+            Ok(ElGamalCiphertext {
+                commitment: ciphertext_lo.commitment,
+                handle,
+            })
+        } else {
+            Err(ProofError::MissingCiphertext)
+        }
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
@@ -167,15 +172,20 @@ impl TransferData {
         let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
-            Role::Source => ciphertext_hi.source_handle,
-            Role::Dest => ciphertext_hi.destination_handle,
-            Role::Auditor => ciphertext_hi.auditor_handle,
+            Role::Source => Some(ciphertext_hi.source_handle),
+            Role::Destination => Some(ciphertext_hi.destination_handle),
+            Role::Auditor => Some(ciphertext_hi.auditor_handle),
+            Role::WithdrawWithheldAuthority => None,
         };
 
-        Ok(ElGamalCiphertext {
-            commitment: ciphertext_hi.commitment,
-            handle: handle_hi,
-        })
+        if let Some(handle) = handle_hi {
+            Ok(ElGamalCiphertext {
+                commitment: ciphertext_hi.commitment,
+                handle,
+            })
+        } else {
+            Err(ProofError::MissingCiphertext)
+        }
     }
 
     /// Decrypts transfer amount from transfer data
@@ -449,11 +459,11 @@ impl TransferPubkeys {
         let (source_pubkey, destination_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
 
         let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Verification)?;
+            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Decryption)?;
         let destination_pubkey =
-            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
+            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Decryption)?;
         let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Verification)?;
+            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Decryption)?;
 
         Ok(Self {
             source_pubkey,
@@ -667,7 +677,9 @@ mod test {
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(Role::Dest, &dest_sk).unwrap(),
+            transfer_data
+                .decrypt_amount(Role::Destination, &dest_sk)
+                .unwrap(),
             550000_u64,
         );
 

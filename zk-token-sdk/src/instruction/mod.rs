@@ -32,8 +32,9 @@ pub trait Verifiable {
 #[derive(Debug, Copy, Clone)]
 pub enum Role {
     Source,
-    Dest,
+    Destination,
     Auditor,
+    WithdrawWithheldAuthority,
 }
 
 /// Takes in a 64-bit number `amount` and a bit length `bit_length`. It returns:
