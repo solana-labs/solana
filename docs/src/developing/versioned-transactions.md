@@ -148,4 +148,4 @@ console.log(`https://explorer.solana.com/tx/${txid}?cluster=devnet`);
 
 - using [Versioned Transactions for Address Lookup Tables](./lookup-tables.md#how-to-create-an-address-lookup-table)
 - view an [example of a v0 transaction](https://explorer.solana.com/tx/3jpoANiFeVGisWRY5UP648xRXs3iQasCHABPWRWnoEjeA93nc79WrnGgpgazjq4K9m8g2NJoyKoWBV1Kx5VmtwHQ/?cluster=devnet) on Solana Explorer
-- read the [accepted proposal](./../proposals/transactions-v2.md) for Versioned Transaction and Address Lookup Tables
+- read the [accepted proposal](./../proposals/versioned-transactions.md) for Versioned Transaction and Address Lookup Tables

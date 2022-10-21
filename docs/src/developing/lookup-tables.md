@@ -148,5 +148,5 @@ console.log(
 
 ## More Resources
 
-- Read the [proposal](./../proposals/transactions-v2.md) for Address Lookup Tables and Versioned transactions
+- Read the [proposal](./../proposals/versioned-transactions.md) for Address Lookup Tables and Versioned transactions
 - [Example Rust program using Address Lookup Tables](https://github.com/TeamRaccoons/address-lookup-table-multi-swap)
