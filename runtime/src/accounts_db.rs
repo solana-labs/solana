@@ -4607,19 +4607,16 @@ impl AccountsDb {
         }
     }
 
-    pub fn scan_accounts<F, A>(
+    pub fn scan_accounts<F>(
         &self,
         ancestors: &Ancestors,
         bank_id: BankId,
-        scan_func: F,
+        mut scan_func: F,
         config: &ScanConfig,
-    ) -> ScanResult<A>
+    ) -> ScanResult<()>
     where
-        F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
-        A: Default,
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
-        let mut collector = A::default();
-
         // This can error out if the slots being scanned over are aborted
         self.accounts_index.scan_accounts(
             ancestors,
@@ -4629,26 +4626,23 @@ impl AccountsDb {
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
-                scan_func(&mut collector, account_slot)
+                scan_func(account_slot)
             },
             config,
         )?;
 
-        Ok(collector)
+        Ok(())
     }
 
-    pub fn unchecked_scan_accounts<F, A>(
+    pub fn unchecked_scan_accounts<F>(
         &self,
         metric_name: &'static str,
         ancestors: &Ancestors,
-        scan_func: F,
+        mut scan_func: F,
         config: &ScanConfig,
-    ) -> A
-    where
-        F: Fn(&mut A, (&Pubkey, LoadedAccount, Slot)),
-        A: Default,
+    ) where
+        F: FnMut(&Pubkey, LoadedAccount, Slot),
     {
-        let mut collector = A::default();
         self.accounts_index.unchecked_scan_accounts(
             metric_name,
             ancestors,
@@ -4657,29 +4651,25 @@ impl AccountsDb {
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                 {
-                    scan_func(&mut collector, (pubkey, loaded_account, slot));
+                    scan_func(pubkey, loaded_account, slot);
                 }
             },
             config,
         );
-        collector
     }
 
     /// Only guaranteed to be safe when called from rent collection
-    pub fn range_scan_accounts<F, A, R>(
+    pub fn range_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
         ancestors: &Ancestors,
         range: R,
         config: &ScanConfig,
-        scan_func: F,
-    ) -> A
-    where
-        F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
-        A: Default,
+        mut scan_func: F,
+    ) where
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
         R: RangeBounds<Pubkey> + std::fmt::Debug,
     {
-        let mut collector = A::default();
         self.accounts_index.range_scan_accounts(
             metric_name,
             ancestors,
@@ -4700,24 +4690,22 @@ impl AccountsDb {
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot))
                 {
-                    scan_func(&mut collector, Some(account_slot))
+                    scan_func(Some(account_slot))
                 }
             },
         );
-        collector
     }
 
-    pub fn index_scan_accounts<F, A>(
+    pub fn index_scan_accounts<F>(
         &self,
         ancestors: &Ancestors,
         bank_id: BankId,
         index_key: IndexKey,
-        scan_func: F,
+        mut scan_func: F,
         config: &ScanConfig,
-    ) -> ScanResult<(A, bool)>
+    ) -> ScanResult<bool>
     where
-        F: Fn(&mut A, Option<(&Pubkey, AccountSharedData, Slot)>),
-        A: Default,
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
     {
         let key = match &index_key {
             IndexKey::ProgramId(key) => key,
@@ -4727,11 +4715,10 @@ impl AccountsDb {
         if !self.account_indexes.include_key(key) {
             // the requested key was not indexed in the secondary index, so do a normal scan
             let used_index = false;
-            let scan_result = self.scan_accounts(ancestors, bank_id, scan_func, config)?;
-            return Ok((scan_result, used_index));
+            self.scan_accounts(ancestors, bank_id, scan_func, config)?;
+            return Ok(used_index);
         }
 
-        let mut collector = A::default();
         self.accounts_index.index_scan_accounts(
             ancestors,
             bank_id,
@@ -4741,12 +4728,12 @@ impl AccountsDb {
                     .get_account_accessor(slot, pubkey, &account_info.storage_location())
                     .get_loaded_account()
                     .map(|loaded_account| (pubkey, loaded_account.take_account(), slot));
-                scan_func(&mut collector, account_slot)
+                scan_func(account_slot)
             },
             config,
         )?;
         let used_index = true;
-        Ok((collector, used_index))
+        Ok(used_index)
     }
 
     /// Scan a specific slot through all the account storage in parallel
@@ -10551,11 +10538,12 @@ pub mod tests {
             &account1
         );
 
-        let accounts: Vec<AccountSharedData> = db.unchecked_scan_accounts(
+        let mut accounts = Vec::new();
+        db.unchecked_scan_accounts(
             "",
             &ancestors,
-            |accounts: &mut Vec<AccountSharedData>, option| {
-                accounts.push(option.1.take_account());
+            |_, account, _| {
+                accounts.push(account.take_account());
             },
             &ScanConfig::default(),
         );
@@ -11482,40 +11470,42 @@ pub mod tests {
                 keys: [mint_key].iter().cloned().collect::<HashSet<Pubkey>>(),
             });
             // Secondary index can't be used - do normal scan: should still find both pubkeys
-            let found_accounts = accounts
+            let mut found_accounts = HashSet::new();
+            let used_index = accounts
                 .index_scan_accounts(
                     &Ancestors::default(),
                     bank_id,
                     index_key,
-                    |collection: &mut HashSet<Pubkey>, account| {
-                        collection.insert(*account.unwrap().0);
+                    |account| {
+                        found_accounts.insert(*account.unwrap().0);
                     },
                     &ScanConfig::default(),
                 )
                 .unwrap();
-            assert!(!found_accounts.1);
-            assert_eq!(found_accounts.0.len(), 2);
-            assert!(found_accounts.0.contains(&pubkey1));
-            assert!(found_accounts.0.contains(&pubkey2));
+            assert!(!used_index);
+            assert_eq!(found_accounts.len(), 2);
+            assert!(found_accounts.contains(&pubkey1));
+            assert!(found_accounts.contains(&pubkey2));
 
             accounts.account_indexes.keys = None;
 
             // Secondary index can now be used since it isn't marked as excluded
-            let found_accounts = accounts
+            let mut found_accounts = HashSet::new();
+            let used_index = accounts
                 .index_scan_accounts(
                     &Ancestors::default(),
                     bank_id,
                     index_key,
-                    |collection: &mut HashSet<Pubkey>, account| {
-                        collection.insert(*account.unwrap().0);
+                    |account| {
+                        found_accounts.insert(*account.unwrap().0);
                     },
                     &ScanConfig::default(),
                 )
                 .unwrap();
-            assert!(found_accounts.1);
-            assert_eq!(found_accounts.0.len(), 2);
-            assert!(found_accounts.0.contains(&pubkey1));
-            assert!(found_accounts.0.contains(&pubkey2));
+            assert!(used_index);
+            assert_eq!(found_accounts.len(), 2);
+            assert!(found_accounts.contains(&pubkey1));
+            assert!(found_accounts.contains(&pubkey2));
 
             accounts.account_indexes.keys = None;
         }
@@ -12124,22 +12114,24 @@ pub mod tests {
         db.store_uncached(1, &[(&key1, &account1)]);
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let accounts: Vec<AccountSharedData> = db.unchecked_scan_accounts(
+        let mut accounts = Vec::new();
+        db.unchecked_scan_accounts(
             "",
             &ancestors,
-            |accounts: &mut Vec<AccountSharedData>, option| {
-                accounts.push(option.1.take_account());
+            |_, account, _| {
+                accounts.push(account.take_account());
             },
             &ScanConfig::default(),
         );
         assert_eq!(accounts, vec![account0]);
 
         let ancestors = vec![(1, 1), (0, 0)].into_iter().collect();
-        let accounts: Vec<AccountSharedData> = db.unchecked_scan_accounts(
+        let mut accounts = Vec::new();
+        db.unchecked_scan_accounts(
             "",
             &ancestors,
-            |accounts: &mut Vec<AccountSharedData>, option| {
-                accounts.push(option.1.take_account());
+            |_, account, _| {
+                accounts.push(account.take_account());
             },
             &ScanConfig::default(),
         );
@@ -14389,7 +14381,7 @@ pub mod tests {
                 db.scan_accounts(
                     &scan_ancestors,
                     bank_id,
-                    |_collector: &mut Vec<(Pubkey, AccountSharedData)>, maybe_account| {
+                    |maybe_account| {
                         ready_.store(true, Ordering::Relaxed);
                         if let Some((pubkey, _, _)) = maybe_account {
                             if *pubkey == stall_key {

@@ -742,10 +742,11 @@ impl Accounts {
         if num == 0 {
             return Ok(vec![]);
         }
-        let account_balances = self.accounts_db.scan_accounts(
+        let mut account_balances = BinaryHeap::new();
+        self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
+            |option| {
                 if let Some((pubkey, account, _slot)) = option {
                     if account.lamports() == 0 {
                         return;
@@ -758,16 +759,16 @@ impl Accounts {
                     if !collect {
                         return;
                     }
-                    if collector.len() == num {
-                        let Reverse(entry) = collector
+                    if account_balances.len() == num {
+                        let Reverse(entry) = account_balances
                             .peek()
                             .expect("BinaryHeap::peek should succeed when len > 0");
                         if *entry >= (account.lamports(), *pubkey) {
                             return;
                         }
-                        collector.pop();
+                        account_balances.pop();
                     }
-                    collector.push(Reverse((account.lamports(), *pubkey)));
+                    account_balances.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
             &ScanConfig::default(),
@@ -878,16 +879,19 @@ impl Accounts {
         program_id: &Pubkey,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner() == program_id
-                })
-            },
-            config,
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
+                        account.owner() == program_id
+                    })
+                },
+                config,
+            )
+            .map(|_| collector)
     }
 
     pub fn load_by_program_with_filter<F: Fn(&AccountSharedData) -> bool>(
@@ -898,16 +902,19 @@ impl Accounts {
         filter: F,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner() == program_id && filter(account)
-                })
-            },
-            config,
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
+                        account.owner() == program_id && filter(account)
+                    })
+                },
+                config,
+            )
+            .map(|_| collector)
     }
 
     fn calc_scan_result_size(account: &AccountSharedData) -> usize {
@@ -957,14 +964,15 @@ impl Accounts {
     ) -> ScanResult<Vec<TransactionAccount>> {
         let sum = AtomicUsize::default();
         let config = config.recreate_with_abort();
+        let mut collector = Vec::new();
         let result = self
             .accounts_db
             .index_scan_accounts(
                 ancestors,
                 bank_id,
                 *index_key,
-                |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                    Self::load_while_filtering(collector, some_account_tuple, |account| {
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
                         let use_account = filter(account);
                         if use_account
                             && Self::accumulate_and_check_scan_result_size(
@@ -981,7 +989,7 @@ impl Accounts {
                 },
                 &config,
             )
-            .map(|result| result.0);
+            .map(|_| collector);
         Self::maybe_abort_scan(result, &config)
     }
 
@@ -994,18 +1002,21 @@ impl Accounts {
         ancestors: &Ancestors,
         bank_id: BankId,
     ) -> ScanResult<Vec<PubkeyAccountSlot>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<PubkeyAccountSlot>, some_account_tuple| {
-                if let Some((pubkey, account, slot)) = some_account_tuple
-                    .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
-                {
-                    collector.push((*pubkey, account, slot))
-                }
-            },
-            &ScanConfig::default(),
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    if let Some((pubkey, account, slot)) = some_account_tuple
+                        .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
+                    {
+                        collector.push((*pubkey, account, slot))
+                    }
+                },
+                &ScanConfig::default(),
+            )
+            .map(|_| collector)
     }
 
     pub fn hold_range_in_memory<R>(
@@ -1026,15 +1037,15 @@ impl Accounts {
         ancestors: &Ancestors,
         range: R,
     ) -> Vec<PubkeyAccountSlot> {
+        let mut collector = Vec::new();
         self.accounts_db.range_scan_accounts(
             "", // disable logging of this. We now parallelize it and this results in multiple parallel logs
             ancestors,
             range,
             &ScanConfig::new(true),
-            |collector: &mut Vec<PubkeyAccountSlot>, option| {
-                Self::load_with_slot(collector, option)
-            },
-        )
+            |option| Self::load_with_slot(&mut collector, option),
+        );
+        collector
     }
 
     /// Slow because lock is held for 1 operation instead of many.
