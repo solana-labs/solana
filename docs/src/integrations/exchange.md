@@ -156,7 +156,7 @@ We recommend using a unique deposit account for each of your users.
 Solana accounts must be made rent-exempt by containing 2-years worth of
 [rent](developing/programming-model/accounts.md#rent) in SOL. In order to find
 the minimum rent-exempt balance for your deposit accounts, query the
-[`getMinimumBalanceForRentExemption` endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption):
+[`getMinimumBalanceForRentExemption` endpoint](/api#getminimumbalanceforrentexemption):
 
 ```bash
 curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
@@ -218,7 +218,7 @@ To track all the deposit accounts for your exchange, poll for each confirmed
 block and inspect for addresses of interest, using the JSON-RPC service of your
 Solana API node.
 
-- To identify which blocks are available, send a [`getBlocks` request](developing/clients/jsonrpc-api.md#getblocks),
+- To identify which blocks are available, send a [`getBlocks` request](/api#getblocks),
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
@@ -235,7 +235,7 @@ curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
 
 Not every slot produces a block, so there may be gaps in the sequence of integers.
 
-- For each block, request its contents with a [`getBlock` request](developing/clients/jsonrpc-api.md#getblock):
+- For each block, request its contents with a [`getBlock` request](/api#getblock):
 
 ### Block Fetching Tips
 
@@ -350,7 +350,7 @@ generally _not_ a viable method for tracking all your deposit addresses over all
 slots, but may be useful for examining a few accounts for a specific period of
 time.
 
-- Send a [`getSignaturesForAddress`](developing/clients/jsonrpc-api.md#getsignaturesforaddress)
+- Send a [`getSignaturesForAddress`](/api#getsignaturesforaddress)
   request to the api node:
 
 ```bash
@@ -400,7 +400,7 @@ curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
 ```
 
 - For each signature returned, get the transaction details by sending a
-  [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
+  [`getTransaction`](/api#gettransaction) request:
 
 ```bash
 curl localhost:8899 -X POST -H 'Content-Type: application/json' -d '{
@@ -542,7 +542,7 @@ before retrying a withdrawal transfer that does not appear to have been
 confirmed or finalized by the cluster. Otherwise, you risk a double spend. See
 more on [blockhash expiration](#blockhash-expiration) below.
 
-First, get a recent blockhash using the [`getFees` endpoint](developing/clients/jsonrpc-api.md#getfees)
+First, get a recent blockhash using the [`getFees` endpoint](/api#getfees)
 or the CLI command:
 
 ```bash
@@ -557,12 +557,12 @@ solana transfer <USER_ADDRESS> <AMOUNT> --no-wait --allow-unfunded-recipient --b
 ```
 
 You can also build, sign, and serialize the transaction manually, and fire it off to
-the cluster using the JSON-RPC [`sendTransaction` endpoint](developing/clients/jsonrpc-api.md#sendtransaction).
+the cluster using the JSON-RPC [`sendTransaction` endpoint](/api#sendtransaction).
 
 #### Transaction Confirmations & Finality
 
 Get the status of a batch of transactions using the
-[`getSignatureStatuses` JSON-RPC endpoint](developing/clients/jsonrpc-api.md#getsignaturestatuses).
+[`getSignatureStatuses` JSON-RPC endpoint](/api#getsignaturestatuses).
 The `confirmations` field reports how many
 [confirmed blocks](../terminology.md#confirmed-block) have elapsed since the
 transaction was processed. If `confirmations: null`, it is [finalized](../terminology.md#finality).
@@ -613,7 +613,7 @@ curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
 #### Blockhash Expiration
 
 You can check whether a particular blockhash is still valid by sending a
-[`getFeeCalculatorForBlockhash`](developing/clients/jsonrpc-api.md#getfeecalculatorforblockhash)
+[`getFeeCalculatorForBlockhash`](/api#getfeecalculatorforblockhash)
 request with the blockhash as a parameter. If the response value is `null`, the
 blockhash is expired, and the withdrawal transaction using that blockhash should
 never succeed.

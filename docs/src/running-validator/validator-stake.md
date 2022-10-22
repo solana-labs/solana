@@ -71,7 +71,7 @@ account.
 This is a normal transaction so the standard transaction fee will apply. The
 transaction fee range is defined by the genesis block. The actual fee will
 fluctuate based on transaction load. You can determine the current fee via the
-[RPC API “getRecentBlockhash”](developing/clients/jsonrpc-api.md#getrecentblockhash)
+[RPC API “getRecentBlockhash”](/api#getrecentblockhash)
 before submitting a transaction.
 
 Learn more about [transaction fees here](../implemented-proposals/transaction-fees.md).

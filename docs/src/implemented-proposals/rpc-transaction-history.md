@@ -10,13 +10,13 @@ fall back to the external data store.
 
 The affected RPC endpoints are:
 
-- [getFirstAvailableBlock](developing/clients/jsonrpc-api.md#getfirstavailableblock)
-- [getConfirmedBlock](developing/clients/jsonrpc-api.md#getconfirmedblock)
-- [getConfirmedBlocks](developing/clients/jsonrpc-api.md#getconfirmedblocks)
-- [getConfirmedSignaturesForAddress](developing/clients/jsonrpc-api.md#getconfirmedsignaturesforaddress)
-- [getConfirmedTransaction](developing/clients/jsonrpc-api.md#getconfirmedtransaction)
-- [getSignatureStatuses](developing/clients/jsonrpc-api.md#getsignaturestatuses)
-- [getBlockTime](developing/clients/jsonrpc-api.md#getblocktime)
+- [getFirstAvailableBlock](/api#getfirstavailableblock)
+- [getConfirmedBlock](/api#getconfirmedblock)
+- [getConfirmedBlocks](/api#getconfirmedblocks)
+- [getConfirmedSignaturesForAddress](/api#getconfirmedsignaturesforaddress)
+- [getConfirmedTransaction](/api#getconfirmedtransaction)
+- [getSignatureStatuses](/api#getsignaturestatuses)
+- [getBlockTime](/api#getblocktime)
 
 Some system design constraints:
 

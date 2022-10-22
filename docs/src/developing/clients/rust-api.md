@@ -19,7 +19,7 @@ Some important crates:
   that do not run on-chain will import this.
 
 - [`solana-client`] &mdash; For interacting with a Solana node via the
-  [JSON RPC API](jsonrpc-api).
+  [JSON RPC API](/api).
 
 - [`solana-cli-config`] &mdash; Loading and saving the Solana CLI configuration
   file.

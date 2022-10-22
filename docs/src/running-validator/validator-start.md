@@ -81,6 +81,7 @@ sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
 ```
 
 ##### **Increase systemd and session file limits**
+
 Add
 
 ```
@@ -226,14 +227,14 @@ Read more about the [difference between SOL and lamports here](../introduction.m
 ## Create Authorized Withdrawer Account
 
 If you haven't already done so, create an authorized-withdrawer keypair to be used
-as the ultimate authority over your validator.  This keypair will have the
+as the ultimate authority over your validator. This keypair will have the
 authority to withdraw from your vote account, and will have the additional
-authority to change all other aspects of your vote account.  Needless to say,
+authority to change all other aspects of your vote account. Needless to say,
 this is a very important keypair as anyone who possesses it can make any
 changes to your vote account, including taking ownership of it permanently.
 So it is very important to keep your authorized-withdrawer keypair in a safe
-location.  It does not need to be stored on your validator, and should not be
-stored anywhere from where it could be accessed by unauthorized parties.  To
+location. It does not need to be stored on your validator, and should not be
+stored anywhere from where it could be accessed by unauthorized parties. To
 create your authorized-withdrawer keypair:
 
 ```bash
@@ -363,7 +364,7 @@ WantedBy=multi-user.target
 
 Now create `/home/sol/bin/validator.sh` to include the desired
 `solana-validator` command-line. Ensure that the 'exec' command is used to
-start the validator process (i.e. "exec solana-validator ...").  This is
+start the validator process (i.e. "exec solana-validator ..."). This is
 important because without it, logrotate will end up killing the validator
 every time the logs are rotated.
 
@@ -474,13 +475,13 @@ command-line arguments and restart the validator.
 
 As the number of populated accounts on the cluster grows, account-data RPC
 requests that scan the entire account set -- like
-[`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) and
-[SPL-token-specific requests](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate) --
+[`getProgramAccounts`](/api#getprogramaccounts) and
+[SPL-token-specific requests](/api#gettokenaccountsbydelegate) --
 may perform poorly. If your validator needs to support any of these requests,
 you can use the `--account-index` parameter to activate one or more in-memory
 account indexes that significantly improve RPC performance by indexing accounts
 by the key field. Currently supports the following parameter values:
 
-- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts)
-- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](developing/clients/jsonrpc-api.md#gettokenaccountsbydelegate), and [getTokenLargestAccounts](developing/clients/jsonrpc-api.md#gettokenlargestaccounts)
-- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](developing/clients/jsonrpc-api.md#gettokenaccountsbyowner), and [`getProgramAccounts`](developing/clients/jsonrpc-api.md#getprogramaccounts) requests that include an spl-token-owner filter.
+- `program-id`: each account indexed by its owning program; used by [`getProgramAccounts`](/api#getprogramaccounts)
+- `spl-token-mint`: each SPL token account indexed by its token Mint; used by [getTokenAccountsByDelegate](/api#gettokenaccountsbydelegate), and [getTokenLargestAccounts](/api#gettokenlargestaccounts)
+- `spl-token-owner`: each SPL token account indexed by the token-owner address; used by [getTokenAccountsByOwner](/api#gettokenaccountsbyowner), and [`getProgramAccounts`](/api#getprogramaccounts) requests that include an spl-token-owner filter.

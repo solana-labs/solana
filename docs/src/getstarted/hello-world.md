@@ -131,7 +131,7 @@ Once you have successfully deployed a Solana program to the blockchain, you will
 Like most developers creating dApps and websites, we will interact with our on chain program using JavaScript inside a NodeJS application. Specifically, will use the open source [NPM package](https://www.npmjs.com/package/@solana/web3.js) `@solana/web3.js` to aid in our client application.
 
 > **NOTE:**
-> This web3.js package is an abstraction layer on top of the [JSON RPC API](./../developing/clients/jsonrpc-api.md) that reduced the need for rewriting common boilerplate, helping to simplify your client side application code.
+> This web3.js package is an abstraction layer on top of the [JSON RPC API](/api) that reduced the need for rewriting common boilerplate, helping to simplify your client side application code.
 
 ### Initialize a new Node project
 

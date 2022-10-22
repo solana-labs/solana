@@ -23,7 +23,7 @@ Currently, the rent rate is a static amount and stored in the the [Rent sysvar](
 
 Accounts that maintain a minimum LAMPORT balance greater than 2 years worth of rent payments are considered "_rent exempt_" and will not incur a rent collection.
 
-> At the time of writing this, new Accounts and Programs **are required** to be initialized with enough LAMPORTS to become rent-exempt. The RPC endpoints have the ability to calculate this [estimated rent exempt balance](../clients/jsonrpc-api.md#getminimumbalanceforrentexemption) and is recommended to be used.
+> At the time of writing this, new Accounts and Programs **are required** to be initialized with enough LAMPORTS to become rent-exempt. The RPC endpoints have the ability to calculate this [estimated rent exempt balance](/api#getminimumbalanceforrentexemption) and is recommended to be used.
 
 Every time an account's balance is reduced, a check is performed to see if the account is still rent exempt. Transactions that would cause an account's balance to drop below the rent exempt threshold will fail.
 

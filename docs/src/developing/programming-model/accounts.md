@@ -147,7 +147,7 @@ Program executable accounts are required by the runtime to be rent-exempt to
 avoid being purged.
 
 Note: Use the [`getMinimumBalanceForRentExemption` RPC
-endpoint](developing/clients/jsonrpc-api.md#getminimumbalanceforrentexemption) to calculate the
+endpoint](/api#getminimumbalanceforrentexemption) to calculate the
 minimum balance for a particular account size. The following calculation is
 illustrative only.
 
