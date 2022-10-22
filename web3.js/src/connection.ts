@@ -470,6 +470,8 @@ export type GetAccountInfoConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+  /** Optional data slice to limit the returned account data */
+  dataSlice?: DataSlice;
 };
 
 /**
@@ -1141,6 +1143,42 @@ export type BlockResponse = {
   }>;
   /** The unix timestamp of when the block was processed */
   blockTime: number | null;
+};
+
+/**
+ * A block with parsed transactions
+ */
+export type ParsedBlockResponse = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of transactions with status meta and original message */
+  transactions: Array<{
+    /** The details of the transaction */
+    transaction: ParsedTransaction;
+    /** Metadata produced from the transaction */
+    meta: ParsedTransactionMeta | null;
+    /** The transaction version */
+    version?: TransactionVersion;
+  }>;
+  /** Vector of block rewards */
+  rewards?: Array<{
+    /** Public key of reward recipient */
+    pubkey: string;
+    /** Reward value in lamports */
+    lamports: number;
+    /** Account balance after reward is applied */
+    postBalance: number | null;
+    /** Type of reward received */
+    rewardType: string | null;
+  }>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
+  /** The number of blocks beneath this block */
+  blockHeight: number | null;
 };
 
 /**
@@ -2082,6 +2120,38 @@ const GetBlockRpcResult = jsonRpcResult(
 );
 
 /**
+ * Expected parsed JSON RPC response for the "getBlock" message
+ */
+const GetParsedBlockRpcResult = jsonRpcResult(
+  nullable(
+    pick({
+      blockhash: string(),
+      previousBlockhash: string(),
+      parentSlot: number(),
+      transactions: array(
+        pick({
+          transaction: ParsedConfirmedTransactionResult,
+          meta: nullable(ParsedConfirmedTransactionMetaResult),
+          version: optional(TransactionVersionStruct),
+        }),
+      ),
+      rewards: optional(
+        array(
+          pick({
+            pubkey: string(),
+            lamports: number(),
+            postBalance: nullable(number()),
+            rewardType: nullable(string()),
+          }),
+        ),
+      ),
+      blockTime: nullable(number()),
+      blockHeight: nullable(number()),
+    }),
+  ),
+);
+
+/**
  * Expected JSON RPC response for the "getConfirmedBlock" message
  *
  * @deprecated Deprecated since Solana v1.8.0. Please use {@link GetBlockRpcResult} instead.
@@ -2328,6 +2398,8 @@ export type GetMultipleAccountsConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+  /** Optional data slice to limit the returned account data */
+  dataSlice?: DataSlice;
 };
 
 /**
@@ -3876,6 +3948,28 @@ export class Connection {
         version,
       })),
     };
+  }
+
+  /**
+   * Fetch parsed transaction details for a confirmed or finalized block
+   */
+  async getParsedBlock(
+    slot: number,
+    rawConfig?: GetVersionedBlockConfig,
+  ): Promise<ParsedBlockResponse | null> {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
+    const args = this._buildArgsAtLeastConfirmed(
+      [slot],
+      commitment as Finality,
+      'jsonParsed',
+      config,
+    );
+    const unsafeRes = await this._rpcRequest('getBlock', args);
+    const res = create(unsafeRes, GetParsedBlockRpcResult);
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(res.error, 'failed to get block');
+    }
+    return res.result;
   }
 
   /*

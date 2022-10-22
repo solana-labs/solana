@@ -17,12 +17,11 @@ export const createFeePayerValidator = (
   feeLamports: number
 ): AccountValidator => {
   return (account: Account): string | undefined => {
-    if (account.details === undefined) return "Account doesn't exist";
-    if (!account.details.owner.equals(SystemProgram.programId))
+    if (account.lamports === 0) return "Account doesn't exist";
+    if (!account.owner.equals(SystemProgram.programId))
       return "Only system-owned accounts can pay fees";
     // TODO: Actually nonce accounts can pay fees too
-    if (account.details.space > 0)
-      return "Only unallocated accounts can pay fees";
+    if (account.space > 0) return "Only unallocated accounts can pay fees";
     if (account.lamports < feeLamports) {
       return "Insufficient funds for fees";
     }
@@ -31,9 +30,8 @@ export const createFeePayerValidator = (
 };
 
 export const programValidator = (account: Account): string | undefined => {
-  if (account.details === undefined) return "Account doesn't exist";
-  if (!account.details.executable)
-    return "Only executable accounts can be invoked";
+  if (account.lamports === 0) return "Account doesn't exist";
+  if (!account.executable) return "Only executable accounts can be invoked";
   return;
 };
 
@@ -108,7 +106,8 @@ function AccountInfo({
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!info?.data)
+  const account = info?.data;
+  if (!account)
     return (
       <span className="text-muted">
         <span className="spinner-grow spinner-grow-sm me-2"></span>
@@ -116,23 +115,22 @@ function AccountInfo({
       </span>
     );
 
-  const errorMessage = validator && validator(info.data);
+  const errorMessage = validator && validator(account);
   if (errorMessage) return <span className="text-warning">{errorMessage}</span>;
 
-  if (!info.data.details) {
+  if (account.lamports === 0) {
     return <span className="text-muted">Account doesn't exist</span>;
   }
 
-  const owner = info.data.details.owner;
-  const ownerAddress = owner.toBase58();
+  const ownerAddress = account.owner.toBase58();
   const ownerLabel = addressLabel(ownerAddress, cluster);
 
   return (
     <span className="text-muted">
       {`Owned by ${ownerLabel || ownerAddress}.`}
-      {` Balance is ${lamportsToSolString(info.data.lamports)} SOL.`}
+      {` Balance is ${lamportsToSolString(account.lamports)} SOL.`}
       {` Size is ${new Intl.NumberFormat("en-US").format(
-        info.data.details.space
+        account.space
       )} byte(s).`}
     </span>
   );

@@ -722,7 +722,7 @@ pub mod test {
                 format!(
                     "{}{}",
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../programs/bpf/c/out/tuner.so"
+                    "/../programs/sbf/c/out/tuner.so"
                 ),
             )),
             &account_keypair_refs,

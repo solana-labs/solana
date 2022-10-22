@@ -3,7 +3,7 @@ use {
     serde::{Deserialize, Serialize},
     serde_json::Result,
     solana_bpf_loader_program::{
-        create_vm, serialization::serialize_parameters, syscalls::register_syscalls, BpfError,
+        create_vm, serialization::serialize_parameters, syscalls::register_syscalls,
         ThisInstructionMeter,
     },
     solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
@@ -233,7 +233,7 @@ native machine code before execting it in the virtual machine.",
             &instruction_data,
         );
     invoke_context.push().unwrap();
-    let (mut parameter_bytes, account_lengths) = serialize_parameters(
+    let (_parameter_bytes, regions, account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
             .transaction_context
@@ -254,10 +254,10 @@ native machine code before execting it in the virtual machine.",
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&mut invoke_context, true).unwrap();
     let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<BpfError, ThisInstructionMeter>::from_elf(&contents, config, syscall_registry)
+        Executable::<ThisInstructionMeter>::from_elf(&contents, config, syscall_registry)
             .map_err(|err| format!("Executable constructor failed: {:?}", err))
     } else {
-        assemble::<BpfError, ThisInstructionMeter>(
+        assemble::<ThisInstructionMeter>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
             config,
             syscall_registry,
@@ -266,11 +266,9 @@ native machine code before execting it in the virtual machine.",
     .unwrap();
 
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
-            executable,
-        )
-        .map_err(|err| format!("Executable verifier failed: {:?}", err))
-        .unwrap();
+        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
+            .map_err(|err| format!("Executable verifier failed: {:?}", err))
+            .unwrap();
 
     verified_executable.jit_compile().unwrap();
     let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
@@ -294,7 +292,7 @@ native machine code before execting it in the virtual machine.",
 
     let mut vm = create_vm(
         &verified_executable,
-        parameter_bytes.as_slice_mut(),
+        regions,
         account_lengths,
         &mut invoke_context,
     )
@@ -310,13 +308,14 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("trace") {
         eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        vm.get_tracer()
+        vm.get_program_environment()
+            .tracer
             .write(&mut file, analysis.analyze())
             .unwrap();
     }
     if matches.is_present("profile") {
         eprintln!("Profile is saved in profile.dot");
-        let tracer = &vm.get_tracer();
+        let tracer = &vm.get_program_environment().tracer;
         let analysis = analysis.analyze();
         let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
@@ -376,19 +375,19 @@ impl Debug for Output {
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a> {
-    analysis: Option<Analysis<'a, BpfError, ThisInstructionMeter>>,
-    executable: &'a Executable<BpfError, ThisInstructionMeter>,
+    analysis: Option<Analysis<'a, ThisInstructionMeter>>,
+    executable: &'a Executable<ThisInstructionMeter>,
 }
 
 impl<'a> LazyAnalysis<'a> {
-    fn new(executable: &'a Executable<BpfError, ThisInstructionMeter>) -> Self {
+    fn new(executable: &'a Executable<ThisInstructionMeter>) -> Self {
         Self {
             analysis: None,
             executable,
         }
     }
 
-    fn analyze(&mut self) -> &Analysis<BpfError, ThisInstructionMeter> {
+    fn analyze(&mut self) -> &Analysis<ThisInstructionMeter> {
         if let Some(ref analysis) = self.analysis {
             return analysis;
         }

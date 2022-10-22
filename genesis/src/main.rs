@@ -683,6 +683,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(
@@ -756,6 +757,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts1).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(
@@ -839,6 +841,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts2).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(

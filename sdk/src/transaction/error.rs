@@ -1,6 +1,8 @@
 use {
     crate::{
-        instruction::InstructionError, message::SanitizeMessageError, sanitize::SanitizeError,
+        instruction::InstructionError,
+        message::{AddressLoaderError, SanitizeMessageError},
+        sanitize::SanitizeError,
     },
     serde::Serialize,
     thiserror::Error,
@@ -156,7 +158,23 @@ impl From<SanitizeError> for TransactionError {
 }
 
 impl From<SanitizeMessageError> for TransactionError {
-    fn from(_err: SanitizeMessageError) -> Self {
-        Self::SanitizeFailure
+    fn from(err: SanitizeMessageError) -> Self {
+        match err {
+            SanitizeMessageError::AddressLoaderError(err) => Self::from(err),
+            _ => Self::SanitizeFailure,
+        }
+    }
+}
+
+impl From<AddressLoaderError> for TransactionError {
+    fn from(err: AddressLoaderError) -> Self {
+        match err {
+            AddressLoaderError::Disabled => Self::UnsupportedVersion,
+            AddressLoaderError::SlotHashesSysvarNotFound => Self::AccountNotFound,
+            AddressLoaderError::LookupTableAccountNotFound => Self::AddressLookupTableNotFound,
+            AddressLoaderError::InvalidAccountOwner => Self::InvalidAddressLookupTableOwner,
+            AddressLoaderError::InvalidAccountData => Self::InvalidAddressLookupTableData,
+            AddressLoaderError::InvalidLookupIndex => Self::InvalidAddressLookupTableIndex,
+        }
     }
 }

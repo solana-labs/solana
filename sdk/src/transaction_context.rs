@@ -83,7 +83,7 @@ pub type IndexOfAccount = u16;
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionAccount {
     /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: IndexOfAccount,
@@ -107,7 +107,7 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
@@ -431,7 +431,7 @@ pub struct TransactionReturnData {
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct InstructionContext {
     nesting_level: usize,
     instruction_accounts_lamport_sum: u128,
@@ -700,11 +700,13 @@ pub struct BorrowedAccount<'a> {
 
 impl<'a> BorrowedAccount<'a> {
     /// Returns the index of this account (transaction wide)
+    #[inline]
     pub fn get_index_in_transaction(&self) -> IndexOfAccount {
         self.index_in_transaction
     }
 
     /// Returns the public key of this account (transaction wide)
+    #[inline]
     pub fn get_key(&self) -> &Pubkey {
         self.transaction_context
             .get_key_of_account_at_index(self.index_in_transaction)
@@ -712,6 +714,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns the owner of this account (transaction wide)
+    #[inline]
     pub fn get_owner(&self) -> &Pubkey {
         self.account.owner()
     }
@@ -760,6 +763,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns the number of lamports of this account (transaction wide)
+    #[inline]
     pub fn get_lamports(&self) -> u64 {
         self.account.lamports()
     }
@@ -824,6 +828,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
+    #[inline]
     pub fn get_data(&self) -> &[u8] {
         self.account.data()
     }
@@ -936,6 +941,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns whether this account is executable (transaction wide)
+    #[inline]
     pub fn is_executable(&self) -> bool {
         self.account.executable()
     }
@@ -982,6 +988,7 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns the rent epoch of this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
+    #[inline]
     pub fn get_rent_epoch(&self) -> u64 {
         self.account.rent_epoch()
     }

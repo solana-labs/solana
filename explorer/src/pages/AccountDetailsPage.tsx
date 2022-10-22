@@ -181,7 +181,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
     <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <AccountHeader address={address} info={info} />
+          <AccountHeader address={address} account={info?.data} />
         </div>
       </div>
       {!pubkey ? (
@@ -195,22 +195,22 @@ export function AccountDetailsPage({ address, tab }: Props) {
 
 export function AccountHeader({
   address,
-  info,
+  account,
 }: {
   address: string;
-  info?: CacheEntry<Account>;
+  account?: Account;
 }) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
   const mintInfo = useMintAccountInfo(address);
-  const account = info?.data;
-  const data = account?.details?.data;
-  const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+  const parsedData = account?.data.parsed;
+  const isToken =
+    parsedData?.program === "spl-token" && parsedData?.parsed.type === "mint";
 
-  if (isMetaplexNFT(data, mintInfo)) {
+  if (isMetaplexNFT(parsedData, mintInfo)) {
     return (
       <MetaplexNFTHeader
-        nftData={(data as TokenProgramData).nftData!}
+        nftData={(parsedData as TokenProgramData).nftData!}
         address={address}
       />
     );
@@ -226,12 +226,14 @@ export function AccountHeader({
     let unverified = false;
 
     // Fall back to legacy token list when there is stub metadata (blank uri), updatable by default by the mint authority
-    if (!data?.nftData?.metadata.data.uri && tokenDetails) {
+    if (!parsedData?.nftData?.metadata.data.uri && tokenDetails) {
       token = tokenDetails;
-    } else if (data?.nftData) {
+    } else if (parsedData?.nftData) {
       token = {
-        logoURI: data?.nftData?.json?.image,
-        name: data?.nftData?.json?.name ?? data?.nftData.metadata.data.name,
+        logoURI: parsedData?.nftData?.json?.image,
+        name:
+          parsedData?.nftData?.json?.name ??
+          parsedData?.nftData.metadata.data.name,
       };
       unverified = true;
     } else if (tokenDetails) {
@@ -339,62 +341,68 @@ function DetailsSections({
 }
 
 function InfoSection({ account }: { account: Account }) {
-  const details = account?.details;
-  const data = details?.data;
+  const parsedData = account.data.parsed;
+  const rawData = account.data.raw;
 
-  if (data && data.program === "bpf-upgradeable-loader") {
+  if (parsedData && parsedData.program === "bpf-upgradeable-loader") {
     return (
       <UpgradeableLoaderAccountSection
         account={account}
-        parsedData={data.parsed}
-        programData={data.programData}
+        parsedData={parsedData.parsed}
+        programData={parsedData.programData}
       />
     );
-  } else if (data && data.program === "stake") {
+  } else if (parsedData && parsedData.program === "stake") {
     return (
       <StakeAccountSection
         account={account}
-        stakeAccount={data.parsed.info}
-        activation={data.activation}
-        stakeAccountType={data.parsed.type}
+        stakeAccount={parsedData.parsed.info}
+        activation={parsedData.activation}
+        stakeAccountType={parsedData.parsed.type}
       />
     );
-  } else if (account.details?.owner.toBase58() === NFTOKEN_ADDRESS) {
+  } else if (account.owner.toBase58() === NFTOKEN_ADDRESS) {
     return <NFTokenAccountSection account={account} />;
-  } else if (data && data.program === "spl-token") {
-    return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
-  } else if (data && data.program === "nonce") {
-    return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
-  } else if (data && data.program === "vote") {
-    return <VoteAccountSection account={account} voteAccount={data.parsed} />;
-  } else if (data && data.program === "sysvar") {
+  } else if (parsedData && parsedData.program === "spl-token") {
     return (
-      <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
+      <TokenAccountSection account={account} tokenAccount={parsedData.parsed} />
     );
-  } else if (data && data.program === "config") {
+  } else if (parsedData && parsedData.program === "nonce") {
     return (
-      <ConfigAccountSection account={account} configAccount={data.parsed} />
+      <NonceAccountSection account={account} nonceAccount={parsedData.parsed} />
+    );
+  } else if (parsedData && parsedData.program === "vote") {
+    return (
+      <VoteAccountSection account={account} voteAccount={parsedData.parsed} />
+    );
+  } else if (parsedData && parsedData.program === "sysvar") {
+    return (
+      <SysvarAccountSection
+        account={account}
+        sysvarAccount={parsedData.parsed}
+      />
+    );
+  } else if (parsedData && parsedData.program === "config") {
+    return (
+      <ConfigAccountSection
+        account={account}
+        configAccount={parsedData.parsed}
+      />
     );
   } else if (
-    data &&
-    data.program === "address-lookup-table" &&
-    data.parsed.type === "lookupTable"
+    parsedData &&
+    parsedData.program === "address-lookup-table" &&
+    parsedData.parsed.type === "lookupTable"
   ) {
     return (
       <AddressLookupTableAccountSection
         account={account}
-        lookupTableAccount={data.parsed.info}
+        lookupTableAccount={parsedData.parsed.info}
       />
     );
-  } else if (
-    details?.rawData &&
-    isAddressLookupTableAccount(details.owner, details.rawData)
-  ) {
+  } else if (rawData && isAddressLookupTableAccount(account.owner, rawData)) {
     return (
-      <AddressLookupTableAccountSection
-        account={account}
-        data={details.rawData}
-      />
+      <AddressLookupTableAccountSection account={account} data={rawData} />
     );
   } else {
     return <UnknownAccountCard account={account} />;
@@ -442,8 +450,8 @@ function MoreSection({
   tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const details = account?.details;
-  const data = details?.data;
+  const parsedData = account.data.parsed;
+  const rawData = account.data.raw;
 
   return (
     <>
@@ -465,27 +473,27 @@ function MoreSection({
       {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "rewards" && <RewardsCard pubkey={pubkey} />}
-      {tab === "vote-history" && data?.program === "vote" && (
-        <VotesCard voteAccount={data.parsed} />
+      {tab === "vote-history" && parsedData?.program === "vote" && (
+        <VotesCard voteAccount={parsedData.parsed} />
       )}
       {tab === "slot-hashes" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "slotHashes" && (
-          <SlotHashesCard sysvarAccount={data.parsed} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "slotHashes" && (
+          <SlotHashesCard sysvarAccount={parsedData.parsed} />
         )}
       {tab === "stake-history" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "stakeHistory" && (
-          <StakeHistoryCard sysvarAccount={data.parsed} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "stakeHistory" && (
+          <StakeHistoryCard sysvarAccount={parsedData.parsed} />
         )}
       {tab === "blockhashes" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "recentBlockhashes" && (
-          <BlockhashesCard blockhashes={data.parsed.info} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "recentBlockhashes" && (
+          <BlockhashesCard blockhashes={parsedData.parsed.info} />
         )}
       {tab === "metadata" && (
         <MetaplexMetadataCard
-          nftData={(account.details?.data as TokenProgramData).nftData!}
+          nftData={(account.data.parsed as TokenProgramData).nftData!}
         />
       )}
       {tab === "nftoken-collection-nfts" && (
@@ -497,13 +505,14 @@ function MoreSection({
       )}
       {tab === "attributes" && (
         <MetaplexNFTAttributesCard
-          nftData={(account.details?.data as TokenProgramData).nftData!}
+          nftData={(account.data.parsed as TokenProgramData).nftData!}
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
-        <SecurityCard data={data} />
-      )}
+      {tab === "security" &&
+        parsedData?.program === "bpf-upgradeable-loader" && (
+          <SecurityCard data={parsedData} />
+        )}
       {tab === "anchor-program" && (
         <React.Suspense
           fallback={<LoadingCard message="Loading anchor program IDL" />}
@@ -521,14 +530,14 @@ function MoreSection({
         </React.Suspense>
       )}
       {tab === "entries" &&
-        details?.rawData &&
-        isAddressLookupTableAccount(details.owner, details.rawData) && (
-          <LookupTableEntriesCard lookupTableAccountData={details?.rawData} />
+        rawData &&
+        isAddressLookupTableAccount(account.owner, rawData) && (
+          <LookupTableEntriesCard lookupTableAccountData={rawData} />
         )}
       {tab === "entries" &&
-        data?.program === "address-lookup-table" &&
-        data.parsed.type === "lookupTable" && (
-          <LookupTableEntriesCard parsedLookupTable={data.parsed.info} />
+        parsedData?.program === "address-lookup-table" &&
+        parsedData.parsed.type === "lookupTable" && (
+          <LookupTableEntriesCard parsedLookupTable={parsedData.parsed.info} />
         )}
     </>
   );
@@ -536,7 +545,7 @@ function MoreSection({
 
 function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
   const address = pubkey.toBase58();
-  const data = account.details?.data;
+  const parsedData = account.data.parsed;
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -546,31 +555,31 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
   ];
 
   let programTypeKey = "";
-  if (data && "parsed" in data && "type" in data.parsed) {
-    programTypeKey = `${data.program}:${data.parsed.type}`;
+  if (parsedData) {
+    programTypeKey = `${parsedData.program}:${parsedData.parsed.type}`;
   }
 
-  if (data && data.program in TABS_LOOKUP) {
-    tabs.push(...TABS_LOOKUP[data.program]);
+  if (parsedData && parsedData.program in TABS_LOOKUP) {
+    tabs.push(...TABS_LOOKUP[parsedData.program]);
   }
 
-  if (data && programTypeKey in TABS_LOOKUP) {
+  if (parsedData && programTypeKey in TABS_LOOKUP) {
     tabs.push(...TABS_LOOKUP[programTypeKey]);
   }
 
   // Add the key for address lookup tables
   if (
-    account.details?.rawData &&
-    isAddressLookupTableAccount(account.details.owner, account.details.rawData)
+    account.data.raw &&
+    isAddressLookupTableAccount(account.owner, account.data.raw)
   ) {
     tabs.push(...TABS_LOOKUP["address-lookup-table"]);
   }
 
   // Add the key for Metaplex NFTs
   if (
-    data &&
+    parsedData &&
     programTypeKey === "spl-token:mint" &&
-    (data as TokenProgramData).nftData
+    (parsedData as TokenProgramData).nftData
   ) {
     tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
   }
@@ -589,9 +598,9 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
 
   if (
     !isNFToken &&
-    (!data ||
+    (!parsedData ||
       !(
-        TOKEN_TABS_HIDDEN.includes(data.program) ||
+        TOKEN_TABS_HIDDEN.includes(parsedData.program) ||
         TOKEN_TABS_HIDDEN.includes(programTypeKey)
       ))
   ) {
@@ -657,7 +666,7 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
         <AccountDataLink
           tab={accountDataTab}
           address={pubkey.toString()}
-          programId={account.details?.owner}
+          programId={account.owner}
         />
       </React.Suspense>
     ),
@@ -676,7 +685,7 @@ function AnchorProgramLink({
   pubkey: PublicKey;
 }) {
   const { url } = useCluster();
-  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
+  const anchorProgram = useAnchorProgram(pubkey.toString(), url);
 
   if (!anchorProgram) {
     return null;
@@ -702,13 +711,10 @@ function AccountDataLink({
 }: {
   address: string;
   tab: Tab;
-  programId: PublicKey | undefined;
+  programId: PublicKey;
 }) {
   const { url } = useCluster();
-  const accountAnchorProgram = useAnchorProgram(
-    programId?.toString() ?? "",
-    url
-  );
+  const accountAnchorProgram = useAnchorProgram(programId.toString(), url);
 
   if (!accountAnchorProgram) {
     return null;

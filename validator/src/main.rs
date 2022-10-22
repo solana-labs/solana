@@ -7,6 +7,7 @@ use {
         AppSettings, Arg, ArgMatches, SubCommand,
     },
     console::style,
+    lazy_static::lazy_static,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     solana_clap_utils::{
@@ -28,7 +29,6 @@ use {
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
-        MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -392,19 +392,18 @@ fn hash_validator(hash: String) -> Result<(), String> {
         .map_err(|e| format!("{:?}", e))
 }
 
-/// Returns the default shred storage size (include both data and coding
+/// Returns the default fifo shred storage size (include both data and coding
 /// shreds) based on the validator config.
-fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> u64 {
+fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
     // The max shred size is around 1228 bytes.
     // Here we reserve a little bit more than that to give extra storage for FIFO
     // to prevent it from purging data that have not yet being marked as obsoleted
     // by LedgerCleanupService.
     const RESERVED_BYTES_PER_SHRED: u64 = 1500;
-    match vc.max_ledger_shreds {
+    vc.max_ledger_shreds.map(|max_ledger_shreds| {
         // x2 as we have data shred and coding shred.
-        Some(max_ledger_shreds) => max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2,
-        None => MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
-    }
+        max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2
+    })
 }
 
 // This function is duplicated in ledger-tool/src/main.rs...
@@ -597,15 +596,6 @@ pub fn main() {
                 .help("Launch validator without voting"),
         )
         .arg(
-            Arg::with_name("no_check_vote_account")
-                .long("no-check-vote-account")
-                .takes_value(false)
-                .conflicts_with("no_voting")
-                .requires("entrypoint")
-                .hidden(true)
-                .help("Skip the RPC vote account sanity check")
-        )
-        .arg(
             Arg::with_name("check_vote_account")
                 .long("check-vote-account")
                 .takes_value(true)
@@ -640,13 +630,6 @@ pub fn main() {
                 .takes_value(true)
                 .validator(solana_validator::port_validator)
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
-        )
-        .arg(
-            Arg::with_name("minimal_rpc_api")
-                .long("--minimal-rpc-api")
-                .takes_value(false)
-                .hidden(true)
-                .help("Only expose the RPC methods required to serve snapshots to other nodes"),
         )
         .arg(
             Arg::with_name("full_rpc_api")
@@ -695,16 +678,6 @@ pub fn main() {
                 .requires("enable_rpc_transaction_history")
                 .takes_value(false)
                 .help("Upload new confirmed blocks into a BigTable instance"),
-        )
-        .arg(
-            Arg::with_name("enable_cpi_and_log_storage")
-                .long("enable-cpi-and-log-storage")
-                .requires("enable_rpc_transaction_history")
-                .takes_value(false)
-                .hidden(true)
-                .help("Deprecated, please use \"enable-extended-tx-metadata-storage\". \
-                       Include CPI inner instructions, logs and return data in \
-                       the historical transaction info stored"),
         )
         .arg(
             Arg::with_name("enable_extended_tx_metadata_storage")
@@ -889,18 +862,6 @@ pub fn main() {
                        download from other validators"),
         )
         .arg(
-            Arg::with_name("incremental_snapshots")
-                .long("incremental-snapshots")
-                .takes_value(false)
-                .hidden(true)
-                .conflicts_with("no_incremental_snapshots")
-                .help("Enable incremental snapshots")
-                .long_help("Enable incremental snapshots by setting this flag. \
-                   When enabled, --snapshot-interval-slots will set the \
-                   incremental snapshot interval. To set the full snapshot \
-                   interval, use --full-snapshot-interval-slots.")
-         )
-        .arg(
             Arg::with_name("no_incremental_snapshots")
                 .long("no-incremental-snapshots")
                 .takes_value(false)
@@ -1050,7 +1011,6 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("rocksdb_shred_compaction")
-                .hidden(true)
                 .long("rocksdb-shred-compaction")
                 .value_name("ROCKSDB_COMPACTION_STYLE")
                 .takes_value(true)
@@ -1065,7 +1025,6 @@ pub fn main() {
         )
         .arg(
             Arg::with_name("rocksdb_fifo_shred_storage_size")
-                .hidden(true)
                 .long("rocksdb-fifo-shred-storage-size")
                 .value_name("SHRED_STORAGE_SIZE_BYTES")
                 .takes_value(true)
@@ -1230,12 +1189,6 @@ pub fn main() {
                       [default: all validators]")
         )
         .arg(
-            Arg::with_name("no_rocksdb_compaction")
-                .long("no-rocksdb-compaction")
-                .takes_value(false)
-                .help("Disable manual compaction of the ledger database (this is ignored).")
-        )
-        .arg(
             Arg::with_name("rocksdb_compaction_interval")
                 .long("rocksdb-compaction-interval-slots")
                 .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
@@ -1269,17 +1222,6 @@ pub fn main() {
                 .long("tpu-enable-udp")
                 .takes_value(false)
                 .help("Enable UDP for receiving/sending transactions."),
-        )
-        .arg(
-            Arg::with_name("disable_quic_servers")
-                .long("disable-quic-servers")
-                .takes_value(false)
-                .hidden(true)
-        )
-        .arg(
-            Arg::with_name("enable_quic_servers")
-                .hidden(true)
-                .long("enable-quic-servers")
         )
         .arg(
             Arg::with_name("tpu_connection_pool_size")
@@ -1635,14 +1577,6 @@ pub fn main() {
                 .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
         )
         .arg(
-            // legacy nop argument
-            Arg::with_name("bpf_jit")
-                .long("bpf-jit")
-                .hidden(true)
-                .takes_value(false)
-                .conflicts_with("no_bpf_jit")
-        )
-        .arg(
             Arg::with_name("poh_pinned_cpu_core")
                 .hidden(true)
                 .long("experimental-poh-pinned-cpu-core")
@@ -1808,28 +1742,6 @@ pub fn main() {
                       AccountsHashVerifier. This has a computational cost."),
         )
         .arg(
-            Arg::with_name("accounts_db_index_hashing")
-                .long("accounts-db-index-hashing")
-                .help("Enables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service.")
-                .hidden(true),
-        )
-        .arg(
-            Arg::with_name("no_accounts_db_index_hashing")
-                .long("no-accounts-db-index-hashing")
-                .help("This is obsolete. See --accounts-db-index-hashing. \
-                       Disables the use of the index in hash calculation in \
-                       AccountsHashVerifier/Accounts Background Service.")
-                .hidden(true),
-        )
-        .arg(
-            // legacy nop argument
-            Arg::with_name("accounts_db_caching_enabled")
-                .long("accounts-db-caching-enabled")
-                .conflicts_with("no_accounts_db_caching")
-                .hidden(true)
-        )
-        .arg(
             Arg::with_name("accounts_shrink_optimize_total_space")
                 .long("accounts-shrink-optimize-total-space")
                 .takes_value(true)
@@ -1879,6 +1791,7 @@ pub fn main() {
                 .long("replay-slots-concurrently")
                 .help("Allow concurrent replay of slots on different forks")
         )
+        .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2057,6 +1970,7 @@ pub fn main() {
                          then this not a good time for a restart")
         )
         .get_matches();
+    warn_for_deprecated_arguments(&matches);
 
     let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     let ledger_path = PathBuf::from(matches.value_of("ledger_path").unwrap());
@@ -2377,9 +2291,6 @@ pub fn main() {
 
     let init_complete_file = matches.value_of("init_complete_file");
 
-    if matches.is_present("no_check_vote_account") {
-        info!("vote account sanity checks are no longer performed by default. --no-check-vote-account is deprecated and can be removed from the command line");
-    }
     let rpc_bootstrap_config = bootstrap::RpcBootstrapConfig {
         no_genesis_fetch: matches.is_present("no_genesis_fetch"),
         no_snapshot_fetch: matches.is_present("no_snapshot_fetch"),
@@ -2623,25 +2534,6 @@ pub fn main() {
         None
     };
 
-    if matches.is_present("minimal_rpc_api") {
-        warn!("--minimal-rpc-api is now the default behavior. This flag is deprecated and can be removed from the launch args");
-    }
-
-    if matches.is_present("enable_cpi_and_log_storage") {
-        warn!(
-            "--enable-cpi-and-log-storage is deprecated. Please update the \
-            launch args to use --enable-extended-tx-metadata-storage and remove \
-            --enable-cpi-and-log-storage"
-        );
-    }
-
-    if matches.is_present("enable_quic_servers") {
-        warn!("--enable-quic-servers is now the default behavior. This flag is deprecated and can be removed from the launch args");
-    }
-    if matches.is_present("disable_quic_servers") {
-        warn!("--disable-quic-servers is deprecated. The quic server cannot be disabled.");
-    }
-
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
     {
@@ -2661,12 +2553,6 @@ pub fn main() {
         None
     };
 
-    if matches.is_present("accounts_db_index_hashing") {
-        info!("The accounts hash is only calculated without using the index. --accounts-db-index-hashing is deprecated and can be removed from the command line");
-    }
-    if matches.is_present("no_accounts_db_index_hashing") {
-        info!("The accounts hash is only calculated without using the index. --no-accounts-db-index-hashing is deprecated and can be removed from the command line");
-    }
     let rpc_send_retry_rate_ms = value_t_or_exit!(matches, "rpc_send_transaction_retry_ms", u64);
     let rpc_send_batch_size = value_t_or_exit!(matches, "rpc_send_transaction_batch_size", usize);
     let rpc_send_batch_send_rate_ms =
@@ -3014,9 +2900,6 @@ pub fn main() {
 
         exit(1);
     }
-    if matches.is_present("incremental_snapshots") {
-        warn!("--incremental-snapshots is now the default behavior. This flag is deprecated and can be removed from the launch args")
-    }
 
     if matches.is_present("limit_ledger_size") {
         let limit_ledger_size = match matches.value_of("limit_ledger_size") {
@@ -3055,11 +2938,11 @@ pub fn main() {
                     None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
                         &validator_config,
                     )),
-                    Some(_) => ShredStorageType::rocks_fifo(value_t_or_exit!(
+                    Some(_) => ShredStorageType::rocks_fifo(Some(value_t_or_exit!(
                         matches,
                         "rocksdb_fifo_shred_storage_size",
                         u64
-                    )),
+                    ))),
                 },
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
@@ -3334,5 +3217,127 @@ fn process_account_indexes(matches: &ArgMatches) -> AccountSecondaryIndexes {
     AccountSecondaryIndexes {
         keys,
         indexes: account_indexes,
+    }
+}
+
+// Helper to add arguments that are no longer used but are being kept around to
+// avoid breaking validator startup commands
+fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
+    vec![
+        Arg::with_name("accounts_db_caching_enabled")
+            .long("accounts-db-caching-enabled")
+            .conflicts_with("no_accounts_db_caching")
+            .hidden(true),
+        Arg::with_name("accounts_db_index_hashing")
+            .long("accounts-db-index-hashing")
+            .help(
+                "Enables the use of the index in hash calculation in \
+                   AccountsHashVerifier/Accounts Background Service.",
+            )
+            .hidden(true),
+        Arg::with_name("no_accounts_db_index_hashing")
+            .long("no-accounts-db-index-hashing")
+            .help(
+                "This is obsolete. See --accounts-db-index-hashing. \
+                   Disables the use of the index in hash calculation in \
+                   AccountsHashVerifier/Accounts Background Service.",
+            )
+            .hidden(true),
+        Arg::with_name("bpf_jit")
+            .long("bpf-jit")
+            .hidden(true)
+            .takes_value(false)
+            .conflicts_with("no_bpf_jit"),
+        Arg::with_name("disable_quic_servers")
+            .long("disable-quic-servers")
+            .takes_value(false)
+            .hidden(true),
+        Arg::with_name("enable_quic_servers")
+            .hidden(true)
+            .long("enable-quic-servers"),
+        Arg::with_name("enable_cpi_and_log_storage")
+            .long("enable-cpi-and-log-storage")
+            .requires("enable_rpc_transaction_history")
+            .takes_value(false)
+            .hidden(true)
+            .help(
+                "Deprecated, please use \"enable-extended-tx-metadata-storage\". \
+                   Include CPI inner instructions, logs and return data in \
+                   the historical transaction info stored",
+            ),
+        Arg::with_name("incremental_snapshots")
+            .long("incremental-snapshots")
+            .takes_value(false)
+            .hidden(true)
+            .conflicts_with("no_incremental_snapshots")
+            .help("Enable incremental snapshots")
+            .long_help(
+                "Enable incremental snapshots by setting this flag. \
+                   When enabled, --snapshot-interval-slots will set the \
+                   incremental snapshot interval. To set the full snapshot \
+                   interval, use --full-snapshot-interval-slots.",
+            ),
+        Arg::with_name("minimal_rpc_api")
+            .long("--minimal-rpc-api")
+            .takes_value(false)
+            .hidden(true)
+            .help("Only expose the RPC methods required to serve snapshots to other nodes"),
+        Arg::with_name("no_check_vote_account")
+            .long("no-check-vote-account")
+            .takes_value(false)
+            .conflicts_with("no_voting")
+            .requires("entrypoint")
+            .hidden(true)
+            .help("Skip the RPC vote account sanity check"),
+        Arg::with_name("no_rocksdb_compaction")
+            .long("no-rocksdb-compaction")
+            .hidden(true)
+            .takes_value(false)
+            .help("Disable manual compaction of the ledger database (this is ignored)."),
+    ]
+}
+
+lazy_static! {
+    static ref DEPRECATED_ARGS_AND_HELP: Vec<(&'static str, &'static str)> = vec![
+        ("accounts_db_caching_enabled", ""),
+        (
+            "accounts_db_index_hashing",
+            "The accounts hash is only calculated without using the index.",
+        ),
+        (
+            "no_accounts_db_index_hashing",
+            "The accounts hash is only calculated without using the index.",
+        ),
+        ("bpf_jit", ""),
+        (
+            "disable_quic_servers",
+            "The quic server cannot be disabled.",
+        ),
+        (
+            "enable_quic_servers",
+            "The quic server is now enabled by default.",
+        ),
+        (
+            "enable_cpi_and_log_storage",
+            "Please use --enable-extended-tx-metadata-storage instead.",
+        ),
+        ("incremental_snapshots", ""),
+        ("minimal_rpc_api", ""),
+        (
+            "no_check_vote_account",
+            "Vote account sanity checks are no longer performed by default.",
+        ),
+        ("no_rocksdb_compaction", ""),
+    ];
+}
+
+fn warn_for_deprecated_arguments(matches: &ArgMatches) {
+    for (arg, help) in DEPRECATED_ARGS_AND_HELP.iter() {
+        if matches.is_present(arg) {
+            warn!(
+                "{}",
+                format!("--{} is deprecated. {}", arg, help).replace('_', "-")
+            );
+        }
     }
 }

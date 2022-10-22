@@ -10,11 +10,8 @@ import { useAnchorProgram } from "providers/anchor";
 export function AnchorAccountCard({ account }: { account: Account }) {
   const { lamports } = account;
   const { url } = useCluster();
-  const anchorProgram = useAnchorProgram(
-    account.details?.owner.toString() || "",
-    url
-  );
-  const rawData = account?.details?.rawData;
+  const anchorProgram = useAnchorProgram(account.owner.toString(), url);
+  const rawData = account.data.raw;
   const programName = getAnchorProgramName(anchorProgram) || "Unknown Program";
 
   const { decodedAccountData, accountDef } = useMemo(() => {

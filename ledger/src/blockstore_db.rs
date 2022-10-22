@@ -134,7 +134,11 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// The slot metadata column
+    /// The slot metadata column.
+    ///
+    /// This column family tracks the status of the received shred data for a
+    /// given slot.  Tracking the progress as the slot fills up allows us to
+    /// know if the slot (or pieces of the slot) are ready to be replayed.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::SlotMeta`
@@ -162,14 +166,29 @@ pub mod columns {
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
-    /// The erasure meta column
+    /// The erasure meta column.
     ///
-    /// index type: (u64, u64)
+    /// This column family stores ErasureMeta which includes metadata about
+    /// dropped network packets (or erasures) that can be used to recover
+    /// missing data shreds.
+    ///
+    /// Its index type is ErasureSetId, which consists of a Slot ID
+    /// and a FEC (Forward Error Correction) set index.
+    ///
+    /// index type: `ErasureSetId` (Slot, fec_set_index: u64)
     /// value type: `blockstore_meta::ErasureMeta`
     pub struct ErasureMeta;
 
     #[derive(Debug)]
-    /// The bank hash column
+    /// The bank hash column.
+    ///
+    /// This column family persists the bank hash of a given slot.  Note that
+    /// not every slot has a bank hash (e.g., a dead slot.)
+    ///
+    /// The bank hash of a slot is derived from hashing the delta state of all
+    /// the accounts in a slot combined with the bank hash of its parent slot.
+    /// A bank hash of a slot essentially represents all the account states at
+    /// that slot.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::FrozenHashVersioned`
@@ -1221,6 +1240,40 @@ where
             );
         }
         result
+    }
+
+    pub fn multi_get_bytes(&self, keys: Vec<C::Index>) -> Vec<Result<Option<Vec<u8>>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(pinnable_slice.as_ref().to_vec())),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
     }
 
     pub fn iter(

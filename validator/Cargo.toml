@@ -23,13 +23,14 @@ jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
 jsonrpc-derive = "18.0.0"
 jsonrpc-ipc-server = "18.0.0"
 jsonrpc-server-utils = "18.0.0"
+lazy_static = "1.4.0"
 log = "0.4.17"
 num_cpus = "1.13.1"
 rand = "0.7.0"
 rayon = "1.5.3"
 serde = "1.0.144"
 serde_json = "1.0.83"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.13"
 solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.15.0" }
 solana-core = { path = "../core", version = "=1.15.0" }

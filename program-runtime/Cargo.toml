@@ -20,6 +20,7 @@ libloading = "0.7.0"
 log = "0.4.14"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
+rand = "0.7.0"
 serde = { version = "1.0.129", features = ["derive", "rc"] }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.15.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.15.0" }

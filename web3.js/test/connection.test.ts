@@ -4505,8 +4505,9 @@ describe('Connection', function () {
         const transferToKey = lookupTableAddresses[0];
         const transferToAccount = await connection.getAccountInfo(
           transferToKey,
-          'confirmed',
+          {commitment: 'confirmed', dataSlice: {length: 0, offset: 0}},
         );
+        expect(transferToAccount?.data.length).to.be.eq(0);
         expect(transferToAccount?.lamports).to.be.eq(LAMPORTS_PER_SOL);
       });
 
@@ -4606,6 +4607,24 @@ describe('Connection', function () {
 
       it('getBlock', async () => {
         const block = await connection.getBlock(transactionSlot, {
+          maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed',
+        });
+        expect(block).to.not.be.null;
+        if (block === null) throw new Error(); // unreachable
+
+        let foundTx = false;
+        for (const tx of block.transactions) {
+          if (tx.transaction.signatures[0] === signature) {
+            foundTx = true;
+            expect(tx.version).to.eq(0);
+          }
+        }
+        expect(foundTx).to.be.true;
+      });
+
+      it('getParsedBlock', async () => {
+        const block = await connection.getParsedBlock(transactionSlot, {
           maxSupportedTransactionVersion: 0,
           commitment: 'confirmed',
         });

@@ -33,7 +33,6 @@ use {
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType, BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-            MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
         },
         blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
@@ -57,7 +56,6 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
-        snapshot_package::PendingAccountsPackage,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             SUPPORTED_ARCHIVE_COMPRESSION,
@@ -216,13 +214,14 @@ fn output_slot(
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
-            if verbose_level >= 2 {
-                println!(" Slot Meta {:?} is_full: {}", meta, is_full);
+            if verbose_level >= 1 {
+                println!("  {:?} is_full: {}", meta, is_full);
             } else {
                 println!(
-                    " num_shreds: {}, parent_slot: {:?}, num_entries: {}, is_full: {}",
+                    "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
                     num_shreds,
                     meta.parent_slot,
+                    meta.next_slots,
                     entries.len(),
                     is_full,
                 );
@@ -874,9 +873,9 @@ fn open_blockstore_with_temporary_primary_access(
 fn get_shred_storage_type(ledger_path: &Path, warn_message: &str) -> ShredStorageType {
     // TODO: the following shred_storage_type inference must be updated once
     // the rocksdb options can be constructed via load_options_file() as the
-    // temporary use of MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES could
-    // affect the persisted rocksdb options file.
-    match ShredStorageType::from_ledger_path(ledger_path, MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES) {
+    // value picked by passing None for `max_shred_storage_size` could affect
+    // the persisted rocksdb options file.
+    match ShredStorageType::from_ledger_path(ledger_path, None) {
         Some(s) => s,
         None => {
             warn!("{}", warn_message);
@@ -1135,11 +1134,13 @@ fn load_bank_forks(
         );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-    let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let (accounts_package_sender, _accounts_package_receiver) = crossbeam_channel::unbounded();
+    let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender.clone());
     let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: SnapshotConfig::new_load_only(),
+        snapshot_request_sender,
         snapshot_request_receiver,
-        pending_accounts_package: PendingAccountsPackage::default(),
+        accounts_package_sender,
     };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
@@ -2769,6 +2770,8 @@ fn main() {
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
                     on_halt_store_hash_raw_data_for_debug: arg_matches
                         .is_present("halt_at_slot_store_hash_raw_data"),
+                    // ledger tool verify always runs the accounts hash calc at the end of processing the blockstore
+                    run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),

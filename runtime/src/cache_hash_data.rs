@@ -76,12 +76,6 @@ impl CacheHashDataFile {
         let start = self.get_element_offset_byte(ix);
         let item_slice: &[u8] = &self.mmap[start..];
         let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
-        assert!(
-            remaining_elements > 0,
-            "ix: {ix}, remaining_elements: {remaining_elements}, capacity: {}",
-            self.mmap.len()
-        );
-
         unsafe {
             let item = item_slice.as_ptr() as *const EntryType;
             std::slice::from_raw_parts(item, remaining_elements)

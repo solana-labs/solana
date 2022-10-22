@@ -45,7 +45,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
-        epoch_accounts_hash::EpochAccountsHash,
+        epoch_accounts_hash::EpochAccountsHashManager,
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
@@ -145,15 +145,18 @@ pub enum StoreReclaims {
     Ignore,
 }
 
-/// specifies how to return zero lamport accounts
-/// This will only be useful until a feature activation occurs.
+/// specifies how to return zero lamport accounts from a load
 #[derive(Clone, Copy)]
-pub enum LoadZeroLamports {
+enum LoadZeroLamports {
     /// return None if loaded account has zero lamports
     None,
     /// return Some(account with zero lamports) if loaded account has zero lamports
-    /// Today this is the default. With feature activation, this will no longer be possible.
-    SomeWithZeroLamportAccount,
+    /// This used to be the only behavior.
+    /// Note that this is non-deterministic if clean is running asynchronously.
+    /// If a zero lamport account exists in the index, then Some is returned.
+    /// Once it is cleaned from the index, None is returned.
+    #[cfg(test)]
+    SomeWithZeroLamportAccountForTests,
 }
 
 // the current best way to add filler accounts is gradually.
@@ -1209,7 +1212,7 @@ pub struct AccountsDb {
     /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
-    pub epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
+    pub epoch_accounts_hash_manager: EpochAccountsHashManager,
 }
 
 #[derive(Debug, Default)]
@@ -1333,6 +1336,172 @@ impl PurgeStats {
                 ),
             );
         }
+    }
+}
+
+/// results from 'split_storages_ancient'
+#[derive(Debug, Default, PartialEq)]
+struct SplitAncientStorages {
+    /// # ancient slots
+    ancient_slot_count: usize,
+    /// the specific ancient slots
+    ancient_slots: Vec<Slot>,
+    /// lowest slot that is not an ancient append vec
+    first_non_ancient_slot: Slot,
+    /// slot # of beginning of first aligned chunk starting from the first non ancient slot
+    first_chunk_start: Slot,
+    /// # non-ancient slots to scan
+    non_ancient_slot_count: usize,
+    /// # chunks to use to iterate the storages
+    /// all ancient chunks, the special 0 and last chunks for non-full chunks, and all the 'full' chunks of normal slots
+    chunk_count: usize,
+    /// start and end(exclusive) of normal (non-ancient) slots to be scanned
+    normal_slot_range: Range<Slot>,
+}
+
+impl SplitAncientStorages {
+    /// When calculating accounts hash, we break the slots/storages into chunks that remain the same during an entire epoch.
+    /// a slot is in this chunk of slots:
+    /// start:         (slot / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK
+    /// end_exclusive: start + MAX_ITEMS_PER_CHUNK
+    /// So a slot remains in the same chunk whenever it is included in the accounts hash.
+    /// When the slot gets deleted or gets consumed in an ancient append vec, it will no longer be in its chunk.
+    /// The results of scanning a chunk of appendvecs can be cached to avoid scanning large amounts of data over and over.
+    fn new(one_epoch_old_slot: Slot, snapshot_storages: &SortedStorages) -> Self {
+        let range = snapshot_storages.range();
+
+        // any ancient append vecs should definitely be cached
+        // We need to break the ranges into:
+        // 1. individual ancient append vecs (may be empty)
+        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
+        // 3. evenly divided full chunks in the middle
+        // 4. unevenly divided chunk of most recent slots (may be empty)
+        let ancient_slots = Self::get_ancient_slots(one_epoch_old_slot, snapshot_storages);
+
+        let first_non_ancient_slot = ancient_slots
+            .last()
+            .map(|last_ancient_slot| last_ancient_slot.saturating_add(1))
+            .unwrap_or(range.start);
+        Self::new_with_ancient_info(range, ancient_slots, first_non_ancient_slot)
+    }
+
+    /// return all ancient append vec slots from the early slots referenced by 'snapshot_storages'
+    fn get_ancient_slots(
+        one_epoch_old_slot: Slot,
+        snapshot_storages: &SortedStorages,
+    ) -> Vec<Slot> {
+        let range = snapshot_storages.range();
+        let mut ancient_slots = Vec::default();
+        for (slot, storages) in snapshot_storages.iter_range(&(range.start..one_epoch_old_slot)) {
+            if let Some(storages) = storages {
+                if storages.len() == 1 && is_ancient(&storages.first().unwrap().accounts) {
+                    ancient_slots.push(slot);
+                    continue; // was ancient, keep looking
+                }
+                // we found a slot with a non-ancient append vec
+                break;
+            }
+        }
+        ancient_slots
+    }
+
+    /// create once ancient slots have been identified
+    /// This is easier to test, removing SortedStorges as a type to deal with here.
+    fn new_with_ancient_info(
+        range: &Range<Slot>,
+        ancient_slots: Vec<Slot>,
+        first_non_ancient_slot: Slot,
+    ) -> Self {
+        if range.is_empty() {
+            // Corner case mainly for tests, but gives us a consistent base case. Makes more sense to return default here than anything else.
+            // caller is asking to split for empty set of slots
+            return SplitAncientStorages::default();
+        }
+
+        let max_slot_inclusive = range.end.saturating_sub(1);
+        let ancient_slot_count = ancient_slots.len();
+        let first_chunk_start = ((first_non_ancient_slot + MAX_ITEMS_PER_CHUNK)
+            / MAX_ITEMS_PER_CHUNK)
+            * MAX_ITEMS_PER_CHUNK;
+
+        let non_ancient_slot_count = (max_slot_inclusive - first_non_ancient_slot + 1) as usize;
+
+        let normal_slot_range = Range {
+            start: first_non_ancient_slot,
+            end: range.end,
+        };
+
+        // 2 is for 2 special chunks - unaligned slots at the beginning and end
+        let chunk_count =
+            ancient_slot_count + 2 + non_ancient_slot_count / (MAX_ITEMS_PER_CHUNK as usize);
+
+        SplitAncientStorages {
+            ancient_slot_count,
+            ancient_slots,
+            first_non_ancient_slot,
+            first_chunk_start,
+            non_ancient_slot_count,
+            chunk_count,
+            normal_slot_range,
+        }
+    }
+
+    /// given 'normal_chunk', return the starting slot of that chunk in the normal/non-ancient range
+    /// a normal_chunk is 0<=normal_chunk<=non_ancient_chunk_count
+    /// non_ancient_chunk_count is chunk_count-ancient_slot_count
+    fn get_starting_slot_from_normal_chunk(&self, normal_chunk: usize) -> Slot {
+        if normal_chunk == 0 {
+            self.normal_slot_range.start
+        } else {
+            assert!(
+                normal_chunk.saturating_add(self.ancient_slot_count) < self.chunk_count,
+                "out of bounds: {}, {}",
+                normal_chunk,
+                self.chunk_count
+            );
+
+            let normal_chunk = normal_chunk.saturating_sub(1);
+            (self.first_chunk_start + MAX_ITEMS_PER_CHUNK * (normal_chunk as Slot))
+                .max(self.normal_slot_range.start)
+        }
+    }
+
+    /// ancient slots are the first chunks
+    fn is_chunk_ancient(&self, chunk: usize) -> bool {
+        chunk < self.ancient_slot_count
+    }
+
+    /// given chunk in 0<=chunk<self.chunk_count
+    /// return the range of slots in that chunk
+    /// None indicates the range is empty for that chunk.
+    fn get_slot_range(&self, chunk: usize) -> Option<Range<Slot>> {
+        let range = if self.is_chunk_ancient(chunk) {
+            // ancient append vecs are handled individually
+            let slot = self.ancient_slots[chunk];
+            Range {
+                start: slot,
+                end: slot + 1,
+            }
+        } else {
+            // normal chunks are after ancient chunks
+            let normal_chunk = chunk - self.ancient_slot_count;
+            if normal_chunk == 0 {
+                // first slot
+                Range {
+                    start: self.normal_slot_range.start,
+                    end: self.first_chunk_start.min(self.normal_slot_range.end),
+                }
+            } else {
+                // normal full chunk or the last chunk
+                let first_slot = self.get_starting_slot_from_normal_chunk(normal_chunk);
+                Range {
+                    start: first_slot,
+                    end: (first_slot + MAX_ITEMS_PER_CHUNK).min(self.normal_slot_range.end),
+                }
+            }
+        };
+        // return empty range as None
+        (!range.is_empty()).then_some(range)
     }
 }
 
@@ -2020,7 +2189,7 @@ impl AccountsDb {
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
-            epoch_accounts_hash: Mutex::new(None),
+            epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
         }
     }
 
@@ -4671,34 +4840,28 @@ impl AccountsDb {
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint)
+        self.do_load(ancestors, pubkey, None, load_hint, LoadZeroLamports::None)
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            None,
+            LoadHint::Unspecified,
+            true,
+            // no return from this function, so irrelevant
+            LoadZeroLamports::None,
+        );
     }
 
+    /// note this returns None for accounts with zero lamports
     pub fn load_with_fixed_root(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
-        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
-            .filter(|(account, _)| {
-                matches!(
-                    load_zero_lamports,
-                    LoadZeroLamports::SomeWithZeroLamportAccount
-                ) || !account.is_zero_lamport()
-            })
-    }
-
-    pub fn load_without_fixed_root(
-        &self,
-        ancestors: &Ancestors,
-        pubkey: &Pubkey,
-    ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::Unspecified)
     }
 
     fn read_index_for_accessor_or_load_slow<'a>(
@@ -4968,22 +5131,35 @@ impl AccountsDb {
             // Notice the subtle `?` at previous line, we bail out pretty early if missing.
 
             if new_slot == slot && new_storage_location.is_store_id_equal(&storage_location) {
-                // Considering that we're failed to get accessor above and further that
+                inc_new_counter_info!("retry_to_get_account_accessor-panic", 1);
+                let message = format!(
+                    "Bad index entry detected ({}, {}, {:?}, {:?}, {:?}, {:?})",
+                    pubkey,
+                    slot,
+                    storage_location,
+                    load_hint,
+                    new_storage_location,
+                    self.accounts_index.get_account_read_entry(pubkey)
+                );
+                // Considering that we've failed to get accessor above and further that
                 // the index still returned the same (slot, store_id) tuple, offset must be same
                 // too.
-                assert!(new_storage_location.is_offset_equal(&storage_location));
+                assert!(
+                    new_storage_location.is_offset_equal(&storage_location),
+                    "{message}"
+                );
 
                 // If the entry was missing from the cache, that means it must have been flushed,
                 // and the accounts index is always updated before cache flush, so store_id must
                 // not indicate being cached at this point.
-                assert!(!new_storage_location.is_cached());
+                assert!(!new_storage_location.is_cached(), "{message}");
 
                 // If this is not a cache entry, then this was a minor fork slot
                 // that had its storage entries cleaned up by purge_slots() but hasn't been
                 // cleaned yet. That means this must be rpc access and not replay/banking at the
                 // very least. Note that purge shouldn't occur even for RPC as caller must hold all
                 // of ancestor slots..
-                assert_eq!(load_hint, LoadHint::Unspecified);
+                assert_eq!(load_hint, LoadHint::Unspecified, "{message}");
 
                 // Everything being assert!()-ed, let's panic!() here as it's an error condition
                 // after all....
@@ -4993,10 +5169,7 @@ impl AccountsDb {
                 // first of all.
                 // For details, see the comment in AccountIndex::do_checked_scan_accounts(),
                 // which is referring back here.
-                panic!(
-                    "Bad index entry detected ({}, {}, {:?}, {:?})",
-                    pubkey, slot, storage_location, load_hint
-                );
+                panic!("{message}");
             } else if fallback_to_slow_path {
                 // the above bad-index-entry check must had been checked first to retain the same
                 // behavior
@@ -5017,8 +5190,16 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
+            false,
+            load_zero_lamports,
+        )
     }
 
     /// if 'load_into_read_cache_only', then return value is meaningless.
@@ -5030,6 +5211,7 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
         load_into_read_cache_only: bool,
+        load_zero_lamports: LoadZeroLamports,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
@@ -5044,6 +5226,11 @@ impl AccountsDb {
                 if !in_write_cache {
                     let result = self.read_only_accounts_cache.load(*pubkey, slot);
                     if let Some(account) = result {
+                        if matches!(load_zero_lamports, LoadZeroLamports::None)
+                            && account.is_zero_lamport()
+                        {
+                            return None;
+                        }
                         return Some((account, slot));
                     }
                 }
@@ -5071,6 +5258,9 @@ impl AccountsDb {
         let loaded_account = account_accessor.check_and_get_loaded_account();
         let is_cached = loaded_account.is_cached();
         let account = loaded_account.take_account();
+        if matches!(load_zero_lamports, LoadZeroLamports::None) && account.is_zero_lamport() {
+            return None;
+        }
 
         if self.caching_enabled && !is_cached {
             /*
@@ -6424,12 +6614,10 @@ impl AccountsDb {
                 None => {
                     // hash any accounts where we were lazy in calculating the hash
                     let mut hash_time = Measure::start("hash_accounts");
-                    let mut stats = BankHashStats::default();
                     let len = accounts_and_meta_to_store.len();
                     let mut hashes = Vec::with_capacity(len);
                     for index in 0..accounts.len() {
                         let (pubkey, account) = (accounts.pubkey(index), accounts.account(index));
-                        stats.update(account);
                         let hash = Self::hash_account(slot, account, pubkey);
                         hashes.push(hash);
                     }
@@ -6857,7 +7045,47 @@ impl AccountsDb {
         }
     }
 
-    /// Scan through all the account storage in parallel
+    /// hash info about 'storages' into 'hasher'
+    /// return true iff storages are valid for loading from cache
+    fn hash_storage_info(
+        hasher: &mut impl StdHasher,
+        storages: Option<&Vec<Arc<AccountStorageEntry>>>,
+        slot: Slot,
+    ) -> bool {
+        if let Some(sub_storages) = storages {
+            if sub_storages.len() > 1 {
+                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to load from the cache for this slot.
+                return false;
+            }
+            // hash info about this storage
+            let append_vec = sub_storages.first().unwrap();
+            append_vec.written_bytes().hash(hasher);
+            let storage_file = append_vec.accounts.get_path();
+            slot.hash(hasher);
+            storage_file.hash(hasher);
+            let amod = std::fs::metadata(storage_file);
+            if amod.is_err() {
+                return false;
+            }
+            let amod = amod.unwrap().modified();
+            if amod.is_err() {
+                return false;
+            }
+            let amod = amod
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            amod.hash(hasher);
+        }
+        // if we made it here, we have hashed info and we should try to load from the cache
+        true
+    }
+
+    /// Scan through all the account storage in parallel.
+    /// Returns a Vec of cache data. At this level, the vector is ordered from older slots to newer slots.
+    ///   A single pubkey could be in multiple entries. The pubkey found int the latest entry is the one to use.
+    /// Each entry in the Vec contains data binned by pubkey according to the various binning parameters.
     fn scan_account_storage_no_bank<S>(
         &self,
         cache_hash_data: &CacheHashData,
@@ -6871,70 +7099,37 @@ impl AccountsDb {
     where
         S: AppendVecScan,
     {
-        let start_bin_index = bin_range.start;
-
-        // any ancient append vecs should definitely be cached
-        // We need to break the ranges into:
-        // 1. individual ancient append vecs (may be empty)
-        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
-        // 3. evenly divided full chunks in the middle
-        // 4. unevenly divided chunk of most recent slots (may be empty)
-        let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        let one_epoch_old_slot =
-            self.get_one_epoch_old_slot_for_hash_calc_scan(max_slot_inclusive, config);
+        let splitter = SplitAncientStorages::new(
+            self.get_one_epoch_old_slot_for_hash_calc_scan(
+                snapshot_storages.max_slot_inclusive(),
+                config,
+            ),
+            snapshot_storages,
+        );
 
         let range = snapshot_storages.range();
-        let ancient_slots = snapshot_storages
-            .iter_range(range.start..one_epoch_old_slot)
-            .filter_map(|(slot, storages)| storages.map(|_| slot))
-            .collect::<Vec<_>>();
-        let ancient_slot_count = ancient_slots.len() as Slot;
-        let slot0 = std::cmp::max(range.start, one_epoch_old_slot);
-        let first_boundary =
-            ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
+        let start_bin_index = bin_range.start;
 
-        let width = max_slot_inclusive - slot0 + 1;
-        // 2 is for 2 special chunks - unaligned slots at the beginning and end
-        let chunks = ancient_slot_count + 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
-        (0..chunks)
+        (0..splitter.chunk_count)
             .into_par_iter()
-            .map(|mut chunk| {
+            .map(|chunk| {
                 let mut scanner = scanner.clone();
-                // calculate start, end_exclusive
-                let (single_cached_slot, (start, mut end_exclusive)) = if chunk < ancient_slot_count
-                {
-                    let ancient_slot = ancient_slots[chunk as usize];
-                    (true, (ancient_slot, ancient_slot + 1))
-                } else {
-                    (false, {
-                        chunk -= ancient_slot_count;
-                        if chunk == 0 {
-                            if slot0 == first_boundary {
-                                return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
-                            }
-                            // otherwise first chunk is not 'full'
-                            (slot0, first_boundary)
-                        } else {
-                            // normal chunk in the middle or at the end
-                            let start = first_boundary + MAX_ITEMS_PER_CHUNK * (chunk - 1);
-                            let end_exclusive = start + MAX_ITEMS_PER_CHUNK;
-                            (start, end_exclusive)
-                        }
-                    })
-                };
-                end_exclusive = std::cmp::min(end_exclusive, range.end);
-                if start == end_exclusive {
+
+                let range_this_chunk = splitter.get_slot_range(chunk);
+
+                if range_this_chunk.is_none() {
                     return scanner.scanning_complete();
                 }
+                let range_this_chunk = range_this_chunk.unwrap();
 
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
                     || config.store_detailed_debug_info_on_failure;
 
-                // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
                 // Single cached slots get cached and full chunks get cached.
                 // chunks that don't divide evenly would include some cached append vecs that are no longer part of this range and some that are, so we have to ignore caching on non-evenly dividing chunks.
-                let eligible_for_caching = single_cached_slot
-                    || end_exclusive.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
+                let eligible_for_caching = splitter.is_chunk_ancient(chunk)
+                    || range_this_chunk.end.saturating_sub(range_this_chunk.start)
+                        == MAX_ITEMS_PER_CHUNK;
 
                 if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
@@ -6954,45 +7149,19 @@ impl AccountsDb {
                     || config.store_detailed_debug_info_on_failure
                 {
                     let mut load_from_cache = true;
-                    let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    bin_range.start.hash(&mut hasher);
+                    bin_range.end.hash(&mut hasher);
+                    let is_first_scan_pass = bin_range.start == 0;
 
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
-                        if bin_range.start == 0 && slot < one_epoch_old {
+                    // calculate hash representing all storages in this chunk
+                    for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
+                        if is_first_scan_pass && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
-                        bin_range.start.hash(&mut hasher);
-                        bin_range.end.hash(&mut hasher);
-                        if let Some(sub_storages) = sub_storages {
-                            if sub_storages.len() > 1
-                                && !config.store_detailed_debug_info_on_failure
-                            {
-                                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to cache this slot.
-                                // However, if we're just dumping detailed debug info, we don't care, so store anyway.
-                                load_from_cache = false;
-                                break;
-                            }
-                            let append_vec = sub_storages.first().unwrap();
-                            // check written_bytes here. This is necessary for tests and removes a potential for false positives.
-                            append_vec.written_bytes().hash(&mut hasher);
-                            let storage_file = append_vec.accounts.get_path();
-                            slot.hash(&mut hasher);
-                            storage_file.hash(&mut hasher);
-                            let amod = std::fs::metadata(storage_file);
-                            if amod.is_err() {
-                                load_from_cache = false;
-                                break;
-                            }
-                            let amod = amod.unwrap().modified();
-                            if amod.is_err() {
-                                load_from_cache = false;
-                                break;
-                            }
-                            let amod = amod
-                                .unwrap()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            amod.hash(&mut hasher);
+                        if !Self::hash_storage_info(&mut hasher, sub_storages, slot) {
+                            load_from_cache = false;
+                            break;
                         }
                     }
                     if load_from_cache {
@@ -7001,7 +7170,11 @@ impl AccountsDb {
                         let hash = hasher.finish();
                         let file_name = format!(
                             "{}.{}.{}.{}.{}",
-                            start, end_exclusive, bin_range.start, bin_range.end, hash
+                            range_this_chunk.start,
+                            range_this_chunk.end,
+                            bin_range.start,
+                            bin_range.end,
+                            hash
                         );
                         let mut retval = scanner.get_accum();
                         if eligible_for_caching
@@ -7024,7 +7197,7 @@ impl AccountsDb {
                         String::default()
                     }
                 } else {
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                         if bin_range.start == 0 && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
@@ -7032,7 +7205,7 @@ impl AccountsDb {
                     String::default()
                 };
 
-                for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                     scanner.set_slot(slot);
                     if let Some(sub_storages) = sub_storages {
                         Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
@@ -7044,8 +7217,13 @@ impl AccountsDb {
 
                     if result.is_err() {
                         info!(
-                            "FAILED_TO_SAVE: {}-{}, {}, first_boundary: {}, {:?}, error: {:?}",
-                            range.start, range.end, width, first_boundary, file_name, result,
+                            "FAILED_TO_SAVE: {}-{}, {}, first_chunk_start: {}, {:?}, error: {:?}",
+                            range.start,
+                            range.end,
+                            splitter.non_ancient_slot_count,
+                            splitter.first_chunk_start,
+                            file_name,
+                            result,
                         );
                     }
                 }
@@ -7069,7 +7247,7 @@ impl AccountsDb {
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
         let in_epoch_range_start = max.saturating_sub(sub);
-        for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
+        for (slot, storages) in storages.iter_range(&(..in_epoch_range_start)) {
             if let Some(storages) = storages {
                 storages.iter().for_each(|store| {
                     if !is_ancient(&store.accounts) {
@@ -7357,7 +7535,7 @@ impl AccountsDb {
                     hash.filler_account_suffix.as_ref(),
                 )?;
 
-                // turn raw data into merkel tree hashes and sum of lamports
+                // turn raw data into merkle tree hashes and sum of lamports
                 let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
                     result,
                     &mut stats,
@@ -7426,6 +7604,7 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
             slot,
@@ -7437,6 +7616,7 @@ impl AccountsDb {
             false,
             false,
             enable_rehashing,
+            use_bg_thread_pool,
         )
     }
 
@@ -7453,20 +7633,19 @@ impl AccountsDb {
         ignore_mismatch: bool,
         store_hash_raw_data_for_debug: bool,
         enable_rehashing: bool,
+        use_bg_thread_pool: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
         let use_index = false;
         let check_hash = false; // this will not be supported anymore
-                                // interesting to consider this
-        let is_startup = true;
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
                 use_index,
                 test_hash_calculation,
                 slot,
                 CalcAccountsHashConfig {
-                    use_bg_thread_pool: !is_startup,
+                    use_bg_thread_pool,
                     check_hash,
                     ancestors: Some(ancestors),
                     epoch_schedule,
@@ -7595,6 +7774,10 @@ impl AccountsDb {
         skipped_rewrites: &Rewrites,
     ) {
         let mut skipped_rewrites = skipped_rewrites.read().unwrap().clone();
+        if skipped_rewrites.is_empty() {
+            // if there are no skipped rewrites, then there is nothing futher to do
+            return;
+        }
         hashes.iter().for_each(|(key, _)| {
             skipped_rewrites.remove(key);
         });
@@ -9514,6 +9697,21 @@ pub mod tests {
                 None,
             )
         }
+
+        fn load_without_fixed_root(
+            &self,
+            ancestors: &Ancestors,
+            pubkey: &Pubkey,
+        ) -> Option<(AccountSharedData, Slot)> {
+            self.do_load(
+                ancestors,
+                pubkey,
+                None,
+                LoadHint::Unspecified,
+                // callers of this expect zero lamport accounts that exist in the index to be returned as Some(empty)
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
+            )
+        }
     }
 
     #[test]
@@ -10092,6 +10290,22 @@ pub mod tests {
         );
     }
 
+    fn append_sample_data_to_storage(
+        storages: &SnapshotStorages,
+        pubkey: &Pubkey,
+        write_version: StoredMetaWriteVersion,
+    ) {
+        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey: *pubkey,
+            write_version,
+        };
+        storages[0][0]
+            .accounts
+            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+    }
+
     fn sample_storage_with_entries(
         tf: &TempFile,
         write_version: StoredMetaWriteVersion,
@@ -10106,15 +10320,7 @@ pub mod tests {
 
         let arc = Arc::new(data);
         let storages = vec![vec![arc]];
-        let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let sm = StoredMeta {
-            data_len: 1,
-            pubkey: *pubkey,
-            write_version,
-        };
-        storages[0][0]
-            .accounts
-            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        append_sample_data_to_storage(&storages, pubkey, write_version);
         storages
     }
 
@@ -11752,6 +11958,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             )
             .unwrap();
     }
@@ -12156,6 +12363,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12170,6 +12378,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MissingBankHash)
         );
@@ -12193,6 +12402,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MismatchedBankHash)
         );
@@ -12222,6 +12432,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12244,12 +12455,13 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), true,),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), true, false,),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -12277,6 +12489,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Ok(_)
         );
@@ -12321,6 +12534,7 @@ pub mod tests {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 true,
+                false,
             ),
             Err(MismatchedBankHash)
         );
@@ -12941,6 +13155,7 @@ pub mod tests {
                     &EpochSchedule::default(),
                     &RentCollector::default(),
                     true,
+                    false,
                 )
                 .unwrap();
 
@@ -12954,6 +13169,7 @@ pub mod tests {
                     &EpochSchedule::default(),
                     &RentCollector::default(),
                     true,
+                    false,
                 )
                 .unwrap();
 
@@ -13897,13 +14113,13 @@ pub mod tests {
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
@@ -13911,11 +14127,14 @@ pub mod tests {
         db.store_cached((2, &[(&account_key, &zero_lamport_account)][..]), None);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key, LoadZeroLamports::None)
+            .load_with_fixed_root(&Ancestors::default(), &account_key)
             .map(|(account, _)| account);
         assert!(account.is_none());
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
     }
+
+    /// a test that will accept either answer
+    const LOAD_ZERO_LAMPORTS_ANY_TESTS: LoadZeroLamports = LoadZeroLamports::None;
 
     #[test]
     fn test_flush_cache_clean() {
@@ -13946,6 +14165,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -13961,7 +14181,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &account_key,
                 Some(0),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS
             )
             .is_none());
     }
@@ -14045,7 +14266,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                load_hint
+                load_hint,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap()
             .0
@@ -14174,6 +14396,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                LoadZeroLamports::SomeWithZeroLamportAccountForTests,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
@@ -14187,6 +14410,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14201,6 +14425,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -14213,7 +14438,8 @@ pub mod tests {
                 &scan_ancestors,
                 &account_key,
                 Some(max_scan_root),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                LOAD_ZERO_LAMPORTS_ANY_TESTS
             )
             .is_none());
     }
@@ -14377,7 +14603,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LOAD_ZERO_LAMPORTS_ANY_TESTS
                 )
                 .is_some());
         }
@@ -14405,7 +14632,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    LOAD_ZERO_LAMPORTS_ANY_TESTS
                 )
                 .is_none());
         }
@@ -14938,7 +15166,15 @@ pub mod tests {
                         .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
-                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    let loaded_account = db
+                        .do_load(
+                            &ancestors,
+                            &pubkey,
+                            None,
+                            load_hint,
+                            LOAD_ZERO_LAMPORTS_ANY_TESTS,
+                        )
+                        .unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports(),
@@ -16169,11 +16405,464 @@ pub mod tests {
     }
 
     #[test]
+    fn test_split_storages_ancient_chunks() {
+        let storages = SortedStorages::empty();
+        assert_eq!(storages.max_slot_inclusive(), 0);
+        let result = SplitAncientStorages::new(0, &storages);
+        assert_eq!(result, SplitAncientStorages::default());
+    }
+
+    /// get all the ranges the splitter produces
+    fn get_all_slot_ranges(splitter: &SplitAncientStorages) -> Vec<Option<Range<Slot>>> {
+        (0..splitter.chunk_count)
+            .map(|chunk| {
+                assert_eq!(
+                    splitter.get_starting_slot_from_normal_chunk(chunk),
+                    if chunk == 0 {
+                        splitter.normal_slot_range.start
+                    } else {
+                        (splitter.first_chunk_start + ((chunk as Slot) - 1) * MAX_ITEMS_PER_CHUNK)
+                            .max(splitter.normal_slot_range.start)
+                    },
+                    "chunk: {chunk}, num_chunks: {}, splitter: {:?}",
+                    splitter.chunk_count,
+                    splitter,
+                );
+                splitter.get_slot_range(chunk)
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// test function to make sure the split range covers exactly every slot in the original range
+    fn verify_all_slots_covered_exactly_once(
+        splitter: &SplitAncientStorages,
+        overall_range: &Range<Slot>,
+    ) {
+        // verify all slots covered exactly once
+        let result = get_all_slot_ranges(splitter);
+        let mut expected = overall_range.start;
+        result.iter().for_each(|range| {
+            if let Some(range) = range {
+                assert!(
+                    overall_range.start == range.start || range.start % MAX_ITEMS_PER_CHUNK == 0
+                );
+                for slot in range.clone() {
+                    assert_eq!(slot, expected);
+                    expected += 1;
+                }
+            }
+        });
+        assert_eq!(expected, overall_range.end);
+    }
+
+    /// new splitter for test
+    /// without any ancient append vecs
+    fn new_splitter(range: &Range<Slot>) -> SplitAncientStorages {
+        let splitter =
+            SplitAncientStorages::new_with_ancient_info(range, Vec::default(), range.start);
+
+        verify_all_slots_covered_exactly_once(&splitter, range);
+
+        splitter
+    }
+
+    /// new splitter for test
+    /// without any ancient append vecs
+    fn new_splitter2(start: Slot, count: Slot) -> SplitAncientStorages {
+        new_splitter(&Range {
+            start,
+            end: start + count,
+        })
+    }
+
+    #[test]
+    fn test_split_storages_splitter_simple() {
+        let plus_1 = MAX_ITEMS_PER_CHUNK + 1;
+        let plus_2 = plus_1 + 1;
+
+        // starting at 0 is aligned with beginning, so 1st chunk is unnecessary since beginning slot starts at boundary
+        // second chunk is the final chunk, which is not full (does not have 2500 entries)
+        let splitter = new_splitter2(0, 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(0..1), None]);
+
+        // starting at 1 is not aligned with beginning, but since we don't have enough for a full chunk, it gets returned in the last chunk
+        let splitter = new_splitter2(1, 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(1..2), None]);
+
+        // 1 full chunk, aligned
+        let splitter = new_splitter2(0, MAX_ITEMS_PER_CHUNK);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(result, [Some(0..MAX_ITEMS_PER_CHUNK), None, None]);
+
+        // 1 full chunk + 1, aligned
+        let splitter = new_splitter2(0, plus_1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(0..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_1),
+                None
+            ]
+        );
+
+        // 1 full chunk + 2, aligned
+        let splitter = new_splitter2(0, plus_2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(0..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_2),
+                None
+            ]
+        );
+
+        // 1 full chunk, mis-aligned by 1
+        let offset = 1;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + offset),
+                None
+            ]
+        );
+
+        // starting at 1 is not aligned with beginning
+        let offset = 1;
+        let splitter = new_splitter2(offset, plus_1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..plus_1 + offset),
+                None
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 2 full chunks, aligned
+        let offset = 0;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                None,
+                None
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 2 full chunks + 1, mis-aligned
+        let offset = 1;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 2);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 2 + offset),
+                None,
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 3 full chunks - 1, mis-aligned by 2
+        // we need ALL the chunks here
+        let offset = 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK * 3 - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK * 2),
+                Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 3),
+                Some(MAX_ITEMS_PER_CHUNK * 3..MAX_ITEMS_PER_CHUNK * 3 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, mis-aligned by 2
+        // we need ALL the chunks here
+        let offset = 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK),
+                Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, aligned at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [Some(offset..MAX_ITEMS_PER_CHUNK * 101 - 1), None,],
+            "{:?}",
+            splitter
+        );
+
+        // 1 full chunk - 1, mis-aligned by 2 at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100 + 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK * 101),
+                Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+    }
+
+    #[test]
+    fn test_split_storages_splitter_large_offset() {
+        solana_logger::setup();
+        // 1 full chunk - 1, mis-aligned by 2 at big offset
+        // huge offset
+        // we need ALL the chunks here
+        let offset = MAX_ITEMS_PER_CHUNK * 100 + 2;
+        let splitter = new_splitter2(offset, MAX_ITEMS_PER_CHUNK - 1);
+        let result = get_all_slot_ranges(&splitter);
+        assert_eq!(
+            result,
+            [
+                Some(offset..MAX_ITEMS_PER_CHUNK * 101),
+                Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
+            ],
+            "{:?}",
+            splitter
+        );
+    }
+
+    #[test]
+    fn test_split_storages_parametric_splitter() {
+        for offset_multiplier in [1, 1000] {
+            for offset in [
+                0,
+                1,
+                2,
+                MAX_ITEMS_PER_CHUNK - 2,
+                MAX_ITEMS_PER_CHUNK - 1,
+                MAX_ITEMS_PER_CHUNK,
+                MAX_ITEMS_PER_CHUNK + 1,
+            ] {
+                for full_chunks in [0, 1, 2, 3] {
+                    for reduced_items in [0, 1, 2] {
+                        for added_items in [0, 1, 2] {
+                            // this will verify the entire range correctly
+                            _ = new_splitter2(
+                                offset * offset_multiplier,
+                                (full_chunks * MAX_ITEMS_PER_CHUNK + added_items)
+                                    .saturating_sub(reduced_items),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_add_uncleaned_pubkeys_after_shrink() {
         let db = AccountsDb::new_single_for_tests();
         let slot = 0;
         let pubkey = Pubkey::new(&[1; 32]);
         db.add_uncleaned_pubkeys_after_shrink(slot, vec![pubkey].into_iter());
         assert_eq!(&*db.uncleaned_pubkeys.get(&slot).unwrap(), &vec![pubkey]);
+    }
+
+    #[test]
+    fn test_get_ancient_slots() {
+        // test permutations of ancient, non-ancient, ancient with sparse slot #s and not
+        for sparse in [false, true] {
+            let (slot1_ancient, slot2, slot3_ancient, slot1_plus_ancient) = if sparse {
+                (1, 10, 20, 5)
+            } else {
+                // we only test with 2 ancient append vecs when sparse
+                (1, 2, 3, 4 /* irrelevant */)
+            };
+
+            let db = AccountsDb::new_single_for_tests();
+            let ancient = db.create_ancient_append_vec(slot1_ancient).0.unwrap().1;
+            let ancient_1_plus = db
+                .create_ancient_append_vec(slot1_plus_ancient)
+                .0
+                .unwrap()
+                .1;
+            let ancient3 = db.create_ancient_append_vec(slot3_ancient).0.unwrap().1;
+            let temp_dir = TempDir::new().unwrap();
+            let path = temp_dir.path();
+            let id = 1;
+            let size = 1;
+            let non_ancient_storage = Arc::new(AccountStorageEntry::new(path, slot2, id, size));
+            let raw_storages = vec![vec![non_ancient_storage.clone()]];
+            let snapshot_storages = SortedStorages::new(&raw_storages);
+            // test without an ancient append vec
+            let one_epoch_old_slot = 0;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(Vec::<Slot>::default(), ancient_slots);
+            let one_epoch_old_slot = 3;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(Vec::<Slot>::default(), ancient_slots);
+
+            // now test with an ancient append vec
+            let raw_storages = vec![vec![ancient.clone()]];
+            let snapshot_storages = SortedStorages::new(&raw_storages);
+            let one_epoch_old_slot = 0;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(Vec::<Slot>::default(), ancient_slots);
+            let one_epoch_old_slot = slot2 + 1;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(vec![slot1_ancient], ancient_slots);
+
+            // now test with an ancient append vec and then a non-ancient append vec
+            let raw_storages = vec![vec![ancient.clone()], vec![non_ancient_storage.clone()]];
+            let snapshot_storages = SortedStorages::new(&raw_storages);
+            let one_epoch_old_slot = 0;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(Vec::<Slot>::default(), ancient_slots);
+            let one_epoch_old_slot = slot2 + 1;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(vec![slot1_ancient], ancient_slots);
+
+            // ancient, non-ancient, ancient
+            let raw_storages = vec![
+                vec![ancient.clone()],
+                vec![non_ancient_storage.clone()],
+                vec![ancient3.clone()],
+            ];
+            let snapshot_storages = SortedStorages::new(&raw_storages);
+            let one_epoch_old_slot = 0;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(Vec::<Slot>::default(), ancient_slots);
+            let one_epoch_old_slot = slot3_ancient + 1;
+            let ancient_slots =
+                SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+            assert_eq!(vec![slot1_ancient], ancient_slots);
+
+            if sparse {
+                // ancient, ancient, non-ancient, ancient
+                let raw_storages = vec![
+                    vec![ancient],
+                    vec![ancient_1_plus],
+                    vec![non_ancient_storage],
+                    vec![ancient3],
+                ];
+                let snapshot_storages = SortedStorages::new(&raw_storages);
+                let one_epoch_old_slot = 0;
+                let ancient_slots =
+                    SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+                assert_eq!(Vec::<Slot>::default(), ancient_slots);
+                let one_epoch_old_slot = slot3_ancient + 1;
+                let ancient_slots =
+                    SplitAncientStorages::get_ancient_slots(one_epoch_old_slot, &snapshot_storages);
+                assert_eq!(vec![slot1_ancient, slot1_plus_ancient], ancient_slots);
+            }
+        }
+    }
+
+    #[test]
+    fn test_hash_storage_info() {
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let storages = None;
+            let slot = 1;
+            let load = AccountsDb::hash_storage_info(&mut hasher, storages, slot);
+            let hash = hasher.finish();
+            assert_eq!(15130871412783076140, hash);
+            assert!(load);
+        }
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let slot: Slot = 0;
+            let tf = crate::append_vec::test_utils::get_append_vec_path(
+                "test_accountsdb_scan_account_storage_no_bank",
+            );
+            let write_version1 = 0;
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
+
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash = hasher.finish();
+            // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let slot = 2; // changed this
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash2 = hasher.finish();
+            assert_ne!(hash, hash2); // slot changed, these should be different
+                                     // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            append_sample_data_to_storage(
+                &storages,
+                &solana_sdk::pubkey::new_rand(),
+                write_version1,
+            );
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash3 = hasher.finish();
+            assert_ne!(hash2, hash3); // moddate and written size changed
+                                      // can't assert hash here - it is a function of mod date
+            assert!(load);
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let hash4 = hasher.finish();
+            assert_eq!(hash4, hash3); // same
+                                      // can't assert hash here - it is a function of mod date
+            assert!(load);
+        }
+        {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            let slot: Slot = 0;
+            let slot1 = 1;
+            let tf = crate::append_vec::test_utils::get_append_vec_path(
+                "test_accountsdb_scan_account_storage_no_bank",
+            );
+            let write_version1 = 0;
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let mut storages = sample_storage_with_entries(&tf, write_version1, slot, &pubkey1);
+            let mut storages2 = sample_storage_with_entries(&tf, write_version1, slot1, &pubkey1);
+            storages[0].push(storages2[0].remove(0));
+
+            let load = AccountsDb::hash_storage_info(&mut hasher, Some(&storages[0]), slot);
+            let _ = hasher.finish();
+            // cannot load because we have 2 storages
+            assert!(!load);
+        }
     }
 }
