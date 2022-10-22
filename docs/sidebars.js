@@ -187,8 +187,8 @@ module.exports = {
       label: "Clients",
       items: [
         {
-          type: "doc",
-          id: "developing/clients/jsonrpc-api",
+          type: "link",
+          href: "/api",
           label: "JSON RPC API",
         },
         {
