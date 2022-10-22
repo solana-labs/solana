@@ -2,6 +2,7 @@
 
 use {
     crate::{
+        clock::Slot,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
@@ -145,6 +146,45 @@ pub enum VoteInstruction {
         #[serde(with = "serde_compact_vote_state_update")] VoteStateUpdate,
         Hash,
     ),
+}
+
+impl VoteInstruction {
+    pub fn is_simple_vote(&self) -> bool {
+        matches!(
+            self,
+            Self::Vote(_)
+                | Self::VoteSwitch(_, _)
+                | Self::UpdateVoteState(_)
+                | Self::UpdateVoteStateSwitch(_, _)
+                | Self::CompactUpdateVoteState(_)
+                | Self::CompactUpdateVoteStateSwitch(_, _),
+        )
+    }
+
+    pub fn is_single_vote_state_update(&self) -> bool {
+        matches!(
+            self,
+            Self::UpdateVoteState(_)
+                | Self::UpdateVoteStateSwitch(_, _)
+                | Self::CompactUpdateVoteState(_)
+                | Self::CompactUpdateVoteStateSwitch(_, _),
+        )
+    }
+
+    /// Only to be used on vote instructions (guard with is_simple_vote),  panics otherwise
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        assert!(self.is_simple_vote());
+        match self {
+            Self::Vote(v) | Self::VoteSwitch(v, _) => v.last_voted_slot(),
+            Self::UpdateVoteState(vote_state_update)
+            | Self::UpdateVoteStateSwitch(vote_state_update, _)
+            | Self::CompactUpdateVoteState(vote_state_update)
+            | Self::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
+                vote_state_update.last_voted_slot()
+            }
+            _ => panic!("Tried to get slot on non simple vote instruction"),
+        }
+    }
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {

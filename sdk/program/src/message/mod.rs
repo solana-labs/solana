@@ -30,7 +30,7 @@
 //! more account keys into a transaction than the legacy format. The
 //! [`VersionedMessage`] type is a thin wrapper around either message version.
 //!
-//! [future message format]: https://docs.solana.com/proposals/transactions-v2
+//! [future message format]: https://docs.solana.com/proposals/versioned-transactions
 //!
 //! Despite living in the `solana-program` crate, there is no way to access the
 //! runtime's messages from within a Solana program, and only the legacy message

@@ -167,13 +167,7 @@ pub enum CliCommand {
         compute_unit_price: Option<u64>,
     },
     // Program Deployment
-    Deploy {
-        program_location: String,
-        address: Option<SignerIndex>,
-        use_deprecated_loader: bool,
-        allow_excessive_balance: bool,
-        skip_fee_check: bool,
-    },
+    Deploy,
     Program(ProgramCliCommand),
     // Stake Commands
     CreateStakeAccount {
@@ -679,26 +673,11 @@ pub fn parse_command(
         }
         ("upgrade-nonce-account", Some(matches)) => parse_upgrade_nonce_account(matches),
         // Program Deployment
-        ("deploy", Some(matches)) => {
-            let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
-            let mut signers = vec![default_signer.signer_from_path(matches, wallet_manager)?];
-            let address = address_signer.map(|signer| {
-                signers.push(signer);
-                1
-            });
-            let skip_fee_check = matches.is_present("skip_fee_check");
-
-            Ok(CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: matches.value_of("program_location").unwrap().to_string(),
-                    address,
-                    use_deprecated_loader: matches.is_present("use_deprecated_loader"),
-                    allow_excessive_balance: matches.is_present("allow_excessive_balance"),
-                    skip_fee_check,
-                },
-                signers,
-            })
-        }
+        ("deploy", Some(_matches)) => clap::Error::with_description(
+            "`solana deploy` has been replaced with `solana program deploy`",
+            clap::ErrorKind::UnrecognizedSubcommand,
+        )
+        .exit(),
         ("program", Some(matches)) => {
             parse_program_subcommand(matches, default_signer, wallet_manager)
         }
@@ -1101,23 +1080,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         ),
 
         // Program Deployment
+        CliCommand::Deploy => {
+            // This command is not supported any longer
+            // Error message is printed on the previous stage
+            std::process::exit(1);
+        }
 
         // Deploy a custom program to the chain
-        CliCommand::Deploy {
-            program_location,
-            address,
-            use_deprecated_loader,
-            allow_excessive_balance,
-            skip_fee_check,
-        } => process_deploy(
-            rpc_client,
-            config,
-            program_location,
-            *address,
-            *use_deprecated_loader,
-            *allow_excessive_balance,
-            *skip_fee_check,
-        ),
         CliCommand::Program(program_subcommand) => {
             process_program_subcommand(rpc_client, config, program_subcommand)
         }
@@ -1736,7 +1705,7 @@ where
 mod tests {
     use {
         super::*,
-        serde_json::{json, Value},
+        serde_json::json,
         solana_rpc_client::mock_sender_for_cli::SIGNATURE,
         solana_rpc_client_api::{
             request::RpcRequest,
@@ -1752,7 +1721,6 @@ mod tests {
             transaction::TransactionError,
         },
         solana_transaction_status::TransactionConfirmationStatus,
-        std::path::PathBuf,
     };
 
     fn make_tmp_path(name: &str) -> String {
@@ -1981,51 +1949,6 @@ mod tests {
                     program_id: stake::program::id(),
                 },
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
-            }
-        );
-
-        // Test Deploy Subcommand
-        let test_command =
-            test_commands
-                .clone()
-                .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
-        assert_eq!(
-            parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: "/Users/test/program.o".to_string(),
-                    address: None,
-                    use_deprecated_loader: false,
-                    allow_excessive_balance: false,
-                    skip_fee_check: false,
-                },
-                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
-            }
-        );
-
-        let custom_address = Keypair::new();
-        let custom_address_file = make_tmp_path("custom_address_file");
-        write_keypair_file(&custom_address, &custom_address_file).unwrap();
-        let test_command = test_commands.clone().get_matches_from(vec![
-            "test",
-            "deploy",
-            "/Users/test/program.o",
-            &custom_address_file,
-        ]);
-        assert_eq!(
-            parse_command(&test_command, &default_signer, &mut None).unwrap(),
-            CliCommandInfo {
-                command: CliCommand::Deploy {
-                    program_location: "/Users/test/program.o".to_string(),
-                    address: Some(1),
-                    use_deprecated_loader: false,
-                    allow_excessive_balance: false,
-                    skip_fee_check: false,
-                },
-                signers: vec![
-                    read_keypair_file(&keypair_file).unwrap().into(),
-                    read_keypair_file(&custom_address_file).unwrap().into(),
-                ],
             }
         );
 
@@ -2453,63 +2376,6 @@ mod tests {
         config.signers = vec![&keypair];
         let result = process_command(&config);
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_cli_deploy() {
-        solana_logger::setup();
-        let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        pathbuf.push("tests");
-        pathbuf.push("fixtures");
-        pathbuf.push("noop");
-        pathbuf.set_extension("so");
-
-        // Success case
-        let mut config = CliConfig::default();
-        let account_info_response = json!(Response {
-            context: RpcResponseContext {
-                slot: 1,
-                api_version: None
-            },
-            value: Value::Null,
-        });
-        let mut mocks = HashMap::new();
-        mocks.insert(RpcRequest::GetAccountInfo, account_info_response);
-        let rpc_client = RpcClient::new_mock_with_mocks("".to_string(), mocks);
-
-        config.rpc_client = Some(Arc::new(rpc_client));
-        let default_keypair = Keypair::new();
-        config.signers = vec![&default_keypair];
-
-        config.command = CliCommand::Deploy {
-            program_location: pathbuf.to_str().unwrap().to_string(),
-            address: None,
-            use_deprecated_loader: false,
-            allow_excessive_balance: false,
-            skip_fee_check: false,
-        };
-        config.output_format = OutputFormat::JsonCompact;
-        let result = process_command(&config);
-        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        let program_id = json
-            .as_object()
-            .unwrap()
-            .get("programId")
-            .unwrap()
-            .as_str()
-            .unwrap();
-
-        assert!(program_id.parse::<Pubkey>().is_ok());
-
-        // Failure case
-        config.command = CliCommand::Deploy {
-            program_location: "bad/file/location.so".to_string(),
-            address: None,
-            use_deprecated_loader: false,
-            allow_excessive_balance: false,
-            skip_fee_check: false,
-        };
-        assert!(process_command(&config).is_err());
     }
 
     #[test]

@@ -559,6 +559,85 @@ fn test_background_services_request_handling() {
     }
 }
 
+/// Ensure that warping and EAH play nicely together
+///
+/// Ledger-tool allows warping when creating a snapshot, so it is important that EAH does not break
+/// that use-case.
+#[test]
+fn test_epoch_accounts_hash_and_warping() {
+    solana_logger::setup();
+
+    let test_environment = TestEnvironment::new();
+    let bank_forks = &test_environment.bank_forks;
+    let bank = bank_forks.read().unwrap().working_bank();
+    let epoch_schedule = test_environment
+        .genesis_config_info
+        .genesis_config
+        .epoch_schedule;
+
+    // Ensure warping past the EAH stop slot is OK
+    info!("Warping past EAH stop slot...");
+    let eah_stop_offset = epoch_accounts_hash::calculation_offset_stop(&bank);
+    let eah_stop_slot_in_next_epoch =
+        epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
+    let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
+        &bank,
+        &Pubkey::default(),
+        eah_stop_slot_in_next_epoch,
+    ));
+    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + 1,
+    ));
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
+    info!("Waiting for epoch accounts hash...");
+    _ = bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .wait_get_epoch_accounts_hash();
+    info!("Waiting for epoch accounts hash... DONE");
+
+    // Ensure warping past the EAH start slot is OK
+    info!("Warping past EAH start slot...");
+    let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
+    let eah_start_slot_in_next_epoch =
+        epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
+    let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
+        &bank,
+        &Pubkey::default(),
+        eah_start_slot_in_next_epoch,
+    ));
+    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + 1,
+    ));
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
+    info!("Waiting for epoch accounts hash...");
+    _ = bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .wait_get_epoch_accounts_hash();
+    info!("Waiting for epoch accounts hash... DONE");
+}
+
 // Copy the impl of `next_multiple_of` since it is nightly-only experimental.
 // https://doc.rust-lang.org/std/primitive.u64.html#method.next_multiple_of
 // https://github.com/rust-lang/rust/issues/88581

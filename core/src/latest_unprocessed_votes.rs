@@ -1,13 +1,11 @@
-#![allow(dead_code)]
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
-        unprocessed_packet_batches,
     },
     itertools::Itertools,
     rand::{thread_rng, Rng},
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
     solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
     solana_vote_program::vote_instruction::VoteInstruction,
@@ -55,14 +53,15 @@ impl LatestValidatorVotePacket {
             .ok_or(DeserializedPacketError::VoteTransactionError)?;
 
         match limited_deserialize::<VoteInstruction>(&instruction.data) {
-            Ok(VoteInstruction::UpdateVoteState(vote_state_update))
-            | Ok(VoteInstruction::UpdateVoteStateSwitch(vote_state_update, _)) => {
+            Ok(vote_state_update_instruction)
+                if vote_state_update_instruction.is_single_vote_state_update() =>
+            {
                 let &pubkey = message
                     .message
                     .static_account_keys()
                     .get(0)
                     .ok_or(DeserializedPacketError::VoteTransactionError)?;
-                let slot = vote_state_update.last_voted_slot().unwrap_or(0);
+                let slot = vote_state_update_instruction.last_voted_slot().unwrap_or(0);
 
                 Ok(Self {
                     vote: Some(vote),
@@ -102,16 +101,6 @@ impl LatestValidatorVotePacket {
     }
 }
 
-pub fn deserialize_packets<'a>(
-    packet_batch: &'a PacketBatch,
-    packet_indexes: &'a [usize],
-    vote_source: VoteSource,
-) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
-    packet_indexes.iter().filter_map(move |packet_index| {
-        LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
-    })
-}
-
 // TODO: replace this with rand::seq::index::sample_weighted once we can update rand to 0.8+
 // This requires updating dependencies of ed25519-dalek as rand_core is not compatible cross
 // version https://github.com/dalek-cryptography/ed25519-dalek/pull/214
@@ -135,7 +124,8 @@ pub(crate) fn weighted_random_order_by_stake<'a>(
     pubkey_with_weight.into_iter().map(|(_, pubkey)| pubkey)
 }
 
-pub struct VoteBatchInsertionMetrics {
+#[derive(Default, Debug)]
+pub(crate) struct VoteBatchInsertionMetrics {
     pub(crate) num_dropped_gossip: usize,
     pub(crate) num_dropped_tpu: usize,
 }
@@ -164,7 +154,7 @@ impl LatestUnprocessedVotes {
         self.len() == 0
     }
 
-    pub fn insert_batch(
+    pub(crate) fn insert_batch(
         &self,
         votes: impl Iterator<Item = LatestValidatorVotePacket>,
     ) -> VoteBatchInsertionMetrics {
@@ -259,9 +249,8 @@ impl LatestUnprocessedVotes {
                     let mut vote = lock.write().unwrap();
                     if !vote.is_vote_taken() && !vote.is_forwarded() {
                         let deserialized_vote_packet = vote.vote.as_ref().unwrap().clone();
-                        if let Some(sanitized_vote_transaction) =
-                            unprocessed_packet_batches::transaction_from_deserialized_packet(
-                                &deserialized_vote_packet,
+                        if let Some(sanitized_vote_transaction) = deserialized_vote_packet
+                            .build_sanitized_transaction(
                                 &bank.feature_set,
                                 bank.vote_only_bank(),
                                 bank.as_ref(),
@@ -329,7 +318,7 @@ mod tests {
         super::*,
         itertools::Itertools,
         rand::{thread_rng, Rng},
-        solana_perf::packet::{Packet, PacketFlags},
+        solana_perf::packet::{Packet, PacketBatch, PacketFlags},
         solana_runtime::{
             bank::Bank,
             genesis_utils::{self, ValidatorVoteKeypairs},
@@ -359,6 +348,16 @@ mod tests {
         let mut packet = Packet::from_data(None, vote_tx).unwrap();
         packet.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         LatestValidatorVotePacket::new(packet, vote_source).unwrap()
+    }
+
+    fn deserialize_packets<'a>(
+        packet_batch: &'a PacketBatch,
+        packet_indexes: &'a [usize],
+        vote_source: VoteSource,
+    ) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
+        packet_indexes.iter().filter_map(move |packet_index| {
+            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
+        })
     }
 
     #[test]
