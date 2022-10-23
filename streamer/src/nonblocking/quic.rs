@@ -41,7 +41,7 @@ use {
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
-const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1000;
+const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS: u64 = 10000;
 
 pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
@@ -1137,7 +1137,7 @@ pub mod test {
                 total_packets += packets.len();
                 all_packets.push(packets)
             }
-            if total_packets > num_expected_packets {
+            if total_packets >= num_expected_packets {
                 break;
             }
         }
