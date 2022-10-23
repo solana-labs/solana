@@ -394,9 +394,10 @@ pub enum SystemInstruction {
 /// space, transfer it the minimum lamports for rent exemption, and assign it to
 /// the system program,
 ///
-/// The `payer` and `new_account` are signers.
+/// ## Example: client-side RPC
 ///
-/// Client example:
+/// This example submits the instruction from an RPC client.
+/// The `payer` and `new_account` are signers.
 ///
 /// ```
 /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
@@ -445,7 +446,16 @@ pub enum SystemInstruction {
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 ///
-/// On chain program example:
+/// ## Example: on-chain program
+///
+/// This example submits the instruction from an on-chain Solana program. The
+/// created account is a [program derived address][pda]. The `payer` and
+/// `new_account_pda` are signers, with `new_account_pda` being signed for
+/// virtually by the program itself via [`invoke_signed`], `payer` being signed
+/// for by the client that submitted the transaction.
+///
+/// [pda]: Pubkey::find_program_address
+/// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
 /// # use borsh_derive::BorshDeserialize;
@@ -456,7 +466,7 @@ pub enum SystemInstruction {
 ///     entrypoint,
 ///     entrypoint::ProgramResult,
 ///     msg,
-///     program::invoke,
+///     program::invoke_signed,
 ///     pubkey::Pubkey,
 ///     system_instruction,
 ///     system_program,
@@ -466,6 +476,11 @@ pub enum SystemInstruction {
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct CreateAccountInstruction {
+///     /// The PDA seed used to distinguish the new account from other PDAs
+///     pub new_account_seed: [u8; 16],
+///     /// The PDA bumpkey
+///     pub new_account_bumpkey: u8,
+///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
 ///
@@ -481,27 +496,36 @@ pub enum SystemInstruction {
 ///     let account_info_iter = &mut accounts.iter();
 ///
 ///     let payer = next_account_info(account_info_iter)?;
-///     let new_account = next_account_info(account_info_iter)?;
+///     let new_account_pda = next_account_info(account_info_iter)?;
 ///     let system_account = next_account_info(account_info_iter)?;
 ///
 ///     assert!(payer.is_signer);
 ///     assert!(payer.is_writable);
-///     assert!(new_account.is_signer);
-///     assert!(new_account.is_writable);
+///     // Note that `new_account_pda` is not a signer yet.
+///     // This program will sign for it via `invoke_signed`.
+///     assert!(!new_account_pda.is_signer);
+///     assert!(new_account_pda.is_writable);
 ///     assert!(system_program::check_id(system_account.key));
 ///
-///     let rent = Rent::get()?.minimum_balance(instr.space.try_into().expect("overflow"));
+///     let new_account_seed = &instr.new_account_seed;
+///     let new_account_bumpkey = instr.new_account_bumpkey;
 ///
-///     invoke(
+///     let rent = Rent::get()?
+///         .minimum_balance(instr.space.try_into().expect("overflow"));
+///
+///     invoke_signed(
 ///         &system_instruction::create_account(
 ///             payer.key,
-///             new_account.key,
+///             new_account_pda.key,
 ///             rent,
 ///             instr.space,
 ///             &system_program::ID
 ///         ),
-///         &[payer.clone(), new_account.clone()],
-///     )
+///         &[payer.clone(), new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///     )?;
+///
+///     Ok(())
 /// }
 ///
 /// # Ok::<(), anyhow::Error>(())
@@ -574,11 +598,13 @@ pub fn create_account_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assign the account to another program.
+/// balance for rent exemption, and assign the account to a program.
 ///
+/// ## Example: client-side RPC
+///
+/// This example submits the instructions from an RPC client.
+/// It assigns the account to a provided program account.
 /// The `payer` and `new_account` are signers.
-///
-/// Client example:
 ///
 /// ```
 /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
@@ -637,7 +663,17 @@ pub fn create_account_with_seed(
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 ///
-/// On chain program example:
+/// ## Example: on-chain program
+///
+/// This example submits the instructions from an on-chain Solana program. The
+/// created account is a [program derived address][pda], funded by `payer`, and
+/// assigned to the running program. The `payer` and `new_account_pda` are
+/// signers, with `new_account_pda` being signed for virtually by the program
+/// itself via [`invoke_signed`], `payer` being signed for by the client that
+/// submitted the transaction.
+///
+/// [pda]: Pubkey::find_program_address
+/// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
 /// # use borsh_derive::BorshDeserialize;
@@ -648,7 +684,7 @@ pub fn create_account_with_seed(
 ///     entrypoint,
 ///     entrypoint::ProgramResult,
 ///     msg,
-///     program::invoke,
+///     program::invoke_signed,
 ///     pubkey::Pubkey,
 ///     system_instruction,
 ///     system_program,
@@ -658,13 +694,18 @@ pub fn create_account_with_seed(
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct CreateAccountInstruction {
+///     /// The PDA seed used to distinguish the new account from other PDAs
+///     pub new_account_seed: [u8; 16],
+///     /// The PDA bumpkey
+///     pub new_account_bumpkey: u8,
+///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
 ///
 /// entrypoint!(process_instruction);
 ///
 /// fn process_instruction(
-///     _program_id: &Pubkey,
+///     program_id: &Pubkey,
 ///     accounts: &[AccountInfo],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
@@ -673,49 +714,49 @@ pub fn create_account_with_seed(
 ///     let account_info_iter = &mut accounts.iter();
 ///
 ///     let payer = next_account_info(account_info_iter)?;
-///     let new_account = next_account_info(account_info_iter)?;
-///     let owning_program = next_account_info(account_info_iter)?;
+///     let new_account_pda = next_account_info(account_info_iter)?;
 ///     let system_account = next_account_info(account_info_iter)?;
 ///
 ///     assert!(payer.is_signer);
 ///     assert!(payer.is_writable);
-///     assert!(new_account.is_signer);
-///     assert!(new_account.is_writable);
-///     assert!(owning_program.executable);
+///     // Note that `new_account_pda` is not a signer yet.
+///     // This program will sign for it via `invoke_signed`.
+///     assert!(!new_account_pda.is_signer);
+///     assert!(new_account_pda.is_writable);
 ///     assert!(system_program::check_id(system_account.key));
 ///
-///     let rent = Rent::get()?.minimum_balance(instr.space.try_into().expect("overflow"));
+///     let new_account_seed = &instr.new_account_seed;
+///     let new_account_bumpkey = instr.new_account_bumpkey;
 ///
-///     invoke(
+///     let rent = Rent::get()?
+///         .minimum_balance(instr.space.try_into().expect("overflow"));
+///
+///     invoke_signed(
 ///         &system_instruction::transfer(
 ///             payer.key,
-///             new_account.key,
+///             new_account_pda.key,
 ///             rent,
 ///         ),
-///         &[
-///             payer.clone(),
-///             new_account.clone(),
-///         ],
+///         &[payer.clone(), new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::allocate(
-///             new_account.key,
+///             new_account_pda.key,
 ///             instr.space,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::assign(
-///             new_account.key,
-///             owning_program.key,
+///             new_account_pda.key,
+///             &program_id,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -769,11 +810,13 @@ pub fn assign_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assign the account to another program.
+/// balance for rent exemption, and assign the account to a program.
 ///
+/// # Example: client-side RPC
+///
+/// This example submits the instructions from an RPC client.
+/// It assigns the account to a provided program account.
 /// The `payer` and `new_account` are signers.
-///
-/// Client example:
 ///
 /// ```
 /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
@@ -832,7 +875,17 @@ pub fn assign_with_seed(
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 ///
-/// On chain program example:
+/// ## Example: on-chain program
+///
+/// This example submits the instructions from an on-chain Solana program. The
+/// created account is a [program derived address][pda], funded by `payer`, and
+/// assigned to the running program. The `payer` and `new_account_pda` are
+/// signers, with `new_account_pda` being signed for virtually by the program
+/// itself via [`invoke_signed`], `payer` being signed for by the client that
+/// submitted the transaction.
+///
+/// [pda]: Pubkey::find_program_address
+/// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
 /// # use borsh_derive::BorshDeserialize;
@@ -843,7 +896,7 @@ pub fn assign_with_seed(
 ///     entrypoint,
 ///     entrypoint::ProgramResult,
 ///     msg,
-///     program::invoke,
+///     program::invoke_signed,
 ///     pubkey::Pubkey,
 ///     system_instruction,
 ///     system_program,
@@ -853,13 +906,18 @@ pub fn assign_with_seed(
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct CreateAccountInstruction {
+///     /// The PDA seed used to distinguish the new account from other PDAs
+///     pub new_account_seed: [u8; 16],
+///     /// The PDA bumpkey
+///     pub new_account_bumpkey: u8,
+///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
 ///
 /// entrypoint!(process_instruction);
 ///
 /// fn process_instruction(
-///     _program_id: &Pubkey,
+///     program_id: &Pubkey,
 ///     accounts: &[AccountInfo],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
@@ -868,49 +926,49 @@ pub fn assign_with_seed(
 ///     let account_info_iter = &mut accounts.iter();
 ///
 ///     let payer = next_account_info(account_info_iter)?;
-///     let new_account = next_account_info(account_info_iter)?;
-///     let owning_program = next_account_info(account_info_iter)?;
+///     let new_account_pda = next_account_info(account_info_iter)?;
 ///     let system_account = next_account_info(account_info_iter)?;
 ///
 ///     assert!(payer.is_signer);
 ///     assert!(payer.is_writable);
-///     assert!(new_account.is_signer);
-///     assert!(new_account.is_writable);
-///     assert!(owning_program.executable);
+///     // Note that `new_account_pda` is not a signer yet.
+///     // This program will sign for it via `invoke_signed`.
+///     assert!(!new_account_pda.is_signer);
+///     assert!(new_account_pda.is_writable);
 ///     assert!(system_program::check_id(system_account.key));
 ///
-///     let rent = Rent::get()?.minimum_balance(instr.space.try_into().expect("overflow"));
+///     let new_account_seed = &instr.new_account_seed;
+///     let new_account_bumpkey = instr.new_account_bumpkey;
 ///
-///     invoke(
+///     let rent = Rent::get()?
+///         .minimum_balance(instr.space.try_into().expect("overflow"));
+///
+///     invoke_signed(
 ///         &system_instruction::transfer(
 ///             payer.key,
-///             new_account.key,
+///             new_account_pda.key,
 ///             rent,
 ///         ),
-///         &[
-///             payer.clone(),
-///             new_account.clone(),
-///         ],
+///         &[payer.clone(), new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::allocate(
-///             new_account.key,
+///             new_account_pda.key,
 ///             instr.space,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::assign(
-///             new_account.key,
-///             owning_program.key,
+///             new_account_pda.key,
+///             &program_id,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -973,11 +1031,13 @@ pub fn transfer_with_seed(
 /// # Examples
 ///
 /// These examples allocate space for an account, transfer it the minimum
-/// balance for rent exemption, and assign the account to another program.
+/// balance for rent exemption, and assign the account to a program.
 ///
+/// # Example: client-side RPC
+///
+/// This example submits the instructions from an RPC client.
+/// It assigns the account to a provided program account.
 /// The `payer` and `new_account` are signers.
-///
-/// Client example:
 ///
 /// ```
 /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
@@ -1036,7 +1096,17 @@ pub fn transfer_with_seed(
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 ///
-/// On chain program example:
+/// ## Example: on-chain program
+///
+/// This example submits the instructions from an on-chain Solana program. The
+/// created account is a [program derived address][pda], funded by `payer`, and
+/// assigned to the running program. The `payer` and `new_account_pda` are
+/// signers, with `new_account_pda` being signed for virtually by the program
+/// itself via [`invoke_signed`], `payer` being signed for by the client that
+/// submitted the transaction.
+///
+/// [pda]: Pubkey::find_program_address
+/// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
 /// # use borsh_derive::BorshDeserialize;
@@ -1047,7 +1117,7 @@ pub fn transfer_with_seed(
 ///     entrypoint,
 ///     entrypoint::ProgramResult,
 ///     msg,
-///     program::invoke,
+///     program::invoke_signed,
 ///     pubkey::Pubkey,
 ///     system_instruction,
 ///     system_program,
@@ -1057,13 +1127,18 @@ pub fn transfer_with_seed(
 ///
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct CreateAccountInstruction {
+///     /// The PDA seed used to distinguish the new account from other PDAs
+///     pub new_account_seed: [u8; 16],
+///     /// The PDA bumpkey
+///     pub new_account_bumpkey: u8,
+///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
 ///
 /// entrypoint!(process_instruction);
 ///
 /// fn process_instruction(
-///     _program_id: &Pubkey,
+///     program_id: &Pubkey,
 ///     accounts: &[AccountInfo],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
@@ -1072,49 +1147,49 @@ pub fn transfer_with_seed(
 ///     let account_info_iter = &mut accounts.iter();
 ///
 ///     let payer = next_account_info(account_info_iter)?;
-///     let new_account = next_account_info(account_info_iter)?;
-///     let owning_program = next_account_info(account_info_iter)?;
+///     let new_account_pda = next_account_info(account_info_iter)?;
 ///     let system_account = next_account_info(account_info_iter)?;
 ///
 ///     assert!(payer.is_signer);
 ///     assert!(payer.is_writable);
-///     assert!(new_account.is_signer);
-///     assert!(new_account.is_writable);
-///     assert!(owning_program.executable);
+///     // Note that `new_account_pda` is not a signer yet.
+///     // This program will sign for it via `invoke_signed`.
+///     assert!(!new_account_pda.is_signer);
+///     assert!(new_account_pda.is_writable);
 ///     assert!(system_program::check_id(system_account.key));
 ///
-///     let rent = Rent::get()?.minimum_balance(instr.space.try_into().expect("overflow"));
+///     let new_account_seed = &instr.new_account_seed;
+///     let new_account_bumpkey = instr.new_account_bumpkey;
 ///
-///     invoke(
+///     let rent = Rent::get()?
+///         .minimum_balance(instr.space.try_into().expect("overflow"));
+///
+///     invoke_signed(
 ///         &system_instruction::transfer(
 ///             payer.key,
-///             new_account.key,
+///             new_account_pda.key,
 ///             rent,
 ///         ),
-///         &[
-///             payer.clone(),
-///             new_account.clone(),
-///         ],
+///         &[payer.clone(), new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::allocate(
-///             new_account.key,
+///             new_account_pda.key,
 ///             instr.space,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
-///     invoke(
+///     invoke_signed(
 ///         &system_instruction::assign(
-///             new_account.key,
-///             owning_program.key,
+///             new_account_pda.key,
+///             &program_id,
 ///         ),
-///         &[
-///             new_account.clone(),
-///         ],
+///         &[new_account_pda.clone()],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -1169,7 +1244,9 @@ pub fn allocate_with_seed(
 ///
 /// # Examples
 ///
-/// Client example:
+/// ## Example: client-side RPC
+///
+/// This example performs multiple transfers in a single transaction.
 ///
 /// ```
 /// # use solana_program::example_mocks::{solana_sdk, solana_rpc_client};
@@ -1213,7 +1290,19 @@ pub fn allocate_with_seed(
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 ///
-/// On chain program example:
+/// ## Example: on-chain program
+///
+/// This example makes multiple transfers out of a "bank" account,
+/// a [program derived address][pda] owned by the calling program.
+/// This example submits the instructions from an on-chain Solana program. The
+/// created account is a [program derived address][pda], and it is assigned to
+/// the running program. The `payer` and `new_account_pda` are signers, with
+/// `new_account_pda` being signed for virtually by the program itself via
+/// [`invoke_signed`], `payer` being signed for by the client that submitted the
+/// transaction.
+///
+/// [pda]: Pubkey::find_program_address
+/// [`invoke_signed`]: crate::program::invoke_signed
 ///
 /// ```
 /// # use borsh_derive::BorshDeserialize;
@@ -1224,18 +1313,20 @@ pub fn allocate_with_seed(
 ///     entrypoint,
 ///     entrypoint::ProgramResult,
 ///     msg,
-///     program::invoke,
+///     program::invoke_signed,
 ///     pubkey::Pubkey,
 ///     system_instruction,
+///     system_program,
 /// };
 ///
 /// /// # Accounts
 /// ///
-/// /// - 0: from - writable, signer
+/// /// - 0: bank_pda - writable
 /// /// - 1: system_program - executable
 /// /// - *: to - writable
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct TransferLamportsToManyInstruction {
+///     pub bank_pda_bumpkey: u8,
 ///     pub amount_list: Vec<u64>,
 /// }
 ///
@@ -1246,18 +1337,22 @@ pub fn allocate_with_seed(
 ///     accounts: &[AccountInfo],
 ///     instruction_data: &[u8],
 /// ) -> ProgramResult {
-///     msg!("process instruction");
-///
 ///     let instr = TransferLamportsToManyInstruction::deserialize(&mut &instruction_data[..])?;
 ///
 ///     let account_info_iter = &mut accounts.iter();
 ///
-///     let from = next_account_info(account_info_iter)?;
+///     let bank_pda = next_account_info(account_info_iter)?;
+///     let bank_pda_bumpkey = instr.bank_pda_bumpkey;
 ///     let system_account = next_account_info(account_info_iter)?;
+///
+///     assert!(system_program::check_id(system_account.key));
 ///
 ///     let to_accounts = next_account_infos(account_info_iter, account_info_iter.len())?;
 ///
-///     // do verification ...
+///     for to_account in to_accounts {
+///          assert!(to_account.is_writable);
+///          // ... do other verification ...
+///     }
 ///
 ///     let to_and_amount = to_accounts
 ///         .iter()
@@ -1265,10 +1360,10 @@ pub fn allocate_with_seed(
 ///         .map(|(to, amount)| (*to.key, *amount))
 ///         .collect::<Vec<(Pubkey, u64)>>();
 ///
-///     let instrs = system_instruction::transfer_many(from.key, to_and_amount.as_ref());
+///     let instrs = system_instruction::transfer_many(bank_pda.key, to_and_amount.as_ref());
 ///
 ///     for instr in instrs {
-///         invoke(&instr, accounts)?;
+///         invoke_signed(&instr, accounts, &[&[b"bank", &[bank_pda_bumpkey]]])?;
 ///     }
 ///
 ///     Ok(())
