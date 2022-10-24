@@ -363,195 +363,193 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   );
 };
 
-const TokenTransactionRow = React.memo(
-  ({
-    mint,
-    tx,
-    details,
-  }: {
-    mint: PublicKey;
-    tx: ConfirmedSignatureInfo;
-    details: CacheEntry<Details> | undefined;
-  }) => {
-    const fetchDetails = useFetchTransactionDetails();
-    const { cluster } = useCluster();
+const TokenTransactionRow = ({
+  mint,
+  tx,
+  details,
+}: {
+  mint: PublicKey;
+  tx: ConfirmedSignatureInfo;
+  details: CacheEntry<Details> | undefined;
+}) => {
+  const fetchDetails = useFetchTransactionDetails();
+  const { cluster } = useCluster();
 
-    // Fetch details on load
-    React.useEffect(() => {
-      if (!details) fetchDetails(tx.signature);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fetch details on load
+  React.useEffect(() => {
+    if (!details) fetchDetails(tx.signature);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    let statusText: string;
-    let statusClass: string;
-    if (tx.err) {
-      statusClass = "warning";
-      statusText = "Failed";
-    } else {
-      statusClass = "success";
-      statusText = "Success";
-    }
-
-    const transactionWithMeta = details?.data?.transactionWithMeta;
-    const instructions = transactionWithMeta?.transaction.message.instructions;
-    if (!instructions)
-      return (
-        <tr key={tx.signature}>
-          <td className="w-1">
-            <Slot slot={tx.slot} link />
-          </td>
-
-          <td>
-            <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
-          </td>
-
-          <td>
-            <Address pubkey={mint} link truncate />
-          </td>
-
-          <td>
-            <span className="spinner-grow spinner-grow-sm me-2"></span>
-            Loading
-          </td>
-
-          <td>
-            <Signature signature={tx.signature} link />
-          </td>
-        </tr>
-      );
-
-    let tokenInstructionNames: InstructionType[] = [];
-
-    if (transactionWithMeta) {
-      tokenInstructionNames = instructions
-        .map((ix, index): InstructionType | undefined => {
-          let name = "Unknown";
-
-          const innerInstructions: (
-            | ParsedInstruction
-            | PartiallyDecodedInstruction
-          )[] = [];
-
-          if (
-            transactionWithMeta.meta?.innerInstructions &&
-            (cluster !== Cluster.MainnetBeta ||
-              transactionWithMeta.slot >= INNER_INSTRUCTIONS_START_SLOT)
-          ) {
-            transactionWithMeta.meta.innerInstructions.forEach((ix) => {
-              if (ix.index === index) {
-                ix.instructions.forEach((inner) => {
-                  innerInstructions.push(inner);
-                });
-              }
-            });
-          }
-
-          let transactionInstruction;
-          if (transactionWithMeta?.transaction) {
-            transactionInstruction = intoTransactionInstruction(
-              transactionWithMeta.transaction,
-              ix
-            );
-          }
-
-          if ("parsed" in ix) {
-            if (ix.program === "spl-token") {
-              name = getTokenProgramInstructionName(ix, tx);
-            } else {
-              return undefined;
-            }
-          } else if (
-            transactionInstruction &&
-            isSerumInstruction(transactionInstruction)
-          ) {
-            try {
-              name = parseSerumInstructionTitle(transactionInstruction);
-            } catch (error) {
-              reportError(error, { signature: tx.signature });
-              return undefined;
-            }
-          } else if (
-            transactionInstruction &&
-            isTokenSwapInstruction(transactionInstruction)
-          ) {
-            try {
-              name = parseTokenSwapInstructionTitle(transactionInstruction);
-            } catch (error) {
-              reportError(error, { signature: tx.signature });
-              return undefined;
-            }
-          } else if (
-            transactionInstruction &&
-            isTokenLendingInstruction(transactionInstruction)
-          ) {
-            try {
-              name = parseTokenLendingInstructionTitle(transactionInstruction);
-            } catch (error) {
-              reportError(error, { signature: tx.signature });
-              return undefined;
-            }
-          } else if (
-            transactionInstruction &&
-            isMangoInstruction(transactionInstruction)
-          ) {
-            try {
-              name = parseMangoInstructionTitle(transactionInstruction);
-            } catch (error) {
-              reportError(error, { signature: tx.signature });
-              return undefined;
-            }
-          } else {
-            if (
-              ix.accounts.findIndex((account) =>
-                account.equals(TOKEN_PROGRAM_ID)
-              ) >= 0
-            ) {
-              name = "Unknown (Inner)";
-            } else {
-              return undefined;
-            }
-          }
-
-          return {
-            name,
-            innerInstructions,
-          };
-        })
-        .filter((name) => name !== undefined) as InstructionType[];
-    }
-
-    return (
-      <>
-        {tokenInstructionNames.map((instructionType, index) => {
-          return (
-            <tr key={index}>
-              <td className="w-1">
-                <Slot slot={tx.slot} link />
-              </td>
-
-              <td>
-                <span className={`badge bg-${statusClass}-soft`}>
-                  {statusText}
-                </span>
-              </td>
-
-              <td className="forced-truncate">
-                <Address pubkey={mint} link truncateUnknown />
-              </td>
-
-              <td>
-                <InstructionDetails instructionType={instructionType} tx={tx} />
-              </td>
-
-              <td className="forced-truncate">
-                <Signature signature={tx.signature} link truncate />
-              </td>
-            </tr>
-          );
-        })}
-      </>
-    );
+  let statusText: string;
+  let statusClass: string;
+  if (tx.err) {
+    statusClass = "warning";
+    statusText = "Failed";
+  } else {
+    statusClass = "success";
+    statusText = "Success";
   }
-);
+
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const instructions = transactionWithMeta?.transaction.message.instructions;
+  if (!instructions)
+    return (
+      <tr key={tx.signature}>
+        <td className="w-1">
+          <Slot slot={tx.slot} link />
+        </td>
+
+        <td>
+          <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
+        </td>
+
+        <td>
+          <Address pubkey={mint} link truncate />
+        </td>
+
+        <td>
+          <span className="spinner-grow spinner-grow-sm me-2"></span>
+          Loading
+        </td>
+
+        <td>
+          <Signature signature={tx.signature} link />
+        </td>
+      </tr>
+    );
+
+  let tokenInstructionNames: InstructionType[] = [];
+
+  if (transactionWithMeta) {
+    tokenInstructionNames = instructions
+      .map((ix, index): InstructionType | undefined => {
+        let name = "Unknown";
+
+        const innerInstructions: (
+          | ParsedInstruction
+          | PartiallyDecodedInstruction
+        )[] = [];
+
+        if (
+          transactionWithMeta.meta?.innerInstructions &&
+          (cluster !== Cluster.MainnetBeta ||
+            transactionWithMeta.slot >= INNER_INSTRUCTIONS_START_SLOT)
+        ) {
+          transactionWithMeta.meta.innerInstructions.forEach((ix) => {
+            if (ix.index === index) {
+              ix.instructions.forEach((inner) => {
+                innerInstructions.push(inner);
+              });
+            }
+          });
+        }
+
+        let transactionInstruction;
+        if (transactionWithMeta?.transaction) {
+          transactionInstruction = intoTransactionInstruction(
+            transactionWithMeta.transaction,
+            ix
+          );
+        }
+
+        if ("parsed" in ix) {
+          if (ix.program === "spl-token") {
+            name = getTokenProgramInstructionName(ix, tx);
+          } else {
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isSerumInstruction(transactionInstruction)
+        ) {
+          try {
+            name = parseSerumInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isTokenSwapInstruction(transactionInstruction)
+        ) {
+          try {
+            name = parseTokenSwapInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isTokenLendingInstruction(transactionInstruction)
+        ) {
+          try {
+            name = parseTokenLendingInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
+            return undefined;
+          }
+        } else if (
+          transactionInstruction &&
+          isMangoInstruction(transactionInstruction)
+        ) {
+          try {
+            name = parseMangoInstructionTitle(transactionInstruction);
+          } catch (error) {
+            reportError(error, { signature: tx.signature });
+            return undefined;
+          }
+        } else {
+          if (
+            ix.accounts.findIndex((account) =>
+              account.equals(TOKEN_PROGRAM_ID)
+            ) >= 0
+          ) {
+            name = "Unknown (Inner)";
+          } else {
+            return undefined;
+          }
+        }
+
+        return {
+          name,
+          innerInstructions,
+        };
+      })
+      .filter((name) => name !== undefined) as InstructionType[];
+  }
+
+  return (
+    <>
+      {tokenInstructionNames.map((instructionType, index) => {
+        return (
+          <tr key={index}>
+            <td className="w-1">
+              <Slot slot={tx.slot} link />
+            </td>
+
+            <td>
+              <span className={`badge bg-${statusClass}-soft`}>
+                {statusText}
+              </span>
+            </td>
+
+            <td className="forced-truncate">
+              <Address pubkey={mint} link truncateUnknown />
+            </td>
+
+            <td>
+              <InstructionDetails instructionType={instructionType} tx={tx} />
+            </td>
+
+            <td className="forced-truncate">
+              <Signature signature={tx.signature} link truncate />
+            </td>
+          </tr>
+        );
+      })}
+    </>
+  );
+};
 
 function InstructionDetails({
   instructionType,
