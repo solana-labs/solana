@@ -795,7 +795,7 @@ impl Accounts {
             .verify_accounts_hash_in_bg
             .wait_for_complete();
         self.accounts_db
-            .update_accounts_hash_with_index_option(
+            .update_accounts_hash(
                 use_index,
                 debug_verify,
                 slot,
