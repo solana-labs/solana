@@ -1,5 +1,8 @@
+import React, { Suspense } from "react";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import { PublicKey } from "@solana/web3.js";
+import { NavLink } from "components/NavLink";
 import { AnchorAccountCard } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
 import { BlockhashesCard } from "components/account/BlockhashesCard";
@@ -42,8 +45,6 @@ import { useAnchorProgram } from "providers/anchor";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import React, { Suspense } from "react";
-import { NavLink } from "components/NavLink";
 import { ClusterPathCreator, useCreateClusterPath } from "utils/routing";
 import { NFTokenAccountHeader } from "components/account/nftoken/NFTokenAccountHeader";
 import { NFTokenAccountSection } from "components/account/nftoken/NFTokenAccountSection";
@@ -251,12 +252,13 @@ export function AccountHeader({
           </div>
         )}
         <div className="col-auto">
-          <div className="avatar avatar-lg header-avatar-top">
+          <div className="avatar-img border border-4 border-body">
             {token?.logoURI ? (
-              <img
-                src={token.logoURI}
+              <Image
+                src={`/api/image-proxy?imageUrl=${token.logoURI}`}
                 alt="token logo"
-                className="avatar-img rounded-circle border border-4 border-body"
+                layout="fill"
+                className="rounded-circle"
               />
             ) : (
               <Identicon

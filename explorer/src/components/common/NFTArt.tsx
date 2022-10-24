@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Stream } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import {
@@ -8,7 +9,6 @@ import {
   MetadataJsonFile,
 } from "@metaplex/js";
 import ContentLoader from "react-content-loader";
-import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 import { getLast } from "utils";
 
 export const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
@@ -27,7 +27,12 @@ const LoadingPlaceholder = () => (
 );
 
 const ErrorPlaceHolder = () => (
-  <img src={ErrorLogo} width="120" height="120" alt="Solana Logo" />
+  <Image
+    src="/img/logos-solana/dark-solana-logo.svg"
+    width={120}
+    height={120}
+    alt="Solana Logo"
+  />
 );
 
 const ViewOriginalArtContentLink = ({ src }: { src: string }) => {
@@ -46,6 +51,8 @@ export const CachedImageContent = ({ uri }: { uri?: string }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showError, setShowError] = useState<boolean>(false);
   const [timeout, setTimeout] = useState<NodeJS.Timeout | undefined>(undefined);
+
+  useEffect(() => setIsLoading(true), []);
 
   useEffect(() => {
     // Set the timeout if we don't have a valid uri
@@ -78,21 +85,25 @@ export const CachedImageContent = ({ uri }: { uri?: string }) => {
         <>
           {isLoading && <LoadingPlaceholder />}
           <div className={`${isLoading ? "d-none" : "d-block"}`}>
-            <img
-              className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
-              src={cachedBlob}
-              alt={"nft"}
-              style={{
-                width: 150,
-                maxHeight: 200,
-              }}
-              onLoad={() => {
-                setIsLoading(false);
-              }}
-              onError={() => {
-                setShowError(true);
-              }}
-            />
+            <div
+              className={`position-relative mx-auto ${
+                isLoading ? "d-none" : "d-block"
+              }`}
+              style={{ width: 150, minHeight: 150, maxHeight: 200 }}
+            >
+              <Image
+                src={cachedBlob ?? `/api/image-proxy?imageUrl=${uri}`}
+                alt={"nft"}
+                layout="fill"
+                className="rounded"
+                onLoad={() => {
+                  setIsLoading(false);
+                }}
+                onError={() => {
+                  setShowError(true);
+                }}
+              />
+            </div>
             {uri && <ViewOriginalArtContentLink src={uri} />}
           </div>
         </>

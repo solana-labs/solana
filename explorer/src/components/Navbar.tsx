@@ -1,5 +1,5 @@
 import React from "react";
-import Logo from "img/logos-solana/dark-explorer-logo.svg";
+import Image from "next/image";
 import Link from "next/link";
 import { useCreateClusterPath } from "utils/routing";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
@@ -16,7 +16,14 @@ export function Navbar() {
       <div className="container">
         <Link href={createClusterPath("/")}>
           <a>
-            <img src={Logo} width="250" alt="Solana Explorer" />
+            <div className="d-flex">
+              <Image
+                src="/img/logos-solana/dark-explorer-logo.svg"
+                width={250}
+                height={21.48}
+                alt="Solana Explorer"
+              />
+            </div>
           </a>
         </Link>
 

@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
+import Image from "next/image";
 import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
 import { Account, useFetchAccountInfo } from "providers/accounts";
@@ -135,21 +136,25 @@ export const NftokenImage = ({
             />
           )}
           <div className={`${isLoading ? "d-none" : "d-block"}`}>
-            <img
-              className={`rounded mx-auto ${isLoading ? "d-none" : "d-block"}`}
-              src={cachedBlob}
-              alt={"nft"}
-              style={{
-                width: size,
-                height: size,
-              }}
-              onLoad={() => {
-                setIsLoading(false);
-              }}
-              onError={() => {
-                setShowError(true);
-              }}
-            />
+            {cachedBlob !== undefined && (
+              <Image
+                className={`rounded mx-auto ${
+                  isLoading ? "d-none" : "d-block"
+                }`}
+                src={cachedBlob}
+                alt={"nft"}
+                style={{
+                  width: size,
+                  height: size,
+                }}
+                onLoad={() => {
+                  setIsLoading(false);
+                }}
+                onError={() => {
+                  setShowError(true);
+                }}
+              />
+            )}
           </div>
         </>
       )}

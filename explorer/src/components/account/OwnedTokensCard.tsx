@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { PublicKey } from "@solana/web3.js";
 import { FetchStatus } from "providers/cache";
 import {
@@ -111,11 +112,14 @@ function HoldingsDetailTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         {showLogos && (
           <td className="w-1 p-0 text-center">
             {tokenDetails?.logoURI ? (
-              <img
-                src={tokenDetails.logoURI}
-                alt="token icon"
-                className="token-icon rounded-circle border border-4 border-gray-dark"
-              />
+              <div className="position-relative token-icon border border-4 border-gray-dark">
+                <Image
+                  src={`/api/image-proxy?imageUrl=${tokenDetails.logoURI}`}
+                  alt="token icon"
+                  layout="fill"
+                  className="rounded-circle"
+                />
+              </div>
             ) : (
               <Identicon
                 address={address}
@@ -186,11 +190,14 @@ function HoldingsSummaryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
         {showLogos && (
           <td className="w-1 p-0 text-center">
             {tokenDetails?.logoURI ? (
-              <img
-                src={tokenDetails.logoURI}
-                alt="token icon"
-                className="token-icon rounded-circle border border-4 border-gray-dark"
-              />
+              <div className="position-relative token-icon border border-4 border-gray-dark">
+                <Image
+                  src={`/api/image-proxy?imageUrl=${tokenDetails.logoURI}`}
+                  alt="token icon"
+                  layout="fill"
+                  className="rounded-circle"
+                />
+              </div>
             ) : (
               <Identicon
                 address={mintAddress}
