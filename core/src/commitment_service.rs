@@ -487,57 +487,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "called `Result::unwrap()` on an `Err` value: LockedRewardAccountsDuringRewardInterval"
-    )]
-    fn test_reward_accounts_lock() {
-        fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
-            let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
-            let slot = vote_account
-                .vote_state()
-                .as_ref()
-                .unwrap()
-                .root_slot
-                .unwrap();
-            slot
-        }
-
-        let block_commitment_cache = RwLock::new(BlockCommitmentCache::new_for_tests());
-
-        let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
-        let validator_keypairs = vec![&validator_vote_keypairs];
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
-            1_000_000_000,
-            &validator_keypairs,
-            vec![100; 1],
-        );
-
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        let mut bank_forks = BankForks::new(bank0);
-
-        // Fill bank_forks with banks with votes landing in the next slot
-        // Create enough banks such that vote account will root slots 0 and 1
-        for x in 0..33 {
-            let previous_bank = bank_forks.get(x).unwrap();
-            let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
-
-            let vote = vote_transaction::new_vote_transaction(
-                vec![x],
-                previous_bank.hash(),
-                previous_bank.last_blockhash(),
-                &validator_vote_keypairs.node_keypair,
-                &validator_vote_keypairs.vote_keypair,
-                &validator_vote_keypairs.vote_keypair,
-                None,
-            );
-            let r = bank.process_transaction(&vote);
-            println!("{:?} {:?} {:?}", x, r, bank.get_reward_interval());
-
-            bank_forks.insert(bank);
-        }
-    }
-
-    #[test]
     fn test_highest_confirmed_root_advance() {
         fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
             let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
