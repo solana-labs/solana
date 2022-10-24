@@ -5,10 +5,10 @@ import {
   EpochInfo,
   EpochSchedule,
 } from "@solana/web3.js";
-import { useQuery } from "../utils/url";
-import { useHistory, useLocation } from "react-router-dom";
+import { useRouter } from "next/router";
 import { reportError } from "utils/sentry";
 import { localStorageIsAvailable } from "utils";
+import { useCurrentRoute } from "utils/routing";
 
 export enum ClusterStatus {
   Connected,
@@ -118,8 +118,8 @@ function clusterReducer(state: State, action: Action): State {
   }
 }
 
-function parseQuery(query: URLSearchParams): Cluster {
-  const clusterParam = query.get("cluster");
+function getClusterFromParams(params: URLSearchParams): Cluster {
+  const clusterParam = params.get("cluster");
   switch (clusterParam) {
     case "custom":
       return Cluster.Custom;
@@ -148,21 +148,21 @@ export function ClusterProvider({ children }: ClusterProviderProps) {
     status: ClusterStatus.Connecting,
   });
   const [showModal, setShowModal] = React.useState(false);
-  const query = useQuery();
-  const cluster = parseQuery(query);
+  const currentRoute = useCurrentRoute();
+  const cluster = getClusterFromParams(currentRoute.searchParams);
   const enableCustomUrl =
     localStorageIsAvailable() &&
     localStorage.getItem("enableCustomUrl") !== null;
   const customUrl =
-    (enableCustomUrl && query.get("customUrl")) || state.customUrl;
-  const history = useHistory();
-  const location = useLocation();
+    (enableCustomUrl && currentRoute.searchParams.get("customUrl")) ||
+    state.customUrl;
+  const router = useRouter();
 
   // Remove customUrl param if dev setting is disabled
   React.useEffect(() => {
-    if (!enableCustomUrl && query.has("customUrl")) {
-      query.delete("customUrl");
-      history.push({ ...location, search: query.toString() });
+    if (!enableCustomUrl && currentRoute.searchParams.has("customUrl")) {
+      currentRoute.searchParams.delete("customUrl");
+      router.push(currentRoute.toString());
     }
   }, [enableCustomUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 

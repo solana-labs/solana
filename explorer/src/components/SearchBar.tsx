@@ -1,6 +1,6 @@
 import React from "react";
+import { useRouter } from "next/router";
 import bs58 from "bs58";
-import { useHistory, useLocation } from "react-router-dom";
 import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import StateManager from "react-select";
 import {
@@ -15,6 +15,7 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
 import { getDomainInfo, hasDomainSyntax } from "utils/name-service";
+import { useCreateClusterPath } from "utils/routing";
 
 interface SearchOptions {
   label: string;
@@ -33,8 +34,8 @@ export function SearchBar() {
   const [loadingSearchMessage, setLoadingSearchMessage] =
     React.useState<string>("loading...");
   const selectRef = React.useRef<StateManager<any> | null>(null);
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
+  const createClusterPath = useCreateClusterPath();
   const { tokenRegistry } = useTokenRegistry();
   const { url, cluster, clusterInfo } = useCluster();
 
@@ -43,7 +44,7 @@ export function SearchBar() {
     meta: ActionMeta<any>
   ) => {
     if (meta.action === "select-option") {
-      history.push({ ...location, pathname });
+      router.push(createClusterPath(pathname));
       setSearch("");
     }
   };

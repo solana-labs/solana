@@ -1,10 +1,14 @@
 import React from "react";
+import { useRouter } from "next/router";
 import { PACKET_DATA_SIZE, VersionedMessage } from "@solana/web3.js";
 
 import { TableCardBody } from "components/common/TableCardBody";
 import { SolBalance } from "components/common/SolBalance";
-import { useQuery } from "utils/url";
-import { useHistory, useLocation } from "react-router";
+import {
+  useCreateClusterPath,
+  useCurrentRoute,
+  useSearchParams,
+} from "utils/routing";
 import {
   useFetchRawTransaction,
   useRawTransactionDetails,
@@ -142,10 +146,9 @@ export function TransactionInspectorPage({
   signature?: string;
 }) {
   const [transaction, setTransaction] = React.useState<TransactionData>();
-  const query = useQuery();
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
   const [paramString, setParamString] = React.useState<string>();
+  const currentRoute = useCurrentRoute();
 
   // Sync message with url search params
   React.useEffect(() => {
@@ -157,9 +160,9 @@ export function TransactionInspectorPage({
         const signaturesParam = encodeURIComponent(
           JSON.stringify(transaction.signatures)
         );
-        if (query.get("signatures") !== signaturesParam) {
+        if (currentRoute.searchParams.get("signatures") !== signaturesParam) {
           shouldRefreshUrl = true;
-          query.set("signatures", signaturesParam);
+          currentRoute.searchParams.set("signatures", signaturesParam);
         }
       }
 
@@ -167,30 +170,30 @@ export function TransactionInspectorPage({
         String.fromCharCode.apply(null, [...transaction.rawMessage])
       );
       const newParam = encodeURIComponent(base64);
-      if (query.get("message") !== newParam) {
+      if (currentRoute.searchParams.get("message") !== newParam) {
         shouldRefreshUrl = true;
-        query.set("message", newParam);
+        currentRoute.searchParams.set("message", newParam);
       }
 
       if (shouldRefreshUrl) {
-        history.push({ ...location, search: query.toString() });
+        router.push(currentRoute.toString());
       }
     }
-  }, [query, transaction, signature, history, location]);
+  }, [transaction, signature, router, currentRoute]);
 
   const reset = React.useCallback(() => {
-    query.delete("message");
-    history.push({ ...location, search: query.toString() });
+    currentRoute.searchParams.delete("message");
+    router.push(currentRoute.toString());
     setTransaction(undefined);
-  }, [query, location, history]);
+  }, [currentRoute, router]);
 
   // Decode the message url param whenever it changes
   React.useEffect(() => {
     if (transaction || signature) return;
 
-    const [result, refreshUrl] = decodeUrlParams(query);
+    const [result, refreshUrl] = decodeUrlParams(currentRoute.searchParams);
     if (refreshUrl) {
-      history.push({ ...location, search: query.toString() });
+      router.push(currentRoute.toString());
     }
 
     if (typeof result === "string") {
@@ -198,7 +201,7 @@ export function TransactionInspectorPage({
     } else {
       setTransaction(result);
     }
-  }, [query, transaction, signature, history, location]);
+  }, [transaction, signature, router, currentRoute]);
 
   return (
     <div className="container mt-4">
@@ -227,12 +230,13 @@ function PermalinkView({
   const details = useRawTransactionDetails(signature);
   const fetchTransaction = useFetchRawTransaction();
   const refreshTransaction = () => fetchTransaction(signature);
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
   const transaction = details?.data?.raw;
+
+  const createClusterPath = useCreateClusterPath();
   const reset = React.useCallback(() => {
-    history.push({ ...location, pathname: "/tx/inspector" });
-  }, [history, location]);
+    router.push(createClusterPath("/tx/inspector"));
+  }, [router, createClusterPath]);
 
   // Fetch details on load
   React.useEffect(() => {

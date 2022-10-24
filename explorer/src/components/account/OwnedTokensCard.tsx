@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
 import { FetchStatus } from "providers/cache";
 import {
@@ -9,9 +10,7 @@ import {
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
-import { useQuery } from "utils/url";
-import { Link } from "react-router-dom";
-import { Location } from "history";
+import { useCurrentRoute, useSearchParams, Route } from "utils/routing";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { BigNumber } from "bignumber.js";
 import { Identicon } from "components/common/Identicon";
@@ -20,11 +19,11 @@ type Display = "summary" | "detail" | null;
 
 const SMALL_IDENTICON_WIDTH = 16;
 
-const useQueryDisplay = (): Display => {
-  const query = useQuery();
-  const filter = query.get("display");
-  if (filter === "summary" || filter === "detail") {
-    return filter;
+const useDisplayParam = (): Display => {
+  const searchParams = useSearchParams();
+  const displayParam = searchParams.get("display");
+  if (displayParam === "summary" || displayParam === "detail") {
+    return displayParam;
   } else {
     return null;
   }
@@ -36,7 +35,7 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
   const fetchAccountTokens = useFetchAccountOwnedTokens();
   const refresh = () => fetchAccountTokens(pubkey);
   const [showDropdown, setDropdown] = React.useState(false);
-  const display = useQueryDisplay();
+  const display = useDisplayParam();
 
   // Fetch owned tokens
   React.useEffect(() => {
@@ -236,17 +235,16 @@ type DropdownProps = {
 };
 
 const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
-  const buildLocation = (location: Location, display: Display) => {
-    const params = new URLSearchParams(location.search);
+  const currentRoute = useCurrentRoute();
+
+  const buildRoute = (currentRoute: Route, display: Display) => {
+    const params = new URLSearchParams(currentRoute.searchParams);
     if (display === null) {
       params.delete("display");
     } else {
       params.set("display", display);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    return new Route(currentRoute.pathname, params).toString();
   };
 
   const DISPLAY_OPTIONS: Display[] = [null, "detail"];
@@ -264,13 +262,17 @@ const DisplayDropdown = ({ display, toggle, show }: DropdownProps) => {
           return (
             <Link
               key={displayOption || "null"}
-              to={(location) => buildLocation(location, displayOption)}
-              className={`dropdown-item${
-                displayOption === display ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildRoute(currentRoute, displayOption)}
+              scroll={false}
             >
-              {displayOption === "detail" ? "Detailed" : "Summary"}
+              <a
+                className={`dropdown-item c-pointer${
+                  displayOption === display ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
+                {displayOption === "detail" ? "Detailed" : "Summary"}
+              </a>
             </Link>
           );
         })}

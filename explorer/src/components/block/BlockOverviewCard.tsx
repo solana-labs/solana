@@ -8,8 +8,8 @@ import { ClusterStatus, useCluster } from "providers/cluster";
 import { BlockHistoryCard } from "./BlockHistoryCard";
 import { BlockRewardsCard } from "./BlockRewardsCard";
 import { VersionedBlockResponse } from "@solana/web3.js";
-import { NavLink } from "react-router-dom";
-import { clusterPath } from "utils/url";
+import { NavLink } from "components/NavLink";
+import { useCreateClusterPath } from "utils/routing";
 import { BlockProgramsCard } from "./BlockProgramsCard";
 import { BlockAccountsCard } from "./BlockAccountsCard";
 import { displayTimestamp, displayTimestampUtc } from "utils/date";
@@ -214,6 +214,8 @@ function MoreSection({
   block: VersionedBlockResponse;
   tab?: string;
 }) {
+  const createClusterPath = useCreateClusterPath();
+
   return (
     <>
       <div className="container">
@@ -223,11 +225,10 @@ function MoreSection({
               {TABS.map(({ title, slug, path }) => (
                 <li key={slug} className="nav-item">
                   <NavLink
-                    className="nav-link"
-                    to={clusterPath(`/block/${slot}${path}`)}
-                    exact
+                    href={createClusterPath(`/block/${slot}${path}`)}
+                    scroll={false}
                   >
-                    {title}
+                    <a className="nav-link">{title}</a>
                   </NavLink>
                 </li>
               ))}

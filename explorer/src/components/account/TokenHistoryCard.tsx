@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import {
   PublicKey,
   ConfirmedSignatureInfo,
@@ -41,9 +42,7 @@ import {
 } from "components/instruction/serum/types";
 import { INNER_INSTRUCTIONS_START_SLOT } from "pages/tx/[signature]";
 import { useCluster, Cluster } from "providers/cluster";
-import { Link } from "react-router-dom";
-import { Location } from "history";
-import { useQuery } from "utils/url";
+import { useCurrentRoute, Route, useSearchParams } from "utils/routing";
 import { TokenInfoMap } from "@solana/spl-token-registry";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import { getTokenProgramInstructionName } from "utils/instruction";
@@ -80,9 +79,9 @@ export function TokenHistoryCard({ pubkey }: { pubkey: PublicKey }) {
   return <TokenHistoryTable tokens={tokens} />;
 }
 
-const useQueryFilter = (): string => {
-  const query = useQuery();
-  const filter = query.get("filter");
+const useFilterParam = (): string => {
+  const params = useSearchParams();
+  const filter = params.get("filter");
   return filter || "";
 };
 
@@ -98,7 +97,7 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
   const fetchAccountHistory = useFetchAccountHistory();
   const transactionDetailsCache = useTransactionDetailsCache();
   const [showDropdown, setDropdown] = React.useState(false);
-  const filter = useQueryFilter();
+  const filter = useFilterParam();
 
   const filteredTokens = React.useMemo(
     () =>
@@ -301,18 +300,16 @@ function TokenHistoryTable({ tokens }: { tokens: TokenInfoWithPubkey[] }) {
 const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
   const { cluster } = useCluster();
   const { tokenRegistry } = useTokenRegistry();
+  const currentRoute = useCurrentRoute();
 
-  const buildLocation = (location: Location, filter: string) => {
-    const params = new URLSearchParams(location.search);
+  const buildRoute = (currentRoute: Route, filter: string) => {
+    const params = new URLSearchParams(currentRoute.searchParams);
     if (filter === ALL_TOKENS) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    return new Route(currentRoute.pathname, params).toString();
   };
 
   const filterOptions: string[] = [ALL_TOKENS];
@@ -345,15 +342,19 @@ const FilterDropdown = ({ filter, toggle, show, tokens }: FilterProps) => {
           return (
             <Link
               key={filterOption}
-              to={(location: Location) => buildLocation(location, filterOption)}
-              className={`dropdown-item${
-                filterOption === filter ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildRoute(currentRoute, filterOption)}
+              scroll={false}
             >
-              {filterOption === ALL_TOKENS
-                ? "All Tokens"
-                : formatTokenName(filterOption, cluster, tokenRegistry)}
+              <a
+                className={`dropdown-item c-pointer${
+                  filterOption === filter ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
+                {filterOption === ALL_TOKENS
+                  ? "All Tokens"
+                  : formatTokenName(filterOption, cluster, tokenRegistry)}
+              </a>
             </Link>
           );
         })}

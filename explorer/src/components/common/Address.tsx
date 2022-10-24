@@ -1,7 +1,7 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { PublicKey } from "@solana/web3.js";
-import { clusterPath } from "utils/url";
+import { useCreateClusterPath } from "utils/routing";
 import { displayAddress } from "utils/tx";
 import { useCluster } from "providers/cluster";
 import { Copyable } from "./Copyable";
@@ -35,6 +35,7 @@ export function Address({
   const address = pubkey.toBase58();
   const { tokenRegistry } = useTokenRegistry();
   const { cluster } = useCluster();
+  const createClusterPath = useCreateClusterPath();
 
   if (
     truncateUnknown &&
@@ -62,11 +63,10 @@ export function Address({
     <Copyable text={address} replaceText={!alignRight}>
       <span className="font-monospace">
         {link ? (
-          <Link
-            className={truncate ? "text-truncate address-truncate" : ""}
-            to={clusterPath(`/address/${address}`)}
-          >
-            {addressLabel}
+          <Link href={createClusterPath(`/address/${address}`)}>
+            <a className={truncate ? "text-truncate address-truncate" : ""}>
+              {addressLabel}
+            </a>
           </Link>
         ) : (
           <span className={truncate ? "text-truncate address-truncate" : ""}>

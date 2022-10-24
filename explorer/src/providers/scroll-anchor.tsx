@@ -7,7 +7,7 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useCurrentRoute } from "utils/routing";
 
 type URLFragment = string;
 
@@ -28,7 +28,8 @@ const ScrollAnchorContext = createContext<RegisterScrollAnchorFn>(
 export const ScrollAnchorProvider =
   typeof WeakRef !== "undefined"
     ? function ScrollAnchorProvider({ children }: { children: ReactNode }) {
-        const location = useLocation();
+        const currentRoute = useCurrentRoute();
+
         const registeredScrollTargets = useRef<{
           [fragment: URLFragment]: WeakRef<HTMLElement>[] | undefined;
         }>({});
@@ -38,7 +39,7 @@ export const ScrollAnchorProvider =
             return;
           }
           const targetsByFragment = registeredScrollTargets.current;
-          const fragment = location.hash.replace(/^#/, "");
+          const fragment = currentRoute.hash.replace(/^#/, "");
           const targets = targetsByFragment[fragment];
           if (!targets) {
             return;
@@ -52,7 +53,7 @@ export const ScrollAnchorProvider =
             target.scrollIntoView();
             return true;
           });
-        }, [location.hash]);
+        }, [currentRoute.hash]);
         const registerScrollAnchor = useCallback(
           (fragment: string, element: HTMLElement) => {
             const targetsByFragment = registeredScrollTargets.current;
@@ -84,11 +85,11 @@ export const ScrollAnchorProvider =
           return () => {
             window.removeEventListener("scroll", handleScroll);
           };
-        }, [location]);
+        }, [currentRoute]);
         useEffect(() => {
           scrollEnabled.current = true;
           maybeScroll();
-        }, [location, maybeScroll]);
+        }, [currentRoute, maybeScroll]);
         return (
           <ScrollAnchorContext.Provider value={registerScrollAnchor}>
             {children}

@@ -1,6 +1,6 @@
 import React from "react";
-import { Link, useHistory, useLocation } from "react-router-dom";
-import { Location } from "history";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import {
   ConfirmedTransactionMeta,
   TransactionSignature,
@@ -11,7 +11,7 @@ import {
 import { ErrorCard } from "components/common/ErrorCard";
 import { Signature } from "components/common/Signature";
 import { Address } from "components/common/Address";
-import { pickClusterParams, useQuery } from "utils/url";
+import { useCurrentRoute, Route } from "utils/routing";
 import { useCluster } from "providers/cluster";
 import { displayAddress } from "utils/tx";
 import { parseProgramLogs } from "utils/program-logs";
@@ -54,13 +54,12 @@ type TransactionWithInvocations = {
 export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
   const [numDisplayed, setNumDisplayed] = React.useState(PAGE_SIZE);
   const [showDropdown, setDropdown] = React.useState(false);
-  const query = useQuery();
-  const programFilter = useQueryProgramFilter(query);
-  const accountFilter = useQueryAccountFilter(query);
-  const sortMode = useQuerySort(query);
+  const currentRoute = useCurrentRoute();
+  const programFilter = useQueryProgramFilter(currentRoute.searchParams);
+  const accountFilter = useQueryAccountFilter(currentRoute.searchParams);
+  const sortMode = useQuerySort(currentRoute.searchParams);
   const { cluster } = useCluster();
-  const location = useLocation();
-  const history = useHistory();
+  const router = useRouter();
 
   const { transactions, invokedPrograms } = React.useMemo(() => {
     const invokedPrograms = new Map<string, number>();
@@ -223,8 +222,10 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                 <th
                   className="text-muted c-pointer"
                   onClick={() => {
-                    query.delete("sort");
-                    history.push(pickClusterParams(location, query));
+                    currentRoute.searchParams.delete("sort");
+                    router.push(currentRoute.toString(), undefined, {
+                      scroll: false,
+                    });
                   }}
                 >
                   #
@@ -234,8 +235,10 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                 <th
                   className="text-muted text-end c-pointer"
                   onClick={() => {
-                    query.set("sort", "fee");
-                    history.push(pickClusterParams(location, query));
+                    currentRoute.searchParams.set("sort", "fee");
+                    router.push(currentRoute.toString(), undefined, {
+                      scroll: false,
+                    });
                   }}
                 >
                   Fee
@@ -244,8 +247,10 @@ export function BlockHistoryCard({ block }: { block: VersionedBlockResponse }) {
                   <th
                     className="text-muted text-end c-pointer"
                     onClick={() => {
-                      query.set("sort", "compute");
-                      history.push(pickClusterParams(location, query));
+                      currentRoute.searchParams.set("sort", "compute");
+                      router.push(currentRoute.toString(), undefined, {
+                        scroll: false,
+                      });
                     }}
                   >
                     Compute
@@ -376,17 +381,16 @@ const FilterDropdown = ({
   totalTransactionCount,
 }: FilterProps) => {
   const { cluster } = useCluster();
-  const buildLocation = (location: Location, filter: string) => {
-    const params = new URLSearchParams(location.search);
+  const currentRoute = useCurrentRoute();
+
+  const buildRoute = (currentRoute: Route, filter: string) => {
+    const params = new URLSearchParams(currentRoute.searchParams);
     if (filter === HIDE_VOTES) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    return new Route(currentRoute.pathname, params).toString();
   };
 
   let defaultFilterOption: FilterOption = {
@@ -450,13 +454,17 @@ const FilterDropdown = ({
           return (
             <Link
               key={programId}
-              to={(location: Location) => buildLocation(location, programId)}
-              className={`dropdown-item${
-                programId === filter ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildRoute(currentRoute, programId)}
+              scroll={false}
             >
-              {`${name} (${transactionCount})`}
+              <a
+                className={`dropdown-item c-pointer${
+                  programId === filter ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
+                {`${name} (${transactionCount})`}
+              </a>
             </Link>
           );
         })}

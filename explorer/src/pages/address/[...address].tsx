@@ -1,3 +1,4 @@
+import { useRouter } from "next/router";
 import { PublicKey } from "@solana/web3.js";
 import { AnchorAccountCard } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
@@ -42,8 +43,8 @@ import { CacheEntry, FetchStatus } from "providers/cache";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
 import React, { Suspense } from "react";
-import { NavLink, Redirect, useLocation } from "react-router-dom";
-import { clusterPath } from "utils/url";
+import { NavLink } from "components/NavLink";
+import { ClusterPathCreator, useCreateClusterPath } from "utils/routing";
 import { NFTokenAccountHeader } from "components/account/nftoken/NFTokenAccountHeader";
 import { NFTokenAccountSection } from "components/account/nftoken/NFTokenAccountSection";
 import { NFTokenCollectionNFTGrid } from "components/account/nftoken/NFTokenCollectionNFTGrid";
@@ -294,7 +295,8 @@ function DetailsSections({
 }) {
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
-  const location = useLocation();
+  const router = useRouter();
+  const createClusterPath = useCreateClusterPath();
   const { flaggedAccounts } = useFlaggedAccounts();
 
   if (!info || info.status === FetchStatus.Fetching) {
@@ -312,7 +314,7 @@ function DetailsSections({
   }
 
   const account = info.data;
-  const tabComponents = getTabs(pubkey, account).concat(
+  const tabComponents = getTabs(pubkey, account, createClusterPath).concat(
     getAnchorTabs(pubkey, account)
   );
 
@@ -322,7 +324,8 @@ function DetailsSections({
     tabComponents.filter((tabComponent) => tabComponent.tab.slug === tab)
       .length === 0
   ) {
-    return <Redirect to={{ ...location, pathname: `/address/${address}` }} />;
+    router.push(createClusterPath(`/address/${address}`));
+    return null;
   } else if (tab) {
     moreTab = tab as MoreTabs;
   }
@@ -548,7 +551,11 @@ function MoreSection({
   );
 }
 
-function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
+function getTabs(
+  pubkey: PublicKey,
+  account: Account,
+  createClusterPath: ClusterPathCreator
+): TabComponent[] {
   const address = pubkey.toBase58();
   const parsedData = account.data.parsed;
   const tabs: Tab[] = [
@@ -627,11 +634,10 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
       component: (
         <li key={tab.slug} className="nav-item">
           <NavLink
-            className="nav-link"
-            to={clusterPath(`/address/${address}${tab.path}`)}
-            exact
+            href={createClusterPath(`/address/${address}${tab.path}`)}
+            scroll={false}
           >
-            {tab.title}
+            <a className="nav-link">{tab.title}</a>
           </NavLink>
         </li>
       ),
@@ -690,6 +696,7 @@ function AnchorProgramLink({
   pubkey: PublicKey;
 }) {
   const { url } = useCluster();
+  const createClusterPath = useCreateClusterPath();
   const anchorProgram = useAnchorProgram(pubkey.toString(), url);
 
   if (!anchorProgram) {
@@ -698,12 +705,8 @@ function AnchorProgramLink({
 
   return (
     <li key={tab.slug} className="nav-item">
-      <NavLink
-        className="nav-link"
-        to={clusterPath(`/address/${address}${tab.path}`)}
-        exact
-      >
-        {tab.title}
+      <NavLink href={createClusterPath(`/address/${address}${tab.path}`)}>
+        <a className="nav-link">{tab.title}</a>
       </NavLink>
     </li>
   );
@@ -719,6 +722,7 @@ function AccountDataLink({
   programId: PublicKey;
 }) {
   const { url } = useCluster();
+  const createClusterPath = useCreateClusterPath();
   const accountAnchorProgram = useAnchorProgram(programId.toString(), url);
 
   if (!accountAnchorProgram) {
@@ -727,12 +731,8 @@ function AccountDataLink({
 
   return (
     <li key={tab.slug} className="nav-item">
-      <NavLink
-        className="nav-link"
-        to={clusterPath(`/address/${address}${tab.path}`)}
-        exact
-      >
-        {tab.title}
+      <NavLink href={createClusterPath(`/address/${address}${tab.path}`)}>
+        <a className="nav-link">{tab.title}</a>
       </NavLink>
     </li>
   );

@@ -1,8 +1,8 @@
 import React from "react";
+import { useRouter } from "next/router";
 import { VersionedMessage } from "@solana/web3.js";
-import type { TransactionData } from "./InspectorPage";
-import { useQuery } from "utils/url";
-import { useHistory, useLocation } from "react-router";
+import type { TransactionData } from "pages/tx/inspector";
+import { useCurrentRoute, useSearchParams } from "utils/routing";
 import base58 from "bs58";
 
 function deserializeTransaction(bytes: Uint8Array): {
@@ -53,20 +53,19 @@ export function RawInput({
   const rawTransactionInput = React.useRef<HTMLTextAreaElement>(null);
   const [error, setError] = React.useState<string>();
   const [rows, setRows] = React.useState(3);
-  const query = useQuery();
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
+  const currentRoute = useCurrentRoute();
 
   const onInput = React.useCallback(() => {
     const base64 = rawTransactionInput.current?.value;
     if (base64) {
       // Clear url params when input is detected
-      if (query.get("message")) {
-        query.delete("message");
-        history.push({ ...location, search: query.toString() });
-      } else if (query.get("transaction")) {
-        query.delete("transaction");
-        history.push({ ...location, search: query.toString() });
+      if (currentRoute.searchParams.get("message")) {
+        currentRoute.searchParams.delete("message");
+        router.push(currentRoute.toString());
+      } else if (currentRoute.searchParams.get("transaction")) {
+        currentRoute.searchParams.delete("transaction");
+        router.push(currentRoute.toString());
       }
 
       // Dynamically expand height based on input length
@@ -113,7 +112,7 @@ export function RawInput({
     } else {
       setError(undefined);
     }
-  }, [setTransactionData, history, query, location]);
+  }, [setTransactionData, router, currentRoute]);
 
   React.useEffect(() => {
     const input = rawTransactionInput.current;

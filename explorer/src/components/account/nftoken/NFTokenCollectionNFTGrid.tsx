@@ -1,6 +1,6 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { clusterPath } from "../../../utils/url";
+import Link from "next/link";
+import { useCreateClusterPath } from "utils/routing";
 import { useCollectionNfts } from "./nftoken-hooks";
 import { NftokenImage } from "./NFTokenAccountSection";
 
@@ -9,6 +9,7 @@ export function NFTokenCollectionNFTGrid({
 }: {
   collection: string;
 }) {
+  const createClusterPath = useCreateClusterPath();
   const { data: nfts, mutate } = useCollectionNfts({
     collectionAddress: collection,
   });
@@ -50,8 +51,8 @@ export function NFTokenCollectionNFTGrid({
                 <NftokenImage url={nft.image} size={80} />
 
                 <div>
-                  <Link to={clusterPath(`/address/${nft.address}`)}>
-                    <div>{nft.name ?? "No Name"}</div>
+                  <Link href={createClusterPath(`/address/${nft.address}`)}>
+                    <a>{nft.name ?? "No Name"}</a>
                   </Link>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { fromProgramData } from "utils/security-txt";
-import { clusterPath } from "utils/url";
+import { useCreateClusterPath } from "utils/routing";
 import { ProgramDataAccountInfo } from "validators/accounts/upgradeable-program";
 
 export function SecurityTXTBadge({
@@ -11,15 +11,16 @@ export function SecurityTXTBadge({
   programData: ProgramDataAccountInfo;
   pubkey: PublicKey;
 }) {
+  const createClusterPath = useCreateClusterPath();
   const { securityTXT, error } = fromProgramData(programData);
+
   if (securityTXT) {
     return (
       <h3 className="mb-0">
         <Link
-          className="c-pointer badge bg-success-soft rank"
-          to={clusterPath(`/address/${pubkey.toBase58()}/security`)}
+          href={createClusterPath(`/address/${pubkey.toBase58()}/security`)}
         >
-          Included
+          <a className="c-pointer badge bg-success-soft rank">Included</a>
         </Link>
       </h3>
     );

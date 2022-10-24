@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import {
   NFTData,
   useFetchAccountInfo,
@@ -7,8 +8,7 @@ import {
 import { programs } from "@metaplex/js";
 import { ArtContent } from "components/common/NFTArt";
 import { InfoTooltip } from "components/common/InfoTooltip";
-import { clusterPath } from "utils/url";
-import { Link } from "react-router-dom";
+import { ClusterPathCreator, useCreateClusterPath } from "utils/routing";
 import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
 import { PublicKey } from "@solana/web3.js";
 
@@ -22,6 +22,7 @@ export function MetaplexNFTHeader({
   const collectionAddress = nftData.metadata.collection?.key;
   const collectionMintInfo = useMintAccountInfo(collectionAddress);
   const fetchAccountInfo = useFetchAccountInfo();
+  const createClusterPath = useCreateClusterPath();
 
   React.useEffect(() => {
     if (collectionAddress && !collectionMintInfo) {
@@ -71,7 +72,7 @@ export function MetaplexNFTHeader({
             Creators
           </button>
           <div className="dropdown-menu mt-2">
-            {getCreatorDropdownItems(metadata.data.creators)}
+            {getCreatorDropdownItems(metadata.data.creators, createClusterPath)}
           </div>
         </div>
       </div>
@@ -80,7 +81,10 @@ export function MetaplexNFTHeader({
 }
 
 type Creator = programs.metadata.Creator;
-function getCreatorDropdownItems(creators: Creator[] | null) {
+function getCreatorDropdownItems(
+  creators: Creator[] | null,
+  createClusterPath: ClusterPathCreator
+) {
   const CreatorHeader = () => {
     const creatorTooltip =
       "Verified creators signed the metadata associated with this NFT when it was created.";
@@ -119,11 +123,10 @@ function getCreatorDropdownItems(creators: Creator[] | null) {
         }
       >
         {getVerifiedIcon(creator.verified)}
-        <Link
-          className="dropdown-item font-monospace creator-dropdown-entry-address"
-          to={clusterPath(`/address/${creator.address}`)}
-        >
-          {creator.address}
+        <Link href={createClusterPath(`/address/${creator.address}`)}>
+          <a className="dropdown-item font-monospace creator-dropdown-entry-address">
+            {creator.address}
+          </a>
         </Link>
         <div className="me-3"> {`${creator.share}%`}</div>
       </div>

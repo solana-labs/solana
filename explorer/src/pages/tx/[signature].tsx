@@ -1,5 +1,6 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import bs58 from "bs58";
 import {
   useFetchTransactionStatus,
@@ -29,7 +30,7 @@ import { BalanceDelta } from "components/common/BalanceDelta";
 import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 import { InstructionsSection } from "components/transaction/InstructionsSection";
 import { ProgramLogSection } from "components/transaction/ProgramLogSection";
-import { clusterPath } from "utils/url";
+import { useCreateClusterPath } from "utils/routing";
 import { getTransactionInstructionError } from "utils/program-err";
 
 const AUTO_REFRESH_INTERVAL = 2000;
@@ -121,6 +122,7 @@ function StatusCard({
   signature,
   autoRefresh,
 }: SignatureProps & AutoRefreshProps) {
+  const createClusterPath = useCreateClusterPath();
   const fetchStatus = useFetchTransactionStatus();
   const status = useTransactionStatus(signature);
   const details = useTransactionDetails(signature);
@@ -218,12 +220,11 @@ function StatusCard({
     <div className="card">
       <div className="card-header align-items-center">
         <h3 className="card-header-title">Overview</h3>
-        <Link
-          to={clusterPath(`/tx/${signature}/inspect`)}
-          className="btn btn-white btn-sm me-2"
-        >
-          <span className="fe fe-settings me-2"></span>
-          Inspect
+        <Link href={createClusterPath(`/tx/${signature}/inspect`)}>
+          <a className="btn btn-white btn-sm me-2">
+            <span className="fe fe-settings me-2"></span>
+            Inspect
+          </a>
         </Link>
         {autoRefresh === AutoRefresh.Active ? (
           <span className="spinner-grow spinner-grow-sm"></span>

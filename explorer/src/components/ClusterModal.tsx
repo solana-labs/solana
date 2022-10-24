@@ -1,7 +1,7 @@
-import React, { ChangeEvent } from "react";
-import { Link, useHistory, useLocation } from "react-router-dom";
+import React, { ChangeEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { useDebounceCallback } from "@react-hook/debounce";
-import { Location } from "history";
 import {
   useCluster,
   ClusterStatus,
@@ -13,8 +13,8 @@ import {
   useUpdateCustomUrl,
 } from "providers/cluster";
 import { assertUnreachable, localStorageIsAvailable } from "../utils";
+import { useCurrentRoute, Route } from "utils/routing";
 import { Overlay } from "./common/Overlay";
-import { useQuery } from "utils/url";
 
 export function ClusterModal() {
   const [show, setShow] = useClusterModal();
@@ -83,38 +83,35 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
   const { customUrl } = useCluster();
   const updateCustomUrl = useUpdateCustomUrl();
   const [editing, setEditing] = React.useState(false);
-  const query = useQuery();
-  const history = useHistory();
-  const location = useLocation();
+  const router = useRouter();
+  const currentRoute = useCurrentRoute();
 
   const btnClass = active
     ? `border-${activeSuffix} text-${activeSuffix}`
     : "btn-white";
 
-  const clusterLocation = (location: Location) => {
-    query.set("cluster", "custom");
+  const clusterRoute = (route: Route) => {
+    const params = new URLSearchParams(route.searchParams);
+    params.set("cluster", "custom");
     if (customUrl.length > 0) {
-      query.set("customUrl", customUrl);
+      params.set("customUrl", customUrl);
     }
-    return {
-      ...location,
-      search: query.toString(),
-    };
+    return new Route(route.pathname, params).toString();
   };
 
   const onUrlInput = useDebounceCallback((url: string) => {
     updateCustomUrl(url);
     if (url.length > 0) {
-      query.set("customUrl", url);
-      history.push({ ...location, search: query.toString() });
+      currentRoute.searchParams.set("customUrl", url);
+      router.push(currentRoute.toString());
     }
   }, 500);
 
   const inputTextClass = editing ? "" : "text-muted";
   return (
     <>
-      <Link className={`btn col-12 mb-3 ${btnClass}`} to={clusterLocation}>
-        Custom RPC URL
+      <Link href={clusterRoute(currentRoute)}>
+        <a className={`btn col-12 mb-3 ${btnClass}`}>Custom RPC URL</a>
       </Link>
       {active && (
         <input
@@ -132,6 +129,7 @@ function CustomClusterInput({ activeSuffix, active }: InputProps) {
 
 function ClusterToggle() {
   const { status, cluster } = useCluster();
+  const currentRoute = useCurrentRoute();
 
   let activeSuffix = "";
   switch (status) {
@@ -165,27 +163,21 @@ function ClusterToggle() {
           ? `border-${activeSuffix} text-${activeSuffix}`
           : "btn-white";
 
-        const clusterLocation = (location: Location) => {
-          const params = new URLSearchParams(location.search);
+        const clusterRoute = (currentRoute: Route) => {
+          const params = new URLSearchParams(currentRoute.searchParams);
           const slug = clusterSlug(net);
           if (slug !== "mainnet-beta") {
             params.set("cluster", slug);
           } else {
             params.delete("cluster");
           }
-          return {
-            ...location,
-            search: params.toString(),
-          };
+          params.delete("customUrl");
+          return new Route(currentRoute.pathname, params).toString();
         };
 
         return (
-          <Link
-            key={index}
-            className={`btn col-12 mb-3 ${btnClass}`}
-            to={clusterLocation}
-          >
-            {clusterName(net)}
+          <Link key={index} href={clusterRoute(currentRoute)}>
+            <a className={`btn col-12 mb-3 ${btnClass}`}>{clusterName(net)}</a>
           </Link>
         );
       })}

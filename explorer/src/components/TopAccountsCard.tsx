@@ -1,12 +1,11 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { Location } from "history";
+import Link from "next/link";
 import { AccountBalancePair } from "@solana/web3.js";
 import { useRichList, useFetchRichList, Status } from "providers/richList";
 import { LoadingCard } from "./common/LoadingCard";
 import { ErrorCard } from "./common/ErrorCard";
-import { SolBalance } from "components/common/SolBalance";
-import { useQuery } from "utils/url";
+import { SolBalance } from "./common/SolBalance";
+import { useCurrentRoute, useSearchParams, Route } from "utils/routing";
 import { useSupply } from "providers/supply";
 import { Address } from "./common/Address";
 
@@ -17,7 +16,7 @@ export function TopAccountsCard() {
   const richList = useRichList();
   const fetchRichList = useFetchRichList();
   const [showDropdown, setDropdown] = React.useState(false);
-  const filter = useQueryFilter();
+  const filter = useFilterParam();
 
   if (typeof supply !== "object") return null;
 
@@ -141,9 +140,9 @@ const renderAccountRow = (
   );
 };
 
-const useQueryFilter = (): Filter => {
-  const query = useQuery();
-  const filter = query.get("filter");
+const useFilterParam = (): Filter => {
+  const searchParams = useSearchParams();
+  const filter = searchParams.get("filter");
   if (
     filter === "circulating" ||
     filter === "nonCirculating" ||
@@ -177,17 +176,16 @@ type DropdownProps = {
 };
 
 const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
-  const buildLocation = (location: Location, filter: Filter) => {
-    const params = new URLSearchParams(location.search);
+  const currentRoute = useCurrentRoute();
+
+  const buildRoute = (currentRoute: Route, filter: Filter) => {
+    const params = new URLSearchParams(currentRoute.searchParams);
     if (filter === null) {
       params.delete("filter");
     } else {
       params.set("filter", filter);
     }
-    return {
-      ...location,
-      search: params.toString(),
-    };
+    return new Route(currentRoute.pathname, params).toString();
   };
 
   const FILTERS: Filter[] = ["all", null, "nonCirculating"];
@@ -205,13 +203,17 @@ const FilterDropdown = ({ filter, toggle, show }: DropdownProps) => {
           return (
             <Link
               key={filterOption || "null"}
-              to={(location) => buildLocation(location, filterOption)}
-              className={`dropdown-item${
-                filterOption === filter ? " active" : ""
-              }`}
-              onClick={toggle}
+              href={buildRoute(currentRoute, filterOption)}
+              scroll={false}
             >
-              {filterTitle(filterOption)}
+              <a
+                className={`dropdown-item${
+                  filterOption === filter ? " active" : ""
+                }`}
+                onClick={toggle}
+              >
+                {filterTitle(filterOption)}
+              </a>
             </Link>
           );
         })}

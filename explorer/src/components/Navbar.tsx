@@ -1,18 +1,23 @@
 import React from "react";
 import Logo from "img/logos-solana/dark-explorer-logo.svg";
-import { clusterPath } from "utils/url";
-import { Link, NavLink } from "react-router-dom";
+import Link from "next/link";
+import { useCreateClusterPath } from "utils/routing";
 import { ClusterStatusButton } from "components/ClusterStatusButton";
+import { NavLink } from "components/NavLink";
 
 export function Navbar() {
+  const createClusterPath = useCreateClusterPath();
+
   // TODO: use `collapsing` to animate collapsible navbar
   const [collapse, setCollapse] = React.useState(false);
 
   return (
     <nav className="navbar navbar-expand-md navbar-light">
       <div className="container">
-        <Link to={clusterPath("/")}>
-          <img src={Logo} width="250" alt="Solana Explorer" />
+        <Link href={createClusterPath("/")}>
+          <a>
+            <img src={Logo} width="250" alt="Solana Explorer" />
+          </a>
         </Link>
 
         <button
@@ -30,18 +35,18 @@ export function Navbar() {
         >
           <ul className="navbar-nav me-auto">
             <li className="nav-item">
-              <NavLink className="nav-link" to={clusterPath("/")} exact>
-                Cluster Stats
+              <NavLink href={createClusterPath("/")}>
+                <a className="nav-link">Cluster Stats</a>
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink className="nav-link" to={clusterPath("/supply")}>
-                Supply
+              <NavLink href={createClusterPath("/supply")}>
+                <a className="nav-link">Supply</a>
               </NavLink>
             </li>
             <li className="nav-item">
-              <NavLink className="nav-link" to={clusterPath("/tx/inspector")}>
-                Inspector
+              <NavLink href={createClusterPath("/tx/inspector")}>
+                <a className="nav-link">Inspector</a>
               </NavLink>
             </li>
           </ul>
