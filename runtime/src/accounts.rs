@@ -21,6 +21,7 @@ use {
         storable_accounts::StorableAccounts,
         system_instruction_processor::{get_system_account_kind, SystemAccountKind},
         transaction_error_metrics::TransactionErrorMetrics,
+        vote_parser,
     },
     dashmap::{
         mapref::entry::Entry::{Occupied, Vacant},
@@ -266,6 +267,8 @@ impl Accounts {
                 LoadZeroLamports::SomeWithZeroLamportAccount
             };
 
+        let is_vote = vote_parser::is_simple_vote_transaction(tx);
+
         // Copy all the accounts
         let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
@@ -375,6 +378,7 @@ impl Accounts {
                         } else if in_reward_interval
                             && message.is_writable(i)
                             && Self::is_stake_or_vote_account(&account)
+                            && !is_vote
                         {
                             error_counters.locked_reward_account += 1;
                             return Err(TransactionError::LockedRewardAccountsDuringRewardInterval);
