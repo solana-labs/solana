@@ -147,7 +147,6 @@ pub struct StreamStats {
 
 impl StreamStats {
     pub fn report(&self) {
-        info!("Reporting stats");
         datapoint_info!(
             "quic-connections",
             (
@@ -370,7 +369,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            2,
+            100,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -426,7 +425,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
-            2,
+            100,
         )
         .unwrap();
 
@@ -469,7 +468,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
-            2,
+            100,
         )
         .unwrap();
 

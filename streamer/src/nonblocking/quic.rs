@@ -540,11 +540,9 @@ async fn handle_connection(
         )
         .await
         {
-            info!("Got a stream {:?}", stream);
             match stream {
                 Some(stream_result) => match stream_result {
                     Ok(mut stream) => {
-                        info!("Indeed we have a stream {:?}", stream);
                         stats.total_streams.fetch_add(1, Ordering::Relaxed);
                         stats.total_new_streams.fetch_add(1, Ordering::Relaxed);
                         let stream_exit = stream_exit.clone();
