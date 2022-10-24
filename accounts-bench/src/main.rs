@@ -120,7 +120,7 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results = accounts.accounts_db.update_accounts_hash(
+            let results = accounts.accounts_db.update_accounts_hash_from_index(
                 0,
                 &ancestors,
                 &EpochSchedule::default(),

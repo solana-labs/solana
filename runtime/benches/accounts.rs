@@ -94,7 +94,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
-    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
+    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash_from_index(
         0,
         &ancestors,
         &EpochSchedule::default(),
@@ -130,7 +130,7 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
-        accounts.accounts_db.update_accounts_hash(
+        accounts.accounts_db.update_accounts_hash_from_index(
             0,
             &ancestors,
             &EpochSchedule::default(),

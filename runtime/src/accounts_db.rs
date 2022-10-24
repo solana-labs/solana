@@ -6920,7 +6920,7 @@ impl AccountsDb {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(
+    pub fn update_accounts_hash_from_index(
         &self,
         slot: Slot,
         ancestors: &Ancestors,
@@ -11748,13 +11748,13 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(
+            daccounts.update_accounts_hash_from_index(
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
             ),
-            accounts.update_accounts_hash(
+            accounts.update_accounts_hash_from_index(
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
@@ -12037,7 +12037,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(
+        accounts.update_accounts_hash_from_index(
             4,
             &Ancestors::default(),
             &EpochSchedule::default(),
@@ -13250,7 +13250,7 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
-            accounts.update_accounts_hash(
+            accounts.update_accounts_hash_from_index(
                 current_slot,
                 &no_ancestors,
                 &EpochSchedule::default(),
