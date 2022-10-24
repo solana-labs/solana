@@ -661,8 +661,8 @@ impl BankingStage {
                                 &mut already_processed,
                                 *reached_end_of_slot.borrow(),
                                 &working_bank,
-                                *buffered_packet_batches_ref_cell.borrow_mut(),
-                                *slot_metrics_tracker_ref_cell.borrow_mut(),
+                                &mut buffered_packet_batches_ref_cell.borrow_mut(),
+                                &mut slot_metrics_tracker_ref_cell.borrow_mut(),
                                 banking_stage_stats,
                                 &mut batch_write_account_locks.borrow_mut(),
                                 &mut batch_sanitized_transactions.borrow_mut(),
@@ -694,7 +694,7 @@ impl BankingStage {
                                 gossip_vote_sender,
                                 banking_stage_stats,
                                 qos_service,
-                                *slot_metrics_tracker_ref_cell.borrow_mut(),
+                                &mut slot_metrics_tracker_ref_cell.borrow_mut(),
                                 log_messages_bytes_limit
                             ));
                         slot_metrics_tracker_ref_cell
@@ -755,7 +755,7 @@ impl BankingStage {
                         // 1) Successfully processed
                         // 2) Failed but not retryable
                         Self::remove_non_retained_packets(
-                            *buffered_packet_batches_ref_cell.borrow_mut(),
+                            &mut buffered_packet_batches_ref_cell.borrow_mut(),
                             &processing_batch,
                             &retryable_transaction_indexes,
                         );
@@ -4420,7 +4420,7 @@ mod tests {
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let mut buffered_packet_batches: UnprocessedPacketBatches =
                         UnprocessedPacketBatches::from_iter(
-                            deserialized_packets.clone().into_iter(),
+                            deserialized_packets.into_iter(),
                             num_conflicting_transactions,
                         );
                     BankingStage::consume_buffered_packets(
