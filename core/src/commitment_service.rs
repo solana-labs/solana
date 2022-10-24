@@ -487,10 +487,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "called `Result::unwrap()` on an `Err` value: LockedRewardAccountsDuringRewardInterval"
-    )]
     fn test_reward_accounts_lock() {
+        use solana_sdk::transaction::TransactionError::LockedRewardAccountsDuringRewardInterval;
+
         let validator_vote_keypairs = ValidatorVoteKeypairs::new_rand();
         let validator_keypairs = vec![&validator_vote_keypairs];
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config_with_vote_accounts(
@@ -507,7 +506,7 @@ mod tests {
 
         // Fill bank_forks with banks with votes landing in the next slot
         // Create enough banks such that vote account will root slots 0 and 1
-        for x in 0..33 {
+        for x in 0..32 {
             let previous_bank = bank_forks.get(x).unwrap();
             let bank = Bank::new_from_parent(&previous_bank, &Pubkey::default(), x + 1);
             let vote = vote_transaction::new_vote_transaction(
@@ -530,9 +529,9 @@ mod tests {
                     1,
                     bank.last_blockhash(),
                 );
+                // This should result in an error for `LockedRewardAccountsDuringRewardInterval`
                 let r = bank.process_transaction(&tx);
-                // This should panic on error for `LockedRewardAccountsDuringRewardInterval`
-                r.unwrap();
+                assert!(r == Err(LockedRewardAccountsDuringRewardInterval));
             }
             bank_forks.insert(bank);
         }
