@@ -244,7 +244,7 @@ impl AccountsHashVerifier {
             let result_with_index = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash(
+                .calculate_accounts_hash_from_index(
                     accounts_package.slot,
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: false,

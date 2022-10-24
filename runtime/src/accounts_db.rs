@@ -6782,7 +6782,7 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
-    pub fn calculate_accounts_hash(
+    pub fn calculate_accounts_hash_from_index(
         &self,
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
@@ -6893,7 +6893,7 @@ impl AccountsDb {
         let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
         hash_time.stop();
         datapoint_info!(
-            "update_accounts_hash",
+            "calculate_accounts_hash_from_index",
             ("accounts_scan", scan.as_us(), i64),
             ("hash", hash_time.as_us(), i64),
             ("hash_total", hash_total, i64),
@@ -7278,7 +7278,7 @@ impl AccountsDb {
 
             self.calculate_accounts_hash_without_index(config, &storages, timings)
         } else {
-            self.calculate_accounts_hash(slot, config)
+            self.calculate_accounts_hash_from_index(slot, config)
         }
     }
 
