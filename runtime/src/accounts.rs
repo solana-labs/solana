@@ -257,6 +257,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: bool,
     ) -> Result<LoadedTransaction> {
         let load_zero_lamports =
             if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
@@ -569,6 +570,7 @@ impl Accounts {
         feature_set: &FeatureSet,
         fee_structure: &FeeStructure,
         account_overrides: Option<&AccountOverrides>,
+        in_reward_interval: bool,
     ) -> Vec<TransactionLoadResult> {
         txs.iter()
             .zip(lock_results)
@@ -600,6 +602,7 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        in_reward_interval,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
@@ -1548,6 +1551,7 @@ mod tests {
             feature_set,
             fee_structure,
             None,
+            false,
         )
     }
 
@@ -3174,6 +3178,7 @@ mod tests {
             &FeatureSet::all_enabled(),
             &FeeStructure::default(),
             account_overrides,
+            false,
         )
     }
 

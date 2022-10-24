@@ -5225,6 +5225,7 @@ impl Bank {
         check_time.stop();
 
         let mut load_time = Measure::start("accounts_load");
+        let in_reward_interval = self.in_reward_interval();
         let mut loaded_transactions = self.rc.accounts.load_accounts(
             &self.ancestors,
             sanitized_txs,
@@ -5235,6 +5236,7 @@ impl Bank {
             &self.feature_set,
             &self.fee_structure,
             account_overrides,
+            in_reward_interval,
         );
         load_time.stop();
 
@@ -19460,6 +19462,7 @@ pub(crate) mod tests {
             &bank.feature_set,
             &FeeStructure::default(),
             None,
+            false,
         );
 
         let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
