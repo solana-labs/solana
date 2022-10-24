@@ -246,7 +246,7 @@ where
         writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
     ) -> Result<Option<T>, PubsubClientError> {
         let message = writable_socket.write().unwrap().read_message()?;
-        if let Message::Ping(_) = message {
+        if message.is_ping() {
             return Ok(None)
         }
         let message_text = &message.into_text().unwrap();
