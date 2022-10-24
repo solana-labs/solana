@@ -2617,7 +2617,7 @@ export type ConfirmedSignatureInfo = {
   memo: string | null;
   /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
-  /** cluster confirmation status, if data available. Possible responses: `processed`, `confirmed`, `finalized` */
+  /** Cluster confirmation status, if available. Possible values: `processed`, `confirmed`, `finalized` */
   confirmationStatus?: TransactionConfirmationStatus;
 };
 
