@@ -132,7 +132,7 @@ impl TransactionStatusService {
                                         .into_iter()
                                         .map(|info| InnerInstruction {
                                             instruction: info.instruction,
-                                            stack_height: info.stack_height,
+                                            stack_height: Some(u32::from(info.stack_height)),
                                         })
                                         .collect(),
                                 })

@@ -494,7 +494,7 @@ fn execute_transactions(
                                     .into_iter()
                                     .map(|ix| solana_transaction_status::InnerInstruction {
                                         instruction: ix.instruction,
-                                        stack_height: ix.stack_height,
+                                        stack_height: Some(u32::from(ix.stack_height)),
                                     })
                                     .collect(),
                             })

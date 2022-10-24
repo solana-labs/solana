@@ -497,9 +497,8 @@ pub type InnerInstructions = Vec<InnerInstruction>;
 pub struct InnerInstruction {
     pub instruction: CompiledInstruction,
     /// Invocation stack height of this instruction. Instruction stack height
-    /// starts at 1 for transaction instructions. This field is set to `None`
-    /// for transactions that were processed prior to stack height tracking.
-    pub stack_height: Option<u32>,
+    /// starts at 1 for transaction instructions.
+    pub stack_height: u8,
 }
 
 /// A list of compiled instructions that were invoked during each instruction of
@@ -524,7 +523,7 @@ pub fn inner_instructions_list_from_instruction_trace(
             if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
                 outer_instructions.push(Vec::new());
             } else if let Some(inner_instructions) = outer_instructions.last_mut() {
-                let stack_height = u32::try_from(stack_height).unwrap_or(u32::MAX);
+                let stack_height = u8::try_from(stack_height).unwrap_or(u8::MAX);
                 let instruction = CompiledInstruction::new_from_raw_parts(
                     instruction_context
                         .get_index_of_program_account_in_transaction(
@@ -546,7 +545,7 @@ pub fn inner_instructions_list_from_instruction_trace(
                 );
                 inner_instructions.push(InnerInstruction {
                     instruction,
-                    stack_height: Some(stack_height),
+                    stack_height,
                 });
             } else {
                 debug_assert!(false);
@@ -19293,21 +19292,21 @@ pub(crate) mod tests {
             vec![
                 vec![InnerInstruction {
                     instruction: CompiledInstruction::new_from_raw_parts(0, vec![1], vec![]),
-                    stack_height: Some(2),
+                    stack_height: 2,
                 }],
                 vec![],
                 vec![
                     InnerInstruction {
                         instruction: CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
-                        stack_height: Some(2),
+                        stack_height: 2,
                     },
                     InnerInstruction {
                         instruction: CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
-                        stack_height: Some(3),
+                        stack_height: 3,
                     },
                     InnerInstruction {
                         instruction: CompiledInstruction::new_from_raw_parts(0, vec![6], vec![]),
-                        stack_height: Some(2),
+                        stack_height: 2,
                     },
                 ]
             ]
