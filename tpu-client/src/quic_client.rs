@@ -117,14 +117,10 @@ async fn send_wire_transaction_async(
     .await;
     ASYNC_TASK_SEMAPHORE.release();
     match result {
-        Ok(result) => {
-            return result;
-        }
-        Err(_err) => {
-            return Err(TransportError::Custom(
-                "Timedout sending transaction".to_string(),
-            ));
-        }
+        Ok(result) => result,
+        Err(_err) => Err(TransportError::Custom(
+            "Timedout sending transaction".to_string(),
+        )),
     }
 }
 
@@ -141,14 +137,10 @@ async fn send_wire_transaction_batch_async(
     .await;
     ASYNC_TASK_SEMAPHORE.release();
     match result {
-        Ok(result) => {
-            return result;
-        }
-        Err(_err) => {
-            return Err(TransportError::Custom(
-                "Timedout sending transaction".to_string(),
-            ));
-        }
+        Ok(result) => result,
+        Err(_err) => Err(TransportError::Custom(
+            "Timedout sending transaction".to_string(),
+        )),
     }
 }
 
