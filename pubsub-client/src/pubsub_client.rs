@@ -847,7 +847,7 @@ impl PubsubClient {
             match PubsubClientSubscription::read_message(socket) {
                 Ok(Some(message)) => handler(message),
                 Ok(None) => {
-                    // Nothing useful, means we received a ping request
+                    // Nothing useful, means we received a ping message
                 },
                 Err(err) => {
                     info!("receive error: {:?}", err);
