@@ -78,7 +78,7 @@ mod tests {
             10,
             10,
             stats,
-            100,
+            1000,
         )
         .unwrap();
 
@@ -124,7 +124,7 @@ mod tests {
             10,
             10,
             stats,
-            100,
+            1000,
         )
         .unwrap();
 
