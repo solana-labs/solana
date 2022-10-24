@@ -376,7 +376,7 @@ impl Accounts {
                             && Self::is_stake_or_vote_account(&account)
                         {
                             error_counters.locked_reward_account += 1;
-                            return Err(TransactionError::LockedStakeAccountsDuringRewardInterval);
+                            return Err(TransactionError::LockedRewardAccountsDuringRewardInterval);
                         }
 
                         tx_rent += rent;

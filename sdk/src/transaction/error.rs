@@ -147,6 +147,10 @@ pub enum TransactionError {
         "Transaction results in an account ({account_index}) with insufficient funds for rent"
     )]
     InsufficientFundsForRent { account_index: u8 },
+
+    /// Transaction results in an account with insufficient funds for rent
+    #[error("Transaction writes to locked stake accounts during reward interval")]
+    LockedRewardAccountsDuringRewardInterval,
 }
 
 impl From<SanitizeError> for TransactionError {
