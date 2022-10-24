@@ -326,7 +326,7 @@ impl SnapshotRequestHandler {
             let (this_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
-                .calculate_accounts_hash_helper(
+                .calculate_accounts_hash(
                     use_index_hash_calculation,
                     snapshot_root_bank.slot(),
                     &CalcAccountsHashConfig {
