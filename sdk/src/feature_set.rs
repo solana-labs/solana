@@ -500,6 +500,10 @@ pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
 }
 
+pub mod on_load_preserve_rent_epoch_for_rent_exempt_accounts {
+    solana_sdk::declare_id!("CpkdQmspsaZZ8FVAouQTtTWZkc8eeQ7V3uj7dWz543rZ");
+}
+
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
@@ -618,6 +622,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
