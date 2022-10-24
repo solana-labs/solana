@@ -5294,7 +5294,6 @@ impl Bank {
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();
-        let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
         let mut accounts_to_store =
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
@@ -5304,8 +5303,7 @@ impl Bank {
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         let preserve_rent_epoch_for_rent_exempt_accounts =
             self.preserve_rent_epoch_for_rent_exempt_accounts();
-        for (pubkey, account, loaded_slot) in accounts.iter_mut() {
-            let old_rent_epoch = account.rent_epoch();
+        for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
@@ -5317,18 +5315,10 @@ impl Bank {
 
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
-            // Also, there's another subtle side-effect from this: this
+            // Also, there's another subtle side-effect from rewrites: this
             // ensures we verify the whole on-chain state (= all accounts)
             // via the bank delta hash slowly once per an epoch.
-            if can_skip_rewrites
-                && Self::skip_rewrite(
-                    bank_slot,
-                    rent_collected_info.rent_amount,
-                    *loaded_slot,
-                    old_rent_epoch,
-                    account,
-                )
-            {
+            if can_skip_rewrites && Self::skip_rewrite(rent_collected_info.rent_amount, account) {
                 // this would have been rewritten previously. Now we skip it.
                 // calculate the hash that we would have gotten if we did the rewrite.
                 // This will be needed to calculate the bank's hash.
@@ -5548,31 +5538,11 @@ impl Bank {
     }
 
     /// return true iff storing this account is just a rewrite and can be skipped
-    fn skip_rewrite(
-        bank_slot: Slot,
-        rent_amount: u64,
-        loaded_slot: Slot,
-        old_rent_epoch: Epoch,
-        account: &AccountSharedData,
-    ) -> bool {
-        if rent_amount != 0 || account.rent_epoch() == 0 {
-            // rent was != 0
-            // or special case for default rent value
-            // these cannot be skipped and must be written
-            return false;
-        }
-        if old_rent_epoch != account.rent_epoch() && loaded_slot == bank_slot {
-            // account's rent_epoch should increment even though we're not collecting rent.
-            // and we already wrote this account in this slot, but we did not adjust rent_epoch (sys vars for example)
-            // so, force ourselves to rewrite account if account was already written in this slot
-            // Now, the account that was written IN this slot, where normally we would have collected rent, has the corrent 'rent_epoch'.
-            // Only this last store will remain in the append vec.
-            // Otherwise, later code would assume the account was written successfully in this slot with the correct 'rent_epoch'.
-            return false;
-        }
-
-        // rent was 0 and no reason to rewrite, so THIS is a rewrite we can skip
-        true
+    fn skip_rewrite(rent_amount: u64, account: &AccountSharedData) -> bool {
+        // if rent was != 0
+        // or special case for default rent value
+        // these cannot be skipped and must be written
+        rent_amount == 0 && account.rent_epoch() != 0
     }
 
     fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
@@ -10014,16 +9984,6 @@ pub(crate) mod tests {
         account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
 
         let just_rewrites = true;
-        // 'later_slot' here is the slot the account was loaded from.
-        // Since 'later_slot' is the same slot the bank is in, this means that the account was already written IN this slot.
-        // So, we should NOT skip rewrites.
-        let result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account.clone(), later_slot)],
-            just_rewrites,
-            None,
-            PartitionIndex::default(),
-        );
-        assert!(result.rewrites_skipped.is_empty());
         // loaded from previous slot, so we skip rent collection on it
         let result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
@@ -19223,18 +19183,9 @@ pub(crate) mod tests {
                 for loaded_slot in (bank_slot - 1)..=bank_slot {
                     for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch
                     {
-                        let skip = Bank::skip_rewrite(
-                            bank_slot,
-                            rent_amount,
-                            loaded_slot,
-                            old_rent_epoch,
-                            &account,
-                        );
+                        let skip = Bank::skip_rewrite(rent_amount, &account);
                         let mut should_skip = true;
-                        if rent_amount != 0
-                            || account_rent_epoch == 0
-                            || (account_rent_epoch != old_rent_epoch && loaded_slot == bank_slot)
-                        {
+                        if rent_amount != 0 || account_rent_epoch == 0 {
                             should_skip = false;
                         }
                         assert_eq!(
