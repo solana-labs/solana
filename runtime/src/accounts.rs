@@ -281,6 +281,7 @@ impl Accounts {
             let mut rent_debits = RentDebits::default();
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
+
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -370,6 +371,12 @@ impl Accounts {
                         } else if account.executable() && message.is_writable(i) {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
+                        } else if in_reward_interval
+                            && message.is_writable(i)
+                            && Self::is_stake_or_vote_account(&account)
+                        {
+                            error_counters.locked_reward_account += 1;
+                            return Err(TransactionError::LockedStakeAccountsDuringRewardInterval);
                         }
 
                         tx_rent += rent;
@@ -414,6 +421,11 @@ impl Accounts {
                 Err(TransactionError::AccountNotFound)
             }
         }
+    }
+
+    fn is_stake_or_vote_account(account: &impl ReadableAccount) -> bool {
+        let owner = account.owner();
+        solana_vote_program::check_id(owner) || solana_stake_program::check_id(owner)
     }
 
     fn validate_fee_payer(
