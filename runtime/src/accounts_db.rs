@@ -200,7 +200,6 @@ struct ShrinkCollect<'a> {
     unrefed_pubkeys: Vec<&'a Pubkey>,
     alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
     alive_total: usize,
-    index_read_elapsed: Measure,
     total_starting_accounts: usize,
 }
 
@@ -3702,6 +3701,10 @@ impl AccountsDb {
         let alive_total = alive_total_collect.load(Ordering::Relaxed);
 
         index_read_elapsed.stop();
+        stats
+            .index_read_elapsed
+            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
+
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
         ShrinkCollect {
@@ -3711,7 +3714,6 @@ impl AccountsDb {
             unrefed_pubkeys,
             alive_accounts,
             alive_total,
-            index_read_elapsed,
             total_starting_accounts: len,
         }
     }
@@ -3726,7 +3728,6 @@ impl AccountsDb {
             store_ids,
             original_bytes,
             alive_total,
-            index_read_elapsed,
             aligned_total,
             unrefed_pubkeys,
             alive_accounts,
@@ -3835,7 +3836,6 @@ impl AccountsDb {
 
         Self::update_shrink_stats(
             &self.shrink_stats,
-            index_read_elapsed,
             find_alive_elapsed,
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
@@ -3853,7 +3853,6 @@ impl AccountsDb {
     #[allow(clippy::too_many_arguments)]
     fn update_shrink_stats(
         shrink_stats: &ShrinkStats,
-        index_read_elapsed: Measure,
         find_alive_elapsed: Measure,
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
@@ -3866,9 +3865,6 @@ impl AccountsDb {
         shrink_stats
             .num_slots_shrunk
             .fetch_add(1, Ordering::Relaxed);
-        shrink_stats
-            .index_read_elapsed
-            .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
         shrink_stats
             .find_alive_elapsed
             .fetch_add(find_alive_elapsed.as_us(), Ordering::Relaxed);
@@ -4328,7 +4324,6 @@ impl AccountsDb {
             let mut stored_accounts = Vec::default();
             let ShrinkCollect {
                 original_bytes,
-                index_read_elapsed,
                 aligned_total,
                 unrefed_pubkeys,
                 alive_accounts,
@@ -4452,7 +4447,6 @@ impl AccountsDb {
 
             Self::update_shrink_stats(
                 &self.shrink_ancient_stats.shrink_stats,
-                index_read_elapsed,
                 find_alive_elapsed,
                 create_and_insert_store_elapsed_us,
                 store_accounts_timing,
