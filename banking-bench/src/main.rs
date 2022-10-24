@@ -36,6 +36,10 @@ use {
     },
 };
 
+// transfer transaction cost = 1 * SIGNATURE_COST +
+//                             2 * WRITE_LOCK_UNITS +
+//                             1 * system_program
+//                           = 1470 CU
 const TRANSFER_TRANSACTION_COST: u32 = 1470;
 
 fn check_txs(
@@ -115,7 +119,7 @@ fn make_accounts_txs(
                 packets_per_batch,
                 mint_txs_percentage,
             );
-            // siumulated mint transactions have higher compute-unit-price
+            // simulated mint transactions have higher compute-unit-price
             let compute_unit_price = if is_simulated_mint { 5 } else { 1 };
             let mut new = make_transfer_transaction_with_compute_unit_price(
                 &payer_key,
@@ -144,15 +148,16 @@ fn make_accounts_txs(
         .collect()
 }
 
-// In siumulate mint, 99% transactions in a batch are mint transaction (eg., have conflicting account and higher
-// priority) and 1% regualr transactions (eg., non-conflict and low priority)
+// In simulating mint, `mint_txs_percentage` transactions in a batch are mint transaction
+// (eg., have conflicting account and higher priority) and remaining percentage regular
+// transactions (eg., non-conflict and low priority)
 fn is_simulated_mint_transaction(
     simulate_mint: bool,
     index: usize,
     packets_per_batch: usize,
     mint_txs_percentage: usize,
 ) -> bool {
-    !simulate_mint || (index % packets_per_batch <= packets_per_batch * mint_txs_percentage / 100)
+    simulate_mint && (index % packets_per_batch <= packets_per_batch * mint_txs_percentage / 100)
 }
 
 fn make_transfer_transaction_with_compute_unit_price(
@@ -278,12 +283,13 @@ fn main() {
             Arg::new("simulate_mint")
                 .long("simulate-mint")
                 .takes_value(false)
-                .help("Simulate mint transactions to have hjigher priority"),
+                .help("Simulate mint transactions to have higher priority"),
         )
         .arg(
             Arg::new("mint_txs_percentage")
                 .long("mint-txs-percentage")
                 .takes_value(true)
+                .requires("simulate_mint")
                 .help("In simulating mint, number of mint transactions out of 100."),
         )
         .get_matches();
@@ -472,9 +478,9 @@ fn main() {
                 }
             }
 
-            // check if txs had been processed by bank. Returns when all transactinos are
+            // check if txs had been processed by bank. Returns when all transactions are
             // processed, with `FALSE` indicate there is still bank. or returns TRUE indicate a
-            // bank ha s expired before receving all txs.
+            // bank has expired before receiving all txs.
             if check_txs(
                 &signal_receiver,
                 packets_for_this_iteration.transactions.len(),
