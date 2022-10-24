@@ -524,7 +524,7 @@ mod tests {
             // LockedRewardAccountsDuringRewardInterval at the beginning of epoch 1.
             if x == 32 {
                 let tx = system_transaction::transfer(
-                    &node_key,
+                    node_key,
                     &stake_key.pubkey(),
                     1,
                     bank.last_blockhash(),
