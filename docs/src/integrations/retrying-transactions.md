@@ -255,7 +255,7 @@ const sleep = async (ms: number) => {
     LAMPORTS_PER_SOL,
   );
 
-  await connection.confirmTransaction(airdropSignature);
+  await connection.confirmTransaction({ signature: airdropSignature });
 
   const blockhashResponse = await connection.getLatestBlockhashAndContext();
   const lastValidBlockHeight = blockhashResponse.context.slot + 150;
