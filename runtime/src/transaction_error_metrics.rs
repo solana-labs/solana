@@ -18,6 +18,7 @@ pub struct TransactionErrorMetrics {
     pub not_allowed_during_cluster_maintenance: usize,
     pub invalid_writable_account: usize,
     pub invalid_rent_paying_account: usize,
+    pub locked_reward_account: usize,
 }
 
 impl TransactionErrorMetrics {
@@ -54,6 +55,7 @@ impl TransactionErrorMetrics {
             self.invalid_rent_paying_account,
             other.invalid_rent_paying_account
         );
+        saturating_add_assign!(self.locked_reward_account, other.locked_reward_account);
     }
 
     pub fn report(&self, id: u32, slot: Slot) {
@@ -103,6 +105,11 @@ impl TransactionErrorMetrics {
             (
                 "invalid_rent_paying_account",
                 self.invalid_rent_paying_account as i64,
+                i64
+            ),
+            (
+                "locked_reward_account",
+                self.locked_reward_account as i64,
                 i64
             ),
         );
