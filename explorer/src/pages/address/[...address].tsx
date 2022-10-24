@@ -44,14 +44,14 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 import React, { Suspense } from "react";
 import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
-import { NFTokenAccountHeader } from "../components/account/nftoken/NFTokenAccountHeader";
-import { NFTokenAccountSection } from "../components/account/nftoken/NFTokenAccountSection";
-import { NFTokenCollectionNFTGrid } from "../components/account/nftoken/NFTokenCollectionNFTGrid";
-import { NFTOKEN_ADDRESS } from "../components/account/nftoken/nftoken";
+import { NFTokenAccountHeader } from "components/account/nftoken/NFTokenAccountHeader";
+import { NFTokenAccountSection } from "components/account/nftoken/NFTokenAccountSection";
+import { NFTokenCollectionNFTGrid } from "components/account/nftoken/NFTokenCollectionNFTGrid";
+import { NFTOKEN_ADDRESS } from "components/account/nftoken/nftoken";
 import {
   isNFTokenAccount,
   parseNFTokenCollectionAccount,
-} from "../components/account/nftoken/isNFTokenAccount";
+} from "components/account/nftoken/isNFTokenAccount";
 import { isAddressLookupTableAccount } from "components/account/address-lookup-table/types";
 import { AddressLookupTableAccountSection } from "components/account/address-lookup-table/AddressLookupTableAccountSection";
 import { LookupTableEntriesCard } from "components/account/address-lookup-table/LookupTableEntriesCard";

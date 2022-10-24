@@ -6,7 +6,7 @@ import {
 } from "@solana/web3.js";
 import { RawDetails } from "./RawDetails";
 import { RawParsedDetails } from "./RawParsedDetails";
-import { SignatureContext } from "../../pages/TransactionDetailsPage";
+import { SignatureContext } from "pages/tx/[signature]";
 import {
   useFetchRawTransaction,
   useRawTransactionDetails,

@@ -12,16 +12,19 @@ import {
 import { FetchStatus } from "providers/cache";
 import { LoadingCard } from "components/common/LoadingCard";
 import { ErrorCard } from "components/common/ErrorCard";
-import { TransactionSignatures } from "./SignaturesCard";
-import { AccountsCard } from "./AccountsCard";
-import { AddressTableLookupsCard } from "./AddressTableLookupsCard";
+import { TransactionSignatures } from "components/inspector/SignaturesCard";
+import { AccountsCard } from "components/inspector/AccountsCard";
+import { AddressTableLookupsCard } from "components/inspector/AddressTableLookupsCard";
 import {
   AddressWithContext,
   createFeePayerValidator,
-} from "./AddressWithContext";
-import { SimulatorCard } from "./SimulatorCard";
-import { MIN_MESSAGE_LENGTH, RawInput } from "./RawInputCard";
-import { InstructionsSection } from "./InstructionsSection";
+} from "components/inspector/AddressWithContext";
+import { SimulatorCard } from "components/inspector/SimulatorCard";
+import {
+  MIN_MESSAGE_LENGTH,
+  RawInput,
+} from "components/inspector/RawInputCard";
+import { InstructionsSection } from "components/inspector/InstructionsSection";
 import base58 from "bs58";
 import { useFetchAccountInfo } from "providers/accounts";
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { SignatureProps } from "pages/TransactionDetailsPage";
+import { SignatureProps } from "pages/tx/[signature]";
 import { useTransactionDetails } from "providers/transactions";
 import { ProgramLogsCardBody } from "components/ProgramLogsCardBody";
 import { parseProgramLogs } from "utils/program-logs";

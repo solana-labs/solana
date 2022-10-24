@@ -7,13 +7,13 @@ import { Navbar } from "components/Navbar";
 import { ClusterStatusBanner } from "components/ClusterStatusButton";
 import { SearchBar } from "components/SearchBar";
 
-import { AccountDetailsPage } from "pages/AccountDetailsPage";
-import { TransactionInspectorPage } from "pages/inspector/InspectorPage";
-import { ClusterStatsPage } from "pages/ClusterStatsPage";
-import { SupplyPage } from "pages/SupplyPage";
-import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
-import { BlockDetailsPage } from "pages/BlockDetailsPage";
-import { EpochDetailsPage } from "pages/EpochDetailsPage";
+import { AccountDetailsPage } from "pages/address/[...address]";
+import { TransactionInspectorPage } from "pages/tx/inspector";
+import { ClusterStatsPage } from "pages/index";
+import { SupplyPage } from "pages/supply";
+import { TransactionDetailsPage } from "pages/tx/[signature]";
+import { BlockDetailsPage } from "pages/block/[...block]";
+import { EpochDetailsPage } from "pages/epoch/[epoch]";
 
 const ADDRESS_ALIASES = ["account", "accounts", "addresses"];
 const TX_ALIASES = ["txs", "txn", "txns", "transaction", "transactions"];

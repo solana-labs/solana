@@ -10,7 +10,7 @@ import classNames from "classnames";
 import { TableCardBody } from "components/common/TableCardBody";
 import { ChartOptions, ChartTooltipModel } from "chart.js";
 import { PerformanceInfo } from "providers/stats/solanaPerformanceInfo";
-import { StatsNotReady } from "pages/ClusterStatsPage";
+import { StatsNotReady } from "pages/index";
 import {
   PingInfo,
   PingRollupInfo,

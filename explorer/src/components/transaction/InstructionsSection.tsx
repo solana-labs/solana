@@ -22,7 +22,7 @@ import { UnknownDetailsCard } from "components/instruction/UnknownDetailsCard";
 import {
   INNER_INSTRUCTIONS_START_SLOT,
   SignatureProps,
-} from "pages/TransactionDetailsPage";
+} from "pages/tx/[signature]";
 import { intoTransactionInstruction } from "utils/tx";
 import { isAddressLookupTableInstruction } from "components/instruction/address-lookup-table/types";
 import { isSerumInstruction } from "components/instruction/serum/types";

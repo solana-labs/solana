@@ -39,7 +39,7 @@ import {
   isSerumInstruction,
   parseSerumInstructionTitle,
 } from "components/instruction/serum/types";
-import { INNER_INSTRUCTIONS_START_SLOT } from "pages/TransactionDetailsPage";
+import { INNER_INSTRUCTIONS_START_SLOT } from "pages/tx/[signature]";
 import { useCluster, Cluster } from "providers/cluster";
 import { Link } from "react-router-dom";
 import { Location } from "history";

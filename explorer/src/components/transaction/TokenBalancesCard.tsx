@@ -8,7 +8,7 @@ import {
 import { BigNumber } from "bignumber.js";
 import { Address } from "components/common/Address";
 import { BalanceDelta } from "components/common/BalanceDelta";
-import { SignatureProps } from "pages/TransactionDetailsPage";
+import { SignatureProps } from "pages/tx/[signature]";
 import { useTransactionDetails } from "providers/transactions";
 import { useTokenRegistry } from "providers/mints/token-registry";
 
