@@ -19,7 +19,7 @@ import { Overlay } from "./common/Overlay";
 export function ClusterModal() {
   const [show, setShow] = useClusterModal();
   const onClose = () => setShow(false);
-  const showDeveloperSettings = localStorageIsAvailable();
+  const [showDeveloperSettings, setDeveloperSettingsDisplay] = useState(false);
   const enableCustomUrl =
     showDeveloperSettings && localStorage.getItem("enableCustomUrl") !== null;
   const onToggleCustomUrlFeature = (e: ChangeEvent<HTMLInputElement>) => {
@@ -29,6 +29,10 @@ export function ClusterModal() {
       localStorage.removeItem("enableCustomUrl");
     }
   };
+
+  useEffect(() => {
+    setDeveloperSettingsDisplay(localStorageIsAvailable());
+  }, []);
 
   return (
     <>

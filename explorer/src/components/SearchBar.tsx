@@ -1,8 +1,8 @@
 import React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import bs58 from "bs58";
-import Select, { InputActionMeta, ActionMeta, ValueType } from "react-select";
-import StateManager from "react-select";
+import { InputActionMeta, ActionMeta, ValueType } from "react-select";
 import {
   LOADER_IDS,
   PROGRAM_INFO_BY_ID,
@@ -16,6 +16,10 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 import { Connection } from "@solana/web3.js";
 import { getDomainInfo, hasDomainSyntax } from "utils/name-service";
 import { useCreateClusterPath } from "utils/routing";
+
+const BrowserReactSelect = dynamic(() => import("react-select"), {
+  ssr: false,
+});
 
 interface SearchOptions {
   label: string;
@@ -33,7 +37,6 @@ export function SearchBar() {
   const [loadingSearch, setLoadingSearch] = React.useState<boolean>(false);
   const [loadingSearchMessage, setLoadingSearchMessage] =
     React.useState<string>("loading...");
-  const selectRef = React.useRef<StateManager<any> | null>(null);
   const router = useRouter();
   const createClusterPath = useCreateClusterPath();
   const { tokenRegistry } = useTokenRegistry();
@@ -105,9 +108,8 @@ export function SearchBar() {
     <div className="container my-4">
       <div className="row align-items-center">
         <div className="col">
-          <Select
+          <BrowserReactSelect
             autoFocus
-            ref={(ref) => (selectRef.current = ref)}
             options={searchOptions}
             noOptionsMessage={() => "No Results"}
             loadingMessage={() => loadingSearchMessage}
@@ -115,7 +117,6 @@ export function SearchBar() {
             value={resetValue}
             inputValue={search}
             blurInputOnSelect
-            onMenuClose={() => selectRef.current?.blur()}
             onChange={onChange}
             styles={{
               /* work around for https://github.com/JedWatson/react-select/issues/3857 */

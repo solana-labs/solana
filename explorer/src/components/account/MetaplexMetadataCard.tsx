@@ -1,5 +1,6 @@
+import dynamic from "next/dynamic";
 import { NFTData } from "providers/accounts";
-import ReactJson from "react-json-view";
+const ReactJson = dynamic(() => import("react-json-view"), { ssr: false });
 
 export function MetaplexMetadataCard({ nftData }: { nftData: NFTData }) {
   return (

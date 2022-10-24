@@ -10,3 +10,5 @@ export function SupplyPage() {
     </div>
   );
 }
+
+export default SupplyPage;

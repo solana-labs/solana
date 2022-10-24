@@ -1,5 +1,5 @@
 import useSWR, { SWRResponse } from "swr";
-import { useCluster } from "../../../providers/cluster";
+import { useCluster } from "providers/cluster";
 import { NftokenFetcher } from "./nftoken";
 import { NftokenTypes } from "./nftoken-types";
 

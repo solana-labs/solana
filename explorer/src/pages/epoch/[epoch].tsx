@@ -1,4 +1,5 @@
 import React from "react";
+import { useRouter } from "next/router";
 
 import { ErrorCard } from "components/common/ErrorCard";
 import { ClusterStatus, useCluster } from "providers/cluster";
@@ -10,8 +11,10 @@ import { useEpoch, useFetchEpoch } from "providers/epoch";
 import { displayTimestampUtc } from "utils/date";
 import { FetchStatus } from "providers/cache";
 
-type Props = { epoch: string };
-export function EpochDetailsPage({ epoch }: Props) {
+export function EpochDetailsPage() {
+  const router = useRouter();
+  const { epoch } = router.query;
+
   let output;
   if (isNaN(Number(epoch))) {
     output = <ErrorCard text={`Epoch ${epoch} is not valid`} />;
@@ -162,3 +165,5 @@ function EpochOverviewCard({ epoch }: OverviewProps) {
     </>
   );
 }
+
+export default EpochDetailsPage;

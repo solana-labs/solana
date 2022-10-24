@@ -62,7 +62,10 @@ export const DEVNET_URL = clusterApiUrl("devnet");
 
 export function clusterUrl(cluster: Cluster, customUrl: string): string {
   const modifyUrl = (url: string): string => {
-    if (window.location.hostname === "localhost") {
+    if (
+      typeof window !== "undefined" &&
+      window.location.hostname === "localhost"
+    ) {
       return url;
     } else {
       return url.replace("api", "explorer-api");

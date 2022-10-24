@@ -324,3 +324,5 @@ export function StatsNotReady({ error }: { error: boolean }) {
     </div>
   );
 }
+
+export default ClusterStatsPage;

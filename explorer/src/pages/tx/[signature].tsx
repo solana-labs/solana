@@ -53,7 +53,10 @@ type AutoRefreshProps = {
   autoRefresh: AutoRefresh;
 };
 
-export function TransactionDetailsPage({ signature: raw }: SignatureProps) {
+export function TransactionDetailsPage() {
+  const router = useRouter();
+
+  const raw = router.query.signature as TransactionSignature;
   let signature: TransactionSignature | undefined;
 
   try {
@@ -464,3 +467,5 @@ function AccountsCard({ signature }: SignatureProps) {
     </div>
   );
 }
+
+export default TransactionDetailsPage;

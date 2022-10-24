@@ -137,14 +137,10 @@ const VideoArtContent = ({
         <Stream
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
           loop={true}
-          height={180}
-          width={320}
+          height="180"
+          width="320"
           controls={false}
-          style={{ borderRadius: 12 }}
-          videoDimensions={{
-            videoWidth: 320,
-            videoHeight: 180,
-          }}
+          className="rounded"
           autoplay={true}
           muted={true}
         />

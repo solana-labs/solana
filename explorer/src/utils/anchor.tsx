@@ -1,4 +1,5 @@
 import React, { Fragment, ReactNode, useState } from "react";
+import dynamic from "next/dynamic";
 import { Cluster } from "providers/cluster";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder, Program, Idl } from "@project-serum/anchor";
@@ -11,7 +12,7 @@ import {
   IdlTypeDef,
 } from "@project-serum/anchor/dist/cjs/idl";
 import { Address } from "components/common/Address";
-import ReactJson from "react-json-view";
+const ReactJson = dynamic(() => import("react-json-view"), { ssr: false });
 
 export function getAnchorProgramName(
   program: Program | null

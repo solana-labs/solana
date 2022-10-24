@@ -1,6 +1,6 @@
 import { PublicKey } from "@solana/web3.js";
 import { NFTOKEN_ADDRESS } from "./nftoken";
-import { Account } from "../../../providers/accounts";
+import { Account } from "providers/accounts";
 import { NftokenTypes } from "./nftoken-types";
 
 export function isNFTokenAccount(account: Account): boolean {

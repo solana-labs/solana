@@ -161,10 +161,21 @@ const TOKEN_TABS_HIDDEN = [
   "config",
 ];
 
-type Props = { address: string; tab?: string };
-export function AccountDetailsPage({ address, tab }: Props) {
+export function AccountDetailsPage() {
   const fetchAccount = useFetchAccountInfo();
   const { status } = useCluster();
+  const router = useRouter();
+  const { address: queryParams } = router.query;
+
+  let address = "";
+  let tab: string | undefined;
+
+  if (queryParams) {
+    const [receivedAddress, receivedTab] = queryParams;
+    address = receivedAddress;
+    tab = receivedTab;
+  }
+
   const info = useAccountInfo(address);
   let pubkey: PublicKey | undefined;
 
@@ -739,3 +750,5 @@ function AccountDataLink({
     </li>
   );
 }
+
+export default AccountDetailsPage;

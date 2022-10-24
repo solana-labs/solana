@@ -386,3 +386,5 @@ function OverviewCard({
     </>
   );
 }
+
+export default TransactionInspectorPage;
