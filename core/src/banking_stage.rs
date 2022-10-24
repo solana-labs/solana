@@ -10,6 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
+        multi_iterator_scanner::MultiIteratorScanner,
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
@@ -64,8 +65,9 @@ use {
     solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
+        cell::{RefCell, RefMut},
         cmp,
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         env,
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -602,14 +604,13 @@ impl BankingStage {
         recorder: &TransactionRecorder,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        num_packets_to_process_per_iteration: usize,
         log_messages_bytes_limit: Option<usize>,
     ) {
         let mut rebuffered_packet_count = 0;
         let mut consumed_buffered_packets_count = 0;
         let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
-        let mut reached_end_of_slot = false;
+        let reached_end_of_slot = RefCell::new(false);
         let mut retryable_packets = {
             let capacity = buffered_packet_batches.capacity();
             std::mem::replace(
@@ -617,21 +618,28 @@ impl BankingStage {
                 MinMaxHeap::with_capacity(capacity),
             )
         };
+
+        let slot_metrics_tracker_ref_cell = RefCell::new(slot_metrics_tracker);
+        let buffered_packet_batches_ref_cell = RefCell::new(buffered_packet_batches);
+
         let retryable_packets: MinMaxHeap<Arc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
-            .chunks(num_packets_to_process_per_iteration)
+            .chunks(TOTAL_BUFFERED_PACKETS) // single chunk for entire buffer so multi-iterator can look ahead
             .into_iter()
             .flat_map(|packets_to_process| {
                 let packets_to_process = packets_to_process.into_iter().collect_vec();
+
                 // TODO: Right now we iterate through buffer and try the highest weighted transaction once
                 // but we should retry the highest weighted transactions more often.
                 let (bank_start, poh_recorder_lock_time) = measure!(
                     poh_recorder.read().unwrap().bank_start(),
                     "poh_recorder.read",
                 );
-                slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                    poh_recorder_lock_time.as_us(),
-                );
+                slot_metrics_tracker_ref_cell
+                    .borrow_mut()
+                    .increment_consume_buffered_packets_poh_recorder_lock_us(
+                        poh_recorder_lock_time.as_us(),
+                    );
 
                 let packets_to_process_len = packets_to_process.len();
                 if let Some(BankStart {
@@ -639,88 +647,139 @@ impl BankingStage {
                     bank_creation_time,
                 }) = bank_start
                 {
-                    let (process_transactions_summary, process_packets_transactions_time) =
-                        measure!(
-                                Self::process_packets_transactions(
-                                    &working_bank,
-                                    &bank_creation_time,
-                                    recorder,
-                                    packets_to_process.iter().map(|p| &**p),
-                                    transaction_status_sender.clone(),
-                                    gossip_vote_sender,
-                                    banking_stage_stats,
-                                    qos_service,
-                                    slot_metrics_tracker,
-                                    log_messages_bytes_limit
-                                ),
-                            "process_packets_transactions",
+                    const SCANNER_BATCH_SIZE: usize = 64;
+                    let mut scanner =
+                        MultiIteratorScanner::new(&packets_to_process, SCANNER_BATCH_SIZE);
+
+                    let batch_write_account_locks = RefCell::new(HashSet::new());
+                    let batch_sanitized_transactions =
+                        RefCell::new(Vec::with_capacity(SCANNER_BATCH_SIZE));
+                    let mut already_processed = vec![false; packets_to_process_len];
+                    let mut should_process_packet =
+                        |index: usize, packet: &Arc<ImmutableDeserializedPacket>| {
+                            Self::consume_scan_should_process_packet(
+                                &mut already_processed,
+                                *reached_end_of_slot.borrow(),
+                                &working_bank,
+                                *buffered_packet_batches_ref_cell.borrow_mut(),
+                                *slot_metrics_tracker_ref_cell.borrow_mut(),
+                                banking_stage_stats,
+                                &mut batch_write_account_locks.borrow_mut(),
+                                &mut batch_sanitized_transactions.borrow_mut(),
+                                index,
+                                packet,
+                            )
+                        };
+
+                    let mut result = Vec::with_capacity(packets_to_process_len);
+                    while let Some(processing_batch) = scanner.iterate(&mut should_process_packet) {
+                        if *reached_end_of_slot.borrow() {
+                            result.extend(processing_batch.iter().map(|p| (*p).clone()));
+                            continue;
+                        }
+
+                        let processing_batch =
+                            processing_batch.iter().map(|p| (*p).clone()).collect_vec();
+                        let processing_batch_len = processing_batch.len();
+                        let sanitized_transactions = batch_sanitized_transactions.borrow();
+                        assert_eq!(processing_batch_len, sanitized_transactions.len());
+
+                        let (process_transactions_summary, process_packets_transactions_time) =
+                            measure!(Self::process_packets_transactions(
+                                &working_bank,
+                                &bank_creation_time,
+                                recorder,
+                                &sanitized_transactions,
+                                transaction_status_sender.clone(),
+                                gossip_vote_sender,
+                                banking_stage_stats,
+                                qos_service,
+                                *slot_metrics_tracker_ref_cell.borrow_mut(),
+                                log_messages_bytes_limit
+                            ));
+                        slot_metrics_tracker_ref_cell
+                            .borrow_mut()
+                            .increment_process_packets_transactions_us(
+                                process_packets_transactions_time.as_us(),
+                            );
+
+                        // reset batch locks and transactions for next iterate call
+                        batch_write_account_locks.borrow_mut().clear();
+                        drop(sanitized_transactions);
+                        batch_sanitized_transactions.borrow_mut().clear();
+
+                        let ProcessTransactionsSummary {
+                            reached_max_poh_height,
+                            retryable_transaction_indexes,
+                            ..
+                        } = process_transactions_summary;
+
+                        if reached_max_poh_height
+                            || !Bank::should_bank_still_be_processing_txs(
+                                &bank_creation_time,
+                                max_tx_ingestion_ns,
+                            )
+                        {
+                            *reached_end_of_slot.borrow_mut() = true;
+                        }
+
+                        // The difference between all transactions passed to execution and the ones that
+                        // are retryable were the ones that were either:
+                        // 1) Committed into the block
+                        // 2) Dropped without being committed because they had some fatal error (too old,
+                        // duplicate signature, etc.)
+                        //
+                        // Note: This assumes that every packet deserializes into one transaction!
+                        consumed_buffered_packets_count += processing_batch_len
+                            .saturating_sub(retryable_transaction_indexes.len());
+
+                        // Out of the buffered packets just retried, collect any still unprocessed
+                        // transactions in this batch for forwarding
+                        rebuffered_packet_count += retryable_transaction_indexes.len();
+                        if let Some(test_fn) = &test_fn {
+                            test_fn();
+                        }
+
+                        slot_metrics_tracker_ref_cell
+                            .borrow_mut()
+                            .increment_retryable_packets_count(
+                                retryable_transaction_indexes.len() as u64
+                            );
+
+                        let batch_result = retryable_transaction_indexes
+                            .iter()
+                            .map(|i| processing_batch[*i].clone())
+                            .collect_vec();
+
+                        // Remove the non-retryable packets, packets that were either:
+                        // 1) Successfully processed
+                        // 2) Failed but not retryable
+                        Self::remove_non_retained_packets(
+                            *buffered_packet_batches_ref_cell.borrow_mut(),
+                            &processing_batch,
+                            &retryable_transaction_indexes,
                         );
-                    slot_metrics_tracker.increment_process_packets_transactions_us(
-                        process_packets_transactions_time.as_us(),
-                    );
 
-                    let ProcessTransactionsSummary {
-                        reached_max_poh_height,
-                        retryable_transaction_indexes,
-                        ..
-                    } = process_transactions_summary;
-
-                    if reached_max_poh_height
-                        || !Bank::should_bank_still_be_processing_txs(
-                            &bank_creation_time,
-                            max_tx_ingestion_ns,
-                        )
-                    {
-                        reached_end_of_slot = true;
+                        result.extend(batch_result);
                     }
-
-                    // The difference between all transactions passed to execution and the ones that
-                    // are retryable were the ones that were either:
-                    // 1) Committed into the block
-                    // 2) Dropped without being committed because they had some fatal error (too old,
-                    // duplicate signature, etc.)
-                    //
-                    // Note: This assumes that every packet deserializes into one transaction!
-                    consumed_buffered_packets_count +=
-                        packets_to_process_len.saturating_sub(retryable_transaction_indexes.len());
-
-                    // Out of the buffered packets just retried, collect any still unprocessed
-                    // transactions in this batch for forwarding
-                    rebuffered_packet_count += retryable_transaction_indexes.len();
-                    if let Some(test_fn) = &test_fn {
-                        test_fn();
-                    }
-
-                    slot_metrics_tracker.increment_retryable_packets_count(
-                        retryable_transaction_indexes.len() as u64,
-                    );
-
-                    let result = retryable_transaction_indexes
-                        .iter()
-                        .map(|i| packets_to_process[*i].clone())
-                        .collect_vec();
-
-                    // Remove the non-retryable packets, packets that were either:
-                    // 1) Successfully processed
-                    // 2) Failed but not retryable
-                    Self::remove_non_retained_packets(buffered_packet_batches, &packets_to_process, &retryable_transaction_indexes);
 
                     result
-                } else if reached_end_of_slot {
+                } else if *reached_end_of_slot.borrow() {
                     packets_to_process
                 } else {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
-                    reached_end_of_slot = true;
+                    *reached_end_of_slot.borrow_mut() = true;
 
                     packets_to_process
                 }
             })
             .collect();
-
+        let buffered_packet_batches = buffered_packet_batches_ref_cell.into_inner();
+        let slot_metrics_tracker = slot_metrics_tracker_ref_cell.into_inner();
         buffered_packet_batches.packet_priority_queue = retryable_packets;
 
-        if reached_end_of_slot {
+        if *reached_end_of_slot.borrow() {
             slot_metrics_tracker
                 .set_end_of_slot_unprocessed_buffer_len(buffered_packet_batches.len() as u64);
 
@@ -752,6 +811,100 @@ impl BankingStage {
         banking_stage_stats
             .consumed_buffered_packets_count
             .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
+    }
+
+    /// Checks if a packet should be processed for the multi-iterator scanner
+    /// Returns true if the packet should be processed, false otherwise
+    #[allow(clippy::too_many_arguments)]
+    fn consume_scan_should_process_packet(
+        already_processed: &mut [bool],
+        reached_end_of_slot: bool,
+        working_bank: &Bank,
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        banking_stage_stats: &BankingStageStats,
+        batch_write_account_locks: &mut RefMut<HashSet<Pubkey>>,
+        batch_sanitized_transactions: &mut RefMut<Vec<SanitizedTransaction>>,
+        index: usize,
+        packet: &ImmutableDeserializedPacket,
+    ) -> bool {
+        // If the packet is already processed, skip it
+        if already_processed[index] {
+            return false;
+        }
+
+        // If end of the slot, return true (to process the packet - will just be quick loop)
+        if reached_end_of_slot {
+            already_processed[index] = true;
+            return true;
+        }
+
+        // Before sanitization, let's quickly check the static keys (performance optimization)
+        let message = &packet.transaction().get_message().message;
+        let static_keys = message.static_account_keys();
+        for key in static_keys
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, key)| message.is_maybe_writable(idx).then_some(key))
+        {
+            if batch_write_account_locks.contains(key) {
+                return false;
+            }
+        }
+
+        // Try to deserialize the packet
+        let (maybe_sanitized_transaction, sanitization_time) = measure!(
+            unprocessed_packet_batches::transaction_from_deserialized_packet(
+                packet,
+                &working_bank.feature_set,
+                working_bank.vote_only_bank(),
+                working_bank,
+            )
+        );
+
+        let sanitization_time_us = sanitization_time.as_us();
+        slot_metrics_tracker.increment_transactions_from_packets_us(sanitization_time_us);
+        banking_stage_stats
+            .packet_conversion_elapsed
+            .fetch_add(sanitization_time_us, Ordering::Relaxed);
+
+        if let Some(sanitized_transaction) = maybe_sanitized_transaction {
+            let message = sanitized_transaction.message();
+
+            let conflicts_with_batch =
+                message.account_keys().iter().enumerate().any(|(idx, key)| {
+                    if message.is_writable(idx) {
+                        batch_write_account_locks.contains(key)
+                    } else {
+                        false
+                    }
+                });
+
+            if conflicts_with_batch {
+                false
+            } else {
+                message
+                    .account_keys()
+                    .iter()
+                    .enumerate()
+                    .for_each(|(idx, key)| {
+                        if message.is_writable(idx) {
+                            batch_write_account_locks.insert(*key);
+                        }
+                    });
+
+                batch_sanitized_transactions.push(sanitized_transaction);
+                true
+            }
+        } else {
+            // Mark it as already processed and return false so we don't try again
+            already_processed[index] = true;
+            // Remove the packet from map
+            buffered_packet_batches
+                .message_hash_to_transaction
+                .remove(packet.message_hash());
+            false
+        }
     }
 
     fn consume_or_forward_packets(
@@ -864,7 +1017,6 @@ impl BankingStage {
                         recorder,
                         qos_service,
                         slot_metrics_tracker,
-                        UNPROCESSED_BUFFER_STEP_SIZE,
                         log_messages_bytes_limit
                     ),
                     "consume_buffered_packets",
@@ -2045,15 +2197,11 @@ impl BankingStage {
 
     /// This function returns a vector containing index of all valid transactions. A valid
     /// transaction has result Ok() as the value
-    fn filter_valid_transaction_indexes(
-        valid_txs: &[TransactionCheckResult],
-        transaction_indexes: &[usize],
-    ) -> Vec<usize> {
+    fn filter_valid_transaction_indexes(valid_txs: &[TransactionCheckResult]) -> Vec<usize> {
         valid_txs
             .iter()
             .enumerate()
             .filter_map(|(index, (x, _h))| if x.is_ok() { Some(index) } else { None })
-            .map(|x| transaction_indexes[x])
             .collect_vec()
     }
 
@@ -2089,12 +2237,10 @@ impl BankingStage {
     /// This function filters pending packets that are still valid
     /// # Arguments
     /// * `transactions` - a batch of transactions deserialized from packets
-    /// * `transaction_to_packet_indexes` - maps each transaction to a packet index
     /// * `pending_indexes` - identifies which indexes in the `transactions` list are still pending
     fn filter_pending_packets_from_pending_txs(
         bank: &Arc<Bank>,
         transactions: &[SanitizedTransaction],
-        transaction_to_packet_indexes: &[usize],
         pending_indexes: &[usize],
     ) -> Vec<usize> {
         let filter =
@@ -2102,7 +2248,7 @@ impl BankingStage {
 
         let results = Self::bank_check_transactions(bank, transactions, &filter);
 
-        Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
+        Self::filter_valid_transaction_indexes(&results)
     }
 
     fn filter_processed_packets<'a, F>(
@@ -2129,7 +2275,7 @@ impl BankingStage {
         bank: &'a Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &'a TransactionRecorder,
-        deserialized_packets: impl Iterator<Item = &'a ImmutableDeserializedPacket>,
+        sanitized_transactions: &[SanitizedTransaction],
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &'a ReplayVoteSender,
         banking_stage_stats: &'a BankingStageStats,
@@ -2137,39 +2283,12 @@ impl BankingStage {
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
-        // Convert packets to transactions
-        let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
-            (Vec<SanitizedTransaction>, Vec<usize>),
-            _,
-        ) = measure!(
-            deserialized_packets
-                .enumerate()
-                .filter_map(|(i, deserialized_packet)| {
-                    unprocessed_packet_batches::transaction_from_deserialized_packet(
-                        deserialized_packet,
-                        &bank.feature_set,
-                        bank.vote_only_bank(),
-                        bank.as_ref(),
-                    )
-                    .map(|transaction| (transaction, i))
-                })
-                .unzip(),
-            "packet_conversion",
-        );
-
-        let packet_conversion_us = packet_conversion_time.as_us();
-        slot_metrics_tracker.increment_transactions_from_packets_us(packet_conversion_us);
-        banking_stage_stats
-            .packet_conversion_elapsed
-            .fetch_add(packet_conversion_us, Ordering::Relaxed);
-        inc_new_counter_info!("banking_stage-packet_conversion", 1);
-
         // Process transactions
         let (mut process_transactions_summary, process_transactions_time) = measure!(
             Self::process_transactions(
                 bank,
                 bank_creation_time,
-                &transactions,
+                sanitized_transactions,
                 poh,
                 transaction_status_sender,
                 gossip_vote_sender,
@@ -2200,12 +2319,12 @@ impl BankingStage {
         let (filtered_retryable_transaction_indexes, filter_retryable_packets_time) = measure!(
             Self::filter_pending_packets_from_pending_txs(
                 bank,
-                &transactions,
-                &transaction_to_packet_indexes,
-                retryable_transaction_indexes,
+                sanitized_transactions,
+                retryable_transaction_indexes
             ),
-            "filter_pending_packets_time",
+            "filter_retryable_packets_time"
         );
+
         let filter_retryable_packets_us = filter_retryable_packets_time.as_us();
         slot_metrics_tracker
             .increment_filter_retryable_packets_us(filter_retryable_packets_us as u64);
@@ -2429,7 +2548,6 @@ mod tests {
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
         std::{
             borrow::Cow,
-            collections::HashSet,
             path::Path,
             sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
@@ -2905,33 +3023,27 @@ mod tests {
     #[test]
     fn test_bank_filter_valid_transaction_indexes() {
         assert_eq!(
-            BankingStage::filter_valid_transaction_indexes(
-                &[
-                    (Err(TransactionError::BlockhashNotFound), None),
-                    (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
-                    (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
-                ],
-                &[2, 4, 5, 9, 11, 13]
-            ),
-            [5, 11, 13]
+            BankingStage::filter_valid_transaction_indexes(&[
+                (Err(TransactionError::BlockhashNotFound), None),
+                (Err(TransactionError::BlockhashNotFound), None),
+                (Ok(()), None),
+                (Err(TransactionError::BlockhashNotFound), None),
+                (Ok(()), None),
+                (Ok(()), None),
+            ]),
+            [2, 4, 5]
         );
 
         assert_eq!(
-            BankingStage::filter_valid_transaction_indexes(
-                &[
-                    (Ok(()), None),
-                    (Err(TransactionError::BlockhashNotFound), None),
-                    (Err(TransactionError::BlockhashNotFound), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
-                    (Ok(()), None),
-                ],
-                &[1, 6, 7, 9, 31, 43]
-            ),
-            [1, 9, 31, 43]
+            BankingStage::filter_valid_transaction_indexes(&[
+                (Ok(()), None),
+                (Err(TransactionError::BlockhashNotFound), None),
+                (Err(TransactionError::BlockhashNotFound), None),
+                (Ok(()), None),
+                (Ok(()), None),
+                (Ok(()), None),
+            ]),
+            [0, 3, 4, 5]
         );
     }
 
@@ -4245,36 +4357,27 @@ mod tests {
                 &recorder,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
-                num_conflicting_transactions,
                 None,
             );
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
-            // When the poh recorder has a bank, should process all non conflicting buffered packets.
-            // Processes one packet per iteration of the loop
-            let num_packets_to_process_per_iteration = num_conflicting_transactions;
-            for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
-                poh_recorder.write().unwrap().set_bank(&bank, false);
-                BankingStage::consume_buffered_packets(
-                    &Pubkey::default(),
-                    max_tx_processing_ns,
-                    &poh_recorder,
-                    &mut buffered_packet_batches,
-                    None,
-                    &gossip_vote_sender,
-                    None::<Box<dyn Fn()>>,
-                    &BankingStageStats::default(),
-                    &recorder,
-                    &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
-                    &mut LeaderSlotMetricsTracker::new(0),
-                    num_packets_to_process_per_iteration,
-                    None,
-                );
-                if num_expected_unprocessed == 0 {
-                    assert!(buffered_packet_batches.is_empty())
-                } else {
-                    assert_eq!(buffered_packet_batches.len(), num_expected_unprocessed);
-                }
-            }
+            // When the working bank in poh_recorder is Some, all packets should be processed.
+            // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
+            poh_recorder.write().unwrap().set_bank(&bank, false);
+            BankingStage::consume_buffered_packets(
+                &Pubkey::default(),
+                max_tx_processing_ns,
+                &poh_recorder,
+                &mut buffered_packet_batches,
+                None,
+                &gossip_vote_sender,
+                None::<Box<dyn Fn()>>,
+                &BankingStageStats::default(),
+                &recorder,
+                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &mut LeaderSlotMetricsTracker::new(0),
+                None,
+            );
+            assert!(buffered_packet_batches.is_empty());
             poh_recorder
                 .read()
                 .unwrap()
@@ -4298,11 +4401,8 @@ mod tests {
                 finished_packet_sender.send(()).unwrap();
                 continue_receiver.recv().unwrap();
             });
-            // When the poh recorder has a bank, it should process all non conflicting buffered packets.
-            // Because each conflicting transaction is in it's own `Packet` within a `PacketBatch`, then
-            // each iteration of this loop will process one element of the batch per iteration of the
-            // loop.
-            let interrupted_iteration = 1;
+            // When the poh recorder has a bank, it should process all buffered packets.
+            let num_conflicting_transactions = transactions.len();
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let poh_recorder_ = poh_recorder.clone();
             let recorder = poh_recorder_.read().unwrap().recorder();
@@ -4318,16 +4418,11 @@ mod tests {
                         )
                         .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
-                    let num_packets_to_process_per_iteration = 1;
                     let mut buffered_packet_batches: UnprocessedPacketBatches =
                         UnprocessedPacketBatches::from_iter(
                             deserialized_packets.clone().into_iter(),
                             num_conflicting_transactions,
                         );
-                    let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
-                        .iter()
-                        .map(|packet| *packet.immutable_section().message_hash())
-                        .collect();
                     BankingStage::consume_buffered_packets(
                         &Pubkey::default(),
                         std::u128::MAX,
@@ -4340,26 +4435,19 @@ mod tests {
                         &recorder,
                         &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                         &mut LeaderSlotMetricsTracker::new(0),
-                        num_packets_to_process_per_iteration,
                         None,
                     );
 
-                    // Check everything is correct. All indexes after `interrupted_iteration`
-                    // should still be unprocessed
-                    assert_eq!(
-                        buffered_packet_batches.len(),
-                        deserialized_packets[interrupted_iteration + 1..].len()
-                    );
-                    for packet in buffered_packet_batches.iter() {
-                        assert!(all_packet_message_hashes
-                            .contains(packet.immutable_section().message_hash()));
-                    }
+                    // Check everything is correct. All valid packets should be processed.
+                    assert!(buffered_packet_batches.is_empty());
                 })
                 .unwrap();
 
-            for i in 0..=interrupted_iteration {
+            // Should be calling `test_fn` for each non-conflicting batch.
+            // In this case each batch is of size 1.
+            for i in 0..num_conflicting_transactions {
                 finished_packet_receiver.recv().unwrap();
-                if i == interrupted_iteration {
+                if i == num_conflicting_transactions {
                     poh_recorder
                         .write()
                         .unwrap()
