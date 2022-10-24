@@ -1036,6 +1036,14 @@ pub struct StoreAccountsTiming {
     handle_reclaims_elapsed: u64,
 }
 
+impl StoreAccountsTiming {
+    fn merge(&mut self, other: &Self) {
+        self.store_accounts_elapsed += other.store_accounts_elapsed;
+        self.update_index_elapsed += other.update_index_elapsed;
+        self.handle_reclaims_elapsed += other.handle_reclaims_elapsed;
+    }
+}
+
 #[derive(Debug, Default)]
 struct RecycleStores {
     entries: Vec<(Instant, Arc<AccountStorageEntry>)>,
@@ -4411,9 +4419,7 @@ impl AccountsDb {
                     &to_store,
                     StorageSelector::Overflow,
                 );
-                store_accounts_timing.store_accounts_elapsed += timing.store_accounts_elapsed;
-                store_accounts_timing.update_index_elapsed += timing.update_index_elapsed;
-                store_accounts_timing.handle_reclaims_elapsed += timing.handle_reclaims_elapsed;
+                store_accounts_timing.merge(&timing);
             }
             rewrite_elapsed.stop();
 
