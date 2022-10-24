@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { lamportsToSol, LAMPORTS_PER_SOL } from "utils";
+import { lamportsToSol, LAMPORTS_PER_SOL } from "../utils";
 
 describe("lamportsToSol", () => {
   it("0 lamports", () => {
