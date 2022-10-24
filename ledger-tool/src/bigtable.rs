@@ -445,21 +445,41 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                     debug!("worker {}: received slot {}", i, slot);
 
                     if !args.force {
-                        match destination_bigtable_clone.get_confirmed_block(slot).await {
-                            Ok(_) => {
-                                skip_slots_clone.lock().unwrap().push(slot);
-                                continue;
+                        match destination_bigtable_clone.confirmed_block_exists(slot).await {
+                            Ok(exist) => {
+                                if exist {
+                                    skip_slots_clone.lock().unwrap().push(slot);
+                                    continue;
+                                }
                             }
-                            Err(solana_storage_bigtable::Error::BlockNotFound(_)) => {}
                             Err(err) => {
-                                error!("failed to get confirmed block from destination, slot: {}, err: {}", slot, err);
+                                error!("failed to get a confirmed block from the destination Bigtable, slot: {}, err: {}", slot, err);
                                 failed_slots_clone.lock().unwrap().push(slot);
                                 continue;
                             }
                         };
                     }
 
-                    let confirmed_block =
+                    if args.dry_run {
+                        match source_bigtable_clone.confirmed_block_exists(slot).await {
+                            Ok(exist) => {
+                                if exist {
+                                    debug!("will write block: {}", slot);
+                                    success_slots_clone.lock().unwrap().push(slot);
+                                } else {
+                                    debug!("block not found, slot: {}", slot);
+                                    block_not_found_slots_clone.lock().unwrap().push(slot);
+                                    continue;
+                                }
+                            }
+                            Err(err) => {
+                                error!("failed to get a confirmed block from the source Bigtable, slot: {}, err: {}", slot, err);
+                                failed_slots_clone.lock().unwrap().push(slot);
+                                continue;
+                            }
+                        };
+                    } else {
+                        let confirmed_block =
                         match source_bigtable_clone.get_confirmed_block(slot).await {
                             Ok(block) => match VersionedConfirmedBlock::try_from(block) {
                                 Ok(block) => block,
@@ -481,10 +501,6 @@ async fn copy(args: CopyArgs) -> Result<(), Box<dyn std::error::Error>> {
                             }
                         };
 
-                    if args.dry_run {
-                        debug!("will write block: {}", slot);
-                        success_slots_clone.lock().unwrap().push(slot);
-                    } else {
                         match destination_bigtable_clone
                             .upload_confirmed_block(slot, confirmed_block)
                             .await
