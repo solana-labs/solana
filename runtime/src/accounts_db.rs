@@ -3774,6 +3774,17 @@ impl AccountsDb {
 
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
+        stats
+            .accounts_removed
+            .fetch_add(len - alive_accounts.len(), Ordering::Relaxed);
+        stats.bytes_removed.fetch_add(
+            original_bytes.saturating_sub(aligned_total),
+            Ordering::Relaxed,
+        );
+        stats
+            .bytes_written
+            .fetch_add(aligned_total, Ordering::Relaxed);
+
         ShrinkCollect {
             store_ids,
             original_bytes,
@@ -3910,9 +3921,6 @@ impl AccountsDb {
             store_accounts_timing,
             rewrite_elapsed,
             write_storage_elapsed_us,
-            shrink_collect.total_starting_accounts - total_accounts_after_shrink,
-            shrink_collect.original_bytes,
-            shrink_collect.aligned_total,
         );
         self.shrink_stats.report();
 
@@ -3927,9 +3935,6 @@ impl AccountsDb {
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed: Measure,
         write_storage_elapsed_us: u64,
-        accounts_removed: usize,
-        original_bytes: u64,
-        aligned_total: u64,
     ) {
         shrink_stats
             .num_slots_shrunk
@@ -3958,16 +3963,6 @@ impl AccountsDb {
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
-        shrink_stats
-            .accounts_removed
-            .fetch_add(accounts_removed, Ordering::Relaxed);
-        shrink_stats.bytes_removed.fetch_add(
-            original_bytes.saturating_sub(aligned_total),
-            Ordering::Relaxed,
-        );
-        shrink_stats
-            .bytes_written
-            .fetch_add(aligned_total, Ordering::Relaxed);
     }
 
     /// get stores for 'slot'
@@ -4486,9 +4481,6 @@ impl AccountsDb {
                 store_accounts_timing,
                 rewrite_elapsed,
                 write_storage_elapsed.as_us(),
-                shrink_collect.total_starting_accounts - shrink_collect.alive_accounts.len(),
-                shrink_collect.original_bytes,
-                shrink_collect.aligned_total,
             );
         }
 
