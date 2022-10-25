@@ -6,7 +6,7 @@ use {
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::{Config, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
-        spl_converters,
+        spl_convert::FromOtherSolana,
     },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
@@ -46,7 +46,7 @@ fn program_account(program_data: &[u8]) -> AccountSharedData {
 fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
     let additional_accounts = vec![(
-        spl_converters::solana_pubkey(&spl_instruction_padding::ID),
+        FromOtherSolana::from(spl_instruction_padding::ID),
         program_account(include_bytes!("fixtures/spl_instruction_padding.so")),
     )];
 
@@ -121,7 +121,7 @@ fn test_bench_tps_test_validator(config: Config) {
         .faucet_addr(Some(faucet_addr))
         .add_program(
             "spl_instruction_padding",
-            spl_converters::solana_pubkey(&spl_instruction_padding::ID),
+            FromOtherSolana::from(spl_instruction_padding::ID),
         )
         .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
@@ -203,7 +203,7 @@ fn test_bench_tps_local_cluster_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: spl_converters::solana_pubkey(&spl_instruction_padding::ID),
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
             data_size: 0,
         }),
         ..Config::default()
@@ -217,7 +217,7 @@ fn test_bench_tps_tpu_client_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: spl_converters::solana_pubkey(&spl_instruction_padding::ID),
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
             data_size: 0,
         }),
         ..Config::default()

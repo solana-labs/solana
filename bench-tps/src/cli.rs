@@ -1,5 +1,5 @@
 use {
-    crate::spl_converters,
+    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
@@ -482,7 +482,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
-            .unwrap_or_else(|| spl_converters::solana_pubkey(&spl_instruction_padding::ID));
+            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
             data_size: data_size
