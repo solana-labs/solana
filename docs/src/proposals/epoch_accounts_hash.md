@@ -85,15 +85,24 @@ The main justifications for these values are:
 Once the EAH calculation is complete, it must be saved somewhere.  Since this
 occurs in the background, there is not an associated `Bank` that would make
 sense to save into.  Instead, a new field will be added to `AccountsDb` that
-will store the EAH.  Later, the bank at slot `stop slot` will read the EAH from
+will store the EAH.  Later, the bank at slot `stop slot`†¹ will read the EAH from
 `AccountsDb` and hash it into its own hash (aka _bank hash_).
 
 EAH calculation will use the existing _accounts background services_ (_ABS_) to
 perform the actual calculation.  Requests for EAH calculation will be sent from
-`bank_forks::set_root()`, with a new request type to distinguish an EAH request
+`bank_forks::set_root()`†², with a new request type to distinguish an EAH request
 from a Snapshot request.  Since the EAH will be part of consensus, it is not
 optional; EAH requests will have the highest priority in ABS, and will be
 processed first/instead of other requests.
+
+†¹: More precisely, all banks where `bank slot >= stop slot` and `parent slot <
+    stop slot` will include the EAH in their _bank hash_.  This ensures EAH
+    handles forking around `stop slot`, since only one of these banks will end
+    up rooted.
+
+†²: An EAH calculation will be requested when `root bank slot >= start slot`
+    and `root parent slot < start slot`.  This handles the scenario where
+    validators call `bank_forks::set_root()` at different intervals.
 
 
 #### Details
