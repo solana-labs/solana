@@ -6970,20 +6970,16 @@ impl Bank {
         mut debug_verify: bool,
         is_startup: bool,
     ) -> Hash {
-        let (hash, total_lamports) = self
-            .rc
-            .accounts
-            .accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
-                debug_verify,
-                self.slot(),
-                &self.ancestors,
-                Some(self.capitalization()),
-                self.epoch_schedule(),
-                &self.rent_collector,
-                is_startup,
-            );
+        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+            use_index,
+            debug_verify,
+            self.slot(),
+            &self.ancestors,
+            Some(self.capitalization()),
+            self.epoch_schedule(),
+            &self.rent_collector,
+            is_startup,
+        );
         if total_lamports != self.capitalization() {
             datapoint_info!(
                 "capitalization_mismatch",
@@ -6996,19 +6992,16 @@ impl Bank {
                 // cap mismatch detected. It has been logged to metrics above.
                 // Run both versions of the calculation to attempt to get more info.
                 debug_verify = true;
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .update_accounts_hash_with_index_option(
-                        use_index,
-                        debug_verify,
-                        self.slot(),
-                        &self.ancestors,
-                        Some(self.capitalization()),
-                        self.epoch_schedule(),
-                        &self.rent_collector,
-                        is_startup,
-                    );
+                self.rc.accounts.accounts_db.update_accounts_hash(
+                    use_index,
+                    debug_verify,
+                    self.slot(),
+                    &self.ancestors,
+                    Some(self.capitalization()),
+                    self.epoch_schedule(),
+                    &self.rent_collector,
+                    is_startup,
+                );
             }
 
             panic!(
