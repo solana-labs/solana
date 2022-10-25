@@ -1077,7 +1077,7 @@ impl BankHashStats {
         self.num_lamports_stored = self.num_lamports_stored.wrapping_add(account.lamports());
     }
 
-    pub fn merge(&mut self, other: &BankHashStats) {
+    pub fn accumulate(&mut self, other: &BankHashStats) {
         self.num_updated_accounts += other.num_updated_accounts;
         self.num_removed_accounts += other.num_removed_accounts;
         self.total_data_len = self.total_data_len.wrapping_add(other.total_data_len);
@@ -1103,7 +1103,7 @@ pub struct StoreAccountsTiming {
 }
 
 impl StoreAccountsTiming {
-    fn merge(&mut self, other: &Self) {
+    fn accumulate(&mut self, other: &Self) {
         self.store_accounts_elapsed += other.store_accounts_elapsed;
         self.update_index_elapsed += other.update_index_elapsed;
         self.handle_reclaims_elapsed += other.handle_reclaims_elapsed;
@@ -4448,7 +4448,7 @@ impl AccountsDb {
                     &to_store,
                     StorageSelector::Overflow,
                 );
-                store_accounts_timing.merge(&timing);
+                store_accounts_timing.accumulate(&timing);
             }
             rewrite_elapsed.stop();
 
@@ -8225,7 +8225,7 @@ impl AccountsDb {
             let slot_info = bank_hashes
                 .entry(accounts.target_slot())
                 .or_insert_with(BankHashInfo::default);
-            slot_info.stats.merge(&stats);
+            slot_info.stats.accumulate(&stats);
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
