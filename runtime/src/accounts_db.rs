@@ -2753,7 +2753,7 @@ impl AccountsDb {
             std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
         let accounts_hash_complete_one_epoch_old = *accounts_hash_complete_one_epoch_old;
 
-        // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
+        // now that accounts hash calculation is complete, we can remove old historical roots
         self.remove_old_historical_roots(accounts_hash_complete_one_epoch_old);
     }
 
@@ -7276,7 +7276,7 @@ impl AccountsDb {
             };
             timings.calc_storage_size_quartiles(&combined_maps);
 
-            self.calculate_accounts_hash_without_index(config, &storages, timings)
+            self.calculate_accounts_hash_from_storages(config, &storages, timings)
         } else {
             self.calculate_accounts_hash_from_index(slot, config)
         }
@@ -7459,7 +7459,7 @@ impl AccountsDb {
 
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
-    pub fn calculate_accounts_hash_without_index(
+    pub fn calculate_accounts_hash_from_storages(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
@@ -7529,7 +7529,7 @@ impl AccountsDb {
             }
 
             info!(
-                "calculate_accounts_hash_without_index: slot: {} {:?}",
+                "calculate_accounts_hash_from_storages: slot: {} {:?}",
                 storages.max_slot_inclusive(),
                 final_result
             );
@@ -10183,13 +10183,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_calculate_accounts_hash_without_index_simple() {
+    fn test_accountsdb_calculate_accounts_hash_from_storages_simple() {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -10200,7 +10200,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_calculate_accounts_hash_without_index() {
+    fn test_accountsdb_calculate_accounts_hash_from_storages() {
         solana_logger::setup();
 
         let (storages, raw_expected) = sample_storages_and_accounts();
@@ -10211,7 +10211,7 @@ pub mod tests {
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),

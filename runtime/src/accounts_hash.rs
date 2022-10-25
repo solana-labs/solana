@@ -145,7 +145,7 @@ impl HashStats {
             + self.collect_snapshots_us
             + self.storage_sort_us;
         datapoint_info!(
-            "calculate_accounts_hash_without_index",
+            "calculate_accounts_hash_from_storages",
             ("mark_time_us", self.mark_time_us, i64),
             ("accounts_scan_us", self.scan_time_total_us, i64),
             ("eliminate_zeros_us", self.zeros_time_total_us, i64),

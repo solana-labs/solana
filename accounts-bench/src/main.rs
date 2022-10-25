@@ -159,6 +159,6 @@ fn main() {
         info!("update_accounts_hash(us),{}", x);
     }
     for x in elapsed_store {
-        info!("calculate_accounts_hash_without_index(us),{}", x);
+        info!("calculate_accounts_hash_from_storages(us),{}", x);
     }
 }
