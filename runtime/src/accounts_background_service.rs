@@ -113,6 +113,10 @@ pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
     pub request_type: SnapshotRequestType,
+
+    /// The instant this request was send to the queue.
+    /// Used to track how long requests wait before processing.
+    pub enqueued: Instant,
 }
 
 impl Debug for SnapshotRequest {
@@ -169,7 +173,12 @@ impl SnapshotRequestHandler {
                 "num-re-enqueued-requests",
                 num_re_enqueued_requests as i64,
                 i64
-            )
+            ),
+            (
+                "enqueued-time-us",
+                snapshot_request.enqueued.elapsed().as_micros() as i64,
+                i64
+            ),
         );
 
         Some(self.handle_snapshot_request(
@@ -274,6 +283,7 @@ impl SnapshotRequestHandler {
             snapshot_root_bank,
             status_cache_slot_deltas,
             request_type: _,
+            enqueued: _,
         } = snapshot_request;
 
         // we should not rely on the state of this validator until startup verification is complete
@@ -844,6 +854,7 @@ mod test {
                 snapshot_root_bank,
                 status_cache_slot_deltas: Vec::default(),
                 request_type,
+                enqueued: Instant::now(),
             };
             snapshot_request_sender.send(snapshot_request).unwrap();
         };
