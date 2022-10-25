@@ -37,6 +37,18 @@ fn next_epoch(bank: &Arc<Bank>) -> Arc<Bank> {
     ))
 }
 
+fn next_epoch_after_rewards_interval(bank: &Arc<Bank>) -> Arc<Bank> {
+    bank.squash();
+
+    let mut bank2 = Bank::new_from_parent(
+        bank,
+        &Pubkey::default(),
+        bank.get_slots_in_epoch(bank.epoch()) + bank.slot() + bank.get_reward_interval(),
+    );
+    bank2.clear_epoch_reward_calc_start_for_test();
+    Arc::new(bank2)
+}
+
 fn fill_epoch_with_votes(
     bank: &Arc<Bank>,
     vote_keypair: &Keypair,
@@ -395,17 +407,15 @@ fn test_stake_account_lifetime() {
     let pre_staked = get_staked(&bank, &stake_pubkey);
     let pre_balance = bank.get_balance(&stake_pubkey);
 
-    // next epoch bank should pay rewards
-    bank = next_epoch(&bank);
+    // next epoch after rewards interval bank so that all stake accounts are unlocked
+    bank = next_epoch_after_rewards_interval(&bank);
 
-    // With partitioned reward stake is no longer paid at the epoch start block, so the stake
-    // should stay unchanged.
+    // TODO: simulate the epoch reward calc to pay rewards.
+    // Not implemented yet. So the stake should stay unchanged.
     let staked = get_staked(&bank, &stake_pubkey);
     let balance = bank.get_balance(&stake_pubkey);
     assert!(staked == pre_staked);
     assert!(balance == pre_balance);
-
-    // TODO: Test that balance increased, and that the balance got staked (after reward interval)
 
     // split the stake
     let split_stake_keypair = Keypair::new();
@@ -424,6 +434,7 @@ fn test_stake_account_lifetime() {
         ),
         Some(&mint_pubkey),
     );
+
     assert!(bank_client
         .send_and_confirm_message(
             &[&mint_keypair, &stake_keypair, &split_stake_keypair],
@@ -467,7 +478,7 @@ fn test_stake_account_lifetime() {
         .send_and_confirm_message(&[&mint_keypair, &stake_keypair], message)
         .is_err());
 
-    let mut bank = next_epoch(&bank);
+    let mut bank = next_epoch_after_rewards_interval(&bank);
     let bank_client = BankClient::new_shared(&bank);
 
     // assert we're still cooling down
@@ -512,7 +523,7 @@ fn test_stake_account_lifetime() {
         if get_staked(&bank, &split_stake_pubkey) == 0 {
             break;
         }
-        bank = next_epoch(&bank);
+        bank = next_epoch_after_rewards_interval(&bank);
     }
     let bank_client = BankClient::new_shared(&bank);
 

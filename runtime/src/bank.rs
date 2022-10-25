@@ -2333,6 +2333,10 @@ impl Bank {
         self.epoch_reward_calc_start = Some((parent_slot, parent_block_height));
     }
 
+    pub fn clear_epoch_reward_calc_start_for_test(&mut self) {
+        self.epoch_reward_calc_start = None;
+    }
+
     pub fn start_epoch_reward_calc(&self) -> bool {
         if let Some((_calc_begin_slot, calc_begin_block_height)) = self.epoch_reward_calc_start {
             if self.block_height == calc_begin_block_height + 1 {
