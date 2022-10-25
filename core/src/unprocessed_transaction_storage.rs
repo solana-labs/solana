@@ -23,7 +23,8 @@ use {
 };
 
 pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
-const MAX_STAKED_VALIDATORS: usize = 10_000;
+/// Maximum numer of votes a single receive call will accept
+const MAX_NUM_VOTES_RECEIVE: usize = 10_000;
 
 #[derive(Debug)]
 pub enum UnprocessedTransactionStorage {
@@ -153,10 +154,13 @@ impl UnprocessedTransactionStorage {
         }
     }
 
-    pub fn capacity(&self) -> usize {
+    /// Returns the maximum number of packets a receive should accept
+    pub fn max_receive_size(&self) -> usize {
         match self {
-            Self::VoteStorage(vote_storage) => vote_storage.capacity(),
-            Self::LocalTransactionStorage(transaction_storage) => transaction_storage.capacity(),
+            Self::VoteStorage(vote_storage) => vote_storage.max_receive_size(),
+            Self::LocalTransactionStorage(transaction_storage) => {
+                transaction_storage.max_receive_size()
+            }
         }
     }
 
@@ -258,8 +262,8 @@ impl VoteStorage {
         self.latest_unprocessed_votes.len()
     }
 
-    fn capacity(&self) -> usize {
-        MAX_STAKED_VALIDATORS
+    fn max_receive_size(&self) -> usize {
+        MAX_NUM_VOTES_RECEIVE
     }
 
     fn forward_option(&self) -> ForwardOption {
@@ -357,8 +361,8 @@ impl ThreadLocalUnprocessedPackets {
         self.unprocessed_packet_batches.len()
     }
 
-    fn capacity(&self) -> usize {
-        self.unprocessed_packet_batches.capacity()
+    fn max_receive_size(&self) -> usize {
+        self.unprocessed_packet_batches.capacity() - self.unprocessed_packet_batches.len()
     }
 
     #[cfg(test)]
