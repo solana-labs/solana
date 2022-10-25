@@ -13,12 +13,13 @@
 
 use {
     crate::{
-        cluster_info::CRDS_UNIQUE_PUBKEY_CAPACITY,
+        cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         contact_info::ContactInfo,
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
+        ping_pong::PingCache,
         weighted_shuffle::WeightedShuffle,
     },
     bincode::serialized_size,
@@ -27,17 +28,24 @@ use {
     lru::LruCache,
     rand::{seq::SliceRandom, Rng},
     solana_bloom::bloom::{AtomicBloom, Bloom},
-    solana_sdk::{packet::PACKET_DATA_SIZE, pubkey::Pubkey, timing::timestamp},
+    solana_sdk::{
+        packet::PACKET_DATA_SIZE,
+        pubkey::Pubkey,
+        signature::{Keypair, Signer},
+        timing::timestamp,
+    },
     solana_streamer::socket::SocketAddrSpace,
     std::{
         cmp,
         collections::{HashMap, HashSet},
         iter::repeat,
+        net::SocketAddr,
         ops::{DerefMut, RangeBounds},
         sync::{
             atomic::{AtomicUsize, Ordering},
             Mutex, RwLock,
         },
+        time::Instant,
     },
 };
 
@@ -334,15 +342,18 @@ impl CrdsGossipPush {
     /// # Arguments
     ///
     /// * ratio - active_set.len()/ratio is the number of actives to rotate
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn refresh_push_active_set(
         &self,
         crds: &RwLock<Crds>,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
-        self_id: &Pubkey,
+        self_keypair: &Keypair,
         self_shred_version: u16,
         network_size: usize,
         ratio: usize,
+        ping_cache: &Mutex<PingCache>,
+        pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
     ) {
         const BLOOM_FALSE_RATE: f64 = 0.1;
@@ -353,17 +364,31 @@ impl CrdsGossipPush {
         const MIN_NUM_BLOOM_ITEMS: usize = CRDS_UNIQUE_PUBKEY_CAPACITY;
         let mut rng = rand::thread_rng();
         let mut new_items = HashMap::new();
+        // Gossip peers and respective sampling weights.
+        let peers = self.push_options(
+            crds,
+            &self_keypair.pubkey(),
+            self_shred_version,
+            stakes,
+            gossip_validators,
+            socket_addr_space,
+        );
+        // Check for nodes which have responded to ping messages.
         let (weights, peers): (Vec<_>, Vec<_>) = {
-            self.push_options(
-                crds,
-                self_id,
-                self_shred_version,
-                stakes,
-                gossip_validators,
-                socket_addr_space,
-            )
-            .into_iter()
-            .unzip()
+            let mut ping_cache = ping_cache.lock().unwrap();
+            let mut pingf = move || Ping::new_rand(&mut rng, self_keypair).ok();
+            let now = Instant::now();
+            peers
+                .into_iter()
+                .filter_map(|(weight, peer)| {
+                    let node = (peer.id, peer.gossip);
+                    let (check, ping) = ping_cache.check(now, node, &mut pingf);
+                    if let Some(ping) = ping {
+                        pings.push((peer.gossip, ping));
+                    }
+                    check.then_some((weight, peer.id))
+                })
+                .unzip()
         };
         if peers.is_empty() {
             return;
@@ -406,7 +431,7 @@ impl CrdsGossipPush {
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
         socket_addr_space: &SocketAddrSpace,
-    ) -> Vec<(/*weight:*/ u64, /*node:*/ Pubkey)> {
+    ) -> Vec<(/*weight:*/ u64, /*node:*/ ContactInfo)> {
         let now = timestamp();
         let mut rng = rand::thread_rng();
         let max_weight = u16::MAX as f32 - 1.0;
@@ -443,7 +468,7 @@ impl CrdsGossipPush {
                 let weight = get_weight(max_weight, since, stake);
                 // Weights are bounded by max_weight defined above.
                 // So this type-cast should be safe.
-                ((weight * 100.0) as u64, info.id)
+                ((weight * 100.0) as u64, info.clone())
             })
             .collect()
     }
@@ -489,11 +514,20 @@ impl CrdsGossipPush {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use {
         super::*,
         crate::{contact_info::ContactInfo, crds_value::CrdsData},
+        std::time::Duration,
     };
+
+    fn new_ping_cache() -> PingCache {
+        PingCache::new(
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
+        )
+    }
 
     #[test]
     fn test_prune() {
@@ -660,33 +694,39 @@ mod test {
         let now = timestamp();
         let mut crds = Crds::default();
         let push = CrdsGossipPush::default();
-        let value1 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let mut ping_cache = new_ping_cache();
+        let value1 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(value1.id, value1.gossip, Instant::now());
+        let value1 = CrdsValue::new_unsigned(CrdsData::ContactInfo(value1));
 
         assert_eq!(
             crds.insert(value1.clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
+        let keypair = Keypair::new();
         let crds = RwLock::new(crds);
+        let ping_cache = Mutex::new(ping_cache);
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validators
+            &keypair,
+            0, // self_shred_version
+            1, // network_sizer
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
 
         let active_set = push.active_set.read().unwrap();
         assert!(active_set.get(&value1.label().pubkey()).is_some());
-        let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache
+            .lock()
+            .unwrap()
+            .mock_pong(value2.id, value2.gossip, Instant::now());
+        let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(value2));
         assert!(active_set.get(&value2.label().pubkey()).is_none());
         drop(active_set);
         assert_eq!(
@@ -698,12 +738,14 @@ mod test {
         for _ in 0..30 {
             push.refresh_push_active_set(
                 &crds,
-                &HashMap::new(),
-                None,
-                &Pubkey::default(),
-                0,
-                1,
-                1,
+                &HashMap::new(), // stakes
+                None,            // gossip_validators
+                &keypair,
+                0, // self_shred_version
+                1, // network_size
+                1, // ratio
+                &ping_cache,
+                &mut Vec::new(), // pings
                 &SocketAddrSpace::Unspecified,
             );
             let active_set = push.active_set.read().unwrap();
@@ -716,9 +758,12 @@ mod test {
             assert!(active_set.get(&value2.label().pubkey()).is_some());
         }
         for _ in 0..push.num_active {
-            let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(
-                ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0),
-            ));
+            let value2 = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+            ping_cache
+                .lock()
+                .unwrap()
+                .mock_pong(value2.id, value2.gossip, Instant::now());
+            let value2 = CrdsValue::new_unsigned(CrdsData::ContactInfo(value2));
             assert_eq!(
                 crds.write()
                     .unwrap()
@@ -726,14 +771,17 @@ mod test {
                 Ok(())
             );
         }
+
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validators
+            &keypair,
+            0, // self_shred_version
+            1, // network_size
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
         assert_eq!(push.active_set.read().unwrap().len(), push.num_active);
@@ -768,7 +816,7 @@ mod test {
         assert!(!options.is_empty());
         options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
         // check that the highest stake holder is also the heaviest weighted.
-        assert_eq!(stakes[&options[0].1], 10_000_u64);
+        assert_eq!(stakes[&options[0].1.id], 10_000_u64);
     }
 
     #[test]
@@ -826,7 +874,7 @@ mod test {
                 &SocketAddrSpace::Unspecified,
             )
             .iter()
-            .map(|(_, pk)| *pk)
+            .map(|(_, node)| node.id)
             .collect::<Vec<_>>();
         assert_eq!(options.len(), 1);
         assert!(!options.contains(&spy.pubkey()));
@@ -906,7 +954,7 @@ mod test {
         );
 
         assert_eq!(options.len(), 1);
-        assert_eq!(options[0].1, node_123.pubkey());
+        assert_eq!(options[0].1.id, node_123.pubkey());
     }
 
     #[test]
@@ -914,23 +962,26 @@ mod test {
         let now = timestamp();
         let mut crds = Crds::default();
         let push = CrdsGossipPush::default();
-        let peer = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &solana_sdk::pubkey::new_rand(),
-            0,
-        )));
+        let mut ping_cache = new_ping_cache();
+        let peer = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
+        ping_cache.mock_pong(peer.id, peer.gossip, Instant::now());
+        let peer = CrdsValue::new_unsigned(CrdsData::ContactInfo(peer));
         assert_eq!(
             crds.insert(peer.clone(), now, GossipRoute::LocalMessage),
             Ok(())
         );
         let crds = RwLock::new(crds);
+        let ping_cache = Mutex::new(ping_cache);
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validtors
+            &Keypair::new(),
+            0, // self_shred_version
+            1, // network_size
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
 
@@ -954,11 +1005,13 @@ mod test {
         let mut rng = rand::thread_rng();
         let mut crds = Crds::default();
         let push = CrdsGossipPush::default();
+        let mut ping_cache = new_ping_cache();
         let peers: Vec<_> = vec![0, 0, now]
             .into_iter()
             .map(|wallclock| {
                 let mut peer = ContactInfo::new_rand(&mut rng, /*pubkey=*/ None);
                 peer.wallclock = wallclock;
+                ping_cache.mock_pong(peer.id, peer.gossip, Instant::now());
                 CrdsValue::new_unsigned(CrdsData::ContactInfo(peer))
             })
             .collect();
@@ -976,14 +1029,17 @@ mod test {
             push.process_push_message(&crds, &Pubkey::default(), vec![peers[2].clone()], now),
             [Ok(origin[2])],
         );
+        let ping_cache = Mutex::new(ping_cache);
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validators
+            &Keypair::new(),
+            0, // self_shred_version
+            1, // network_size
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(),
             &SocketAddrSpace::Unspecified,
         );
 
@@ -1011,14 +1067,17 @@ mod test {
             Ok(())
         );
         let crds = RwLock::new(crds);
+        let ping_cache = Mutex::new(new_ping_cache());
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validators
+            &Keypair::new(),
+            0, // self_shred_version
+            1, // network_size
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
 
@@ -1049,14 +1108,17 @@ mod test {
         )));
         assert_eq!(crds.insert(peer, 0, GossipRoute::LocalMessage), Ok(()));
         let crds = RwLock::new(crds);
+        let ping_cache = Mutex::new(new_ping_cache());
         push.refresh_push_active_set(
             &crds,
-            &HashMap::new(),
-            None,
-            &Pubkey::default(),
-            0,
-            1,
-            1,
+            &HashMap::new(), // stakes
+            None,            // gossip_validators
+            &Keypair::new(),
+            0, // self_shred_version
+            1, // network_size
+            1, // ratio
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
 

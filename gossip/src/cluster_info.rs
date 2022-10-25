@@ -427,7 +427,7 @@ impl ClusterInfo {
             socket_addr_space,
         };
         me.insert_self();
-        me.push_self(&HashMap::new(), None);
+        me.push_self();
         me
     }
 
@@ -466,11 +466,7 @@ impl ClusterInfo {
         &self.socket_addr_space
     }
 
-    fn push_self(
-        &self,
-        stakes: &HashMap<Pubkey, u64>,
-        gossip_validators: Option<&HashSet<Pubkey>>,
-    ) {
+    fn push_self(&self) {
         let now = timestamp();
         self.my_contact_info.write().unwrap().wallclock = now;
         let entries: Vec<_> = vec![
@@ -484,18 +480,45 @@ impl ClusterInfo {
             .lock()
             .unwrap()
             .extend(entries);
-        let ContactInfo {
-            id: self_pubkey,
-            shred_version,
-            ..
-        } = *self.my_contact_info.read().unwrap();
+    }
+
+    fn refresh_push_active_set(
+        &self,
+        recycler: &PacketBatchRecycler,
+        stakes: &HashMap<Pubkey, u64>,
+        gossip_validators: Option<&HashSet<Pubkey>>,
+        sender: &PacketBatchSender,
+    ) {
+        let ContactInfo { shred_version, .. } = *self.my_contact_info.read().unwrap();
+        let self_keypair: Arc<Keypair> = self.keypair().clone();
+        let mut pings = Vec::new();
         self.gossip.refresh_push_active_set(
-            &self_pubkey,
+            &self_keypair,
             shred_version,
             stakes,
             gossip_validators,
+            &self.ping_cache,
+            &mut pings,
             &self.socket_addr_space,
         );
+        self.stats
+            .new_pull_requests_pings_count
+            .add_relaxed(pings.len() as u64);
+        let pings: Vec<_> = pings
+            .into_iter()
+            .map(|(addr, ping)| (addr, Protocol::PingMessage(ping)))
+            .collect();
+        if !pings.is_empty() {
+            self.stats
+                .packets_sent_gossip_requests_count
+                .add_relaxed(pings.len() as u64);
+            let packet_batch = PacketBatch::new_unpinned_with_recycler_data_and_dests(
+                recycler.clone(),
+                "refresh_push_active_set",
+                &pings,
+            );
+            let _ = sender.send(packet_batch);
+        }
     }
 
     // TODO kill insert_info, only used by tests
@@ -645,7 +668,7 @@ impl ClusterInfo {
             CrdsData::Version(Version::new(self.id())),
             &self.keypair(),
         ));
-        self.push_self(&HashMap::new(), None);
+        self.push_self();
     }
 
     pub fn lookup_contact_info<F, Y>(&self, id: &Pubkey, map: F) -> Option<Y>
@@ -1691,7 +1714,7 @@ impl ClusterInfo {
         Builder::new()
             .name("solGossip".to_string())
             .spawn(move || {
-                let mut last_push = timestamp();
+                let mut last_push = 0;
                 let mut last_contact_info_trace = timestamp();
                 let mut last_contact_info_save = timestamp();
                 let mut entrypoints_processed = false;
@@ -1754,7 +1777,13 @@ impl ClusterInfo {
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an self.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
-                        self.push_self(&stakes, gossip_validators.as_ref());
+                        self.push_self();
+                        self.refresh_push_active_set(
+                            &recycler,
+                            &stakes,
+                            gossip_validators.as_ref(),
+                            &sender,
+                        );
                         last_push = timestamp();
                     }
                     let elapsed = timestamp() - start;
@@ -3552,10 +3581,12 @@ RPC Enabled Nodes: 1"#;
         ));
         cluster_info.insert_info(spy);
         cluster_info.gossip.refresh_push_active_set(
-            &cluster_info.id(),
+            &cluster_info.keypair(),
             cluster_info.my_shred_version(),
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &cluster_info.ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
         let reqs = cluster_info.generate_new_gossip_requests(
@@ -3683,10 +3714,12 @@ RPC Enabled Nodes: 1"#;
             .mock_pong(peer.id, peer.gossip, Instant::now());
         cluster_info.insert_info(peer);
         cluster_info.gossip.refresh_push_active_set(
-            &cluster_info.id(),
+            &cluster_info.keypair(),
             cluster_info.my_shred_version(),
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &cluster_info.ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
@@ -3987,10 +4020,7 @@ RPC Enabled Nodes: 1"#;
             let mut node = cluster_info.my_contact_info.write().unwrap();
             node.shred_version = 42;
         }
-        cluster_info.push_self(
-            &HashMap::default(), // stakes
-            None,                // gossip validators
-        );
+        cluster_info.push_self();
         cluster_info.flush_push_queue();
         // Should now include both epoch slots.
         let slots = cluster_info.get_epoch_slots(&mut Cursor::default());
