@@ -79,6 +79,8 @@ The main justifications for these values are:
    hash calculation in time.
 3. The `start offset` should be *after* the `rewarding interval`
    (from [Partitioned Inflationary Rewards Distribution](https://github.com/solana-labs/solana/pull/27455)).
+   This ensures stake rewards have been distributed and stored into the
+   accounts for this epoch.
 
 Once the EAH calculation is complete, it must be saved somewhere.  Since this
 occurs in the background, there is not an associated `Bank` that would make
