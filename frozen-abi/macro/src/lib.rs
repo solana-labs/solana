@@ -298,7 +298,7 @@ fn quote_for_test(
                     ::log::warn!("Not testing the abi digest under SOLANA_ABI_BULK_UPDATE!");
                 } else {
                     if let Ok(dir) = ::std::env::var("SOLANA_ABI_DUMP_DIR") {
-                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: $ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
+                        assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Examine the diff in SOLANA_ABI_DUMP_DIR!: \n$ diff -u {}/*{}* {}/*{}*", dir, #expected_digest, dir, actual_digest);
                     } else {
                         assert_eq!(#expected_digest, actual_digest, "Possibly ABI changed? Confirm the diff by rerunning before and after this test failed with SOLANA_ABI_DUMP_DIR!");
                     }
