@@ -7244,7 +7244,7 @@ impl AccountsDb {
         stats.num_dirty_slots = num_dirty_slots;
     }
 
-    pub(crate) fn calculate_accounts_hash_helper(
+    pub(crate) fn calculate_accounts_hash(
         &self,
         use_index: bool,
         slot: Slot,
@@ -7291,12 +7291,11 @@ impl AccountsDb {
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let (hash, total_lamports) =
-            self.calculate_accounts_hash_helper(use_index, slot, &config)?;
+        let (hash, total_lamports) = self.calculate_accounts_hash(use_index, slot, &config)?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let (hash_other, total_lamports_other) =
-                self.calculate_accounts_hash_helper(!use_index, slot, &config)?;
+                self.calculate_accounts_hash(!use_index, slot, &config)?;
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
@@ -12382,7 +12381,7 @@ pub mod tests {
         let check_hash = true;
         for use_index in [true, false] {
             assert!(db
-                .calculate_accounts_hash_helper(
+                .calculate_accounts_hash(
                     use_index,
                     some_slot,
                     &CalcAccountsHashConfig {
@@ -12434,7 +12433,7 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         assert_eq!(
-            db.calculate_accounts_hash_helper(
+            db.calculate_accounts_hash(
                 false,
                 some_slot,
                 &CalcAccountsHashConfig {
@@ -12445,7 +12444,7 @@ pub mod tests {
                 },
             )
             .unwrap(),
-            db.calculate_accounts_hash_helper(
+            db.calculate_accounts_hash(
                 true,
                 some_slot,
                 &CalcAccountsHashConfig {
