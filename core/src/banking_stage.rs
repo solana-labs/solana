@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        multi_iterator_scanner::MultiIteratorScanner,
+        multi_iterator_scanner::{MultiIteratorScanner, MultiIteratorScannerElementCheck},
         packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
@@ -654,22 +654,18 @@ impl BankingStage {
                     let batch_write_account_locks = RefCell::new(HashSet::new());
                     let batch_sanitized_transactions =
                         RefCell::new(Vec::with_capacity(SCANNER_BATCH_SIZE));
-                    let mut already_processed = vec![false; packets_to_process_len];
-                    let mut should_process_packet =
-                        |index: usize, packet: &Arc<ImmutableDeserializedPacket>| {
-                            Self::consume_scan_should_process_packet(
-                                &mut already_processed,
-                                *reached_end_of_slot.borrow(),
-                                &working_bank,
-                                &mut buffered_packet_batches_ref_cell.borrow_mut(),
-                                &mut slot_metrics_tracker_ref_cell.borrow_mut(),
-                                banking_stage_stats,
-                                &mut batch_write_account_locks.borrow_mut(),
-                                &mut batch_sanitized_transactions.borrow_mut(),
-                                index,
-                                packet,
-                            )
-                        };
+                    let mut should_process_packet = |packet: &Arc<ImmutableDeserializedPacket>| {
+                        Self::consume_scan_should_process_packet(
+                            *reached_end_of_slot.borrow(),
+                            &working_bank,
+                            &mut buffered_packet_batches_ref_cell.borrow_mut(),
+                            &mut slot_metrics_tracker_ref_cell.borrow_mut(),
+                            banking_stage_stats,
+                            &mut batch_write_account_locks.borrow_mut(),
+                            &mut batch_sanitized_transactions.borrow_mut(),
+                            packet,
+                        )
+                    };
 
                     let mut result = Vec::with_capacity(packets_to_process_len);
                     while let Some(processing_batch) = scanner.iterate(&mut should_process_packet) {
@@ -817,7 +813,6 @@ impl BankingStage {
     /// Returns true if the packet should be processed, false otherwise
     #[allow(clippy::too_many_arguments)]
     fn consume_scan_should_process_packet(
-        already_processed: &mut [bool],
         reached_end_of_slot: bool,
         working_bank: &Bank,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
@@ -825,18 +820,11 @@ impl BankingStage {
         banking_stage_stats: &BankingStageStats,
         batch_write_account_locks: &mut RefMut<HashSet<Pubkey>>,
         batch_sanitized_transactions: &mut RefMut<Vec<SanitizedTransaction>>,
-        index: usize,
         packet: &ImmutableDeserializedPacket,
-    ) -> bool {
-        // If the packet is already processed, skip it
-        if already_processed[index] {
-            return false;
-        }
-
-        // If end of the slot, return true (to process the packet - will just be quick loop)
+    ) -> MultiIteratorScannerElementCheck {
+        // If end of the slot, return should process (quick loop after reached end of slot)
         if reached_end_of_slot {
-            already_processed[index] = true;
-            return true;
+            return MultiIteratorScannerElementCheck::Process;
         }
 
         // Before sanitization, let's quickly check the static keys (performance optimization)
@@ -848,7 +836,7 @@ impl BankingStage {
             .filter_map(|(idx, key)| message.is_maybe_writable(idx).then_some(key))
         {
             if batch_write_account_locks.contains(key) {
-                return false;
+                return MultiIteratorScannerElementCheck::ProcessLater;
             }
         }
 
@@ -881,7 +869,7 @@ impl BankingStage {
                 });
 
             if conflicts_with_batch {
-                false
+                MultiIteratorScannerElementCheck::ProcessLater
             } else {
                 message
                     .account_keys()
@@ -893,18 +881,15 @@ impl BankingStage {
                         }
                     });
 
-                already_processed[index] = true;
                 batch_sanitized_transactions.push(sanitized_transaction);
-                true
+                MultiIteratorScannerElementCheck::Process
             }
         } else {
-            // Mark it as already processed and return false so we don't try again
-            already_processed[index] = true;
             // Remove the packet from map
             buffered_packet_batches
                 .message_hash_to_transaction
                 .remove(packet.message_hash());
-            false
+            MultiIteratorScannerElementCheck::NeverProcess
         }
     }
 

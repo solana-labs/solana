@@ -1,7 +1,19 @@
+/// Output from the element checker used in `MultiIteratorScanner::iterate`.
+pub enum MultiIteratorScannerElementCheck {
+    /// Should be processed by the scanner.
+    Process,
+    /// Should be skipped by the scanner on this pass - process later.
+    ProcessLater,
+    /// Should be skipped and marked as processed so we don't process it again.
+    NeverProcess,
+}
+
 /// Single-pass scan over a slice with multiple iterators.
 pub struct MultiIteratorScanner<'a, T> {
     /// Slice that we're iterating over
     slice: &'a [T],
+    /// Store whether an element has already been processed
+    already_processed: Vec<bool>,
     /// The indices used for iteration
     indices: Vec<usize>,
     /// Container to store items for iteration - Should only be used in `get_current_items()`
@@ -15,6 +27,7 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
         assert!(num_iterators > 0);
         Self {
             slice,
+            already_processed: vec![false; slice.len()],
             indices: Vec::with_capacity(num_iterators),
             current_items: Vec::with_capacity(num_iterators),
             initialized: false,
@@ -27,7 +40,7 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
     ///                    so that multiple iterators do not grab the same index.
     pub fn iterate<F>(&mut self, should_process: &mut F) -> Option<&[&'a T]>
     where
-        F: FnMut(usize, &T) -> bool,
+        F: FnMut(&T) -> MultiIteratorScannerElementCheck,
     {
         if !self.initialized {
             return self.initialize_iterators(should_process);
@@ -40,7 +53,12 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
         for (iterator_index, iterator) in self.indices.iter_mut().enumerate() {
             // If the previous iterator has passed this iterator, we should start at it's position + 1.
             let start_index = (iterator.saturating_add(1)).max(prev_index.saturating_add(1));
-            match Self::march_iterator(self.slice, start_index, should_process) {
+            match Self::march_iterator(
+                self.slice,
+                &mut self.already_processed,
+                start_index,
+                should_process,
+            ) {
                 Some(index) => {
                     *iterator = index;
                 }
@@ -61,12 +79,17 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
 
     fn initialize_iterators<F>(&mut self, should_process: &mut F) -> Option<&[&'a T]>
     where
-        F: FnMut(usize, &T) -> bool,
+        F: FnMut(&T) -> MultiIteratorScannerElementCheck,
     {
         let mut last_index = 0;
         let num_iterators = self.indices.capacity();
         for _iterator_index in 0..num_iterators {
-            match Self::march_iterator(self.slice, last_index, should_process) {
+            match Self::march_iterator(
+                self.slice,
+                &mut self.already_processed,
+                last_index,
+                should_process,
+            ) {
                 Some(index) => {
                     self.indices.push(index);
                     last_index = index.saturating_add(1);
@@ -89,16 +112,34 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
     }
 
     /// Moves the iterator to its' next position. If we've reached the end of the slice, we return None
-    fn march_iterator<F>(slice: &[T], mut index: usize, should_process: &mut F) -> Option<usize>
+    fn march_iterator<F>(
+        slice: &[T],
+        already_processed: &mut [bool],
+        mut index: usize,
+        should_process: &mut F,
+    ) -> Option<usize>
     where
-        F: FnMut(usize, &T) -> bool,
+        F: FnMut(&T) -> MultiIteratorScannerElementCheck,
     {
-        // Check length before calling into `should_process`
+        // Check length and `already_processed` before calling into `should_process`
         let length = slice.len();
-        while index < length && !should_process(index, &slice[index]) {
+        while index < length {
+            if !already_processed[index] {
+                match should_process(&slice[index]) {
+                    MultiIteratorScannerElementCheck::Process => {
+                        already_processed[index] = true;
+                        return Some(index);
+                    }
+                    MultiIteratorScannerElementCheck::ProcessLater => {}
+                    MultiIteratorScannerElementCheck::NeverProcess => {
+                        already_processed[index] = true;
+                    }
+                }
+            }
             index += 1;
         }
-        (index < length).then_some(index)
+
+        None
     }
 }
 
@@ -106,20 +147,14 @@ impl<'a, T> MultiIteratorScanner<'a, T> {
 mod tests {
     use {
         super::MultiIteratorScanner,
+        crate::multi_iterator_scanner::MultiIteratorScannerElementCheck,
         std::{cell::RefCell, rc::Rc},
     };
 
     #[test]
     fn test_multi_iterator_scanner_iterate() {
         let slice = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        let mut has_processed = vec![false; slice.len()];
-        let mut should_process = move |index: usize, _item: &i32| {
-            if has_processed[index] {
-                return false;
-            }
-            has_processed[index] = true;
-            true
-        };
+        let mut should_process = move |_item: &i32| MultiIteratorScannerElementCheck::Process;
 
         let mut scanner = MultiIteratorScanner::new(&slice, 2);
         // [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -163,25 +198,18 @@ mod tests {
     #[test]
     fn test_multi_iterator_scanner_iterate_with_gaps() {
         let slice = [0, 0, 0, 1, 2, 3, 1];
-        let mut has_processed = vec![false; slice.len()];
         let resource_locked = Rc::new(RefCell::new(vec![false; 4]));
         let resource_locked_clone = resource_locked.clone();
-        let mut should_process = move |index: usize, item: &i32| {
-            // Already processed => skip
-            if has_processed[index] {
-                return false;
-            }
+        let mut should_process = move |item: &i32| {
             // Resource locked => skip
             if resource_locked.borrow()[*item as usize] {
-                return false;
+                return MultiIteratorScannerElementCheck::ProcessLater;
             }
 
-            // Mark as processed (usually would do this in the iterate loop)
-            has_processed[index] = true;
             // Lock the resource - this needs to be in the `should_skip`
             resource_locked.borrow_mut()[*item as usize] = true;
 
-            true
+            MultiIteratorScannerElementCheck::Process
         };
 
         // Batch 1: [0, 0, 0, 1, 2, 3, 4]
@@ -202,6 +230,27 @@ mod tests {
                 resource_locked_clone.borrow_mut()[**item as usize] = false;
             }
 
+            index += 1;
+        }
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_with_never_process() {
+        let slice = [0, 4, 1, 2];
+        let mut should_process = move |item: &i32| match item {
+            4 => MultiIteratorScannerElementCheck::NeverProcess,
+            _ => MultiIteratorScannerElementCheck::Process,
+        };
+
+        // Batch 1: [0, 4, 1, 2]
+        //           ^     ^
+        // Batch 1: [0, 4, 1, 2]
+        //                    ^
+        let expected_batches = vec![vec![&0, &1], vec![&2]];
+        let mut index = 0;
+        let mut scanner = MultiIteratorScanner::new(&slice, 2);
+        while let Some(batch) = scanner.iterate(&mut should_process) {
+            assert_eq!(batch, &expected_batches[index][..]);
             index += 1;
         }
     }
