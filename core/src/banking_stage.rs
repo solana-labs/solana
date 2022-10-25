@@ -893,6 +893,7 @@ impl BankingStage {
                         }
                     });
 
+                already_processed[index] = true;
                 batch_sanitized_transactions.push(sanitized_transaction);
                 true
             }
