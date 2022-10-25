@@ -72,6 +72,7 @@ impl AccountsHashVerifier {
                         &accounts_package_receiver,
                     ) {
                         info!("handling accounts package: {accounts_package:?}");
+                        let enqueued_time = accounts_package.enqueued.elapsed();
 
                         let (_, measure) = measure!(Self::process_accounts_package(
                             accounts_package,
@@ -97,6 +98,7 @@ impl AccountsHashVerifier {
                                 num_re_enqueued_accounts_packages as i64,
                                 i64
                             ),
+                            ("enqueued-time-us", enqueued_time.as_micros() as i64, i64),
                             ("total-processing-time-us", measure.as_us() as i64, i64),
                         );
                     } else {
@@ -478,7 +480,7 @@ mod tests {
             sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::str::FromStr,
+        std::{str::FromStr, time::Instant},
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -561,6 +563,7 @@ mod tests {
                 accounts: Arc::clone(&accounts),
                 epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
+                enqueued: Instant::now(),
             };
 
             AccountsHashVerifier::process_accounts_package(

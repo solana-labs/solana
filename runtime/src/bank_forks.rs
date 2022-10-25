@@ -317,6 +317,7 @@ impl BankForks {
                     snapshot_root_bank: Arc::clone(eah_bank),
                     status_cache_slot_deltas: Vec::default(),
                     request_type: SnapshotRequestType::EpochAccountsHash,
+                    enqueued: Instant::now(),
                 })
                 .expect("send epoch accounts hash request");
         }
@@ -356,6 +357,7 @@ impl BankForks {
                             snapshot_root_bank: Arc::clone(bank),
                             status_cache_slot_deltas,
                             request_type: SnapshotRequestType::Snapshot,
+                            enqueued: Instant::now(),
                         })
                     {
                         warn!(
