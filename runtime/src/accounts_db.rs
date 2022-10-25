@@ -3826,7 +3826,6 @@ impl AccountsDb {
         );
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-        let mut dead_storages = vec![];
         let mut create_and_insert_store_elapsed_us = 0;
         let mut write_storage_elapsed_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
@@ -3865,6 +3864,8 @@ impl AccountsDb {
                 StoreReclaims::Ignore,
             );
 
+            rewrite_elapsed.stop();
+
             // `store_accounts_frozen()` above may have purged accounts from some
             // other storage entries (the ones that were just overwritten by this
             // new storage entry). This means some of those stores might have caused
@@ -3872,8 +3873,9 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
+            let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
             // Purge old, overwritten storage entries
-            let mut write_storage_elapsed = Measure::start("write_storage_elapsed");
+            let mut dead_storages = vec![];
             let remaining_stores = self.mark_dirty_dead_stores(
                 slot,
                 &mut dead_storages,
@@ -3887,6 +3889,11 @@ impl AccountsDb {
                 self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
             }
 
+            write_storage_elapsed.stop();
+            write_storage_elapsed_us = write_storage_elapsed.as_us();
+
+            self.drop_or_recycle_stores(dead_storages);
+
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
                 info!(
@@ -3894,12 +3901,7 @@ impl AccountsDb {
                     slot, remaining_stores
                 );
             }
-            write_storage_elapsed.stop();
-            write_storage_elapsed_us = write_storage_elapsed.as_us();
         }
-        rewrite_elapsed.stop();
-
-        self.drop_or_recycle_stores(dead_storages);
 
         Self::update_shrink_stats(
             &self.shrink_stats,
