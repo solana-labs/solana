@@ -2333,6 +2333,7 @@ impl Bank {
         self.epoch_reward_calc_start = Some((parent_slot, parent_block_height));
     }
 
+    /// Test-only method
     pub fn clear_epoch_reward_calc_start_for_test(&mut self) {
         self.epoch_reward_calc_start = None;
     }
