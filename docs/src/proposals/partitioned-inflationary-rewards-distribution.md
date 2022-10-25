@@ -94,7 +94,18 @@ pending, account access is restricted". However, normal rpc queries, such as
 expect the rewards to be credit as some time point during the 'rewarding
 interval'.
 
-2. snapshot taken during the `rewarding interval`
+2. voting during `reward interval`
+
+During reward interval, vote transactions must be processed normally for
+achieving consensus and making progress for rooted blocks. However, those vote
+transactions may potentially change the vote accounts balance (i.e. pay for the
+voting transaction fee if vote_account and block reward recipient accounts
+are the same), before the epoch rewards are paid. When the epoch rewards are
+paid, those block rewards will be wiped out by the stale cached value. To
+prevent this, we will enforce that the vote_account and authorized_voter
+authority must be different.
+
+3. snapshot taken during the `rewarding interval`
 
 If a snapshot is taken during the `rewarding interval`, it would miss the
 rewards for the stake accounts. Any plain restart from those snapshots will be
@@ -109,7 +120,7 @@ In future, if needed, we can
 revisit to enable taking snapshots and perform hash calculation during reward
 interval.
 
-3. account-db related action during the `rewarding interval`
+4. account-db related action during the `rewarding interval`
 
 Account-db related action such as flush, clean, squash, shrink etc. may touch
 and evict the stake accounts from account db's cache during the `rewarding
@@ -121,14 +132,14 @@ is, and make the `credit interval` larger to accommodate the performance hit
 when writing back those accounts. In future, we can continue tuning account db
 actions during 'rewarding interval'.
 
-4. view of total epoch capitalization change
+5. view of total epoch capitalization change
 
 The view of total epoch capitalization, instead of being available at every
 epoch boundary, is only available after the `rewarding interval`. Any third
 party application logic, which depends on total epoch capitalization, need to
 wait after `rewarding interval`.
 
-5. `getInflationReward` JSONRPC API method call
+6. `getInflationReward` JSONRPC API method call
 
 Today, the `getInflationReward` JSONRPC API method call can simply grab the
 first block in the target epoch and lookup the target stake account's rewards
