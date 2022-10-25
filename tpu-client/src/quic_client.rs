@@ -17,7 +17,7 @@ use {
     solana_sdk::transport::{Result as TransportResult, TransportError},
     std::{
         net::SocketAddr,
-        sync::{Arc, Condvar, Mutex, MutexGuard},
+        sync::{atomic::Ordering, Arc, Condvar, Mutex, MutexGuard},
         time::Duration,
     },
     tokio::{runtime::Runtime, time::timeout},
@@ -118,9 +118,13 @@ async fn send_wire_transaction_async(
     ASYNC_TASK_SEMAPHORE.release();
     match result {
         Ok(result) => result,
-        Err(_err) => Err(TransportError::Custom(
-            "Timedout sending transaction".to_string(),
-        )),
+        Err(_err) => {
+            let stats = connection.base_stats();
+            stats.send_timeout.fetch_add(1, Ordering::Relaxed);
+            Err(TransportError::Custom(
+                "Timedout sending transaction".to_string(),
+            ))
+        }
     }
 }
 
@@ -138,9 +142,13 @@ async fn send_wire_transaction_batch_async(
     ASYNC_TASK_SEMAPHORE.release();
     match result {
         Ok(result) => result,
-        Err(_err) => Err(TransportError::Custom(
-            "Timedout sending transaction".to_string(),
-        )),
+        Err(_err) => {
+            let stats = connection.base_stats();
+            stats.send_timeout.fetch_add(1, Ordering::Relaxed);
+            Err(TransportError::Custom(
+                "Timedout sending transaction".to_string(),
+            ))
+        }
     }
 }
 

@@ -188,6 +188,13 @@ impl ConnectionCacheStats {
                 self.batch_failure.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "send_timeout",
+                self.total_client_stats
+                    .send_timeout
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }
