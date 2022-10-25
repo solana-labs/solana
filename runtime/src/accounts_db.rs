@@ -7283,7 +7283,7 @@ impl AccountsDb {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn calculate_accounts_hash_helper_with_verify(
+    fn calculate_accounts_hash_with_verify(
         &self,
         use_index: bool,
         debug_verify: bool,
@@ -7300,7 +7300,7 @@ impl AccountsDb {
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
+            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
         }
         Ok((hash, total_lamports))
     }
@@ -7319,7 +7319,7 @@ impl AccountsDb {
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
-            .calculate_accounts_hash_helper_with_verify(
+            .calculate_accounts_hash_with_verify(
                 use_index,
                 debug_verify,
                 slot,
@@ -7616,22 +7616,21 @@ impl AccountsDb {
 
         let use_index = false;
         let check_hash = false; // this will not be supported anymore
-        let (calculated_hash, calculated_lamports) = self
-            .calculate_accounts_hash_helper_with_verify(
-                use_index,
-                test_hash_calculation,
-                slot,
-                CalcAccountsHashConfig {
-                    use_bg_thread_pool,
-                    check_hash,
-                    ancestors: Some(ancestors),
-                    epoch_schedule,
-                    rent_collector,
-                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
-                    full_snapshot: None,
-                },
-                None,
-            )?;
+        let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_with_verify(
+            use_index,
+            test_hash_calculation,
+            slot,
+            CalcAccountsHashConfig {
+                use_bg_thread_pool,
+                check_hash,
+                ancestors: Some(ancestors),
+                epoch_schedule,
+                rent_collector,
+                store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
+                full_snapshot: None,
+            },
+            None,
+        )?;
 
         if calculated_lamports != total_lamports {
             warn!(
