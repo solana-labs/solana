@@ -44,8 +44,9 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, IncludeSlotInHash, SnapshotStorages,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            AccountShrinkThreshold, AccountsDbConfig, CalcAccountsHashDataSource,
+            IncludeSlotInHash, SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -6966,12 +6967,12 @@ impl Bank {
 
     pub fn update_accounts_hash_with_index_option(
         &self,
-        use_index: bool,
+        data_source: CalcAccountsHashDataSource,
         mut debug_verify: bool,
         is_startup: bool,
     ) -> Hash {
         let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
-            use_index,
+            data_source,
             debug_verify,
             self.slot(),
             &self.ancestors,
@@ -6993,7 +6994,7 @@ impl Bank {
                 // Run both versions of the calculation to attempt to get more info.
                 debug_verify = true;
                 self.rc.accounts.accounts_db.update_accounts_hash(
-                    use_index,
+                    data_source,
                     debug_verify,
                     self.slot(),
                     &self.ancestors,
@@ -7015,7 +7016,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, false)
+        self.update_accounts_hash_with_index_option(CalcAccountsHashDataSource::Index, false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
