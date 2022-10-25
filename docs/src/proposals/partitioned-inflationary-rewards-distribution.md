@@ -99,7 +99,7 @@ interval'.
 During reward interval, vote transactions must be processed normally for
 achieving consensus and making progress for rooted blocks. However, those vote
 transactions may potentially change the vote accounts balance (i.e. pay for the
-voting transaction fee if vote_account and vote transaction fee paying accounts
+voting transaction fee if vote_account and block reward recipient accounts
 are the same), before the epoch rewards are paid. When the epoch rewards are
 paid, those transaction fees will be wiped out. To prevent this, we will force
 the vote_account and vote_transaction fee paying account must be different.
