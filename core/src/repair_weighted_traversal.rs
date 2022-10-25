@@ -34,7 +34,7 @@ impl<'a> RepairWeightTraversal<'a> {
     fn new(tree: &'a HeaviestSubtreeForkChoice) -> Self {
         Self {
             tree,
-            pending: vec![Visit::Unvisited(tree.root().0)],
+            pending: vec![Visit::Unvisited(tree.tree_root().0)],
         }
     }
 }
