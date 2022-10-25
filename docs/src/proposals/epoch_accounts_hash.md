@@ -199,9 +199,11 @@ decrease network stability.
 
 ##### Remove `stop offset`
 
-This delays when the EAH is saved into a Bank and voted on.  The saved EAH is
-now the EAH from the previous epoch.  This could work; would reduce the number
-of "special" slots from two to one.  No significant advantages observed.
+Instead of having two offsets—one for `start` and one for `stop`—use a single
+offset for both.  This delays when the EAH is saved into a Bank and voted on.
+The saved EAH is now the EAH from the previous epoch.  This could work; would
+reduce the number of "special" slots from two to one.  No significant
+advantages observed.
 
 
 ##### Send EAH requests when making a new bank, instead of a new root
