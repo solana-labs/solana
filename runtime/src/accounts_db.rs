@@ -3791,22 +3791,18 @@ impl AccountsDb {
     {
         let mut stored_accounts = Vec::default();
         debug!("do_shrink_slot_stores: slot: {}", slot);
-        let ShrinkCollect {
-            store_ids,
-            original_bytes,
-            alive_total,
-            aligned_total,
-            unrefed_pubkeys,
-            alive_accounts,
-            total_starting_accounts,
-        } = self.shrink_collect(stores, &mut stored_accounts, &self.shrink_stats);
+        let shrink_collect = self.shrink_collect(stores, &mut stored_accounts, &self.shrink_stats);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(aligned_total, original_bytes, store_ids.len()) {
+        if Self::should_not_shrink(
+            shrink_collect.aligned_total,
+            shrink_collect.original_bytes,
+            shrink_collect.store_ids.len(),
+        ) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
-            for pubkey in unrefed_pubkeys {
+            for pubkey in shrink_collect.unrefed_pubkeys {
                 if let Some(locked_entry) = self.accounts_index.get_account_read_entry(pubkey) {
                     locked_entry.addref();
                 }
@@ -3814,15 +3810,15 @@ impl AccountsDb {
             return 0;
         }
 
-        let total_accounts_after_shrink = alive_accounts.len();
+        let total_accounts_after_shrink = shrink_collect.alive_accounts.len();
         debug!(
             "shrinking: slot: {}, accounts: ({} => {}) bytes: ({} ; aligned to: {}) original: {}",
             slot,
-            total_starting_accounts,
+            shrink_collect.total_starting_accounts,
             total_accounts_after_shrink,
-            alive_total,
-            aligned_total,
-            original_bytes,
+            shrink_collect.alive_total,
+            shrink_collect.aligned_total,
+            shrink_collect.original_bytes,
         );
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
@@ -3830,13 +3826,13 @@ impl AccountsDb {
         let mut write_storage_elapsed_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
-        if aligned_total > 0 {
+        if shrink_collect.aligned_total > 0 {
             let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
 
             let mut all_are_zero_lamports = true;
-            for (pubkey, alive_account) in alive_accounts {
+            for (pubkey, alive_account) in &shrink_collect.alive_accounts {
                 if all_are_zero_lamports && alive_account.account.lamports() != 0 {
                     all_are_zero_lamports = false;
                 }
@@ -3846,7 +3842,8 @@ impl AccountsDb {
             }
             find_alive_elapsed.stop();
 
-            let (shrunken_store, time) = measure!(self.get_store_for_shrink(slot, aligned_total));
+            let (shrunken_store, time) =
+                measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total));
             create_and_insert_store_elapsed_us = time.as_us();
 
             // here, we're writing back alive_accounts. That should be an atomic operation
@@ -3879,14 +3876,17 @@ impl AccountsDb {
             let remaining_stores = self.mark_dirty_dead_stores(
                 slot,
                 &mut dead_storages,
-                |store| !store_ids.contains(&store.append_vec_id()),
+                |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
                 // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
                 // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
                 all_are_zero_lamports,
             );
 
             if !all_are_zero_lamports {
-                self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
+                self.add_uncleaned_pubkeys_after_shrink(
+                    slot,
+                    shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
+                );
             }
 
             write_storage_elapsed.stop();
@@ -3910,9 +3910,9 @@ impl AccountsDb {
             store_accounts_timing,
             rewrite_elapsed,
             write_storage_elapsed_us,
-            total_starting_accounts - total_accounts_after_shrink,
-            original_bytes,
-            aligned_total,
+            shrink_collect.total_starting_accounts - total_accounts_after_shrink,
+            shrink_collect.original_bytes,
+            shrink_collect.aligned_total,
         );
         self.shrink_stats.report();
 
@@ -4368,21 +4368,14 @@ impl AccountsDb {
             }
 
             let mut stored_accounts = Vec::default();
-            let ShrinkCollect {
-                original_bytes,
-                aligned_total,
-                unrefed_pubkeys,
-                alive_accounts,
-                total_starting_accounts,
-                ..
-            } = self.shrink_collect(
+            let shrink_collect = self.shrink_collect(
                 old_storages.iter(),
                 &mut stored_accounts,
                 &self.shrink_ancient_stats.shrink_stats,
             );
 
             // could follow what shrink does more closely
-            if total_starting_accounts == 0 {
+            if shrink_collect.total_starting_accounts == 0 {
                 continue; // skipping slot with no useful accounts to write
             }
 
@@ -4391,10 +4384,12 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us += time.as_us();
             let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
             let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
-            let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
+            let to_store =
+                AccountsToStore::new(available_bytes, &shrink_collect.alive_accounts, slot);
             find_alive_elapsed.stop();
 
-            let all_are_zero_lamports = !alive_accounts
+            let all_are_zero_lamports = !shrink_collect
+                .alive_accounts
                 .iter()
                 .any(|(_key, found)| !found.account.is_zero_lamport());
 
@@ -4467,7 +4462,10 @@ impl AccountsDb {
             );
 
             if !all_are_zero_lamports {
-                self.add_uncleaned_pubkeys_after_shrink(slot, unrefed_pubkeys.into_iter().cloned());
+                self.add_uncleaned_pubkeys_after_shrink(
+                    slot,
+                    shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
+                );
             }
 
             write_storage_elapsed.stop();
@@ -4488,9 +4486,9 @@ impl AccountsDb {
                 store_accounts_timing,
                 rewrite_elapsed,
                 write_storage_elapsed.as_us(),
-                total_starting_accounts - alive_accounts.len(),
-                original_bytes,
-                aligned_total,
+                shrink_collect.total_starting_accounts - shrink_collect.alive_accounts.len(),
+                shrink_collect.original_bytes,
+                shrink_collect.aligned_total,
             );
         }
 
