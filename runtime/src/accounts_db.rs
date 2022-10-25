@@ -6916,7 +6916,7 @@ impl AccountsDb {
         debug_verify: bool,
         is_startup: bool,
     ) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
+        self.update_accounts_hash(
             true,
             debug_verify,
             slot,
@@ -7281,7 +7281,7 @@ impl AccountsDb {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash_with_index_option(
+    pub fn update_accounts_hash(
         &self,
         use_index: bool,
         debug_verify: bool,
