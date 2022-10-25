@@ -3883,10 +3883,8 @@ impl AccountsDb {
 
             let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
             // Purge old, overwritten storage entries
-            let mut dead_storages = vec![];
-            let remaining_stores = self.mark_dirty_dead_stores(
+            let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
                 slot,
-                &mut dead_storages,
                 |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
                 // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
                 // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
@@ -3968,15 +3966,15 @@ impl AccountsDb {
     /// get stores for 'slot'
     /// retain only the stores where 'should_retain(store)' == true
     /// for stores not retained, insert in 'dead_storages' and optionally 'dirty_stores'
-    /// returns # of remaining stores for this slot
+    /// returns: (# of remaining stores for this slot, dead storages)
     pub(crate) fn mark_dirty_dead_stores(
         &self,
         slot: Slot,
-        dead_storages: &mut Vec<Arc<AccountStorageEntry>>,
         should_retain: impl Fn(&AccountStorageEntry) -> bool,
         add_dirty_stores: bool,
-    ) -> usize {
-        if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
+    ) -> (usize, Vec<Arc<AccountStorageEntry>>) {
+        let mut dead_storages = Vec::default();
+        let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             let mut list = slot_stores.write().unwrap();
             list.retain(|_key, store| {
                 if !should_retain(store) {
@@ -3993,7 +3991,8 @@ impl AccountsDb {
             list.len()
         } else {
             0
-        }
+        };
+        (remaining_stores, dead_storages)
     }
 
     pub(crate) fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
@@ -4446,10 +4445,8 @@ impl AccountsDb {
 
             let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
             // Purge old, overwritten storage entries
-            let mut dead_storages = vec![];
-            self.mark_dirty_dead_stores(
+            let (_, dead_storages) = self.mark_dirty_dead_stores(
                 slot,
-                &mut dead_storages,
                 |store| ids.contains(&store.append_vec_id()),
                 // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
                 // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
@@ -16428,10 +16425,8 @@ pub mod tests {
         let slot = 0;
         let called = AtomicUsize::default();
         let add_dirty_stores = false;
-        let mut dead_storages = Vec::default();
-        let remaining_stores = db.mark_dirty_dead_stores(
+        let (remaining_stores, _) = db.mark_dirty_dead_stores(
             slot,
-            &mut dead_storages,
             |_store| {
                 called.fetch_add(1, Ordering::Relaxed);
                 false
@@ -16443,9 +16438,8 @@ pub mod tests {
 
         let size = 1;
         let inserted_store = db.create_and_insert_store(slot, size, "test");
-        let remaining_stores = db.mark_dirty_dead_stores(
+        let (remaining_stores, _) = db.mark_dirty_dead_stores(
             slot,
-            &mut dead_storages,
             |store| {
                 assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
                 called.fetch_add(1, Ordering::Relaxed);
@@ -16457,9 +16451,8 @@ pub mod tests {
         assert_eq!(1, remaining_stores);
 
         let called = AtomicUsize::default();
-        let remaining_stores = db.mark_dirty_dead_stores(
+        let (remaining_stores, _) = db.mark_dirty_dead_stores(
             slot,
-            &mut dead_storages,
             |store| {
                 assert_eq!(store.append_vec_id(), inserted_store.append_vec_id());
                 called.fetch_add(1, Ordering::Relaxed);
