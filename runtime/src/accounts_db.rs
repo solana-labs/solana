@@ -6920,36 +6920,22 @@ impl AccountsDb {
         bank_hash_info.snapshot_hash
     }
 
-    pub fn update_accounts_hash(
+    pub fn update_accounts_hash_for_tests(
         &self,
         slot: Slot,
         ancestors: &Ancestors,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
+        debug_verify: bool,
+        is_startup: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true,
-            false,
-            slot,
-            ancestors,
-            None,
-            epoch_schedule,
-            rent_collector,
-            false,
-        )
-    }
-
-    #[cfg(test)]
-    fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
-            true,
-            true,
+            debug_verify,
             slot,
             ancestors,
             None,
             &EpochSchedule::default(),
             &RentCollector::default(),
-            true,
+            is_startup,
         )
     }
 
@@ -11748,18 +11734,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(
-                latest_slot,
-                &ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-            ),
-            accounts.update_accounts_hash(
-                latest_slot,
-                &ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-            )
+            daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
+            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
         );
     }
 
@@ -11915,12 +11891,12 @@ pub mod tests {
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
-        let hash = accounts.update_accounts_hash_test(current_slot, &ancestors);
+        let hash = accounts.update_accounts_hash_for_tests(current_slot, &ancestors, true, true);
 
         accounts.clean_accounts_for_tests();
 
         assert_eq!(
-            accounts.update_accounts_hash_test(current_slot, &ancestors),
+            accounts.update_accounts_hash_for_tests(current_slot, &ancestors, true, true),
             hash
         );
 
@@ -12037,12 +12013,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(
-            4,
-            &Ancestors::default(),
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-        );
+        accounts.update_accounts_hash_for_tests(4, &Ancestors::default(), false, false);
 
         let accounts = f(accounts, current_slot);
 
@@ -12471,7 +12442,7 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12537,7 +12508,7 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12559,7 +12530,7 @@ pub mod tests {
                 &solana_sdk::native_loader::create_loadable_account_for_test("foo"),
             )],
         );
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12592,7 +12563,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -13250,12 +13221,7 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
-            accounts.update_accounts_hash(
-                current_slot,
-                &no_ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-            );
+            accounts.update_accounts_hash_for_tests(current_slot, &no_ancestors, false, false);
             accounts
                 .verify_bank_hash_and_lamports(
                     current_slot,
