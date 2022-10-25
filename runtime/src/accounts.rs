@@ -267,7 +267,7 @@ impl Accounts {
                 LoadZeroLamports::SomeWithZeroLamportAccount
             };
 
-        let is_vote = vote_parser::is_simple_vote_transaction(tx);
+        let is_vote = vote_parser::is_vote_only_transaction(tx);
 
         // Copy all the accounts
         let message = tx.message();

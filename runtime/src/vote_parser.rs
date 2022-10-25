@@ -38,6 +38,55 @@ pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> 
     false
 }
 
+/// Return true when
+///     1. All instructions are vote instructions
+///     2. There are no instruction
+/// Used to allow processing of vote instructions during reward interval
+pub(crate) fn is_vote_only_transaction(transaction: &SanitizedTransaction) -> bool {
+    let n = transaction.message().instructions().len();
+
+    if n == 0 {
+        return true;
+    }
+
+    let mut i = 0;
+    let mut result = true;
+
+    loop {
+        let (program_pubkey, instruction) = transaction
+            .message()
+            .program_instructions_iter()
+            .next()
+            .unwrap();
+
+        if program_pubkey == &solana_vote_program::id() {
+            if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
+            {
+                if !matches!(
+                    vote_instruction,
+                    VoteInstruction::Vote(_)
+                        | VoteInstruction::VoteSwitch(_, _)
+                        | VoteInstruction::UpdateVoteState(_)
+                        | VoteInstruction::UpdateVoteStateSwitch(_, _)
+                        | VoteInstruction::CompactUpdateVoteState(_)
+                        | VoteInstruction::CompactUpdateVoteStateSwitch(..)
+                ) {
+                    result = false;
+                }
+            } else {
+                result = false;
+            }
+        } else {
+            result = false;
+        }
+        i += 1;
+        if i == n {
+            break;
+        }
+    }
+    result
+}
+
 // Used for locally forwarding processed vote transactions to consensus
 pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<ParsedVote> {
     // Check first instruction for a vote
