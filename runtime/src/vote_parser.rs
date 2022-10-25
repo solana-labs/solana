@@ -155,6 +155,7 @@ mod test {
         solana_sdk::{
             hash::hash,
             signature::{Keypair, Signer},
+            transaction::Transaction,
         },
         solana_vote_program::{
             vote_instruction, vote_state::Vote, vote_transaction::new_vote_transaction,
@@ -196,5 +197,67 @@ mod test {
     fn test_parse_vote_transaction() {
         run_test_parse_vote_transaction(None);
         run_test_parse_vote_transaction(Some(hash(&[42u8])));
+    }
+
+    #[test]
+    fn test_check_vote_transaction() {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let auth_voter_keypair = Keypair::new();
+        let bank_hash = Hash::default();
+        let vote_tx = new_vote_transaction(
+            vec![42],
+            bank_hash,
+            Hash::default(),
+            &node_keypair,
+            &vote_keypair,
+            &auth_voter_keypair,
+            Some(bank_hash),
+        );
+
+        let vote_tx = SanitizedTransaction::from_transaction_for_tests(vote_tx);
+
+        assert!(is_simple_vote_transaction(&vote_tx));
+        assert!(is_vote_only_transaction(&vote_tx));
+    }
+
+    #[test]
+    fn test_check_vote_transaction_multiple_instructions() {
+        let node_keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let auth_voter_keypair = Keypair::new();
+        let bank_hash = Hash::default();
+
+        // Votes
+        let instructions = [
+            vote_instruction::vote(
+                &vote_keypair.pubkey(),
+                &auth_voter_keypair.pubkey(),
+                Vote {
+                    slots: vec![42],
+                    hash: bank_hash,
+                    timestamp: None,
+                },
+            ),
+            vote_instruction::vote(
+                &vote_keypair.pubkey(),
+                &auth_voter_keypair.pubkey(),
+                Vote {
+                    slots: vec![43],
+                    hash: bank_hash,
+                    timestamp: None,
+                },
+            ),
+        ];
+
+        let mut vote_tx = Transaction::new_with_payer(&instructions, Some(&node_keypair.pubkey()));
+
+        vote_tx.partial_sign(&[&node_keypair], bank_hash);
+        vote_tx.partial_sign(&[&auth_voter_keypair], bank_hash);
+
+        let vote_tx = SanitizedTransaction::from_transaction_for_tests(vote_tx);
+
+        assert!(!is_simple_vote_transaction(&vote_tx));
+        assert!(is_vote_only_transaction(&vote_tx));
     }
 }
