@@ -530,6 +530,11 @@ pub mod limit_max_instruction_trace_length {
     solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
 }
 
+/// TODO: hook up feature set in vote parser
+pub mod enable_required_different_vote_and_auth_voter_accounts {
+    solana_sdk::declare_id!("hK5s4DwOZhooF36HS7arQulmdB3pHHlWI4NqW3Ljdus8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -657,6 +662,7 @@ lazy_static! {
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
+        (enable_required_different_vote_and_auth_voter_accounts::id(), "enable the requirement for different vote account and authorized voter account for vote instructions"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
