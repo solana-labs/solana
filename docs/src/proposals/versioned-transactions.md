@@ -149,7 +149,7 @@ pub struct Message {
   // constructed from the concatenation of three key lists:
   //   1) message `account_keys`
   //   2) ordered list of keys loaded from address table `writable_indexes`
-  //   3) ordered list of keys loaded from address table `readable_indexes`
+  //   3) ordered list of keys loaded from address table `readonly_indexes`
   #[serde(with = "short_vec")]
   pub instructions: Vec<CompiledInstruction>,
 
