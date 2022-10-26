@@ -1474,7 +1474,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
 
         #[allow(clippy::collapsible_else_if)]
         if use_fixed_nonoverlapping_check {
-            if !is_nonoverlapping(src_addr, dst_addr, n) {
+            if !is_nonoverlapping(src_addr, n, dst_addr, n) {
                 *result = Err(SyscallError::CopyOverlapping.into());
                 return;
             }
@@ -1502,7 +1502,7 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallMemcpy<'a, 'b> {
         )
         .as_ptr();
         if do_check_physical_overlapping
-            && !is_nonoverlapping(src_ptr as usize, dst_ptr as usize, n as usize)
+            && !is_nonoverlapping(src_ptr as usize, n as usize, dst_ptr as usize, n as usize)
         {
             unsafe {
                 std::ptr::copy(src_ptr, dst_ptr, n as usize);
