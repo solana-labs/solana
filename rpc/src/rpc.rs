@@ -5147,10 +5147,7 @@ pub mod tests {
         let res = io.handle_request_sync(req, meta);
         let expected = json!({
             "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value":2,
-                },
+            "result": 2,
             "id": 1,
         });
         let result = serde_json::from_str::<Value>(&res.expect("actual response"))
@@ -5173,7 +5170,7 @@ pub mod tests {
         io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
 
         async fn use_client(client: rpc_minimal::gen_client::Client) -> u64 {
-            client.get_reward_interval(None).await.unwrap().value
+            client.get_reward_interval(None).await.unwrap()
         }
 
         let fut = async {

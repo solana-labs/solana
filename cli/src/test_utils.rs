@@ -61,7 +61,6 @@ pub fn wait_for_next_epoch_after_reward_interval(rpc_client: &RpcClient) -> Slot
         let next_epoch = rpc_client.get_epoch_info().unwrap().epoch;
         if next_epoch > current_epoch {
             let slot = rpc_client.get_slot().unwrap();
-            //let reward_interval = 150; //rpc_client.get_reward_interval().unwrap();
             let reward_interval = rpc_client.get_reward_interval().unwrap();
             loop {
                 sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
