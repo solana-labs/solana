@@ -223,7 +223,8 @@ fn test_bank_serialize_style(
     initial_epoch_accounts_hash: bool,
 ) {
     solana_logger::setup();
-    let (genesis_config, _) = create_genesis_config(500);
+    let (mut genesis_config, _) = create_genesis_config(500);
+    genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);

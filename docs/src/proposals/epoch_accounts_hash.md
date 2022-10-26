@@ -179,29 +179,34 @@ well.
 
 An EAH is requested by `BankForks::set_root()`, which happens while setting
 *roots*.  The EAH is stored into `Bank`s when they are *frozen*.  Banks are
-frozen 32 slots before they are rooted.  For the expected behavior, the EAH
-start slot really should be 32 slots before the stop slot. If the number of
-slots per epoch is small, this can result in surprising behavior.
+frozen *at least* 32 slots before they are rooted.  For the expected behavior,
+the EAH start slot really should be 32 slots before the stop slot. If the
+number of slots per epoch is small, this can result in surprising behavior.
 
-Example 1: Assume there are 64 slots per epoch.  The EAH start offset is 16
-and the EAH stop offset is 48.  The difference is 32.  So when Bank 48 is
-frozen before Bank 16 is rooted, a new EAH request has not yet been requested;
-the EAH from the previous epoch is still valid and will be used by Bank 48.
+Example: Assume there are 40 slots per epoch.  The EAH start offset is 10, and
+the EAH stop offset is 30.  When Bank 30 is frozen it will include the EAH in
+its hash.  However, Bank 10 has not yet been rooted, so a new EAH has not been
+calculated for this epoch.  This means Bank 30 will have included the EAH *from
+the previous epoch* in its hash.
 
-Example 2: Assume there are 66 slots per epoch, then the EAH start offset is
-still 16 and the EAH stop offset is now 49.  The difference is now 33.  When
-Bank 49 is frozen, Bank 16 will already have been rooted, and thus sent an EAH
-request; Bank 49 will wait for the new EAH calculation to complete.
+Later, when Bank 10 is rooted, it will request a new EAH be calculated.  If a
+snapshot is taken for Bank 12 (or any bank between 10 and 30), it will include
+the EAH *from this epoch*.  If a node loads the snapshot from Bank 12, once it
+gets to freezing Bank 30, it will end up with a different bank hash since it
+included the EAH from this epoch (versus the other node's Bank 30 included the
+EAH from the previous epoch).  Different bank hashes will result in consensus
+failures.
 
-Example 3: Assume there are 32 slots per epoch (the minimum allowed).  The EAH
-start offset is 8, and the EAH stop offset is 24.  Similar to Example 1, Bank
-24 is frozen around when Bank 24 *of the previous epoch* is rooted.  This
-ensures that when the EAH is stored, it'll be for the previous epoch.
+The above example is clearly bad.  It can be observed that short epochs only
+occur (1) during warmup, or (2) in tests.  Real clusters have much longer
+epochs (432,000 slots by default).
 
-In these examples the observed behavior of the EAH is different than when using
-the normal 432,000 slots per epoch.  The EAH is still valid and correct with a
-small number of slots per epoch; it now has a delay of one epoch.  Since the
-epochs themselves can be much faster, security is not reduced.
+Tests can be fixed as needed; that leaves fixing warmup.  Since warmup is
+transient, we disable EAH until slots-per-epoch is large enough.  More
+precisely, we disable EAH until the `calculation window` is big enough.  During
+warmup, slots-per-epoch doubles each epoch until reaching the desired number,
+so only a few epochs will skip EAH (which also is a small total number of
+slots).
 
 
 #### Warping
