@@ -260,6 +260,56 @@ enum LoadZeroLamports {
     SomeWithZeroLamportAccountForTests,
 }
 
+#[derive(Debug)]
+struct AncientSlotPubkeysInner {
+    pubkeys: HashSet<Pubkey>,
+    slot: Slot,
+}
+
+#[derive(Debug, Default)]
+struct AncientSlotPubkeys {
+    inner: Option<AncientSlotPubkeysInner>,
+}
+
+impl AncientSlotPubkeys {
+    /// All accounts in 'slot' will be moved to 'current_ancient'
+    /// If 'slot' is different than the 'current_ancient'.slot, then an account in 'slot' may ALREADY be in the current ancient append vec.
+    /// In that case, we need to unref the pubkey because it will now only be referenced from 'current_ancient'.slot and no longer from 'slot'.
+    /// 'self' is also changed to accumulate the pubkeys that now exist in 'current_ancient'
+    /// When 'slot' differs from the previous inner slot, then we have moved to a new ancient append vec, and inner.pubkeys gets reset to the
+    ///  pubkeys in the new 'current_ancient'.append_vec
+    fn maybe_unref_accounts_already_in_ancient(
+        &mut self,
+        slot: Slot,
+        db: &AccountsDb,
+        current_ancient: &CurrentAncientAppendVec,
+        to_store: &AccountsToStore,
+    ) {
+        if slot != current_ancient.slot() {
+            // we are taking accounts from 'slot' and putting them into 'ancient_slot'
+            let (accounts, _hashes) = to_store.get(StorageSelector::Primary);
+            if Some(current_ancient.slot()) != self.inner.as_ref().map(|ap| ap.slot) {
+                let pubkeys = current_ancient
+                    .append_vec()
+                    .accounts
+                    .account_iter()
+                    .map(|account| account.meta.pubkey)
+                    .collect::<HashSet<_>>();
+                self.inner = Some(AncientSlotPubkeysInner {
+                    pubkeys,
+                    slot: current_ancient.slot(),
+                });
+            }
+            // accounts in 'slot' but ALSO already in the ancient append vec at a different slot need to be unref'd since 'slot' is going away
+            // unwrap cannot fail because the code above will cause us to set it to Some(...) if it is None
+            db.unref_accounts_already_in_storage(
+                accounts,
+                self.inner.as_mut().map(|p| &mut p.pubkeys).unwrap(),
+            );
+        }
+    }
+}
+
 struct ShrinkCollect<'a> {
     original_bytes: u64,
     store_ids: Vec<AppendVecId>,
@@ -4362,8 +4412,7 @@ impl AccountsDb {
         let mut dropped_roots = vec![];
 
         // we have to keep track of what pubkeys exist in the current ancient append vec so we can unref correctly
-        let mut ancient_pubkeys = HashSet::default();
-        let mut ancient_slot_with_pubkeys = None;
+        let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
@@ -4410,23 +4459,12 @@ impl AccountsDb {
             // if this slot is not the ancient slot we're writing to, then this root will be dropped
             let mut drop_root = slot != current_ancient.slot();
 
-            if slot != current_ancient.slot() {
-                // we are taking accounts from 'slot' and putting them into 'ancient_slot'
-                let (accounts, _hashes) = to_store.get(StorageSelector::Primary);
-                if Some(current_ancient.slot()) != ancient_slot_with_pubkeys {
-                    // 'ancient_slot_with_pubkeys' is a local, re-used only for the set of slots we're iterating right now.
-                    // the first time or when we change to a new ancient append vec, we need to recreate the set of ancient pubkeys here.
-                    ancient_slot_with_pubkeys = Some(current_ancient.slot());
-                    ancient_pubkeys = current_ancient
-                        .append_vec()
-                        .accounts
-                        .account_iter()
-                        .map(|account| account.meta.pubkey)
-                        .collect::<HashSet<_>>();
-                }
-                // accounts in 'slot' but ALSO already in the ancient append vec at a different slot need to be unref'd since 'slot' is going away
-                self.unref_accounts_already_in_storage(accounts, &mut ancient_pubkeys);
-            }
+            ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
+                slot,
+                self,
+                &current_ancient,
+                &to_store,
+            );
 
             let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
             // write what we can to the current ancient storage
