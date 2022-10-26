@@ -6923,7 +6923,7 @@ impl AccountsDb {
         is_startup: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash(
-            true,
+            CalcAccountsHashDataSource::Index,
             debug_verify,
             slot,
             ancestors,
@@ -7227,61 +7227,69 @@ impl AccountsDb {
 
     pub(crate) fn calculate_accounts_hash(
         &self,
-        use_index: bool,
+        data_source: CalcAccountsHashDataSource,
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        if !use_index {
-            if self.accounts_cache.contains_any_slots(slot) {
-                // this indicates a race condition
-                inc_new_counter_info!("accounts_hash_items_in_write_cache", 1);
+        match data_source {
+            CalcAccountsHashDataSource::Storages => {
+                if self.accounts_cache.contains_any_slots(slot) {
+                    // this indicates a race condition
+                    inc_new_counter_info!("accounts_hash_items_in_write_cache", 1);
+                }
+
+                let mut collect_time = Measure::start("collect");
+                let (combined_maps, slots) =
+                    self.get_snapshot_storages(slot, None, config.ancestors);
+                collect_time.stop();
+
+                let mut sort_time = Measure::start("sort_storages");
+                let min_root = self.accounts_index.min_alive_root();
+                let storages = SortedStorages::new_with_slots(
+                    combined_maps.iter().zip(slots.into_iter()),
+                    min_root,
+                    Some(slot),
+                );
+                sort_time.stop();
+
+                let mut timings = HashStats {
+                    collect_snapshots_us: collect_time.as_us(),
+                    storage_sort_us: sort_time.as_us(),
+                    ..HashStats::default()
+                };
+                timings.calc_storage_size_quartiles(&combined_maps);
+
+                self.calculate_accounts_hash_from_storages(config, &storages, timings)
             }
-
-            let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
-            collect_time.stop();
-
-            let mut sort_time = Measure::start("sort_storages");
-            let min_root = self.accounts_index.min_alive_root();
-            let storages = SortedStorages::new_with_slots(
-                combined_maps.iter().zip(slots.into_iter()),
-                min_root,
-                Some(slot),
-            );
-            sort_time.stop();
-
-            let mut timings = HashStats {
-                collect_snapshots_us: collect_time.as_us(),
-                storage_sort_us: sort_time.as_us(),
-                ..HashStats::default()
-            };
-            timings.calc_storage_size_quartiles(&combined_maps);
-
-            self.calculate_accounts_hash_from_storages(config, &storages, timings)
-        } else {
-            self.calculate_accounts_hash_from_index(slot, config)
+            CalcAccountsHashDataSource::Index => {
+                self.calculate_accounts_hash_from_index(slot, config)
+            }
         }
     }
 
     #[allow(clippy::too_many_arguments)]
     fn calculate_accounts_hash_with_verify(
         &self,
-        use_index: bool,
+        data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
         slot: Slot,
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let (hash, total_lamports) = self.calculate_accounts_hash(use_index, slot, &config)?;
+        let (hash, total_lamports) = self.calculate_accounts_hash(data_source, slot, &config)?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
+            let data_source_other = match data_source {
+                CalcAccountsHashDataSource::Index => CalcAccountsHashDataSource::Storages,
+                CalcAccountsHashDataSource::Storages => CalcAccountsHashDataSource::Index,
+            };
             let (hash_other, total_lamports_other) =
-                self.calculate_accounts_hash(!use_index, slot, &config)?;
+                self.calculate_accounts_hash(data_source_other, slot, &config)?;
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
+            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
         }
         Ok((hash, total_lamports))
     }
@@ -7289,7 +7297,7 @@ impl AccountsDb {
     #[allow(clippy::too_many_arguments)]
     pub fn update_accounts_hash(
         &self,
-        use_index: bool,
+        data_source: CalcAccountsHashDataSource,
         debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
@@ -7301,7 +7309,7 @@ impl AccountsDb {
         let check_hash = false;
         let (hash, total_lamports) = self
             .calculate_accounts_hash_with_verify(
-                use_index,
+                data_source,
                 debug_verify,
                 slot,
                 CalcAccountsHashConfig {
@@ -7595,10 +7603,9 @@ impl AccountsDb {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let use_index = false;
         let check_hash = false; // this will not be supported anymore
         let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_with_verify(
-            use_index,
+            CalcAccountsHashDataSource::Storages,
             test_hash_calculation,
             slot,
             CalcAccountsHashConfig {
@@ -9388,6 +9395,13 @@ impl AccountsDb {
             }
         }
     }
+}
+
+/// Specify the source of the accounts data when calculating the accounts hash
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum CalcAccountsHashDataSource {
+    Index,
+    Storages,
 }
 
 #[cfg(test)]
@@ -12344,10 +12358,13 @@ pub mod tests {
         );
         db.add_root(some_slot);
         let check_hash = true;
-        for use_index in [true, false] {
+        for data_source in [
+            CalcAccountsHashDataSource::Index,
+            CalcAccountsHashDataSource::Storages,
+        ] {
             assert!(db
                 .calculate_accounts_hash(
-                    use_index,
+                    data_source,
                     some_slot,
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: true, // is_startup used to be false
@@ -12399,7 +12416,7 @@ pub mod tests {
         let check_hash = true;
         assert_eq!(
             db.calculate_accounts_hash(
-                false,
+                CalcAccountsHashDataSource::Storages,
                 some_slot,
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true, // is_startup used to be false
@@ -12410,7 +12427,7 @@ pub mod tests {
             )
             .unwrap(),
             db.calculate_accounts_hash(
-                true,
+                CalcAccountsHashDataSource::Index,
                 some_slot,
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true, // is_startup used to be false
