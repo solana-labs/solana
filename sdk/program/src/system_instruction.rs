@@ -478,8 +478,8 @@ pub enum SystemInstruction {
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
-///     /// The PDA bumpkey
-///     pub new_account_bumpkey: u8,
+///     /// The PDA bump seed
+///     pub new_account_bump_seed: u8,
 ///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
@@ -508,7 +508,7 @@ pub enum SystemInstruction {
 ///     assert!(system_program::check_id(system_account.key));
 ///
 ///     let new_account_seed = &instr.new_account_seed;
-///     let new_account_bumpkey = instr.new_account_bumpkey;
+///     let new_account_bump_seed = instr.new_account_bump_seed;
 ///
 ///     let rent = Rent::get()?
 ///         .minimum_balance(instr.space.try_into().expect("overflow"));
@@ -522,7 +522,7 @@ pub enum SystemInstruction {
 ///             &system_program::ID
 ///         ),
 ///         &[payer.clone(), new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -696,8 +696,8 @@ pub fn create_account_with_seed(
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
-///     /// The PDA bumpkey
-///     pub new_account_bumpkey: u8,
+///     /// The PDA bump seed
+///     pub new_account_bump_seed: u8,
 ///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
@@ -726,7 +726,7 @@ pub fn create_account_with_seed(
 ///     assert!(system_program::check_id(system_account.key));
 ///
 ///     let new_account_seed = &instr.new_account_seed;
-///     let new_account_bumpkey = instr.new_account_bumpkey;
+///     let new_account_bump_seed = instr.new_account_bump_seed;
 ///
 ///     let rent = Rent::get()?
 ///         .minimum_balance(instr.space.try_into().expect("overflow"));
@@ -738,7 +738,7 @@ pub fn create_account_with_seed(
 ///             rent,
 ///         ),
 ///         &[payer.clone(), new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -747,7 +747,7 @@ pub fn create_account_with_seed(
 ///             instr.space,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -756,7 +756,7 @@ pub fn create_account_with_seed(
 ///             &program_id,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -908,8 +908,8 @@ pub fn assign_with_seed(
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
-///     /// The PDA bumpkey
-///     pub new_account_bumpkey: u8,
+///     /// The PDA bump seed
+///     pub new_account_bump_seed: u8,
 ///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
@@ -938,7 +938,7 @@ pub fn assign_with_seed(
 ///     assert!(system_program::check_id(system_account.key));
 ///
 ///     let new_account_seed = &instr.new_account_seed;
-///     let new_account_bumpkey = instr.new_account_bumpkey;
+///     let new_account_bump_seed = instr.new_account_bump_seed;
 ///
 ///     let rent = Rent::get()?
 ///         .minimum_balance(instr.space.try_into().expect("overflow"));
@@ -950,7 +950,7 @@ pub fn assign_with_seed(
 ///             rent,
 ///         ),
 ///         &[payer.clone(), new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -959,7 +959,7 @@ pub fn assign_with_seed(
 ///             instr.space,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -968,7 +968,7 @@ pub fn assign_with_seed(
 ///             &program_id,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -1129,8 +1129,8 @@ pub fn transfer_with_seed(
 /// pub struct CreateAccountInstruction {
 ///     /// The PDA seed used to distinguish the new account from other PDAs
 ///     pub new_account_seed: [u8; 16],
-///     /// The PDA bumpkey
-///     pub new_account_bumpkey: u8,
+///     /// The PDA bump seed
+///     pub new_account_bump_seed: u8,
 ///     /// The amount of space to allocate for `new_account_pda`
 ///     pub space: u64,
 /// }
@@ -1159,7 +1159,7 @@ pub fn transfer_with_seed(
 ///     assert!(system_program::check_id(system_account.key));
 ///
 ///     let new_account_seed = &instr.new_account_seed;
-///     let new_account_bumpkey = instr.new_account_bumpkey;
+///     let new_account_bump_seed = instr.new_account_bump_seed;
 ///
 ///     let rent = Rent::get()?
 ///         .minimum_balance(instr.space.try_into().expect("overflow"));
@@ -1171,7 +1171,7 @@ pub fn transfer_with_seed(
 ///             rent,
 ///         ),
 ///         &[payer.clone(), new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -1180,7 +1180,7 @@ pub fn transfer_with_seed(
 ///             instr.space,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     invoke_signed(
@@ -1189,7 +1189,7 @@ pub fn transfer_with_seed(
 ///             &program_id,
 ///         ),
 ///         &[new_account_pda.clone()],
-///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bumpkey]]],
+///         &[&[payer.key.as_ref(), new_account_seed, &[new_account_bump_seed]]],
 ///     )?;
 ///
 ///     Ok(())
@@ -1326,7 +1326,7 @@ pub fn allocate_with_seed(
 /// /// - *: to - writable
 /// #[derive(BorshSerialize, BorshDeserialize, Debug)]
 /// pub struct TransferLamportsToManyInstruction {
-///     pub bank_pda_bumpkey: u8,
+///     pub bank_pda_bump_seed: u8,
 ///     pub amount_list: Vec<u64>,
 /// }
 ///
@@ -1342,7 +1342,7 @@ pub fn allocate_with_seed(
 ///     let account_info_iter = &mut accounts.iter();
 ///
 ///     let bank_pda = next_account_info(account_info_iter)?;
-///     let bank_pda_bumpkey = instr.bank_pda_bumpkey;
+///     let bank_pda_bump_seed = instr.bank_pda_bump_seed;
 ///     let system_account = next_account_info(account_info_iter)?;
 ///
 ///     assert!(system_program::check_id(system_account.key));
@@ -1363,7 +1363,7 @@ pub fn allocate_with_seed(
 ///     let instrs = system_instruction::transfer_many(bank_pda.key, to_and_amount.as_ref());
 ///
 ///     for instr in instrs {
-///         invoke_signed(&instr, accounts, &[&[b"bank", &[bank_pda_bumpkey]]])?;
+///         invoke_signed(&instr, accounts, &[&[b"bank", &[bank_pda_bump_seed]]])?;
 ///     }
 ///
 ///     Ok(())
