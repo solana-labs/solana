@@ -87,7 +87,7 @@ pub enum ParsableAccount {
     Vote,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct AccountAdditionalData {
     pub spl_token_decimals: Option<u8>,
 }
