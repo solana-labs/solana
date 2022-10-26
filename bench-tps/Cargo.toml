@@ -37,6 +37,7 @@ solana-streamer = { path = "../streamer", version = "=1.15.0" }
 solana-thin-client = { path = "../thin-client", version = "=1.15.0" }
 solana-tpu-client = { path = "../tpu-client", version = "=1.15.0", default-features = false }
 solana-version = { path = "../version", version = "=1.15.0" }
+spl-instruction-padding = "0.1"
 thiserror = "1.0"
 
 [dev-dependencies]
