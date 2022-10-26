@@ -491,7 +491,15 @@ pub type TransactionBalances = Vec<Vec<u64>>;
 
 /// An ordered list of compiled instructions that were invoked during a
 /// transaction instruction
-pub type InnerInstructions = Vec<CompiledInstruction>;
+pub type InnerInstructions = Vec<InnerInstruction>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InnerInstruction {
+    pub instruction: CompiledInstruction,
+    /// Invocation stack height of this instruction. Instruction stack height
+    /// starts at 1 for transaction instructions.
+    pub stack_height: u8,
+}
 
 /// A list of compiled instructions that were invoked during each instruction of
 /// a transaction
@@ -511,10 +519,12 @@ pub fn inner_instructions_list_from_instruction_trace(
         if let Ok(instruction_context) =
             transaction_context.get_instruction_context_at_index_in_trace(index_in_trace)
         {
-            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
+            let stack_height = instruction_context.get_stack_height();
+            if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
                 outer_instructions.push(Vec::new());
             } else if let Some(inner_instructions) = outer_instructions.last_mut() {
-                inner_instructions.push(CompiledInstruction::new_from_raw_parts(
+                let stack_height = u8::try_from(stack_height).unwrap_or(u8::MAX);
+                let instruction = CompiledInstruction::new_from_raw_parts(
                     instruction_context
                         .get_index_of_program_account_in_transaction(
                             instruction_context
@@ -532,7 +542,11 @@ pub fn inner_instructions_list_from_instruction_trace(
                                 .unwrap_or_default() as u8
                         })
                         .collect(),
-                ));
+                );
+                inner_instructions.push(InnerInstruction {
+                    instruction,
+                    stack_height,
+                });
             } else {
                 debug_assert!(false);
             }
@@ -19269,12 +19283,24 @@ pub(crate) mod tests {
         assert_eq!(
             inner_instructions,
             vec![
-                vec![CompiledInstruction::new_from_raw_parts(0, vec![1], vec![])],
+                vec![InnerInstruction {
+                    instruction: CompiledInstruction::new_from_raw_parts(0, vec![1], vec![]),
+                    stack_height: 2,
+                }],
                 vec![],
                 vec![
-                    CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
-                    CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
-                    CompiledInstruction::new_from_raw_parts(0, vec![6], vec![])
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
+                        stack_height: 2,
+                    },
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
+                        stack_height: 3,
+                    },
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![6], vec![]),
+                        stack_height: 2,
+                    },
                 ]
             ]
         );

@@ -13,7 +13,7 @@ use {
     solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
     solana_runtime::{
         bank::{
-            DurableNonceFee, TransactionBalancesSet, TransactionExecutionDetails,
+            DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
             TransactionExecutionResult, TransactionResults,
         },
         loader_utils::{
@@ -33,7 +33,6 @@ use {
         feature_set::FeatureSet,
         fee::FeeStructure,
         fee_calculator::FeeRateGovernor,
-        instruction::CompiledInstruction,
         loader_instruction,
         message::{v0::LoadedAddresses, SanitizedMessage},
         rent::Rent,
@@ -374,7 +373,7 @@ fn process_transaction_and_record_inner(
     tx: Transaction,
 ) -> (
     Result<(), TransactionError>,
-    Vec<Vec<CompiledInstruction>>,
+    Vec<Vec<InnerInstruction>>,
     Vec<String>,
 ) {
     let signature = tx.signatures.get(0).unwrap().clone();
@@ -491,7 +490,13 @@ fn execute_transactions(
                             .enumerate()
                             .map(|(index, instructions)| InnerInstructions {
                                 index: index as u8,
-                                instructions,
+                                instructions: instructions
+                                    .into_iter()
+                                    .map(|ix| solana_transaction_status::InnerInstruction {
+                                        instruction: ix.instruction,
+                                        stack_height: Some(u32::from(ix.stack_height)),
+                                    })
+                                    .collect(),
                             })
                             .filter(|i| !i.instructions.is_empty())
                             .collect()
@@ -1110,7 +1115,8 @@ fn test_program_sbf_invoke_sanity() {
 
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
-            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
+            .cloned()
             .collect();
         let expected_invoked_programs = match program.0 {
             Languages::C => vec![
@@ -1165,7 +1171,8 @@ fn test_program_sbf_invoke_sanity() {
         assert_eq!(invoked_programs, expected_invoked_programs);
         let no_invoked_programs: Vec<Pubkey> = inner_instructions[1]
             .iter()
-            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
+            .cloned()
             .collect();
         assert_eq!(no_invoked_programs.len(), 0);
 
@@ -1195,7 +1202,8 @@ fn test_program_sbf_invoke_sanity() {
                     process_transaction_and_record_inner(&bank, tx);
                 let invoked_programs: Vec<Pubkey> = inner_instructions[0]
                     .iter()
-                    .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+                    .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
+                    .cloned()
                     .collect();
                 assert_eq!(result, Err(expected_error));
                 assert_eq!(invoked_programs, expected_invoked_programs);
@@ -1411,7 +1419,8 @@ fn test_program_sbf_invoke_sanity() {
             process_transaction_and_record_inner(&bank, tx);
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
-            .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
+            .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
+            .cloned()
             .collect();
         assert_eq!(invoked_programs, vec![system_program::id()]);
         assert_eq!(
