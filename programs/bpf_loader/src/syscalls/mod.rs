@@ -812,6 +812,15 @@ declare_syscall!(
                         ),
                         result
                     );
+                    if !is_nonoverlapping(
+                        bump_seed_ref as *const _ as usize,
+                        std::mem::size_of_val(bump_seed_ref),
+                        address.as_ptr() as usize,
+                        std::mem::size_of::<Pubkey>(),
+                    ) {
+                        *result = Err(SyscallError::CopyOverlapping.into());
+                        return;
+                    }
                     *bump_seed_ref = bump_seed[0];
                     address.copy_from_slice(new_address.as_ref());
                     *result = Ok(0);
@@ -1681,6 +1690,16 @@ declare_syscall!(
                 result
             );
 
+            if !is_nonoverlapping(
+                to_slice.as_ptr() as usize,
+                length as usize,
+                program_id_result as *const _ as usize,
+                std::mem::size_of::<Pubkey>(),
+            ) {
+                *result = Err(SyscallError::CopyOverlapping.into());
+                return;
+            }
+
             *program_id_result = *program_id;
         }
 
@@ -1744,10 +1763,7 @@ declare_syscall!(
         };
 
         if let Some(instruction_context) = instruction_context {
-            let ProcessedSiblingInstruction {
-                data_len,
-                accounts_len,
-            } = question_mark!(
+            let result_header = question_mark!(
                 translate_type_mut::<ProcessedSiblingInstruction>(
                     memory_mapping,
                     meta_addr,
@@ -1756,8 +1772,8 @@ declare_syscall!(
                 result
             );
 
-            if *data_len == (instruction_context.get_instruction_data().len() as u64)
-                && *accounts_len
+            if result_header.data_len == (instruction_context.get_instruction_data().len() as u64)
+                && result_header.accounts_len
                     == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = question_mark!(
@@ -1772,7 +1788,7 @@ declare_syscall!(
                     translate_slice_mut::<u8>(
                         memory_mapping,
                         data_addr,
-                        *data_len as u64,
+                        result_header.data_len as u64,
                         invoke_context.get_check_aligned(),
                         invoke_context.get_check_size(),
                     ),
@@ -1782,12 +1798,50 @@ declare_syscall!(
                     translate_slice_mut::<AccountMeta>(
                         memory_mapping,
                         accounts_addr,
-                        *accounts_len as u64,
+                        result_header.accounts_len as u64,
                         invoke_context.get_check_aligned(),
                         invoke_context.get_check_size(),
                     ),
                     result
                 );
+
+                if !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) {
+                    *result = Err(SyscallError::CopyOverlapping.into());
+                    return;
+                }
 
                 *program_id = *question_mark!(
                     instruction_context
@@ -1816,8 +1870,9 @@ declare_syscall!(
                 );
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len() as u64;
-            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
+            result_header.data_len = instruction_context.get_instruction_data().len() as u64;
+            result_header.accounts_len =
+                instruction_context.get_number_of_instruction_accounts() as u64;
             *result = Ok(true as u64);
             return;
         }
