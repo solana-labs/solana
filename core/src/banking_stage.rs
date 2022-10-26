@@ -1943,7 +1943,7 @@ impl BankingStage {
             failed_sigverify_count,
         } = packet_deserializer.handle_received_packets(
             recv_timeout,
-            unprocessed_transaction_storage.capacity() - unprocessed_transaction_storage.len(),
+            unprocessed_transaction_storage.max_receive_size(),
         )?;
         let packet_count = deserialized_packets.len();
         debug!(
