@@ -96,10 +96,14 @@ pub fn parse_sanitized_vote_transaction(tx: &SanitizedTransaction) -> Option<Par
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
-    let key = message.account_keys().get(first_account)?;
-    let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
+    let first_key = message.account_keys().get(first_account)?;
+    let last_account = usize::from(*first_instruction.accounts.last()?);
+    let last_key = message.account_keys().get(last_account)?;
+
+    let (vote, switch_proof_hash) =
+        parse_vote_instruction_data(&first_instruction.data, first_key, last_key)?;
     let signature = tx.signatures().get(0).cloned().unwrap_or_default();
-    Some((*key, vote, switch_proof_hash, signature))
+    Some((*first_key, vote, switch_proof_hash, signature))
 }
 
 // Used for parsing gossip vote transactions
@@ -113,29 +117,63 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
         return None;
     }
     let first_account = usize::from(*first_instruction.accounts.first()?);
-    let key = message.account_keys.get(first_account)?;
-    let (vote, switch_proof_hash) = parse_vote_instruction_data(&first_instruction.data)?;
+    let first_key = message.account_keys.get(first_account)?;
+    let last_account = usize::from(*first_instruction.accounts.last()?);
+    let last_key = message.account_keys.get(last_account)?;
+
+    let (vote, switch_proof_hash) =
+        parse_vote_instruction_data(&first_instruction.data, first_key, last_key)?;
     let signature = tx.signatures.get(0).cloned().unwrap_or_default();
-    Some((*key, vote, switch_proof_hash, signature))
+    Some((*first_key, vote, switch_proof_hash, signature))
 }
 
 fn parse_vote_instruction_data(
     vote_instruction_data: &[u8],
+    first_key: &Pubkey,
+    last_key: &Pubkey,
 ) -> Option<(VoteTransaction, Option<Hash>)> {
     match limited_deserialize(vote_instruction_data).ok()? {
-        VoteInstruction::Vote(vote) => Some((VoteTransaction::from(vote), None)),
-        VoteInstruction::VoteSwitch(vote, hash) => Some((VoteTransaction::from(vote), Some(hash))),
+        VoteInstruction::Vote(vote) => {
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote), None))
+            }
+        }
+        VoteInstruction::VoteSwitch(vote, hash) => {
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote), Some(hash)))
+            }
+        }
         VoteInstruction::UpdateVoteState(vote_state_update) => {
-            Some((VoteTransaction::from(vote_state_update), None))
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote_state_update), None))
+            }
         }
         VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
-            Some((VoteTransaction::from(vote_state_update), Some(hash)))
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote_state_update), Some(hash)))
+            }
         }
         VoteInstruction::CompactUpdateVoteState(vote_state_update) => {
-            Some((VoteTransaction::from(vote_state_update), None))
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote_state_update), None))
+            }
         }
         VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, hash) => {
-            Some((VoteTransaction::from(vote_state_update), Some(hash)))
+            if first_key == last_key {
+                None
+            } else {
+                Some((VoteTransaction::from(vote_state_update), Some(hash)))
+            }
         }
         VoteInstruction::Authorize(_, _)
         | VoteInstruction::AuthorizeChecked(_)

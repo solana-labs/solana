@@ -324,6 +324,10 @@ pub fn update_commission(
 }
 
 pub fn vote(vote_pubkey: &Pubkey, authorized_voter_pubkey: &Pubkey, vote: Vote) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
+
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
@@ -340,6 +344,10 @@ pub fn vote_switch(
     vote: Vote,
     proof_hash: Hash,
 ) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
+
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(sysvar::slot_hashes::id(), false),
@@ -359,6 +367,9 @@ pub fn update_vote_state(
     authorized_voter_pubkey: &Pubkey,
     vote_state_update: VoteStateUpdate,
 ) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
@@ -377,6 +388,10 @@ pub fn update_vote_state_switch(
     vote_state_update: VoteStateUpdate,
     proof_hash: Hash,
 ) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
+
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
@@ -394,6 +409,10 @@ pub fn compact_update_vote_state(
     authorized_voter_pubkey: &Pubkey,
     vote_state_update: VoteStateUpdate,
 ) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
+
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
@@ -412,6 +431,10 @@ pub fn compact_update_vote_state_switch(
     vote_state_update: VoteStateUpdate,
     proof_hash: Hash,
 ) -> Instruction {
+    if vote_pubkey == authorized_voter_pubkey {
+        panic!("please use different authorized_voter key from vote_key");
+    }
+
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
         AccountMeta::new_readonly(*authorized_voter_pubkey, true),
