@@ -532,7 +532,12 @@ pub mod limit_max_instruction_trace_length {
 
 /// TODO: hook up feature set in vote parser
 pub mod enable_required_different_vote_and_auth_voter_accounts {
-    solana_sdk::declare_id!("hK5s4DwOZhooF36HS7arQulmdB3pHHlWI4NqW3Ljdus8");
+    solana_sdk::declare_id!("6Fkbm9ixGGnbgQSmejaToSydSq228zjiokNaWXqqEgC5");
+}
+
+/// TODO: hook up feature set in bank
+pub mod enable_partitioned_epoch_reward {
+    solana_sdk::declare_id!("HCnE3xQoZtDz9dSVm3jKwJXioTb6zMRbgwCmGg3PHHk8");
 }
 
 lazy_static! {
@@ -663,6 +668,7 @@ lazy_static! {
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
         (enable_required_different_vote_and_auth_voter_accounts::id(), "enable the requirement for different vote account and authorized voter account for vote instructions"),
+        (enable_partitioned_epoch_reward::id(), "enable partitioned rewards at epoch bondary"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
