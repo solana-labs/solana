@@ -72,7 +72,18 @@ message TransactionError {
 
 message InnerInstructions {
     uint32 index = 1;
-    repeated CompiledInstruction instructions = 2;
+    repeated InnerInstruction instructions = 2;
+}
+
+message InnerInstruction {
+    uint32 program_id_index = 1;
+    bytes accounts = 2;
+    bytes data = 3;
+
+    // Invocation stack height of an inner instruction.
+    // Available since Solana v1.14.6
+    // Set to `None` for txs executed on earlier versions.
+    optional uint32 stack_height = 4;
 }
 
 message CompiledInstruction {
