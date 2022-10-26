@@ -3811,6 +3811,37 @@ impl AccountsDb {
         }
     }
 
+    /// common code from shrink and combine_ancient_slots
+    /// returns (remaining stores, measure of time to mark stores dirty or dead)
+    fn remove_old_stores_shrink(
+        &self,
+        keep_store_ids: &[AppendVecId],
+        shrink_collect: &ShrinkCollect,
+        slot: Slot,
+    ) -> (usize, Measure) {
+        let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
+        // Purge old, overwritten storage entries
+        let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
+            slot,
+            |store| !keep_store_ids.contains(&store.append_vec_id()),
+            // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
+            // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
+            shrink_collect.all_are_zero_lamports,
+        );
+
+        if !shrink_collect.all_are_zero_lamports {
+            self.add_uncleaned_pubkeys_after_shrink(
+                slot,
+                shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
+            );
+        }
+
+        write_storage_elapsed.stop();
+
+        self.drop_or_recycle_stores(dead_storages);
+        (remaining_stores, write_storage_elapsed)
+    }
+
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
@@ -3892,27 +3923,9 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
-            // Purge old, overwritten storage entries
-            let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
-                slot,
-                |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
-                // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
-                // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
-                shrink_collect.all_are_zero_lamports,
-            );
-
-            if !shrink_collect.all_are_zero_lamports {
-                self.add_uncleaned_pubkeys_after_shrink(
-                    slot,
-                    shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
-                );
-            }
-
-            write_storage_elapsed.stop();
+            let (remaining_stores, write_storage_elapsed) =
+                self.remove_old_stores_shrink(&shrink_collect.store_ids, &shrink_collect, slot);
             write_storage_elapsed_us = write_storage_elapsed.as_us();
-
-            self.drop_or_recycle_stores(dead_storages);
 
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
@@ -4449,26 +4462,8 @@ impl AccountsDb {
             }
             rewrite_elapsed.stop();
 
-            let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
-            // Purge old, overwritten storage entries
-            let (_, dead_storages) = self.mark_dirty_dead_stores(
-                slot,
-                |store| ids.contains(&store.append_vec_id()),
-                // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
-                // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
-                shrink_collect.all_are_zero_lamports,
-            );
-
-            if !shrink_collect.all_are_zero_lamports {
-                self.add_uncleaned_pubkeys_after_shrink(
-                    slot,
-                    shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
-                );
-            }
-
-            write_storage_elapsed.stop();
-
-            self.drop_or_recycle_stores(dead_storages);
+            let (_remaining_stores, write_storage_elapsed) =
+                self.remove_old_stores_shrink(&ids, &shrink_collect, slot);
 
             if drop_root {
                 dropped_roots.push(slot);
