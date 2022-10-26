@@ -1,7 +1,7 @@
 use {
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        clock::{Epoch, DEFAULT_MS_PER_SLOT},
+        clock::{Epoch, Slot, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,
     },
     std::{thread::sleep, time::Duration},
@@ -48,6 +48,28 @@ pub fn wait_for_next_epoch(rpc_client: &RpcClient) -> Epoch {
         let next_epoch = rpc_client.get_epoch_info().unwrap().epoch;
         if next_epoch > current_epoch {
             return next_epoch;
+        }
+    }
+}
+
+pub fn wait_for_next_epoch_after_reward_interval(rpc_client: &RpcClient) -> Slot {
+    let current_epoch = rpc_client.get_epoch_info().unwrap().epoch;
+    println!("waiting for epoch {}", current_epoch + 1);
+    loop {
+        sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+
+        let next_epoch = rpc_client.get_epoch_info().unwrap().epoch;
+        if next_epoch > current_epoch {
+            let slot = rpc_client.get_slot().unwrap();
+            //let reward_interval = 150; //rpc_client.get_reward_interval().unwrap();
+            let reward_interval = rpc_client.get_reward_interval().unwrap();
+            loop {
+                sleep(Duration::from_millis(DEFAULT_MS_PER_SLOT));
+                let new_slot = rpc_client.get_slot().unwrap();
+                if new_slot - slot > reward_interval {
+                    return new_slot;
+                }
+            }
         }
     }
 }

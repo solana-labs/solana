@@ -514,6 +514,7 @@ impl JsonRpcRequestProcessor {
         })
     }
 
+    // TODO: update to take into account of reward interval
     pub async fn get_inflation_reward(
         &self,
         addresses: Vec<Pubkey>,
@@ -645,9 +646,9 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(&bank, bank.get_balance(pubkey)))
     }
 
-    pub fn get_reward_interval(&self, config: RpcContextConfig) -> Result<RpcResponse<u64>> {
+    pub fn get_reward_interval(&self, config: RpcContextConfig) -> Result<u64> {
         let bank = self.get_bank_with_config(config)?;
-        Ok(new_response(&bank, bank.get_reward_interval()))
+        Ok(bank.get_reward_interval())
     }
 
     fn get_recent_blockhash(
@@ -2617,7 +2618,7 @@ pub mod rpc_minimal {
             &self,
             meta: Self::Metadata,
             config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<u64>>;
+        ) -> Result<u64>;
     }
 
     pub struct MinimalImpl;
@@ -2786,7 +2787,7 @@ pub mod rpc_minimal {
             &self,
             meta: Self::Metadata,
             config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<u64>> {
+        ) -> Result<u64> {
             debug!("get_reward_interval rpc request received");
             meta.get_reward_interval(config.unwrap_or_default())
         }
