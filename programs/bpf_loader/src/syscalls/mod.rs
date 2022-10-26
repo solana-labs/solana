@@ -34,7 +34,7 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar,
+            check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled, disable_fees_sysvar,
             enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
             syscall_saturated_math,
@@ -817,7 +817,10 @@ declare_syscall!(
                         std::mem::size_of_val(bump_seed_ref),
                         address.as_ptr() as usize,
                         std::mem::size_of::<Pubkey>(),
-                    ) {
+                    ) && invoke_context
+                        .feature_set
+                        .is_active(&check_syscall_outputs_do_not_overlap::id())
+                    {
                         *result = Err(SyscallError::CopyOverlapping.into());
                         return;
                     }
@@ -1695,7 +1698,10 @@ declare_syscall!(
                 length as usize,
                 program_id_result as *const _ as usize,
                 std::mem::size_of::<Pubkey>(),
-            ) {
+            ) && invoke_context
+                .feature_set
+                .is_active(&check_syscall_outputs_do_not_overlap::id())
+            {
                 *result = Err(SyscallError::CopyOverlapping.into());
                 return;
             }
@@ -1805,7 +1811,7 @@ declare_syscall!(
                     result
                 );
 
-                if !is_nonoverlapping(
+                if (!is_nonoverlapping(
                     result_header as *const _ as usize,
                     std::mem::size_of::<ProcessedSiblingInstruction>(),
                     program_id as *const _ as usize,
@@ -1838,7 +1844,10 @@ declare_syscall!(
                     accounts.as_ptr() as usize,
                     std::mem::size_of::<AccountMeta>()
                         .saturating_mul(result_header.accounts_len as usize),
-                ) {
+                )) && invoke_context
+                    .feature_set
+                    .is_active(&check_syscall_outputs_do_not_overlap::id())
+                {
                     *result = Err(SyscallError::CopyOverlapping.into());
                     return;
                 }
