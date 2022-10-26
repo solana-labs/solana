@@ -4455,10 +4455,6 @@ impl AccountsDb {
                 slot
             ));
 
-            let mut ids = vec![current_ancient.append_vec_id()];
-            // if this slot is not the ancient slot we're writing to, then this root will be dropped
-            let mut drop_root = slot != current_ancient.slot();
-
             ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
                 slot,
                 self,
@@ -4477,16 +4473,8 @@ impl AccountsDb {
                 // Assert: it cannot be the case that we already had an ancient append vec at this slot and
                 // yet that ancient append vec does not have room for the accounts stored at this slot currently
                 assert_ne!(slot, current_ancient.slot());
-                let (_, time) = measure!(CurrentAncientAppendVec::create_ancient_append_vec(
-                    &mut current_ancient,
-                    slot,
-                    self
-                ));
+                let (_, time) = measure!(current_ancient.create_ancient_append_vec(slot, self));
                 create_and_insert_store_elapsed_us += time.as_us();
-
-                ids.push(current_ancient.append_vec_id());
-                // if this slot is not the ancient slot we're writing to, then this root will be dropped
-                drop_root = slot != current_ancient.slot();
 
                 // write the overflow accounts to the next ancient storage
                 let timing = current_ancient.store_ancient_accounts(
@@ -4498,12 +4486,18 @@ impl AccountsDb {
             }
             rewrite_elapsed.stop();
 
-            let (_remaining_stores, remove_old_stores_shrink) =
-                measure!(self.remove_old_stores_shrink(&ids, &shrink_collect, slot));
-
-            if drop_root {
+            let keep_store_ids = if slot == current_ancient.slot() {
+                // this slot became an ancient append vec, so we want to keep the append vec storage for the slot
+                // and remove the old, normal append vec
+                vec![current_ancient.append_vec_id()]
+            } else {
+                // all append vecs in this slot have been combined into an ancient append vec
                 dropped_roots.push(slot);
-            }
+                Vec::default()
+            };
+
+            let (_remaining_stores, remove_old_stores_shrink) =
+                measure!(self.remove_old_stores_shrink(&keep_store_ids, &shrink_collect, slot));
 
             // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
