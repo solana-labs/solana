@@ -533,14 +533,6 @@ impl ServeRepair {
         response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-<<<<<<< HEAD
-        let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
-        let exit = exit.clone();
-=======
-        const INTERVAL_MS: u64 = 1000;
-        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
-        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-
         // rate limit delay should be greater than the repair request iteration delay
         assert!(REPAIR_PING_CACHE_RATE_LIMIT_DELAY > Duration::from_millis(REPAIR_MS));
 
@@ -549,8 +541,8 @@ impl ServeRepair {
             REPAIR_PING_CACHE_RATE_LIMIT_DELAY,
             REPAIR_PING_CACHE_CAPACITY,
         );
+        let exit = exit.clone();
 
->>>>>>> 8b0f9b491 (make ping cache rate limit delay configurable (#27955))
         let recycler = PacketBatchRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
