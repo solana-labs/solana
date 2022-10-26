@@ -3682,6 +3682,7 @@ mod tests {
         invoke_context: &'a mut InvokeContext<'b>,
         seeds: &[&[u8]],
         program_id: &Pubkey,
+        overlap_outputs: bool,
         syscall: SyscallFunction<&'a mut InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
@@ -3749,7 +3750,11 @@ mod tests {
             seeds.len() as u64,
             PROGRAM_ID_VA,
             ADDRESS_VA,
-            BUMP_SEED_VA,
+            if overlap_outputs {
+                ADDRESS_VA
+            } else {
+                BUMP_SEED_VA
+            },
             &mut memory_mapping,
             &mut result,
         );
@@ -3765,6 +3770,7 @@ mod tests {
             invoke_context,
             seeds,
             address,
+            false,
             SyscallCreateProgramAddress::call,
         )?;
         Ok(address)
@@ -3779,8 +3785,83 @@ mod tests {
             invoke_context,
             seeds,
             address,
+            false,
             SyscallTryFindProgramAddress::call,
         )
+    }
+
+    #[test]
+    fn test_set_and_get_return_data() {
+        const SRC_VA: u64 = 0x100000000;
+        const DST_VA: u64 = 0x200000000;
+        const PROGRAM_ID_VA: u64 = 0x300000000;
+        let data = vec![42; 24];
+        let mut data_buffer = vec![0; 16];
+        let mut id_buffer = vec![0; 32];
+
+        let config = Config::default();
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion::new_readonly(&data, SRC_VA),
+                MemoryRegion::new_writable(&mut data_buffer, DST_VA),
+                MemoryRegion::new_writable(&mut id_buffer, PROGRAM_ID_VA),
+            ],
+            &config,
+        )
+        .unwrap();
+
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallSetReturnData::call(
+            &mut invoke_context,
+            SRC_VA,
+            data.len() as u64,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result.unwrap(), 0);
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetReturnData::call(
+            &mut invoke_context,
+            DST_VA,
+            data_buffer.len() as u64,
+            PROGRAM_ID_VA,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result.unwrap() as usize, data.len());
+        assert_eq!(data.get(0..data_buffer.len()).unwrap(), data_buffer);
+        assert_eq!(id_buffer, program_id.to_bytes());
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetReturnData::call(
+            &mut invoke_context,
+            PROGRAM_ID_VA,
+            data_buffer.len() as u64,
+            PROGRAM_ID_VA,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert!(matches!(
+            result,
+            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
+            ),
+        ));
     }
 
     #[test]
@@ -3921,6 +4002,28 @@ mod tests {
             &mut result,
         );
         assert_eq!(result.unwrap(), 0);
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetProcessedSiblingInstruction::call(
+            &mut invoke_context,
+            0,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert!(matches!(
+            result,
+            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
+            ),
+        ));
     }
 
     #[test]
@@ -4279,6 +4382,19 @@ mod tests {
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
+
+        assert!(matches!(
+            call_program_address_common(
+                &mut invoke_context,
+                seeds,
+                &address,
+                true,
+                SyscallTryFindProgramAddress::call,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
             ),
         ));
     }
