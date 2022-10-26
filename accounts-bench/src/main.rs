@@ -10,7 +10,7 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             Accounts,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
@@ -126,7 +126,7 @@ fn main() {
             time.stop();
             let mut time_store = Measure::start("hash using store");
             let results_store = accounts.accounts_db.update_accounts_hash(
-                false,
+                CalcAccountsHashDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
                 &ancestors,

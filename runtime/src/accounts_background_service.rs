@@ -5,6 +5,7 @@
 mod stats;
 use {
     crate::{
+        accounts_db::CalcAccountsHashDataSource,
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -296,7 +297,11 @@ impl SnapshotRequestHandler {
         let previous_hash = if test_hash_calculation {
             // We have to use the index version here.
             // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
-            snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
+            snapshot_root_bank.update_accounts_hash_with_index_option(
+                CalcAccountsHashDataSource::Index,
+                false,
+                false,
+            )
         } else {
             Hash::default()
         };
@@ -330,14 +335,13 @@ impl SnapshotRequestHandler {
         flush_accounts_cache_time.stop();
 
         let hash_for_testing = if test_hash_calculation {
-            let use_index_hash_calculation = false;
             let check_hash = false;
 
             let (this_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
                 .calculate_accounts_hash(
-                    use_index_hash_calculation,
+                    CalcAccountsHashDataSource::Storages,
                     snapshot_root_bank.slot(),
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: true,

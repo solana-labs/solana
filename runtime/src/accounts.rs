@@ -4,8 +4,8 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            BankHashInfo, CalcAccountsHashDataSource, IncludeSlotInHash, LoadHint, LoadedAccount,
+            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -789,14 +789,13 @@ impl Accounts {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
-        let use_index = false;
         let is_startup = true;
         self.accounts_db
             .verify_accounts_hash_in_bg
             .wait_for_complete();
         self.accounts_db
             .update_accounts_hash(
-                use_index,
+                CalcAccountsHashDataSource::Storages,
                 debug_verify,
                 slot,
                 ancestors,
