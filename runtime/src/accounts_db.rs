@@ -268,6 +268,8 @@ struct ShrinkCollect<'a> {
     alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
     alive_total: usize,
     total_starting_accounts: usize,
+    /// true if all alive accounts are zero lamports
+    all_are_zero_lamports: bool,
 }
 
 // the current best way to add filler accounts is gradually.
@@ -301,9 +303,14 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 struct LoadAccountsIndexForShrink<'a> {
+    /// number of alive accounts
     alive_total: usize,
+    /// the specific alive accounts
     alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
+    /// pubkeys that were unref'd in the accounts index because they were dead
     unrefed_pubkeys: Vec<&'a Pubkey>,
+    /// true if all alive accounts are zero lamport accounts
+    all_are_zero_lamports: bool,
 }
 
 pub struct GetUniqueAccountsResult<'a> {
@@ -3618,6 +3625,7 @@ impl AccountsDb {
         let mut alive = 0;
         let mut dead = 0;
         let mut index = 0;
+        let mut all_are_zero_lamports = true;
         self.accounts_index.scan(
             accounts.iter().map(|(key, _)| key),
             |pubkey, slots_refs| {
@@ -3640,6 +3648,7 @@ impl AccountsDb {
                         result = AccountsIndexScanResult::Unref;
                         dead += 1;
                     } else {
+                        all_are_zero_lamports &= stored_account.account.lamports() == 0;
                         alive_accounts.push(pair);
                         alive_total += stored_account.account.stored_size;
                         alive += 1;
@@ -3662,6 +3671,7 @@ impl AccountsDb {
             alive_total,
             alive_accounts,
             unrefed_pubkeys,
+            all_are_zero_lamports,
         }
     }
 
@@ -3738,7 +3748,7 @@ impl AccountsDb {
         stats
             .accounts_loaded
             .fetch_add(len as u64, Ordering::Relaxed);
-
+        let all_are_zero_lamports_collect = Mutex::new(true);
         self.thread_pool_clean.install(|| {
             let chunk_size = 50; // # accounts/thread
             stored_accounts
@@ -3748,6 +3758,7 @@ impl AccountsDb {
                         alive_total,
                         mut alive_accounts,
                         mut unrefed_pubkeys,
+                        all_are_zero_lamports,
                     } = self.load_accounts_index_for_shrink(stored_accounts);
 
                     // collect
@@ -3760,6 +3771,9 @@ impl AccountsDb {
                         .unwrap()
                         .append(&mut unrefed_pubkeys);
                     alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+                    if !all_are_zero_lamports {
+                        *all_are_zero_lamports_collect.lock().unwrap() = false;
+                    }
                 });
         });
 
@@ -3793,6 +3807,7 @@ impl AccountsDb {
             alive_accounts,
             alive_total,
             total_starting_accounts: len,
+            all_are_zero_lamports: all_are_zero_lamports_collect.into_inner().unwrap(),
         }
     }
 
@@ -3842,11 +3857,7 @@ impl AccountsDb {
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
 
-            let mut all_are_zero_lamports = true;
             for (pubkey, alive_account) in &shrink_collect.alive_accounts {
-                if all_are_zero_lamports && alive_account.account.lamports() != 0 {
-                    all_are_zero_lamports = false;
-                }
                 accounts.push((pubkey, &alive_account.account));
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
@@ -3888,10 +3899,10 @@ impl AccountsDb {
                 |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
                 // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
                 // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
-                all_are_zero_lamports,
+                shrink_collect.all_are_zero_lamports,
             );
 
-            if !all_are_zero_lamports {
+            if !shrink_collect.all_are_zero_lamports {
                 self.add_uncleaned_pubkeys_after_shrink(
                     slot,
                     shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
@@ -4382,11 +4393,6 @@ impl AccountsDb {
                 AccountsToStore::new(available_bytes, &shrink_collect.alive_accounts, slot);
             find_alive_elapsed.stop();
 
-            let all_are_zero_lamports = !shrink_collect
-                .alive_accounts
-                .iter()
-                .any(|(_key, found)| !found.account.is_zero_lamport());
-
             let mut ids = vec![current_ancient.append_vec_id()];
             // if this slot is not the ancient slot we're writing to, then this root will be dropped
             let mut drop_root = slot != current_ancient.slot();
@@ -4450,10 +4456,10 @@ impl AccountsDb {
                 |store| ids.contains(&store.append_vec_id()),
                 // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
                 // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
-                all_are_zero_lamports,
+                shrink_collect.all_are_zero_lamports,
             );
 
-            if !all_are_zero_lamports {
+            if !shrink_collect.all_are_zero_lamports {
                 self.add_uncleaned_pubkeys_after_shrink(
                     slot,
                     shrink_collect.unrefed_pubkeys.iter().cloned().cloned(),
