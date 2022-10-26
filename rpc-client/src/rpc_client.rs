@@ -408,7 +408,7 @@ impl RpcClient {
     /// behavior in specific scenarios:
     ///
     /// - It is customary to set the `url` to "succeeds" for mocks that should
-    ///   return sucessfully, though this value is not actually interpreted.
+    ///   return successfully, though this value is not actually interpreted.
     ///
     /// - If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
@@ -463,7 +463,7 @@ impl RpcClient {
     ///    scenarios.
     ///
     ///    It is customary to set the `url` to "succeeds" for mocks that should
-    ///    return sucessfully, though this value is not actually interpreted.
+    ///    return successfully, though this value is not actually interpreted.
     ///
     ///    If `url` is "fails" then any call to `send` will return `Ok(Value::Null)`.
     ///
