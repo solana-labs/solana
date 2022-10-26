@@ -44,7 +44,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -153,6 +153,10 @@ struct ServeRepairStats {
     unsigned_requests: usize,
     dropped_requests: usize,
     total_response_packets: usize,
+    total_response_bytes_staked: usize,
+    total_response_bytes_unstaked: usize,
+    handle_requests_staked: usize,
+    handle_requests_unstaked: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
@@ -470,6 +474,7 @@ impl ServeRepair {
 
         let timer = Instant::now();
         let root_bank = obj.read().unwrap().bank_forks.read().unwrap().root_bank();
+        let epoch_staked_nodes = root_bank.epoch_staked_nodes(root_bank.epoch());
         for reqs in reqs_v {
             Self::handle_packets(
                 obj,
@@ -478,8 +483,8 @@ impl ServeRepair {
                 blockstore,
                 reqs,
                 response_sender,
-                &root_bank,
                 stats,
+                &epoch_staked_nodes,
             );
         }
         packet_threshold.update(total_requests, timer.elapsed());
@@ -502,6 +507,23 @@ impl ServeRepair {
             ("unsigned_requests", stats.unsigned_requests, i64),
             ("dropped_requests", stats.dropped_requests, i64),
             ("total_response_packets", stats.total_response_packets, i64),
+            ("handle_requests_staked", stats.handle_requests_staked, i64),
+            (
+                "handle_requests_unstaked",
+                stats.handle_requests_unstaked,
+                i64
+            ),
+            ("processed", stats.processed, i64),
+            (
+                "total_response_bytes_staked",
+                stats.total_response_bytes_staked,
+                i64
+            ),
+            (
+                "total_response_bytes_unstaked",
+                stats.total_response_bytes_unstaked,
+                i64
+            ),
             ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
@@ -655,8 +677,8 @@ impl ServeRepair {
         blockstore: Option<&Arc<Blockstore>>,
         packet_batch: PacketBatch,
         response_sender: &PacketBatchSender,
-        _root_bank: &Bank,
         stats: &mut ServeRepairStats,
+        epoch_staked_nodes: &Option<Arc<HashMap<Pubkey, u64>>>,
     ) {
         let identity_keypair = me.read().unwrap().cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
@@ -670,6 +692,15 @@ impl ServeRepair {
                     continue;
                 }
             };
+
+            let staked = epoch_staked_nodes
+                .as_ref()
+                .map(|nodes| nodes.contains_key(request.sender()))
+                .unwrap_or_default();
+            match staked {
+                true => stats.handle_requests_staked += 1,
+                false => stats.handle_requests_unstaked += 1,
+            }
 
             if request.sender() == &my_id {
                 stats.self_repair += 1;
@@ -685,12 +716,19 @@ impl ServeRepair {
 
             let from_addr = packet.meta.socket_addr();
             stats.processed += 1;
-            let rsp =
-                Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
-            stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
-            if let Some(rsp) = rsp {
-                let _ignore_disconnect = response_sender.send(rsp);
+            let rsp = match Self::handle_repair(
+                recycler, &from_addr, blockstore, request, stats, ping_cache,
+            ) {
+                None => continue,
+                Some(rsp) => rsp,
+            };
+            stats.total_response_packets += rsp.len();
+            let num_response_bytes: usize = rsp.iter().map(|p| p.meta.size).sum();
+            match staked {
+                true => stats.total_response_bytes_staked += num_response_bytes,
+                false => stats.total_response_bytes_unstaked += num_response_bytes,
             }
+            let _ignore_disconnect = response_sender.send(rsp);
         }
     }
 
