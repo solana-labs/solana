@@ -649,10 +649,18 @@ declare_syscall!(
                     let address = translate_slice_mut::<u8>(
                         memory_mapping,
                         address_addr,
-                        32,
+                        std::mem::size_of::<Pubkey>() as u64,
                         invoke_context.get_check_aligned(),
                         invoke_context.get_check_size(),
                     )?;
+                    if !is_nonoverlapping(
+                        bump_seed_ref as *const _ as usize,
+                        std::mem::size_of_val(bump_seed_ref),
+                        address.as_ptr() as usize,
+                        std::mem::size_of::<Pubkey>(),
+                    ) {
+                        return Err(SyscallError::CopyOverlapping.into());
+                    }
                     *bump_seed_ref = bump_seed[0];
                     address.copy_from_slice(new_address.as_ref());
                     return Ok(0);
@@ -1432,6 +1440,15 @@ declare_syscall!(
                 invoke_context.get_check_aligned(),
             )?;
 
+            if !is_nonoverlapping(
+                to_slice.as_ptr() as usize,
+                length as usize,
+                program_id_result as *const _ as usize,
+                std::mem::size_of::<Pubkey>(),
+            ) {
+                return Err(SyscallError::CopyOverlapping.into());
+            }
+
             *program_id_result = *program_id;
         }
 
@@ -1490,17 +1507,14 @@ declare_syscall!(
         }
 
         if let Some(instruction_context) = found_instruction_context {
-            let ProcessedSiblingInstruction {
-                data_len,
-                accounts_len,
-            } = translate_type_mut::<ProcessedSiblingInstruction>(
+            let result_header = translate_type_mut::<ProcessedSiblingInstruction>(
                 memory_mapping,
                 meta_addr,
                 invoke_context.get_check_aligned(),
             )?;
 
-            if *data_len == (instruction_context.get_instruction_data().len() as u64)
-                && *accounts_len
+            if result_header.data_len == (instruction_context.get_instruction_data().len() as u64)
+                && result_header.accounts_len
                     == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = translate_type_mut::<Pubkey>(
@@ -1511,17 +1525,54 @@ declare_syscall!(
                 let data = translate_slice_mut::<u8>(
                     memory_mapping,
                     data_addr,
-                    *data_len as u64,
+                    result_header.data_len as u64,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
                 let accounts = translate_slice_mut::<AccountMeta>(
                     memory_mapping,
                     accounts_addr,
-                    *accounts_len as u64,
+                    result_header.accounts_len as u64,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
+
+                if !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) {
+                    return Err(SyscallError::CopyOverlapping.into());
+                }
 
                 *program_id = *instruction_context
                     .get_last_program_key(invoke_context.transaction_context)
@@ -1548,8 +1599,9 @@ declare_syscall!(
                     .map_err(SyscallError::InstructionError)?;
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len() as u64;
-            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
+            result_header.data_len = instruction_context.get_instruction_data().len() as u64;
+            result_header.accounts_len =
+                instruction_context.get_number_of_instruction_accounts() as u64;
             return Ok(true as u64);
         }
         Ok(false as u64)
@@ -1603,7 +1655,7 @@ declare_syscall!(
         let instruction_context = transaction_context
             .get_current_instruction_context()
             .map_err(SyscallError::InstructionError)?;
-        let updates = translate_slice_mut::<AccountPropertyUpdate>(
+        let updates = translate_slice::<AccountPropertyUpdate>(
             memory_mapping,
             updates_addr,
             updates_count,
@@ -1621,7 +1673,7 @@ declare_syscall!(
                 unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
             match attribute {
                 TransactionContextAttribute::TransactionAccountOwner => {
-                    let owner_pubkey = translate_type_mut::<Pubkey>(
+                    let owner_pubkey = translate_type::<Pubkey>(
                         memory_mapping,
                         update.value,
                         invoke_context.get_check_aligned(),
