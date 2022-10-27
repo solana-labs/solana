@@ -1595,19 +1595,22 @@ mod tests {
 
     fn test_vote_tx(
         validator_vote_keypairs: Option<&ValidatorVoteKeypairs>,
+        auth_vote_keypairs: Option<&ValidatorVoteKeypairs>,
         hash: Option<Hash>,
     ) -> Transaction {
         let other = ValidatorVoteKeypairs::new_rand();
         let validator_vote_keypair = validator_vote_keypairs.unwrap_or(&other);
-        // TODO authorized_voter_keypair should be different from vote-keypair
-        // but that is what create_genesis_... currently generates.
+
+        let other = ValidatorVoteKeypairs::new_rand();
+        let auth_vote_keypair = auth_vote_keypairs.unwrap_or(&other);
+
         vote_transaction::new_vote_transaction(
             vec![0],
             Hash::default(),
             Hash::default(),
             &validator_vote_keypair.node_keypair,
             &validator_vote_keypair.vote_keypair,
-            &validator_vote_keypair.vote_keypair, // authorized_voter_keypair
+            &auth_vote_keypair,
             hash,
         )
     }
@@ -1641,10 +1644,16 @@ mod tests {
         let voting_keypairs: Vec<_> = repeat_with(ValidatorVoteKeypairs::new_rand)
             .take(10)
             .collect();
+
+        let auth_voter_keypairs: Vec<_> = repeat_with(ValidatorVoteKeypairs::new_rand)
+            .take(10)
+            .collect();
+
         let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_accounts(
+            genesis_utils::create_genesis_config_with_vote_and_authorized_accounts(
                 10_000, // mint_lamports
                 &voting_keypairs,
+                &auth_voter_keypairs,
                 vec![100; voting_keypairs.len()], // stakes
             );
         let bank = Bank::new_for_tests(&genesis_config);
