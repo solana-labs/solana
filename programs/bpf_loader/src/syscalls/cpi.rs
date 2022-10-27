@@ -21,12 +21,15 @@ struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
     original_data_len: usize,
-    // After the activation of bpf_account_data_direct_mapping this
-    // no longer holds the account data followed by the reallocation padding,
-    // but only the reallocation padding. That is because after the activation
-    // we already share the account data between runtime and program and mapping it
-    // forward and backward would create aliasing mutable references.
-    account_data_or_only_realloc_padding: &'a mut [u8],
+    // This points to the data section for this account, as serialized and
+    // mapped inside the vm (see serialize_parameters() in
+    // BpfExecutor::execute).
+    //
+    // When direct mapping is off, this includes both the account data _and_ the
+    // realloc padding. When direct mapping is on, account data is mapped in its
+    // own separate memory region which is directly mutated from inside the vm,
+    // and the serialized buffer includes only the realloc padding.
+    serialized_data: &'a mut [u8],
     // Given the corresponding input AccountInfo::data, vm_data_addr points to
     // the pointer field and ref_to_len_in_vm points to the length field.
     vm_data_addr: u64,
@@ -65,12 +68,7 @@ impl<'a> CallerAccount<'a> {
             invoke_context.get_check_aligned(),
         )?;
 
-        let (
-            account_data_or_only_realloc_padding,
-            vm_data_addr,
-            ref_to_len_in_vm,
-            serialized_len_ptr,
-        ) = {
+        let (serialized_data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
             // Double translate data out of RefCell
             let data = *translate_type::<&[u8]>(
                 memory_mapping,
@@ -111,7 +109,7 @@ impl<'a> CallerAccount<'a> {
             let bpf_account_data_direct_mapping = invoke_context
                 .feature_set
                 .is_active(&feature_set::bpf_account_data_direct_mapping::id());
-            let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
+            let serialized_data = translate_slice_mut::<u8>(
                 memory_mapping,
                 if bpf_account_data_direct_mapping {
                     vm_data_addr.saturating_add(original_data_len as u64)
@@ -132,7 +130,7 @@ impl<'a> CallerAccount<'a> {
             )?;
 
             (
-                account_data_or_only_realloc_padding,
+                serialized_data,
                 vm_data_addr,
                 ref_to_len_in_vm,
                 serialized_len_ptr,
@@ -143,7 +141,7 @@ impl<'a> CallerAccount<'a> {
             lamports,
             owner,
             original_data_len,
-            account_data_or_only_realloc_padding,
+            serialized_data,
             vm_data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
@@ -186,7 +184,7 @@ impl<'a> CallerAccount<'a> {
         let bpf_account_data_direct_mapping = invoke_context
             .feature_set
             .is_active(&feature_set::bpf_account_data_direct_mapping::id());
-        let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
+        let serialized_data = translate_slice_mut::<u8>(
             memory_mapping,
             if bpf_account_data_direct_mapping {
                 vm_data_addr.saturating_add(original_data_len as u64)
@@ -240,7 +238,7 @@ impl<'a> CallerAccount<'a> {
             lamports,
             owner,
             original_data_len,
-            account_data_or_only_realloc_padding,
+            serialized_data,
             vm_data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
@@ -1046,7 +1044,7 @@ fn update_callee_account(
                         .ok_or(SyscallError::InvalidLength)?
                         .copy_from_slice(
                             caller_account
-                                .account_data_or_only_realloc_padding
+                                .serialized_data
                                 .get(0..realloc_bytes_used)
                                 .ok_or(SyscallError::InvalidLength)?,
                         );
@@ -1060,15 +1058,11 @@ fn update_callee_account(
     } else {
         // The redundant check helps to avoid the expensive data comparison if we can
         match callee_account
-            .can_data_be_resized(caller_account.account_data_or_only_realloc_padding.len())
+            .can_data_be_resized(caller_account.serialized_data.len())
             .and_then(|_| callee_account.can_data_be_changed())
         {
-            Ok(()) => callee_account
-                .set_data_from_slice(caller_account.account_data_or_only_realloc_padding)?,
-            Err(err)
-                if callee_account.get_data()
-                    != caller_account.account_data_or_only_realloc_padding =>
-            {
+            Ok(()) => callee_account.set_data_from_slice(caller_account.serialized_data)?,
+            Err(err) if callee_account.get_data() != caller_account.serialized_data => {
                 return Err(Box::new(err));
             }
             _ => {}
@@ -1175,13 +1169,13 @@ fn update_caller_account(
                 }
             } else {
                 caller_account
-                    .account_data_or_only_realloc_padding
+                    .serialized_data
                     .get_mut(post_len..)
                     .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
                     .fill(0);
             }
         }
-        caller_account.account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
+        caller_account.serialized_data = translate_slice_mut::<u8>(
             memory_mapping,
             if direct_mapping {
                 caller_account
@@ -1226,7 +1220,7 @@ fn update_caller_account(
     }
     let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
     if !direct_mapping {
-        let to_slice = &mut caller_account.account_data_or_only_realloc_padding;
+        let to_slice = &mut caller_account.serialized_data;
         let from_slice = callee_account
             .get_data()
             .get(0..post_len)
@@ -1237,7 +1231,7 @@ fn update_caller_account(
         to_slice.copy_from_slice(from_slice);
     } else if !is_loader_deprecated && realloc_bytes_used > 0 {
         let to_slice = caller_account
-            .account_data_or_only_realloc_padding
+            .serialized_data
             .get_mut(0..realloc_bytes_used)
             .ok_or(SyscallError::InvalidLength)?;
         let from_slice = callee_account
@@ -1432,10 +1426,7 @@ mod tests {
             *caller_account.ref_to_len_in_vm as usize,
             account.data().len()
         );
-        assert_eq!(
-            caller_account.account_data_or_only_realloc_padding,
-            account.data()
-        );
+        assert_eq!(caller_account.serialized_data, account.data());
         assert_eq!(caller_account.executable, account.executable());
         assert_eq!(caller_account.rent_epoch, account.rent_epoch());
     }
@@ -1545,10 +1536,7 @@ mod tests {
             (b"foobaz".to_vec(), MAX_PERMITTED_DATA_INCREASE),
             (b"foobazbad".to_vec(), MAX_PERMITTED_DATA_INCREASE - 3),
         ] {
-            assert_eq!(
-                caller_account.account_data_or_only_realloc_padding,
-                callee_account.get_data()
-            );
+            assert_eq!(caller_account.serialized_data, callee_account.get_data());
             callee_account.set_data_from_slice(&new_value).unwrap();
 
             update_caller_account(
@@ -1564,13 +1552,10 @@ mod tests {
             let data_len = callee_account.get_data().len();
             assert_eq!(data_len, *caller_account.ref_to_len_in_vm as usize);
             assert_eq!(data_len, serialized_len());
-            assert_eq!(
-                data_len,
-                caller_account.account_data_or_only_realloc_padding.len()
-            );
+            assert_eq!(data_len, caller_account.serialized_data.len());
             assert_eq!(
                 callee_account.get_data(),
-                &caller_account.account_data_or_only_realloc_padding[..data_len]
+                &caller_account.serialized_data[..data_len]
             );
             assert_eq!(data_slice[data_len..].len(), expected_realloc_size);
             assert!(is_zeroed(&data_slice[data_len..]));
@@ -1680,7 +1665,7 @@ mod tests {
         let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         let mut data = b"foo".to_vec();
-        caller_account.account_data_or_only_realloc_padding = &mut data;
+        caller_account.serialized_data = &mut data;
 
         update_callee_account(
             &invoke_context,
@@ -1692,10 +1677,7 @@ mod tests {
         .unwrap();
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
-        assert_eq!(
-            callee_account.get_data(),
-            caller_account.account_data_or_only_realloc_padding
-        );
+        assert_eq!(callee_account.get_data(), caller_account.serialized_data);
     }
 
     #[test]
@@ -1757,10 +1739,7 @@ mod tests {
         assert_eq!(accounts.len(), 2);
         assert!(accounts[0].1.is_none());
         let caller_account = accounts[1].1.as_ref().unwrap();
-        assert_eq!(
-            caller_account.account_data_or_only_realloc_padding,
-            account.data()
-        );
+        assert_eq!(caller_account.serialized_data, account.data());
         assert_eq!(caller_account.original_data_len, original_data_len);
     }
 
@@ -1785,7 +1764,7 @@ mod tests {
             // the memory region must include the realloc data
             let regions = vec![MemoryRegion::new_writable(d.as_mut_slice(), vm_addr)];
 
-            // caller_account.account_data_or_only_realloc_padding must have the actual data length
+            // caller_account.serialized_data must have the actual data length
             d.truncate(mem::size_of::<u64>() + data.len());
 
             MockCallerAccount {
@@ -1814,7 +1793,7 @@ mod tests {
                 lamports: &mut self.lamports,
                 owner: &mut self.owner,
                 original_data_len: data.len(),
-                account_data_or_only_realloc_padding: data,
+                serialized_data: data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: &mut self.len,
                 serialized_len_ptr: std::ptr::null_mut(),
