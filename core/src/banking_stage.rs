@@ -1317,23 +1317,14 @@ impl BankingStage {
 
         let ((pre_balances, pre_token_balances), collect_balances_time) = measure!(
             {
-                // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
-                // the likelihood of any single thread getting starved and processing old ids.
-                // TODO: Banking stage threads should be prioritized to complete faster then this queue
-                // expires.
-                let pre_balances = if transaction_status_sender.is_some() {
-                    bank.collect_balances(batch)
+                if transaction_status_sender.is_some() {
+                    (
+                        bank.collect_balances(batch),
+                        collect_token_balances(bank, batch, &mut mint_decimals),
+                    )
                 } else {
-                    vec![]
-                };
-
-                let pre_token_balances = if transaction_status_sender.is_some() {
-                    collect_token_balances(bank, batch, &mut mint_decimals)
-                } else {
-                    vec![]
-                };
-
-                (pre_balances, pre_token_balances)
+                    (vec![], vec![])
+                }
             },
             "collect_balances",
         );
