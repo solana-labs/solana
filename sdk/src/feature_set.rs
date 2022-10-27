@@ -530,6 +530,10 @@ pub mod limit_max_instruction_trace_length {
     solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
 }
 
+pub mod check_syscall_outputs_do_not_overlap {
+    solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -656,7 +660,8 @@ lazy_static! {
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
-        (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
+        (limit_max_instruction_trace_length::id(), "limit max instruction trace length #27939"),
+        (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
