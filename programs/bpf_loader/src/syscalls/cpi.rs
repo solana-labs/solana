@@ -20,6 +20,10 @@ use {
 struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
+    // The original data length of the account at the start of the current
+    // instruction. We use this to determine wether an account was shrunk or
+    // grown before or after CPI, and to derive the vm address of the realloc
+    // region.
     original_data_len: usize,
     // This points to the data section for this account, as serialized and
     // mapped inside the vm (see serialize_parameters() in
