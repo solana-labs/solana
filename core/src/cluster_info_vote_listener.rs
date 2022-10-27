@@ -1608,7 +1608,7 @@ mod tests {
             Hash::default(),
             &validator_vote_keypair.node_keypair,
             &validator_vote_keypair.vote_keypair,
-            &validator_vote_keypair.auth_vote_keypair,
+            &validator_vote_keypair.auth_keypair,
             hash,
         )
     }
@@ -1643,15 +1643,10 @@ mod tests {
             .take(10)
             .collect();
 
-        let auth_voter_keypairs: Vec<_> = repeat_with(ValidatorVoteKeypairs::new_rand)
-            .take(10)
-            .collect();
-
         let GenesisConfigInfo { genesis_config, .. } =
-            genesis_utils::create_genesis_config_with_vote_and_authorized_accounts(
+            genesis_utils::create_genesis_config_with_vote_accounts(
                 10_000, // mint_lamports
                 &voting_keypairs,
-                &auth_voter_keypairs,
                 vec![100; voting_keypairs.len()], // stakes
             );
         let bank = Bank::new_for_tests(&genesis_config);

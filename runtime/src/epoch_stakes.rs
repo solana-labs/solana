@@ -67,6 +67,7 @@ impl EpochStakes {
             .iter()
             .map(|(_, (stake, _))| stake)
             .sum();
+
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {

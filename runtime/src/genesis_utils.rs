@@ -177,11 +177,21 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
     for (validator_voting_keypairs, stake) in voting_keypairs[1..].iter().zip(&stakes[1..]) {
         let node_pubkey = validator_voting_keypairs.borrow().node_keypair.pubkey();
         let vote_pubkey = validator_voting_keypairs.borrow().vote_keypair.pubkey();
+        let auth_pubkey = validator_voting_keypairs.borrow().auth_keypair.pubkey();
         let stake_pubkey = validator_voting_keypairs.borrow().stake_keypair.pubkey();
 
         // Create accounts
         let node_account = Account::new(VALIDATOR_LAMPORTS, 0, &system_program::id());
-        let vote_account = vote_state::create_account(&vote_pubkey, &node_pubkey, 0, *stake);
+
+        let auth_account = Account::new(VALIDATOR_LAMPORTS, 0, &system_program::id());
+
+        let vote_account = vote_state::create_account_with_authorized(
+            &node_pubkey,
+            &vote_pubkey,
+            &auth_pubkey,
+            0,
+            *stake,
+        );
         let stake_account = Account::from(stake_state::create_account(
             &stake_pubkey,
             &vote_pubkey,
@@ -195,6 +205,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
         // Put newly created accounts into genesis
         genesis_config_info.genesis_config.accounts.extend(vec![
             (node_pubkey, node_account),
+            (auth_pubkey, auth_account),
             (vote_pubkey, vote_account),
             (stake_pubkey, stake_account),
         ]);
