@@ -285,9 +285,24 @@ module.exports = {
     "running-validator",
     {
       type: "category",
+      label: "Introduction",
+      collapsed: false,
+      items: [
+        "validator/overview/what-is-a-validator",
+        "validator/overview/what-is-an-rpc-node",
+        "validator/overview/running-validator-or-rpc-node",
+        "validator/overview/validator-prerequisites",
+      ],
+    },
+    {
+      type: "category",
       label: "Getting Started",
       collapsed: false,
-      items: ["running-validator/validator-reqs"],
+      items: [
+        "running-validator/validator-reqs",
+        "validator/get-started/setup-a-validator",
+        "validator/get-started/setup-an-rpc-node",
+      ],
     },
     {
       type: "category",
