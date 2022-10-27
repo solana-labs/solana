@@ -423,6 +423,10 @@ pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
 
+pub mod check_syscall_outputs_do_not_overlap {
+    solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -523,6 +527,7 @@ lazy_static! {
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
+        (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
