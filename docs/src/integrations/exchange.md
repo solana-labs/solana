@@ -79,6 +79,8 @@ Discord, or Twillio. For details, run `solana-watchtower --help`.
 solana-watchtower --validator-identity <YOUR VALIDATOR IDENTITY>
 ```
 
+> You can find more information about the [best practices for Solana Watchtower](../validator/best-practices/monitoring.md#solana-watchtower) here in the docs.
+
 #### New Software Release Announcements
 
 We release new software frequently (around 1 release / week).

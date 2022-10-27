@@ -5,7 +5,7 @@ sidebar_label: Setup a Validator
 
 This is a guide for getting your validator setup on the Solana testnet cluster for the first time. Testnet is a Solana cluster that is used for performance testing of the software before the software is used on mainnet. Since testnet is stress tested daily, it is a good cluster to practice validator operations.
 
-Once you have a working validator on testnet, you will want to learn about [operational best practices](/best-practices/operational-best-practices) in the next section. Although the guide is specific to testnet, it can be adapted to mainnet or devnet as well. Refer to the [clusters](../../clusters) section of the Solana docs to see example commands for each cluster.
+Once you have a working validator on testnet, you will want to learn about [operational best practices](../best-practices/operations.md) in the next section. Although the guide is specific to testnet, it can be adapted to mainnet or devnet as well. Refer to the [clusters](../../clusters) section of the Solana docs to see example commands for each cluster.
 
 Now let's get started.
 
@@ -296,7 +296,7 @@ solana-validator \
     --limit-ledger-size
 ```
 
-Refer to `solana-validator --help` for more information on what each flag is doing in this script. For a discussion of operating best practices, see the [next section](/best-practices/operational-best-practices).
+Refer to `solana-validator --help` for more information on what each flag is doing in this script. Also refer to the section on [best practices for operating a validator](../best-practices/operations.md).
 
 ## Verifying Your Validator Is Working
 
@@ -401,7 +401,7 @@ tail -f /home/sol/solana-validator*.log
 
 ## Monitoring
 
-`solana-watchtower` is a command you can run on a separate machine to monitor your server. You can read more about handling [automatic restarts and monitoring](../../integrations/exchange#automatic-restarts-and-monitoring) using watchtower here in the docs.
+`solana-watchtower` is a command you can run on a separate machine to monitor your server. You can read more about handling [automatic restarts and monitoring](../best-practices/monitoring.md#solana-watchtower) using Solana Watchtower here in the docs.
 
 ## Common issues
 
