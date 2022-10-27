@@ -1193,7 +1193,7 @@ impl ReplayStage {
                         .and_modify(|x| *x += 1)
                         .or_insert(1);
                     if *attempt_no > MAX_REPAIR_RETRY_LOOP_ATTEMPTS {
-                        panic!("We have tried to repair duplicate slot: {} more than {} times and are unable to freeze a block with bankhash {}, instead we have a block with bankhash {:?}. At this point manual intervention is needed to make progress as this most likely indicates a runtime bug", *duplicate_slot, MAX_REPAIR_RETRY_LOOP_ATTEMPTS, *correct_hash, frozen_hash);
+                        panic!("We have tried to repair duplicate slot: {} more than {} times and are unable to freeze a block with bankhash {}, instead we have a block with bankhash {:?}. This is most likely a bug in the runtime. At this point manual intervention is needed to make progress. Exiting", *duplicate_slot, MAX_REPAIR_RETRY_LOOP_ATTEMPTS, *correct_hash, frozen_hash);
                     }
                     warn!(
                         "Notifying repair service to repair duplicate slot: {}, attempt {}",
@@ -5992,6 +5992,7 @@ pub(crate) mod tests {
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
         duplicate_slots_to_repair.insert(1, Hash::new_unique());
         duplicate_slots_to_repair.insert(2, Hash::new_unique());
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         ReplayStage::dump_then_repair_correct_slots(
             &mut duplicate_slots_to_repair,
@@ -6001,7 +6002,7 @@ pub(crate) mod tests {
             bank_forks,
             blockstore,
             None,
-            &mut PurgeRepairSlotCounter::default(),
+            &mut purge_repair_slot_counter,
         );
 
         let r_bank_forks = bank_forks.read().unwrap();
@@ -6019,6 +6020,9 @@ pub(crate) mod tests {
                 assert!(descendants_result.is_none());
             }
         }
+        assert_eq!(2, purge_repair_slot_counter.len());
+        assert_eq!(1, *purge_repair_slot_counter.get(&1).unwrap());
+        assert_eq!(1, *purge_repair_slot_counter.get(&2).unwrap());
     }
 
     fn setup_vote_then_rollback(

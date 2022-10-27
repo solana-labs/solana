@@ -1443,6 +1443,7 @@ mod test {
             );
         }
         assert!(duplicate_slots_to_repair.is_empty());
+        assert!(purge_repair_slot_counter.is_empty());
 
         // Simulate detecting another hash that is the correct version,
         // RepairDuplicateConfirmedVersion should add the slot to repair
@@ -1465,6 +1466,7 @@ mod test {
             *duplicate_slots_to_repair.get(&duplicate_slot).unwrap(),
             correct_hash
         );
+        assert!(purge_repair_slot_counter.is_empty());
     }
 
     #[test]
@@ -1558,6 +1560,7 @@ mod test {
 
         // Setup and check the state that is about to change.
         duplicate_slots_to_repair.insert(duplicate_slot, Hash::new_unique());
+        purge_repair_slot_counter.insert(duplicate_slot, 1);
         assert!(blockstore.get_bank_hash(duplicate_slot).is_none());
         assert!(!blockstore.is_duplicate_confirmed(duplicate_slot));
 
@@ -1565,6 +1568,7 @@ mod test {
         // 1) Re-enable fork choice
         // 2) Clear any pending repairs from `duplicate_slots_to_repair` since we have the
         //    right version now
+        // 3) Clear the slot from `purge_repair_slot_counter`
         // 3) Set the status to duplicate confirmed in Blockstore
         let mut state_changes = vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
             our_duplicate_slot_hash,
@@ -1598,6 +1602,7 @@ mod test {
             .is_candidate(&(duplicate_slot, our_duplicate_slot_hash))
             .unwrap());
         assert!(duplicate_slots_to_repair.is_empty());
+        assert!(purge_repair_slot_counter.is_empty());
         assert_eq!(
             blockstore.get_bank_hash(duplicate_slot).unwrap(),
             our_duplicate_slot_hash
