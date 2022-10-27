@@ -987,6 +987,8 @@ pub fn create_account_with_authorized(
     commission: u8,
     lamports: u64,
 ) -> AccountSharedData {
+    assert!(authorized_voter != authorized_withdrawer);
+
     let mut vote_account = AccountSharedData::new(lamports, VoteState::size_of(), &id());
 
     let vote_state = VoteState::new(
