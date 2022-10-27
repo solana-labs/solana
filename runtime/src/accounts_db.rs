@@ -4446,14 +4446,17 @@ impl AccountsDb {
                 continue; // skipping slot with no useful accounts to write
             }
 
-            let mut create_and_insert_store_elapsed_us = 0;
             let (_, time) = measure!(current_ancient.create_if_necessary(slot, self));
-            create_and_insert_store_elapsed_us += time.as_us();
+            let mut create_and_insert_store_elapsed_us = time.as_us();
             let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
-            let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
-            let to_store =
-                AccountsToStore::new(available_bytes, &shrink_collect.alive_accounts, slot);
-            find_alive_elapsed.stop();
+            // split accounts in 'slot' into:
+            // 'Primary', which can fit in 'current_ancient'
+            // 'Overflow', which will have to go into a new ancient append vec at 'slot'
+            let (to_store, find_alive_elapsed) = measure!(AccountsToStore::new(
+                available_bytes,
+                &shrink_collect.alive_accounts,
+                slot
+            ));
 
             let mut ids = vec![current_ancient.append_vec_id()];
             // if this slot is not the ancient slot we're writing to, then this root will be dropped
@@ -4473,24 +4476,22 @@ impl AccountsDb {
 
             // handle accounts from 'slot' which did not fit into the current ancient append vec
             if to_store.has_overflow() {
-                // we need a new ancient append vec
+                // We need a new ancient append vec at this slot.
+                // Assert: it cannot be the case that we already had an ancient append vec at this slot and
+                // yet that ancient append vec does not have room for the accounts stored at this slot currently
+                assert_ne!(slot, current_ancient.slot());
                 let (_, time) = measure!(CurrentAncientAppendVec::create_ancient_append_vec(
                     &mut current_ancient,
                     slot,
                     self
                 ));
                 create_and_insert_store_elapsed_us += time.as_us();
-                info!(
-                    "ancient_append_vec: combine_ancient_slots {}, overflow: {} accounts",
-                    slot,
-                    to_store.get(StorageSelector::Overflow).0.len()
-                );
 
                 ids.push(current_ancient.append_vec_id());
                 // if this slot is not the ancient slot we're writing to, then this root will be dropped
                 drop_root = slot != current_ancient.slot();
 
-                // write the rest to the next ancient storage
+                // write the overflow accounts to the next ancient storage
                 let timing = current_ancient.store_ancient_accounts(
                     self,
                     &to_store,
