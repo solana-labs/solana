@@ -3,17 +3,19 @@ title: Setup a Solana RPC Node
 sidebar_label: Setup an RPC Node
 ---
 
-Since an RPC server runs the same process as a consensus validator, you can follow the instructions in the [previous section](/validator-setup/initial-validator-setup) to get started. After you validator is running, you can refer to this section for RPC specific setup instructions.
+Since a Solana RPC server runs the same process as a consensus validator, first follow the instructions on [how to setup a Solana validator](./setup-a-validator.md) to get started. After you validator is running, you can refer to this section for the RPC node specific setup instructions.
 
-## Sample RPC validator.sh
+## Sample RPC Node
 
-Here is an example `validator.sh` file for a testnet rpc server. You will want to be aware of the following flags:
+Below is an example `validator.sh` file for a `testnet` RPC server.
 
-- `--full-rpc-api`: enables all rpc operations on this validator.
-- `--no-voting`: runs the validator without participating in consensus. Typically you do not want to run a validator as both a consensus node and a full rpc node due to resource constraints.
-- `--private-rpc`: does not publish the validator's open rpc port in the `solana gossip` command
+You will want to be aware of the following flags:
 
-For more explanation on the flags used in the command, refer to `solana-validator --help`. Additionally, examples for different clusters can be found at the [Solana clusters doc](https://docs.solana.com/clusters) page. You will need to customize these commands for your use case.
+- `--full-rpc-api`: enables all RPC operations on this validator.
+- `--no-voting`: runs the validator without participating in consensus. Typically, you do not want to run a validator as _both_ a consensus node and a full RPC node due to resource constraints.
+- `--private-rpc`: does not publish the validator's open RPC port in the `solana gossip` command
+
+> For more explanation on the flags used in the command, refer to the `solana-validator --help` command
 
 ```
 #!/bin/bash
@@ -45,4 +47,12 @@ exec solana-validator \
 
 ### Solana Bigtable
 
-The Solana blockchain is able to create many transactions per second. Because of the volume of transactions on the chain, it is not practical for an RPC node to store all of the blockchain on the machine. Instead, RPC operators use the `--limit-ledger-size` flag to specify how many blocks to store on the RPC node. If the user of the RPC node needs historical blockchain data then the RPC server will have to access older blocks through a Solana bigtable instance. If you are interested in setting up your own bigtable instance, see [these docs](https://github.com/solana-labs/solana-bigtable) in the solana github repository.
+The Solana blockchain is able to create many transactions per second. Because of the volume of transactions on the chain, it is not practical for an RPC node to store the entire blockchain on the machine. Instead, RPC operators use the `--limit-ledger-size` flag to specify how many blocks to store on the RPC node. If the user of the RPC node needs historical blockchain data then the RPC server will have to access older blocks through a Solana bigtable instance.
+
+If you are interested in setting up your own bigtable instance, see these docs in the Solana GitHub repository: [solana-labs/solana-bigtable](https://github.com/solana-labs/solana-bigtable)
+
+## Examples for other clusters
+
+Additional examples of other Solana cluster specific validator commands can be found on the [Clusters](/clusters.md) page.
+
+Keep in mind, you will still need to customize these commands for your use case.
