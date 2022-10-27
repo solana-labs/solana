@@ -1841,7 +1841,7 @@ struct ShrinkStats {
     store_accounts_elapsed: AtomicU64,
     update_index_elapsed: AtomicU64,
     handle_reclaims_elapsed: AtomicU64,
-    write_storage_elapsed: AtomicU64,
+    remove_old_stores_shrink_us: AtomicU64,
     rewrite_elapsed: AtomicU64,
     drop_storage_entries_elapsed: AtomicU64,
     recycle_stores_write_elapsed: AtomicU64,
@@ -1901,8 +1901,8 @@ impl ShrinkStats {
                     i64
                 ),
                 (
-                    "write_storage_elapsed",
-                    self.write_storage_elapsed.swap(0, Ordering::Relaxed) as i64,
+                    "remove_old_stores_shrink_us",
+                    self.remove_old_stores_shrink_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
                 (
@@ -2022,9 +2022,9 @@ impl ShrinkAncientStats {
                     i64
                 ),
                 (
-                    "write_storage_elapsed",
+                    "remove_old_stores_shrink_us",
                     self.shrink_stats
-                        .write_storage_elapsed
+                        .remove_old_stores_shrink_us
                         .swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
@@ -3862,14 +3862,13 @@ impl AccountsDb {
     }
 
     /// common code from shrink and combine_ancient_slots
-    /// returns (remaining stores, measure of time to mark stores dirty or dead)
+    /// returns remaining stores
     fn remove_old_stores_shrink(
         &self,
         keep_store_ids: &[AppendVecId],
         shrink_collect: &ShrinkCollect,
         slot: Slot,
-    ) -> (usize, Measure) {
-        let mut write_storage_elapsed = Measure::start("mark_dirty_dead_stores");
+    ) -> usize {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
             slot,
@@ -3886,10 +3885,8 @@ impl AccountsDb {
             );
         }
 
-        write_storage_elapsed.stop();
-
         self.drop_or_recycle_stores(dead_storages);
-        (remaining_stores, write_storage_elapsed)
+        remaining_stores
     }
 
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
@@ -3930,7 +3927,7 @@ impl AccountsDb {
 
         let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
         let mut create_and_insert_store_elapsed_us = 0;
-        let mut write_storage_elapsed_us = 0;
+        let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
         if shrink_collect.aligned_total > 0 {
@@ -3973,10 +3970,10 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (remaining_stores, write_storage_elapsed) =
-                self.remove_old_stores_shrink(&shrink_collect.store_ids, &shrink_collect, slot);
-            write_storage_elapsed_us = write_storage_elapsed.as_us();
-
+            let (remaining_stores, remove_old_stores_shrink) = measure!(
+                self.remove_old_stores_shrink(&shrink_collect.store_ids, &shrink_collect, slot)
+            );
+            remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
                 info!(
@@ -3992,7 +3989,7 @@ impl AccountsDb {
             create_and_insert_store_elapsed_us,
             store_accounts_timing,
             rewrite_elapsed,
-            write_storage_elapsed_us,
+            remove_old_stores_shrink_us,
         );
         self.shrink_stats.report();
 
@@ -4006,7 +4003,7 @@ impl AccountsDb {
         create_and_insert_store_elapsed_us: u64,
         store_accounts_timing: StoreAccountsTiming,
         rewrite_elapsed: Measure,
-        write_storage_elapsed_us: u64,
+        remove_old_stores_shrink_us: u64,
     ) {
         shrink_stats
             .num_slots_shrunk
@@ -4030,8 +4027,8 @@ impl AccountsDb {
             Ordering::Relaxed,
         );
         shrink_stats
-            .write_storage_elapsed
-            .fetch_add(write_storage_elapsed_us, Ordering::Relaxed);
+            .remove_old_stores_shrink_us
+            .fetch_add(remove_old_stores_shrink_us, Ordering::Relaxed);
         shrink_stats
             .rewrite_elapsed
             .fetch_add(rewrite_elapsed.as_us(), Ordering::Relaxed);
@@ -4501,8 +4498,8 @@ impl AccountsDb {
             }
             rewrite_elapsed.stop();
 
-            let (_remaining_stores, write_storage_elapsed) =
-                self.remove_old_stores_shrink(&ids, &shrink_collect, slot);
+            let (_remaining_stores, remove_old_stores_shrink) =
+                measure!(self.remove_old_stores_shrink(&ids, &shrink_collect, slot));
 
             if drop_root {
                 dropped_roots.push(slot);
@@ -4517,7 +4514,7 @@ impl AccountsDb {
                 create_and_insert_store_elapsed_us,
                 store_accounts_timing,
                 rewrite_elapsed,
-                write_storage_elapsed.as_us(),
+                remove_old_stores_shrink.as_us(),
             );
         }
 
