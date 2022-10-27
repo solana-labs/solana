@@ -50,6 +50,11 @@ mod consts {
     /// Size of the EC point. `alt_bn128` point contains
     /// the consistently united x and y fields as 64 bytes.
     pub const ALT_BN128_POINT_SIZE: usize = 64;
+
+    pub const ADD: u64 = 0;
+    pub const SUB: u64 = 1;
+    pub const MUL: u64 = 2;
+    pub const PAIRING: u64 = 3;
 }
 
 //---- Custom errors
@@ -58,18 +63,10 @@ mod consts {
 pub enum AltBn128Error {
     #[error("The input data is invalid")]
     InvalidInputData,
-    #[error("Incorrect size of input data slice for curve field")]
-    InvalidFieldSliceSize,
-    #[error("Incorrect size of input data slice for curve point")]
-    InvalidPointSliceSize,
-    #[error("Slice data is going out of input data bounds")]
-    SliceOutOfBounds,
-    #[error("Cannot convert slice to specified array")]
-    TryFromSliceError,
-    #[error("Invalid field data")]
-    FieldError,
     #[error("Invalid group data")]
     GroupError,
+    #[error("Slice data is going out of input data bounds")]
+    SliceOutOfBounds,
     #[error("Unexpected error")]
     UnexpectedError,
 }
@@ -78,12 +75,8 @@ impl From<u64> for AltBn128Error {
     fn from(v: u64) -> AltBn128Error {
         match v {
             1 => AltBn128Error::InvalidInputData,
-            2 => AltBn128Error::InvalidFieldSliceSize,
-            3 => AltBn128Error::InvalidPointSliceSize,
-            4 => AltBn128Error::SliceOutOfBounds,
-            5 => AltBn128Error::TryFromSliceError,
-            6 => AltBn128Error::FieldError,
-            7 => AltBn128Error::GroupError,
+            2 => AltBn128Error::GroupError,
+            3 => AltBn128Error::SliceOutOfBounds,
             _ => AltBn128Error::UnexpectedError,
         }
     }
@@ -93,12 +86,8 @@ impl From<AltBn128Error> for u64 {
     fn from(v: AltBn128Error) -> u64 {
         match v {
             AltBn128Error::InvalidInputData => 1,
-            AltBn128Error::InvalidFieldSliceSize => 2,
-            AltBn128Error::InvalidPointSliceSize => 3,
-            AltBn128Error::SliceOutOfBounds => 4,
-            AltBn128Error::TryFromSliceError => 5,
-            AltBn128Error::FieldError => 6,
-            AltBn128Error::GroupError => 7,
+            AltBn128Error::GroupError => 2,
+            AltBn128Error::SliceOutOfBounds => 3,
             AltBn128Error::UnexpectedError => 0,
         }
     }
@@ -171,7 +160,8 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         }
         let mut result_buffer = [0; ALT_BN128_ADDITION_OUTPUT_LEN];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_addition(
+            crate::syscalls::sol_alt_bn128_group_op(
+                ADD,
                 input as *const _ as *const u8,
                 input.len() as u64,
                 &mut result_buffer as *mut _ as *mut u8,
@@ -214,6 +204,7 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         Ok(convert_edianness_64(&result_point_data[..ALT_BN128_ADDITION_OUTPUT_LEN]).to_vec())
     }
 }
+
 pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
     #[cfg(target_os = "solana")]
     {
@@ -222,7 +213,8 @@ pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> 
         }
         let mut result_buffer = [0u8; ALT_BN128_POINT_SIZE];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_multiplication(
+            crate::syscalls::sol_alt_bn128_group_op(
+                MUL,
                 input as *const _ as *const u8,
                 input.len() as u64,
                 &mut result_buffer as *mut _ as *mut u8,
@@ -276,7 +268,8 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         }
         let mut result_buffer = [0u8; 32];
         let result = unsafe {
-            crate::syscalls::sol_alt_bn128_pairing(
+            crate::syscalls::sol_alt_bn128_group_op(
+                PAIRING,
                 input as *const _ as *const u8,
                 input.len() as u64,
                 &mut result_buffer as *mut _ as *mut u8,

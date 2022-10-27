@@ -1671,13 +1671,13 @@ declare_syscall!(
 
         invoke_context.get_compute_meter().consume(cost)?;
 
-        let input = translate_slice::<u8>(
-            memory_mapping,
-            input_addr,
-            input_size,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
-        )?;
+                let call_result = translate_slice_mut::<u8>(
+                    memory_mapping,
+                    result_addr,
+                    ALT_BN128_MULTIPLICATION_OUTPUT_LEN as u64,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
 
         let call_result = translate_slice_mut::<u8>(
             memory_mapping,
@@ -1706,9 +1706,6 @@ declare_syscall!(
         if result_point.len() != output {
             return Ok(AltBn128Error::SliceOutOfBounds.into());
         }
-
-        call_result.copy_from_slice(&result_point);
-        Ok(SUCCESS)
     }
 );
 
