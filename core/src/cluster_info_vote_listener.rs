@@ -358,7 +358,12 @@ impl ClusterInfoVoteListener {
                     .epoch_authorized_voters()
                     .get(&vote_account_key)?;
                 let mut keys = tx.message.account_keys.iter().enumerate();
-                if !keys.any(|(i, key)| tx.message.is_signer(i) && key == authorized_voter) {
+                // When the authorized_voter and authorized_vote_withdrawer
+                // keypairs are different, the vote message will be signed by
+                // auth_vote_withdrawer keypair, not authorized_voter keypair.
+                // Therefore, we should only check that the authorized_voter
+                // account exist.
+                if !keys.any(|(_i, key)| key == authorized_voter) {
                     return None;
                 }
                 let verified_vote_metadata = VerifiedVoteMetadata {
