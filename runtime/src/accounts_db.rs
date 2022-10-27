@@ -4520,6 +4520,14 @@ impl AccountsDb {
             );
         }
 
+        self.handle_dropped_roots_for_ancient(dropped_roots);
+
+        self.shrink_ancient_stats.report();
+    }
+
+    /// each slot in 'dropped_roots' has been combined into an ancient append vec.
+    /// We are done with the slot now forever.
+    fn handle_dropped_roots_for_ancient(&self, dropped_roots: Vec<Slot>) {
         if !dropped_roots.is_empty() {
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
@@ -4537,8 +4545,6 @@ impl AccountsDb {
                     .is_empty());
             });
         }
-
-        self.shrink_ancient_stats.report();
     }
 
     /// add all 'pubkeys' into the set of pubkeys that are 'uncleaned', associated with 'slot'
