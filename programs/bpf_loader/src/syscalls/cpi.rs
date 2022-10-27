@@ -732,6 +732,10 @@ where
         .unwrap()
         .orig_account_lengths;
 
+    let direct_mapping = invoke_context
+        .feature_set
+        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
+
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
         if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
@@ -793,6 +797,7 @@ where
                 is_loader_deprecated,
                 &caller_account,
                 callee_account,
+                direct_mapping,
             )?;
 
             let caller_account = if instruction_account.is_writable {
@@ -980,6 +985,10 @@ fn cpi_common<S: SyscallInvokeSigned>(
     // CPI exit.
     //
     // Synchronize the callee's account changes so the caller can see them.
+    let direct_mapping = invoke_context
+        .feature_set
+        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
+
     for (index_in_caller, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
             let mut callee_account = instruction_context
@@ -990,6 +999,7 @@ fn cpi_common<S: SyscallInvokeSigned>(
                 is_loader_deprecated,
                 caller_account,
                 &mut callee_account,
+                direct_mapping,
             )?;
         }
     }
@@ -1010,19 +1020,16 @@ fn update_callee_account(
     is_loader_deprecated: bool,
     caller_account: &CallerAccount,
     mut callee_account: BorrowedAccount<'_>,
+    direct_mapping: bool,
 ) -> Result<(), Error> {
     let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
         .feature_set
         .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
-    let bpf_account_data_direct_mapping = invoke_context
-        .feature_set
-        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
-
     if callee_account.get_lamports() != *caller_account.lamports {
         callee_account.set_lamports(*caller_account.lamports)?;
     }
 
-    if bpf_account_data_direct_mapping {
+    if direct_mapping {
         let prev_len = callee_account.get_data().len();
         let post_len = *caller_account.ref_to_len_in_vm as usize;
         match callee_account
@@ -1118,15 +1125,12 @@ fn update_caller_account(
     is_loader_deprecated: bool,
     caller_account: &mut CallerAccount,
     callee_account: &mut BorrowedAccount<'_>,
+    direct_mapping: bool,
 ) -> Result<(), Error> {
-    let bpf_account_data_direct_mapping = invoke_context
-        .feature_set
-        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
-
     *caller_account.lamports = callee_account.get_lamports();
     *caller_account.owner = *callee_account.get_owner();
 
-    if bpf_account_data_direct_mapping && caller_account.original_data_len > 0 {
+    if direct_mapping && caller_account.original_data_len > 0 {
         let regions = memory_mapping.get_regions();
         let memory_region_index = regions
             .iter()
@@ -1161,7 +1165,7 @@ fn update_caller_account(
             return Err(Box::new(InstructionError::InvalidRealloc));
         }
         if post_len < prev_len {
-            if bpf_account_data_direct_mapping {
+            if direct_mapping {
                 unsafe {
                     std::slice::from_raw_parts_mut(
                         callee_account.get_data_mut()?.as_mut_ptr().add(post_len),
@@ -1179,14 +1183,14 @@ fn update_caller_account(
         }
         caller_account.account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
             memory_mapping,
-            if bpf_account_data_direct_mapping {
+            if direct_mapping {
                 caller_account
                     .vm_data_addr
                     .saturating_add(caller_account.original_data_len as u64)
             } else {
                 caller_account.vm_data_addr
             },
-            if bpf_account_data_direct_mapping {
+            if direct_mapping {
                 if is_loader_deprecated {
                     0
                 } else {
@@ -1221,7 +1225,7 @@ fn update_caller_account(
         }
     }
     let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
-    if !bpf_account_data_direct_mapping {
+    if !direct_mapping {
         let to_slice = &mut caller_account.account_data_or_only_realloc_padding;
         let from_slice = callee_account
             .get_data()
@@ -1481,6 +1485,7 @@ mod tests {
             false,
             &mut caller_account,
             &mut callee_account,
+            false,
         )
         .unwrap();
 
@@ -1552,6 +1557,7 @@ mod tests {
                 false,
                 &mut caller_account,
                 &mut callee_account,
+                false,
             )
             .unwrap();
 
@@ -1579,6 +1585,7 @@ mod tests {
             false,
             &mut caller_account,
             &mut callee_account,
+            false,
         )
         .unwrap();
         let data_len = callee_account.get_data().len();
@@ -1595,6 +1602,7 @@ mod tests {
                 false,
                 &mut caller_account,
                 &mut callee_account,
+                false,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc,
         ));
@@ -1636,7 +1644,14 @@ mod tests {
         *caller_account.lamports = 42;
         *caller_account.owner = Pubkey::new_unique();
 
-        update_callee_account(&invoke_context, false, &caller_account, callee_account).unwrap();
+        update_callee_account(
+            &invoke_context,
+            false,
+            &caller_account,
+            callee_account,
+            false,
+        )
+        .unwrap();
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.get_lamports(), 42);
@@ -1667,7 +1682,14 @@ mod tests {
         let mut data = b"foo".to_vec();
         caller_account.account_data_or_only_realloc_padding = &mut data;
 
-        update_callee_account(&invoke_context, false, &caller_account, callee_account).unwrap();
+        update_callee_account(
+            &invoke_context,
+            false,
+            &caller_account,
+            callee_account,
+            false,
+        )
+        .unwrap();
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(
