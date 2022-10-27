@@ -196,6 +196,8 @@ When warping from before `start slot` to after, an EAH calculation will be
 requested the next time `set_root()` is called.  Therefore the EAH will be
 based on this new bank.  This is also safe and correct.
 
+For specific examples, refer to Appendix A.
+
 
 #### Implementation Alternatives
 
@@ -220,3 +222,80 @@ advantages observed.
 When a bank is created, we don't yet know if it will be finalized until it is
 rooted, which could result in multiple EAH requests due to forking.  This would
 be bad for performance.
+
+
+### Appendix A: Warping Examples
+
+To enumerate how EAH interacts with warping, refer to the following diagram for
+the scenarios below:
+
+```text
+  +---------+-----------------+-----------+---------+-----------------+-----------+
+  |         >                 <           |         >                 <           |
+  |    A    >     B           <     C     |    D    >      E          <     F     |
+  |         >                 <           |         >                 <           |
+  +---------+-----------------+-----------+---------+-----------------+-----------+
+  |         |                 |           |         |                 |           |
+  v         v                 v           v         v                 v           v
+  epoch 1   start slot 1      stop slot 1 epoch 2   start slot 2      stop slot 2 epoch 3
+```
+
+
+#### parent slot: `A`, warp slot: `A`
+
+No slots important to the EAH have been skipped, so no change in behavior.
+
+
+#### parent slot: `A`, warp slot: `B`
+
+An EAH calculation will be requested at the warp slot, and then will be
+included in the Bank at `slot slot 1`; behavior is unchanged.
+
+
+#### parent slot: `A`, warp slot: `C` or `D`
+
+The entire EAH range has been skipped; no new EAH calculation will have been
+requested for epoch 1.  The warp slot will include the EAH from `epoch 0`.
+This is different from the normal behavior.
+
+
+#### parent slot: `A`, warp slot: `E`
+
+Similar to `A -> B`, an EAH calculation will be requested at the warp slot, and
+then will be included in the Bank at `stop slot 2`.  Behavior appears normal.
+
+
+#### parent slot: `A`, warp slot: `F`
+
+Similar to `A -> C`, no new EAH calculation will be requested.  The warp slot
+will include the EAH from `epoch 0`.  This is different from the normal
+behavior.
+
+
+#### parent slot: `B`, warp slot: `B`
+
+Similar to `A -> A`, no slots important to the EAH have been skipped, so no
+change in behavior.
+
+
+#### parent slot: `B`, warp slot: `C` or `D`
+
+This will be observed as normal behavior; the warp slot will include the EAH
+that was calculated based on `start slot 1`.
+
+
+#### parent slot: `B`, warp slot: `E`
+
+Similar to `A -> B`, an EAH calculation will be requested at the warp slot, and
+then will be included in the Bank at `stop slot 2`.  Behavior appears normal.
+
+
+#### parent slot: `B`, warp slot: `F`
+
+The warp slot will include the EAH from `start slot 1`.  Behavior appears
+different.
+
+
+#### The Rest
+
+All remaining combinations are already enumerated in one of the scenarios above.
