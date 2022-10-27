@@ -1685,6 +1685,59 @@ mod tests {
     }
 
     #[test]
+    fn test_update_callee_account_data_direct_mapping() {
+        let transaction_accounts = one_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account =
+            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let get_callee = || {
+            instruction_context
+                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
+                .unwrap()
+        };
+        let mut callee_account = get_callee();
+
+        // this is done when a writable account is mapped, and it ensures
+        // through make_data_mut() that the account is made writable and resized
+        // with enough padding to hold the realloc padding
+        callee_account.get_data_mut().unwrap();
+
+        let mut data = b"baz".to_vec();
+        caller_account.serialized_data = &mut data;
+
+        for (len, expected) in [
+            (9, b"foobarbaz".to_vec()), // > original_data_len, copies from realloc region
+            (6, b"foobar".to_vec()),    // == original_data_len, truncates
+            (3, b"foo".to_vec()),       // < original_data_len, truncates
+        ] {
+            *caller_account.ref_to_len_in_vm = len as u64;
+            update_callee_account(
+                &invoke_context,
+                false,
+                &caller_account,
+                callee_account,
+                true,
+            )
+            .unwrap();
+            callee_account = get_callee();
+            assert_eq!(callee_account.get_data(), expected);
+        }
+    }
+
+    #[test]
     fn test_translate_accounts_rust() {
         let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
