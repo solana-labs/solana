@@ -2869,7 +2869,7 @@ export class Connection {
       .then(x => x.value)
       .catch(e => {
         throw new Error(
-          'failed to get balance of account ' + publicKey.toBase58() + ': ' + e,
+          'failed to get balance of account ' + publicKey.toBase58() + ': ' + (typeof e === 'object' ? JSON.stringify(e) : e.toString()),
         );
       });
   }
