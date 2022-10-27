@@ -306,6 +306,16 @@ module.exports = {
     },
     {
       type: "category",
+      label: "Best Practices",
+      collapsed: false,
+      items: [
+        "validator/best-practices/operations",
+        "validator/best-practices/monitoring",
+        "validator/best-practices/security",
+      ],
+    },
+    {
+      type: "category",
       label: "Voting Setup",
       collapsed: false,
       items: [
