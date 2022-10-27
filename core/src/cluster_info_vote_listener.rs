@@ -1595,14 +1595,10 @@ mod tests {
 
     fn test_vote_tx(
         validator_vote_keypairs: Option<&ValidatorVoteKeypairs>,
-        auth_vote_keypairs: Option<&ValidatorVoteKeypairs>,
         hash: Option<Hash>,
     ) -> Transaction {
         let other = ValidatorVoteKeypairs::new_rand();
         let validator_vote_keypair = validator_vote_keypairs.unwrap_or(&other);
-
-        let other = ValidatorVoteKeypairs::new_rand();
-        let auth_vote_keypair = auth_vote_keypairs.unwrap_or(&other);
 
         vote_transaction::new_vote_transaction(
             vec![0],
@@ -1610,7 +1606,7 @@ mod tests {
             Hash::default(),
             &validator_vote_keypair.node_keypair,
             &validator_vote_keypair.vote_keypair,
-            &auth_vote_keypair,
+            &validator_vote_keypair.auth_vote_keypair,
             hash,
         )
     }
