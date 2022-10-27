@@ -30,7 +30,6 @@ use {
 
 pub struct QuicPool {
     connections: Vec<Arc<Quic>>,
-    endpoint: Arc<QuicLazyInitializedEndpoint>,
 }
 impl ConnectionPool for QuicPool {
     type PoolTpuConnection = Quic;
@@ -40,7 +39,6 @@ impl ConnectionPool for QuicPool {
     fn new_with_connection(config: &Self::TpuConfig, addr: &SocketAddr) -> Self {
         let mut pool = Self {
             connections: vec![],
-            endpoint: config.create_endpoint(),
         };
         pool.add_connection(config, addr);
         pool
@@ -68,7 +66,7 @@ impl ConnectionPool for QuicPool {
         addr: &SocketAddr,
     ) -> Self::PoolTpuConnection {
         Quic(Arc::new(QuicClient::new(
-            self.endpoint.clone(),
+            config.endpoint.clone(),
             *addr,
             config.compute_max_parallel_streams(),
         )))
@@ -79,6 +77,7 @@ pub struct QuicConfig {
     client_certificate: Arc<QuicClientCertificate>,
     maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     maybe_client_pubkey: Option<Pubkey>,
+    endpoint: Arc<QuicLazyInitializedEndpoint>,
 }
 
 impl Default for QuicConfig {
@@ -88,11 +87,14 @@ impl Default for QuicConfig {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         )
         .expect("Failed to initialize QUIC client certificates");
+        let client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+        let endpoint = Self::create_endpoint_from_cert(client_certificate.clone());
         Self {
-            client_certificate: Arc::new(QuicClientCertificate {
-                certificates: certs,
-                key: priv_key,
-            }),
+            client_certificate,
+            endpoint,
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
         }
@@ -100,10 +102,10 @@ impl Default for QuicConfig {
 }
 
 impl QuicConfig {
-    fn create_endpoint(&self) -> Arc<QuicLazyInitializedEndpoint> {
-        Arc::new(QuicLazyInitializedEndpoint::new(
-            self.client_certificate.clone(),
-        ))
+    fn create_endpoint_from_cert(
+        client_certificate: Arc<QuicClientCertificate>,
+    ) -> Arc<QuicLazyInitializedEndpoint> {
+        Arc::new(QuicLazyInitializedEndpoint::new(client_certificate))
     }
 
     fn compute_max_parallel_streams(&self) -> usize {
