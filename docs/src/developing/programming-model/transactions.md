@@ -27,10 +27,22 @@ Each digital signature is in the ed25519 binary format and consumes 64 bytes.
 
 ### Message Format
 
-A message contains a [header](#message-header-format), followed by a
-compact-array of [account addresses](#account-addresses-format), followed by a
+The message format depends on the whether the transaction is of type legacy or 
+[versioned](../versioned-transactions.md). Legacy messages begin with a [header](#message-header-format),
+followed by a compact-array of [account addresses](#account-addresses-format), followed by a
 recent [blockhash](#blockhash-format), followed by a compact-array of
 [instructions](#instruction-format).
+
+Versioned messages are slightly different. They begin with a [version byte](#version-byte-format), 
+followed by a [header](#message-header-format), followed by a compact-array of [account addresses](#account-address-format),
+followed by a recent [blockhash](#blockhash-format), followed by a compact-array of
+[instructions](#instruction-format), followed by a compact-array of [address table lookups](#address-table-lookup-format).
+
+Because legacy transactions can only contain ~20 signatures, the leftmost 
+byte of a legacy message (which contains the number of required signatures)
+will always have 0 in its 5-7th bit positions. A version byte will always 
+have 1 in its 7th bit position, so one can distinguish between the two by
+checking the 7th bit of the message's first byte.
 
 #### Message Header Format
 
@@ -39,6 +51,10 @@ number of required signatures in the containing transaction. The second value
 is the number of those corresponding account addresses that are read-only. The
 third value in the message header is the number of read-only account addresses
 not requiring signatures.
+
+#### Version Byte Format
+
+A version byte contains 1 in its 7th bit and the version number (e.g., 0) in its 0-6th bits.
 
 #### Account Addresses Format
 
@@ -62,6 +78,13 @@ program id index is used to identify an on-chain program that can interpret the
 opaque data. The program id index is an unsigned 8-bit index to an account
 address in the message's array of account addresses. The account address
 indexes are each an unsigned 8-bit index into that same array.
+
+### Address Table Lookup Format
+
+A reference to an address table lookup within a message contains the public key of 
+an [address lookup table account](../lookup-tables.md), followed by a compact-
+array of 8-bit indexes of writable accounts, followed by a compact-array of 8-bit 
+indexes of read-only accounts. These are indexes into the lookup table account. 
 
 ### Compact-Array Format
 
