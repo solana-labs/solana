@@ -743,7 +743,7 @@ impl ThreadLocalUnprocessedPackets {
                 }),
         );
 
-        self.unprocessed_packet_batches.packet_priority_queue = retryable_packets;
+        self.unprocessed_packet_batches.packet_priority_queue = new_retryable_packets;
         self.verify_priority_queue(original_capacity);
     }
 }
