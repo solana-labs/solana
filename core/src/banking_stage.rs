@@ -65,7 +65,6 @@ use {
         collections::HashMap,
         env,
         net::{SocketAddr, UdpSocket},
-        rc::Rc,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, RwLock,
@@ -665,14 +664,16 @@ impl BankingStage {
         let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = false;
+        let original_capacity = buffered_packet_batches.capacity();
         let mut retryable_packets = {
-            let capacity = buffered_packet_batches.capacity();
             std::mem::replace(
                 &mut buffered_packet_batches.packet_priority_queue,
-                MinMaxHeap::with_capacity(capacity),
+                MinMaxHeap::new(),
             )
         };
-        let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+
+        let mut new_retryable_packets = MinMaxHeap::with_capacity(original_capacity);
+        new_retryable_packets.extend(retryable_packets
             .drain_desc()
             .chunks(num_packets_to_process_per_iteration)
             .into_iter()
@@ -781,10 +782,9 @@ impl BankingStage {
 
                     packets_to_process
                 }
-            })
-            .collect();
+            }));
 
-        buffered_packet_batches.packet_priority_queue = retryable_packets;
+        buffered_packet_batches.packet_priority_queue = new_retryable_packets;
 
         if reached_end_of_slot {
             slot_metrics_tracker
@@ -804,7 +804,8 @@ impl BankingStage {
             (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
-        // Assert unprocessed queue is still consistent
+        // Assert unprocessed queue is still consistent and maintains original capacity
+        assert_eq!(buffered_packet_batches.capacity(), original_capacity);
         assert_eq!(
             buffered_packet_batches.packet_priority_queue.len(),
             buffered_packet_batches.message_hash_to_transaction.len()
