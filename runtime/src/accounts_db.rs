@@ -17006,6 +17006,81 @@ pub mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn test_current_ancient_slot_assert() {
+        let current_ancient = CurrentAncientAppendVec::default();
+        _ = current_ancient.slot();
+    }
+
+    #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn test_current_ancient_append_vec_id_assert() {
+        let current_ancient = CurrentAncientAppendVec::default();
+        _ = current_ancient.append_vec_id();
+    }
+
+    #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn test_current_ancient_append_vec_assert() {
+        let current_ancient = CurrentAncientAppendVec::default();
+        _ = current_ancient.append_vec();
+    }
+
+    #[test]
+    fn test_current_ancient_simple() {
+        let slot = 1;
+        let slot2 = 2;
+        let slot3 = 3;
+        {
+            // new
+            let db = AccountsDb::new_single_for_tests();
+            let size = 1000;
+            let append_vec = db.create_and_insert_store(slot, size, "test");
+            let mut current_ancient = CurrentAncientAppendVec::new(slot, append_vec.clone());
+            assert_eq!(current_ancient.slot(), slot);
+            assert_eq!(current_ancient.append_vec_id(), append_vec.append_vec_id());
+            assert_eq!(
+                current_ancient.append_vec().append_vec_id(),
+                append_vec.append_vec_id()
+            );
+
+            current_ancient.create_if_necessary(slot2, &db);
+            assert_eq!(current_ancient.slot(), slot);
+            assert_eq!(current_ancient.append_vec_id(), append_vec.append_vec_id());
+        }
+
+        {
+            // create_if_necessary
+            let db = AccountsDb::new_single_for_tests();
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            current_ancient.create_if_necessary(slot2, &db);
+            let id = current_ancient.append_vec_id();
+            assert_eq!(current_ancient.slot(), slot2);
+            assert!(is_ancient(&current_ancient.append_vec().accounts));
+            let slot3 = 3;
+            // should do nothing
+            current_ancient.create_if_necessary(slot3, &db);
+            assert_eq!(current_ancient.slot(), slot2);
+            assert_eq!(current_ancient.append_vec_id(), id);
+            assert!(is_ancient(&current_ancient.append_vec().accounts));
+        }
+
+        {
+            // create_ancient_append_vec
+            let db = AccountsDb::new_single_for_tests();
+            let mut current_ancient = CurrentAncientAppendVec::default();
+            current_ancient.create_ancient_append_vec(slot2, &db);
+            let id = current_ancient.append_vec_id();
+            assert_eq!(current_ancient.slot(), slot2);
+            assert!(is_ancient(&current_ancient.append_vec().accounts));
+            current_ancient.create_ancient_append_vec(slot3, &db);
+            assert_eq!(current_ancient.slot(), slot3);
+            assert!(is_ancient(&current_ancient.append_vec().accounts));
+            assert_ne!(current_ancient.append_vec_id(), id);
+        }
+    }
+
+    #[test]
     fn test_get_sorted_potential_ancient_slots() {
         let db = AccountsDb::new_single_for_tests();
         assert!(db.get_sorted_potential_ancient_slots().is_empty());
