@@ -107,12 +107,13 @@ impl LedgerCleanupService {
             if i == 0 {
                 debug!("purge: searching from slot: {}", slot);
             }
-            // Not exact since non-full slots will have holes
-            total_shreds += meta.received;
-            total_slots.push((slot, meta.received));
+            // Unrooted slots are not eligible for cleaning
             if slot > root {
                 break;
             }
+            // This method not exact since non-full slots will have holes
+            total_shreds += meta.received;
+            total_slots.push((slot, meta.received));
         }
         iterate_time.stop();
         info!(
@@ -266,14 +267,77 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::unbounded,
-        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
+        solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path_auto_delete},
     };
+
+    #[test]
+    fn test_find_slots_to_clean() {
+        // LedgerCleanupService::find_slots_to_clean() does not modify the
+        // Blockstore, so we can make repeated calls on the same slots
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+
+        // Construct and build some shreds for slots [1, 10]
+        let num_slots: u64 = 10;
+        let num_entries = 200;
+        let (shreds, _) = make_many_slot_entries(1, num_slots, num_entries);
+        let shreds_per_slot = (shreds.len() / num_slots as usize) as u64;
+        assert!(shreds_per_slot > 1);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+
+        // Ensure no cleaning of slots > last_root
+        let last_root = 0;
+        let max_ledger_shreds = 0;
+        let (should_clean, lowest_purged, _) =
+            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        // Slot 0 will exist in blockstore with zero shreds since it is slot
+        // 1's parent. Thus, slot 0 will be identified for clean.
+        assert!(should_clean && lowest_purged == 0);
+        // Now, set max_ledger_shreds to 1 so that slot 0 is left alone
+        let max_ledger_shreds = 1;
+        let (should_clean, lowest_purged, _) =
+            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        assert!(!should_clean && lowest_purged == 0);
+
+        // Ensure no cleaning if blockstore contains fewer than max_ledger_shreds
+        let last_root = num_slots;
+        let max_ledger_shreds = (shreds_per_slot * num_slots) + 1;
+        let (should_clean, lowest_purged, _) =
+            LedgerCleanupService::find_slots_to_clean(&blockstore, last_root, max_ledger_shreds);
+        assert!(!should_clean && lowest_purged == 0);
+
+        for slot in 1..=num_slots {
+            // Set last_root to make slots <= slot eligible for cleaning
+            let last_root = slot;
+            // Set max_ledger_shreds to 0 so that all eligible slots are cleaned
+            let max_ledger_shreds = 0;
+            let (should_clean, lowest_purged, _) = LedgerCleanupService::find_slots_to_clean(
+                &blockstore,
+                last_root,
+                max_ledger_shreds,
+            );
+            assert!(should_clean && lowest_purged == slot);
+
+            // Set last_root to make all slots eligible for cleaning
+            let last_root = num_slots + 1;
+            // Set max_ledger_shreds to the number of shreds in slots > slot.
+            // This will make it so that slots [1, slot] are cleaned
+            let max_ledger_shreds = shreds_per_slot * (num_slots - slot);
+            let (should_clean, lowest_purged, _) = LedgerCleanupService::find_slots_to_clean(
+                &blockstore,
+                last_root,
+                max_ledger_shreds,
+            );
+            assert!(should_clean && lowest_purged == slot);
+        }
+    }
 
     #[test]
     fn test_cleanup1() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -291,16 +355,13 @@ mod tests {
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(slot, _)| assert!(slot > 40));
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 
     #[test]
     fn test_cleanup_speed() {
         solana_logger::setup();
-        let blockstore_path = get_tmp_ledger_path!();
-        let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
         let (sender, receiver) = unbounded();
 
         let mut first_insert = Measure::start("first_insert");
@@ -345,8 +406,5 @@ mod tests {
             slot += num_slots;
             num_slots *= 2;
         }
-
-        drop(blockstore);
-        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
 }
