@@ -1,5 +1,5 @@
 import {Connection} from '../connection';
-import {Transaction} from '../transaction';
+import {Transaction, VersionedTransaction} from '../transaction';
 import type {ConfirmOptions} from '../connection';
 import type {Signer} from '../keypair';
 import type {TransactionSignature} from '../transaction';
@@ -10,14 +10,14 @@ import type {TransactionSignature} from '../transaction';
  * If `commitment` option is not specified, defaults to 'max' commitment.
  *
  * @param {Connection} connection
- * @param {Transaction} transaction
+ * @param {Transaction | VersionedTransaction} transaction
  * @param {Array<Signer>} signers
  * @param {ConfirmOptions} [options]
  * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmTransaction(
   connection: Connection,
-  transaction: Transaction,
+  transaction: Transaction | VersionedTransaction,
   signers: Array<Signer>,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature> {
