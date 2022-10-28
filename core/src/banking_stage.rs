@@ -1213,9 +1213,10 @@ impl BankingStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn commit_transactions(
         batch: &TransactionBatch,
-        loaded_transactions: &mut Vec<TransactionLoadResult>,
+        loaded_transactions: &mut [TransactionLoadResult],
         execution_results: Vec<TransactionExecutionResult>,
         sanitized_txs: &[SanitizedTransaction],
         starting_transaction_index: Option<usize>,
