@@ -10,7 +10,7 @@ use {
         },
         transaction_context::BorrowedAccount,
     },
-    std::mem,
+    std::{mem, slice},
 };
 
 /// Host side representation of AccountInfo or SolAccountInfo passed to the CPI syscall.
@@ -1150,27 +1150,43 @@ fn update_caller_account(
     let prev_len = *caller_account.ref_to_len_in_vm as usize;
     let post_len = callee_account.get_data().len();
     if prev_len != post_len {
+        let max_increase = if direct_mapping && !invoke_context.get_check_aligned() {
+            0
+        } else {
+            MAX_PERMITTED_DATA_INCREASE
+        };
         let data_overflow = post_len
             > caller_account
                 .original_data_len
-                .saturating_add(MAX_PERMITTED_DATA_INCREASE);
+                .saturating_add(max_increase);
         if data_overflow {
             ic_msg!(
                 invoke_context,
-                "Account data size realloc limited to {} in inner instructions",
-                MAX_PERMITTED_DATA_INCREASE
+                "Account data size realloc limited to {max_increase} in inner instructions",
             );
             return Err(Box::new(InstructionError::InvalidRealloc));
         }
         if post_len < prev_len {
             if direct_mapping {
-                unsafe {
-                    std::slice::from_raw_parts_mut(
-                        callee_account.get_data_mut()?.as_mut_ptr().add(post_len),
-                        prev_len.saturating_sub(post_len),
-                    )
-                    .fill(0);
+                if post_len < caller_account.original_data_len {
+                    // zero the spare capacity in the account data
+                    let spare_capacity = unsafe {
+                        slice::from_raw_parts_mut(
+                            callee_account.get_data_mut()?.as_mut_ptr().add(post_len),
+                            caller_account.original_data_len.saturating_sub(post_len),
+                        )
+                    };
+                    spare_capacity.fill(0);
                 }
+
+                // zero the spare capacity in the realloc padding
+                let spare_realloc = unsafe {
+                    slice::from_raw_parts_mut(
+                        caller_account.serialized_data.as_mut_ptr(),
+                        prev_len.saturating_sub(caller_account.original_data_len),
+                    )
+                };
+                spare_realloc.fill(0);
             } else {
                 caller_account
                     .serialized_data
@@ -1453,8 +1469,13 @@ mod tests {
             .get_current_instruction_context()
             .unwrap();
 
-        let mut mock_caller_account =
-            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+        let mut mock_caller_account = MockCallerAccount::new(
+            1234,
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            false,
+        );
 
         let config = Config {
             aligned_memory_mapping: false,
@@ -1513,6 +1534,7 @@ mod tests {
             *account.owner(),
             0xFFFFFFFF00000000,
             account.data(),
+            false,
         );
 
         let config = Config {
@@ -1610,6 +1632,145 @@ mod tests {
     }
 
     #[test]
+    fn test_update_caller_account_data_direct_mapping() {
+        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+        let original_data_len = account.data().len();
+
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account = MockCallerAccount::new(
+            account.lamports(),
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            true,
+        );
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mut memory_mapping =
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
+
+        let data_slice = mock_caller_account.data_slice();
+        let len_ptr = unsafe {
+            data_slice
+                .as_ptr()
+                .offset(-(mem::size_of::<u64>() as isize))
+        };
+        let serialized_len = || unsafe { *len_ptr.cast::<u64>() as usize };
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let mut callee_account = instruction_context
+            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
+            .unwrap();
+
+        for (new_value, expected_realloc_used) in [
+            (b"foobazbad".to_vec(), 3), // > original_data_len, writes into realloc
+            (b"foo".to_vec(), 0), // < original_data_len, zeroes account capacity + realloc capacity
+            (b"foobaz".to_vec(), 0), // = original_data_len
+            (vec![], 0),          // check lower bound
+        ] {
+            callee_account.set_data_from_slice(&new_value).unwrap();
+
+            update_caller_account(
+                &invoke_context,
+                &mut memory_mapping,
+                false,
+                &mut caller_account,
+                &mut callee_account,
+                true,
+            )
+            .unwrap();
+
+            let data_len = callee_account.get_data().len();
+            // the account info length must get updated
+            assert_eq!(data_len, *caller_account.ref_to_len_in_vm as usize);
+            // the length slot in the serialization parameters must be updated
+            assert_eq!(data_len, serialized_len());
+
+            // with direct mapping on, serialized_data contains the realloc padding
+            let realloc_area = &caller_account.serialized_data;
+
+            if data_len < original_data_len {
+                // if an account gets resized below its original data length,
+                // the spare capacity is zeroed
+                let original_data_slice = unsafe {
+                    slice::from_raw_parts(callee_account.get_data().as_ptr(), original_data_len)
+                };
+
+                let spare_capacity = &original_data_slice[original_data_len - data_len..];
+                assert!(
+                    is_zeroed(spare_capacity),
+                    "dirty account spare capacity {:?}",
+                    spare_capacity
+                );
+            }
+
+            // if an account gets extended past its original length, the end
+            // gets written in the realloc padding
+            assert_eq!(
+                &realloc_area[..expected_realloc_used],
+                &callee_account.get_data()[data_len - expected_realloc_used..]
+            );
+
+            // the unused realloc padding is always zeroed
+            assert!(
+                is_zeroed(&realloc_area[expected_realloc_used..]),
+                "dirty realloc padding {:?}",
+                realloc_area
+            );
+        }
+
+        callee_account
+            .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE)
+            .unwrap();
+        update_caller_account(
+            &invoke_context,
+            &mut memory_mapping,
+            false,
+            &mut caller_account,
+            &mut callee_account,
+            true,
+        )
+        .unwrap();
+        assert!(
+            is_zeroed(caller_account.serialized_data),
+            "dirty realloc padding {:?}",
+            caller_account.serialized_data
+        );
+
+        callee_account
+            .set_data_length(original_data_len + MAX_PERMITTED_DATA_INCREASE + 1)
+            .unwrap();
+        assert!(matches!(
+            update_caller_account(
+                &invoke_context,
+                &mut memory_mapping,
+                false,
+                &mut caller_account,
+                &mut callee_account,
+                false,
+            ),
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc
+        ));
+    }
+
+    #[test]
     fn test_update_callee_account_lamports_owner() {
         let transaction_accounts = transaction_with_one_instruction_account(vec![]);
         let account = transaction_accounts[1].1.clone();
@@ -1623,8 +1784,13 @@ mod tests {
             &[1]
         );
 
-        let mut mock_caller_account =
-            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+        let mut mock_caller_account = MockCallerAccount::new(
+            1234,
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            false,
+        );
 
         let caller_account = mock_caller_account.caller_account();
 
@@ -1661,8 +1827,13 @@ mod tests {
             &[1]
         );
 
-        let mut mock_caller_account =
-            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+        let mut mock_caller_account = MockCallerAccount::new(
+            1234,
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            false,
+        );
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1686,20 +1857,30 @@ mod tests {
 
     #[test]
     fn test_update_callee_account_data_direct_mapping() {
-        let transaction_accounts = one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let instruction_context = invoke_context
             .transaction_context
             .get_current_instruction_context()
             .unwrap();
 
-        let mut mock_caller_account =
-            MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
+        let mut mock_caller_account = MockCallerAccount::new(
+            1234,
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            true,
+        );
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1811,18 +1992,54 @@ mod tests {
     }
 
     impl MockCallerAccount {
-        fn new(lamports: u64, owner: Pubkey, vm_addr: u64, data: &[u8]) -> MockCallerAccount {
-            // write [len][data] into a vec so we can check that they get
-            // properly updated by update_caller_account()
-            let mut d = vec![0; mem::size_of::<u64>() + data.len() + MAX_PERMITTED_DATA_INCREASE];
+        fn new(
+            lamports: u64,
+            owner: Pubkey,
+            vm_addr: u64,
+            data: &[u8],
+            direct_mapping: bool,
+        ) -> MockCallerAccount {
+            let mut regions = vec![];
+
+            let mut d = vec![
+                0;
+                mem::size_of::<u64>()
+                    + if direct_mapping { 0 } else { data.len() }
+                    + MAX_PERMITTED_DATA_INCREASE
+            ];
+            // always write the [len] part even when direct mapping
             unsafe { ptr::write_unaligned::<u64>(d.as_mut_ptr().cast(), data.len() as u64) };
-            d[mem::size_of::<u64>()..][..data.len()].copy_from_slice(data);
 
-            // the memory region must include the realloc data
-            let regions = vec![MemoryRegion::new_writable(d.as_mut_slice(), vm_addr)];
+            // write the account data when not direct mapping
+            if !direct_mapping {
+                d[mem::size_of::<u64>()..][..data.len()].copy_from_slice(data);
+            }
 
-            // caller_account.serialized_data must have the actual data length
-            d.truncate(mem::size_of::<u64>() + data.len());
+            // create a region for [len][data+realloc if !direct_mapping]
+            let mut region_addr = vm_addr;
+            let region_len = mem::size_of::<u64>()
+                + if direct_mapping {
+                    0
+                } else {
+                    data.len() + MAX_PERMITTED_DATA_INCREASE
+                };
+            regions.push(MemoryRegion::new_writable(&mut d[..region_len], vm_addr));
+            region_addr += region_len as u64;
+
+            if direct_mapping {
+                // create a region for the directly mapped data
+                regions.push(MemoryRegion::new_readonly(data, region_addr));
+                region_addr += data.len() as u64;
+
+                // create a region for the realloc padding
+                regions.push(MemoryRegion::new_writable(
+                    &mut d[mem::size_of::<u64>()..],
+                    region_addr,
+                ));
+            } else {
+                // caller_account.serialized_data must have the actual data length
+                d.truncate(mem::size_of::<u64>() + data.len());
+            }
 
             MockCallerAccount {
                 lamports,
@@ -1849,7 +2066,7 @@ mod tests {
             CallerAccount {
                 lamports: &mut self.lamports,
                 owner: &mut self.owner,
-                original_data_len: data.len(),
+                original_data_len: self.len as usize,
                 serialized_data: data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: &mut self.len,
