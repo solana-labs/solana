@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that queries sibling instructions
+//! Example Rust-based SBF program that queries sibling instructions
 
 #![cfg(feature = "program")]
 

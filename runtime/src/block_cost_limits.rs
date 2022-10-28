@@ -53,7 +53,7 @@ lazy_static! {
 /// Number of compute units that a block is allowed. A block's compute units are
 /// accumulated by Transactions added to it; A transaction's compute units are
 /// calculated by cost_model, based on transaction's signatures, write locks,
-/// data size and built-in and BPF instructions.
+/// data size and built-in and SBF instructions.
 pub const MAX_BLOCK_UNITS: u64 =
     MAX_BLOCK_REPLAY_TIME_US * COMPUTE_UNIT_TO_US_RATIO * MAX_CONCURRENCY;
 

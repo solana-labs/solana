@@ -192,7 +192,7 @@ impl Secp256k1Pubkey {
 ///
 /// This has the downside that the program must link to the [`libsecp256k1`]
 /// crate and parse the signature just for this check. Note that `libsecp256k1`
-/// version 0.7.0 or greater is required for running on the Solana BPF target.
+/// version 0.7.0 or greater is required for running on the Solana SBF target.
 ///
 /// [`libsecp256k1`]: https://docs.rs/libsecp256k1/latest/libsecp256k1
 ///
@@ -210,14 +210,14 @@ impl Secp256k1Pubkey {
 ///
 /// If `hash` is not 32 bytes in length this function returns
 /// [`Secp256k1RecoverError::InvalidHash`], though see notes
-/// on BPF-specific behavior below.
+/// on SBF-specific behavior below.
 ///
 /// If `recovery_id` is not in the range [0, 3] this function returns
 /// [`Secp256k1RecoverError::InvalidRecoveryId`].
 ///
 /// If `signature` is not 64 bytes in length this function returns
 /// [`Secp256k1RecoverError::InvalidSignature`], though see notes
-/// on BPF-specific behavior below.
+/// on SBF-specific behavior below.
 ///
 /// If `signature` represents an "overflowing" signature this function returns
 /// [`Secp256k1RecoverError::InvalidSignature`]. Overflowing signatures are
@@ -226,7 +226,7 @@ impl Secp256k1Pubkey {
 /// If `signature` is otherwise invalid this function returns
 /// [`Secp256k1RecoverError::InvalidSignature`].
 ///
-/// # BPF-specific behavior
+/// # SBF-specific behavior
 ///
 /// When calling this function on-chain the caller must verify the correct
 /// lengths of `hash` and `signature` beforehand.

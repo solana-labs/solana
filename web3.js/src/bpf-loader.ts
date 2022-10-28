@@ -24,12 +24,12 @@ export class BpfLoader {
   }
 
   /**
-   * Load a BPF program
+   * Load a SBF program
    *
    * @param connection The connection to use
    * @param payer Account that will pay program loading fees
    * @param program Account to load the program into
-   * @param elf The entire ELF containing the BPF program
+   * @param elf The entire ELF containing the SBF program
    * @param loaderProgramId The program id of the BPF loader to use
    * @return true if program was loaded successfully, false if program was already loaded
    */

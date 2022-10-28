@@ -45,7 +45,7 @@ If an account is marked "executable" in its metadata, then it is considered a
 program which can be executed by including the account's public key in an
 instruction's [program id](transactions.md#program-id). Accounts are marked as
 executable during a successful program deployment process by the loader that
-owns the account. When a program is deployed to the execution engine (BPF deployment),
+owns the account. When a program is deployed to the execution engine (SBF deployment),
 the loader determines that the bytecode in the account's data is valid.
 If so, the loader permanently marks the program account as executable.
 
