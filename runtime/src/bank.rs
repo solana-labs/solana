@@ -6983,7 +6983,7 @@ impl Bank {
             .load_account_into_read_cache(&self.ancestors, key);
     }
 
-    pub fn update_accounts_hash_with_index_option(
+    pub fn update_accounts_hash(
         &self,
         data_source: CalcAccountsHashDataSource,
         mut debug_verify: bool,
@@ -7034,7 +7034,7 @@ impl Bank {
     }
 
     pub fn update_accounts_hash_for_tests(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(CalcAccountsHashDataSource::Index, false, false)
+        self.update_accounts_hash(CalcAccountsHashDataSource::Index, false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
