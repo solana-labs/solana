@@ -325,6 +325,13 @@ impl BankingStageStats {
     }
 }
 
+#[derive(Default)]
+struct PreBalanceInfo {
+    native: Vec<Vec<u64>>,
+    token: Vec<Vec<TransactionTokenBalance>>,
+    mint_decimals: HashMap<Pubkey, u8>,
+}
+
 #[derive(Debug, Default)]
 pub struct BatchedTransactionDetails {
     pub costs: BatchedTransactionCostDetails,
@@ -1212,15 +1219,13 @@ impl BankingStage {
         sanitized_txs: &[SanitizedTransaction],
         starting_transaction_index: Option<usize>,
         bank: &Arc<Bank>,
-        pre_balances: Vec<Vec<u64>>,
-        pre_token_balances: Vec<Vec<TransactionTokenBalance>>,
+        pre_balance_info: &mut PreBalanceInfo,
         execute_and_commit_timings: &mut LeaderExecuteAndCommitTimings,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         signature_count: u64,
         executed_transactions_count: usize,
         executed_with_successful_result_count: usize,
-        mint_decimals: &mut HashMap<Pubkey, u8>,
     ) -> (u64, Vec<CommitTransactionDetails>) {
         inc_new_counter_info!(
             "banking_stage-record_transactions_num_to_commit",
@@ -1272,7 +1277,8 @@ impl BankingStage {
                 if let Some(transaction_status_sender) = transaction_status_sender {
                     let txs = batch.sanitized_transactions().to_vec();
                     let post_balances = bank.collect_balances(batch);
-                    let post_token_balances = collect_token_balances(bank, batch, mint_decimals);
+                    let post_token_balances =
+                        collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals);
                     let mut transaction_index = starting_transaction_index.unwrap_or_default();
                     let batch_transaction_indexes: Vec<_> = tx_results
                         .execution_results
@@ -1291,8 +1297,14 @@ impl BankingStage {
                         bank.clone(),
                         txs,
                         tx_results.execution_results,
-                        TransactionBalancesSet::new(pre_balances, post_balances),
-                        TransactionTokenBalancesSet::new(pre_token_balances, post_token_balances),
+                        TransactionBalancesSet::new(
+                            std::mem::take(&mut pre_balance_info.native),
+                            post_balances,
+                        ),
+                        TransactionTokenBalancesSet::new(
+                            std::mem::take(&mut pre_balance_info.token),
+                            post_token_balances,
+                        ),
                         tx_results.rent_debits,
                         batch_transaction_indexes,
                     );
@@ -1313,17 +1325,16 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
-        let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
-        let ((pre_balances, pre_token_balances), collect_balances_time) = measure!(
+        let mut pre_balance_info = PreBalanceInfo::default();
+        let (_, collect_balances_time) = measure!(
             {
+                // If the extra meta-data services are enabled for RPC, collect the
+                // pre-balances for native and token programs.
                 if transaction_status_sender.is_some() {
-                    (
-                        bank.collect_balances(batch),
-                        collect_token_balances(bank, batch, &mut mint_decimals),
-                    )
-                } else {
-                    (vec![], vec![])
+                    pre_balance_info.native = bank.collect_balances(batch);
+                    pre_balance_info.token =
+                        collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals)
                 }
             },
             "collect_balances",
@@ -1421,15 +1432,13 @@ impl BankingStage {
                 sanitized_txs,
                 starting_transaction_index,
                 bank,
-                pre_balances,
-                pre_token_balances,
+                &mut pre_balance_info,
                 &mut execute_and_commit_timings,
                 transaction_status_sender,
                 gossip_vote_sender,
                 signature_count,
                 executed_transactions_count,
                 executed_with_successful_result_count,
-                &mut mint_decimals,
             )
         } else {
             (
