@@ -81,8 +81,6 @@ pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
     pub repair_validators: Option<HashSet<Pubkey>>,
-    pub rocksdb_compaction_interval: Option<u64>,
-    pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
     pub replay_slots_concurrently: bool,
 }
@@ -300,8 +298,6 @@ impl Tvu {
                 blockstore.clone(),
                 max_ledger_shreds,
                 exit,
-                tvu_config.rocksdb_compaction_interval,
-                tvu_config.rocksdb_max_compaction_jitter,
             )
         });
 
