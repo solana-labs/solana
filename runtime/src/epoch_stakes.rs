@@ -68,6 +68,8 @@ impl EpochStakes {
             .map(|(_, (stake, _))| stake)
             .sum();
 
+        println!("{:?}", epoch_vote_accounts);
+
         let epoch_authorized_voters = epoch_vote_accounts
             .iter()
             .filter_map(|(key, (stake, account))| {
@@ -98,6 +100,11 @@ impl EpochStakes {
 
                         node_vote_accounts.total_stake += stake;
                         node_vote_accounts.vote_accounts.push(*key);
+
+                        println!(
+                            "in parse: key={:?} authorize_voter={:?}",
+                            key, authorized_voter
+                        );
 
                         Some((*key, authorized_voter))
                     } else {

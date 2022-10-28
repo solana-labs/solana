@@ -357,10 +357,25 @@ impl ClusterInfoVoteListener {
                     .epoch_stakes(epoch)?
                     .epoch_authorized_voters()
                     .get(&vote_account_key)?;
+                println!(
+                    "authorized_voters: {:?}",
+                    root_bank.epoch_stakes(epoch)?.epoch_authorized_voters()
+                );
+
+                for (i, key) in tx.message.account_keys.iter().enumerate() {
+                    println!(
+                        "is_signer={}, key={}, authorized_voter={}",
+                        tx.message.is_signer(i),
+                        key,
+                        authorized_voter
+                    );
+                }
+
                 let mut keys = tx.message.account_keys.iter().enumerate();
                 // When the vote and auth_vote keypairs are different, the vote message will be signed
                 // with auth_vote_withdrawer keypair, not authorized_voter keypair.
-                if !keys.any(|(i, key)| key == authorized_voter) {
+                if !keys.any(|(i, key)| tx.message.is_signer(i) && key == authorized_voter) {
+                    //if !keys.any(|(i, key)| key == authorized_voter) {
                     return None;
                 }
                 let verified_vote_metadata = VerifiedVoteMetadata {

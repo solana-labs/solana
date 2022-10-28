@@ -187,7 +187,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
 
         let vote_account = vote_state::create_account_with_authorized(
             &node_pubkey,
-            &vote_pubkey,
+            &auth_pubkey,
             &auth_pubkey,
             0,
             *stake,
@@ -278,9 +278,14 @@ pub fn create_authorized_genesis_config_with_leader_ex(
     cluster_type: ClusterType,
     mut initial_accounts: Vec<(Pubkey, AccountSharedData)>,
 ) -> GenesisConfig {
+    println!(
+        "gen create: {:?} {:?} {:?}",
+        validator_pubkey, validator_vote_account_pubkey, validator_auth_voter_account_pubkey
+    );
+
     let validator_vote_account = vote_state::create_account_with_authorized(
         validator_pubkey,
-        validator_vote_account_pubkey,
+        validator_auth_voter_account_pubkey,
         validator_auth_voter_account_pubkey,
         0,
         validator_stake_lamports,

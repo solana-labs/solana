@@ -121,9 +121,11 @@ pub fn parse_vote_transaction(tx: &Transaction) -> Option<ParsedVote> {
     let last_account = usize::from(*first_instruction.accounts.last()?);
     let last_key = message.account_keys.get(last_account)?;
 
+    println!("looking");
     let (vote, switch_proof_hash) =
         parse_vote_instruction_data(&first_instruction.data, first_key, last_key)?;
     let signature = tx.signatures.get(0).cloned().unwrap_or_default();
+    println!("found");
     Some((*first_key, vote, switch_proof_hash, signature))
 }
 
