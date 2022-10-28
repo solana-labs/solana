@@ -290,7 +290,9 @@ impl AncientSlotPubkeys {
         to_store: &AccountsToStore,
     ) {
         if slot != current_ancient.slot() {
-            // we are taking accounts from 'slot' and putting them into 'ancient_slot'
+            // we are taking accounts from 'slot' and putting them into 'current_ancient.slot()'
+            // StorageSelector::Primary here because only the accounts that are moving from 'slot' to 'current_ancient.slot()'
+            // Any overflow accounts will get written into a new append vec AT 'slot', so they don't need to be unrefed
             let (accounts, _hashes) = to_store.get(StorageSelector::Primary);
             if Some(current_ancient.slot()) != self.inner.as_ref().map(|ap| ap.slot) {
                 let pubkeys = current_ancient
@@ -4305,6 +4307,23 @@ impl AccountsDb {
         })
     }
 
+    fn get_keys_to_unref_ancient<'a>(
+        accounts: &'a [(&Pubkey, &StoredAccountMeta<'_>, u64)],
+        existing_ancient_pubkeys: &mut HashSet<Pubkey>,
+    ) -> HashSet<&'a Pubkey> {
+        let mut unref = HashSet::<&Pubkey>::default();
+        // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
+        // Now it is being put into an ancient storage again, but it is already there, so maintain max of 1 ref per storage in the accounts index.
+        // The slot that currently references the account is going away, so unref to maintain # slots that reference the pubkey = refcount.
+        accounts.iter().for_each(|(key, _, _)| {
+            if !existing_ancient_pubkeys.insert(**key) {
+                // this key exists BOTH in 'accounts' and already in the ancient append vec, so we need to unref it
+                unref.insert(key);
+            }
+        });
+        unref
+    }
+
     /// 'accounts' are about to be appended to an ancient append vec. That ancient append vec may already have some accounts.
     /// Unref each account in 'accounts' that already exists in 'existing_ancient_pubkeys'.
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
@@ -4313,16 +4332,7 @@ impl AccountsDb {
         accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
-        let mut unref = HashSet::<&Pubkey>::default();
-        // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
-        // Now it is being put into an ancient storage again, but it is already there, so maintain max of 1 ref per storage in the accounts index.
-        // The slot that currently references the account is going away, so unref to maintain # slots that reference the pubkey = refcount.
-        accounts.iter().for_each(|(key, _, _)| {
-            if !existing_ancient_pubkeys.insert(**key) {
-                // this key exists BOTH in 'accounts' and already in the ancient append vec, so we need to unref it
-                unref.insert(*key);
-            }
-        });
+        let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
 
         self.thread_pool_clean.install(|| {
             unref.into_par_iter().for_each(|key| {
@@ -9790,6 +9800,85 @@ pub mod tests {
         fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
         }
+    }
+
+    #[test]
+    fn test_maybe_unref_accounts_already_in_ancient() {
+        let db = AccountsDb::new_single_for_tests();
+        let slot0 = 0;
+        let slot1 = 1;
+        let available_bytes = 1_000_000;
+        let mut current_ancient = CurrentAncientAppendVec::default();
+
+        // setup 'to_store'
+        let pubkey = Pubkey::new(&[1; 32]);
+        let store_id = AppendVecId::default();
+        let account_size = 3;
+
+        let account = AccountSharedData::default();
+
+        let account_meta = AccountMeta {
+            lamports: 1,
+            owner: Pubkey::new(&[2; 32]),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let offset = 3;
+        let hash = Hash::new(&[2; 32]);
+        let stored_meta = StoredMeta {
+            /// global write version
+            write_version: 0,
+            /// key for the account
+            pubkey,
+            data_len: 43,
+        };
+        let account = StoredAccountMeta {
+            meta: &stored_meta,
+            /// account data
+            account_meta: &account_meta,
+            data: account.data(),
+            offset,
+            stored_size: account_size,
+            hash: &hash,
+        };
+        let found = FoundStoredAccount { account, store_id };
+        let item = (pubkey, found);
+        let map = vec![&item];
+        let to_store = AccountsToStore::new(available_bytes, &map, slot0);
+        // Done: setup 'to_store'
+
+        current_ancient.create_ancient_append_vec(slot0, &db);
+        let mut ancient_slot_pubkeys = AncientSlotPubkeys::default();
+        assert!(ancient_slot_pubkeys.inner.is_none());
+        // same slot as current_ancient, so no-op
+        ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
+            slot0,
+            &db,
+            &current_ancient,
+            &to_store,
+        );
+        assert!(ancient_slot_pubkeys.inner.is_none());
+        // different slot than current_ancient, so update 'ancient_slot_pubkeys'
+        current_ancient.create_ancient_append_vec(slot1, &db);
+        let slot2 = 2;
+        ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
+            slot2,
+            &db,
+            &current_ancient,
+            &to_store,
+        );
+        assert!(ancient_slot_pubkeys.inner.is_some());
+        assert_eq!(ancient_slot_pubkeys.inner.as_ref().unwrap().slot, slot1);
+        assert!(ancient_slot_pubkeys
+            .inner
+            .as_ref()
+            .unwrap()
+            .pubkeys
+            .contains(&pubkey));
+        assert_eq!(
+            ancient_slot_pubkeys.inner.as_ref().unwrap().pubkeys.len(),
+            1
+        );
     }
 
     #[test]
