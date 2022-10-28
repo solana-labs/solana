@@ -24,7 +24,8 @@ pub struct RpcTransportStats {
 /// responses from, a Solana node, and is used primarily by [`RpcClient`].
 ///
 /// [`RpcClient`]: crate::rpc_client::RpcClient
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait RpcSender {
     async fn send(
         &self,

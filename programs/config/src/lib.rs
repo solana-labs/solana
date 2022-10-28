@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 pub mod config_instruction;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod config_processor;
 pub mod date_instruction;
 

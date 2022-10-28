@@ -26,8 +26,13 @@ solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 solana-version = { path = "../version", version = "=1.15.0" }
-solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["full"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.2.4", features = ["futures"] }
+wasm-bindgen-futures = "0.4.33"
 
 [dev-dependencies]
 assert_matches = "1.5.0"

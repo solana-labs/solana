@@ -3,6 +3,7 @@
 pub mod http_sender;
 pub mod mock_sender;
 pub mod nonblocking;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod rpc_client;
 pub mod rpc_sender;
 pub mod spinner;

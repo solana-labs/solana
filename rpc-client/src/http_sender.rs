@@ -23,8 +23,15 @@ use {
         },
         time::{Duration, Instant},
     },
-    tokio::time::sleep,
 };
+
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::time::sleep;
+
+#[cfg(target_arch = "wasm32")]
+use gloo_timers::future::sleep;
+
 
 pub struct HttpSender {
     client: Arc<reqwest::Client>,
@@ -56,11 +63,17 @@ impl HttpSender {
             .unwrap(),
         );
 
+        let client_builder = reqwest::Client::builder()
+            .default_headers(default_headers);
+        #[cfg(not(target_arch = "wasm32"))]
+            let client_builder = client_builder
+            .timeout(timeout)
+            .pool_idle_timeout(timeout);
+        #[cfg(target_arch = "wasm32")]
+        drop(timeout); // Use unused variable
+
         let client = Arc::new(
-            reqwest::Client::builder()
-                .default_headers(default_headers)
-                .timeout(timeout)
-                .pool_idle_timeout(timeout)
+            client_builder
                 .build()
                 .expect("build rpc client"),
         );
@@ -103,7 +116,8 @@ impl<'a> Drop for StatsUpdater<'a> {
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl RpcSender for HttpSender {
     fn get_transport_stats(&self) -> RpcTransportStats {
         self.stats.read().unwrap().clone()

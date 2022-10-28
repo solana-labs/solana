@@ -18,14 +18,11 @@ use {
     crate::{
         http_sender::HttpSender,
         mock_sender::MockSender,
-        rpc_client::{
-            GetConfirmedSignaturesForAddress2Config, RpcClientConfig, SerializableMessage,
-            SerializableTransaction,
-        },
         rpc_sender::*,
     },
     bincode::serialize,
     log::*,
+    serde::Serialize,
     serde_json::{json, Value},
     solana_account_decoder::{
         parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
@@ -41,6 +38,7 @@ use {
         response::*,
     },
     solana_sdk::{
+        vote::state::MAX_LOCKOUT_HISTORY,
         account::Account,
         clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT},
         commitment_config::{CommitmentConfig, CommitmentLevel},
@@ -48,22 +46,92 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
+        message::{v0, Message as LegacyMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction,
+        transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
         UiConfirmedBlock, UiTransactionEncoding,
     },
-    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         net::SocketAddr,
         str::FromStr,
         time::{Duration, Instant},
     },
-    tokio::{sync::RwLock, time::sleep},
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::{sync::RwLock, time::sleep};
+
+#[cfg(target_arch = "wasm32")]
+use {
+    gloo_timers::future::sleep,
+    std::sync::RwLock,
+};
+
+
+#[derive(Default)]
+pub struct RpcClientConfig {
+    pub commitment_config: CommitmentConfig,
+    pub confirm_transaction_initial_timeout: Option<Duration>,
+}
+
+impl RpcClientConfig {
+    pub fn with_commitment(commitment_config: CommitmentConfig) -> Self {
+        RpcClientConfig {
+            commitment_config,
+            ..Self::default()
+        }
+    }
+}
+
+/// Trait used to add support for versioned messages to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableMessage: Serialize {}
+impl SerializableMessage for LegacyMessage {}
+impl SerializableMessage for v0::Message {}
+
+/// Trait used to add support for versioned transactions to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableTransaction: Serialize {
+    fn get_signature(&self) -> &Signature;
+    fn get_recent_blockhash(&self) -> &Hash;
+    fn uses_durable_nonce(&self) -> bool;
+}
+
+impl SerializableTransaction for Transaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        &self.message.recent_blockhash
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        uses_durable_nonce(self).is_some()
+    }
+}
+
+impl SerializableTransaction for VersionedTransaction {
+    fn get_signature(&self) -> &Signature {
+        &self.signatures[0]
+    }
+    fn get_recent_blockhash(&self) -> &Hash {
+        self.message.recent_blockhash()
+    }
+    fn uses_durable_nonce(&self) -> bool {
+        self.uses_durable_nonce()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct GetConfirmedSignaturesForAddress2Config {
+    pub before: Option<Signature>,
+    pub until: Option<Signature>,
+    pub limit: Option<usize>,
+    pub commitment: Option<CommitmentConfig>,
+}
 
 /// A client of a remote Solana node.
 ///
@@ -515,12 +583,20 @@ impl RpcClient {
     }
 
     async fn get_node_version(&self) -> Result<semver::Version, RpcError> {
+        #[cfg(not(target_arch = "wasm32"))]
         let r_node_version = self.node_version.read().await;
+        #[cfg(target_arch = "wasm32")]
+        let r_node_version = self.node_version.read().expect("read node_version");
+
         if let Some(version) = &*r_node_version {
             Ok(version.clone())
         } else {
             drop(r_node_version);
+            #[cfg(not(target_arch = "wasm32"))]
             let mut w_node_version = self.node_version.write().await;
+            #[cfg(target_arch = "wasm32")]
+            let mut w_node_version = self.node_version.write().expect("write node_version");
+
             let node_version = self.get_version().await.map_err(|e| {
                 RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
             })?;
