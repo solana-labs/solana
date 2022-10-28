@@ -1,4 +1,4 @@
-//! Example Rust-based BPF realloc test program
+//! Example Rust-based SBF realloc test program
 
 pub const INVOKE_REALLOC_ZERO_RO: u8 = 0;
 pub const INVOKE_REALLOC_ZERO: u8 = 1;

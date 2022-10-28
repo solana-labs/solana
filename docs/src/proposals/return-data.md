@@ -1,4 +1,4 @@
-# Return data from BPF programs
+# Return data from SBF programs
 
 ## Problem
 
@@ -44,7 +44,7 @@ block, any of these would cause the transaction or rpc to fail.
 ## Existing solution
 
 The existing solution that Solang uses, writes the return data to the callee account data.
-The caller's account cannot be used, since the callee may not be the same BPF program, so
+The caller's account cannot be used, since the callee may not be the same SBF program, so
 it will not have permission to write to the callee's account data.
 
 Another solution would be to have a single return data account which is passed
@@ -136,9 +136,9 @@ strings in the [stable log](https://github.com/solana-labs/solana/blob/952928419
 
 Solidity on Ethereum allows the contract to return an error in the return data. In this case, all
 the account data changes for the account should be reverted. On Solana, any non-zero exit code
-for a BPF prorgram means the entire transaction fails. We do not wish to support an error return
+for a SBF prorgram means the entire transaction fails. We do not wish to support an error return
 by returning success and then returning an error in the return data. This would mean we would have
-to support reverting the account data changes; this too expensive both on the VM side and the BPF
+to support reverting the account data changes; this too expensive both on the VM side and the SBF
 contract side.
 
 Errors will be reported via sol_log.

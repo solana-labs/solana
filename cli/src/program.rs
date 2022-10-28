@@ -1398,7 +1398,7 @@ fn process_show(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())
@@ -1468,7 +1468,7 @@ fn process_dump(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())

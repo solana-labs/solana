@@ -3,7 +3,7 @@
                  | Solana Runtime                      |
                  |                                     |
   .----------.   |   .------------.   .------------.   |
-  | Program  |   |   | BPF        |   | Executable |   |
+  | Program  |   |   | SBF        |   | Executable |   |
   | Author   +------>| Bytecode   +-->| Account    |   |
   |          |   |   | Verifier   |   |            |   |
   `----------`   |   `------------`   `------------`   |
@@ -12,7 +12,7 @@
                  |          |  LoadAccounts            |
                  |          V                          |
   .----------.   |   .------------.   .-------------.  |
-  |          |   |   |  BPF       |   | BPF         |  |
+  |          |   |   |  SBF       |   | SBF         |  |
   |  Client  +------>|  Loader    +-->| Interpreter |  |
   |          |   |   |            |   |             |  |
   `----------`   |   `------------`   `-------------`  |

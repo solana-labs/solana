@@ -78,9 +78,9 @@ pub const MAX_SIGNERS: usize = 16;
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
-    #[error("BPF program panicked")]
+    #[error("SBF program panicked")]
     Abort,
-    #[error("BPF program Panicked in {0} at {1}:{2}")]
+    #[error("SBF program Panicked in {0} at {1}:{2}")]
     Panic(String, u64, u64),
     #[error("Cannot borrow invoke context")]
     InvokeContextBorrowFailed,
@@ -386,7 +386,7 @@ fn translate_slice<'a, T>(
     .map(|value| &*value)
 }
 
-/// Take a virtual pointer to a string (points to BPF VM memory space), translate it
+/// Take a virtual pointer to a string (points to SBF VM memory space), translate it
 /// pass it to a user-defined work function
 fn translate_string_and_do(
     memory_mapping: &MemoryMapping,
@@ -435,10 +435,10 @@ macro_rules! declare_syscall {
 }
 
 declare_syscall!(
-    /// Abort syscall functions, called when the BPF program calls `abort()`
+    /// Abort syscall functions, called when the SBF program calls `abort()`
     /// LLVM will insert calls to `abort()` if it detects an untenable situation,
     /// `abort()` is not intended to be called explicitly by the program.
-    /// Causes the BPF program to be halted immediately
+    /// Causes the SBF program to be halted immediately
     SyscallAbort,
     fn inner_call(
         _invoke_context: &mut InvokeContext,
@@ -454,8 +454,8 @@ declare_syscall!(
 );
 
 declare_syscall!(
-    /// Panic syscall function, called when the BPF program calls 'sol_panic_()`
-    /// Causes the BPF program to be halted immediately
+    /// Panic syscall function, called when the SBF program calls 'sol_panic_()`
+    /// Causes the SBF program to be halted immediately
     SyscallPanic,
     fn inner_call(
         invoke_context: &mut InvokeContext,
@@ -480,7 +480,7 @@ declare_syscall!(
 );
 
 declare_syscall!(
-    /// Dynamic memory allocation syscall called when the BPF program calls
+    /// Dynamic memory allocation syscall called when the SBF program calls
     /// `sol_alloc_free_()`.  The allocator is expected to allocate/free
     /// from/to a given chunk of memory and enforce size restrictions.  The
     /// memory chunk is given to the allocator during allocator creation and
