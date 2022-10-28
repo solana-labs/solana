@@ -1,4 +1,4 @@
-//! Example Rust-based BPF realloc test program
+//! Example Rust-based SBF realloc test program
 
 use solana_program::{
     instruction::{AccountMeta, Instruction},

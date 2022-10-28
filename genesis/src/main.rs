@@ -374,7 +374,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .number_of_values(3)
                 .multiple(true)
-                .help("Install a BPF program at the given address"),
+                .help("Install a SBF program at the given address"),
         )
         .arg(
             Arg::with_name("inflation")

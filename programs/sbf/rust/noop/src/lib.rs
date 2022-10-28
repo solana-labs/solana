@@ -1,4 +1,4 @@
-//! Example Rust-based BPF noop program
+//! Example Rust-based SBF noop program
 
 extern crate solana_program;
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};

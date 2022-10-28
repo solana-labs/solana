@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that tests sysvar use
+//! Example Rust-based SBF program that tests sysvar use
 
 extern crate solana_program;
 #[allow(deprecated)]

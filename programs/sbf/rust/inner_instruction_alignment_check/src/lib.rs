@@ -1,4 +1,4 @@
-//! Example Rust-based BPF noop program
+//! Example Rust-based SBF noop program
 
 use solana_program::{
     account_info::AccountInfo,

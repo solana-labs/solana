@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program tests dependent crates
+//! Example Rust-based SBF program tests dependent crates
 
 extern crate solana_program;
 use {

@@ -379,7 +379,7 @@ pub fn pubkeys(input: TokenStream) -> TokenStream {
 }
 
 // The normal `wasm_bindgen` macro generates a .bss section which causes the resulting
-// BPF program to fail to load, so for now this stub should be used when building for BPF
+// SBF program to fail to load, so for now this stub should be used when building for SBF
 #[proc_macro_attribute]
 pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match parse_macro_input!(item as syn::Item) {

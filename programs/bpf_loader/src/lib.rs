@@ -349,7 +349,7 @@ fn check_loader_id(id: &Pubkey) -> bool {
         || bpf_loader_upgradeable::check_id(id)
 }
 
-/// Create the BPF virtual machine
+/// Create the SBF virtual machine
 pub fn create_vm<'a, 'b>(
     program: &'a VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
     regions: Vec<MemoryRegion>,
@@ -1395,7 +1395,7 @@ impl Executor for BpfExecutor {
             ) {
                 Ok(info) => info,
                 Err(e) => {
-                    ic_logger_msg!(log_collector, "Failed to create BPF VM: {}", e);
+                    ic_logger_msg!(log_collector, "Failed to create SBF VM: {}", e);
                     return Err(InstructionError::ProgramEnvironmentSetupFailure);
                 }
             };
@@ -1427,7 +1427,7 @@ impl Executor for BpfExecutor {
                     .write(&mut trace_buffer, &analysis)
                     .unwrap();
                 let trace_string = String::from_utf8(trace_buffer).unwrap();
-                trace!("BPF Program Instruction Trace:\n{}", trace_string);
+                trace!("SBF Program Instruction Trace:\n{}", trace_string);
             }
             drop(vm);
             let (_returned_from_program_id, return_data) =

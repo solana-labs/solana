@@ -21,7 +21,7 @@ use {
 };
 
 /// Maximum number of instruction accounts that can be serialized into the
-/// BPF VM.
+/// SBF VM.
 const MAX_INSTRUCTION_ACCOUNTS: u8 = NON_DUP_MARKER;
 
 enum SerializeAccount<'a> {

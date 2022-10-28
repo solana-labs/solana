@@ -60,7 +60,7 @@ Install the latest Solana release from https://docs.solana.com/cli/install-solan
 
 **Use `solana-test-validator` from the latest Solana release**
 
-### BPF program development
+### SBF program development
 
 **Use `cargo build-bpf` from the latest Solana release**
 

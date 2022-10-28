@@ -18,7 +18,7 @@ Both types of programs run on top of the [Sealevel runtime](https://medium.com/s
 - Programs can own other Accounts
 - Programs can only _change the data_ or _debit_ accounts they own
 - Any program can _read_ or _credit_ another account
-- Programs are considered stateless since the primary data stored in a program account is the compiled BPF code
+- Programs are considered stateless since the primary data stored in a program account is the compiled SBF code
 - Programs can be upgraded by their owner (see more on that below)
 
 ## Types of programs

@@ -18,7 +18,7 @@ Depth](developing/programming-model/calling-between-programs.md#call-depth)
 
 ## `CallDepthExceeded` error
 
-This error means the BPF stack depth was exceeded.
+This error means the SBF stack depth was exceeded.
 
 See [call depth](overview.md#call-depth)
 

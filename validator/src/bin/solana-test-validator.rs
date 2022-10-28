@@ -193,12 +193,12 @@ fn main() {
         .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
-                .value_names(&["ADDRESS_OR_KEYPAIR", "BPF_PROGRAM.SO"])
+                .value_names(&["ADDRESS_OR_KEYPAIR", "SBF_PROGRAM.SO"])
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
                 .help(
-                    "Add a BPF program to the genesis configuration. \
+                    "Add a SBF program to the genesis configuration. \
                        If the ledger already exists then this parameter is silently ignored. \
                        First argument can be a pubkey string or path to a keypair",
                 ),
@@ -246,7 +246,7 @@ fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
+                .help("Disable the just-in-time compiler and instead use the interpreter for SBF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("ticks_per_slot")

@@ -60,7 +60,7 @@ fn get_declaration_packed_len(
 /// Get the worst-case packed length for the given BorshSchema
 ///
 /// Note: due to the serializer currently used by Borsh, this function cannot
-/// be used on-chain in the Solana BPF execution environment.
+/// be used on-chain in the Solana SBF execution environment.
 pub fn get_packed_len<S: BorshSchema>() -> usize {
     let schema_container = S::schema_container();
     get_declaration_packed_len(&schema_container.declaration, &schema_container.definitions)

@@ -1,11 +1,11 @@
 [package]
 name = "rbpf-cli"
 version = "1.15.0"
-description = "CLI to test and analyze eBPF programs"
+description = "CLI to test and analyze SBF programs"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/rbpf"
 homepage = "https://solana.com/"
-keywords = ["BPF", "eBPF", "interpreter", "JIT"]
+keywords = ["SBF", "interpreter", "JIT"]
 edition = "2021"
 publish = false
 

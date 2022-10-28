@@ -53,13 +53,13 @@ fn load_accounts(path: &Path) -> Result<Input> {
 
 fn main() {
     solana_logger::setup();
-    let matches = Command::new("Solana BPF CLI")
+    let matches = Command::new("Solana SBF CLI")
         .version(crate_version!())
         .author("Solana Maintainers <maintainers@solana.foundation>")
         .about(
-            r##"CLI to test and analyze eBPF programs.
+            r##"CLI to test and analyze SBF programs.
 
-The tool executes eBPF programs in a mocked environment.
+The tool executes SBF programs in a mocked environment.
 Some features, such as sysvars syscall and CPI, are not
 available for the programs executed by the CLI tool.
 

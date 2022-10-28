@@ -1560,7 +1560,7 @@ pub fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+                .help("Disable the just-in-time compiler and instead use the interpreter for SBF"),
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")

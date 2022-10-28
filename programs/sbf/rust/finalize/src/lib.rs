@@ -1,4 +1,4 @@
-//! Example Rust-based BPF sanity program that finalizes a BPF program
+//! Example Rust-based SBF sanity program that finalizes a BPF program
 
 #![allow(unreachable_code)]
 

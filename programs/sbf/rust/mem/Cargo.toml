@@ -1,7 +1,7 @@
 [package]
 name = "solana-sbf-rust-mem"
 version = "1.15.0"
-description = "Solana BPF test program written in Rust"
+description = "Solana SBF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
