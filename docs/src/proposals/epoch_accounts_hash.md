@@ -224,7 +224,7 @@ rooted, which could result in multiple EAH requests due to forking.  This would
 be bad for performance.
 
 
-### Appendix A: Warping Examples
+### Appendix A: All Warping Scenarios
 
 To enumerate how EAH interacts with warping, refer to the following diagram for
 the scenarios below:
@@ -294,8 +294,3 @@ then will be included in the Bank at `stop slot 2`.  Behavior appears normal.
 
 The warp slot will include the EAH from `start slot 1`.  Behavior appears
 different.
-
-
-#### The Rest
-
-All remaining combinations are already enumerated in one of the scenarios above.
