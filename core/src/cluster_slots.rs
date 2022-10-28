@@ -181,7 +181,8 @@ impl ClusterSlots {
                     let peer_stake = validator_stakes
                         .get(&peer.id)
                         .map(|node| node.total_stake)
-                        .unwrap_or(0);
+                        .unwrap_or(0)
+                        + 1;
                     max_stake = std::cmp::max(max_stake, peer_stake);
                     peer_stake
                 })
