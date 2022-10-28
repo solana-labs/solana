@@ -3622,8 +3622,8 @@ impl AccountsDb {
 
     // Must be kept private!, does sensitive cleanup that should only be called from
     // supported pipelines in AccountsDb
-    // pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
-    //    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
+    ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn process_dead_slots(
         &self,
         dead_slots: &HashSet<Slot>,
@@ -4334,11 +4334,11 @@ impl AccountsDb {
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
 
-        self.thread_pool_clean.install(|| {
-            unref.into_par_iter().for_each(|key| {
-                self.accounts_index.unref_from_storage(key);
-            });
-        });
+        self.unref_pubkeys(
+            unref.iter().cloned(),
+            unref.len(),
+            &PubkeysRemovedFromAccountsIndex::default(),
+        );
     }
 
     /// get the storages from 'slot' to squash
@@ -8027,8 +8027,8 @@ impl AccountsDb {
         dead_slots
     }
 
-    // pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
-    //    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
+    ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn remove_dead_slots_metadata<'a>(
         &'a self,
         dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
@@ -8054,31 +8054,28 @@ impl AccountsDb {
         inc_new_counter_info!("remove_dead_slots_metadata-ms", measure.as_ms() as usize);
     }
 
-    /// lookup each pubkey in 'purged_slot_pubkeys' and unref it in the accounts index
-    /// populate 'purged_stored_account_slots' by grouping 'purged_slot_pubkeys' by pubkey
-    // pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
-    //    and should not be unref'd. If they exist in the accounts index, they are NEW.
-    fn unref_accounts(
-        &self,
-        purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
-        purged_stored_account_slots: &mut AccountSlots,
-        pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
+    /// lookup each pubkey in 'pubkeys' and unref it in the accounts index
+    /// skip pubkeys that are in 'pubkeys_removed_from_accounts_index'
+    fn unref_pubkeys<'a>(
+        &'a self,
+        pubkeys: impl Iterator<Item = &'a Pubkey> + Clone + Send + Sync,
+        num_pubkeys: usize,
+        pubkeys_removed_from_accounts_index: &'a PubkeysRemovedFromAccountsIndex,
     ) {
-        let len = purged_slot_pubkeys.len();
-        let batches = 1 + (len / UNREF_ACCOUNTS_BATCH_SIZE);
+        let batches = 1 + (num_pubkeys / UNREF_ACCOUNTS_BATCH_SIZE);
         self.thread_pool_clean.install(|| {
             (0..batches).into_par_iter().for_each(|batch| {
                 let skip = batch * UNREF_ACCOUNTS_BATCH_SIZE;
                 self.accounts_index.scan(
-                    purged_slot_pubkeys
-                        .iter()
+                    pubkeys
+                        .clone()
                         .skip(skip)
                         .take(UNREF_ACCOUNTS_BATCH_SIZE)
-                        .filter_map(|(_slot, pubkey)| {
+                        .filter(|pubkey| {
                             // filter out pubkeys that have already been removed from the accounts index in a previous step
                             let already_removed =
                                 pubkeys_removed_from_accounts_index.contains(pubkey);
-                            (!already_removed).then_some(pubkey)
+                            !already_removed
                         }),
                     |_pubkey, _slots_refs| {
                         /* unused */
@@ -8088,6 +8085,23 @@ impl AccountsDb {
                 )
             });
         });
+    }
+
+    /// lookup each pubkey in 'purged_slot_pubkeys' and unref it in the accounts index
+    /// populate 'purged_stored_account_slots' by grouping 'purged_slot_pubkeys' by pubkey
+    /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
+    ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    fn unref_accounts(
+        &self,
+        purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
+        purged_stored_account_slots: &mut AccountSlots,
+        pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
+    ) {
+        self.unref_pubkeys(
+            purged_slot_pubkeys.iter().map(|(_slot, pubkey)| pubkey),
+            purged_slot_pubkeys.len(),
+            pubkeys_removed_from_accounts_index,
+        );
         for (slot, pubkey) in purged_slot_pubkeys {
             purged_stored_account_slots
                 .entry(pubkey)
@@ -8096,8 +8110,8 @@ impl AccountsDb {
         }
     }
 
-    // pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
-    //    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
+    ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn clean_dead_slots_from_accounts_index<'a>(
         &'a self,
         dead_slots_iter: impl Iterator<Item = &'a Slot> + Clone,
@@ -8152,8 +8166,8 @@ impl AccountsDb {
             .update(&accounts_index_root_stats);
     }
 
-    // pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
-    //    and should not be unref'd. If they exist in the accounts index, they are NEW.
+    /// pubkeys_removed_from_accounts_index - These keys have already been removed from the accounts index
+    ///    and should not be unref'd. If they exist in the accounts index, they are NEW.
     fn clean_stored_dead_slots(
         &self,
         dead_slots: &HashSet<Slot>,
