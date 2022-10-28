@@ -1154,7 +1154,7 @@ impl BankHashStats {
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
     pub hash: Hash,
-    pub snapshot_hash: Hash,
+    pub accounts_hash: Hash,
     pub stats: BankHashStats,
 }
 
@@ -4879,7 +4879,7 @@ impl AccountsDb {
 
         let new_hash_info = BankHashInfo {
             hash: Hash::default(),
-            snapshot_hash: Hash::default(),
+            accounts_hash: Hash::default(),
             stats: BankHashStats::default(),
         };
         bank_hashes.insert(slot, new_hash_info);
@@ -6956,7 +6956,7 @@ impl AccountsDb {
     pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
         let bank_hashes = self.bank_hashes.read().unwrap();
         let bank_hash_info = bank_hashes.get(&slot).unwrap();
-        bank_hash_info.snapshot_hash
+        bank_hash_info.accounts_hash
     }
 
     pub fn update_accounts_hash_for_tests(
@@ -7376,7 +7376,7 @@ impl AccountsDb {
     pub(crate) fn set_accounts_hash(&self, slot: Slot, hash: Hash) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        bank_hash_info.snapshot_hash = hash;
+        bank_hash_info.accounts_hash = hash;
     }
 
     /// scan 'storage', return a vec of 'CacheHashDataFile', one per pass
@@ -7677,12 +7677,12 @@ impl AccountsDb {
         } else {
             let bank_hashes = self.bank_hashes.read().unwrap();
             if let Some(found_hash_info) = bank_hashes.get(&slot) {
-                if calculated_hash == found_hash_info.snapshot_hash {
+                if calculated_hash == found_hash_info.accounts_hash {
                     Ok(())
                 } else {
                     warn!(
                         "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                        slot, calculated_hash, found_hash_info.snapshot_hash
+                        slot, calculated_hash, found_hash_info.accounts_hash
                     );
                     Err(MismatchedBankHash)
                 }
@@ -12623,7 +12623,7 @@ pub mod tests {
         let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
             hash: some_bank_hash,
-            snapshot_hash: Hash::new(&[0xca; HASH_BYTES]),
+            accounts_hash: Hash::new(&[0xca; HASH_BYTES]),
             stats: BankHashStats::default(),
         };
         db.bank_hashes
