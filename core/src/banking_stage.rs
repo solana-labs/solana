@@ -44,6 +44,7 @@ use {
         bank::{
             Bank, CommitTransactionCounts, LoadAndExecuteTransactionsOutput,
             TransactionBalancesSet, TransactionCheckResult, TransactionExecutionResult,
+            TransactionResults,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -1274,46 +1275,64 @@ impl BankingStage {
                     &tx_results,
                     Some(gossip_vote_sender),
                 );
-                if let Some(transaction_status_sender) = transaction_status_sender {
-                    let txs = batch.sanitized_transactions().to_vec();
-                    let post_balances = bank.collect_balances(batch);
-                    let post_token_balances =
-                        collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals);
-                    let mut transaction_index = starting_transaction_index.unwrap_or_default();
-                    let batch_transaction_indexes: Vec<_> = tx_results
-                        .execution_results
-                        .iter()
-                        .map(|result| {
-                            if result.was_executed() {
-                                let this_transaction_index = transaction_index;
-                                saturating_add_assign!(transaction_index, 1);
-                                this_transaction_index
-                            } else {
-                                0
-                            }
-                        })
-                        .collect();
-                    transaction_status_sender.send_transaction_status_batch(
-                        bank.clone(),
-                        txs,
-                        tx_results.execution_results,
-                        TransactionBalancesSet::new(
-                            std::mem::take(&mut pre_balance_info.native),
-                            post_balances,
-                        ),
-                        TransactionTokenBalancesSet::new(
-                            std::mem::take(&mut pre_balance_info.token),
-                            post_token_balances,
-                        ),
-                        tx_results.rent_debits,
-                        batch_transaction_indexes,
-                    );
-                }
+                Self::collect_balances_and_send_status_batch(
+                    transaction_status_sender,
+                    tx_results,
+                    bank,
+                    batch,
+                    pre_balance_info,
+                    starting_transaction_index,
+                );
             },
             "find_and_send_votes",
         );
         execute_and_commit_timings.find_and_send_votes_us = find_and_send_votes_time.as_us();
         (commit_time_us, commit_transaction_statuses)
+    }
+
+    fn collect_balances_and_send_status_batch(
+        transaction_status_sender: &Option<TransactionStatusSender>,
+        tx_results: TransactionResults,
+        bank: &Arc<Bank>,
+        batch: &TransactionBatch,
+        pre_balance_info: &mut PreBalanceInfo,
+        starting_transaction_index: Option<usize>,
+    ) {
+        if let Some(transaction_status_sender) = transaction_status_sender {
+            let txs = batch.sanitized_transactions().to_vec();
+            let post_balances = bank.collect_balances(batch);
+            let post_token_balances =
+                collect_token_balances(bank, batch, &mut pre_balance_info.mint_decimals);
+            let mut transaction_index = starting_transaction_index.unwrap_or_default();
+            let batch_transaction_indexes: Vec<_> = tx_results
+                .execution_results
+                .iter()
+                .map(|result| {
+                    if result.was_executed() {
+                        let this_transaction_index = transaction_index;
+                        saturating_add_assign!(transaction_index, 1);
+                        this_transaction_index
+                    } else {
+                        0
+                    }
+                })
+                .collect();
+            transaction_status_sender.send_transaction_status_batch(
+                bank.clone(),
+                txs,
+                tx_results.execution_results,
+                TransactionBalancesSet::new(
+                    std::mem::take(&mut pre_balance_info.native),
+                    post_balances,
+                ),
+                TransactionTokenBalancesSet::new(
+                    std::mem::take(&mut pre_balance_info.token),
+                    post_token_balances,
+                ),
+                tx_results.rent_debits,
+                batch_transaction_indexes,
+            );
+        }
     }
 
     fn execute_and_commit_transactions_locked(
