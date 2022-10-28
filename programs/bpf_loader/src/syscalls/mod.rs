@@ -1706,6 +1706,9 @@ declare_syscall!(
         if result_point.len() != output {
             return Ok(AltBn128Error::SliceOutOfBounds.into());
         }
+
+        call_result.copy_from_slice(&result_point);
+        Ok(SUCCESS)
     }
 );
 
