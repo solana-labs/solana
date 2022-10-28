@@ -283,6 +283,7 @@ module.exports = {
   ],
   validatorsSidebar: [
     "running-validator",
+    "validator/faq",
     {
       type: "category",
       label: "Introduction",

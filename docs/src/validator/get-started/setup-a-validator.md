@@ -67,13 +67,13 @@ solana-keygen new -o vote-account-keypair.json
 solana-keygen new -o authorized-withdrawer-keypair.json
 ```
 
-> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be stored in a secure place like a hardware wallet or a password protection app. It should **NOT** be stored on the validator. See the [FAQ](/FAQ/frequently-asked-questions) for more details.
+> **IMPORTANT** the `authorized-withdrawer-keypair.json` should be stored in a secure place like a hardware wallet or a password protection app. It should **NOT** be stored on the validator. See the [FAQ](../faq.md) for more details.
 
 ## Create a Vote Account
 
 Before you can create your vote account, you need to configure the Solana command line tool a bit more.
 
-The below command sets the default keypair that the Solana cli uses to the `validator-keypair.json` file that you just created in the terminal:
+The below command sets the default keypair that the Solana CLI uses to the `validator-keypair.json` file that you just created in the terminal:
 
 ```
 solana config set --keypair ./validator-keypair.json
