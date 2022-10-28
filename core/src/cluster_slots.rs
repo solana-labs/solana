@@ -301,10 +301,9 @@ mod tests {
             .insert(0, Arc::new(RwLock::new(map)));
         c1.id = k1;
         c2.id = k2;
-        assert_eq!(
-            cs.compute_weights(0, &[c1, c2]),
-            vec![std::u64::MAX / 2 + 1, 1]
-        );
+        // `map` stake is ignored because only the stakes in the
+        // `ClusterSlots.validator_stakes` matter, which is default here.
+        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![1, 1]);
     }
 
     #[test]
@@ -312,15 +311,8 @@ mod tests {
         let cs = ClusterSlots::default();
         let mut c1 = ContactInfo::default();
         let mut c2 = ContactInfo::default();
-        let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(k2, 0);
-        cs.cluster_slots
-            .write()
-            .unwrap()
-            .insert(0, Arc::new(RwLock::new(map)));
-        //make sure default weights are used as well
         let validator_stakes: HashMap<_, _> = vec![(
             k1,
             NodeVoteAccounts {
@@ -331,11 +323,37 @@ mod tests {
         .into_iter()
         .collect();
         *cs.validator_stakes.write().unwrap() = Arc::new(validator_stakes);
+        // Make sure default weights are used as well
         c1.id = k1;
         c2.id = k2;
+        let contact_infos = vec![c1, c2];
         assert_eq!(
-            cs.compute_weights(0, &[c1, c2]),
+            cs.compute_weights(0, &contact_infos),
             vec![std::u64::MAX / 2 + 1, 1]
+        );
+        // Because k2 completed the slot, it should now have the max weight
+        let mut map = HashMap::new();
+        map.insert(k2, 0);
+        cs.cluster_slots
+            .write()
+            .unwrap()
+            .insert(0, Arc::new(RwLock::new(map)));
+        assert_eq!(
+            cs.compute_weights(0, &contact_infos),
+            vec![std::u64::MAX / 2 + 1, std::u64::MAX / 2 + 1]
+        );
+        // Even though k1 completed the slot, it should still only have
+        // the max weight
+        let mut map = HashMap::new();
+        map.insert(k1, std::u64::MAX / 2 + 1);
+        map.insert(k2, std::u64::MAX / 2 + 1);
+        cs.cluster_slots
+            .write()
+            .unwrap()
+            .insert(0, Arc::new(RwLock::new(map)));
+        assert_eq!(
+            cs.compute_weights(0, &contact_infos),
+            vec![std::u64::MAX / 2 + 1, std::u64::MAX / 2 + 1]
         );
     }
 
