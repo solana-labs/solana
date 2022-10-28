@@ -650,16 +650,7 @@ impl BankingStage {
         let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = false;
-<<<<<<< HEAD
 
-        let mut retryable_packets = MinMaxHeap::with_capacity(buffered_packet_batches.capacity());
-        std::mem::swap(
-            &mut buffered_packet_batches.packet_priority_queue,
-            &mut retryable_packets,
-        );
-
-        let mut retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
-=======
         let original_capacity = buffered_packet_batches.capacity();
         let mut retryable_packets = {
             std::mem::replace(
@@ -669,64 +660,129 @@ impl BankingStage {
         };
 
         let mut new_retryable_packets = MinMaxHeap::with_capacity(original_capacity);
-        new_retryable_packets.extend(retryable_packets
->>>>>>> d9b9e3293 (Maintain original queue capacity for unprocessed packet buffer - Manual v1.14 Backport (#28663))
-            .drain_desc()
-            .chunks(num_packets_to_process_per_iteration)
-            .into_iter()
-            .flat_map(|packets_to_process| {
-                let packets_to_process = packets_to_process.into_iter().collect_vec();
-                // TODO: Right now we iterate through buffer and try the highest weighted transaction once
-                // but we should retry the highest weighted transactions more often.
-                let (bank_start, poh_recorder_lock_time) = Measure::this(
-                    |_| poh_recorder.lock().unwrap().bank_start(),
-                    (),
-                    "poh_recorder_lock",
-                );
-                slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                    poh_recorder_lock_time.as_us(),
-                );
-
-                let packets_to_process_len = packets_to_process.len();
-                if let Some(BankStart {
-                    working_bank,
-                    bank_creation_time,
-                }) = bank_start
-                {
-                    let (process_transactions_summary, process_packets_transactions_time) =
-                        Measure::this(
-                            |_| {
-                                Self::process_packets_transactions(
-                                    &working_bank,
-                                    &bank_creation_time,
-                                    recorder,
-                                    packets_to_process.iter().map(|p| &**p),
-                                    transaction_status_sender.clone(),
-                                    gossip_vote_sender,
-                                    banking_stage_stats,
-                                    qos_service,
-                                    slot_metrics_tracker,
-                                )
-                            },
-                            (),
-                            "process_packets_transactions",
-                        );
-                    slot_metrics_tracker.increment_process_packets_transactions_us(
-                        process_packets_transactions_time.as_us(),
+        new_retryable_packets.extend(
+            retryable_packets
+                .drain_desc()
+                .chunks(num_packets_to_process_per_iteration)
+                .into_iter()
+                .flat_map(|packets_to_process| {
+                    let packets_to_process = packets_to_process.into_iter().collect_vec();
+                    // TODO: Right now we iterate through buffer and try the highest weighted transaction once
+                    // but we should retry the highest weighted transactions more often.
+                    let (bank_start, poh_recorder_lock_time) = Measure::this(
+                        |_| poh_recorder.lock().unwrap().bank_start(),
+                        (),
+                        "poh_recorder_lock",
+                    );
+                    slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
+                        poh_recorder_lock_time.as_us(),
                     );
 
-                    let ProcessTransactionsSummary {
-                        reached_max_poh_height,
-                        retryable_transaction_indexes,
-                        ..
-                    } = process_transactions_summary;
-
-                    if reached_max_poh_height
-                        || !Bank::should_bank_still_be_processing_txs(
-                            &bank_creation_time,
-                            max_tx_ingestion_ns,
-                        )
+                    let packets_to_process_len = packets_to_process.len();
+                    if let Some(BankStart {
+                        working_bank,
+                        bank_creation_time,
+                    }) = bank_start
                     {
+                        let (process_transactions_summary, process_packets_transactions_time) =
+                            Measure::this(
+                                |_| {
+                                    Self::process_packets_transactions(
+                                        &working_bank,
+                                        &bank_creation_time,
+                                        recorder,
+                                        packets_to_process.iter().map(|p| &**p),
+                                        transaction_status_sender.clone(),
+                                        gossip_vote_sender,
+                                        banking_stage_stats,
+                                        qos_service,
+                                        slot_metrics_tracker,
+                                    )
+                                },
+                                (),
+                                "process_packets_transactions",
+                            );
+                        slot_metrics_tracker.increment_process_packets_transactions_us(
+                            process_packets_transactions_time.as_us(),
+                        );
+
+                        let ProcessTransactionsSummary {
+                            reached_max_poh_height,
+                            retryable_transaction_indexes,
+                            ..
+                        } = process_transactions_summary;
+
+                        if reached_max_poh_height
+                            || !Bank::should_bank_still_be_processing_txs(
+                                &bank_creation_time,
+                                max_tx_ingestion_ns,
+                            )
+                        {
+                            let poh_recorder_lock_time = {
+                                let (_poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
+                                    |_| poh_recorder.lock().unwrap(),
+                                    (),
+                                    "poh_recorder.lock",
+                                );
+
+                                reached_end_of_slot = true;
+                                poh_recorder_lock_time
+                            };
+
+                            slot_metrics_tracker
+                                .increment_consume_buffered_packets_poh_recorder_lock_us(
+                                    poh_recorder_lock_time.as_us(),
+                                );
+                        }
+
+                        // The difference between all transactions passed to execution and the ones that
+                        // are retryable were the ones that were either:
+                        // 1) Committed into the block
+                        // 2) Dropped without being committed because they had some fatal error (too old,
+                        // duplicate signature, etc.)
+                        //
+                        // Note: This assumes that every packet deserializes into one transaction!
+                        consumed_buffered_packets_count += packets_to_process_len
+                            .saturating_sub(retryable_transaction_indexes.len());
+
+                        // Out of the buffered packets just retried, collect any still unprocessed
+                        // transactions in this batch for forwarding
+                        rebuffered_packet_count += retryable_transaction_indexes.len();
+                        if let Some(test_fn) = &test_fn {
+                            test_fn();
+                        }
+
+                        slot_metrics_tracker.increment_retryable_packets_count(
+                            retryable_transaction_indexes.len() as u64,
+                        );
+
+                        let result = retryable_transaction_indexes
+                            .iter()
+                            .map(|i| packets_to_process[*i].clone())
+                            .collect_vec();
+
+                        // Remove the non-retryable packets, packets that were either:
+                        // 1) Successfully processed
+                        // 2) Failed but not retryable
+                        Self::filter_processed_packets(
+                            retryable_transaction_indexes
+                                .iter()
+                                .chain(std::iter::once(&packets_to_process.len())),
+                            |start, end| {
+                                for processed_packet in &packets_to_process[start..end] {
+                                    buffered_packet_batches
+                                        .message_hash_to_transaction
+                                        .remove(processed_packet.message_hash());
+                                }
+                            },
+                        );
+
+                        result
+                    } else if reached_end_of_slot {
+                        packets_to_process
+                    } else {
+                        // mark as end-of-slot to avoid aggressively lock poh for the remaining for
+                        // packet batches in buffer
                         let poh_recorder_lock_time = {
                             let (_poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
                                 |_| poh_recorder.lock().unwrap(),
@@ -737,87 +793,17 @@ impl BankingStage {
                             reached_end_of_slot = true;
                             poh_recorder_lock_time
                         };
-
                         slot_metrics_tracker
                             .increment_consume_buffered_packets_poh_recorder_lock_us(
                                 poh_recorder_lock_time.as_us(),
                             );
+
+                        packets_to_process
                     }
-
-                    // The difference between all transactions passed to execution and the ones that
-                    // are retryable were the ones that were either:
-                    // 1) Committed into the block
-                    // 2) Dropped without being committed because they had some fatal error (too old,
-                    // duplicate signature, etc.)
-                    //
-                    // Note: This assumes that every packet deserializes into one transaction!
-                    consumed_buffered_packets_count +=
-                        packets_to_process_len.saturating_sub(retryable_transaction_indexes.len());
-
-                    // Out of the buffered packets just retried, collect any still unprocessed
-                    // transactions in this batch for forwarding
-                    rebuffered_packet_count += retryable_transaction_indexes.len();
-                    if let Some(test_fn) = &test_fn {
-                        test_fn();
-                    }
-
-                    slot_metrics_tracker.increment_retryable_packets_count(
-                        retryable_transaction_indexes.len() as u64,
-                    );
-
-                    let result = retryable_transaction_indexes
-                        .iter()
-                        .map(|i| packets_to_process[*i].clone())
-                        .collect_vec();
-
-                    // Remove the non-retryable packets, packets that were either:
-                    // 1) Successfully processed
-                    // 2) Failed but not retryable
-                    Self::filter_processed_packets(
-                        retryable_transaction_indexes
-                            .iter()
-                            .chain(std::iter::once(&packets_to_process.len())),
-                        |start, end| {
-                            for processed_packet in &packets_to_process[start..end] {
-                                buffered_packet_batches
-                                    .message_hash_to_transaction
-                                    .remove(processed_packet.message_hash());
-                            }
-                        },
-                    );
-
-                    result
-                } else if reached_end_of_slot {
-                    packets_to_process
-                } else {
-                    // mark as end-of-slot to avoid aggressively lock poh for the remaining for
-                    // packet batches in buffer
-                    let poh_recorder_lock_time = {
-                        let (_poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
-                            |_| poh_recorder.lock().unwrap(),
-                            (),
-                            "poh_recorder.lock",
-                        );
-
-                        reached_end_of_slot = true;
-                        poh_recorder_lock_time
-                    };
-                    slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                        poh_recorder_lock_time.as_us(),
-                    );
-
-                    packets_to_process
-                }
-            }));
-
-<<<<<<< HEAD
-        std::mem::swap(
-            &mut retryable_packets,
-            &mut buffered_packet_batches.packet_priority_queue,
+                }),
         );
-=======
+
         buffered_packet_batches.packet_priority_queue = new_retryable_packets;
->>>>>>> d9b9e3293 (Maintain original queue capacity for unprocessed packet buffer - Manual v1.14 Backport (#28663))
 
         if reached_end_of_slot {
             slot_metrics_tracker
