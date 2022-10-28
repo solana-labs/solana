@@ -65,7 +65,6 @@ use {
         collections::HashMap,
         env,
         net::{SocketAddr, UdpSocket},
-        rc::Rc,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
@@ -651,6 +650,7 @@ impl BankingStage {
         let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = false;
+<<<<<<< HEAD
 
         let mut retryable_packets = MinMaxHeap::with_capacity(buffered_packet_batches.capacity());
         std::mem::swap(
@@ -659,6 +659,18 @@ impl BankingStage {
         );
 
         let mut retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+=======
+        let original_capacity = buffered_packet_batches.capacity();
+        let mut retryable_packets = {
+            std::mem::replace(
+                &mut buffered_packet_batches.packet_priority_queue,
+                MinMaxHeap::new(),
+            )
+        };
+
+        let mut new_retryable_packets = MinMaxHeap::with_capacity(original_capacity);
+        new_retryable_packets.extend(retryable_packets
+>>>>>>> d9b9e3293 (Maintain original queue capacity for unprocessed packet buffer - Manual v1.14 Backport (#28663))
             .drain_desc()
             .chunks(num_packets_to_process_per_iteration)
             .into_iter()
@@ -796,13 +808,16 @@ impl BankingStage {
 
                     packets_to_process
                 }
-            })
-            .collect();
+            }));
 
+<<<<<<< HEAD
         std::mem::swap(
             &mut retryable_packets,
             &mut buffered_packet_batches.packet_priority_queue,
         );
+=======
+        buffered_packet_batches.packet_priority_queue = new_retryable_packets;
+>>>>>>> d9b9e3293 (Maintain original queue capacity for unprocessed packet buffer - Manual v1.14 Backport (#28663))
 
         if reached_end_of_slot {
             slot_metrics_tracker
@@ -822,7 +837,8 @@ impl BankingStage {
             (consumed_buffered_packets_count as f32) / (proc_start.as_s())
         );
 
-        // Assert unprocessed queue is still consistent
+        // Assert unprocessed queue is still consistent and maintains original capacity
+        assert_eq!(buffered_packet_batches.capacity(), original_capacity);
         assert_eq!(
             buffered_packet_batches.packet_priority_queue.len(),
             buffered_packet_batches.message_hash_to_transaction.len()
