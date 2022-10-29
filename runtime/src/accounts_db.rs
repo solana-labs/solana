@@ -4312,15 +4312,16 @@ impl AccountsDb {
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
     /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
-        accounts: &'a [(&Pubkey, &StoredAccountMeta<'_>, u64)],
+        accounts: &'a [(&StoredAccountMeta<'_>, u64)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) -> HashSet<&'a Pubkey> {
         let mut unref = HashSet::<&Pubkey>::default();
         // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
         // Now it is being put into an ancient storage again, but it is already there, so maintain max of 1 ref per storage in the accounts index.
         // The slot that currently references the account is going away, so unref to maintain # slots that reference the pubkey = refcount.
-        accounts.iter().for_each(|(key, _, _)| {
-            if !existing_ancient_pubkeys.insert(**key) {
+        accounts.iter().for_each(|(account, _)| {
+            let key = account.pubkey();
+            if !existing_ancient_pubkeys.insert(*key) {
                 // this key exists BOTH in 'accounts' and already in the ancient append vec, so we need to unref it
                 unref.insert(key);
             }
@@ -4333,7 +4334,7 @@ impl AccountsDb {
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
-        accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
+        accounts: &[(&StoredAccountMeta<'_>, u64)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
@@ -9788,7 +9789,6 @@ pub mod tests {
     }
 
     /// this tuple contains slot info PER account
-    /// last bool is include_slot_in_hash
     impl<'a, T: ReadableAccount + Sync> StorableAccounts<'a, T>
         for (Slot, &'a [(&'a Pubkey, &'a T, Slot)])
     {
@@ -9909,9 +9909,30 @@ pub mod tests {
         let executable = false;
         let owner = Pubkey::default();
         let data = Vec::new();
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+        let pubkey4 = solana_sdk::pubkey::new_rand();
+
         let meta = StoredMeta {
             write_version: 5,
-            pubkey: Pubkey::new_unique(),
+            pubkey,
+            data_len: 7,
+        };
+        let meta2 = StoredMeta {
+            write_version: 5,
+            pubkey: pubkey2,
+            data_len: 7,
+        };
+        let meta3 = StoredMeta {
+            write_version: 5,
+            pubkey: pubkey3,
+            data_len: 7,
+        };
+        let meta4 = StoredMeta {
+            write_version: 5,
+            pubkey: pubkey4,
             data_len: 7,
         };
         let account_meta = AccountMeta {
@@ -9931,10 +9952,33 @@ pub mod tests {
             stored_size,
             hash: &hash,
         };
-        let pubkey = solana_sdk::pubkey::new_rand();
+        let stored_account2 = StoredAccountMeta {
+            meta: &meta2,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
+        let stored_account3 = StoredAccountMeta {
+            meta: &meta3,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
+        let stored_account4 = StoredAccountMeta {
+            meta: &meta4,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
         let slot0 = 0;
         let mut existing_ancient_pubkeys = HashSet::default();
-        let accounts = [(&pubkey, &stored_account, slot0)];
+        let accounts = [(&stored_account, slot0)];
         // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
@@ -9951,9 +9995,8 @@ pub mod tests {
             vec![&pubkey]
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey]);
-        let pubkey2 = solana_sdk::pubkey::new_rand();
         // pubkey2 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [(&pubkey2, &stored_account, slot0)];
+        let accounts = [(&stored_account2, slot0)];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
@@ -9975,13 +10018,8 @@ pub mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey2]);
-        let pubkey3 = solana_sdk::pubkey::new_rand();
-        let pubkey4 = solana_sdk::pubkey::new_rand();
         // pubkey3/4 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [
-            (&pubkey3, &stored_account, slot0),
-            (&pubkey4, &stored_account, slot0),
-        ];
+        let accounts = [(&stored_account3, slot0), (&stored_account4, slot0)];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
