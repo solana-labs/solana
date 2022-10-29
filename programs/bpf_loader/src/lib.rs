@@ -3612,9 +3612,9 @@ mod tests {
             &instruction,
             transaction_accounts.clone(),
             vec![
-                buffer_meta.clone(),
-                authority_meta.clone(),
-                new_authority_meta.clone(),
+                buffer_meta,
+                authority_meta,
+                new_authority_meta,
             ],
             Err(InstructionError::Immutable),
         );
