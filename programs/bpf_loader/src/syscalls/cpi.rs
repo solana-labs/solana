@@ -1328,7 +1328,8 @@ mod tests {
 
     #[test]
     fn test_translate_instruction() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foo".to_vec());
         mock_invoke_context!(
             invoke_context,
             transaction_context,
@@ -1372,7 +1373,8 @@ mod tests {
 
     #[test]
     fn test_translate_signers() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foo".to_vec());
         mock_invoke_context!(
             invoke_context,
             transaction_context,
@@ -1407,7 +1409,8 @@ mod tests {
 
     #[test]
     fn test_caller_account_from_account_info() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foo".to_vec());
         let account = transaction_accounts[1].1.clone();
         mock_invoke_context!(
             invoke_context,
@@ -1453,7 +1456,7 @@ mod tests {
 
     #[test]
     fn test_update_caller_account_lamports_owner() {
-        let transaction_accounts = transaction_with_one_instruction_account(vec![]);
+        let transaction_accounts = transaction_with_one_writable_instruction_account(vec![]);
         let account = transaction_accounts[1].1.clone();
         mock_invoke_context!(
             invoke_context,
@@ -1511,7 +1514,8 @@ mod tests {
 
     #[test]
     fn test_update_caller_account_data() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
         let original_data_len = account.data().len();
 
@@ -1633,7 +1637,8 @@ mod tests {
 
     #[test]
     fn test_update_caller_account_data_direct_mapping() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
         let original_data_len = account.data().len();
 
@@ -1772,7 +1777,7 @@ mod tests {
 
     #[test]
     fn test_update_callee_account_lamports_owner() {
-        let transaction_accounts = transaction_with_one_instruction_account(vec![]);
+        let transaction_accounts = transaction_with_one_writable_instruction_account(vec![]);
         let account = transaction_accounts[1].1.clone();
 
         mock_invoke_context!(
@@ -1815,7 +1820,8 @@ mod tests {
 
     #[test]
     fn test_update_callee_account_data() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
 
         mock_invoke_context!(
@@ -1856,8 +1862,99 @@ mod tests {
     }
 
     #[test]
+    fn test_update_callee_account_data_readonly() {
+        let transaction_accounts =
+            transaction_with_one_readonly_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account = MockCallerAccount::new(
+            1234,
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            false,
+        );
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        let get_callee = || {
+            instruction_context
+                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
+                .unwrap()
+        };
+        let callee_account = get_callee();
+
+        caller_account.serialized_data[0] = b'b';
+        assert!(matches!(
+            update_callee_account(
+                &invoke_context,
+                false,
+                &caller_account,
+                callee_account,
+                false,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::ExternalAccountDataModified)
+            )
+        ));
+
+        // without direct mapping
+        let mut data = b"foobarbaz".to_vec();
+        *caller_account.ref_to_len_in_vm = data.len() as u64;
+        caller_account.serialized_data = &mut data;
+
+        let callee_account = get_callee();
+        assert!(matches!(
+            update_callee_account(
+                &invoke_context,
+                false,
+                &caller_account,
+                callee_account,
+                false,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::AccountDataSizeChanged)
+            )
+        ));
+
+        // with direct mapping
+        let mut data = b"baz".to_vec();
+        *caller_account.ref_to_len_in_vm = 9;
+        caller_account.serialized_data = &mut data;
+
+        let callee_account = get_callee();
+        assert!(matches!(
+            update_callee_account(
+                &invoke_context,
+                false,
+                &caller_account,
+                callee_account,
+                true,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::InstructionError(InstructionError::AccountDataSizeChanged)
+            )
+        ));
+    }
+
+    #[test]
     fn test_update_callee_account_data_direct_mapping() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
 
         mock_invoke_context!(
@@ -1920,7 +2017,8 @@ mod tests {
 
     #[test]
     fn test_translate_accounts_rust() {
-        let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
         let key = transaction_accounts[1].0;
         let original_data_len = account.data().len();
@@ -2077,12 +2175,42 @@ mod tests {
         }
     }
 
-    fn transaction_with_one_instruction_account(data: Vec<u8>) -> Vec<TestTransactionAccount> {
+    fn transaction_with_one_writable_instruction_account(
+        data: Vec<u8>,
+    ) -> Vec<TestTransactionAccount> {
         let program_id = Pubkey::new_unique();
         let account = AccountSharedData::from(Account {
             lamports: 1,
             data,
             owner: program_id,
+            executable: false,
+            rent_epoch: 100,
+        });
+        vec![
+            (
+                program_id,
+                AccountSharedData::from(Account {
+                    lamports: 0,
+                    data: vec![],
+                    owner: bpf_loader::id(),
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+                false,
+            ),
+            (Pubkey::new_unique(), account, true),
+        ]
+    }
+
+    fn transaction_with_one_readonly_instruction_account(
+        data: Vec<u8>,
+    ) -> Vec<TestTransactionAccount> {
+        let program_id = Pubkey::new_unique();
+        let account_owner = Pubkey::new_unique();
+        let account = AccountSharedData::from(Account {
+            lamports: 1,
+            data,
+            owner: account_owner,
             executable: false,
             rent_epoch: 100,
         });
