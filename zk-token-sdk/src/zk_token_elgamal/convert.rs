@@ -98,7 +98,7 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(ct: pod::ElGamalCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::InconsistentCTData)
+            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -112,7 +112,7 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pk.0).ok_or(ProofError::InconsistentCTData)
+            Self::from_bytes(&pk.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -147,7 +147,7 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
+            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -171,7 +171,7 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(pod: pod::DecryptHandle) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::InconsistentCTData)
+            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -185,7 +185,7 @@ mod target_arch {
         type Error = ProofError;
 
         fn try_from(ct: pod::AeCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::InconsistentCTData)
+            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 

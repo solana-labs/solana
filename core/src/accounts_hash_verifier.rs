@@ -72,6 +72,7 @@ impl AccountsHashVerifier {
                         &accounts_package_receiver,
                     ) {
                         info!("handling accounts package: {accounts_package:?}");
+                        let enqueued_time = accounts_package.enqueued.elapsed();
 
                         let (_, measure) = measure!(Self::process_accounts_package(
                             accounts_package,
@@ -97,6 +98,7 @@ impl AccountsHashVerifier {
                                 num_re_enqueued_accounts_packages as i64,
                                 i64
                             ),
+                            ("enqueued-time-us", enqueued_time.as_micros() as i64, i64),
                             ("total-processing-time-us", measure.as_us() as i64, i64),
                         );
                     } else {
@@ -223,7 +225,7 @@ impl AccountsHashVerifier {
         let (accounts_hash, lamports) = accounts_package
             .accounts
             .accounts_db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true,
                     check_hash: false,
@@ -232,7 +234,6 @@ impl AccountsHashVerifier {
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
-                    enable_rehashing: accounts_package.enable_rehashing,
                 },
                 &sorted_storages,
                 timings,
@@ -245,7 +246,7 @@ impl AccountsHashVerifier {
             let result_with_index = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash(
+                .calculate_accounts_hash_from_index(
                     accounts_package.slot,
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: false,
@@ -255,7 +256,6 @@ impl AccountsHashVerifier {
                         rent_collector: &accounts_package.rent_collector,
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
-                        enable_rehashing: accounts_package.enable_rehashing,
                     },
                 );
             info!(
@@ -265,7 +265,7 @@ impl AccountsHashVerifier {
             let _ = accounts_package
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash_without_index(
+                .calculate_accounts_hash_from_storages(
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: false,
                         check_hash: false,
@@ -275,7 +275,6 @@ impl AccountsHashVerifier {
                         // now that we've failed, store off the failing contents that produced a bad capitalization
                         store_detailed_debug_info_on_failure: true,
                         full_snapshot: None,
-                        enable_rehashing: accounts_package.enable_rehashing,
                     },
                     &sorted_storages,
                     HashStats::default(),
@@ -481,7 +480,7 @@ mod tests {
             sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::str::FromStr,
+        std::{str::FromStr, time::Instant},
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -564,7 +563,7 @@ mod tests {
                 accounts: Arc::clone(&accounts),
                 epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
-                enable_rehashing: true,
+                enqueued: Instant::now(),
             };
 
             AccountsHashVerifier::process_accounts_package(

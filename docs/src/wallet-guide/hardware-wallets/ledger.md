@@ -2,7 +2,7 @@
 title: Ledger Nano
 ---
 
-This page describes how to use a Ledger Nano S or Nano X to interact with Solana
+This page describes how to use a Ledger Nano S, Nano S Plus, or Nano X to interact with Solana
 using the command line tools.
 
 ## Before You Begin

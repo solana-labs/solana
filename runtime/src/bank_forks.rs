@@ -296,12 +296,6 @@ impl BankForks {
                 "sending epoch accounts hash request, slot: {}",
                 eah_bank.slot()
             );
-            eah_bank
-                .rc
-                .accounts
-                .accounts_db
-                .epoch_accounts_hash_manager
-                .set_in_flight(eah_bank.slot());
 
             self.last_accounts_hash_slot = eah_bank.slot();
             let squash_timing = eah_bank.squash();
@@ -312,11 +306,18 @@ impl BankForks {
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
             is_root_bank_squashed = eah_bank.slot() == root;
 
+            eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_in_flight(eah_bank.slot());
             accounts_background_request_sender
                 .send_snapshot_request(SnapshotRequest {
                     snapshot_root_bank: Arc::clone(eah_bank),
                     status_cache_slot_deltas: Vec::default(),
                     request_type: SnapshotRequestType::EpochAccountsHash,
+                    enqueued: Instant::now(),
                 })
                 .expect("send epoch accounts hash request");
         }
@@ -356,6 +357,7 @@ impl BankForks {
                             snapshot_root_bank: Arc::clone(bank),
                             status_cache_slot_deltas,
                             request_type: SnapshotRequestType::Snapshot,
+                            enqueued: Instant::now(),
                         })
                     {
                         warn!(

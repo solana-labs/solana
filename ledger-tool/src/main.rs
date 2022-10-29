@@ -382,29 +382,24 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        if encoding == UiAccountEncoding::Base58 {
-            println!("  data: '{}'", bs58::encode(account.data()).into_string());
-            println!("  encoding: \"base58\"");
-        } else {
-            let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
-            match account_data {
-                UiAccountData::Binary(data, data_encoding) => {
-                    println!("  data: '{}'", data);
-                    println!(
-                        "  encoding: {}",
-                        serde_json::to_string(&data_encoding).unwrap()
-                    );
-                }
-                UiAccountData::Json(account_data) => {
-                    println!(
-                        "  data: '{}'",
-                        serde_json::to_string(&account_data).unwrap()
-                    );
-                    println!("  encoding: \"jsonParsed\"");
-                }
-                UiAccountData::LegacyBinary(_) => {}
-            };
-        }
+        let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
+        match account_data {
+            UiAccountData::Binary(data, data_encoding) => {
+                println!("  data: '{}'", data);
+                println!(
+                    "  encoding: {}",
+                    serde_json::to_string(&data_encoding).unwrap()
+                );
+            }
+            UiAccountData::Json(account_data) => {
+                println!(
+                    "  data: '{}'",
+                    serde_json::to_string(&account_data).unwrap()
+                );
+                println!("  encoding: \"jsonParsed\"");
+            }
+            UiAccountData::LegacyBinary(_) => {}
+        };
     }
 }
 
@@ -1491,6 +1486,13 @@ fn main() {
         .multiple(true)
         .help("Specify the configuration file for the Geyser plugin.");
 
+    let accounts_data_encoding_arg = Arg::with_name("encoding")
+        .long("encoding")
+        .takes_value(true)
+        .possible_values(&["base64", "base64+zstd", "jsonParsed"])
+        .default_value("base64")
+        .help("Print account data in specified format when printing account contents.");
+
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
         .max(VoteState::get_rent_exempt_reserve(&rent))
@@ -1681,15 +1683,7 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
-            .arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
-                    .requires("accounts")
-                    .help("Print account data in specified format when printing account contents."),
-            )
+            .arg(&accounts_data_encoding_arg.clone().requires("accounts"))
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -2023,6 +2017,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
+            .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -2039,13 +2034,6 @@ fn main() {
                 .long("no-account-data")
                 .takes_value(false)
                 .help("Do not print account data when printing account contents."),
-            ).arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base58", "base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base58")
-                    .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -2350,7 +2338,7 @@ fn main() {
                         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
                         Some("base64") => UiAccountEncoding::Base64,
                         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base58,
+                        _ => UiAccountEncoding::Base64,
                     };
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
@@ -3403,7 +3391,7 @@ fn main() {
                         Some("jsonParsed") => UiAccountEncoding::JsonParsed,
                         Some("base64") => UiAccountEncoding::Base64,
                         Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base58,
+                        _ => UiAccountEncoding::Base64,
                     };
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {

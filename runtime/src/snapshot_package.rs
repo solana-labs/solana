@@ -18,6 +18,7 @@ use {
         fs,
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
+        time::Instant,
     },
     tempfile::TempDir,
 };
@@ -46,7 +47,10 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
-    pub enable_rehashing: bool,
+
+    /// The instant this accounts package was send to the queue.
+    /// Used to track how long accounts packages wait before processing.
+    pub enqueued: Instant,
 }
 
 impl AccountsPackage {
@@ -117,7 +121,7 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
-            enable_rehashing: bank.bank_enable_rehashing_on_accounts_hash(),
+            enqueued: Instant::now(),
         })
     }
 
@@ -141,7 +145,7 @@ impl AccountsPackage {
             accounts: Arc::new(Accounts::default_for_tests()),
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
-            enable_rehashing: bool::default(),
+            enqueued: Instant::now(),
         }
     }
 }

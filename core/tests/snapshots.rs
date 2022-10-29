@@ -249,7 +249,7 @@ fn run_bank_forks_snapshot_n<F>(
         if slot % set_root_interval == 0 || slot == last_slot {
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
         }
     }
@@ -765,7 +765,7 @@ fn test_bank_forks_incremental_snapshot(
         if slot % SET_ROOT_INTERVAL == 0 {
             // set_root sends a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
                 false,
                 false,
@@ -1056,7 +1056,7 @@ fn test_snapshots_with_background_services(
                 .write()
                 .unwrap()
                 .set_root(slot, &abs_request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
         }
 
         // Sleep for a second when making a snapshot archive so the background services get a
@@ -1113,10 +1113,10 @@ fn test_snapshots_with_background_services(
             .as_ref()
     );
 
-    // Stop the background services
+    // Stop the background services, ignore any errors
     info!("Shutting down background services...");
     exit.store(true, Ordering::Relaxed);
-    accounts_background_service.join().unwrap();
-    accounts_hash_verifier.join().unwrap();
-    snapshot_packager_service.join().unwrap();
+    _ = accounts_background_service.join();
+    _ = accounts_hash_verifier.join();
+    _ = snapshot_packager_service.join();
 }
