@@ -6967,7 +6967,7 @@ impl AccountsDb {
         is_startup: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash(
-            CalcAccountsHashDataSource::Index,
+            CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
             slot,
             ancestors,
@@ -7305,7 +7305,7 @@ impl AccountsDb {
 
                 self.calculate_accounts_hash_from_storages(config, &storages, timings)
             }
-            CalcAccountsHashDataSource::Index => {
+            CalcAccountsHashDataSource::IndexForTests => {
                 self.calculate_accounts_hash_from_index(slot, config)
             }
         }
@@ -7324,8 +7324,8 @@ impl AccountsDb {
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let data_source_other = match data_source {
-                CalcAccountsHashDataSource::Index => CalcAccountsHashDataSource::Storages,
-                CalcAccountsHashDataSource::Storages => CalcAccountsHashDataSource::Index,
+                CalcAccountsHashDataSource::IndexForTests => CalcAccountsHashDataSource::Storages,
+                CalcAccountsHashDataSource::Storages => CalcAccountsHashDataSource::IndexForTests,
             };
             let (hash_other, total_lamports_other) =
                 self.calculate_accounts_hash(data_source_other, slot, &config)?;
@@ -9456,9 +9456,12 @@ impl AccountsDb {
 }
 
 /// Specify the source of the accounts data when calculating the accounts hash
+///
+/// Using the Index is meant for tests and debugging; not intended during normal validator
+/// operation.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalcAccountsHashDataSource {
-    Index,
+    IndexForTests,
     Storages,
 }
 
@@ -12497,7 +12500,7 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         for data_source in [
-            CalcAccountsHashDataSource::Index,
+            CalcAccountsHashDataSource::IndexForTests,
             CalcAccountsHashDataSource::Storages,
         ] {
             assert!(db
@@ -12565,7 +12568,7 @@ pub mod tests {
             )
             .unwrap(),
             db.calculate_accounts_hash(
-                CalcAccountsHashDataSource::Index,
+                CalcAccountsHashDataSource::IndexForTests,
                 some_slot,
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true, // is_startup used to be false
