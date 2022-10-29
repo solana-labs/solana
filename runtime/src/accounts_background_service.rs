@@ -298,7 +298,11 @@ impl SnapshotRequestHandler {
             // We have to use the index version here.
             // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
             // This comment is out of date and can be re-evaluated.
-            snapshot_root_bank.update_accounts_hash(CalcAccountsHashDataSource::Index, false, false)
+            snapshot_root_bank.update_accounts_hash(
+                CalcAccountsHashDataSource::IndexForTests,
+                false,
+                false,
+            )
         } else {
             Hash::default()
         };
