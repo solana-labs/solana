@@ -1195,27 +1195,18 @@ fn update_caller_account(
                     .fill(0);
             }
         }
-        caller_account.serialized_data = translate_slice_mut::<u8>(
-            memory_mapping,
-            if direct_mapping {
-                caller_account
-                    .vm_data_addr
-                    .saturating_add(caller_account.original_data_len as u64)
-            } else {
-                caller_account.vm_data_addr
-            },
-            if direct_mapping {
-                if is_loader_deprecated {
-                    0
-                } else {
-                    MAX_PERMITTED_DATA_INCREASE
-                }
-            } else {
-                post_len
-            } as u64,
-            false, // Don't care since it is byte aligned
-            invoke_context.get_check_size(),
-        )?;
+
+        // with direct_mapping on, serialized_data is fixed and holds the
+        // realloc padding
+        if !direct_mapping {
+            caller_account.serialized_data = translate_slice_mut::<u8>(
+                memory_mapping,
+                caller_account.vm_data_addr,
+                post_len as u64,
+                false, // Don't care since it is byte aligned
+                invoke_context.get_check_size(),
+            )?;
+        }
         // this is the len field in the AccountInfo::data slice
         *caller_account.ref_to_len_in_vm = post_len as u64;
 
