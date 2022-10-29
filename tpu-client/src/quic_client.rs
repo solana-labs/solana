@@ -11,9 +11,10 @@ use {
             },
             tpu_connection::TpuConnection as NonblockingTpuConnection,
         },
-        tpu_connection::TpuConnection,
+        tpu_connection::{ClientStats, TpuConnection},
     },
     lazy_static::lazy_static,
+    log::*,
     solana_sdk::transport::{Result as TransportResult, TransportError},
     std::{
         net::SocketAddr,
@@ -116,16 +117,7 @@ async fn send_wire_transaction_async(
     )
     .await;
     ASYNC_TASK_SEMAPHORE.release();
-    match result {
-        Ok(result) => result,
-        Err(_err) => {
-            let stats = connection.base_stats();
-            stats.send_timeout.fetch_add(1, Ordering::Relaxed);
-            Err(TransportError::Custom(
-                "Timedout sending transaction".to_string(),
-            ))
-        }
-    }
+    handle_send_result(result, connection)
 }
 
 async fn send_wire_transaction_batch_async(
@@ -140,11 +132,22 @@ async fn send_wire_transaction_batch_async(
     )
     .await;
     ASYNC_TASK_SEMAPHORE.release();
+    handle_send_result(result, connection)
+}
+
+/// Check the send result and update stats if timedout. Returns the checked result.
+fn handle_send_result(
+    result: Result<Result<(), TransportError>, tokio::time::error::Elapsed>,
+    connection: Arc<NonblockingQuicTpuConnection>,
+) -> Result<(), TransportError> {
     match result {
         Ok(result) => result,
         Err(_err) => {
-            let stats = connection.base_stats();
-            stats.send_timeout.fetch_add(1, Ordering::Relaxed);
+            let client_stats = ClientStats::default();
+            client_stats.send_timeout.fetch_add(1, Ordering::Relaxed);
+            let stats = connection.connection_stats();
+            stats.add_client_stats(&client_stats, 0, false);
+            info!("Timedout sending transaction {:?}", connection.tpu_addr());
             Err(TransportError::Custom(
                 "Timedout sending transaction".to_string(),
             ))
