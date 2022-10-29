@@ -4307,6 +4307,10 @@ impl AccountsDb {
         })
     }
 
+    /// 'accounts' that exist in the current slot we are combining into a different ancient slot
+    /// 'existing_ancient_pubkeys': pubkeys that exist currently in the ancient append vec slot
+    /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
+    /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
         accounts: &'a [(&Pubkey, &StoredAccountMeta<'_>, u64)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
@@ -9895,6 +9899,115 @@ pub mod tests {
         assert_eq!(
             ancient_slot_pubkeys.inner.as_ref().unwrap().pubkeys.len(),
             1
+        );
+    }
+
+    #[test]
+    fn test_get_keys_to_unref_ancient() {
+        let rent_epoch = 0;
+        let lamports = 0;
+        let executable = false;
+        let owner = Pubkey::default();
+        let data = Vec::new();
+        let meta = StoredMeta {
+            write_version: 5,
+            pubkey: Pubkey::new_unique(),
+            data_len: 7,
+        };
+        let account_meta = AccountMeta {
+            lamports,
+            owner,
+            executable,
+            rent_epoch,
+        };
+        let offset = 99;
+        let stored_size = 101;
+        let hash = Hash::new_unique();
+        let stored_account = StoredAccountMeta {
+            meta: &meta,
+            account_meta: &account_meta,
+            data: &data,
+            offset,
+            stored_size,
+            hash: &hash,
+        };
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let slot0 = 0;
+        let mut existing_ancient_pubkeys = HashSet::default();
+        let accounts = [(&pubkey, &stored_account, slot0)];
+        // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert!(unrefs.is_empty());
+        assert_eq!(
+            existing_ancient_pubkeys.iter().collect::<Vec<_>>(),
+            vec![&pubkey]
+        );
+        // pubkey already in existing_ancient_pubkeys, so DO unref
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert_eq!(
+            existing_ancient_pubkeys.iter().collect::<Vec<_>>(),
+            vec![&pubkey]
+        );
+        assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey]);
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        // pubkey2 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
+        let accounts = [(&pubkey2, &stored_account, slot0)];
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert!(unrefs.is_empty());
+        assert_eq!(
+            existing_ancient_pubkeys.iter().sorted().collect::<Vec<_>>(),
+            vec![&pubkey, &pubkey2]
+                .into_iter()
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+        // pubkey2 already in existing_ancient_pubkeys, so DO unref
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert_eq!(
+            existing_ancient_pubkeys.iter().sorted().collect::<Vec<_>>(),
+            vec![&pubkey, &pubkey2]
+                .into_iter()
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey2]);
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+        let pubkey4 = solana_sdk::pubkey::new_rand();
+        // pubkey3/4 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
+        let accounts = [
+            (&pubkey3, &stored_account, slot0),
+            (&pubkey4, &stored_account, slot0),
+        ];
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert!(unrefs.is_empty());
+        assert_eq!(
+            existing_ancient_pubkeys.iter().sorted().collect::<Vec<_>>(),
+            vec![&pubkey, &pubkey2, &pubkey3, &pubkey4]
+                .into_iter()
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+        // pubkey3/4 already in existing_ancient_pubkeys, so DO unref
+        let unrefs =
+            AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
+        assert_eq!(
+            existing_ancient_pubkeys.iter().sorted().collect::<Vec<_>>(),
+            vec![&pubkey, &pubkey2, &pubkey3, &pubkey4]
+                .into_iter()
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            unrefs.iter().cloned().sorted().collect::<Vec<_>>(),
+            vec![&pubkey3, &pubkey4]
+                .into_iter()
+                .sorted()
+                .collect::<Vec<_>>()
         );
     }
 
