@@ -17345,8 +17345,10 @@ pub mod tests {
             SHRINK_COLLECT_CHUNK_SIZE + 1,
             SHRINK_COLLECT_CHUNK_SIZE * 2,
         ];
+        // 2 = append_opposite_alive_account + append_opposite_zero_lamport_account
+        let max_appended_accounts = 2;
         let max_num_accounts = *account_counts.iter().max().unwrap();
-        let pubkeys = (0..max_num_accounts)
+        let pubkeys = (0..(max_num_accounts + max_appended_accounts))
             .map(|_| solana_sdk::pubkey::new_rand())
             .collect::<Vec<_>>();
         // write accounts, maybe remove from index
@@ -17357,89 +17359,162 @@ pub mod tests {
                     // illegal - zero lamport accounts are written with 0 space
                     continue;
                 }
-                for account_count in account_counts {
-                    for alive in [false, true] {
-                        debug!("space: {space}, lamports: {lamports}, alive: {alive}, account_count: {account_count}");
-                        let size = 100000;
-                        let db = AccountsDb::new_single_for_tests();
-                        let slot5 = 5;
-                        let inserted_store = db.create_and_insert_store(slot5, size, "test");
-                        let account = AccountSharedData::new(
-                            lamports,
-                            space,
-                            AccountSharedData::default().owner(),
-                        );
-                        for pubkey in pubkeys.iter().take(account_count) {
-                            // store in append vec and index
-                            db.store_uncached(slot5, &[(pubkey, &account)]);
-                            if !alive {
-                                // remove from index so pubkey is 'dead'
-                                db.accounts_index.purge_exact(
-                                    pubkey,
-                                    &([slot5].into_iter().collect::<HashSet<_>>()),
-                                    &mut Vec::default(),
+                for alive in [false, true] {
+                    for append_opposite_alive_account in [false, true] {
+                        for append_opposite_zero_lamport_account in [true, false] {
+                            for mut account_count in account_counts {
+                                let mut normal_account_count = account_count;
+                                let mut pubkey_opposite_zero_lamports = None;
+                                if append_opposite_zero_lamport_account {
+                                    pubkey_opposite_zero_lamports = Some(&pubkeys[account_count]);
+                                    normal_account_count += 1;
+                                    account_count += 1;
+                                }
+                                let mut pubkey_opposite_alive = None;
+                                if append_opposite_alive_account {
+                                    // this needs to happen AFTER append_opposite_zero_lamport_account
+                                    pubkey_opposite_alive = Some(&pubkeys[account_count]);
+                                    account_count += 1;
+                                }
+                                debug!("space: {space}, lamports: {lamports}, alive: {alive}, account_count: {account_count}, append_opposite_alive_account: {append_opposite_alive_account}, append_opposite_zero_lamport_account: {append_opposite_zero_lamport_account}, normal_account_count: {normal_account_count}");
+                                let size = 100000;
+                                let db = AccountsDb::new_single_for_tests();
+                                let slot5 = 5;
+                                let inserted_store =
+                                    db.create_and_insert_store(slot5, size, "test");
+                                let mut account = AccountSharedData::new(
+                                    lamports,
+                                    space,
+                                    AccountSharedData::default().owner(),
+                                );
+                                for pubkey in pubkeys.iter().take(account_count) {
+                                    // store in append vec and index
+                                    let old_lamports = account.lamports();
+                                    if Some(pubkey) == pubkey_opposite_zero_lamports {
+                                        account.set_lamports(u64::from(old_lamports == 0));
+                                    }
+
+                                    db.store_uncached(slot5, &[(pubkey, &account)]);
+                                    account.set_lamports(old_lamports);
+                                    let mut alive = alive;
+                                    if append_opposite_alive_account
+                                        && Some(pubkey) == pubkey_opposite_alive
+                                    {
+                                        // invert this for one special pubkey
+                                        alive = !alive;
+                                    }
+                                    if !alive {
+                                        // remove from index so pubkey is 'dead'
+                                        db.accounts_index.purge_exact(
+                                            pubkey,
+                                            &([slot5].into_iter().collect::<HashSet<_>>()),
+                                            &mut Vec::default(),
+                                        );
+                                    }
+                                }
+                                let storages = vec![inserted_store];
+                                let mut stored_accounts = Vec::default();
+                                assert_eq!(storages.len(), 1);
+                                let shrink_collect = db.shrink_collect(
+                                    storages.iter(),
+                                    &mut stored_accounts,
+                                    &ShrinkStats::default(),
+                                );
+                                let expect_single_opposite_alive_account =
+                                    if append_opposite_alive_account {
+                                        vec![*pubkey_opposite_alive.unwrap()]
+                                    } else {
+                                        vec![]
+                                    };
+
+                                let expected_alive_accounts = if alive {
+                                    pubkeys[..normal_account_count]
+                                        .iter()
+                                        .filter(|p| Some(p) != pubkey_opposite_alive.as_ref())
+                                        .sorted()
+                                        .cloned()
+                                        .collect::<Vec<_>>()
+                                } else {
+                                    expect_single_opposite_alive_account.clone()
+                                };
+
+                                let expected_unrefed = if alive {
+                                    expect_single_opposite_alive_account.clone()
+                                } else {
+                                    pubkeys[..normal_account_count]
+                                        .iter()
+                                        .sorted()
+                                        .cloned()
+                                        .collect::<Vec<_>>()
+                                };
+
+                                assert_eq!(
+                                    shrink_collect
+                                        .alive_accounts
+                                        .iter()
+                                        .map(|(pubkey, _)| *pubkey)
+                                        .sorted()
+                                        .collect::<Vec<_>>(),
+                                    expected_alive_accounts
+                                );
+                                assert_eq!(
+                                    shrink_collect
+                                        .unrefed_pubkeys
+                                        .iter()
+                                        .sorted()
+                                        .cloned()
+                                        .cloned()
+                                        .collect::<Vec<_>>(),
+                                    expected_unrefed
+                                );
+
+                                let alive_total_one_account = 136 + space;
+                                if alive {
+                                    assert_eq!(
+                                        shrink_collect.aligned_total,
+                                        PAGE_SIZE
+                                            * if account_count >= 100 {
+                                                4
+                                            } else if account_count >= 50 {
+                                                2
+                                            } else {
+                                                1
+                                            }
+                                    );
+                                    let mut expected_alive_total =
+                                        alive_total_one_account * normal_account_count;
+                                    if append_opposite_zero_lamport_account {
+                                        // zero lamport accounts store size=0 data
+                                        expected_alive_total -= space;
+                                    }
+                                    assert_eq!(shrink_collect.alive_total, expected_alive_total);
+                                } else if append_opposite_alive_account {
+                                    assert_eq!(shrink_collect.aligned_total, 4096);
+                                    assert_eq!(shrink_collect.alive_total, alive_total_one_account);
+                                } else {
+                                    assert_eq!(shrink_collect.aligned_total, 0);
+                                    assert_eq!(shrink_collect.alive_total, 0);
+                                }
+                                assert_eq!(shrink_collect.original_bytes, 102400);
+                                assert_eq!(
+                                    shrink_collect.store_ids,
+                                    vec![storages[0].append_vec_id()]
+                                );
+                                assert_eq!(shrink_collect.total_starting_accounts, account_count);
+                                let mut expected_all_are_zero_lamports = lamports == 0;
+                                if !append_opposite_alive_account {
+                                    expected_all_are_zero_lamports |= !alive;
+                                }
+                                if append_opposite_zero_lamport_account && lamports == 0 && alive {
+                                    expected_all_are_zero_lamports =
+                                        !expected_all_are_zero_lamports;
+                                }
+                                assert_eq!(
+                                    shrink_collect.all_are_zero_lamports,
+                                    expected_all_are_zero_lamports
                                 );
                             }
                         }
-                        let storages = vec![inserted_store];
-                        let mut stored_accounts = Vec::default();
-                        assert_eq!(storages.len(), 1);
-                        let shrink_collect = db.shrink_collect(
-                            storages.iter(),
-                            &mut stored_accounts,
-                            &ShrinkStats::default(),
-                        );
-                        if alive {
-                            assert!(shrink_collect.unrefed_pubkeys.is_empty());
-                            assert_eq!(shrink_collect.alive_accounts.len(), account_count);
-                            assert_eq!(
-                                shrink_collect
-                                    .alive_accounts
-                                    .iter()
-                                    .map(|(pubkey, _)| *pubkey)
-                                    .sorted()
-                                    .collect::<Vec<_>>(),
-                                pubkeys[..account_count]
-                                    .iter()
-                                    .sorted()
-                                    .cloned()
-                                    .collect::<Vec<_>>()
-                            );
-                            assert_eq!(
-                                shrink_collect.aligned_total,
-                                PAGE_SIZE
-                                    * if account_count >= 100 {
-                                        4
-                                    } else if account_count >= 50 {
-                                        2
-                                    } else {
-                                        1
-                                    }
-                            );
-                            // 136 is size of serialized account, with zero length data, and with padding to next aligned entry
-                            assert_eq!(shrink_collect.alive_total, (136 + space) * account_count);
-                        } else {
-                            assert!(shrink_collect.alive_accounts.is_empty());
-                            assert_eq!(shrink_collect.unrefed_pubkeys.len(), account_count);
-                            assert_eq!(
-                                shrink_collect
-                                    .unrefed_pubkeys
-                                    .iter()
-                                    .sorted()
-                                    .cloned()
-                                    .collect::<Vec<_>>(),
-                                pubkeys[..account_count].iter().sorted().collect::<Vec<_>>()
-                            );
-                            assert_eq!(shrink_collect.aligned_total, 0);
-                            assert_eq!(shrink_collect.alive_total, 0);
-                        }
-                        assert_eq!(shrink_collect.original_bytes, 102400);
-                        assert_eq!(shrink_collect.store_ids, vec![storages[0].append_vec_id()]);
-                        assert_eq!(shrink_collect.total_starting_accounts, account_count);
-                        assert_eq!(
-                            shrink_collect.all_are_zero_lamports,
-                            lamports == 0 || !alive
-                        );
                     }
                 }
             }
