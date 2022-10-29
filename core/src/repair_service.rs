@@ -337,6 +337,7 @@ impl RepairService {
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
                                 identity_keypair,
+                                root_bank.cluster_type(),
                             )
                             .ok()?;
                         Some((req, to))

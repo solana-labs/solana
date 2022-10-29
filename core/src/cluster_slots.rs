@@ -214,6 +214,54 @@ impl ClusterSlots {
             })
             .collect()
     }
+
+    fn normalize_stake_ln(stake: u64) -> u64 {
+        // cap the max balance to u32 max (it should be plenty)
+        let bal = f64::from(u32::max_value()).min(stake as f64);
+        let x = 1_f32.max((bal as f32).ln());
+        x as u64
+    }
+
+    // Create weighting of peers based on peers' similarity in stake to the node specifiied
+    // by `target_id`.
+    pub(crate) fn compute_weights_target_distance(
+        &self,
+        repair_peers: &[ContactInfo],
+        target_id: &Pubkey,
+    ) -> Vec<u64> {
+        if repair_peers.is_empty() {
+            return Vec::default();
+        }
+        let (weights, max_diff) = {
+            let validator_stakes = self.validator_stakes.read().unwrap();
+            let target_stake = validator_stakes
+                .get(target_id)
+                .map(|node| node.total_stake)
+                .unwrap_or(0);
+            let mut max_diff = 0;
+            let weights: Vec<_> = repair_peers
+                .iter()
+                .map(|peer| {
+                    let stake = validator_stakes
+                        .get(&peer.id)
+                        .map(|node| node.total_stake)
+                        .unwrap_or(0);
+                    let diff = if target_stake > stake {
+                        target_stake - stake
+                    } else {
+                        stake - target_stake
+                    };
+                    max_diff = max_diff.max(diff);
+                    diff
+                })
+                .collect();
+            (weights, max_diff)
+        };
+        weights
+            .into_iter()
+            .map(|w| Self::normalize_stake_ln(max_diff - w + 1))
+            .collect()
+    }
 }
 
 #[cfg(test)]
