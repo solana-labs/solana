@@ -791,18 +791,17 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Overwrites the account data and size (transaction wide).
     ///
-    /// You should almost always prefer set_data_from_slice() to this method.
-    /// This is currently only used by tests and the program-test crate.
+    /// You should always prefer set_data_from_slice(). Calling this method is
+    /// currently safe but requires some special casing during CPI when direct
+    /// account mapping is enabled.
+    ///
+    /// Currently only used by tests and the program-test crate.
     #[cfg(not(target_os = "solana"))]
-    pub fn set_data(&mut self, mut data: Vec<u8>) -> Result<(), InstructionError> {
+    pub fn set_data(&mut self, data: Vec<u8>) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
         self.touch()?;
 
-        // self.account might be mapped into a MemoryRegion. Ensure that its
-        // capacity doesn't shrink potentially leaving a hole in vm address
-        // space. The extra capacity will be zeroed by the runtime.
-        data.reserve(self.account.data().len().saturating_sub(data.len()));
         self.update_accounts_resize_delta(data.len())?;
         self.account.set_data(data);
         Ok(())
@@ -866,6 +865,23 @@ impl<'a> BorrowedAccount<'a> {
         self.make_data_mut();
         self.account.extend_from_slice(data);
         Ok(())
+    }
+
+    /// Reserves capacity for at least additional more elements to be inserted
+    /// in the given account. Does nothing if capacity is already sufficient.
+    #[cfg(not(target_os = "solana"))]
+    pub fn reserve(&mut self, additional: usize) -> Result<(), InstructionError> {
+        self.can_data_be_changed()?;
+        self.make_data_mut();
+        self.account.reserve(additional);
+
+        Ok(())
+    }
+
+    /// Returns the number of bytes the account can hold without reallocating.
+    #[cfg(not(target_os = "solana"))]
+    pub fn capacity(&self) -> usize {
+        self.account.capacity()
     }
 
     #[cfg(not(target_os = "solana"))]

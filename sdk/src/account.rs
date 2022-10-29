@@ -541,6 +541,10 @@ impl AccountSharedData {
         self.data_mut().reserve(additional)
     }
 
+    pub fn capacity(&self) -> usize {
+        self.data.capacity()
+    }
+
     fn data_mut(&mut self) -> &mut Vec<u8> {
         Arc::make_mut(&mut self.data)
     }

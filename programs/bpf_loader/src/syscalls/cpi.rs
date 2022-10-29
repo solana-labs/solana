@@ -1129,12 +1129,32 @@ fn update_caller_account(
     *caller_account.owner = *callee_account.get_owner();
 
     if direct_mapping && caller_account.original_data_len > 0 {
+        // This whole branch can be removed once we stop using AccountSharedData
+        // within transaction accounts. Mutating an account through
+        // AccountSharedData (which is possible from builtins), can change the
+        // allocation (pointer) and the capacity.
+        //
+        // Since each instruction account is directly mapped in a memory region
+        // with a fixed length, upon returning from CPI we must ensure that the
+        // current capacity is at least the original length (what is mapped in
+        // memory), so that the account's memory region never points to an
+        // invalid address.
+        let min_capacity = caller_account.original_data_len;
+        if callee_account.capacity() < min_capacity {
+            callee_account
+                .reserve(min_capacity.saturating_sub(callee_account.capacity()))
+                .map_err(SyscallError::InstructionError)?;
+        }
+
+        // replace the region in case the allocation changed
         let regions = memory_mapping.get_regions();
         let memory_region_index = regions
             .iter()
             .position(|memory_region| memory_region.vm_addr == caller_account.vm_data_addr)
             .ok_or(Box::new(InstructionError::ProgramEnvironmentSetupFailure))?;
         let region = regions.get(memory_region_index).unwrap();
+        debug_assert!(callee_account.capacity() >= region.len as usize);
+
         let account_region = if let Ok(data) = callee_account.get_data_mut() {
             let data =
                 unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr(), region.len as usize) };
@@ -1764,6 +1784,64 @@ mod tests {
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc
         ));
+    }
+
+    #[test]
+    fn test_update_caller_account_data_capacity_direct_mapping() {
+        let transaction_accounts = one_writable_instruction_account(b"foobar".to_vec());
+        let account = transaction_accounts[1].1.clone();
+
+        let mut invoke_context_builder =
+            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
+        let invoke_context = invoke_context_builder.invoke_context();
+
+        let instruction_context = invoke_context
+            .transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+
+        let mut mock_caller_account = MockCallerAccount::new(
+            account.lamports(),
+            *account.owner(),
+            0xFFFFFFFF00000000,
+            account.data(),
+            true,
+        );
+
+        let config = Config {
+            aligned_memory_mapping: false,
+            ..Config::default()
+        };
+        let mut memory_mapping =
+            MemoryMapping::new(mock_caller_account.regions.clone(), &config).unwrap();
+
+        let mut caller_account = mock_caller_account.caller_account();
+
+        {
+            let mut account = invoke_context
+                .transaction_context
+                .get_account_at_index(1)
+                .unwrap()
+                .borrow_mut();
+            account.set_data(b"foo".to_vec());
+        }
+
+        let mut callee_account = instruction_context
+            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
+            .unwrap();
+        assert_eq!(callee_account.capacity(), 3);
+
+        update_caller_account(
+            &invoke_context,
+            &mut memory_mapping,
+            false,
+            &mut caller_account,
+            &mut callee_account,
+            true,
+        )
+        .unwrap();
+
+        assert!(callee_account.capacity() >= caller_account.original_data_len);
     }
 
     #[test]
