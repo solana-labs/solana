@@ -1,9 +1,11 @@
 use {
     super::*,
     crate::declare_syscall,
-    solana_sdk::feature_set::enable_bpf_loader_set_authority_checked_ix,
-    solana_sdk::syscalls::{
-        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+    solana_sdk::{
+        feature_set::enable_bpf_loader_set_authority_checked_ix,
+        syscalls::{
+            MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+        },
     },
 };
 

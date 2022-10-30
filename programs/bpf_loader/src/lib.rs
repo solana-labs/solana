@@ -3611,11 +3611,7 @@ mod tests {
             &[],
             &instruction,
             transaction_accounts.clone(),
-            vec![
-                buffer_meta,
-                authority_meta,
-                new_authority_meta,
-            ],
+            vec![buffer_meta, authority_meta, new_authority_meta],
             Err(InstructionError::Immutable),
         );
     }
