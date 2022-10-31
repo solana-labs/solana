@@ -1011,6 +1011,18 @@ pub fn bank_from_snapshot_archives(
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
 
+    verify_bank_against_expected_slot_hash(
+        &bank,
+        incremental_snapshot_archive_info.as_ref().map_or(
+            full_snapshot_archive_info.slot(),
+            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
+        ),
+        incremental_snapshot_archive_info.as_ref().map_or(
+            *full_snapshot_archive_info.hash(),
+            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
+        ),
+    )?;
+
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
@@ -1126,18 +1138,6 @@ pub fn bank_from_latest_snapshot_archives(
             i64
         ),
     );
-
-    verify_bank_against_expected_slot_hash(
-        &bank,
-        incremental_snapshot_archive_info.as_ref().map_or(
-            full_snapshot_archive_info.slot(),
-            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
-        ),
-        incremental_snapshot_archive_info.as_ref().map_or(
-            *full_snapshot_archive_info.hash(),
-            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
-        ),
-    )?;
 
     Ok((
         bank,
