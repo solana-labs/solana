@@ -57,7 +57,9 @@ impl ComputeBudgetInstruction {
         Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
     }
 
-    /// Serialize Instruction using borsh
+    /// Serialize Instruction using borsh, this is only used in runtime::cost_model::tests but compilation
+    /// can't be restricted as it's used across packages
+    // #[cfg(test)]
     pub fn pack(self) -> Result<Vec<u8>, std::io::Error> {
         self.try_to_vec()
     }
