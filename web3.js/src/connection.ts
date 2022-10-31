@@ -2768,7 +2768,14 @@ export class Connection {
     }
 
     this._rpcEndpoint = assertEndpointUrl(endpoint);
-    this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
+    if (wsEndpoint) {
+      this._rpcWsEndpoint = wsEndpoint;
+    } else {
+      this._rpcWsEndpoint = makeWebsocketUrl(endpoint);
+      console.warn(
+        `No websocket endpoint specified, created one automatically: ${this._rpcWsEndpoint}`,
+      );
+    }
 
     this._rpcClient = createRpcClient(
       endpoint,
