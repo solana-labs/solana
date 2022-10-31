@@ -318,17 +318,17 @@ impl<'a> SnapshotMinimizer<'a> {
             let mut chunk_bytes = 0;
             let mut keep_accounts = Vec::with_capacity(CHUNK_SIZE);
             let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
-            chunk.iter().for_each(|(pubkey, account)| {
-                if self.minimized_account_set.contains(pubkey) {
+            chunk.iter().for_each(|account| {
+                if self.minimized_account_set.contains(account.pubkey()) {
                     chunk_bytes += account.account.stored_size;
-                    keep_accounts.push((pubkey, account));
+                    keep_accounts.push(account);
                 } else if self
                     .accounts_db()
                     .accounts_index
-                    .get_account_read_entry(pubkey)
+                    .get_account_read_entry(account.pubkey())
                     .is_some()
                 {
-                    purge_pubkeys.push(pubkey);
+                    purge_pubkeys.push(account.pubkey());
                 }
             });
 
@@ -359,8 +359,8 @@ impl<'a> SnapshotMinimizer<'a> {
             let mut hashes = Vec::with_capacity(keep_accounts.len());
             let mut write_versions = Vec::with_capacity(keep_accounts.len());
 
-            for (pubkey, alive_account) in keep_accounts {
-                accounts.push((pubkey, &alive_account.account));
+            for alive_account in keep_accounts {
+                accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
