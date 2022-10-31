@@ -203,6 +203,7 @@ struct RewardsStoreMetrics {
     epoch: Epoch,
     slot: Slot,
     parent_slot: Slot,
+    partition_index: u64,
     store_stake_accounts_us: u64,
     store_vote_accounts_us: u64,
     store_stake_accounts_count: usize,
@@ -220,6 +221,7 @@ impl RewardsStoreMetrics {
             ("epoch", self.epoch, i64),
             ("slot", self.slot, i64),
             ("parent_slot", self.parent_slot, i64),
+            ("partition_index", self.partition_index, i64),
             ("store_stake_accounts_us", self.store_stake_accounts_us, i64),
             ("store_vote_accounts_us", self.store_vote_accounts_us, i64),
             (
@@ -3733,6 +3735,7 @@ impl Bank {
 
             metrics.total_stake_accounts_count = stake_rewards.len();
             metrics.total_vote_accounts_count = vote_account_rewards.len();
+            metrics.partition_index = partition_index;
 
             let mut m = Measure::start("store_stake_account");
             let (stake_store_counts, total_stake_rewards) =
