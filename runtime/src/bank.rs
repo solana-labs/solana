@@ -3776,7 +3776,6 @@ impl Bank {
         credits_auto_rewind: bool,
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
-        //update_rewards_from_cached_accounts: bool,
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
     ) -> StakeVoteRewardCalcResult {
         let mut m = Measure::start("calculate_points");
