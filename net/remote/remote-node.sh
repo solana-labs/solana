@@ -30,6 +30,7 @@ extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 enableUdp="${24}"
+clientType="${25:-thin-client}"
 
 set +x
 
@@ -92,6 +93,27 @@ case "$gpuMode" in
     ;;
   *)
     echo "Unexpected gpuMode: \"$gpuMode\""
+    exit 1
+    ;;
+esac
+
+TPU_CLIENT=false
+RPC_CLIENT=false
+case "$clientType" in
+  thin-client)
+    TPU_CLIENT=false
+    RPC_CLIENT=false
+    ;;
+  tpu-client)
+    TPU_CLIENT=true
+    RPC_CLIENT=false
+    ;;
+  rpc-client)
+    TPU_CLIENT=false
+    RPC_CLIENT=true
+    ;;
+  *)
+    echo "Unexpected clientType: \"$clientType\""
     exit 1
     ;;
 esac
@@ -293,6 +315,12 @@ EOF
 
     if $enableUdp; then
       args+=(--tpu-enable-udp)
+    fi
+
+    if ${TPU_CLIENT}; then
+        args+=(--use-tpu-client)
+    elif ${RPC_CLIENT}; then
+        args+=(--use-rpc-client)
     fi
 
     if [[ $airdropsEnabled = true ]]; then

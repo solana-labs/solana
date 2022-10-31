@@ -813,6 +813,7 @@ waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
 enableUdp=false
+clientType=thin-client
 
 command=$1
 [[ -n $command ]] || usage
@@ -948,6 +949,17 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
       shift 1
+    elif [[ $1 = --client-type ]]; then
+      clientType=$2
+      case "$clientType" in
+        thin-client|tpu-client|rpc-client)
+          ;;
+        *)
+          echo "Unexpected client type: \"$clientType\""
+          exit 1
+          ;;
+      esac
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
