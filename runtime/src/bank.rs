@@ -182,6 +182,30 @@ struct TransactionTimings {
     pub thread_name: String,
     pub execution_us: u64,
     pub execution_cpu_us: u128,
+    pub priority: u64,
+    pub account_locks: OwnedTransactionAccountLocks,
+}
+
+use serde_with::*;
+
+#[serde_as]
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct OwnedTransactionAccountLocks {
+    #[serde_as(as = "Vec<DisplayFromStr>")]
+    pub readonly: Vec<Pubkey>,
+    #[serde_as(as = "Vec<DisplayFromStr>")]
+    pub writable: Vec<Pubkey>,
+}
+
+impl<'a> From<solana_sdk::transaction::TransactionAccountLocks<'a>>
+    for OwnedTransactionAccountLocks
+{
+    fn from(locks: solana_sdk::transaction::TransactionAccountLocks) -> Self {
+        Self {
+            readonly: locks.readonly.into_iter().cloned().collect(),
+            writable: locks.writable.into_iter().cloned().collect(),
+        }
+    }
 }
 
 fn record_transaction_timings(
@@ -192,7 +216,13 @@ fn record_transaction_timings(
     thread_name: String,
     process_message_time: &Measure,
     cpu_time: &std::time::Duration,
+    priority: u64,
+    account_locks: OwnedTransactionAccountLocks,
 ) {
+    if slot == 0 {
+        return;
+    }
+
     static INSTANCE: once_cell::sync::OnceCell<
         Option<crossbeam_channel::Sender<TransactionTimings>>,
     > = once_cell::sync::OnceCell::new();
@@ -223,7 +253,11 @@ fn record_transaction_timings(
                         ("index", transaction_timings.transaction_index, i64),
                         ("thread", transaction_timings.thread_name, String),
                         ("signature", &format!("{}", transaction_timings.sig), String),
-                        ("account_locks_in_json", "{}", String), // todo
+                        (
+                            "account_locks_in_json",
+                            serde_json::to_string(&transaction_timings.account_locks).unwrap(),
+                            String
+                        ),
                         (
                             "status",
                             format!(
@@ -235,6 +269,7 @@ fn record_transaction_timings(
                         ("duration", transaction_timings.execution_us, i64),
                         ("cpu_duration", transaction_timings.execution_cpu_us, i64),
                         ("compute_units", transaction_timings.cu, i64),
+                        ("priority", transaction_timings.priority, i64),
                     );
                 }
             })
@@ -255,6 +290,8 @@ fn record_transaction_timings(
                 thread_name,
                 execution_us: process_message_time.as_us(),
                 execution_cpu_us: cpu_time.as_micros(),
+                priority,
+                account_locks,
             })
             .unwrap()
     }
@@ -4489,6 +4526,9 @@ impl Bank {
         );
         let cpu_elapsed = cpu_time.elapsed();
         process_message_time.stop();
+        use crate::transaction_priority_details::GetTransactionPriorityDetails;
+        let account_locks_in_json = tx.get_account_locks_unchecked().into();
+
         record_transaction_timings(
             self.slot(),
             tx.signature(),
@@ -4497,6 +4537,8 @@ impl Bank {
             std::thread::current().name().unwrap().into(),
             &process_message_time,
             &cpu_elapsed,
+            tx.get_transaction_priority_details().unwrap().priority,
+            account_locks_in_json,
         );
 
         saturating_add_assign!(

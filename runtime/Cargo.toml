@@ -41,6 +41,8 @@ rayon = "1.5.3"
 regex = "1.5.6"
 serde = { version = "1.0.143", features = ["rc"] }
 serde_derive = "1.0.103"
+serde_json = "1.0.81"
+serde_with = "1.14.0"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.12.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.12.0" }
 solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.12.0" }
