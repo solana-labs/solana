@@ -136,6 +136,10 @@ impl<'a> StoredAccountMeta<'a> {
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
         executable_byte
     }
+
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.meta.pubkey
+    }
 }
 
 pub struct AppendVecAccountsIter<'a> {

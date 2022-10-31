@@ -26,7 +26,7 @@ pub enum StorageSelector {
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
     hashes: Vec<&'a Hash>,
-    accounts: Vec<(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)>,
+    accounts: Vec<(&'a StoredAccountMeta<'a>, Slot)>,
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
@@ -57,7 +57,7 @@ impl<'a> AccountsToStore<'a> {
             hashes.push(account.1.account.hash);
             // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
             // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
-            accounts.push((&account.1.account.meta.pubkey, &account.1.account, slot));
+            accounts.push((&account.1.account, slot));
         });
         Self {
             hashes,
@@ -75,10 +75,7 @@ impl<'a> AccountsToStore<'a> {
     pub fn get(
         &self,
         storage: StorageSelector,
-    ) -> (
-        &[(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)],
-        &[&'a Hash],
-    ) {
+    ) -> (&[(&'a StoredAccountMeta<'a>, Slot)], &[&'a Hash]) {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
@@ -170,7 +167,7 @@ pub mod tests {
             assert_eq!(
                 accounts,
                 map.iter()
-                    .map(|(a, b)| (a, &b.account, slot))
+                    .map(|(_a, b)| (&b.account, slot))
                     .collect::<Vec<_>>(),
                 "mismatch"
             );
