@@ -299,7 +299,7 @@ impl AncientSlotPubkeys {
                     .append_vec()
                     .accounts
                     .account_iter()
-                    .map(|account| account.meta.pubkey)
+                    .map(|account| *account.pubkey())
                     .collect::<HashSet<_>>();
                 self.inner = Some(AncientSlotPubkeysInner {
                     pubkeys,
@@ -733,7 +733,7 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn pubkey(&self) -> &Pubkey {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => &stored_account_meta.meta.pubkey,
+            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.pubkey(),
             LoadedAccount::Cached(cached_account) => cached_account.pubkey(),
         }
     }
@@ -755,7 +755,7 @@ impl<'a> LoadedAccount<'a> {
             LoadedAccount::Stored(stored_account_meta) => AccountsDb::hash_account(
                 slot,
                 stored_account_meta,
-                &stored_account_meta.meta.pubkey,
+                stored_account_meta.pubkey(),
                 include_slot,
             ),
             LoadedAccount::Cached(cached_account) => {
@@ -2911,7 +2911,7 @@ impl AccountsDb {
                         }
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
                         store.accounts.account_iter().for_each(|account| {
-                            pubkeys.insert(account.meta.pubkey);
+                            pubkeys.insert(*account.pubkey());
                         });
                     });
                     oldest_dirty_slot
@@ -3010,8 +3010,8 @@ impl AccountsDb {
                 .unwrap_or_default()
             {
                 storage.all_accounts().iter().for_each(|account| {
-                    let pk = account.meta.pubkey;
-                    match pubkey_refcount.entry(pk) {
+                    let pk = account.pubkey();
+                    match pubkey_refcount.entry(*pk) {
                         dashmap::mapref::entry::Entry::Occupied(mut occupied_entry) => {
                             if !occupied_entry.get().iter().any(|s| s == &slot) {
                                 occupied_entry.get_mut().push(slot);
@@ -3749,7 +3749,7 @@ impl AccountsDb {
                 let store_id = store.append_vec_id();
                 store.accounts.account_iter().for_each(|account| {
                     let new_entry = FoundStoredAccount { account, store_id };
-                    match stored_accounts.entry(new_entry.account.meta.pubkey) {
+                    match stored_accounts.entry(*new_entry.account.pubkey()) {
                         Entry::Occupied(mut occupied_entry) => {
                             if new_entry.account.meta.write_version
                                 > occupied_entry.get().account.meta.write_version
@@ -4312,7 +4312,7 @@ impl AccountsDb {
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
     /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
-        accounts: &'a [(&StoredAccountMeta<'_>, u64)],
+        accounts: &'a [(&StoredAccountMeta<'_>, Slot)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) -> HashSet<&'a Pubkey> {
         let mut unref = HashSet::<&Pubkey>::default();
@@ -4334,7 +4334,7 @@ impl AccountsDb {
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
-        accounts: &[(&StoredAccountMeta<'_>, u64)],
+        accounts: &[(&StoredAccountMeta<'_>, Slot)],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
@@ -6993,7 +6993,7 @@ impl AccountsDb {
         if len == 1 {
             // only 1 storage, so no need to interleave between multiple storages based on write_version
             storages[0].accounts.account_iter().for_each(|account| {
-                if scanner.filter(&account.meta.pubkey) {
+                if scanner.filter(account.pubkey()) {
                     scanner.found_account(&LoadedAccount::Stored(account))
                 }
             });
@@ -7023,10 +7023,10 @@ impl AccountsDb {
                 }
                 let found_account = &mut current[min_index];
                 if scanner.filter(
-                    &found_account
+                    found_account
                         .1
                         .as_ref()
-                        .map(|stored_account| stored_account.meta.pubkey)
+                        .map(|stored_account| stored_account.pubkey())
                         .unwrap(), // will always be 'Some'
                 ) {
                     let account = std::mem::take(found_account);
@@ -8199,7 +8199,7 @@ impl AccountsDb {
                         store
                             .accounts
                             .account_iter()
-                            .map(|account| (slot, account.meta.pubkey))
+                            .map(|account| (slot, *account.pubkey()))
                             .collect::<Vec<(Slot, Pubkey)>>()
                     })
                     .flatten()
@@ -8686,9 +8686,9 @@ impl AccountsDb {
         storage_maps.iter().for_each(|storage| {
             storage.accounts.account_iter().for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
-                let pubkey = stored_account.meta.pubkey;
-                assert!(!self.is_filler_account(&pubkey));
-                match accounts_map.entry(pubkey) {
+                let pubkey = stored_account.pubkey();
+                assert!(!self.is_filler_account(pubkey));
+                match accounts_map.entry(*pubkey) {
                     Entry::Vacant(entry) => {
                         entry.insert(IndexAccountMapEntry {
                             write_version: this_version,
@@ -12581,7 +12581,7 @@ pub mod tests {
             AccountsDb::hash_account(
                 slot,
                 &stored_account,
-                &stored_account.meta.pubkey,
+                stored_account.pubkey(),
                 INCLUDE_SLOT_IN_HASH_TESTS
             ),
             expected_account_hash,
@@ -12591,7 +12591,7 @@ pub mod tests {
             AccountsDb::hash_account(
                 slot,
                 &account,
-                &stored_account.meta.pubkey,
+                stored_account.pubkey(),
                 INCLUDE_SLOT_IN_HASH_TESTS
             ),
             expected_account_hash,
@@ -14857,7 +14857,7 @@ pub mod tests {
             let before_size = storage0.alive_bytes.load(Ordering::Acquire);
             let account_info = accounts_db
                 .accounts_index
-                .get_account_read_entry(&account.meta.pubkey)
+                .get_account_read_entry(account.pubkey())
                 .map(|locked_entry| {
                     // Should only be one entry per key, since every key was only stored to slot 0
                     locked_entry.slot_list()[0]
