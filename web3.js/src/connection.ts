@@ -52,7 +52,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
-import toString from './utils/convert-error-to-string';
+import toString from './utils/to-string';
 
 const PublicKeyFromString = coerce(
   instance(PublicKey),
