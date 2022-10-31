@@ -115,7 +115,8 @@ use {
         feature,
         feature_set::{
             self, disable_fee_calculator, enable_early_verification_of_account_modifications,
-            remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation, FeatureSet,
+            enable_partitioned_epoch_reward, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -1840,6 +1841,9 @@ impl Bank {
 
     pub fn partitioned_rewards_enabled(&self) -> bool {
         self.enable_partitioned_rewards
+            || self
+                .feature_set
+                .is_active(&enable_partitioned_epoch_reward::id())
     }
 
     pub fn set_partitioned_rewards_enable(&mut self, enable: bool) {
@@ -20519,5 +20523,13 @@ pub(crate) mod tests {
         info!("reward_calc_result: {:?}", result);
         assert_eq!(result.0.len(), 1);
         assert_eq!(result.1.len(), 1);
+    }
+
+    #[test]
+    fn test_partitioned_reward_enable() {
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        assert!(bank.partitioned_rewards_enabled());
     }
 }

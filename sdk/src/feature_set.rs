@@ -530,6 +530,10 @@ pub mod limit_max_instruction_trace_length {
     solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
 }
 
+pub mod enable_partitioned_epoch_reward {
+    solana_sdk::declare_id!("HCnE3xQoZtDz9dSVm3jKwJXioTb6zMRbgwCmGg3PHHk8");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -657,6 +661,7 @@ lazy_static! {
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
+        (enable_partitioned_epoch_reward::id(), "enable partitioned rewards at epoch bondary"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
