@@ -42,3 +42,17 @@ pub struct IncrementalSnapshotHashes {
     pub base: (Slot, Hash),
     pub hashes: Vec<(Slot, Hash)>,
 }
+
+/// The hash used for snapshot archives
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct SnapshotHash(pub Hash);
+
+impl SnapshotHash {
+    /// Make a snapshot hash from an accounts hash
+    ///
+    /// Will soon also incorporate the epoch accounts hash
+    #[must_use]
+    pub fn new(accounts_hash: &Hash) -> Self {
+        Self(*accounts_hash)
+    }
+}

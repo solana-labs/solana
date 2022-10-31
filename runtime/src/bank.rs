@@ -60,6 +60,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         runtime_config::RuntimeConfig,
+        snapshot_hash::SnapshotHash,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -6970,6 +6971,11 @@ impl Bank {
 
     pub fn get_accounts_hash(&self) -> Hash {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
+    }
+
+    pub fn get_snapshot_hash(&self) -> SnapshotHash {
+        let accounts_hash = self.get_accounts_hash();
+        SnapshotHash::new(&accounts_hash)
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {

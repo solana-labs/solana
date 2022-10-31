@@ -94,7 +94,7 @@ impl SnapshotPackagerService {
                     if let Some(snapshot_gossip_manager) = snapshot_gossip_manager.as_mut() {
                         snapshot_gossip_manager.push_snapshot_hash(
                             snapshot_package.snapshot_type,
-                            (snapshot_package.slot(), *snapshot_package.hash()),
+                            (snapshot_package.slot(), snapshot_package.hash().0),
                         );
                     }
                 }
@@ -225,6 +225,7 @@ mod tests {
             accounts_db::AccountStorageEntry,
             bank::BankSlotDelta,
             snapshot_archive_info::SnapshotArchiveInfo,
+            snapshot_hash::SnapshotHash,
             snapshot_package::{SnapshotPackage, SnapshotType},
             snapshot_utils::{
                 self, ArchiveFormat, SnapshotVersion, SNAPSHOT_STATUS_CACHE_FILENAME,
@@ -309,7 +310,7 @@ mod tests {
 
         // Create a packageable snapshot
         let slot = 42;
-        let hash = Hash::default();
+        let hash = SnapshotHash(Hash::default());
         let archive_format = ArchiveFormat::TarBzip2;
         let output_tar_path = snapshot_utils::build_full_snapshot_archive_path(
             &full_snapshot_archives_dir,

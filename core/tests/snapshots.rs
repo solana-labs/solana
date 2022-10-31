@@ -24,6 +24,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
+        snapshot_hash::SnapshotHash,
         snapshot_package::{
             AccountsPackage, AccountsPackageType, PendingSnapshotPackage, SnapshotPackage,
             SnapshotType,
@@ -149,7 +150,7 @@ fn restore_from_snapshot(
     let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         full_snapshot_archives_dir,
         old_last_bank.slot(),
-        &old_last_bank.get_accounts_hash(),
+        &old_last_bank.get_snapshot_hash(),
         ArchiveFormat::TarBzip2,
     );
     let full_snapshot_archive_info =
@@ -467,7 +468,7 @@ fn test_concurrent_snapshot_packaging(
                 slot,
                 // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                 // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
-                &Hash::default(),
+                &SnapshotHash(Hash::default()),
                 ArchiveFormat::TarBzip2,
             ));
         }

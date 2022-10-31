@@ -4,10 +4,11 @@ use {
     indicatif::{ProgressBar, ProgressStyle},
     log::*,
     solana_runtime::{
+        snapshot_hash::SnapshotHash,
         snapshot_package::SnapshotType,
         snapshot_utils::{self, ArchiveFormat},
     },
-    solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE, hash::Hash},
+    solana_sdk::{clock::Slot, genesis_config::DEFAULT_GENESIS_ARCHIVE},
     std::{
         fs::{self, File},
         io::{self, Read},
@@ -260,7 +261,7 @@ pub fn download_snapshot_archive<'a, 'b>(
     rpc_addr: &SocketAddr,
     full_snapshot_archives_dir: &Path,
     incremental_snapshot_archives_dir: &Path,
-    desired_snapshot_hash: (Slot, Hash),
+    desired_snapshot_hash: (Slot, SnapshotHash),
     snapshot_type: SnapshotType,
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
