@@ -317,10 +317,10 @@ EOF
       args+=(--tpu-enable-udp)
     fi
     
-    if ${TPU_CLIENT} then
-        args+=(--tpu_client)
-    elif ${RPC_CLIENT} then
-        args+=(--rpc_client)
+    if ${TPU_CLIENT}; then
+        args+=(--use-tpu-client)
+    elif ${RPC_CLIENT}; then
+        args+=(--use-rpc-client)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
