@@ -1,4 +1,4 @@
-export default function convertErrorToString(error: any): string {
+export default function toString(error: any): string {
   if (error instanceof Error) {
     return error.message;
   }

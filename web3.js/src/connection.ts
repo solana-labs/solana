@@ -52,7 +52,7 @@ import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
 import type {CompiledInstruction} from './message';
-import convertErrorToString from './utils/convert-error-to-string';
+import toString from './utils/convert-error-to-string';
 
 const PublicKeyFromString = coerce(
   instance(PublicKey),
@@ -2870,7 +2870,7 @@ export class Connection {
       .then(x => x.value)
       .catch(e => {
         throw new Error(
-          'failed to get balance of account ' + publicKey.toBase58() + ': ' + convertErrorToString(e),
+          'failed to get balance of account ' + publicKey.toBase58() + ': ' + toString(e),
         );
       });
   }
