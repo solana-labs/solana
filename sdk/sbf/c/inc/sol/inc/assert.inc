@@ -14,7 +14,7 @@ extern "C" {
  * Panics
  *
  * Prints the line number where the panic occurred and then causes
- * the BPF VM to immediately halt execution. No accounts' data are updated
+ * the SBF VM to immediately halt execution. No accounts' data are updated
  */
 @SYSCALL void sol_panic_(const char *, uint64_t, uint64_t, uint64_t);
 #define sol_panic() sol_panic_(__FILE__, sizeof(__FILE__), __LINE__, 0)

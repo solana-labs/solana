@@ -36,7 +36,6 @@ pub mod cost_model;
 pub mod cost_tracker;
 pub mod epoch_accounts_hash;
 pub mod epoch_stakes;
-mod expected_rent_collection;
 pub mod genesis_utils;
 pub mod hardened_unpack;
 pub mod in_mem_accounts_index;

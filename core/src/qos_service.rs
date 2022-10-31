@@ -392,7 +392,7 @@ struct QosServiceMetricsStats {
     /// accumulated estimated builtin programs Compute Units to be packed into block
     estimated_builtins_execute_cu: AtomicU64,
 
-    /// accumulated estimated BPF program Compute Units to be packed into block
+    /// accumulated estimated SBF program Compute Units to be packed into block
     estimated_bpf_execute_cu: AtomicU64,
 
     /// accumulated actual program Compute Units that have been packed into block

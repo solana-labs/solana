@@ -1189,13 +1189,6 @@ pub fn main() {
                       [default: all validators]")
         )
         .arg(
-            Arg::with_name("rocksdb_compaction_interval")
-                .long("rocksdb-compaction-interval-slots")
-                .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
-                .takes_value(true)
-                .help("Number of slots between compacting ledger"),
-        )
-        .arg(
             Arg::with_name("tpu_coalesce_ms")
                 .long("tpu-coalesce-ms")
                 .value_name("MILLISECS")
@@ -1241,13 +1234,6 @@ pub fn main() {
                             as valid for other peers in network. The stake amount is used for calculating
                             number of QUIC streams permitted from the peer and vote packet sender stage.
                             Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}"),
-        )
-        .arg(
-            Arg::with_name("rocksdb_max_compaction_jitter")
-                .long("rocksdb-max-compaction-jitter-slots")
-                .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
-                .takes_value(true)
-                .help("Introduce jitter into the compaction to offset compaction operation"),
         )
         .arg(
             Arg::with_name("bind_address")
@@ -1574,7 +1560,7 @@ pub fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+                .help("Disable the just-in-time compiler and instead use the interpreter for SBF"),
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")
@@ -2308,10 +2294,6 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
-    let no_rocksdb_compaction = true;
-    let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
-    let rocksdb_max_compaction_jitter =
-        value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
     let wal_recovery_mode = matches
@@ -2661,9 +2643,6 @@ pub fn main() {
         known_validators,
         repair_validators,
         gossip_validators,
-        no_rocksdb_compaction,
-        rocksdb_compaction_interval,
-        rocksdb_max_compaction_jitter,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
@@ -3294,6 +3273,18 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
             .hidden(true)
             .takes_value(false)
             .help("Disable manual compaction of the ledger database (this is ignored)."),
+        Arg::with_name("rocksdb_compaction_interval")
+            .long("rocksdb-compaction-interval-slots")
+            .hidden(true)
+            .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
+            .takes_value(true)
+            .help("Number of slots between compacting ledger"),
+        Arg::with_name("rocksdb_max_compaction_jitter")
+            .long("rocksdb-max-compaction-jitter-slots")
+            .hidden(true)
+            .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
+            .takes_value(true)
+            .help("Introduce jitter into the compaction to offset compaction operation"),
     ]
 }
 
@@ -3328,6 +3319,8 @@ lazy_static! {
             "Vote account sanity checks are no longer performed by default.",
         ),
         ("no_rocksdb_compaction", ""),
+        ("rocksdb_compaction_interval", ""),
+        ("rocksdb_max_compaction_jitter", ""),
     ];
 }
 

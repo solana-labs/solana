@@ -21,7 +21,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
+        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -186,9 +186,10 @@ impl BackgroundServices {
             false,
         );
 
-        let pending_accounts_package = PendingAccountsPackage::default();
+        let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            Arc::clone(&pending_accounts_package),
+            accounts_package_sender.clone(),
+            accounts_package_receiver,
             Some(pending_snapshot_package),
             &exit,
             &cluster_info,
@@ -199,11 +200,13 @@ impl BackgroundServices {
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
-        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let accounts_background_request_sender =
+            AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config: snapshot_config.clone(),
+            snapshot_request_sender,
             snapshot_request_receiver,
-            pending_accounts_package,
+            accounts_package_sender,
         };
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
@@ -307,7 +310,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                 .rc
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash(
+                .calculate_accounts_hash_from_index(
                     bank.slot(),
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: false,
@@ -317,7 +320,6 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                         rent_collector: bank.rent_collector(),
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
-                        enable_rehashing: true,
                     },
                 )
                 .unwrap();
@@ -470,5 +472,180 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
         // Give the background services a chance to run
         std::thread::yield_now();
+    }
+}
+
+/// Ensure that EAH works well with ABS's snapshot request handling
+///
+/// Given the scenario where two banks are rooted back-to-back, where the first bank sends an
+/// EAH request and the second bank sends a snapshot request, both requests should be handled.
+#[test]
+fn test_background_services_request_handling() {
+    solana_logger::setup();
+
+    const NUM_EPOCHS_TO_TEST: u64 = 2;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+
+    let test_environment =
+        TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
+    let bank_forks = &test_environment.bank_forks;
+    let snapshot_config = &test_environment.snapshot_config;
+
+    let slots_per_epoch = test_environment
+        .genesis_config_info
+        .genesis_config
+        .epoch_schedule
+        .slots_per_epoch;
+    for _ in 0..slots_per_epoch * NUM_EPOCHS_TO_TEST {
+        let bank = {
+            let parent = bank_forks.read().unwrap().working_bank();
+            let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+                &parent,
+                &Pubkey::default(),
+                parent.slot() + 1,
+            ));
+
+            let transaction = system_transaction::transfer(
+                &test_environment.genesis_config_info.mint_keypair,
+                &Pubkey::new_unique(),
+                1,
+                bank.last_blockhash(),
+            );
+            bank.process_transaction(&transaction).unwrap();
+            bank.fill_bank_with_ticks_for_tests();
+
+            bank
+        };
+        debug!("new bank {}", bank.slot());
+
+        // Based on the EAH start and snapshot interval, pick a slot to mass-root all the banks in
+        // this range such that an EAH request will be sent and also a snapshot request.
+        let eah_start_slot = epoch_accounts_hash::calculation_start(&bank);
+        let set_root_slot = next_multiple_of(eah_start_slot, FULL_SNAPSHOT_INTERVAL);
+
+        if bank.block_height() == set_root_slot {
+            info!("Calling set_root() on bank {}...", bank.slot());
+            bank_forks.write().unwrap().set_root(
+                bank.slot(),
+                &test_environment
+                    .background_services
+                    .accounts_background_request_sender,
+                None,
+            );
+            info!("Calling set_root() on bank {}... DONE", bank.slot());
+
+            // wait until eah is valid
+            info!("Calculating epoch accounts hash...");
+            while bank.epoch_accounts_hash().is_none() {
+                trace!("waiting for epoch accounts hash...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            info!("Calculating epoch accounts hash... DONE");
+
+            // wait until FSS is made
+            info!("Taking full snapshot...");
+            while snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &snapshot_config.full_snapshot_archives_dir,
+            ) != Some(bank.slot())
+            {
+                trace!("waiting for full snapshot...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            info!("Taking full snapshot... DONE");
+        }
+
+        // Give the background services a chance to run
+        std::thread::yield_now();
+    }
+}
+
+/// Ensure that warping and EAH play nicely together
+///
+/// Ledger-tool allows warping when creating a snapshot, so it is important that EAH does not break
+/// that use-case.
+#[test]
+fn test_epoch_accounts_hash_and_warping() {
+    solana_logger::setup();
+
+    let test_environment = TestEnvironment::new();
+    let bank_forks = &test_environment.bank_forks;
+    let bank = bank_forks.read().unwrap().working_bank();
+    let epoch_schedule = test_environment
+        .genesis_config_info
+        .genesis_config
+        .epoch_schedule;
+
+    // Ensure warping past the EAH stop slot is OK
+    info!("Warping past EAH stop slot...");
+    let eah_stop_offset = epoch_accounts_hash::calculation_offset_stop(&bank);
+    let eah_stop_slot_in_next_epoch =
+        epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
+    let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
+        &bank,
+        &Pubkey::default(),
+        eah_stop_slot_in_next_epoch,
+    ));
+    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + 1,
+    ));
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
+    info!("Waiting for epoch accounts hash...");
+    _ = bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .wait_get_epoch_accounts_hash();
+    info!("Waiting for epoch accounts hash... DONE");
+
+    // Ensure warping past the EAH start slot is OK
+    info!("Warping past EAH start slot...");
+    let eah_start_offset = epoch_accounts_hash::calculation_offset_start(&bank);
+    let eah_start_slot_in_next_epoch =
+        epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_start_offset;
+    let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
+        &bank,
+        &Pubkey::default(),
+        eah_start_slot_in_next_epoch,
+    ));
+    let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
+        &bank,
+        &Pubkey::default(),
+        bank.slot() + 1,
+    ));
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
+    info!("Waiting for epoch accounts hash...");
+    _ = bank
+        .rc
+        .accounts
+        .accounts_db
+        .epoch_accounts_hash_manager
+        .wait_get_epoch_accounts_hash();
+    info!("Waiting for epoch accounts hash... DONE");
+}
+
+// Copy the impl of `next_multiple_of` since it is nightly-only experimental.
+// https://doc.rust-lang.org/std/primitive.u64.html#method.next_multiple_of
+// https://github.com/rust-lang/rust/issues/88581
+// https://github.com/rust-lang/rust/pull/88582
+// https://github.com/jhpratt/rust/blob/727a4fc7e3f836938dfeb4a2ab237cfca612222d/library/core/src/num/uint_macros.rs#L1811-L1837
+const fn next_multiple_of(lhs: u64, rhs: u64) -> u64 {
+    match lhs % rhs {
+        0 => lhs,
+        r => lhs + (rhs - r),
     }
 }

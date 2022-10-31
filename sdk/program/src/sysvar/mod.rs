@@ -225,7 +225,7 @@ pub trait Sysvar:
     }
 }
 
-/// Implements the [`Sysvar::get`] method for both BPF and host targets.
+/// Implements the [`Sysvar::get`] method for both SBF and host targets.
 #[macro_export]
 macro_rules! impl_sysvar_get {
     ($syscall_name:ident) => {

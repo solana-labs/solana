@@ -3,7 +3,7 @@ use {
     solana_sdk::{
         account_info::{next_account_info, AccountInfo},
         entrypoint::{ProgramResult, MAX_PERMITTED_DATA_INCREASE},
-        instruction::{AccountMeta, Instruction},
+        instruction::{get_stack_height, AccountMeta, Instruction},
         msg,
         program::invoke,
         pubkey::Pubkey,
@@ -217,6 +217,76 @@ async fn cpi_create_account() {
         &instructions,
         Some(&context.payer.pubkey()),
         &[&context.payer, &create_account_keypair],
+        context.last_blockhash,
+    );
+
+    context
+        .banks_client
+        .process_transaction(transaction)
+        .await
+        .unwrap();
+}
+
+// Process instruction to invoke into another program
+fn invoker_stack_height(
+    _program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    _input: &[u8],
+) -> ProgramResult {
+    // if we can call `msg!` successfully, then InvokeContext exists as required
+    msg!("Processing invoker instruction before CPI");
+    let stack_height = get_stack_height();
+    assert_eq!(stack_height, 1);
+    let account_info_iter = &mut accounts.iter();
+    let invoked_program_info = next_account_info(account_info_iter)?;
+    invoke(
+        &Instruction::new_with_bytes(*invoked_program_info.key, &[], vec![]),
+        &[invoked_program_info.clone()],
+    )?;
+    msg!("Processing invoker instruction after CPI");
+    Ok(())
+}
+
+// Process instruction to be invoked by another program
+#[allow(clippy::unnecessary_wraps)]
+fn invoked_stack_height(
+    _program_id: &Pubkey,
+    _accounts: &[AccountInfo],
+    _input: &[u8],
+) -> ProgramResult {
+    let stack_height = get_stack_height();
+    assert_eq!(stack_height, 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn stack_height() {
+    let invoker_stack_height_program_id = Pubkey::new_unique();
+    let invoked_stack_height_program_id = Pubkey::new_unique();
+    let mut program_test = ProgramTest::new(
+        "invoker_stack_height",
+        invoker_stack_height_program_id,
+        processor!(invoker_stack_height),
+    );
+    program_test.add_program(
+        "invoked_stack_height",
+        invoked_stack_height_program_id,
+        processor!(invoked_stack_height),
+    );
+
+    let mut context = program_test.start_with_context().await;
+    let instructions = vec![Instruction::new_with_bytes(
+        invoker_stack_height_program_id,
+        &[],
+        vec![AccountMeta::new_readonly(
+            invoked_stack_height_program_id,
+            false,
+        )],
+    )];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
         context.last_blockhash,
     );
 

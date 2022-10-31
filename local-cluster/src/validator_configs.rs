@@ -31,9 +31,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         halt_on_known_validators_accounts_hash_mismatch: config
             .halt_on_known_validators_accounts_hash_mismatch,
         accounts_hash_fault_injection_slots: config.accounts_hash_fault_injection_slots,
-        no_rocksdb_compaction: config.no_rocksdb_compaction,
-        rocksdb_compaction_interval: config.rocksdb_compaction_interval,
-        rocksdb_max_compaction_jitter: config.rocksdb_max_compaction_jitter,
         accounts_hash_interval_slots: config.accounts_hash_interval_slots,
         max_genesis_archive_unpacked_size: config.max_genesis_archive_unpacked_size,
         wal_recovery_mode: config.wal_recovery_mode.clone(),

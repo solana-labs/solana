@@ -257,7 +257,7 @@ Returns all information associated with the account of provided Pubkey
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -309,7 +309,8 @@ Response:
       "executable": false,
       "lamports": 1000000000,
       "owner": "11111111111111111111111111111111",
-      "rentEpoch": 2
+      "rentEpoch": 2,
+      "space": 80
     }
   },
   "id": 1
@@ -360,7 +361,8 @@ Response:
       "executable": false,
       "lamports": 1000000000,
       "owner": "11111111111111111111111111111111",
-      "rentEpoch": 2
+      "rentEpoch": 2,
+      "space": 80
     }
   },
   "id": 1
@@ -1795,7 +1797,7 @@ Returns the account information for a list of Pubkeys.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -1849,18 +1851,20 @@ Result:
     },
     "value": [
       {
-        "data": ["AAAAAAEAAAACtzNsyJrW0g==", "base64"],
+        "data": ["", "base64"],
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 16
       },
       {
         "data": ["", "base64"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 0
       }
     ]
   },
@@ -1909,14 +1913,16 @@ Result:
         "executable": false,
         "lamports": 1000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 80
       },
       {
         "data": ["", "base58"],
         "executable": false,
         "lamports": 5000000000,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 2
+        "rentEpoch": 2,
+        "space": 0
       }
     ]
   },
@@ -1938,7 +1944,7 @@ Returns all accounts owned by the provided program Pubkey
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `filters: <array>` - filter results using up to 4 [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
   - (optional) `withContext: bool` - wrap the result in an RpcResponse JSON object.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
@@ -1990,7 +1996,8 @@ Result:
         "executable": false,
         "lamports": 15298080,
         "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-        "rentEpoch": 28
+        "rentEpoch": 28,
+        "space": 16
       },
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
@@ -2041,7 +2048,8 @@ Result:
         "executable": false,
         "lamports": 15298080,
         "owner": "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T",
-        "rentEpoch": 28
+        "rentEpoch": 28,
+        "space": 42
       },
       "pubkey": "CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"
     }
@@ -2151,23 +2159,23 @@ Result:
   "result": [
     {
       "slot": 348125,
-      "prioritizationFee": 0,
+      "prioritizationFee": 0
     },
     {
       "slot": 348126,
-      "prioritizationFee": 1000,
+      "prioritizationFee": 1000
     },
     {
       "slot": 348127,
-      "prioritizationFee": 500,
+      "prioritizationFee": 500
     },
     {
       "slot": 348128,
-      "prioritizationFee": 0,
+      "prioritizationFee": 0
     },
     {
       "slot": 348129,
-      "prioritizationFee": 1234,
+      "prioritizationFee": 1234
     }
   ],
   "id": 1
@@ -2716,7 +2724,7 @@ Returns all SPL Token accounts by approved Delegate.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -2795,7 +2803,8 @@ Result:
           "executable": false,
           "lamports": 1726080,
           "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "rentEpoch": 4
+          "rentEpoch": 4,
+          "space": 165
         },
         "pubkey": "28YTZEwqtMHWrhWcvv34se7pjS7wctgqzCPB3gReCFKp"
       }
@@ -2822,7 +2831,7 @@ Returns all SPL Token accounts by token owner.
     "base64" will return base64 encoded data for Account data of any size.
     "base64+zstd" compresses the Account data using [Zstandard](https://facebook.github.io/zstd/) and base64-encodes the result.
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to "base64" encoding, detectable when the `data` field is type `<string>`.
-  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; only available for "base58", "base64" or "base64+zstd" encodings.
+  - (optional) `dataSlice: <object>` - limit the returned account data using the provided `offset: <usize>` and `length: <usize>` fields; has no effect on parsed account data.
   - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
@@ -2902,7 +2911,8 @@ Result:
           "executable": false,
           "lamports": 1726080,
           "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-          "rentEpoch": 4
+          "rentEpoch": 4,
+          "space": 165
         },
         "pubkey": "C2gJg6tKpQs41PRS1nC8aw3ZKNZK3HQQZGVrDFDup5nx"
       }
@@ -3620,10 +3630,7 @@ Result:
         "Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
       ],
       "returnData": {
-        "data": [
-          "Kg==",
-          "base64"
-        ],
+        "data": ["Kg==", "base64"],
         "programId": "83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri"
       },
       "unitsConsumed": 2366
@@ -3716,7 +3723,8 @@ Base58 encoding:
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 635
+        "rentEpoch": 635,
+        "space": 80
       }
     },
     "subscription": 23784
@@ -3752,7 +3760,8 @@ Parsed-JSON encoding:
         "executable": false,
         "lamports": 33594,
         "owner": "11111111111111111111111111111111",
-        "rentEpoch": 635
+        "rentEpoch": 635,
+        "space": 80
       }
     },
     "subscription": 23784
@@ -4151,7 +4160,7 @@ Example:
         "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
         "err": null,
         "logs": [
-          "BPF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
+          "SBF program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success"
         ]
       }
     },
@@ -4280,7 +4289,8 @@ Base58 encoding:
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
-          "rentEpoch": 636
+          "rentEpoch": 636,
+          "space": 80
         }
       }
     },
@@ -4319,7 +4329,8 @@ Parsed-JSON encoding:
           "executable": false,
           "lamports": 33594,
           "owner": "11111111111111111111111111111111",
-          "rentEpoch": 636
+          "rentEpoch": 636,
+          "space": 80
         }
       }
     },

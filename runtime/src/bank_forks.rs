@@ -296,12 +296,6 @@ impl BankForks {
                 "sending epoch accounts hash request, slot: {}",
                 eah_bank.slot()
             );
-            eah_bank
-                .rc
-                .accounts
-                .accounts_db
-                .epoch_accounts_hash_manager
-                .set_in_flight(eah_bank.slot());
 
             self.last_accounts_hash_slot = eah_bank.slot();
             let squash_timing = eah_bank.squash();
@@ -312,14 +306,30 @@ impl BankForks {
             total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
             is_root_bank_squashed = eah_bank.slot() == root;
 
+            eah_bank
+                .rc
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash_manager
+                .set_in_flight(eah_bank.slot());
             accounts_background_request_sender
                 .send_snapshot_request(SnapshotRequest {
                     snapshot_root_bank: Arc::clone(eah_bank),
                     status_cache_slot_deltas: Vec::default(),
                     request_type: SnapshotRequestType::EpochAccountsHash,
+                    enqueued: Instant::now(),
                 })
                 .expect("send epoch accounts hash request");
-        } else if let Some(bank) = banks.iter().find(|bank| {
+        }
+        drop(eah_banks);
+
+        // After checking for EAH requests, also check for regular snapshot requests.
+        //
+        // This is needed when a snapshot request occurs in a slot after an EAH request, and is
+        // part of the same set of `banks` in a single `set_root()` invocation.  While (very)
+        // unlikely for a validator with defaut snapshot intervals (and accounts hash verifier
+        // intervals), it *is* possible, and there are tests to exercise this possibility.
+        if let Some(bank) = banks.iter().find(|bank| {
             bank.slot() > self.last_accounts_hash_slot
                 && bank.block_height() % self.accounts_hash_interval_slots == 0
         }) {
@@ -347,6 +357,7 @@ impl BankForks {
                             snapshot_root_bank: Arc::clone(bank),
                             status_cache_slot_deltas,
                             request_type: SnapshotRequestType::Snapshot,
+                            enqueued: Instant::now(),
                         })
                     {
                         warn!(
@@ -361,8 +372,6 @@ impl BankForks {
             snapshot_time.stop();
             total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
-
-        drop(eah_banks);
 
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
