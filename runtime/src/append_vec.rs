@@ -114,6 +114,10 @@ impl<'a> StoredAccountMeta<'a> {
         })
     }
 
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.meta.pubkey
+    }
+
     fn sanitize(&self) -> bool {
         self.sanitize_executable() && self.sanitize_lamports()
     }
@@ -135,10 +139,6 @@ impl<'a> StoredAccountMeta<'a> {
         // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
         executable_byte
-    }
-
-    pub fn pubkey(&self) -> &Pubkey {
-        &self.meta.pubkey
     }
 }
 
