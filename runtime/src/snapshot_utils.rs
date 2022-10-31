@@ -2276,7 +2276,6 @@ pub fn package_and_archive_full_snapshot(
         accounts_package.slot,
         &bank.get_accounts_hash(),
         None,
-        None, // todo: this needs to be passed through
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2330,7 +2329,6 @@ pub fn package_and_archive_incremental_snapshot(
         accounts_package.slot,
         &bank.get_accounts_hash(),
         None,
-        None, // todo: this needs to be passed through
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());

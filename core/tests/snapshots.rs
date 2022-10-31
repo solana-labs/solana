@@ -280,7 +280,6 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
         None,
-        None,
     );
     let snapshot_package = SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
     snapshot_utils::archive_snapshot_package(
@@ -518,7 +517,6 @@ fn test_concurrent_snapshot_packaging(
                 accounts_package.slot,
                 &Hash::default(),
                 None,
-                None,
             );
             let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
             pending_snapshot_package
@@ -562,7 +560,6 @@ fn test_concurrent_snapshot_packaging(
         saved_snapshots_dir.path(),
         saved_slot,
         &Hash::default(),
-        None,
         None,
     );
 
