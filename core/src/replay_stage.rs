@@ -2559,6 +2559,8 @@ impl ReplayStage {
                     bank_complete_time.as_us(),
                 );
                 execute_timings.accumulate(&r_replay_stats.execute_timings);
+
+                bank.read_cost_tracker().unwrap().report_stats(bank.slot());
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
