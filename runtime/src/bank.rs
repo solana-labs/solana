@@ -3334,7 +3334,21 @@ impl Bank {
         F: Fn(&RewardCalculationEvent) + Send + Sync,
     {
         let stakes = self.stakes_cache.stakes();
-        let stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+        let mut stake_delegations: Vec<_> = stakes.stake_delegations().iter().collect();
+
+        stake_delegations.sort_by(|a, b| {
+            let x = a.1;
+            let y = b.1;
+            y.lamports().partial_cmp(&x.lamports()).unwrap()
+        });
+
+        let stake_delegations = if stake_delegations.len() > 600_000 {
+            (left, _) = stake_delegations.split_at(600_000);
+            left
+        } else {
+            &stake_delegations[..]
+        };
+
         // Obtain all unique voter pubkeys from stake delegations.
         fn merge(mut acc: HashSet<Pubkey>, other: HashSet<Pubkey>) -> HashSet<Pubkey> {
             if acc.len() < other.len() {
@@ -3343,6 +3357,7 @@ impl Bank {
             acc.extend(other);
             acc
         }
+
         let voter_pubkeys = thread_pool.install(|| {
             stake_delegations
                 .par_iter()
