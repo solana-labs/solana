@@ -318,9 +318,9 @@ EOF
     fi
     
     if ${TPU_CLIENT} then
-        args+=(--tpu-client)
+        args+=(--tpu_client)
     elif ${RPC_CLIENT} then
-        args+=(--rpc-client)
+        args+=(--rpc_client)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
