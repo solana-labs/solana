@@ -46,7 +46,9 @@
     "react-select": "^4.3.1",
     "superstruct": "^0.15.3",
     "swr": "^1.3.0",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "@popperjs/core": "^2.11.6",
+    "jquery": "^3.6.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^5.16.5",

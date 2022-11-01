@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter as Router } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 import "./scss/theme-dark.scss";
+import "jquery/dist/jquery.min.js";
+import "bootstrap/dist/js/bootstrap.min.js";
 import App from "./App";
 import { ClusterProvider } from "./providers/cluster";
 import { RichListProvider } from "./providers/richList";
