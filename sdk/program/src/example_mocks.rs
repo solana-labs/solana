@@ -155,7 +155,7 @@ pub mod solana_sdk {
     pub mod signature {
         use crate::pubkey::Pubkey;
 
-        #[derive(Default)]
+        #[derive(Default, Debug)]
         pub struct Signature;
 
         pub struct Keypair;
