@@ -6,29 +6,20 @@ export CI_LOCAL_RUN=true
 
 set -e
 
-case $(uname -o) in
-  */Linux)
-    export CI_OS_NAME=linux
-    ;;
-  *)
-    echo "local CI runs are only supported on Linux" 1>&2
-    exit 1
-    ;;
-esac
-
 steps=()
 steps+=(test-sanity)
 steps+=(shellcheck)
 steps+=(test-checks)
 steps+=(test-coverage)
 steps+=(test-stable)
-steps+=(test-stable-bpf)
+steps+=(test-stable-sbf)
 steps+=(test-stable-perf)
 steps+=(test-downstream-builds)
 steps+=(test-bench)
 steps+=(test-local-cluster)
 steps+=(test-local-cluster-flakey)
-steps+=(test-local-cluster-slow)
+steps+=(test-local-cluster-slow-1)
+steps+=(test-local-cluster-slow-2)
 
 step_index=0
 if [[ -n "$1" ]]; then

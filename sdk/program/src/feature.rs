@@ -18,7 +18,7 @@ use crate::{
 
 crate::declare_id!("Feature111111111111111111111111111111111111");
 
-#[derive(Default, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Feature {
     pub activated_at: Option<Slot>,
 }

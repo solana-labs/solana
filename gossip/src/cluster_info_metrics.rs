@@ -103,6 +103,8 @@ pub struct GossipStats {
     pub(crate) get_epoch_duration_no_working_bank: Counter,
     pub(crate) get_votes: Counter,
     pub(crate) get_votes_count: Counter,
+    pub(crate) gossip_listen_loop_iterations_since_last_report: Counter,
+    pub(crate) gossip_listen_loop_time: Counter,
     pub(crate) gossip_packets_dropped_count: Counter,
     pub(crate) gossip_ping_msg_verify_fail: Counter,
     pub(crate) gossip_pong_msg_verify_fail: Counter,
@@ -113,6 +115,8 @@ pub struct GossipStats {
     pub(crate) gossip_pull_request_verify_fail: Counter,
     pub(crate) gossip_pull_response_verify_fail: Counter,
     pub(crate) gossip_push_msg_verify_fail: Counter,
+    pub(crate) gossip_transmit_loop_iterations_since_last_report: Counter,
+    pub(crate) gossip_transmit_loop_time: Counter,
     pub(crate) handle_batch_ping_messages_time: Counter,
     pub(crate) handle_batch_pong_messages_time: Counter,
     pub(crate) handle_batch_prune_messages_time: Counter,
@@ -127,16 +131,20 @@ pub struct GossipStats {
     pub(crate) new_push_requests: Counter,
     pub(crate) new_push_requests_num: Counter,
     pub(crate) packets_received_count: Counter,
+    pub(crate) packets_received_ping_messages_count: Counter,
+    pub(crate) packets_received_pong_messages_count: Counter,
     pub(crate) packets_received_prune_messages_count: Counter,
     pub(crate) packets_received_pull_requests_count: Counter,
     pub(crate) packets_received_pull_responses_count: Counter,
     pub(crate) packets_received_push_messages_count: Counter,
+    pub(crate) packets_received_unknown_count: Counter,
     pub(crate) packets_received_verified_count: Counter,
     pub(crate) packets_sent_gossip_requests_count: Counter,
     pub(crate) packets_sent_prune_messages_count: Counter,
     pub(crate) packets_sent_pull_requests_count: Counter,
     pub(crate) packets_sent_pull_responses_count: Counter,
     pub(crate) packets_sent_push_messages_count: Counter,
+    pub(crate) process_gossip_packets_iterations_since_last_report: Counter,
     pub(crate) process_gossip_packets_time: Counter,
     pub(crate) process_prune: Counter,
     pub(crate) process_pull_requests: Counter,
@@ -385,6 +393,37 @@ pub(crate) fn submit_gossip_stats(
             stats.gossip_pull_request_dropped_requests.clear(),
             i64
         ),
+        (
+            "gossip_transmit_loop_time",
+            stats.gossip_transmit_loop_time.clear(),
+            i64
+        ),
+        (
+            "gossip_transmit_loop_iterations_since_last_report",
+            stats
+                .gossip_transmit_loop_iterations_since_last_report
+                .clear(),
+            i64
+        ),
+        (
+            "gossip_listen_loop_time",
+            stats.gossip_listen_loop_time.clear(),
+            i64
+        ),
+        (
+            "gossip_listen_loop_iterations_since_last_report",
+            stats
+                .gossip_listen_loop_iterations_since_last_report
+                .clear(),
+            i64
+        ),
+        (
+            "process_gossip_packets_iterations_since_last_report",
+            stats
+                .process_gossip_packets_iterations_since_last_report
+                .clear(),
+            i64
+        ),
     );
     datapoint_info!(
         "cluster_info_stats4",
@@ -455,6 +494,16 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         (
+            "packets_received_ping_messages_count",
+            stats.packets_received_ping_messages_count.clear(),
+            i64
+        ),
+        (
+            "packets_received_pong_messages_count",
+            stats.packets_received_pong_messages_count.clear(),
+            i64
+        ),
+        (
             "packets_received_prune_messages_count",
             stats.packets_received_prune_messages_count.clear(),
             i64
@@ -472,6 +521,11 @@ pub(crate) fn submit_gossip_stats(
         (
             "packets_received_push_messages_count",
             stats.packets_received_push_messages_count.clear(),
+            i64
+        ),
+        (
+            "packets_received_unknown_count",
+            stats.packets_received_unknown_count.clear(),
             i64
         ),
         (

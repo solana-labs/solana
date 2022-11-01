@@ -16,7 +16,7 @@ use {
     thiserror::Error,
 };
 
-#[derive(Error, Debug, Serialize, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Serialize, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum SystemError {
     #[error("an account with the same address already exists")]
     AccountAlreadyInUse,
@@ -44,7 +44,7 @@ impl<T> DecodeError<T> for SystemError {
     }
 }
 
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 pub enum NonceError {
     #[error("recent blockhash list is empty")]
     NoRecentBlockhashes,
@@ -62,7 +62,7 @@ impl<E> DecodeError<E> for NonceError {
     }
 }
 
-#[derive(Error, Debug, Clone, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 enum NonceErrorAdapter {
     #[error("recent blockhash list is empty")]
     NoRecentBlockhashes,
@@ -139,11 +139,27 @@ pub fn instruction_to_nonce_error(
     }
 }
 
-/// maximum permitted size of data: 10 MB
+/// Maximum permitted size of data: 10 MiB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
-#[frozen_abi(digest = "2xnDcizcPKKR7b624FeuuPd1zj5bmnkmVsBWgoKPTh4w")]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, AbiExample, AbiEnumVisitor)]
+/// Maximum permitted size of new allocations per transaction, in bytes
+///
+/// The value was chosen such at least one max sized account could be created,
+/// plus some additional resize allocations.
+pub const MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION: i64 =
+    MAX_PERMITTED_DATA_LENGTH as i64 * 2;
+
+// SBF program entrypoint assumes that the max account data length
+// will fit inside a u32. If this constant no longer fits in a u32,
+// the entrypoint deserialization code in the SDK must be updated.
+#[cfg(test)]
+static_assertions::const_assert!(MAX_PERMITTED_DATA_LENGTH <= u32::MAX as u64);
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_PERMITTED_DATA_LENGTH, 10_485_760);
+
+#[frozen_abi(digest = "5e22s2kFu9Do77hdcCyxyhuKHD8ThAB6Q6dNaLTCjL5M")]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 pub enum SystemInstruction {
     /// Create a new account
     ///
@@ -307,6 +323,13 @@ pub enum SystemInstruction {
         /// Owner to use to derive the funding account address
         from_owner: Pubkey,
     },
+
+    /// One-time idempotent upgrade of legacy nonce versions in order to bump
+    /// them out of chain blockhash domain.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Nonce account
+    UpgradeNonceAccount,
 }
 
 pub fn create_account(
@@ -565,8 +588,8 @@ pub fn create_nonce_account_with_seed(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 /// #   pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
@@ -655,7 +678,7 @@ pub fn create_nonce_account(
 /// setting it to a recent blockhash, the value of the nonce must be retreived
 /// and deserialized from the nonce account, and that value specified as the
 /// "recent blockhash". A nonce account can be deserialized with the
-/// [`solana_client::nonce_utils::data_from_account`][dfa] function.
+/// [`solana_rpc_client_nonce_utils::data_from_account`][dfa] function.
 ///
 /// For further description of durable transaction nonces see
 /// [`create_nonce_account`].
@@ -663,7 +686,7 @@ pub fn create_nonce_account(
 /// [`Message`]: crate::message::Message
 /// [`Message::new_with_nonce`]: crate::message::Message::new_with_nonce
 /// [`recent_blockhash`]: crate::message::Message::recent_blockhash
-/// [dfa]: https://docs.rs/solana-client/latest/solana_client/nonce_utils/fn.data_from_account.html
+/// [dfa]: https://docs.rs/solana-rpc-client-nonce-utils/latest/solana_rpc_client_nonce_utils/fn.data_from_account.html
 ///
 /// # Required signers
 ///
@@ -675,11 +698,9 @@ pub fn create_nonce_account(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::{
-///     rpc_client::RpcClient,
-///     nonce_utils,
-/// };
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// # use solana_program::example_mocks::solana_rpc_client_nonce_utils;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     message::Message,
 ///     pubkey::Pubkey,
@@ -735,8 +756,8 @@ pub fn create_nonce_account(
 ///     #   rent_epoch: 1,
 ///     # });
 ///     let nonce_account = client.get_account(nonce_account_pubkey)?;
-///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
-///     let blockhash = nonce_data.blockhash;
+///     let nonce_data = solana_rpc_client_nonce_utils::data_from_account(&nonce_account)?;
+///     let blockhash = nonce_data.blockhash();
 ///
 ///     tx.try_sign(&[payer], blockhash)?;
 ///
@@ -801,8 +822,8 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
@@ -883,8 +904,8 @@ pub fn withdraw_nonce_account(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
@@ -936,6 +957,17 @@ pub fn authorize_nonce_account(
     Instruction::new_with_bincode(
         system_program::id(),
         &SystemInstruction::AuthorizeNonceAccount(*new_authority),
+        account_metas,
+    )
+}
+
+/// One-time idempotent upgrade of legacy nonce versions in order to bump
+/// them out of chain blockhash domain.
+pub fn upgrade_nonce_account(nonce_pubkey: Pubkey) -> Instruction {
+    let account_metas = vec![AccountMeta::new(nonce_pubkey, /*is_signer:*/ false)];
+    Instruction::new_with_bincode(
+        system_program::id(),
+        &SystemInstruction::UpgradeNonceAccount,
         account_metas,
     )
 }

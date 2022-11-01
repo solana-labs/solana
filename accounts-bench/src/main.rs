@@ -10,12 +10,14 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             Accounts,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
     },
-    solana_sdk::{genesis_config::ClusterType, pubkey::Pubkey},
+    solana_sdk::{
+        genesis_config::ClusterType, pubkey::Pubkey, sysvar::epoch_schedule::EpochSchedule,
+    },
     std::{env, fs, path::PathBuf},
 };
 
@@ -108,7 +110,7 @@ fn main() {
     for x in 0..iterations {
         if clean {
             let mut time = Measure::start("clean");
-            accounts.accounts_db.clean_accounts(None, false, None);
+            accounts.accounts_db.clean_accounts_for_tests();
             time.stop();
             println!("{}", time);
             for slot in 0..num_slots {
@@ -118,21 +120,20 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results =
-                accounts
-                    .accounts_db
-                    .update_accounts_hash(0, &ancestors, &RentCollector::default());
+            let results = accounts
+                .accounts_db
+                .update_accounts_hash_for_tests(0, &ancestors, false, false);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
-                false,
+            let results_store = accounts.accounts_db.update_accounts_hash(
+                CalcAccountsHashDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
                 None,
-                false,
+                &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
+                true,
             );
             time_store.stop();
             if results != results_store {
@@ -155,6 +156,6 @@ fn main() {
         info!("update_accounts_hash(us),{}", x);
     }
     for x in elapsed_store {
-        info!("calculate_accounts_hash_without_index(us),{}", x);
+        info!("calculate_accounts_hash_from_storages(us),{}", x);
     }
 }

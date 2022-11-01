@@ -28,7 +28,7 @@ pub(crate) struct IpEchoServerMessage {
     udp_ports: [u16; MAX_PORT_COUNT_PER_MESSAGE], // Fixed size list of ports to avoid vec serde
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IpEchoServerResponse {
     // Public IP address of request echoed back to the node.
     pub(crate) address: IpAddr,

@@ -13,7 +13,7 @@ Test failed during step:
 ${STEP}
 
 Failure occured when running the following command:
-$(eval echo "$@")"
+$*"
   fi
 
 # shellcheck disable=SC2034
@@ -22,6 +22,9 @@ $(eval echo "$@")"
     upload_results_to_slack
   fi
 
+  if [[ "$UPLOAD_RESULTS_TO_DISCORD" = "true" ]]; then
+    upload_results_to_discord
+  fi
 
   (
     execution_step "Collecting Logfiles from Nodes"

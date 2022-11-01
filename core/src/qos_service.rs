@@ -72,7 +72,7 @@ impl QosService {
         let metrics_clone = Arc::clone(&metrics);
         let reporting_thread = Some(
             Builder::new()
-                .name("solana-qos-service-metrics-repoting".to_string())
+                .name("solQosSvcMetr".to_string())
                 .spawn(move || {
                     Self::reporting_loop(running_flag_clone, metrics_clone, report_receiver);
                 })
@@ -392,7 +392,7 @@ struct QosServiceMetricsStats {
     /// accumulated estimated builtin programs Compute Units to be packed into block
     estimated_builtins_execute_cu: AtomicU64,
 
-    /// accumulated estimated BPF program Compute Units to be packed into block
+    /// accumulated estimated SBF program Compute Units to be packed into block
     estimated_bpf_execute_cu: AtomicU64,
 
     /// accumulated actual program Compute Units that have been packed into block

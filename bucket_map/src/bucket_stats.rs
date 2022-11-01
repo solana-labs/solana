@@ -8,6 +8,7 @@ pub struct BucketStats {
     pub new_file_us: AtomicU64,
     pub flush_file_us: AtomicU64,
     pub mmap_us: AtomicU64,
+    pub find_entry_mut_us: AtomicU64,
 }
 
 #[derive(Debug, Default)]

@@ -1,4 +1,10 @@
 fn main() -> Result<(), std::io::Error> {
+    const PROTOC_ENVAR: &str = "PROTOC";
+    if std::env::var(PROTOC_ENVAR).is_err() {
+        #[cfg(not(windows))]
+        std::env::set_var(PROTOC_ENVAR, protobuf_src::protoc());
+    }
+
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
     let out_dir = manifest_dir.join("../proto");

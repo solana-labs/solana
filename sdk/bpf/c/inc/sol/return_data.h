@@ -22,7 +22,16 @@ extern "C"
  * @param bytes byte array to set
  * @param bytes_len length of byte array. This may not exceed MAX_RETURN_DATA.
  */
-void sol_set_return_data(const uint8_t *bytes, uint64_t bytes_len);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/return_data.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+void sol_set_return_data(const uint8_t *, uint64_t);
+#else
+typedef void(*sol_set_return_data_pointer_type)(const uint8_t *, uint64_t);
+static void sol_set_return_data(const uint8_t * arg1, uint64_t arg2) {
+  sol_set_return_data_pointer_type sol_set_return_data_pointer = (sol_set_return_data_pointer_type) 2720453611;
+  sol_set_return_data_pointer(arg1, arg2);
+}
+#endif
 
 /**
  * Get the return data
@@ -32,7 +41,16 @@ void sol_set_return_data(const uint8_t *bytes, uint64_t bytes_len);
  * @param program_id the program_id which set the return data. Only set if there was some return data (the function returns non-zero).
  * @param result length of return data (may exceed bytes_len if the return data is longer)
  */
-uint64_t sol_get_return_data(const uint8_t *bytes, uint64_t bytes_len, SolPubkey *program_id);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/return_data.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+uint64_t sol_get_return_data(uint8_t *, uint64_t, SolPubkey *);
+#else
+typedef uint64_t(*sol_get_return_data_pointer_type)(uint8_t *, uint64_t, SolPubkey *);
+static uint64_t sol_get_return_data(uint8_t * arg1, uint64_t arg2, SolPubkey * arg3) {
+  sol_get_return_data_pointer_type sol_get_return_data_pointer = (sol_get_return_data_pointer_type) 1562527204;
+  return sol_get_return_data_pointer(arg1, arg2, arg3);
+}
+#endif
 
 #ifdef __cplusplus
 }

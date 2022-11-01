@@ -7,7 +7,7 @@
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::{
         elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
@@ -40,7 +40,7 @@ pub struct ZeroBalanceProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl ZeroBalanceProof {
     /// Zero-balance proof constructor.
     ///
@@ -61,6 +61,8 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Self {
+        transcript.zero_balance_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_keypair.public.get_point();
         let s = elgamal_keypair.secret.get_scalar();
@@ -98,6 +100,8 @@ impl ZeroBalanceProof {
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
     ) -> Result<(), ZeroBalanceProofError> {
+        transcript.zero_balance_proof_domain_sep();
+
         // extract the relevant scalar and Ristretto points from the input
         let P = elgamal_pubkey.get_point();
         let C = ciphertext.commitment.get_point();
@@ -112,7 +116,7 @@ impl ZeroBalanceProof {
 
         let w_negated = -&w;
 
-        // decompress R or return verification error
+        // decompress Y or return verification error
         let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::Format)?;
         let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::Format)?;
 
@@ -152,6 +156,10 @@ impl ZeroBalanceProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
+        if bytes.len() != 96 {
+            return Err(ZeroBalanceProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 96];
         let (Y_P, Y_D, z) = array_refs![bytes, 32, 32, 32];
 

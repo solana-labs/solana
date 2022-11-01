@@ -19,7 +19,7 @@ log-*.txt
 log-*/
 
 # intellij files
-/.idea/
+.idea/
 /solana.iml
 /.vscode/
 

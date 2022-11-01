@@ -14,7 +14,7 @@ pub type PohTimingReceiver = Receiver<SlotPohTimingInfo>;
 pub type PohTimingSender = Sender<SlotPohTimingInfo>;
 
 /// PohTimingPoint. Each TimingPoint is annotated with a timestamp in milliseconds.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PohTimingPoint {
     PohSlotStart(u64),
     PohSlotEnd(u64),

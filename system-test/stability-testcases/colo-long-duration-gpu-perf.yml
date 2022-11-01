@@ -3,6 +3,7 @@ steps:
     label: "COLO 1 hour performance & stability GPU enabled"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "colo"
       TESTNET_TAG: "colo-perf-gpu-enabled"
       ENABLE_GPU: "true"
@@ -13,4 +14,4 @@ steps:
       ADDITIONAL_FLAGS: ""
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=colo-deploy"
+      queue: "colo-deploy"

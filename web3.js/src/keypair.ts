@@ -1,5 +1,4 @@
-import nacl from 'tweetnacl';
-
+import {generateKeypair, getPublicKey, Ed25519Keypair} from './utils/ed25519';
 import {PublicKey} from './publickey';
 
 /**
@@ -7,14 +6,6 @@ import {PublicKey} from './publickey';
  */
 export interface Signer {
   publicKey: PublicKey;
-  secretKey: Uint8Array;
-}
-
-/**
- * Ed25519 Keypair
- */
-export interface Ed25519Keypair {
-  publicKey: Uint8Array;
   secretKey: Uint8Array;
 }
 
@@ -31,18 +22,14 @@ export class Keypair {
    * @param keypair ed25519 keypair
    */
   constructor(keypair?: Ed25519Keypair) {
-    if (keypair) {
-      this._keypair = keypair;
-    } else {
-      this._keypair = nacl.sign.keyPair();
-    }
+    this._keypair = keypair ?? generateKeypair();
   }
 
   /**
    * Generate a new random keypair
    */
   static generate(): Keypair {
-    return new Keypair(nacl.sign.keyPair());
+    return new Keypair(generateKeypair());
   }
 
   /**
@@ -61,16 +48,20 @@ export class Keypair {
     secretKey: Uint8Array,
     options?: {skipValidation?: boolean},
   ): Keypair {
-    const keypair = nacl.sign.keyPair.fromSecretKey(secretKey);
+    if (secretKey.byteLength !== 64) {
+      throw new Error('bad secret key size');
+    }
+    const publicKey = secretKey.slice(32, 64);
     if (!options || !options.skipValidation) {
-      const encoder = new TextEncoder();
-      const signData = encoder.encode('@solana/web3.js-validation-v1');
-      const signature = nacl.sign.detached(signData, keypair.secretKey);
-      if (!nacl.sign.detached.verify(signData, signature, keypair.publicKey)) {
-        throw new Error('provided secretKey is invalid');
+      const privateScalar = secretKey.slice(0, 32);
+      const computedPublicKey = getPublicKey(privateScalar);
+      for (let ii = 0; ii < 32; ii++) {
+        if (publicKey[ii] !== computedPublicKey[ii]) {
+          throw new Error('provided secretKey is invalid');
+        }
       }
     }
-    return new Keypair(keypair);
+    return new Keypair({publicKey, secretKey});
   }
 
   /**
@@ -79,7 +70,11 @@ export class Keypair {
    * @param seed seed byte array
    */
   static fromSeed(seed: Uint8Array): Keypair {
-    return new Keypair(nacl.sign.keyPair.fromSeed(seed));
+    const publicKey = getPublicKey(seed);
+    const secretKey = new Uint8Array(64);
+    secretKey.set(seed);
+    secretKey.set(publicKey, 32);
+    return new Keypair({publicKey, secretKey});
   }
 
   /**
@@ -93,6 +88,6 @@ export class Keypair {
    * The raw secret key for this keypair
    */
   get secretKey(): Uint8Array {
-    return this._keypair.secretKey;
+    return new Uint8Array(this._keypair.secretKey);
   }
 }

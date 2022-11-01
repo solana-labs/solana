@@ -16,7 +16,7 @@ use {
 };
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 // one instance of this per item in the index
 // stored in the index bucket
 pub struct IndexEntry {

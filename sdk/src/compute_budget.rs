@@ -17,12 +17,13 @@ crate::declare_id!("ComputeBudget111111111111111111111111111111");
     Debug,
     Deserialize,
     PartialEq,
+    Eq,
     Serialize,
 )]
 pub enum ComputeBudgetInstruction {
-    /// Request a specific maximum number of compute units the transaction is
-    /// allowed to consume and an additional fee to pay.
-    RequestUnits {
+    /// Deprecated
+    // TODO: after feature remove_deprecated_request_unit_ix::id() is activated, replace it with 'unused'
+    RequestUnitsDeprecated {
         /// Units to request
         units: u32,
         /// Additional fee to add
@@ -30,29 +31,29 @@ pub enum ComputeBudgetInstruction {
     },
     /// Request a specific transaction-wide program heap region size in bytes.
     /// The value requested must be a multiple of 1024. This new heap region
-    /// size applies to each program executed, including all calls to CPIs.
+    /// size applies to each program executed in the transaction, including all
+    /// calls to CPIs.
     RequestHeapFrame(u32),
+    /// Set a specific compute unit limit that the transaction is allowed to consume.
+    SetComputeUnitLimit(u32),
+    /// Set a compute unit price in "micro-lamports" to pay a higher transaction
+    /// fee for higher transaction prioritization.
+    SetComputeUnitPrice(u64),
 }
 
 impl ComputeBudgetInstruction {
-    /// Create a `ComputeBudgetInstruction::RequestUnits` `Instruction`
-    pub fn request_units(units: u32, additional_fee: u32) -> Instruction {
-        Instruction::new_with_borsh(
-            id(),
-            &ComputeBudgetInstruction::RequestUnits {
-                units,
-                additional_fee,
-            },
-            vec![],
-        )
-    }
-
     /// Create a `ComputeBudgetInstruction::RequestHeapFrame` `Instruction`
     pub fn request_heap_frame(bytes: u32) -> Instruction {
-        Instruction::new_with_borsh(
-            id(),
-            &ComputeBudgetInstruction::RequestHeapFrame(bytes),
-            vec![],
-        )
+        Instruction::new_with_borsh(id(), &Self::RequestHeapFrame(bytes), vec![])
+    }
+
+    /// Create a `ComputeBudgetInstruction::SetComputeUnitLimit` `Instruction`
+    pub fn set_compute_unit_limit(units: u32) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetComputeUnitLimit(units), vec![])
+    }
+
+    /// Create a `ComputeBudgetInstruction::SetComputeUnitPrice` `Instruction`
+    pub fn set_compute_unit_price(micro_lamports: u64) -> Instruction {
+        Instruction::new_with_borsh(id(), &Self::SetComputeUnitPrice(micro_lamports), vec![])
     }
 }

@@ -25,6 +25,7 @@ A node sends a push message to tells the cluster it has information to share. No
 Upon receiving a push message, a node examines the message for:
 
 1. Duplication: if the message has been seen before, the node drops the message and may respond with `PushMessagePrune` if forwarded from a low staked node
+
 2. New data: if the message is new to the node
 
    - Stores the new information with an updated version in its cluster info and purges any previous older value

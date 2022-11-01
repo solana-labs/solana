@@ -236,6 +236,16 @@ pub fn find_program_address(
 }
 ```
 
+ **Warning**: Because of the way the seeds are hashed there is a potential for
+ program address collisions for the same program id.  The seeds are hashed
+ sequentially which means that seeds {"abcdef"}, {"abc", "def"}, and {"ab",
+ "cd", "ef"} will all result in the same program address given the same program
+ id. Since the chance of collision is local to a given program id, the developer
+ of that program must take care to choose seeds that do not collide with each
+ other. For seed schemes that are susceptible to this type of hash collision, a
+ common remedy is to insert separators between seeds, e.g. transforming {"abc",
+ "def"} into {"abc", "-", "def"}.
+
 ### Using program addresses
 
 Clients can use the `create_program_address` function to generate a destination

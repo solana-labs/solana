@@ -42,21 +42,21 @@
 //! transaction nonce]_ mechanism instead of a recent blockhash to ensure unique
 //! transactions.
 //!
-//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
+//! [`RpcClient::get_latest_blockhash`]: https://docs.rs/solana-rpc-client/latest/solana_rpc_client/rpc_client/struct.RpcClient.html#method.get_latest_blockhash
 //! [durable transaction nonce]: https://docs.solana.com/implemented-proposals/durable-tx-nonces
 //!
 //! # Examples
 //!
-//! This example uses the [`solana_client`] and [`anyhow`] crates.
+//! This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
 //!
-//! [`solana_client`]: https://docs.rs/solana-client
+//! [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
 //! [`anyhow`]: https://docs.rs/anyhow
 //!
 //! ```
-//! # use solana_sdk::example_mocks::solana_client;
+//! # use solana_sdk::example_mocks::solana_rpc_client;
 //! use anyhow::Result;
 //! use borsh::{BorshSerialize, BorshDeserialize};
-//! use solana_client::rpc_client::RpcClient;
+//! use solana_rpc_client::rpc_client::RpcClient;
 //! use solana_sdk::{
 //!      instruction::Instruction,
 //!      message::Message,
@@ -129,7 +129,7 @@ use {
     serde::Serialize,
     solana_program::{system_instruction::SystemInstruction, system_program},
     solana_sdk::feature_set,
-    std::{result, sync::Arc},
+    std::result,
 };
 
 mod error;
@@ -138,7 +138,7 @@ mod versioned;
 
 pub use {error::*, sanitized::*, versioned::*};
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TransactionVerificationMode {
     HashOnly,
     HashAndVerifyPrecompiles,
@@ -206,16 +206,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -285,16 +285,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -364,16 +364,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -440,16 +440,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -648,16 +648,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -789,16 +789,16 @@ impl Transaction {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_client`] and [`anyhow`] crates.
+    /// This example uses the [`solana_rpc_client`] and [`anyhow`] crates.
     ///
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
-    /// # use solana_sdk::example_mocks::solana_client;
+    /// # use solana_sdk::example_mocks::solana_rpc_client;
     /// use anyhow::Result;
     /// use borsh::{BorshSerialize, BorshDeserialize};
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      instruction::Instruction,
     ///      message::Message,
@@ -1014,7 +1014,7 @@ impl Transaction {
     }
 
     /// Verify the precompiled programs in this transaction.
-    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &feature_set::FeatureSet) -> Result<()> {
         for instruction in &self.message().instructions {
             // The Transaction may not be sanitized at this point
             if instruction.program_id_index as usize >= self.message().account_keys.len() {
@@ -1095,7 +1095,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
             )
             // Nonce account is writable
             && matches!(
-                instruction.accounts.get(0),
+                instruction.accounts.first(),
                 Some(index) if message.is_writable(*index as usize)
             )
         })
@@ -1106,7 +1106,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
     ix: &CompiledInstruction,
     tx: &'a Transaction,
 ) -> Option<&'a Pubkey> {
-    ix.accounts.get(0).and_then(|idx| {
+    ix.accounts.first().and_then(|idx| {
         let idx = *idx as usize;
         tx.message().account_keys.get(idx)
     })

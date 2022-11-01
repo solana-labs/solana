@@ -21,11 +21,16 @@ extern "C" {
  * @param bytes_len Number of byte arrays
  * @param result 32 byte array to hold the result
  */
-uint64_t sol_blake3(
-    const SolBytes *bytes,
-    int bytes_len,
-    const uint8_t *result
-);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/blake3.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+uint64_t sol_blake3(const SolBytes *, int, const uint8_t *);
+#else
+typedef uint64_t(*sol_blake3_pointer_type)(const SolBytes *, int, const uint8_t *);
+static uint64_t sol_blake3(const SolBytes * arg1, int arg2, const uint8_t * arg3) {
+  sol_blake3_pointer_type sol_blake3_pointer = (sol_blake3_pointer_type) 390877474;
+  return sol_blake3_pointer(arg1, arg2, arg3);
+}
+#endif
 
 #ifdef __cplusplus
 }

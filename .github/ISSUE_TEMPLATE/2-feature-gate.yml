@@ -1,0 +1,84 @@
+name: Feature Gate Tracker
+description: Track the development and status of an on-chain feature
+title: "Feature Gate: "
+labels: ["feature-gate"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Steps to add a new feature are outlined below. Note that these steps only cover
+        the process of getting a feature into the core Solana code.
+
+        - For features that are unambiguously good (ie bug fixes), these steps are sufficient.
+
+        - For features that should go up for community vote (ie fee structure changes), more
+        information on the additional steps to follow can be found at:
+        <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
+
+        1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
+            - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
+            through these steps, the PR process will facilitate a keypair holder being picked. That
+            person will generate the keypair, provide pubkey for PR, and ultimately enable the feature.
+
+        2. Add a public module for the feature, specifying keypair pubkey as the id with
+        `solana_sdk::declare_id!()` within the module. Additionally, add an entry to `FEATURE_NAMES` map.
+
+        3. Add desired logic to check for and switch on feature availability.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: Describe why the new feature gate is needed and any necessary conditions for its activation
+    validations:
+      required: true
+  - type: input
+    id: id
+    attributes:
+      label: Feature ID
+      description: The public key of the feature account
+    validations:
+      required: true
+  - type: dropdown
+    id: activation-method
+    attributes:
+      label: Activation Method
+      options:
+        - Single Core Contributor
+        - Staked Validator Vote
+    validations:
+      required: true
+  - type: input
+    id: beta-version
+    attributes:
+      label: Minimum Beta Version
+      placeholder: Edit this response when feature has landed in a beta release
+    validations:
+      required: false
+  - type: input
+    id: stable-version
+    attributes:
+      label: Minimum Stable Version
+      placeholder: Edit this response when feature has landed in a stable release
+    validations:
+      required: false
+  - type: input
+    id: testnet
+    attributes:
+      label: Testnet Activation Epoch
+      placeholder: Edit this response when feature is activated on this cluster
+    validations:
+      required: false
+  - type: input
+    id: devnet
+    attributes:
+      label: Devnet Activation Epoch
+      placeholder: Edit this response when feature is activated on this cluster
+    validations:
+      required: false
+  - type: input
+    id: mainnet-beta
+    attributes:
+      label: Mainnet-Beta Activation Epoch
+      placeholder: Edit this response when feature is activated on this cluster
+    validations:
+      required: false

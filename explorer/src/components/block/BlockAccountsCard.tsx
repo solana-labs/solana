@@ -1,6 +1,8 @@
 import React from "react";
-import { BlockResponse, PublicKey } from "@solana/web3.js";
+import { PublicKey, VersionedBlockResponse } from "@solana/web3.js";
 import { Address } from "components/common/Address";
+import { Link } from "react-router-dom";
+import { clusterPath } from "utils/url";
 
 type AccountStats = {
   reads: number;
@@ -9,7 +11,13 @@ type AccountStats = {
 
 const PAGE_SIZE = 25;
 
-export function BlockAccountsCard({ block }: { block: BlockResponse }) {
+export function BlockAccountsCard({
+  block,
+  blockSlot,
+}: {
+  block: VersionedBlockResponse;
+  blockSlot: number;
+}) {
   const [numDisplayed, setNumDisplayed] = React.useState(10);
   const totalTransactions = block.transactions.length;
 
@@ -18,9 +26,12 @@ export function BlockAccountsCard({ block }: { block: BlockResponse }) {
     block.transactions.forEach((tx) => {
       const message = tx.transaction.message;
       const txSet = new Map<string, boolean>();
-      message.instructions.forEach((ix) => {
-        ix.accounts.forEach((index) => {
-          const address = message.accountKeys[index].toBase58();
+      const accountKeys = message.getAccountKeys({
+        accountKeysFromLookups: tx.meta?.loadedAddresses,
+      });
+      message.compiledInstructions.forEach((ix) => {
+        ix.accountKeyIndexes.forEach((index) => {
+          const address = accountKeys.get(index)!.toBase58();
           txSet.set(address, message.isAccountWritable(index));
         });
       });
@@ -76,7 +87,16 @@ export function BlockAccountsCard({ block }: { block: BlockResponse }) {
                 return (
                   <tr key={address}>
                     <td>
-                      <Address pubkey={new PublicKey(address)} link />
+                      <Link
+                        to={clusterPath(
+                          `/block/${blockSlot}`,
+                          new URLSearchParams(
+                            `accountFilter=${address}&filter=all`
+                          )
+                        )}
+                      >
+                        <Address pubkey={new PublicKey(address)} />
+                      </Link>
                     </td>
                     <td>{writes}</td>
                     <td>{reads}</td>

@@ -38,6 +38,7 @@ pub(crate) struct ReadOnlyAccountsCache {
     data_size: AtomicUsize,
     hits: AtomicU64,
     misses: AtomicU64,
+    evicts: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
@@ -49,7 +50,13 @@ impl ReadOnlyAccountsCache {
             data_size: AtomicUsize::default(),
             hits: AtomicU64::default(),
             misses: AtomicU64::default(),
+            evicts: AtomicU64::default(),
         }
+    }
+
+    /// true if pubkey is in cache at slot
+    pub fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
+        self.cache.contains_key(&(*pubkey, slot))
     }
 
     pub(crate) fn load(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
@@ -102,13 +109,16 @@ impl ReadOnlyAccountsCache {
             }
         };
         // Evict entries from the front of the queue.
+        let mut num_evicts = 0;
         while self.data_size.load(Ordering::Relaxed) > self.max_data_size {
             let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
                 None => break,
                 Some(key) => *key,
             };
+            num_evicts += 1;
             self.remove(pubkey, slot);
         }
+        self.evicts.fetch_add(num_evicts, Ordering::Relaxed);
     }
 
     pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
@@ -130,10 +140,12 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
-        (hits, misses)
+        let evicts = self.evicts.swap(0, Ordering::Relaxed);
+
+        (hits, misses, evicts)
     }
 }
 

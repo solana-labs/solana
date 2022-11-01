@@ -1,9 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
 
-pub use {crate::extract_memos::extract_and_fmt_memos, solana_runtime::bank::RewardType};
+pub use {crate::extract_memos::extract_and_fmt_memos, solana_sdk::reward_type::RewardType};
 use {
     crate::{
-        parse_accounts::{parse_accounts, parse_static_accounts, ParsedAccount},
+        option_serializer::OptionSerializer,
+        parse_accounts::{parse_legacy_message_accounts, parse_v0_message_accounts, ParsedAccount},
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
@@ -16,7 +17,6 @@ use {
             AccountKeys, Message, MessageHeader, VersionedMessage,
         },
         pubkey::Pubkey,
-        sanitize::Sanitize,
         signature::Signature,
         transaction::{
             Result as TransactionResult, Transaction, TransactionError, TransactionVersion,
@@ -34,7 +34,9 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod extract_memos;
+pub mod option_serializer;
 pub mod parse_accounts;
+pub mod parse_address_lookup_table;
 pub mod parse_associated_token;
 pub mod parse_bpf_loader;
 pub mod parse_instruction;
@@ -71,6 +73,11 @@ pub trait EncodableWithMeta {
         meta: &TransactionStatusMeta,
     ) -> Self::Encoded;
     fn json_encode(&self) -> Self::Encoded;
+}
+
+trait JsonAccounts {
+    type Encoded;
+    fn build_json_accounts(&self) -> Self::Encoded;
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -114,6 +121,7 @@ pub enum TransactionDetails {
     Full,
     Signatures,
     None,
+    Accounts,
 }
 
 impl Default for TransactionDetails {
@@ -123,7 +131,7 @@ impl Default for TransactionDetails {
 }
 
 /// A duplicate representation of an Instruction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiInstruction {
     Compiled(UiCompiledInstruction),
@@ -131,19 +139,23 @@ pub enum UiInstruction {
 }
 
 impl UiInstruction {
-    fn parse(instruction: &CompiledInstruction, account_keys: &AccountKeys) -> Self {
+    fn parse(
+        instruction: &CompiledInstruction,
+        account_keys: &AccountKeys,
+        stack_height: Option<u32>,
+    ) -> Self {
         let program_id = &account_keys[instruction.program_id_index as usize];
-        if let Ok(parsed_instruction) = parse(program_id, instruction, account_keys) {
+        if let Ok(parsed_instruction) = parse(program_id, instruction, account_keys, stack_height) {
             UiInstruction::Parsed(UiParsedInstruction::Parsed(parsed_instruction))
         } else {
             UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
-                UiPartiallyDecodedInstruction::from(instruction, account_keys),
+                UiPartiallyDecodedInstruction::from(instruction, account_keys, stack_height),
             ))
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiParsedInstruction {
     Parsed(ParsedInstruction),
@@ -151,35 +163,42 @@ pub enum UiParsedInstruction {
 }
 
 /// A duplicate representation of a CompiledInstruction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiCompiledInstruction {
     pub program_id_index: u8,
     pub accounts: Vec<u8>,
     pub data: String,
+    pub stack_height: Option<u32>,
 }
 
-impl From<&CompiledInstruction> for UiCompiledInstruction {
-    fn from(instruction: &CompiledInstruction) -> Self {
+impl UiCompiledInstruction {
+    fn from(instruction: &CompiledInstruction, stack_height: Option<u32>) -> Self {
         Self {
             program_id_index: instruction.program_id_index,
             accounts: instruction.accounts.clone(),
-            data: bs58::encode(instruction.data.clone()).into_string(),
+            data: bs58::encode(&instruction.data).into_string(),
+            stack_height,
         }
     }
 }
 
 /// A partially decoded CompiledInstruction that includes explicit account addresses
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiPartiallyDecodedInstruction {
     pub program_id: String,
     pub accounts: Vec<String>,
     pub data: String,
+    pub stack_height: Option<u32>,
 }
 
 impl UiPartiallyDecodedInstruction {
-    fn from(instruction: &CompiledInstruction, account_keys: &AccountKeys) -> Self {
+    fn from(
+        instruction: &CompiledInstruction,
+        account_keys: &AccountKeys,
+        stack_height: Option<u32>,
+    ) -> Self {
         Self {
             program_id: account_keys[instruction.program_id_index as usize].to_string(),
             accounts: instruction
@@ -188,19 +207,28 @@ impl UiPartiallyDecodedInstruction {
                 .map(|&i| account_keys[i as usize].to_string())
                 .collect(),
             data: bs58::encode(instruction.data.clone()).into_string(),
+            stack_height,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerInstructions {
     /// Transaction instruction index
     pub index: u8,
     /// List of inner instructions
-    pub instructions: Vec<CompiledInstruction>,
+    pub instructions: Vec<InnerInstruction>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InnerInstruction {
+    /// Compiled instruction
+    pub instruction: CompiledInstruction,
+    /// Invocation stack height of the instruction,
+    pub stack_height: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiInnerInstructions {
     /// Transaction instruction index
@@ -216,7 +244,14 @@ impl UiInnerInstructions {
             instructions: inner_instructions
                 .instructions
                 .iter()
-                .map(|ix| UiInstruction::parse(ix, account_keys))
+                .map(
+                    |InnerInstruction {
+                         instruction: ix,
+                         stack_height,
+                     }| {
+                        UiInstruction::parse(ix, account_keys, *stack_height)
+                    },
+                )
                 .collect(),
         }
     }
@@ -229,7 +264,14 @@ impl From<InnerInstructions> for UiInnerInstructions {
             instructions: inner_instructions
                 .instructions
                 .iter()
-                .map(|ix| UiInstruction::Compiled(ix.into()))
+                .map(
+                    |InnerInstruction {
+                         instruction: ix,
+                         stack_height,
+                     }| {
+                        UiInstruction::Compiled(UiCompiledInstruction::from(ix, *stack_height))
+                    },
+                )
                 .collect(),
         }
     }
@@ -250,10 +292,16 @@ pub struct UiTransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
     pub ui_token_amount: UiTokenAmount,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub owner: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub program_id: Option<String>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub owner: OptionSerializer<String>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub program_id: OptionSerializer<String>,
 }
 
 impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
@@ -263,14 +311,14 @@ impl From<TransactionTokenBalance> for UiTransactionTokenBalance {
             mint: token_balance.mint,
             ui_token_amount: token_balance.ui_token_amount,
             owner: if !token_balance.owner.is_empty() {
-                Some(token_balance.owner)
+                OptionSerializer::Some(token_balance.owner)
             } else {
-                None
+                OptionSerializer::Skip
             },
             program_id: if !token_balance.program_id.is_empty() {
-                Some(token_balance.program_id)
+                OptionSerializer::Some(token_balance.program_id)
             } else {
-                None
+                OptionSerializer::Skip
             },
         }
     }
@@ -289,6 +337,7 @@ pub struct TransactionStatusMeta {
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
     pub return_data: Option<TransactionReturnData>,
+    pub compute_units_consumed: Option<u64>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -305,6 +354,7 @@ impl Default for TransactionStatusMeta {
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
             return_data: None,
+            compute_units_consumed: None,
         }
     }
 }
@@ -318,18 +368,50 @@ pub struct UiTransactionStatusMeta {
     pub fee: u64,
     pub pre_balances: Vec<u64>,
     pub post_balances: Vec<u64>,
-    pub inner_instructions: Option<Vec<UiInnerInstructions>>,
-    pub log_messages: Option<Vec<String>>,
-    pub pre_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub post_token_balances: Option<Vec<UiTransactionTokenBalance>>,
-    pub rewards: Option<Rewards>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub loaded_addresses: Option<UiLoadedAddresses>,
-    pub return_data: Option<TransactionReturnData>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub inner_instructions: OptionSerializer<Vec<UiInnerInstructions>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub log_messages: OptionSerializer<Vec<String>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub pre_token_balances: OptionSerializer<Vec<UiTransactionTokenBalance>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub post_token_balances: OptionSerializer<Vec<UiTransactionTokenBalance>>,
+    #[serde(
+        default = "OptionSerializer::none",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub rewards: OptionSerializer<Rewards>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub loaded_addresses: OptionSerializer<UiLoadedAddresses>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub return_data: OptionSerializer<UiTransactionReturnData>,
+    #[serde(
+        default = "OptionSerializer::skip",
+        skip_serializing_if = "OptionSerializer::should_skip"
+    )]
+    pub compute_units_consumed: OptionSerializer<u64>,
 }
 
 /// A duplicate representation of LoadedAddresses
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLoadedAddresses {
     pub writable: Vec<String>,
@@ -354,7 +436,7 @@ impl From<&LoadedAddresses> for UiLoadedAddresses {
 }
 
 impl UiTransactionStatusMeta {
-    fn parse(meta: TransactionStatusMeta, static_keys: &[Pubkey]) -> Self {
+    fn parse(meta: TransactionStatusMeta, static_keys: &[Pubkey], show_rewards: bool) -> Self {
         let account_keys = AccountKeys::new(static_keys, Some(&meta.loaded_addresses));
         Self {
             err: meta.status.clone().err(),
@@ -362,21 +444,57 @@ impl UiTransactionStatusMeta {
             fee: meta.fee,
             pre_balances: meta.pre_balances,
             post_balances: meta.post_balances,
-            inner_instructions: meta.inner_instructions.map(|ixs| {
-                ixs.into_iter()
-                    .map(|ix| UiInnerInstructions::parse(ix, &account_keys))
-                    .collect()
-            }),
-            log_messages: meta.log_messages,
+            inner_instructions: meta
+                .inner_instructions
+                .map(|ixs| {
+                    ixs.into_iter()
+                        .map(|ix| UiInnerInstructions::parse(ix, &account_keys))
+                        .collect()
+                })
+                .into(),
+            log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             post_token_balances: meta
                 .post_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: meta.rewards,
-            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
-            return_data: meta.return_data,
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            rewards: if show_rewards { meta.rewards } else { None }.into(),
+            loaded_addresses: OptionSerializer::Skip,
+            return_data: OptionSerializer::or_skip(
+                meta.return_data.map(|return_data| return_data.into()),
+            ),
+            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
+        }
+    }
+
+    fn build_simple(meta: TransactionStatusMeta, show_rewards: bool) -> Self {
+        Self {
+            err: meta.status.clone().err(),
+            status: meta.status,
+            fee: meta.fee,
+            pre_balances: meta.pre_balances,
+            post_balances: meta.post_balances,
+            inner_instructions: OptionSerializer::Skip,
+            log_messages: OptionSerializer::Skip,
+            pre_token_balances: meta
+                .pre_token_balances
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            post_token_balances: meta
+                .post_token_balances
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            rewards: if show_rewards {
+                meta.rewards.into()
+            } else {
+                OptionSerializer::Skip
+            },
+            loaded_addresses: OptionSerializer::Skip,
+            return_data: OptionSerializer::Skip,
+            compute_units_consumed: OptionSerializer::Skip,
         }
     }
 }
@@ -391,22 +509,28 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             post_balances: meta.post_balances,
             inner_instructions: meta
                 .inner_instructions
-                .map(|ixs| ixs.into_iter().map(Into::into).collect()),
-            log_messages: meta.log_messages,
+                .map(|ixs| ixs.into_iter().map(Into::into).collect())
+                .into(),
+            log_messages: meta.log_messages.into(),
             pre_token_balances: meta
                 .pre_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
             post_token_balances: meta
                 .post_token_balances
-                .map(|balance| balance.into_iter().map(Into::into).collect()),
-            rewards: meta.rewards,
-            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
-            return_data: meta.return_data,
+                .map(|balance| balance.into_iter().map(Into::into).collect())
+                .into(),
+            rewards: meta.rewards.into(),
+            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)).into(),
+            return_data: OptionSerializer::or_skip(
+                meta.return_data.map(|return_data| return_data.into()),
+            ),
+            compute_units_consumed: OptionSerializer::or_skip(meta.compute_units_consumed),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionConfirmationStatus {
     Processed,
@@ -414,7 +538,7 @@ pub enum TransactionConfirmationStatus {
     Finalized,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionStatus {
     pub slot: Slot,
@@ -459,7 +583,7 @@ impl TransactionStatus {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfirmedTransactionStatusWithSignature {
     pub signature: Signature,
     pub slot: Slot,
@@ -468,7 +592,7 @@ pub struct ConfirmedTransactionStatusWithSignature {
     pub block_time: Option<UnixTimestamp>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reward {
     pub pubkey: String,
@@ -534,7 +658,11 @@ impl ConfirmedBlock {
                     self.transactions
                         .into_iter()
                         .map(|tx_with_meta| {
-                            tx_with_meta.encode(encoding, options.max_supported_transaction_version)
+                            tx_with_meta.encode(
+                                encoding,
+                                options.max_supported_transaction_version,
+                                options.show_rewards,
+                            )
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 ),
@@ -550,6 +678,20 @@ impl ConfirmedBlock {
                 ),
             ),
             TransactionDetails::None => (None, None),
+            TransactionDetails::Accounts => (
+                Some(
+                    self.transactions
+                        .into_iter()
+                        .map(|tx_with_meta| {
+                            tx_with_meta.build_json_accounts(
+                                options.max_supported_transaction_version,
+                                options.show_rewards,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                None,
+            ),
         };
         Ok(UiConfirmedBlock {
             previous_blockhash: self.previous_blockhash,
@@ -594,7 +736,7 @@ impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfirmedBlock {
     pub previous_blockhash: String,
@@ -653,6 +795,7 @@ impl TransactionWithStatusMeta {
         self,
         encoding: UiTransactionEncoding,
         max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
         match self {
             Self::MissingMetadata(ref transaction) => Ok(EncodedTransactionWithStatusMeta {
@@ -661,7 +804,7 @@ impl TransactionWithStatusMeta {
                 meta: None,
             }),
             Self::Complete(tx_with_meta) => {
-                tx_with_meta.encode(encoding, max_supported_transaction_version)
+                tx_with_meta.encode(encoding, max_supported_transaction_version, show_rewards)
             }
         }
     }
@@ -672,15 +815,31 @@ impl TransactionWithStatusMeta {
             Self::Complete(tx_with_meta) => tx_with_meta.account_keys(),
         }
     }
+
+    fn build_json_accounts(
+        self,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        match self {
+            Self::MissingMetadata(ref transaction) => Ok(EncodedTransactionWithStatusMeta {
+                version: None,
+                transaction: transaction.build_json_accounts(),
+                meta: None,
+            }),
+            Self::Complete(tx_with_meta) => {
+                tx_with_meta.build_json_accounts(max_supported_transaction_version, show_rewards)
+            }
+        }
+    }
 }
 
 impl VersionedTransactionWithStatusMeta {
-    pub fn encode(
-        self,
-        encoding: UiTransactionEncoding,
+    fn validate_version(
+        &self,
         max_supported_transaction_version: Option<u8>,
-    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
-        let version = match (
+    ) -> Result<Option<TransactionVersion>, EncodeError> {
+        match (
             max_supported_transaction_version,
             self.transaction.version(),
         ) {
@@ -697,7 +856,16 @@ impl VersionedTransactionWithStatusMeta {
                     Err(EncodeError::UnsupportedTransactionVersion(version))
                 }
             }
-        }?;
+        }
+    }
+
+    pub fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        let version = self.validate_version(max_supported_transaction_version)?;
 
         Ok(EncodedTransactionWithStatusMeta {
             transaction: self.transaction.encode_with_meta(encoding, &self.meta),
@@ -705,8 +873,15 @@ impl VersionedTransactionWithStatusMeta {
                 UiTransactionEncoding::JsonParsed => UiTransactionStatusMeta::parse(
                     self.meta,
                     self.transaction.message.static_account_keys(),
+                    show_rewards,
                 ),
-                _ => UiTransactionStatusMeta::from(self.meta),
+                _ => {
+                    let mut meta = UiTransactionStatusMeta::from(self.meta);
+                    if !show_rewards {
+                        meta.rewards = OptionSerializer::None;
+                    }
+                    meta
+                }
             }),
             version,
         })
@@ -717,6 +892,40 @@ impl VersionedTransactionWithStatusMeta {
             self.transaction.message.static_account_keys(),
             Some(&self.meta.loaded_addresses),
         )
+    }
+
+    fn build_json_accounts(
+        self,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        let version = self.validate_version(max_supported_transaction_version)?;
+
+        let account_keys = match &self.transaction.message {
+            VersionedMessage::Legacy(message) => parse_legacy_message_accounts(message),
+            VersionedMessage::V0(message) => {
+                let loaded_message =
+                    LoadedMessage::new_borrowed(message, &self.meta.loaded_addresses);
+                parse_v0_message_accounts(&loaded_message)
+            }
+        };
+
+        Ok(EncodedTransactionWithStatusMeta {
+            transaction: EncodedTransaction::Accounts(UiAccountsList {
+                signatures: self
+                    .transaction
+                    .signatures
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                account_keys,
+            }),
+            meta: Some(UiTransactionStatusMeta::build_simple(
+                self.meta,
+                show_rewards,
+            )),
+            version,
+        })
     }
 }
 
@@ -751,9 +960,11 @@ impl ConfirmedTransactionWithStatusMeta {
     ) -> Result<EncodedConfirmedTransactionWithStatusMeta, EncodeError> {
         Ok(EncodedConfirmedTransactionWithStatusMeta {
             slot: self.slot,
-            transaction: self
-                .tx_with_meta
-                .encode(encoding, max_supported_transaction_version)?,
+            transaction: self.tx_with_meta.encode(
+                encoding,
+                max_supported_transaction_version,
+                true,
+            )?,
             block_time: self.block_time,
         })
     }
@@ -772,12 +983,13 @@ pub struct EncodedConfirmedTransactionWithStatusMeta {
     pub block_time: Option<UnixTimestamp>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum EncodedTransaction {
     LegacyBinary(String), // Old way of expressing base-58, retained for RPC backwards compatibility
     Binary(String, TransactionBinaryEncoding),
     Json(UiTransaction),
+    Accounts(UiAccountsList),
 }
 
 impl EncodableWithMeta for VersionedTransaction {
@@ -849,10 +1061,20 @@ impl Encodable for Transaction {
     }
 }
 
+impl JsonAccounts for Transaction {
+    type Encoded = EncodedTransaction;
+    fn build_json_accounts(&self) -> Self::Encoded {
+        EncodedTransaction::Accounts(UiAccountsList {
+            signatures: self.signatures.iter().map(ToString::to_string).collect(),
+            account_keys: parse_legacy_message_accounts(&self.message),
+        })
+    }
+}
+
 impl EncodedTransaction {
     pub fn decode(&self) -> Option<VersionedTransaction> {
         let (blob, encoding) = match self {
-            Self::Json(_) => return None,
+            Self::Json(_) | Self::Accounts(_) => return None,
             Self::LegacyBinary(blob) => (blob, TransactionBinaryEncoding::Base58),
             Self::Binary(blob, encoding) => (blob, *encoding),
         };
@@ -867,19 +1089,25 @@ impl EncodedTransaction {
                 .and_then(|bytes| bincode::deserialize(&bytes).ok()),
         };
 
-        transaction.filter(|transaction| transaction.sanitize().is_ok())
+        transaction.filter(|transaction| {
+            transaction
+                .sanitize(
+                    true, // require_static_program_ids
+                )
+                .is_ok()
+        })
     }
 }
 
 /// A duplicate representation of a Transaction for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiTransaction {
     pub signatures: Vec<String>,
     pub message: UiMessage,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum UiMessage {
     Parsed(UiParsedMessage),
@@ -892,12 +1120,12 @@ impl Encodable for Message {
         if encoding == UiTransactionEncoding::JsonParsed {
             let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_accounts(self),
+                account_keys: parse_legacy_message_accounts(self),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
                     .iter()
-                    .map(|instruction| UiInstruction::parse(instruction, &account_keys))
+                    .map(|instruction| UiInstruction::parse(instruction, &account_keys, None))
                     .collect(),
                 address_table_lookups: None,
             })
@@ -906,7 +1134,11 @@ impl Encodable for Message {
                 header: self.header,
                 account_keys: self.account_keys.iter().map(ToString::to_string).collect(),
                 recent_blockhash: self.recent_blockhash.to_string(),
-                instructions: self.instructions.iter().map(Into::into).collect(),
+                instructions: self
+                    .instructions
+                    .iter()
+                    .map(|ix| UiCompiledInstruction::from(ix, None))
+                    .collect(),
                 address_table_lookups: None,
             })
         }
@@ -924,12 +1156,12 @@ impl EncodableWithMeta for v0::Message {
             let account_keys = AccountKeys::new(&self.account_keys, Some(&meta.loaded_addresses));
             let loaded_message = LoadedMessage::new_borrowed(self, &meta.loaded_addresses);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_static_accounts(&loaded_message),
+                account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
                     .iter()
-                    .map(|instruction| UiInstruction::parse(instruction, &account_keys))
+                    .map(|instruction| UiInstruction::parse(instruction, &account_keys, None))
                     .collect(),
                 address_table_lookups: Some(
                     self.address_table_lookups.iter().map(Into::into).collect(),
@@ -944,7 +1176,11 @@ impl EncodableWithMeta for v0::Message {
             header: self.header,
             account_keys: self.account_keys.iter().map(ToString::to_string).collect(),
             recent_blockhash: self.recent_blockhash.to_string(),
-            instructions: self.instructions.iter().map(Into::into).collect(),
+            instructions: self
+                .instructions
+                .iter()
+                .map(|ix| UiCompiledInstruction::from(ix, None))
+                .collect(),
             address_table_lookups: Some(
                 self.address_table_lookups.iter().map(Into::into).collect(),
             ),
@@ -953,7 +1189,7 @@ impl EncodableWithMeta for v0::Message {
 }
 
 /// A duplicate representation of a Message, in raw format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiRawMessage {
     pub header: MessageHeader,
@@ -964,8 +1200,15 @@ pub struct UiRawMessage {
     pub address_table_lookups: Option<Vec<UiAddressTableLookup>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiAccountsList {
+    pub signatures: Vec<String>,
+    pub account_keys: Vec<ParsedAccount>,
+}
+
 /// A duplicate representation of a MessageAddressTableLookup, in raw format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAddressTableLookup {
     pub account_key: String,
@@ -984,7 +1227,7 @@ impl From<&MessageAddressTableLookup> for UiAddressTableLookup {
 }
 
 /// A duplicate representation of a Message, in parsed format, for pretty JSON serialization
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiParsedMessage {
     pub account_keys: Vec<ParsedAccount>,
@@ -995,7 +1238,7 @@ pub struct UiParsedMessage {
 
 // A serialized `Vec<TransactionByAddrInfo>` is stored in the `tx-by-addr` table.  The row keys are
 // the one's compliment of the slot so that rows may be listed in reverse order
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionByAddrInfo {
     pub signature: Signature,          // The transaction signature
     pub err: Option<TransactionError>, // None if the transaction executed successfully
@@ -1004,9 +1247,43 @@ pub struct TransactionByAddrInfo {
     pub block_time: Option<UnixTimestamp>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransactionReturnData {
+    pub program_id: String,
+    pub data: (String, UiReturnDataEncoding),
+}
+
+impl Default for UiTransactionReturnData {
+    fn default() -> Self {
+        Self {
+            program_id: String::default(),
+            data: (String::default(), UiReturnDataEncoding::Base64),
+        }
+    }
+}
+
+impl From<TransactionReturnData> for UiTransactionReturnData {
+    fn from(return_data: TransactionReturnData) -> Self {
+        Self {
+            program_id: return_data.program_id.to_string(),
+            data: (
+                base64::encode(return_data.data),
+                UiReturnDataEncoding::Base64,
+            ),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum UiReturnDataEncoding {
+    Base64,
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, serde_json::json};
 
     #[test]
     fn test_decode_invalid_transaction() {
@@ -1099,5 +1376,135 @@ mod test {
             confirmation_status: None,
         };
         assert!(status.satisfies_commitment(CommitmentConfig::confirmed()));
+    }
+
+    #[test]
+    fn test_serde_empty_fields() {
+        fn test_serde<'de, T: serde::Serialize + serde::Deserialize<'de>>(
+            json_input: &'de str,
+            expected_json_output: &str,
+        ) {
+            let typed_meta: T = serde_json::from_str(json_input).unwrap();
+            let reserialized_value = json!(typed_meta);
+
+            let expected_json_output_value: serde_json::Value =
+                serde_json::from_str(expected_json_output).unwrap();
+            assert_eq!(reserialized_value, expected_json_output_value);
+        }
+
+        let json_input = "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6]\
+        }";
+        let expected_json_output = "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null\
+        }";
+        test_serde::<UiTransactionStatusMeta>(json_input, expected_json_output);
+
+        let json_input = "{\
+            \"accountIndex\":5,\
+            \"mint\":\"DXM2yVSouSg1twmQgHLKoSReqXhtUroehWxrTgPmmfWi\",\
+            \"uiTokenAmount\": {
+                \"amount\": \"1\",\
+                \"decimals\": 0,\
+                \"uiAmount\": 1.0,\
+                \"uiAmountString\": \"1\"\
+            }\
+        }";
+        let expected_json_output = "{\
+            \"accountIndex\":5,\
+            \"mint\":\"DXM2yVSouSg1twmQgHLKoSReqXhtUroehWxrTgPmmfWi\",\
+            \"uiTokenAmount\": {
+                \"amount\": \"1\",\
+                \"decimals\": 0,\
+                \"uiAmount\": 1.0,\
+                \"uiAmountString\": \"1\"\
+            }\
+        }";
+        test_serde::<UiTransactionTokenBalance>(json_input, expected_json_output);
+    }
+
+    #[test]
+    fn test_ui_transaction_status_meta_ctors_serialization() {
+        let meta = TransactionStatusMeta {
+            status: Ok(()),
+            fee: 1234,
+            pre_balances: vec![1, 2, 3],
+            post_balances: vec![4, 5, 6],
+            inner_instructions: None,
+            log_messages: None,
+            pre_token_balances: None,
+            post_token_balances: None,
+            rewards: None,
+            loaded_addresses: LoadedAddresses {
+                writable: vec![],
+                readonly: vec![],
+            },
+            return_data: None,
+            compute_units_consumed: None,
+        };
+        let expected_json_output_value: serde_json::Value = serde_json::from_str(
+            "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null,\
+            \"loadedAddresses\":{\
+                \"readonly\": [],\
+                \"writable\": []\
+            }\
+        }",
+        )
+        .unwrap();
+        let ui_meta_from: UiTransactionStatusMeta = meta.clone().into();
+        assert_eq!(
+            serde_json::to_value(&ui_meta_from).unwrap(),
+            expected_json_output_value
+        );
+
+        let expected_json_output_value: serde_json::Value = serde_json::from_str(
+            "{\
+            \"err\":null,\
+            \"status\":{\"Ok\":null},\
+            \"fee\":1234,\
+            \"preBalances\":[1,2,3],\
+            \"postBalances\":[4,5,6],\
+            \"innerInstructions\":null,\
+            \"logMessages\":null,\
+            \"preTokenBalances\":null,\
+            \"postTokenBalances\":null,\
+            \"rewards\":null\
+        }",
+        )
+        .unwrap();
+        let ui_meta_parse_with_rewards = UiTransactionStatusMeta::parse(meta.clone(), &[], true);
+        assert_eq!(
+            serde_json::to_value(&ui_meta_parse_with_rewards).unwrap(),
+            expected_json_output_value
+        );
+
+        let ui_meta_parse_no_rewards = UiTransactionStatusMeta::parse(meta, &[], false);
+        assert_eq!(
+            serde_json::to_value(&ui_meta_parse_no_rewards).unwrap(),
+            expected_json_output_value
+        );
     }
 }

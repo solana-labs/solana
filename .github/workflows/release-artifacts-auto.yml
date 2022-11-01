@@ -1,0 +1,33 @@
+name: release-artifacts-auto
+
+on:
+  push:
+    branches:
+      - master
+      - v[0-9]+.[0-9]+
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  release-artifacts:
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      commit: ${{ github.sha }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+
+  send-slack-notification:
+    runs-on: ubuntu-20.04
+    needs:
+      - release-artifacts
+    if: failure()
+    steps:
+      - env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+          color: danger

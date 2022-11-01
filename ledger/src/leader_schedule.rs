@@ -10,11 +10,10 @@ use {
 #[derive(Clone, Debug)]
 pub struct FixedSchedule {
     pub leader_schedule: Arc<LeaderSchedule>,
-    pub start_epoch: u64,
 }
 
 /// Stake-weighted leader schedule for one epoch.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
     // Inverted index from pubkeys to indices where they are the leader.

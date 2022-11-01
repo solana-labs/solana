@@ -1,8 +1,10 @@
 ---
 title: Terminology
+description: "Learn the essential terminology used thoughtout the Solana blockchain and development models."
+keywords: "terms, dictionary, definitions, define, programming models"
 ---
 
-The following terms are used throughout the documentation.
+The following terms are used throughout the Solana documentation and development ecosystem.
 
 ## account
 
@@ -12,9 +14,9 @@ Like an account at a traditional bank, a Solana account may hold funds called [l
 
 The key may be one of:
 
-* an ed25519 public key
-* a program-derived account address (32byte value forced off the ed25519 curve)
-* a hash of an ed25519 public key with a 32 character string
+- an ed25519 public key
+- a program-derived account address (32byte value forced off the ed25519 curve)
+- a hash of an ed25519 public key with a 32 character string
 
 ## account owner
 
@@ -34,7 +36,7 @@ A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-
 
 ## blockhash
 
-A unique value ([hash](#hash)) that identifies a record (block).  Solana computes a blockhash from the last [entry id](#entry-id) of the block.
+A unique value ([hash](#hash)) that identifies a record (block). Solana computes a blockhash from the last [entry id](#entry-id) of the block.
 
 ## block height
 
@@ -52,9 +54,21 @@ The Solana program that owns and loads [BPF](developing/on-chain-programs/overvi
 
 A computer program that accesses the Solana server network [cluster](#cluster).
 
+## commitment
+
+A measure of the network confirmation for the [block](#block).
+
 ## cluster
 
 A set of [validators](#validator) maintaining a single [ledger](#ledger).
+
+## compute budget
+
+The maximum number of [compute units](#compute-units) consumed per transaction.
+
+## compute units
+
+The smallest unit of measure for consumption of computational resources of the blockchain.
 
 ## confirmation time
 
@@ -62,7 +76,7 @@ The wallclock duration between a [leader](#leader) creating a [tick entry](#tick
 
 ## confirmed block
 
-A [block](#block) that has received a [supermajority](#supermajority) of [ledger votes](#ledger-vote).
+A [block](#block) that has received a [super majority](#supermajority) of [ledger votes](#ledger-vote).
 
 ## control plane
 
@@ -90,7 +104,7 @@ An off-chain service that acts as a custodian for a user's private key. It typic
 
 ## entry
 
-An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions entry](#transactions-entry).
+An entry on the [ledger](#ledger) either a [tick](#tick) or a [transaction's entry](#transactions-entry).
 
 ## entry id
 
@@ -179,6 +193,12 @@ A [program](#program) with the ability to interpret the binary encoding of other
 
 The duration of time for which a [validator](#validator) is unable to [vote](#ledger-vote) on another [fork](#fork).
 
+## message
+
+The structured contents of a [transaction](#transaction). Generally containing a header, array of account addresses, recent [blockhash](#blockhash), and an array of [instructions](#instruction).
+
+Learn more about the [message formatting inside of transactions](./developing/programming-model/transactions.md#message-format) here.
+
 ## native token
 
 The [token](#token) used to track work done by [nodes](#node) in a cluster.
@@ -205,11 +225,11 @@ The private key of a [keypair](#keypair).
 
 ## program
 
-The code that interprets [instructions](#instruction).
+The executable code that interprets the [instructions](#instruction) sent inside of each [transaction](#transaction) on the Solana. These programs are often referred to as "[_smart contracts_](./developing//intro/programs.md)" on other blockchains.
 
 ## program derived account (PDA)
 
-An account whose owner is a program and thus is not controlled by a private key like other accounts.
+An account whose signing authority is a program and thus is not controlled by a private key like other accounts.
 
 ## program id
 
@@ -217,11 +237,29 @@ The public key of the [account](#account) containing a [program](#program).
 
 ## proof of history (PoH)
 
-A stack of proofs, each which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
+A stack of proofs, each of which proves that some data existed before the proof was created and that a precise duration of time passed before the previous proof. Like a [VDF](#verifiable-delay-function-vdf), a Proof of History can be verified in less time than it took to produce.
+
+## prioritization fee
+
+An additional fee user can specify in the compute budget [instruction](#instruction) to prioritize their [transactions](#transaction).
+
+The prioritization fee is calculated by multiplying the requested maximum compute units by the compute-unit price (specified in increments of 0.000001 lamports per compute unit) rounded up to the nearest lamport.
+
+Transactions should request the minimum amount of compute units required for execution to minimize fees.
 
 ## public key (pubkey)
 
 The public key of a [keypair](#keypair).
+
+## rent
+
+Fee paid by [Accounts](#account) and [Programs](#program) to store data on the blockchain. When accounts do not have enough balance to pay rent, they may be Garbage Collected.
+
+See also [rent exempt](#rent-exempt) below. Learn more about rent here: [What is rent?](../src/developing/intro/rent.md).
+
+## rent exempt
+
+Accounts that maintain more than 2 years with of rent payments in their account are considered "*rent exempt*" and will not incur the [collection of rent](../src/developing/intro/rent.md#collecting-rent).
 
 ## root
 
@@ -243,7 +281,7 @@ A fraction of a [block](#block); the smallest unit sent between [validators](#va
 
 A 64-byte ed25519 signature of R (32-bytes) and S (32-bytes). With the requirement that R is a packed Edwards point not of small order and S is a scalar in the range of 0 <= S < L.
 This requirement ensures no signature malleability. Each transaction must have at least one signature for [fee account](terminology#fee-account).
-Thus, the first signature in transaction can be treated as [transacton id](#transaction-id)
+Thus, the first signature in transaction can be treated as [transaction id](#transaction-id)
 
 ## skipped slot
 
@@ -279,7 +317,7 @@ Tokens forfeit to the [cluster](#cluster) if malicious [validator](#validator) b
 
 ## sysvar
 
-A system [account](#account).  [Sysvars](developing/runtime-facilities/sysvars.md) provide cluster state information such as current tick height, rewards [points](#point) values, etc.  Programs can access Sysvars via a Sysvar account (pubkey) or by querying via a syscall.
+A system [account](#account). [Sysvars](developing/runtime-facilities/sysvars.md) provide cluster state information such as current tick height, rewards [points](#point) values, etc. Programs can access Sysvars via a Sysvar account (pubkey) or by querying via a syscall.
 
 ## thin client
 
@@ -319,7 +357,7 @@ A set of [transactions](#transaction) that may be executed in parallel.
 
 ## validator
 
-A full participant in a Solana network [cluster](#cluster) that produces new [blocks](#block).  A validator validates the transactions added to the [ledger](#ledger)
+A full participant in a Solana network [cluster](#cluster) that produces new [blocks](#block). A validator validates the transactions added to the [ledger](#ledger)
 
 ## VDF
 

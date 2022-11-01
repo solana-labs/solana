@@ -58,35 +58,29 @@ sudo $(command -v solana-sys-tuner) --user $(whoami) > sys-tuner.log 2>&1 &
 If you would prefer to manage system settings on your own, you may do so with
 the following commands.
 
-##### **Increase UDP buffers**
+##### **Optimize sysctl knobs**
 
 ```bash
-sudo bash -c "cat >/etc/sysctl.d/20-solana-udp-buffers.conf <<EOF
-# Increase UDP buffer size
+sudo bash -c "cat >/etc/sysctl.d/21-solana-validator.conf <<EOF
+# Increase UDP buffer sizes
 net.core.rmem_default = 134217728
 net.core.rmem_max = 134217728
 net.core.wmem_default = 134217728
 net.core.wmem_max = 134217728
-EOF"
-```
 
-```bash
-sudo sysctl -p /etc/sysctl.d/20-solana-udp-buffers.conf
-```
-
-##### **Increased memory mapped files limit**
-
-```bash
-sudo bash -c "cat >/etc/sysctl.d/20-solana-mmaps.conf <<EOF
 # Increase memory mapped files limit
 vm.max_map_count = 1000000
+
+# Increase number of allowed open file descriptors
+fs.nr_open = 1000000
 EOF"
 ```
 
 ```bash
-sudo sysctl -p /etc/sysctl.d/20-solana-mmaps.conf
+sudo sysctl -p /etc/sysctl.d/21-solana-validator.conf
 ```
 
+##### **Increase systemd and session file limits**
 Add
 
 ```
@@ -399,7 +393,7 @@ to be reverted and the issue reproduced before help can be provided.
 The validator log file, as specified by `--log ~/solana-validator.log`, can get
 very large over time and it's recommended that log rotation be configured.
 
-The validator will re-open its when it receives the `USR1` signal, which is the
+The validator will re-open its log file when it receives the `USR1` signal, which is the
 basic primitive that enables log rotation.
 
 If the validator is being started by a wrapper shell script, it is important to

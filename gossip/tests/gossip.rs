@@ -109,7 +109,7 @@ where
         } else {
             trace!("not converged {} {} {}", i, total + num, num * num);
         }
-        sleep(Duration::new(1, 0));
+        sleep(Duration::from_secs(1));
     }
     exit.store(true, Ordering::Relaxed);
     for (_, dr, _) in listen {
@@ -251,7 +251,7 @@ pub fn cluster_info_retransmit() {
         if done {
             break;
         }
-        sleep(Duration::new(1, 0));
+        sleep(Duration::from_secs(1));
     }
     assert!(done);
     let mut p = Packet::default();
@@ -260,7 +260,7 @@ pub fn cluster_info_retransmit() {
     let retransmit_peers: Vec<_> = peers.iter().collect();
     retransmit_to(
         &retransmit_peers,
-        &p.data[..p.meta.size],
+        p.data(..).unwrap(),
         &tn1,
         false,
         &SocketAddrSpace::Unspecified,
@@ -269,8 +269,8 @@ pub fn cluster_info_retransmit() {
         .into_par_iter()
         .map(|s| {
             let mut p = Packet::default();
-            s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
-            let res = s.recv_from(&mut p.data);
+            s.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+            let res = s.recv_from(p.buffer_mut());
             res.is_err() //true if failed to receive the retransmit packet
         })
         .collect();

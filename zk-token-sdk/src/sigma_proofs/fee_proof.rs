@@ -2,7 +2,7 @@
 //!
 //! TODO: Add detail on how the fee is calculated.
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::pedersen::{PedersenCommitment, PedersenOpening, G, H},
     rand::rngs::OsRng,
@@ -35,10 +35,13 @@ pub struct FeeSigmaProof {
 }
 
 #[allow(non_snake_case, dead_code)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl FeeSigmaProof {
     /// Creates a fee sigma proof assuming that the committed fee is greater than the maximum fee
     /// bound.
+    ///
+    /// Note: the proof is generated twice via `create_proof_fee_above_max` and
+    /// `create_proof_fee_below_max` to enforce constant time execution.
     ///
     /// * `(fee_amount, fee_commitment, fee_opening)` - The amount, Pedersen commitment, and
     /// opening of the transfer fee
@@ -76,24 +79,29 @@ impl FeeSigmaProof {
 
         let below_max = u64::ct_gt(&max_fee, &fee_amount);
 
-        // conditionally assign transcript; transcript is not conditionally selectable
-        if bool::from(below_max) {
-            *transcript = transcript_fee_below_max;
-        } else {
-            *transcript = transcript_fee_above_max;
-        }
+        // choose one of `proof_fee_above_max` or `proof_fee_below_max` according to whether the
+        // fee amount surpasses max fee
+        let fee_max_proof = FeeMaxProof::conditional_select(
+            &proof_fee_above_max.fee_max_proof,
+            &proof_fee_below_max.fee_max_proof,
+            below_max,
+        );
+
+        let fee_equality_proof = FeeEqualityProof::conditional_select(
+            &proof_fee_above_max.fee_equality_proof,
+            &proof_fee_below_max.fee_equality_proof,
+            below_max,
+        );
+
+        transcript.append_point(b"Y_max_proof", &fee_max_proof.Y_max_proof);
+        transcript.append_point(b"Y_delta", &fee_equality_proof.Y_delta);
+        transcript.append_point(b"Y_claimed", &fee_equality_proof.Y_claimed);
+        transcript.challenge_scalar(b"c");
+        transcript.challenge_scalar(b"w");
 
         Self {
-            fee_max_proof: FeeMaxProof::conditional_select(
-                &proof_fee_above_max.fee_max_proof,
-                &proof_fee_below_max.fee_max_proof,
-                below_max,
-            ),
-            fee_equality_proof: FeeEqualityProof::conditional_select(
-                &proof_fee_above_max.fee_equality_proof,
-                &proof_fee_below_max.fee_equality_proof,
-                below_max,
-            ),
+            fee_max_proof,
+            fee_equality_proof,
         }
     }
 
@@ -352,6 +360,10 @@ impl FeeSigmaProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
+        if bytes.len() != 256 {
+            return Err(FeeSigmaProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 256];
         let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
             array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];

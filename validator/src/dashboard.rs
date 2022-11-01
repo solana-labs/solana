@@ -4,10 +4,9 @@ use {
         ProgressBar,
     },
     console::style,
-    solana_client::{
-        client_error, rpc_client::RpcClient, rpc_request, rpc_response::RpcContactInfo,
-    },
     solana_core::validator::ValidatorStartProgress,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{client_error, request, response::RpcContactInfo},
     solana_sdk::{
         clock::Slot, commitment_config::CommitmentConfig, exit::Exit, native_token::Sol,
         pubkey::Pubkey,
@@ -273,16 +272,14 @@ fn get_validator_stats(
     let health = match rpc_client.get_health() {
         Ok(()) => "ok".to_string(),
         Err(err) => {
-            if let client_error::ClientErrorKind::RpcError(
-                rpc_request::RpcError::RpcResponseError {
-                    code: _,
-                    message: _,
-                    data:
-                        rpc_request::RpcResponseErrorData::NodeUnhealthy {
-                            num_slots_behind: Some(num_slots_behind),
-                        },
-                },
-            ) = &err.kind
+            if let client_error::ErrorKind::RpcError(request::RpcError::RpcResponseError {
+                code: _,
+                message: _,
+                data:
+                    request::RpcResponseErrorData::NodeUnhealthy {
+                        num_slots_behind: Some(num_slots_behind),
+                    },
+            }) = &err.kind
             {
                 format!("{} slots behind", num_slots_behind)
             } else {

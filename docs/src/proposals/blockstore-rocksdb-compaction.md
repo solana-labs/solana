@@ -95,7 +95,7 @@ As mentioned above, shred data column families, ShredData and ShredCode, which
 contribute to 99% of the storage size in shred insertion, have an unique write
 workload where write-keys are mostly monotonically increasing over time.  As a
 result, after entries are flushed from memory into SST files, the keys are
-naturally sorted accross multiple SST files where each SST file might have
+naturally sorted across multiple SST files where each SST file might have
 a small overlapping key range between at most two other SST files.  In other
 words, files are sorted naturally from old to new, which allows us to use
 the First-In-First-Out compaction, or FIFO Compaction.
@@ -103,7 +103,7 @@ the First-In-First-Out compaction, or FIFO Compaction.
 FIFO Compaction actually does not compact files.  Instead, it simply deletes
 the oldest files when the storage size reaches the specified threshold.  As a
 result, it has a constant 1 write amplification.  In addition, as keys are
-naturally sorted accross multiple SST files, each read can be answered by
+naturally sorted across multiple SST files, each read can be answered by
 hitting mostly only one (or in the boundary case, two) file.  This gives us
 close to 1 read amplification.  As each key is only inserted once, we have
 space amplification 1.

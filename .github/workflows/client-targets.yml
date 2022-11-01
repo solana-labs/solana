@@ -53,7 +53,14 @@ jobs:
           target: ${{ matrix.target }}
       - name: Install cargo-ndk
         if: ${{ matrix.platform == 'android' }}
-        run: cargo install cargo-ndk
+        run: cargo install cargo-ndk@2.11.0
+      - name: Install NDK 21
+        if: ${{ matrix.platform == 'android' }}
+        run: |
+          ANDROID_ROOT=/usr/local/lib/android
+          ANDROID_SDK_ROOT=${ANDROID_ROOT}/sdk
+          SDKMANAGER=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager
+          echo "y" | $SDKMANAGER "ndk;21.4.7075529"
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.platform == 'android' }}
         with:
@@ -64,3 +71,12 @@ jobs:
         with:
           command: build
           args: -p solana-client --target ${{ matrix.target }}
+      - name: Send Slack notifiaction
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
+        uses: voxmedia/github-action-slack-notify-build@v1
+        with:
+          channel: ${{ secrets.SLACK_CHANNEL }}
+          status: FAILED
+          color: danger

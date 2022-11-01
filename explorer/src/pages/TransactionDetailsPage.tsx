@@ -13,7 +13,7 @@ import {
   SystemProgram,
   SystemInstruction,
 } from "@solana/web3.js";
-import { SolBalance } from "utils";
+import { SolBalance } from "components/common/SolBalance";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -30,6 +30,7 @@ import { TokenBalancesCard } from "components/transaction/TokenBalancesCard";
 import { InstructionsSection } from "components/transaction/InstructionsSection";
 import { ProgramLogSection } from "components/transaction/ProgramLogSection";
 import { clusterPath } from "utils/url";
+import { getTransactionInstructionError } from "utils/program-err";
 
 const AUTO_REFRESH_INTERVAL = 2000;
 const ZERO_CONFIRMATION_BAILOUT = 5;
@@ -171,24 +172,32 @@ function StatusCard({
 
   const { info } = status.data;
 
-  const renderResult = () => {
-    let statusClass = "success";
-    let statusText = "Success";
-    if (info.result.err) {
-      statusClass = "warning";
-      statusText = "Error";
+  let statusClass = "success";
+  let statusText = "Success";
+  let errorReason = undefined;
+
+  if (info.result.err) {
+    statusClass = "warning";
+    statusText = "Error";
+    if (typeof info.result.err === "string") {
+      errorReason = `Runtime Error: "${info.result.err}"`;
+    } else {
+      const programError = getTransactionInstructionError(info.result.err);
+      if (programError !== undefined) {
+        errorReason = `Program Error: "Instruction #${
+          programError.index + 1
+        } Failed"`;
+      } else {
+        errorReason = `Unknown Error: "${JSON.stringify(info.result.err)}"`;
+      }
     }
+  }
 
-    return (
-      <h3 className="mb-0">
-        <span className={`badge bg-${statusClass}-soft`}>{statusText}</span>
-      </h3>
-    );
-  };
-
-  const fee = details?.data?.transaction?.meta?.fee;
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const fee = transactionWithMeta?.meta?.fee;
+  const transaction = transactionWithMeta?.transaction;
   const blockhash = transaction?.message.recentBlockhash;
+  const version = transactionWithMeta?.version;
   const isNonce = (() => {
     if (!transaction || transaction.message.instructions.length < 1) {
       return false;
@@ -239,8 +248,27 @@ function StatusCard({
 
         <tr>
           <td>Result</td>
-          <td className="text-lg-end">{renderResult()}</td>
+          <td className="text-lg-end">
+            <h3 className="mb-0">
+              <span className={`badge bg-${statusClass}-soft`}>
+                {statusText}
+              </span>
+            </h3>
+          </td>
         </tr>
+
+        {errorReason !== undefined && (
+          <tr>
+            <td>Error</td>
+            <td className="text-lg-end">
+              <h3 className="mb-0">
+                <span className={`badge bg-${statusClass}-soft`}>
+                  {errorReason}
+                </span>
+              </h3>
+            </td>
+          </tr>
+        )}
 
         <tr>
           <td>Timestamp</td>
@@ -274,7 +302,7 @@ function StatusCard({
         </tr>
 
         <tr>
-          <td>Block</td>
+          <td>Slot</td>
           <td className="text-lg-end">
             <Slot slot={info.slot} link />
           </td>
@@ -303,6 +331,13 @@ function StatusCard({
             </td>
           </tr>
         )}
+
+        {version !== undefined && (
+          <tr>
+            <td>Transaction Version</td>
+            <td className="text-lg-end text-uppercase">{version}</td>
+          </tr>
+        )}
       </TableCardBody>
     </div>
   );
@@ -312,7 +347,8 @@ function DetailsSection({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
   const status = useTransactionStatus(signature);
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const transaction = transactionWithMeta?.transaction;
   const message = transaction?.message;
   const { status: clusterStatus } = useCluster();
   const refreshDetails = () => fetchDetails(signature);
@@ -330,11 +366,11 @@ function DetailsSection({ signature }: SignatureProps) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details) {
+  } else if (!details || details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;
-  } else if (!details.data?.transaction || !message) {
+  } else if (!transactionWithMeta || !message) {
     return <ErrorCard text="Details are not available" />;
   }
 
@@ -351,11 +387,12 @@ function DetailsSection({ signature }: SignatureProps) {
 function AccountsCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
 
-  if (!details?.data?.transaction) {
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!transactionWithMeta) {
     return null;
   }
 
-  const { meta, transaction } = details.data.transaction;
+  const { meta, transaction } = transactionWithMeta;
   const { message } = transaction;
 
   if (!meta) {
@@ -385,14 +422,19 @@ function AccountsCard({ signature }: SignatureProps) {
           {index === 0 && (
             <span className="badge bg-info-soft me-1">Fee Payer</span>
           )}
-          {account.writable && (
-            <span className="badge bg-info-soft me-1">Writable</span>
-          )}
           {account.signer && (
             <span className="badge bg-info-soft me-1">Signer</span>
           )}
+          {account.writable && (
+            <span className="badge bg-danger-soft me-1">Writable</span>
+          )}
           {message.instructions.find((ix) => ix.programId.equals(pubkey)) && (
-            <span className="badge bg-info-soft me-1">Program</span>
+            <span className="badge bg-warning-soft me-1">Program</span>
+          )}
+          {account.source === "lookupTable" && (
+            <span className="badge bg-gray-soft me-1">
+              Address Table Lookup
+            </span>
           )}
         </td>
       </tr>

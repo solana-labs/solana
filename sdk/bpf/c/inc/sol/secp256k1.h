@@ -32,12 +32,16 @@ extern "C" {
  * @param result 64 byte array to hold the result. A recovered public key
  * @return 0 if executed successfully
  */
-uint64_t sol_secp256k1_recover(
-    const uint8_t *hash,
-    uint64_t recovery_id,
-    const uint8_t *signature,
-    uint8_t *result
-);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/secp256k1.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+uint64_t sol_secp256k1_recover(const uint8_t *, uint64_t, const uint8_t *, uint8_t *);
+#else
+typedef uint64_t(*sol_secp256k1_recover_pointer_type)(const uint8_t *, uint64_t, const uint8_t *, uint8_t *);
+static uint64_t sol_secp256k1_recover(const uint8_t * arg1, uint64_t arg2, const uint8_t * arg3, uint8_t * arg4) {
+  sol_secp256k1_recover_pointer_type sol_secp256k1_recover_pointer = (sol_secp256k1_recover_pointer_type) 400819024;
+  return sol_secp256k1_recover_pointer(arg1, arg2, arg3, arg4);
+}
+#endif
 
 #ifdef __cplusplus
 }

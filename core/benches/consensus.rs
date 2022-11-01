@@ -70,12 +70,7 @@ fn bench_generate_ancestors_descendants(bench: &mut Bencher) {
     bench.iter(move || {
         for _ in 0..num_banks {
             let _ancestors = vote_simulator.bank_forks.read().unwrap().ancestors();
-            let _descendants = vote_simulator
-                .bank_forks
-                .read()
-                .unwrap()
-                .descendants()
-                .clone();
+            let _descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         }
     });
 }

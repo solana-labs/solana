@@ -1,7 +1,7 @@
 pub use bytemuck::{Pod, Zeroable};
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodU16([u8; 2]);
 impl From<u16> for PodU16 {
@@ -15,7 +15,7 @@ impl From<PodU16> for u16 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Pod, Zeroable)]
 #[repr(transparent)]
 pub struct PodU64([u8; 8]);
 impl From<u64> for PodU64 {
@@ -29,15 +29,11 @@ impl From<PodU64> for u64 {
     }
 }
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
-#[repr(transparent)]
-pub struct Scalar(pub [u8; 32]);
-
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
 
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalCiphertext(pub [u8; 64]);
 
@@ -47,13 +43,19 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
+impl fmt::Display for ElGamalCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
 impl Default for ElGamalCiphertext {
     fn default() -> Self {
         Self::zeroed()
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ElGamalPubkey(pub [u8; 32]);
 
@@ -63,7 +65,13 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+impl fmt::Display for ElGamalPubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
@@ -73,7 +81,7 @@ impl fmt::Debug for PedersenCommitment {
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DecryptHandle(pub [u8; 32]);
 
@@ -138,6 +146,11 @@ unsafe impl Pod for ZeroBalanceProof {}
 #[repr(transparent)]
 pub struct FeeSigmaProof(pub [u8; 256]);
 
+/// Serialization of public-key sigma proof
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PubkeySigmaProof(pub [u8; 64]);
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]
@@ -169,7 +182,7 @@ unsafe impl Zeroable for RangeProof256 {}
 unsafe impl Pod for RangeProof256 {}
 
 /// Serialization for AeCiphertext
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct AeCiphertext(pub [u8; 36]);
 
@@ -181,6 +194,12 @@ unsafe impl Pod for AeCiphertext {}
 impl fmt::Debug for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for AeCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 

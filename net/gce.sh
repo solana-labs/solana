@@ -397,6 +397,7 @@ cloud_ForEachInstance() {
     declare name publicIp privateIp
     IFS=: read -r name publicIp privateIp zone < <(echo "$info")
 
+    # shellcheck disable=SC2294
     eval "$cmd" "$name" "$publicIp" "$privateIp" "$zone" "$count" "$@"
     count=$((count + 1))
   done
@@ -807,6 +808,7 @@ $(
     install-libssl-compatability.sh \
     install-redis.sh \
     install-rsync.sh \
+    install-perf.sh \
     localtime.sh \
     network-config.sh \
     remove-docker-interface.sh \

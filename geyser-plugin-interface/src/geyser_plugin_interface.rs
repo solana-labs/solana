@@ -38,12 +38,46 @@ pub struct ReplicaAccountInfo<'a> {
     pub write_version: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Information about an account being updated
+/// (extended with transaction signature doing this update)
+pub struct ReplicaAccountInfoV2<'a> {
+    /// The Pubkey for the account
+    pub pubkey: &'a [u8],
+
+    /// The lamports for the account
+    pub lamports: u64,
+
+    /// The Pubkey of the owner program account
+    pub owner: &'a [u8],
+
+    /// This account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
+
+    /// The epoch at which this account will next owe rent
+    pub rent_epoch: u64,
+
+    /// The data held in this account.
+    pub data: &'a [u8],
+
+    /// A global monotonically increasing atomic number, which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    /// write_version.
+    pub write_version: u64,
+
+    /// First signature of the transaction caused this account modification
+    pub txn_signature: Option<&'a Signature>,
+}
+
 /// A wrapper to future-proof ReplicaAccountInfo handling.
 /// If there were a change to the structure of ReplicaAccountInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
 pub enum ReplicaAccountInfoVersions<'a> {
     V0_0_1(&'a ReplicaAccountInfo<'a>),
+    V0_0_2(&'a ReplicaAccountInfoV2<'a>),
 }
 
 /// Information about a transaction
@@ -62,12 +96,32 @@ pub struct ReplicaTransactionInfo<'a> {
     pub transaction_status_meta: &'a TransactionStatusMeta,
 }
 
+/// Information about a transaction, including index in block
+#[derive(Clone, Debug)]
+pub struct ReplicaTransactionInfoV2<'a> {
+    /// The first signature of the transaction, used for identifying the transaction.
+    pub signature: &'a Signature,
+
+    /// Indicates if the transaction is a simple vote transaction.
+    pub is_vote: bool,
+
+    /// The sanitized transaction.
+    pub transaction: &'a SanitizedTransaction,
+
+    /// Metadata of the transaction status.
+    pub transaction_status_meta: &'a TransactionStatusMeta,
+
+    /// The transaction's index in the block
+    pub index: usize,
+}
+
 /// A wrapper to future-proof ReplicaTransactionInfo handling.
 /// If there were a change to the structure of ReplicaTransactionInfo,
 /// there would be new enum entry for the newer version, forcing
 /// plugin implementations to handle the change.
 pub enum ReplicaTransactionInfoVersions<'a> {
     V0_0_1(&'a ReplicaTransactionInfo<'a>),
+    V0_0_2(&'a ReplicaTransactionInfoV2<'a>),
 }
 
 #[derive(Clone, Debug)]

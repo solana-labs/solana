@@ -7,10 +7,12 @@ use {
     solana_runtime::{
         account_info::AccountInfo,
         accounts_index::{
-            AccountSecondaryIndexes, AccountsIndex, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
+            AccountSecondaryIndexes, AccountsIndex, UpsertReclaim,
+            ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         },
     },
     solana_sdk::{account::AccountSharedData, pubkey},
+    std::sync::Arc,
     test::Bencher,
 };
 
@@ -22,7 +24,10 @@ fn bench_accounts_index(bencher: &mut Bencher) {
     const NUM_FORKS: u64 = 16;
 
     let mut reclaims = vec![];
-    let index = AccountsIndex::<AccountInfo>::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS));
+    let index = AccountsIndex::<AccountInfo>::new(
+        Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
+        &Arc::default(),
+    );
     for f in 0..NUM_FORKS {
         for pubkey in pubkeys.iter().take(NUM_PUBKEYS) {
             index.upsert(
@@ -33,7 +38,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
-                false,
+                UpsertReclaim::PopulateReclaims,
             );
         }
     }
@@ -51,7 +56,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
-                false,
+                UpsertReclaim::PopulateReclaims,
             );
             reclaims.clear();
         }

@@ -48,7 +48,7 @@ impl ClusterSlotsService {
         Self::initialize_lowest_slot(&blockstore, &cluster_info);
         Self::initialize_epoch_slots(&bank_forks, &cluster_info);
         let t_cluster_slots_service = Builder::new()
-            .name("solana-cluster-slots-service".to_string())
+            .name("solClusterSlots".to_string())
             .spawn(move || {
                 Self::run(
                     blockstore,

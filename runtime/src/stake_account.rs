@@ -13,7 +13,7 @@ use {
 };
 
 /// An account and a stake state deserialized from the account.
-/// Generic type T enforces type-saftey so that StakeAccount<Delegation> can
+/// Generic type T enforces type-safety so that StakeAccount<Delegation> can
 /// only wrap a stake-state which is a Delegation; whereas StakeAccount<()>
 /// wraps any account with stake state.
 #[derive(Clone, Debug, Default)]
@@ -29,9 +29,9 @@ pub enum Error {
     #[error(transparent)]
     InstructionError(#[from] InstructionError),
     #[error("Invalid delegation: {0:?}")]
-    InvalidDelegation(StakeState),
-    #[error("Invalid stake account owner: {owner:?}")]
-    InvalidOwner { owner: Pubkey },
+    InvalidDelegation(Box<StakeState>),
+    #[error("Invalid stake account owner: {0}")]
+    InvalidOwner(/*owner:*/ Pubkey),
 }
 
 impl<T> StakeAccount<T> {
@@ -44,12 +44,16 @@ impl<T> StakeAccount<T> {
     pub(crate) fn stake_state(&self) -> &StakeState {
         &self.stake_state
     }
+
+    pub(crate) fn account(&self) -> &AccountSharedData {
+        &self.account
+    }
 }
 
 impl StakeAccount<Delegation> {
     #[inline]
     pub(crate) fn delegation(&self) -> Delegation {
-        // Safe to unwrap here becasue StakeAccount<Delegation> will always
+        // Safe to unwrap here because StakeAccount<Delegation> will always
         // only wrap a stake-state which is a delegation.
         self.stake_state.delegation().unwrap()
     }
@@ -59,9 +63,7 @@ impl TryFrom<AccountSharedData> for StakeAccount<()> {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if account.owner() != &solana_stake_program::id() {
-            return Err(Error::InvalidOwner {
-                owner: *account.owner(),
-            });
+            return Err(Error::InvalidOwner(*account.owner()));
         }
         let stake_state = account.state()?;
         Ok(Self {
@@ -77,7 +79,9 @@ impl TryFrom<AccountSharedData> for StakeAccount<Delegation> {
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         let stake_account = StakeAccount::<()>::try_from(account)?;
         if stake_account.stake_state.delegation().is_none() {
-            return Err(Error::InvalidDelegation(stake_account.stake_state));
+            return Err(Error::InvalidDelegation(Box::new(
+                stake_account.stake_state,
+            )));
         }
         Ok(Self {
             account: stake_account.account,
@@ -127,7 +131,7 @@ impl AbiExample for StakeAccount<Delegation> {
         let mut account = Account::example();
         account.data.resize(196, 0u8);
         account.owner = solana_stake_program::id();
-        let _ = account.set_state(&stake_state).unwrap();
+        account.set_state(&stake_state).unwrap();
         Self::try_from(AccountSharedData::from(account)).unwrap()
     }
 }

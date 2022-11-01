@@ -7,7 +7,7 @@ use std::{
 // this will likely be wrapped in an arc somehow
 #[derive(Default, Debug)]
 pub struct WaitableCondvar {
-    pub mutex: Mutex<u8>,
+    pub mutex: Mutex<()>,
     pub event: Condvar,
 }
 

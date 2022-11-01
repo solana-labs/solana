@@ -14,19 +14,46 @@ extern "C" {
 /**
  * Prints a string to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
 void sol_log_(const char *, uint64_t);
+#else
+typedef void(*sol_log__pointer_type)(const char *, uint64_t);
+static void sol_log_(const char * arg1, uint64_t arg2) {
+  sol_log__pointer_type sol_log__pointer = (sol_log__pointer_type) 544561597;
+  sol_log__pointer(arg1, arg2);
+}
+#endif
 #define sol_log(message) sol_log_(message, sol_strlen(message))
 
 /**
  * Prints a 64 bit values represented in hexadecimal to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
 void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+#else
+typedef void(*sol_log_64__pointer_type)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+static void sol_log_64_(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5) {
+  sol_log_64__pointer_type sol_log_64__pointer = (sol_log_64__pointer_type) 1546269048;
+  sol_log_64__pointer(arg1, arg2, arg3, arg4, arg5);
+}
+#endif
 #define sol_log_64 sol_log_64_
 
 /**
  * Prints the current compute unit consumption to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
 void sol_log_compute_units_();
+#else
+typedef void(*sol_log_compute_units__pointer_type)();
+static void sol_log_compute_units_() {
+  sol_log_compute_units__pointer_type sol_log_compute_units__pointer = (sol_log_compute_units__pointer_type) 1387942038;
+  sol_log_compute_units__pointer();
+}
+#endif
 #define sol_log_compute_units() sol_log_compute_units_()
 
 /**
@@ -43,7 +70,16 @@ static void sol_log_array(const uint8_t *array, int len) {
 /**
  * Print the base64 representation of some arrays.
  */
-void sol_log_data(SolBytes *fields, uint64_t fields_len);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+void sol_log_data(SolBytes *, uint64_t);
+#else
+typedef void(*sol_log_data_pointer_type)(SolBytes *, uint64_t);
+static void sol_log_data(SolBytes * arg1, uint64_t arg2) {
+  sol_log_data_pointer_type sol_log_data_pointer = (sol_log_data_pointer_type) 1930933300;
+  sol_log_data_pointer(arg1, arg2);
+}
+#endif
 
 /**
  * Prints the program's input parameters

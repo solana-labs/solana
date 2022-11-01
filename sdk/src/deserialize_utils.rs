@@ -10,6 +10,14 @@ where
     T: Deserialize<'de> + Default,
 {
     let result = T::deserialize(d);
+    ignore_eof_error::<'de, T, D::Error>(result)
+}
+
+pub fn ignore_eof_error<'de, T, D>(result: Result<T, D>) -> Result<T, D>
+where
+    T: Deserialize<'de> + Default,
+    D: std::fmt::Display,
+{
     match result {
         Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(T::default()),
         Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(T::default()),
@@ -23,7 +31,7 @@ pub mod tests {
 
     #[test]
     fn test_default_on_eof() {
-        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
         struct Foo {
             bar: u16,
             #[serde(deserialize_with = "default_on_eof")]
@@ -98,7 +106,7 @@ pub mod tests {
     fn test_default_on_eof_additional_untagged_fields() {
         // If later fields are not tagged `deserialize_with = "default_on_eof"`, deserialization
         // will panic on any missing fields/data
-        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
         struct Foo {
             bar: u16,
             #[serde(deserialize_with = "default_on_eof")]

@@ -13,7 +13,7 @@ use {
     },
     solana_entry::poh::compute_hashes_per_tick,
     solana_genesis::{genesis_accounts::add_genesis_accounts, Base64Account},
-    solana_ledger::{blockstore::create_new_ledger, blockstore_db::LedgerColumnOptions},
+    solana_ledger::{blockstore::create_new_ledger, blockstore_options::LedgerColumnOptions},
     solana_runtime::hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
@@ -135,7 +135,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         .to_string();
     // stake account
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
-        .max(StakeState::get_rent_exempt_reserve(&rent))
+        .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
 
     let default_target_tick_duration =
@@ -374,7 +374,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .takes_value(true)
                 .number_of_values(3)
                 .multiple(true)
-                .help("Install a BPF program at the given address"),
+                .help("Install a SBF program at the given address"),
         )
         .arg(
             Arg::with_name("inflation")
@@ -430,7 +430,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_validator_stake_lamports = rent_exempt_check(
         &matches,
         "bootstrap_validator_stake_lamports",
-        StakeState::get_rent_exempt_reserve(&rent),
+        rent.minimum_balance(StakeState::size_of()),
     )?;
 
     let bootstrap_stake_authorized_pubkey =
@@ -580,8 +580,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let issued_lamports = genesis_config
         .accounts
-        .iter()
-        .map(|(_key, account)| account.lamports)
+        .values()
+        .map(|account| account.lamports)
         .sum::<u64>();
 
     add_genesis_accounts(&mut genesis_config, issued_lamports - faucet_lamports);
@@ -683,6 +683,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(
@@ -756,6 +757,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts1).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(
@@ -839,6 +841,7 @@ mod tests {
         let serialized = serde_yaml::to_string(&genesis_accounts2).unwrap();
         let path = Path::new("test_append_primordial_accounts_to_genesis.yml");
         let mut file = File::create(path).unwrap();
+        file.write_all(b"---\n").unwrap();
         file.write_all(&serialized.into_bytes()).unwrap();
 
         load_genesis_accounts(

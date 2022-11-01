@@ -3,20 +3,29 @@ use {
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
     solana_address_lookup_table_program::{
         id,
-        instruction::create_lookup_table,
+        instruction::{create_lookup_table, create_lookup_table_signed},
+        processor::process_instruction,
         state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
     },
     solana_program_test::*,
     solana_sdk::{
-        clock::Slot, instruction::InstructionError, pubkey::Pubkey, rent::Rent, signature::Signer,
-        signer::keypair::Keypair, transaction::Transaction,
+        clock::Slot, feature_set, instruction::InstructionError, pubkey::Pubkey, rent::Rent,
+        signature::Signer, signer::keypair::Keypair, transaction::Transaction,
     },
 };
 
 mod common;
 
+pub async fn setup_test_context_without_authority_feature() -> ProgramTestContext {
+    let mut program_test = ProgramTest::new("", id(), Some(process_instruction));
+    program_test.deactivate_feature(
+        feature_set::relax_authority_signer_check_for_lookup_table_creation::id(),
+    );
+    program_test.start_with_context().await
+}
+
 #[tokio::test]
-async fn test_create_lookup_table() {
+async fn test_create_lookup_table_idempotent() {
     let mut context = setup_test_context().await;
 
     let test_recent_slot = 123;
@@ -25,8 +34,7 @@ async fn test_create_lookup_table() {
     let client = &mut context.banks_client;
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
-    let authority_keypair = Keypair::new();
-    let authority_address = authority_keypair.pubkey();
+    let authority_address = Pubkey::new_unique();
     let (create_lookup_table_ix, lookup_table_address) =
         create_lookup_table(authority_address, payer.pubkey(), test_recent_slot);
 
@@ -35,7 +43,7 @@ async fn test_create_lookup_table() {
         let transaction = Transaction::new_signed_with_payer(
             &[create_lookup_table_ix.clone()],
             Some(&payer.pubkey()),
-            &[payer, &authority_keypair],
+            &[payer],
             recent_blockhash,
         );
 
@@ -45,7 +53,7 @@ async fn test_create_lookup_table() {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(lookup_table_account.owner, crate::id());
+        assert_eq!(lookup_table_account.owner, id());
         assert_eq!(lookup_table_account.data.len(), LOOKUP_TABLE_META_SIZE);
         assert_eq!(
             lookup_table_account.lamports,
@@ -58,6 +66,47 @@ async fn test_create_lookup_table() {
         assert_eq!(lookup_table.meta.last_extended_slot_start_index, 0);
         assert_eq!(lookup_table.addresses.len(), 0);
     }
+
+    // Second create should succeed too
+    {
+        let recent_blockhash = client
+            .get_new_latest_blockhash(&recent_blockhash)
+            .await
+            .unwrap();
+        let transaction = Transaction::new_signed_with_payer(
+            &[create_lookup_table_ix],
+            Some(&payer.pubkey()),
+            &[payer],
+            recent_blockhash,
+        );
+
+        assert_matches!(client.process_transaction(transaction).await, Ok(()));
+    }
+}
+
+#[tokio::test]
+async fn test_create_lookup_table_not_idempotent() {
+    let mut context = setup_test_context_without_authority_feature().await;
+
+    let test_recent_slot = 123;
+    overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
+
+    let client = &mut context.banks_client;
+    let payer = &context.payer;
+    let recent_blockhash = context.last_blockhash;
+    let authority_keypair = Keypair::new();
+    let authority_address = authority_keypair.pubkey();
+    let (create_lookup_table_ix, ..) =
+        create_lookup_table_signed(authority_address, payer.pubkey(), test_recent_slot);
+
+    let transaction = Transaction::new_signed_with_payer(
+        &[create_lookup_table_ix.clone()],
+        Some(&payer.pubkey()),
+        &[payer, &authority_keypair],
+        recent_blockhash,
+    );
+
+    assert_matches!(client.process_transaction(transaction).await, Ok(()));
 
     // Second create should fail
     {
@@ -97,11 +146,11 @@ async fn test_create_lookup_table_use_payer_as_authority() {
 }
 
 #[tokio::test]
-async fn test_create_lookup_table_without_signer() {
-    let mut context = setup_test_context().await;
+async fn test_create_lookup_table_missing_signer() {
+    let mut context = setup_test_context_without_authority_feature().await;
     let unsigned_authority_address = Pubkey::new_unique();
 
-    let mut ix = create_lookup_table(
+    let mut ix = create_lookup_table_signed(
         unsigned_authority_address,
         context.payer.pubkey(),
         Slot::MAX,
@@ -122,15 +171,14 @@ async fn test_create_lookup_table_without_signer() {
 async fn test_create_lookup_table_not_recent_slot() {
     let mut context = setup_test_context().await;
     let payer = &context.payer;
-    let authority_keypair = Keypair::new();
-    let authority_address = authority_keypair.pubkey();
+    let authority_address = Pubkey::new_unique();
 
     let ix = create_lookup_table(authority_address, payer.pubkey(), Slot::MAX).0;
 
     assert_ix_error(
         &mut context,
         ix,
-        Some(&authority_keypair),
+        None,
         InstructionError::InvalidInstructionData,
     )
     .await;
@@ -142,17 +190,10 @@ async fn test_create_lookup_table_pda_mismatch() {
     let test_recent_slot = 123;
     overwrite_slot_hashes_with_slots(&mut context, &[test_recent_slot]);
     let payer = &context.payer;
-    let authority_keypair = Keypair::new();
-    let authority_address = authority_keypair.pubkey();
+    let authority_address = Pubkey::new_unique();
 
     let mut ix = create_lookup_table(authority_address, payer.pubkey(), test_recent_slot).0;
     ix.accounts[0].pubkey = Pubkey::new_unique();
 
-    assert_ix_error(
-        &mut context,
-        ix,
-        Some(&authority_keypair),
-        InstructionError::InvalidArgument,
-    )
-    .await;
+    assert_ix_error(&mut context, ix, None, InstructionError::InvalidArgument).await;
 }

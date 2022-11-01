@@ -17,11 +17,11 @@ pub fn parse_bpf_upgradeable_loader(
         UpgradeableLoaderState::Uninitialized => BpfUpgradeableLoaderAccountType::Uninitialized,
         UpgradeableLoaderState::Buffer { authority_address } => {
             let offset = if authority_address.is_some() {
-                UpgradeableLoaderState::buffer_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_buffer_metadata()
             } else {
                 // This case included for code completeness; in practice, a Buffer account will
                 // always have authority_address.is_some()
-                UpgradeableLoaderState::buffer_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_buffer_metadata()
                     - serialized_size(&Pubkey::default()).unwrap() as usize
             };
             BpfUpgradeableLoaderAccountType::Buffer(UiBuffer {
@@ -42,9 +42,9 @@ pub fn parse_bpf_upgradeable_loader(
             upgrade_authority_address,
         } => {
             let offset = if upgrade_authority_address.is_some() {
-                UpgradeableLoaderState::programdata_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_programdata_metadata()
             } else {
-                UpgradeableLoaderState::programdata_data_offset().unwrap()
+                UpgradeableLoaderState::size_of_programdata_metadata()
                     - serialized_size(&Pubkey::default()).unwrap() as usize
             };
             BpfUpgradeableLoaderAccountType::ProgramData(UiProgramData {
@@ -60,7 +60,7 @@ pub fn parse_bpf_upgradeable_loader(
     Ok(parsed_account)
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum BpfUpgradeableLoaderAccountType {
     Uninitialized,
@@ -69,20 +69,20 @@ pub enum BpfUpgradeableLoaderAccountType {
     ProgramData(UiProgramData),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiBuffer {
     pub authority: Option<String>,
     pub data: UiAccountData,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiProgram {
     pub program_data: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiProgramData {
     pub slot: u64,

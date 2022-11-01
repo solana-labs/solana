@@ -28,7 +28,7 @@
 //! [serialization]: #serialization
 //! [np]: #native-programs
 //! [cpi]: #cross-program-instruction-execution
-//! [sysvar]: #sysvars
+//! [sysvar]: crate::sysvar
 //!
 //! Idiomatic examples of `solana-program` usage can be found in
 //! [the Solana Program Library][spl].
@@ -112,7 +112,7 @@
 //! and off-chain execution, the environments of which are significantly
 //! different, it extensively uses [conditional compilation][cc] to tailor its
 //! implementation to the environment. The `cfg` predicate used for identifying
-//! compilation for on-chain programs is `target_arch = "bpf"`, as in this
+//! compilation for on-chain programs is `target_os = "solana"`, as in this
 //! example from the `solana-program` codebase that logs a message via a
 //! syscall when run on-chain, and via a library call when offchain:
 //!
@@ -122,12 +122,12 @@
 //!
 //! ```
 //! pub fn sol_log(message: &str) {
-//!     #[cfg(target_arch = "bpf")]
+//!     #[cfg(target_os = "solana")]
 //!     unsafe {
 //!         sol_log_(message.as_ptr(), message.len() as u64);
 //!     }
 //!
-//!     #[cfg(not(target_arch = "bpf"))]
+//!     #[cfg(not(target_os = "solana"))]
 //!     program_stubs::sol_log(message);
 //! }
 //! # mod program_stubs {
@@ -465,90 +465,7 @@
 //!   - Instruction: [`solana_program::loader_instruction`]
 //!   - Invokable by programs? yes
 //!
-//! [lut]: https://docs.solana.com/proposals/transactions-v2
-//!
-//! # Sysvars
-//!
-//! Sysvars are special accounts that contain dynamically-updating data about
-//! the network cluster, the blockchain history, and the executing transaction.
-//!
-//! The program IDs for sysvars are defined in the [`sysvar`] module, and simple
-//! sysvars implement the [`Sysvar::get`] method, which loads a sysvar directly
-//! from the runtime, as in this example that logs the `clock` sysvar:
-//!
-//! [`Sysvar::get`]: sysvar::Sysvar::get
-//!
-//! ```
-//! use solana_program::{
-//!     account_info::AccountInfo,
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
-//!
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let clock = clock::Clock::get()?;
-//!     msg!("clock: {:#?}", clock);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! Since Solana sysvars are accounts, if the `AccountInfo` is provided to the
-//! program, then the program can deserialize the sysvar with
-//! [`Sysvar::from_account_info`] to access its data, as in this example that
-//! again logs the [`clock`][clk] sysvar.
-//!
-//! [`Sysvar::from_account_info`]: sysvar::Sysvar::from_account_info
-//! [clk]: sysvar::clock
-//!
-//! ```
-//! use solana_program::{
-//!     account_info::{next_account_info, AccountInfo},
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
-//!
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let account_info_iter = &mut accounts.iter();
-//!     let clock_account = next_account_info(account_info_iter)?;
-//!     let clock = clock::Clock::from_account_info(&clock_account)?;
-//!     msg!("clock: {:#?}", clock);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! When possible, programs should prefer to call `Sysvar::get` instead of
-//! deserializing with `Sysvar::from_account_info`, as the latter imposes extra
-//! overhead of deserialization while also requiring the sysvar account address
-//! be passed to the program, wasting the limited space available to
-//! transactions. Deserializing sysvars that can instead be retrieved with
-//! `Sysvar::get` should be only be considered for compatibility with older
-//! programs that pass around sysvar accounts.
-//!
-//! Some sysvars are too large to deserialize within a program, and
-//! `Sysvar::from_account_info` returns an error. Some sysvars are too large
-//! to deserialize within a program, and attempting to will exhaust the
-//! program's compute budget. Some sysvars do not implement `Sysvar::get` and
-//! return an error. Some sysvars have custom deserializers that do not
-//! implement the `Sysvar` trait. These cases are documented in the modules for
-//! individual sysvars.
-//!
-//! For more details see the Solana [documentation on sysvars][sysvardoc].
-//!
-//! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
+//! [lut]: https://docs.solana.com/proposals/versioned-transactions
 
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]
@@ -572,8 +489,6 @@ pub mod ed25519_program;
 pub mod entrypoint;
 pub mod entrypoint_deprecated;
 pub mod epoch_schedule;
-#[cfg(not(target_arch = "bpf"))]
-pub mod example_mocks;
 pub mod feature;
 pub mod fee_calculator;
 pub mod hash;
@@ -599,23 +514,26 @@ pub mod rent;
 pub mod sanitize;
 pub mod secp256k1_program;
 pub mod secp256k1_recover;
+pub mod serde_varint;
 pub mod serialize_utils;
 pub mod short_vec;
 pub mod slot_hashes;
 pub mod slot_history;
 pub mod stake;
 pub mod stake_history;
+pub mod syscalls;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+pub mod vote;
 pub mod wasm;
 
-#[cfg(target_arch = "bpf")]
+#[cfg(target_os = "solana")]
 pub use solana_sdk_macro::wasm_bindgen_stub as wasm_bindgen;
 /// Re-export of [wasm-bindgen].
 ///
 /// [wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 pub use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The [config native program][np].
@@ -627,12 +545,36 @@ pub mod config {
     }
 }
 
-/// The [vote native program][np].
-///
-/// [np]: https://docs.solana.com/developing/runtime-facilities/programs#vote-program
-pub mod vote {
-    pub mod program {
-        crate::declare_id!("Vote111111111111111111111111111111111111111");
+/// A vector of Solana SDK IDs
+pub mod sdk_ids {
+    use {
+        crate::{
+            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable, config, ed25519_program,
+            feature, incinerator, secp256k1_program, solana_program::pubkey::Pubkey, stake,
+            system_program, sysvar, vote,
+        },
+        lazy_static::lazy_static,
+    };
+
+    lazy_static! {
+        pub static ref SDK_IDS: Vec<Pubkey> = {
+            let mut sdk_ids = vec![
+                ed25519_program::id(),
+                secp256k1_program::id(),
+                system_program::id(),
+                sysvar::id(),
+                bpf_loader::id(),
+                bpf_loader_upgradeable::id(),
+                incinerator::id(),
+                config::program::id(),
+                vote::program::id(),
+                feature::id(),
+                bpf_loader_deprecated::id(),
+                stake::config::id(),
+            ];
+            sdk_ids.extend(sysvar::ALL_IDS.iter());
+            sdk_ids
+        };
     }
 }
 
@@ -799,6 +741,34 @@ macro_rules! unchecked_div_by_const {
         quotient
     }};
 }
+
+use std::{mem::MaybeUninit, ptr::write_bytes};
+
+#[macro_export]
+macro_rules! copy_field {
+    ($ptr:expr, $self:ident, $field:ident) => {
+        std::ptr::addr_of_mut!((*$ptr).$field).write($self.$field)
+    };
+}
+
+pub fn clone_zeroed<T, F>(clone: F) -> T
+where
+    F: Fn(&mut MaybeUninit<T>),
+{
+    let mut value = MaybeUninit::<T>::uninit();
+    unsafe { write_bytes(&mut value, 0, 1) }
+    clone(&mut value);
+    unsafe { value.assume_init() }
+}
+
+// This module is purposefully listed after all other exports: because of an
+// interaction within rustdoc between the reexports inside this module of
+// `solana_program`'s top-level modules, and `solana_sdk`'s glob re-export of
+// `solana_program`'s top-level modules, if this module is not lexically last
+// rustdoc fails to generate documentation for the re-exports within
+// `solana_sdk`.
+#[cfg(not(target_os = "solana"))]
+pub mod example_mocks;
 
 #[cfg(test)]
 mod tests {

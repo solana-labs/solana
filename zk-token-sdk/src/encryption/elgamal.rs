@@ -18,7 +18,6 @@ use {
         discrete_log::DiscreteLog,
         pedersen::{Pedersen, PedersenCommitment, PedersenOpening, G, H},
     },
-    arrayref::{array_ref, array_refs},
     core::ops::{Add, Mul, Sub},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -37,7 +36,7 @@ use {
     subtle::{Choice, ConstantTimeEq},
     zeroize::Zeroize,
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     rand::rngs::OsRng,
     sha3::Sha3_512,
@@ -55,7 +54,7 @@ impl ElGamal {
     /// Generates an ElGamal keypair.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen() -> ElGamalKeypair {
         // secret scalar should be zero with negligible probability
@@ -67,7 +66,7 @@ impl ElGamal {
     }
 
     /// Generates an ElGamal keypair from a scalar input that determines the ElGamal private key.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen_with_scalar(s: &Scalar) -> ElGamalKeypair {
         assert!(s != &Scalar::zero());
@@ -84,7 +83,7 @@ impl ElGamal {
     /// corresponding ElGamal ciphertext.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn encrypt<T: Into<Scalar>>(public: &ElGamalPubkey, amount: T) -> ElGamalCiphertext {
         let (commitment, opening) = Pedersen::new(amount);
         let handle = public.decrypt_handle(&opening);
@@ -94,7 +93,7 @@ impl ElGamal {
 
     /// On input a public key, message, and Pedersen opening, the function
     /// returns the corresponding ElGamal ciphertext.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn encrypt_with<T: Into<Scalar>>(
         amount: T,
         public: &ElGamalPubkey,
@@ -109,7 +108,7 @@ impl ElGamal {
     /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
     /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
     /// of this form is a valid ciphertext under any ElGamal public key.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn encode<T: Into<Scalar>>(amount: T) -> ElGamalCiphertext {
         let commitment = Pedersen::encode(amount);
         let handle = DecryptHandle(RistrettoPoint::identity());
@@ -121,7 +120,7 @@ impl ElGamal {
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
     /// message, use `DiscreteLog::decode`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
             *G,
@@ -131,7 +130,7 @@ impl ElGamal {
 
     /// On input a secret key and a ciphertext, the function returns the decrypted message
     /// interpretted as type `u32`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
         discrete_log_instance.decode_u32()
@@ -141,7 +140,7 @@ impl ElGamal {
 /// A (twisted) ElGamal encryption keypair.
 ///
 /// The instances of the secret key are zeroized on drop.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, Zeroize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Zeroize)]
 pub struct ElGamalKeypair {
     /// The public half of this keypair.
     pub public: ElGamalPubkey,
@@ -151,7 +150,7 @@ pub struct ElGamalKeypair {
 
 impl ElGamalKeypair {
     /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana address.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
         let message = Message::new(
@@ -166,7 +165,7 @@ impl ElGamalKeypair {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
             return Err(SignerError::Custom("Rejecting default signature".into()));
         }
 
@@ -181,7 +180,7 @@ impl ElGamalKeypair {
     /// Generates the public and secret keys for ElGamal encryption.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     #[allow(clippy::new_ret_no_self)]
     pub fn new_rand() -> Self {
         ElGamal::keygen()
@@ -195,8 +194,12 @@ impl ElGamalKeypair {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() != 64 {
+            return None;
+        }
+
         Some(Self {
-            public: ElGamalPubkey::from_bytes(bytes[..32].try_into().ok()?)?,
+            public: ElGamalPubkey::from_bytes(&bytes[..32])?,
             secret: ElGamalSecretKey::from_bytes(bytes[32..].try_into().ok()?)?,
         })
     }
@@ -276,7 +279,11 @@ impl ElGamalPubkey {
         self.0.compress().to_bytes()
     }
 
-    pub fn from_bytes(bytes: &[u8; 32]) -> Option<ElGamalPubkey> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalPubkey> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(ElGamalPubkey(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))
@@ -285,7 +292,7 @@ impl ElGamalPubkey {
     /// Encrypts an amount under the public key.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     pub fn encrypt<T: Into<Scalar>>(&self, amount: T) -> ElGamalCiphertext {
         ElGamal::encrypt(self, amount)
     }
@@ -375,8 +382,11 @@ impl ElGamalSecretKey {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(bytes: [u8; 32]) -> Option<ElGamalSecretKey> {
-        Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey)
+    pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalSecretKey> {
+        match bytes.try_into() {
+            Ok(bytes) => Scalar::from_canonical_bytes(bytes).map(ElGamalSecretKey),
+            _ => None,
+        }
     }
 }
 
@@ -431,15 +441,13 @@ impl ElGamalCiphertext {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<ElGamalCiphertext> {
-        let bytes = array_ref![bytes, 0, 64];
-        let (commitment, handle) = array_refs![bytes, 32, 32];
-
-        let commitment = CompressedRistretto::from_slice(commitment).decompress()?;
-        let handle = CompressedRistretto::from_slice(handle).decompress()?;
+        if bytes.len() != 64 {
+            return None;
+        }
 
         Some(ElGamalCiphertext {
-            commitment: PedersenCommitment(commitment),
-            handle: DecryptHandle(handle),
+            commitment: PedersenCommitment::from_bytes(&bytes[..32])?,
+            handle: DecryptHandle::from_bytes(&bytes[32..])?,
         })
     }
 
@@ -454,6 +462,12 @@ impl ElGamalCiphertext {
     /// Decrypts the ciphertext using an ElGamal secret key interpretting the message as type `u32`.
     pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u64> {
         ElGamal::decrypt_u32(secret, self)
+    }
+}
+
+impl fmt::Display for ElGamalCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.to_bytes()))
     }
 }
 
@@ -543,6 +557,10 @@ impl DecryptHandle {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Option<DecryptHandle> {
+        if bytes.len() != 32 {
+            return None;
+        }
+
         Some(DecryptHandle(
             CompressedRistretto::from_slice(bytes).decompress()?,
         ))

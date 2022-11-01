@@ -1,5 +1,4 @@
-import React from "react";
-import ReactDOM from "react-dom";
+import { createRoot } from "react-dom/client";
 import { BrowserRouter as Router } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 import "./scss/theme-dark.scss";
@@ -11,6 +10,7 @@ import { TransactionsProvider } from "./providers/transactions";
 import { AccountsProvider } from "./providers/accounts";
 import { BlockProvider } from "./providers/block";
 import { EpochProvider } from "./providers/epoch";
+import { ScrollAnchorProvider } from "providers/scroll-anchor";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
 
@@ -20,27 +20,29 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-ReactDOM.render(
+const root = createRoot(document.getElementById("root")!);
+root.render(
   <Router>
-    <ClusterProvider>
-      <StatsProvider>
-        <SupplyProvider>
-          <RichListProvider>
-            <AccountsProvider>
-              <BlockProvider>
-                <EpochProvider>
-                  <MintsProvider>
-                    <TransactionsProvider>
-                      <App />
-                    </TransactionsProvider>
-                  </MintsProvider>
-                </EpochProvider>
-              </BlockProvider>
-            </AccountsProvider>
-          </RichListProvider>
-        </SupplyProvider>
-      </StatsProvider>
-    </ClusterProvider>
-  </Router>,
-  document.getElementById("root")
+    <ScrollAnchorProvider>
+      <ClusterProvider>
+        <StatsProvider>
+          <SupplyProvider>
+            <RichListProvider>
+              <AccountsProvider>
+                <BlockProvider>
+                  <EpochProvider>
+                    <MintsProvider>
+                      <TransactionsProvider>
+                        <App />
+                      </TransactionsProvider>
+                    </MintsProvider>
+                  </EpochProvider>
+                </BlockProvider>
+              </AccountsProvider>
+            </RichListProvider>
+          </SupplyProvider>
+        </StatsProvider>
+      </ClusterProvider>
+    </ScrollAnchorProvider>
+  </Router>
 );

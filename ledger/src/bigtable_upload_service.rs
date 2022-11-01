@@ -1,5 +1,8 @@
 use {
-    crate::{bigtable_upload, blockstore::Blockstore},
+    crate::{
+        bigtable_upload::{self, ConfirmedBlockUploadConfig},
+        blockstore::Blockstore,
+    },
     solana_runtime::commitment::BlockCommitmentCache,
     std::{
         cmp::min,
@@ -25,9 +28,29 @@ impl BigTableUploadService {
         max_complete_transaction_status_slot: Arc<AtomicU64>,
         exit: Arc<AtomicBool>,
     ) -> Self {
+        Self::new_with_config(
+            runtime,
+            bigtable_ledger_storage,
+            blockstore,
+            block_commitment_cache,
+            max_complete_transaction_status_slot,
+            ConfirmedBlockUploadConfig::default(),
+            exit,
+        )
+    }
+
+    pub fn new_with_config(
+        runtime: Arc<Runtime>,
+        bigtable_ledger_storage: solana_storage_bigtable::LedgerStorage,
+        blockstore: Arc<Blockstore>,
+        block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
+        max_complete_transaction_status_slot: Arc<AtomicU64>,
+        config: ConfirmedBlockUploadConfig,
+        exit: Arc<AtomicBool>,
+    ) -> Self {
         info!("Starting BigTable upload service");
         let thread = Builder::new()
-            .name("bigtable-upload".to_string())
+            .name("solBigTUpload".to_string())
             .spawn(move || {
                 Self::run(
                     runtime,
@@ -35,6 +58,7 @@ impl BigTableUploadService {
                     blockstore,
                     block_commitment_cache,
                     max_complete_transaction_status_slot,
+                    config,
                     exit,
                 )
             })
@@ -49,17 +73,24 @@ impl BigTableUploadService {
         blockstore: Arc<Blockstore>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        config: ConfirmedBlockUploadConfig,
         exit: Arc<AtomicBool>,
     ) {
-        let mut start_slot = 0;
+        let mut start_slot = blockstore.get_first_available_block().unwrap_or_default();
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
 
-            let end_slot = min(
+            // The highest slot eligible for upload is the highest root that has complete
+            // transaction-status metadata
+            let highest_complete_root = min(
                 max_complete_transaction_status_slot.load(Ordering::SeqCst),
                 block_commitment_cache.read().unwrap().root(),
+            );
+            let end_slot = min(
+                highest_complete_root,
+                start_slot.saturating_add(config.max_num_slots_to_check as u64 * 2),
             );
 
             if end_slot <= start_slot {
@@ -71,16 +102,19 @@ impl BigTableUploadService {
                 blockstore.clone(),
                 bigtable_ledger_storage.clone(),
                 start_slot,
-                Some(end_slot),
-                false,
+                end_slot,
+                config.clone(),
                 exit.clone(),
             ));
 
             match result {
-                Ok(()) => start_slot = end_slot,
+                Ok(last_slot_uploaded) => start_slot = last_slot_uploaded,
                 Err(err) => {
                     warn!("bigtable: upload_confirmed_blocks: {}", err);
                     std::thread::sleep(std::time::Duration::from_secs(2));
+                    if start_slot == 0 {
+                        start_slot = blockstore.get_first_available_block().unwrap_or_default();
+                    }
                 }
             }
         }

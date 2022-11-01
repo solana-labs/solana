@@ -2,6 +2,7 @@ use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
         blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
+        token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -12,30 +13,27 @@ use {
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_metrics::{datapoint_error, inc_new_counter_debug},
-    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings},
-    solana_rayon_threadlimit::get_thread_count,
+    solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
+    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::DroppedSlotsReceiver,
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
-            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionResult,
-            TransactionResults,
+            Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
+            TransactionExecutionResult, TransactionResults, VerifyBankHash,
         },
         bank_forks::BankForks,
         bank_utils,
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, SnapshotType},
-        snapshot_utils,
         transaction_batch::TransactionBatch,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
@@ -44,7 +42,6 @@ use {
         feature_set,
         genesis_config::GenesisConfig,
         hash::Hash,
-        instruction::InstructionError,
         pubkey::Pubkey,
         signature::{Keypair, Signature},
         timing,
@@ -53,23 +50,23 @@ use {
             VersionedTransaction,
         },
     },
-    solana_transaction_status::token_balances::{
-        collect_token_balances, TransactionTokenBalancesSet,
-    },
+    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering::Relaxed},
+            Arc, Mutex, RwLock,
+        },
         time::{Duration, Instant},
     },
     thiserror::Error,
 };
 
 // it tracks the block cost available capacity - number of compute-units allowed
-// by max block cost limit
+// by max block cost limit.
 #[derive(Debug)]
 pub struct BlockCostCapacityMeter {
     pub capacity: u64,
@@ -97,12 +94,25 @@ impl BlockCostCapacityMeter {
     }
 }
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
+struct TransactionBatchWithIndexes<'a, 'b> {
+    pub batch: TransactionBatch<'a, 'b>,
+    pub transaction_indexes: Vec<usize>,
+}
+
+struct ReplayEntry {
+    entry: EntryType,
+    starting_index: usize,
+}
+
+// get_max_thread_count to match number of threads in the old code.
+// see: https://github.com/solana-labs/solana/pull/24853
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_max_thread_count())
+        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
+        .build()
+        .unwrap();
+}
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -158,13 +168,19 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
 }
 
 fn execute_batch(
-    batch: &TransactionBatch,
+    batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    tx_cost: u64,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
+    let TransactionBatchWithIndexes {
+        batch,
+        transaction_indexes,
+    } = batch;
     let record_token_balances = transaction_status_sender.is_some();
 
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -185,6 +201,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         timings,
+        log_messages_bytes_limit,
     );
 
     if bank
@@ -195,13 +212,14 @@ fn execute_batch(
         let remaining_block_cost_cap = cost_capacity_meter
             .write()
             .unwrap()
-            .accumulate(execution_cost_units);
+            .accumulate(execution_cost_units + tx_cost);
 
         debug!(
-            "bank {} executed a batch, number of transactions {}, total execute cu {}, remaining block cost cap {}",
+            "bank {} executed a batch, number of transactions {}, total execute cu {}, total additional cu {}, remaining block cost cap {}",
             bank.slot(),
             batch.sanitized_transactions().len(),
             execution_cost_units,
+            tx_cost,
             remaining_block_cost_cap,
         );
 
@@ -223,13 +241,6 @@ fn execute_batch(
         ..
     } = tx_results;
 
-    if bank
-        .feature_set
-        .is_active(&feature_set::cap_accounts_data_len::id())
-    {
-        check_accounts_data_size(&execution_results)?;
-    }
-
     if let Some(transaction_status_sender) = transaction_status_sender {
         let transactions = batch.sanitized_transactions().to_vec();
         let post_token_balances = if record_token_balances {
@@ -248,6 +259,7 @@ fn execute_batch(
             balances,
             token_balances,
             rent_debits,
+            transaction_indexes.to_vec(),
         );
     }
 
@@ -255,116 +267,218 @@ fn execute_batch(
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }
 
+#[derive(Default)]
+struct ExecuteBatchesInternalMetrics {
+    execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
+    total_batches_len: u64,
+    execute_batches_us: u64,
+}
+
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-) -> Result<()> {
+    tx_costs: &[u64],
+    log_messages_bytes_limit: Option<usize>,
+) -> Result<ExecuteBatchesInternalMetrics> {
+    assert!(!batches.is_empty());
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let (results, new_timings): (Vec<Result<()>>, Vec<ExecuteTimings>) =
-        PAR_THREAD_POOL.with(|thread_pool| {
-            thread_pool.borrow().install(|| {
-                batches
-                    .into_par_iter()
-                    .map(|batch| {
-                        let mut timings = ExecuteTimings::default();
+    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
+        Mutex::new(HashMap::new());
+
+    let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .enumerate()
+            .map(|(index, transaction_batch_with_indexes)| {
+                let transaction_count = transaction_batch_with_indexes
+                    .batch
+                    .sanitized_transactions()
+                    .len() as u64;
+                let mut timings = ExecuteTimings::default();
+                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                    {
                         let result = execute_batch(
-                            batch,
+                            transaction_batch_with_indexes,
                             bank,
                             transaction_status_sender,
                             replay_vote_sender,
                             &mut timings,
                             cost_capacity_meter.clone(),
+                            tx_costs[index],
+                            log_messages_bytes_limit,
                         );
                         if let Some(entry_callback) = entry_callback {
                             entry_callback(bank);
                         }
-                        (result, timings)
+                        result
+                    },
+                    "execute_batch",
+                );
+
+                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
+                execution_timings_per_thread
+                    .lock()
+                    .unwrap()
+                    .entry(thread_index)
+                    .and_modify(|thread_execution_time| {
+                        let ThreadExecuteTimings {
+                            total_thread_us,
+                            total_transactions_executed,
+                            execute_timings: total_thread_execute_timings,
+                        } = thread_execution_time;
+                        *total_thread_us += execute_batches_time.as_us();
+                        *total_transactions_executed += transaction_count;
+                        total_thread_execute_timings
+                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
+                        total_thread_execute_timings.accumulate(&timings);
                     })
-                    .unzip()
+                    .or_insert(ThreadExecuteTimings {
+                        total_thread_us: execute_batches_time.as_us(),
+                        total_transactions_executed: transaction_count,
+                        execute_timings: timings,
+                    });
+                result
             })
-        });
+            .collect()
+    });
+    execute_batches_elapsed.stop();
 
-    timings.saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, batches.len() as u64);
-    timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
-    for timing in new_timings {
-        timings.accumulate(&timing);
+    first_err(&results)?;
+
+    Ok(ExecuteBatchesInternalMetrics {
+        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
+        total_batches_len: batches.len() as u64,
+        execute_batches_us: execute_batches_elapsed.as_us(),
+    })
+}
+
+fn rebatch_transactions<'a>(
+    lock_results: &'a [Result<()>],
+    bank: &'a Arc<Bank>,
+    sanitized_txs: &'a [SanitizedTransaction],
+    start: usize,
+    end: usize,
+    transaction_indexes: &'a [usize],
+) -> TransactionBatchWithIndexes<'a, 'a> {
+    let txs = &sanitized_txs[start..=end];
+    let results = &lock_results[start..=end];
+    let mut tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
+    tx_batch.set_needs_unlock(false);
+
+    let transaction_indexes = transaction_indexes[start..=end].to_vec();
+    TransactionBatchWithIndexes {
+        batch: tx_batch,
+        transaction_indexes,
     }
-
-    first_err(&results)
 }
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatch],
+    batches: &[TransactionBatchWithIndexes],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    timings: &mut ExecuteTimings,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    cost_model: &CostModel,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    let lock_results = batches
-        .iter()
-        .flat_map(|batch| batch.lock_results().clone())
-        .collect::<Vec<_>>();
-    let sanitized_txs = batches
-        .iter()
-        .flat_map(|batch| batch.sanitized_transactions().to_vec())
-        .collect::<Vec<_>>();
+    if batches.is_empty() {
+        return Ok(());
+    }
 
-    let cost_model = CostModel::new();
+    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
+        .iter()
+        .flat_map(|batch| {
+            batch
+                .batch
+                .lock_results()
+                .iter()
+                .cloned()
+                .zip(batch.batch.sanitized_transactions().to_vec())
+                .zip(batch.transaction_indexes.to_vec())
+        })
+        .unzip();
+
     let mut minimal_tx_cost = u64::MAX;
     let mut total_cost: u64 = 0;
+    let mut total_cost_without_bpf: u64 = 0;
     // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
     // These two values are later used for checking if the tx_costs vector needs to be iterated over.
+    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
     #[allow(clippy::needless_collect)]
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let cost = cost_model.calculate_cost(tx).sum();
+            let tx_cost = cost_model.calculate_cost(tx);
+            let cost = tx_cost.sum();
+            let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
             total_cost = total_cost.saturating_add(cost);
-            cost
+            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
+            (cost, cost_without_bpf)
         })
         .collect::<Vec<_>>();
 
     let target_batch_count = get_thread_count() as u64;
 
-    let mut tx_batches: Vec<TransactionBatch> = vec![];
+    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
+    let mut tx_batch_costs: Vec<u64> = vec![];
     let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
         let target_batch_cost = total_cost / target_batch_count;
         let mut batch_cost: u64 = 0;
+        let mut batch_cost_without_bpf: u64 = 0;
         let mut slice_start = 0;
-        tx_costs.into_iter().enumerate().for_each(|(index, cost)| {
-            let next_index = index + 1;
-            batch_cost = batch_cost.saturating_add(cost);
-            if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                let txs = &sanitized_txs[slice_start..=index];
-                let results = &lock_results[slice_start..=index];
-                let tx_batch = TransactionBatch::new(results.to_vec(), bank, Cow::from(txs));
-                slice_start = next_index;
-                tx_batches.push(tx_batch);
-                batch_cost = 0;
-            }
-        });
+        tx_costs
+            .into_iter()
+            .enumerate()
+            .for_each(|(index, cost_pair)| {
+                let next_index = index + 1;
+                batch_cost = batch_cost.saturating_add(cost_pair.0);
+                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
+                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
+                    let tx_batch = rebatch_transactions(
+                        &lock_results,
+                        bank,
+                        &sanitized_txs,
+                        slice_start,
+                        index,
+                        &transaction_indexes,
+                    );
+                    slice_start = next_index;
+                    tx_batches.push(tx_batch);
+                    tx_batch_costs.push(batch_cost_without_bpf);
+                    batch_cost = 0;
+                    batch_cost_without_bpf = 0;
+                }
+            });
         &tx_batches[..]
     } else {
+        // Ensure that the total cost attributed to this batch is essentially correct
+        // batches.is_empty() check at top of function ensures that n > 0 for following divide
+        let n = batches.len();
+        tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n];
         batches
     };
 
-    execute_batches_internal(
+    let execute_batches_internal_metrics = execute_batches_internal(
         bank,
         rebatched_txs,
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
-        timings,
         cost_capacity_meter,
-    )
+        &tx_batch_costs,
+        log_messages_bytes_limit,
+    )?;
+
+    confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
+    Ok(())
 }
 
 /// Process an ordered list of entries in parallel
@@ -372,6 +486,9 @@ fn execute_batches(
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
+///
+/// This method is for use testing against a single Bank, and assumes `Bank::transaction_count()`
+/// represents the number of transactions executed in this Bank
 pub fn process_entries_for_tests(
     bank: &Arc<Bank>,
     entries: Vec<Entry>,
@@ -386,42 +503,66 @@ pub fn process_entries_for_tests(
         }
     };
 
-    let mut timings = ExecuteTimings::default();
-    let mut entries = entry::verify_transactions(entries, Arc::new(verify_transaction))?;
+    let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
+    let mut confirmation_timing = ConfirmationTiming::default();
+    let mut replay_entries: Vec<_> =
+        entry::verify_transactions(entries, Arc::new(verify_transaction))?
+            .into_iter()
+            .map(|entry| {
+                let starting_index = entry_starting_index;
+                if let EntryType::Transactions(ref transactions) = entry {
+                    entry_starting_index = entry_starting_index.saturating_add(transactions.len());
+                }
+                ReplayEntry {
+                    entry,
+                    starting_index,
+                }
+            })
+            .collect();
+
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries_with_callback(
         bank,
-        &mut entries,
+        &mut replay_entries,
         randomize,
         None,
         transaction_status_sender,
         replay_vote_sender,
-        None,
-        &mut timings,
+        &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
+        None,
+        &_ignored_prioritization_fee_cache,
     );
 
-    debug!("process_entries: {:?}", timings);
+    debug!("process_entries: {:?}", confirmation_timing);
     result
 }
 
 // Note: If randomize is true this will shuffle entries' transactions in-place.
+#[allow(clippy::too_many_arguments)]
 fn process_entries_with_callback(
     bank: &Arc<Bank>,
-    entries: &mut [EntryType],
+    entries: &mut [ReplayEntry],
     randomize: bool,
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
-    timings: &mut ExecuteTimings,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
+    let cost_model = CostModel::new();
 
-    for entry in entries {
+    for ReplayEntry {
+        entry,
+        starting_index,
+    } in entries
+    {
         match entry {
             EntryType::Tick(hash) => {
                 // If it's a tick, save it for later
@@ -435,8 +576,10 @@ fn process_entries_with_callback(
                         entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
-                        timings,
+                        confirmation_timing,
                         cost_capacity_meter.clone(),
+                        &cost_model,
+                        log_messages_bytes_limit,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -446,14 +589,18 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
-                if let Some(transaction_cost_metrics_sender) = transaction_cost_metrics_sender {
-                    transaction_cost_metrics_sender
-                        .send_cost_details(bank.clone(), transactions.iter());
-                }
-
-                if randomize {
-                    transactions.shuffle(&mut rng);
-                }
+                let starting_index = *starting_index;
+                let transaction_indexes = if randomize {
+                    let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
+                        transactions.drain(..).zip(starting_index..).collect();
+                    transactions_and_indexes.shuffle(&mut rng);
+                    let (txs, indexes): (Vec<_>, Vec<_>) =
+                        transactions_and_indexes.into_iter().unzip();
+                    *transactions = txs;
+                    indexes
+                } else {
+                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
+                };
 
                 loop {
                     // try to lock the accounts
@@ -462,7 +609,13 @@ fn process_entries_with_callback(
 
                     // if locking worked
                     if first_lock_err.is_ok() {
-                        batches.push(batch);
+                        batches.push(TransactionBatchWithIndexes {
+                            batch,
+                            transaction_indexes,
+                        });
+                        // entry is scheduled to be processed, transactions in it can be used to
+                        // update prioritization fee cache asynchronously.
+                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
                         // done with this entry
                         break;
                     }
@@ -492,8 +645,10 @@ fn process_entries_with_callback(
                             entry_callback,
                             transaction_status_sender,
                             replay_vote_sender,
-                            timings,
+                            confirmation_timing,
                             cost_capacity_meter.clone(),
+                            &cost_model,
+                            log_messages_bytes_limit,
                         )?;
                         batches.clear();
                     }
@@ -507,8 +662,10 @@ fn process_entries_with_callback(
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
-        timings,
+        confirmation_timing,
         cost_capacity_meter,
+        &cost_model,
+        log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -549,7 +706,6 @@ pub struct ProcessOptions {
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessCallback>,
-    pub override_num_threads: Option<usize>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -562,36 +718,73 @@ pub struct ProcessOptions {
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
+    pub on_halt_store_hash_raw_data_for_debug: bool,
+    /// true if after processing the contents of the blockstore at startup, we should run an accounts hash calc
+    /// This is useful for debugging.
+    pub run_final_accounts_hash_calc: bool,
 }
 
 pub fn test_process_blockstore(
     genesis_config: &GenesisConfig,
     blockstore: &Blockstore,
-    opts: ProcessOptions,
+    opts: &ProcessOptions,
+    exit: &Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
-    let (bank_forks, leader_schedule_cache, .., pruned_banks_receiver) =
-        crate::bank_forks_utils::load_bank_forks(
-            genesis_config,
-            blockstore,
-            Vec::new(),
-            None,
-            None,
-            &opts,
-            None,
-            None,
-        );
+    // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
+    // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
+    // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let bg_exit = Arc::new(AtomicBool::new(false));
+    let bg_thread = {
+        let exit = Arc::clone(&bg_exit);
+        std::thread::spawn(move || {
+            while !exit.load(Relaxed) {
+                snapshot_request_receiver
+                    .try_iter()
+                    .filter(|snapshot_request| {
+                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                    })
+                    .for_each(|snapshot_request| {
+                        snapshot_request
+                            .snapshot_root_bank
+                            .rc
+                            .accounts
+                            .accounts_db
+                            .epoch_accounts_hash_manager
+                            .set_invalid_for_tests();
+                    });
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        })
+    };
+
+    let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
+        genesis_config,
+        blockstore,
+        Vec::new(),
+        None,
+        None,
+        opts,
+        None,
+        None,
+        exit,
+    );
+
     process_blockstore_from_root(
         blockstore,
         &bank_forks,
         &leader_schedule_cache,
-        &opts,
+        opts,
         None,
         None,
-        None,
-        PendingAccountsPackage::default(),
-        pruned_banks_receiver,
+        &abs_request_sender,
     )
     .unwrap();
+
+    bg_exit.store(true, Relaxed);
+    bg_thread.join().unwrap();
+
     (bank_forks, leader_schedule_cache)
 }
 
@@ -602,10 +795,12 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Arc<RwLock<BankForks>> {
     // Setup bank for slot 0
-    let mut bank0 = Bank::new_with_paths(
+    let bank0 = Bank::new_with_paths(
         genesis_config,
+        Arc::new(opts.runtime_config.clone()),
         account_paths,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
@@ -615,11 +810,11 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
+        exit,
     );
-    bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
-    info!("processing ledger for slot 0...");
+    info!("Processing ledger for slot 0...");
     process_bank_0(
         &bank_forks.read().unwrap().root_bank(),
         blockstore,
@@ -639,56 +834,45 @@ pub fn process_blockstore_from_root(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    pending_accounts_package: PendingAccountsPackage,
-    pruned_banks_receiver: DroppedSlotsReceiver,
-) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
-
+    accounts_background_request_sender: &AbsRequestSender,
+) -> result::Result<(), BlockstoreProcessorError> {
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
     let bank = bank_forks.read().unwrap().root_bank();
     assert!(bank.parent().is_none());
 
     let start_slot = bank.slot();
-    info!("processing ledger from slot {}...", start_slot);
+    info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
     // ensure start_slot is rooted for correct replay
     if blockstore.is_primary_access() {
         blockstore
-            .set_roots(std::iter::once(&start_slot))
-            .expect("Couldn't set root slot on startup");
+            .mark_slots_as_if_rooted_normally_at_startup(
+                vec![(bank.slot(), Some(bank.hash()))],
+                true,
+            )
+            .expect("Couldn't mark start_slot as root on startup");
     } else {
-        assert!(
-            blockstore.is_root(start_slot),
-            "starting slot isn't root and can't update due to being secondary blockstore access: {}", start_slot
+        info!(
+            "Starting slot {} isn't root and won't be updated due to being secondary blockstore access",
+            start_slot
         );
     }
 
-    if let Ok(metas) = blockstore.slot_meta_iterator(start_slot) {
-        if let Some((slot, _meta)) = metas.last() {
-            info!("ledger holds data through slot {}", slot);
-        }
+    if let Ok(Some(highest_slot)) = blockstore.highest_slot() {
+        info!("ledger holds data through slot {}", highest_slot);
     }
 
     let mut timing = ExecuteTimings::default();
+
     // Iterate and replay slots from blockstore starting from `start_slot`
-
-    let mut last_full_snapshot_slot = None;
-
+    let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
         .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
     {
-        load_frozen_forks(
+        num_slots_processed = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -697,38 +881,22 @@ pub fn process_blockstore_from_root(
             opts,
             transaction_status_sender,
             cache_block_meta_sender,
-            snapshot_config,
-            pending_accounts_package,
             &mut timing,
-            &mut last_full_snapshot_slot,
-            pruned_banks_receiver,
+            accounts_background_request_sender,
         )?;
     } else {
-        // If there's no meta for the input `start_slot`, then we started from a snapshot
-        // and there's no point in processing the rest of blockstore and implies blockstore
-        // should be empty past this point.
+        // If there's no meta in the blockstore for the input `start_slot`,
+        // then we started from a snapshot and are unable to process anything.
+        //
+        // If the ledger has any data at all, the snapshot was likely taken at
+        // a slot that is not within the range of ledger min/max slot(s).
+        warn!(
+            "Starting slot {} is not in Blockstore, unable to process",
+            start_slot
+        );
     };
 
     let processing_time = now.elapsed();
-
-    let debug_verify = opts.accounts_db_test_hash_calculation;
-    let mut time_cap = Measure::start("capitalization");
-    // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
-    // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
-    // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks
-        .read()
-        .unwrap()
-        .root_bank()
-        .calculate_and_verify_capitalization(debug_verify)
-    {
-        return Err(
-            BlockstoreProcessorError::RootBankWithMismatchedCapitalization(
-                bank_forks.read().unwrap().root(),
-            ),
-        );
-    }
-    time_cap.stop();
 
     datapoint_info!(
         "process_blockstore_from_root",
@@ -739,14 +907,14 @@ pub fn process_blockstore_from_root(
             i64
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
+        ("num_slots_processed", num_slots_processed, i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
-        ("calculate_capitalization_us", time_cap.as_us(), i64),
     );
 
     info!("ledger processing timing: {:?}", timing);
     {
         let bank_forks = bank_forks.read().unwrap();
-        let mut bank_slots = bank_forks.banks().keys().collect::<Vec<_>>();
+        let mut bank_slots = bank_forks.banks().keys().copied().collect::<Vec<_>>();
         bank_slots.sort_unstable();
 
         info!(
@@ -758,10 +926,10 @@ pub fn process_blockstore_from_root(
             if bank_slots.len() > 1 { "s" } else { "" },
             bank_slots.iter().map(|slot| slot.to_string()).join(", "),
         );
-        assert!(bank_forks.active_banks().is_empty());
+        assert!(bank_forks.active_bank_slots().is_empty());
     }
 
-    Ok(last_full_snapshot_slot)
+    Ok(())
 }
 
 /// Verify that a segment of entries has the correct number of ticks and hashes
@@ -821,6 +989,8 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
+
     confirm_slot(
         blockstore,
         bank,
@@ -829,10 +999,11 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
+        opts.runtime_config.log_messages_bytes_limit,
+        &_ignored_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -846,14 +1017,70 @@ fn confirm_full_slot(
     }
 }
 
+#[derive(Debug)]
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
+    pub execute_batches_us: u64,
     pub poh_verify_elapsed: u64,
     pub transaction_verify_elapsed: u64,
     pub fetch_elapsed: u64,
     pub fetch_fail_elapsed: u64,
     pub execute_timings: ExecuteTimings,
+    pub end_to_end_execute_timings: ThreadExecuteTimings,
+}
+
+impl ConfirmationTiming {
+    fn process_execute_batches_internal_metrics(
+        &mut self,
+        execute_batches_internal_metrics: ExecuteBatchesInternalMetrics,
+    ) {
+        let ConfirmationTiming {
+            execute_timings: ref mut cumulative_execute_timings,
+            execute_batches_us: ref mut cumulative_execute_batches_us,
+            ref mut end_to_end_execute_timings,
+            ..
+        } = self;
+
+        saturating_add_assign!(
+            *cumulative_execute_batches_us,
+            execute_batches_internal_metrics.execute_batches_us
+        );
+
+        cumulative_execute_timings.saturating_add_in_place(
+            ExecuteTimingType::TotalBatchesLen,
+            execute_batches_internal_metrics.total_batches_len,
+        );
+        cumulative_execute_timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
+
+        let mut current_max_thread_execution_time: Option<ThreadExecuteTimings> = None;
+        for (_, thread_execution_time) in execute_batches_internal_metrics
+            .execution_timings_per_thread
+            .into_iter()
+        {
+            let ThreadExecuteTimings {
+                total_thread_us,
+                execute_timings,
+                ..
+            } = &thread_execution_time;
+            cumulative_execute_timings.accumulate(execute_timings);
+            if *total_thread_us
+                > current_max_thread_execution_time
+                    .as_ref()
+                    .map(|thread_execution_time| thread_execution_time.total_thread_us)
+                    .unwrap_or(0)
+            {
+                current_max_thread_execution_time = Some(thread_execution_time);
+            }
+        }
+
+        if let Some(current_max_thread_execution_time) = current_max_thread_execution_time {
+            end_to_end_execute_timings.accumulate(&current_max_thread_execution_time);
+            end_to_end_execute_timings
+                .execute_timings
+                .saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
+        };
+    }
 }
 
 impl Default for ConfirmationTiming {
@@ -861,11 +1088,13 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
+            execute_batches_us: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,
             fetch_elapsed: 0,
             fetch_fail_elapsed: 0,
             execute_timings: ExecuteTimings::default(),
+            end_to_end_execute_timings: ThreadExecuteTimings::default(),
         }
     }
 }
@@ -897,10 +1126,11 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
+    log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -926,9 +1156,10 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        transaction_cost_metrics_sender,
         entry_callback,
         recyclers,
+        log_messages_bytes_limit,
+        prioritization_fee_cache,
     )
 }
 
@@ -941,14 +1172,26 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
+    log_messages_bytes_limit: Option<usize>,
+    prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
     let num_entries = entries.len();
-    let num_txs = entries.iter().map(|e| e.transactions.len()).sum::<usize>();
+    let mut entry_starting_indexes = Vec::with_capacity(num_entries);
+    let mut entry_starting_index = progress.num_txs;
+    let num_txs = entries
+        .iter()
+        .map(|e| {
+            let num_txs = e.transactions.len();
+            let next_starting_index = entry_starting_index.saturating_add(num_txs);
+            entry_starting_indexes.push(entry_starting_index);
+            entry_starting_index = next_starting_index;
+            num_txs
+        })
+        .sum::<usize>();
     trace!(
         "Fetched entries for slot {}, num_entries: {}, num_shreds: {}, num_txs: {}, slot_full: {}",
         slot,
@@ -1013,25 +1256,32 @@ fn confirm_slot_entries(
             assert!(entries.is_some());
 
             let mut replay_elapsed = Measure::start("replay_elapsed");
-            let mut execute_timings = ExecuteTimings::default();
             let cost_capacity_meter = Arc::new(RwLock::new(BlockCostCapacityMeter::default()));
+            let mut replay_entries: Vec<_> = entries
+                .unwrap()
+                .into_iter()
+                .zip(entry_starting_indexes)
+                .map(|(entry, starting_index)| ReplayEntry {
+                    entry,
+                    starting_index,
+                })
+                .collect();
             // Note: This will shuffle entries' transactions in-place.
             let process_result = process_entries_with_callback(
                 bank,
-                &mut entries.unwrap(),
+                &mut replay_entries,
                 true, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
-                transaction_cost_metrics_sender,
-                &mut execute_timings,
+                timing,
                 cost_capacity_meter,
+                log_messages_bytes_limit,
+                prioritization_fee_cache,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
             timing.replay_elapsed += replay_elapsed.as_us();
-
-            timing.execute_timings.accumulate(&execute_timings);
 
             // If running signature verification on the GPU, wait for that
             // computation to finish, and get the result of it. If we did the
@@ -1094,9 +1344,11 @@ fn process_bank_0(
         None,
         &mut ExecuteTimings::default(),
     )
-    .expect("processing for bank 0 must succeed");
+    .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
     bank0.freeze();
-    blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
+    if blockstore.is_primary_access() {
+        blockstore.insert_bank_hash(bank0.slot(), bank0.hash(), false);
+    }
     cache_block_meta(bank0, cache_block_meta_sender);
 }
 
@@ -1108,6 +1360,7 @@ fn process_next_slots(
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Bank, Hash)>,
+    halt_at_slot: Option<Slot>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     if meta.next_slots.is_empty() {
         return Ok(());
@@ -1115,6 +1368,13 @@ fn process_next_slots(
 
     // This is a fork point if there are multiple children, create a new child bank for each fork
     for next_slot in &meta.next_slots {
+        let skip_next_slot = halt_at_slot
+            .map(|halt_at_slot| *next_slot > halt_at_slot)
+            .unwrap_or(false);
+        if skip_next_slot {
+            continue;
+        }
+
         let next_meta = blockstore
             .meta(*next_slot)
             .map_err(|err| {
@@ -1159,17 +1419,16 @@ fn load_frozen_forks(
     opts: &ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-    snapshot_config: Option<&SnapshotConfig>,
-    pending_accounts_package: PendingAccountsPackage,
     timing: &mut ExecuteTimings,
-    last_full_snapshot_slot: &mut Option<Slot>,
-    pruned_banks_receiver: DroppedSlotsReceiver,
-) -> result::Result<(), BlockstoreProcessorError> {
+    accounts_background_request_sender: &AbsRequestSender,
+) -> result::Result<u64, BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
-    let mut last_free = Instant::now();
     let mut pending_slots = vec![];
+    // The total number of slots processed
+    let mut total_slots_elapsed = 0;
+    // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
@@ -1182,15 +1441,20 @@ fn load_frozen_forks(
     );
 
     process_next_slots(
-        bank_forks.read().unwrap().get(start_slot).unwrap(),
+        &bank_forks.read().unwrap().get(start_slot).unwrap(),
         start_slot_meta,
         blockstore,
         leader_schedule_cache,
         &mut pending_slots,
+        opts.halt_at_slot,
     )?;
 
-    let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
-    if bank_forks.read().unwrap().root() != halt_at_slot {
+    let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
+    if Some(bank_forks.read().unwrap().root()) != opts.halt_at_slot {
+        let mut set_root_us = 0;
+        let mut root_retain_us = 0;
+        let mut process_single_slot_us = 0;
+        let mut voting_us = 0;
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
@@ -1199,7 +1463,7 @@ fn load_frozen_forks(
                 let secs = last_status_report.elapsed().as_secs() as f32;
                 last_status_report = Instant::now();
                 info!(
-                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}, set_root_us={set_root_us}, root_retain_us={root_retain_us}, process_single_slot_us:{process_single_slot_us}, voting_us: {voting_us}",
                     slot,
                     root,
                     slots_elapsed,
@@ -1208,10 +1472,15 @@ fn load_frozen_forks(
                 );
                 slots_elapsed = 0;
                 txs = 0;
+                set_root_us = 0;
+                root_retain_us = 0;
+                process_single_slot_us = 0;
+                voting_us = 0;
             }
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
+            let mut m = Measure::start("process_single_slot");
             let bank = bank_forks.write().unwrap().insert(bank);
             if process_single_slot(
                 blockstore,
@@ -1235,6 +1504,10 @@ fn load_frozen_forks(
             // have errored above
             assert!(bank.is_frozen());
             all_banks.insert(bank.slot(), bank.clone());
+            m.stop();
+            process_single_slot_us += m.as_us();
+
+            let mut m = Measure::start("voting");
 
             // If we've reached the last known root in blockstore, start looking
             // for newer cluster confirmed roots
@@ -1266,14 +1539,17 @@ fn load_frozen_forks(
                                 if new_root_bank.slot() == root { break; } // Found the last root in the chain, yay!
                                 assert!(new_root_bank.slot() > root);
 
-                                rooted_slots.push((new_root_bank.slot(), new_root_bank.hash()));
+                                rooted_slots.push((new_root_bank.slot(), Some(new_root_bank.hash())));
                                 // As noted, the cluster confirmed root should be descended from
                                 // our last root; therefore parent should be set
                                 new_root_bank = new_root_bank.parent().unwrap();
                             }
                             inc_new_counter_info!("load_frozen_forks-cluster-confirmed-root", rooted_slots.len());
-                            blockstore.set_roots(rooted_slots.iter().map(|(slot, _hash)| slot)).expect("Blockstore::set_roots should succeed");
-                            blockstore.set_duplicate_confirmed_slots_and_hashes(rooted_slots.into_iter()).expect("Blockstore::set_duplicate_confirmed should succeed");
+                            if blockstore.is_primary_access() {
+                                blockstore
+                                    .mark_slots_as_if_rooted_normally_at_startup(rooted_slots, true)
+                                    .expect("Blockstore::mark_slots_as_if_rooted_normally_at_startup() should succeed");
+                            }
                             Some(cluster_root_bank)
                         } else {
                             None
@@ -1286,76 +1562,33 @@ fn load_frozen_forks(
                 }
             };
 
+            m.stop();
+            voting_us += m.as_us();
+
             if let Some(new_root_bank) = new_root_bank {
+                let mut m = Measure::start("set_root");
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
                 let _ = bank_forks.write().unwrap().set_root(
                     root,
-                    &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+                    accounts_background_request_sender,
                     None,
                 );
-
-                if let Some(snapshot_config) = snapshot_config {
-                    let block_height = new_root_bank.block_height();
-                    if snapshot_utils::should_take_full_snapshot(
-                        block_height,
-                        snapshot_config.full_snapshot_archive_interval_slots,
-                    ) {
-                        info!("Taking snapshot of new root bank that has crossed the full snapshot interval! slot: {}", root);
-                        *last_full_snapshot_slot = Some(root);
-                        new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
-                        last_free = Instant::now();
-                        new_root_bank.update_accounts_hash_with_index_option(
-                            false,
-                            snapshot_config.accounts_hash_debug_verify,
-                            false,
-                        );
-                        snapshot_utils::snapshot_bank(
-                            new_root_bank,
-                            new_root_bank.src.slot_deltas(&new_root_bank.src.roots()),
-                            &pending_accounts_package,
-                            &snapshot_config.bank_snapshots_dir,
-                            &snapshot_config.snapshot_archives_dir,
-                            snapshot_config.snapshot_version,
-                            snapshot_config.archive_format,
-                            None,
-                            Some(SnapshotType::FullSnapshot),
-                        )
-                        .expect("Failed to snapshot bank while loading frozen banks");
-                        trace!(
-                            "took bank snapshot for new root bank, block height: {}, slot: {}",
-                            block_height,
-                            root
-                        );
-                    }
-                }
-
-                if last_free.elapsed() > Duration::from_secs(10) {
-                    // Purge account state for all dropped banks
-                    for (pruned_slot, pruned_bank_id) in pruned_banks_receiver.try_iter() {
-                        // Simulate this purge is from AccountBackgroundService
-                        new_root_bank.rc.accounts.accounts_db.purge_slot(
-                            pruned_slot,
-                            pruned_bank_id,
-                            true,
-                        );
-                    }
-
-                    // Must be called after `squash()`, so that AccountsDb knows what
-                    // the roots are for the cache flushing in exhaustively_free_unused_resource().
-                    // This could take few secs; so update last_free later
-                    new_root_bank.exhaustively_free_unused_resource(*last_full_snapshot_slot);
-                    last_free = Instant::now();
-                }
+                m.stop();
+                set_root_us += m.as_us();
 
                 // Filter out all non descendants of the new root
+                let mut m = Measure::start("filter pending slots");
                 pending_slots
                     .retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(&root));
                 all_banks.retain(|_, bank| bank.ancestors.contains_key(&root));
+                m.stop();
+                root_retain_us += m.as_us();
             }
 
             slots_elapsed += 1;
+            total_slots_elapsed += 1;
 
             trace!(
                 "Bank for {}slot {} is complete",
@@ -1363,23 +1596,46 @@ fn load_frozen_forks(
                 slot,
             );
 
+            let done_processing = opts
+                .halt_at_slot
+                .map(|halt_at_slot| slot >= halt_at_slot)
+                .unwrap_or(false);
+            if done_processing {
+                if opts.run_final_accounts_hash_calc {
+                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                }
+                break;
+            }
+
             process_next_slots(
                 &bank,
                 &meta,
                 blockstore,
                 leader_schedule_cache,
                 &mut pending_slots,
+                opts.halt_at_slot,
             )?;
-
-            if slot >= halt_at_slot {
-                bank.force_flush_accounts_cache();
-                let _ = bank.verify_bank_hash(false);
-                break;
-            }
         }
+    } else if on_halt_store_hash_raw_data_for_debug {
+        run_final_hash_calc(
+            &bank_forks.read().unwrap().root_bank(),
+            on_halt_store_hash_raw_data_for_debug,
+        );
     }
 
-    Ok(())
+    Ok(total_slots_elapsed)
+}
+
+fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
+    bank.force_flush_accounts_cache();
+    // note that this slot may not be a root
+    let _ = bank.verify_bank_hash(VerifyBankHash {
+        test_hash_calculation: false,
+        ignore_mismatch: true,
+        require_rooted_bank: false,
+        run_in_background: false,
+        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+    });
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -1450,7 +1706,17 @@ fn process_single_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see AlreadyProcessed errors later in ReplayStage
-    confirm_full_slot(blockstore, bank, opts, recyclers, progress, transaction_status_sender, replay_vote_sender, timing).map_err(|err| {
+    confirm_full_slot(
+        blockstore,
+        bank,
+        opts,
+        recyclers,
+        progress,
+        transaction_status_sender,
+        replay_vote_sender,
+        timing,
+    )
+    .map_err(|err| {
         let slot = bank.slot();
         warn!("slot {} failed to verify: {}", slot, err);
         if blockstore.is_primary_access() {
@@ -1458,13 +1724,18 @@ fn process_single_slot(
                 .set_dead_slot(slot)
                 .expect("Failed to mark slot as dead in blockstore");
         } else {
-            assert!(blockstore.is_dead(slot), "Failed slot isn't dead and can't update due to being secondary blockstore access: {}", slot);
+            info!(
+                "Failed slot {} won't be marked dead due to being secondary blockstore access",
+                slot
+            );
         }
         err
     })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
-    blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
+    if blockstore.is_primary_access() {
+        blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
+    }
     cache_block_meta(bank, cache_block_meta_sender);
 
     Ok(())
@@ -1479,10 +1750,11 @@ pub enum TransactionStatusMessage {
 pub struct TransactionStatusBatch {
     pub bank: Arc<Bank>,
     pub transactions: Vec<SanitizedTransaction>,
-    pub execution_results: Vec<TransactionExecutionResult>,
+    pub execution_results: Vec<Option<TransactionExecutionDetails>>,
     pub balances: TransactionBalancesSet,
     pub token_balances: TransactionTokenBalancesSet,
     pub rent_debits: Vec<RentDebits>,
+    pub transaction_indexes: Vec<usize>,
 }
 
 #[derive(Clone)]
@@ -1499,6 +1771,7 @@ impl TransactionStatusSender {
         balances: TransactionBalancesSet,
         token_balances: TransactionTokenBalancesSet,
         rent_debits: Vec<RentDebits>,
+        transaction_indexes: Vec<usize>,
     ) {
         let slot = bank.slot();
 
@@ -1507,10 +1780,17 @@ impl TransactionStatusSender {
             .send(TransactionStatusMessage::Batch(TransactionStatusBatch {
                 bank,
                 transactions,
-                execution_results,
+                execution_results: execution_results
+                    .into_iter()
+                    .map(|result| match result {
+                        TransactionExecutionResult::Executed { details, .. } => Some(details),
+                        TransactionExecutionResult::NotExecuted(_) => None,
+                    })
+                    .collect(),
                 balances,
                 token_balances,
                 rent_debits,
+                transaction_indexes,
             }))
         {
             trace!(
@@ -1574,36 +1854,15 @@ pub fn fill_blockstore_slot_with_ticks(
     last_entry_hash
 }
 
-/// Check the transaction execution results to see if any instruction errored by exceeding the max
-/// accounts data size limit for all slots.  If yes, the whole block needs to be failed.
-fn check_accounts_data_size<'a>(
-    execution_results: impl IntoIterator<Item = &'a TransactionExecutionResult>,
-) -> Result<()> {
-    if let Some(result) = execution_results
-        .into_iter()
-        .map(|execution_result| execution_result.flattened_result())
-        .find(|result| {
-            matches!(
-                result,
-                Err(TransactionError::InstructionError(
-                    _,
-                    InstructionError::MaxAccountsDataSizeExceeded
-                )),
-            )
-        })
-    {
-        return result;
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 pub mod tests {
     use {
         super::*,
-        crate::genesis_utils::{
-            create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+        crate::{
+            blockstore_options::{AccessType, BlockstoreOptions},
+            genesis_utils::{
+                create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
+            },
         },
         matches::assert_matches,
         rand::{thread_rng, Rng},
@@ -1618,6 +1877,7 @@ pub mod tests {
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
             hash::Hash,
+            native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_instruction::SystemError,
@@ -1633,8 +1893,55 @@ pub mod tests {
         trees::tr,
     };
 
+    // Convenience wrapper to optionally process blockstore with Secondary access.
+    //
+    // Setting up the ledger for a test requires Primary access as items will need to be inserted.
+    // However, once a Secondary access has been opened, it won't automaticaly see updates made by
+    // the Primary access. So, open (and close) the Secondary access within this function to ensure
+    // that "stale" Secondary accesses don't propagate.
+    fn test_process_blockstore_with_custom_options(
+        genesis_config: &GenesisConfig,
+        blockstore: &Blockstore,
+        opts: &ProcessOptions,
+        access_type: AccessType,
+    ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
+        match access_type {
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {
+                // Attempting to open a second Primary access would fail, so
+                // just pass the original session if it is a Primary variant
+                test_process_blockstore(genesis_config, blockstore, opts, &Arc::default())
+            }
+            AccessType::Secondary => {
+                let secondary_blockstore = Blockstore::open_with_options(
+                    blockstore.ledger_path(),
+                    BlockstoreOptions {
+                        access_type,
+                        ..BlockstoreOptions::default()
+                    },
+                )
+                .expect("Unable to open access to blockstore");
+                test_process_blockstore(
+                    genesis_config,
+                    &secondary_blockstore,
+                    opts,
+                    &Arc::default(),
+                )
+            }
+        }
+    }
+
     #[test]
     fn test_process_blockstore_with_missing_hashes() {
+        do_test_process_blockstore_with_missing_hashes(AccessType::Primary);
+    }
+
+    #[test]
+    fn test_process_blockstore_with_missing_hashes_secondary_access() {
+        do_test_process_blockstore_with_missing_hashes(AccessType::Secondary);
+    }
+
+    // Intentionally make slot 1 faulty and ensure that processing sees it as dead
+    fn do_test_process_blockstore_with_missing_hashes(blockstore_access_type: AccessType) {
         solana_logger::setup();
 
         let hashes_per_tick = 2;
@@ -1665,15 +1972,28 @@ pub mod tests {
             Ok(_)
         );
 
-        let (bank_forks, ..) = test_process_blockstore(
+        let (bank_forks, ..) = test_process_blockstore_with_custom_options(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            blockstore_access_type.clone(),
         );
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
+
+        let dead_slots: Vec<Slot> = blockstore.dead_slots_iterator(0).unwrap().collect();
+        match blockstore_access_type {
+            // Secondary access is immutable so even though a dead slot
+            // will be identified, it won't actually be marked dead.
+            AccessType::Secondary => {
+                assert_eq!(dead_slots.len(), 0);
+            }
+            AccessType::Primary | AccessType::PrimaryForMaintenance => {
+                assert_eq!(&dead_slots, &[1]);
+            }
+        }
     }
 
     #[test]
@@ -1710,10 +2030,11 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            &Arc::default(),
         );
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
 
@@ -1724,10 +2045,11 @@ pub mod tests {
         let (bank_forks, ..) = test_process_blockstore(
             &genesis_config,
             &blockstore,
-            ProcessOptions {
+            &ProcessOptions {
                 poh_verify: true,
                 ..ProcessOptions::default()
             },
+            &Arc::default(),
         );
 
         // One valid fork, one bad fork.  process_blockstore() should only return the valid fork
@@ -1782,7 +2104,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]);
     }
 
@@ -1846,7 +2169,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
 
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0]); // slot 1 isn't "full", we stop at slot zero
 
@@ -1865,7 +2189,8 @@ pub mod tests {
         };
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 0, blockhash);
         // Slot 0 should not show up in the ending bank_forks_info
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
 
         // slot 1 isn't "full", we stop at slot zero
         assert_eq!(frozen_bank_slots(&bank_forks.read().unwrap()), vec![0, 3]);
@@ -1931,7 +2256,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // One fork, other one is ignored b/c not a descendant of the root
@@ -2010,7 +2336,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![1, 2, 3, 4]);
@@ -2066,8 +2393,12 @@ pub mod tests {
         blockstore.set_dead_slot(2).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1, 3]);
@@ -2111,8 +2442,12 @@ pub mod tests {
         blockstore.set_dead_slot(4).unwrap();
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 3, 1, slot1_blockhash);
 
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see the parent of the dead child
@@ -2159,8 +2494,12 @@ pub mod tests {
         fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, 2, 0, blockhash);
         blockstore.set_dead_slot(1).unwrap();
         blockstore.set_dead_slot(2).unwrap();
-        let (bank_forks, ..) =
-            test_process_blockstore(&genesis_config, &blockstore, ProcessOptions::default());
+        let (bank_forks, ..) = test_process_blockstore(
+            &genesis_config,
+            &blockstore,
+            &ProcessOptions::default(),
+            &Arc::default(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         // Should see only the parent of the dead children
@@ -2211,7 +2550,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // There is one fork, head is last_slot + 1
@@ -2355,7 +2695,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0, 1]);
@@ -2385,29 +2726,13 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(frozen_bank_slots(&bank_forks), vec![0]);
         let bank = bank_forks[0].clone();
         assert_eq!(bank.tick_height(), 1);
-    }
-
-    #[test]
-    fn test_process_ledger_options_override_threads() {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(123);
-        let (ledger_path, _blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-        let opts = ProcessOptions {
-            override_num_threads: Some(1),
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        test_process_blockstore(&genesis_config, &blockstore, opts);
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
     }
 
     #[test]
@@ -2422,7 +2747,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         let (_bank_forks, leader_schedule) =
-            test_process_blockstore(&genesis_config, &blockstore, opts);
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(leader_schedule.max_schedules(), std::usize::MAX);
     }
 
@@ -2477,12 +2802,11 @@ pub mod tests {
         };
 
         let opts = ProcessOptions {
-            override_num_threads: Some(1),
             entry_callback: Some(entry_callback),
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        test_process_blockstore(&genesis_config, &blockstore, opts);
+        test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         assert_eq!(*callback_counter.write().unwrap(), 2);
     }
 
@@ -3136,7 +3460,8 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) =
+            test_process_blockstore(&genesis_config, &blockstore, &opts, &Arc::default());
         let bank_forks = bank_forks.read().unwrap();
 
         // Should be able to fetch slot 0 because we specified halting at slot 0, even
@@ -3182,7 +3507,7 @@ pub mod tests {
 
         // Set up bank1
         let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap().clone();
+        let bank0 = bank_forks.get(0).unwrap();
         let opts = ProcessOptions {
             poh_verify: true,
             accounts_db_test_hash_calculation: true,
@@ -3211,7 +3536,6 @@ pub mod tests {
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank1);
 
         // Test process_blockstore_from_root() from slot 1 onwards
-        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         let bank_forks = RwLock::new(bank_forks);
         process_blockstore_from_root(
             &blockstore,
@@ -3220,9 +3544,7 @@ pub mod tests {
             &opts,
             None,
             None,
-            None,
-            PendingAccountsPackage::default(),
-            pruned_banks_receiver,
+            &AbsRequestSender::default(),
         )
         .unwrap();
 
@@ -3244,128 +3566,6 @@ pub mod tests {
 
         // Check that bank forks has the correct banks
         verify_fork_infos(&bank_forks);
-    }
-
-    /// Test that processing the blockstore is aware of incremental snapshots.  When processing the
-    /// blockstore from a root, like what happens when loading from a snapshot, there may be new
-    /// roots that cross a full snapshot interval.  In these cases, a bank snapshot must be taken,
-    /// so that a full snapshot archive is created and available by the time the background
-    /// services spin up.
-    ///
-    /// For this test, process enough roots to cross the full snapshot interval multiple times.
-    /// Ensure afterwards that the snapshots were created.
-    #[test]
-    fn test_process_blockstore_from_root_with_snapshots() {
-        solana_logger::setup();
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = create_genesis_config(123);
-
-        let ticks_per_slot = 1;
-        genesis_config.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, blockhash) = create_new_tmp_ledger_auto_delete!(&genesis_config);
-        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
-
-        const ROOT_INTERVAL_SLOTS: Slot = 2;
-        const FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS: Slot = ROOT_INTERVAL_SLOTS * 5;
-        const LAST_SLOT: Slot = FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 4;
-
-        let mut last_hash = blockhash;
-        for i in 1..=LAST_SLOT {
-            last_hash =
-                fill_blockstore_slot_with_ticks(&blockstore, ticks_per_slot, i, i - 1, last_hash);
-        }
-
-        let roots_to_set = (0..=LAST_SLOT)
-            .step_by(ROOT_INTERVAL_SLOTS as usize)
-            .collect_vec();
-        blockstore.set_roots(roots_to_set.iter()).unwrap();
-
-        // Set up bank1
-        let mut bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
-        let bank0 = bank_forks.get(0).unwrap().clone();
-        let opts = ProcessOptions {
-            poh_verify: true,
-            accounts_db_test_hash_calculation: true,
-            ..ProcessOptions::default()
-        };
-        let recyclers = VerifyRecyclers::default();
-        process_bank_0(&bank0, &blockstore, &opts, &recyclers, None);
-
-        let slot_start_processing = 1;
-        let bank = bank_forks.insert(Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            slot_start_processing,
-        ));
-        confirm_full_slot(
-            &blockstore,
-            &bank,
-            &opts,
-            &recyclers,
-            &mut ConfirmationProgress::new(bank0.last_blockhash()),
-            None,
-            None,
-            &mut ExecuteTimings::default(),
-        )
-        .unwrap();
-        bank_forks.set_root(
-            1,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            None,
-        );
-
-        let bank_snapshots_tempdir = tempfile::TempDir::new().unwrap();
-        let snapshot_config = SnapshotConfig {
-            full_snapshot_archive_interval_slots: FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            bank_snapshots_dir: bank_snapshots_tempdir.path().to_path_buf(),
-            ..SnapshotConfig::default()
-        };
-
-        let pending_accounts_package = PendingAccountsPackage::default();
-        let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
-
-        let (_pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
-        process_blockstore_from_root(
-            &blockstore,
-            &RwLock::new(bank_forks),
-            &leader_schedule_cache,
-            &opts,
-            None,
-            None,
-            Some(&snapshot_config),
-            Arc::clone(&pending_accounts_package),
-            pruned_banks_receiver,
-        )
-        .unwrap();
-
-        // Ensure the last AccountsPackage was created and is pending
-        let received_accounts_package_slot = pending_accounts_package
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .slot;
-        let expected_accounts_package_slot = (slot_start_processing..=LAST_SLOT)
-            .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
-            .max()
-            .unwrap();
-        assert_eq!(
-            received_accounts_package_slot,
-            expected_accounts_package_slot
-        );
-
-        // Ensure all the bank snapshots were created
-        let bank_snapshots = snapshot_utils::get_bank_snapshots(&bank_snapshots_tempdir);
-        let mut bank_snapshot_slots = bank_snapshots
-            .into_iter()
-            .map(|bank_snapshot| bank_snapshot.slot)
-            .collect::<Vec<_>>();
-        bank_snapshot_slots.sort_unstable();
-        let expected_slots = (slot_start_processing..=LAST_SLOT)
-            .filter(|slot| slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0)
-            .collect::<Vec<_>>();
-        assert_eq!(bank_snapshot_slots, expected_slots);
     }
 
     #[test]
@@ -3514,13 +3714,11 @@ pub mod tests {
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             account_paths,
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            false,
         );
         *bank.epoch_schedule()
     }
@@ -3593,6 +3791,7 @@ pub mod tests {
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
@@ -3627,15 +3826,13 @@ pub mod tests {
         // Create an transaction that references the new blockhash, should still
         // be able to find the blockhash if we process transactions all in the same
         // batch
-        let mut expected_successful_voter_pubkeys = BTreeSet::new();
+        let mut expected_signatures = BTreeSet::new();
         let vote_txs: Vec<_> = validator_keypairs
             .iter()
             .enumerate()
             .map(|(i, validator_keypairs)| {
-                if i % 3 == 0 {
+                let vote_tx = if i % 3 == 0 {
                     // These votes are correct
-                    expected_successful_voter_pubkeys
-                        .insert(validator_keypairs.vote_keypair.pubkey());
                     vote_transaction::new_vote_transaction(
                         vec![0],
                         bank0.hash(),
@@ -3667,18 +3864,20 @@ pub mod tests {
                         &validator_keypairs.vote_keypair,
                         None,
                     )
-                }
+                };
+                expected_signatures.insert(vote_tx.signatures[0]);
+                vote_tx
             })
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
         let _ =
             process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
-        let successes: BTreeSet<Pubkey> = replay_vote_receiver
+        let signatures: BTreeSet<_> = replay_vote_receiver
             .try_iter()
-            .map(|(vote_pubkey, _, _)| vote_pubkey)
+            .map(|(.., signature)| signature)
             .collect();
-        assert_eq!(successes, expected_successful_voter_pubkeys);
+        assert_eq!(signatures, expected_signatures);
     }
 
     fn make_slot_with_vote_tx(
@@ -3709,7 +3908,10 @@ pub mod tests {
             .unwrap();
     }
 
-    fn run_test_process_blockstore_with_supermajority_root(blockstore_root: Option<Slot>) {
+    fn run_test_process_blockstore_with_supermajority_root(
+        blockstore_root: Option<Slot>,
+        blockstore_access_type: AccessType,
+    ) {
         solana_logger::setup();
         /*
             Build fork structure:
@@ -3776,7 +3978,13 @@ pub mod tests {
             accounts_db_test_hash_calculation: true,
             ..ProcessOptions::default()
         };
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts.clone());
+
+        let (bank_forks, ..) = test_process_blockstore_with_custom_options(
+            &genesis_config,
+            &blockstore,
+            &opts,
+            blockstore_access_type.clone(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         // prepare to add votes
@@ -3808,7 +4016,12 @@ pub mod tests {
             &leader_keypair,
         );
 
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts.clone());
+        let (bank_forks, ..) = test_process_blockstore_with_custom_options(
+            &genesis_config,
+            &blockstore,
+            &opts,
+            blockstore_access_type.clone(),
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(bank_forks.root(), expected_root_slot);
@@ -3863,7 +4076,12 @@ pub mod tests {
             &leader_keypair,
         );
 
-        let (bank_forks, ..) = test_process_blockstore(&genesis_config, &blockstore, opts);
+        let (bank_forks, ..) = test_process_blockstore_with_custom_options(
+            &genesis_config,
+            &blockstore,
+            &opts,
+            blockstore_access_type,
+        );
         let bank_forks = bank_forks.read().unwrap();
 
         assert_eq!(bank_forks.root(), really_expected_root_slot);
@@ -3871,12 +4089,17 @@ pub mod tests {
 
     #[test]
     fn test_process_blockstore_with_supermajority_root_without_blockstore_root() {
-        run_test_process_blockstore_with_supermajority_root(None);
+        run_test_process_blockstore_with_supermajority_root(None, AccessType::Primary);
+    }
+
+    #[test]
+    fn test_process_blockstore_with_supermajority_root_without_blockstore_root_secondary_access() {
+        run_test_process_blockstore_with_supermajority_root(None, AccessType::Secondary);
     }
 
     #[test]
     fn test_process_blockstore_with_supermajority_root_with_blockstore_root() {
-        run_test_process_blockstore_with_supermajority_root(Some(1))
+        run_test_process_blockstore_with_supermajority_root(Some(1), AccessType::Primary)
     }
 
     #[test]
@@ -3894,7 +4117,7 @@ pub mod tests {
                     VoteState::serialize(&versioned, vote_account.data_as_mut_slice()).unwrap();
                     (
                         solana_sdk::pubkey::new_rand(),
-                        (stake, VoteAccount::from(vote_account)),
+                        (stake, VoteAccount::try_from(vote_account).unwrap()),
                     )
                 })
                 .collect()
@@ -3945,8 +4168,9 @@ pub mod tests {
             None,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
+            None,
+            &PrioritizationFeeCache::new(0u64),
         )
     }
 
@@ -4034,6 +4258,188 @@ pub mod tests {
         assert_eq!(slot_2_bank.get_hash_age(&slot_0_hash), Some(2));
         assert_eq!(slot_2_bank.get_hash_age(&slot_1_hash), Some(1));
         assert_eq!(slot_2_bank.get_hash_age(&slot_2_hash), Some(0));
+    }
+
+    #[test]
+    fn test_confirm_slot_entries_progress_num_txs_indexes() {
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(100 * LAMPORTS_PER_SOL);
+        let genesis_hash = genesis_config.hash();
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut timing = ConfirmationTiming::default();
+        let mut progress = ConfirmationProgress::new(genesis_hash);
+        let amount = genesis_config.rent.minimum_balance(0);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        let keypair4 = Keypair::new();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair1.pubkey())
+            .unwrap();
+        bank.transfer(LAMPORTS_PER_SOL, &mint_keypair, &keypair2.pubkey())
+            .unwrap();
+
+        let (transaction_status_sender, transaction_status_receiver) =
+            crossbeam_channel::unbounded();
+        let transaction_status_sender = TransactionStatusSender {
+            sender: transaction_status_sender,
+        };
+
+        let blockhash = bank.last_blockhash();
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&blockhash, 1, vec![tx1, tx2]);
+        let new_hash = entry.hash;
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            &VerifyRecyclers::default(),
+            None,
+            &PrioritizationFeeCache::new(0u64),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 2);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 2);
+            assert_eq!(batch.transaction_indexes.len(), 2);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&0));
+            assert!(batch.transaction_indexes.contains(&1));
+        } else {
+            panic!("batch should have been sent");
+        }
+
+        let tx1 = system_transaction::transfer(
+            &keypair1,
+            &keypair3.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx2 = system_transaction::transfer(
+            &keypair2,
+            &keypair4.pubkey(),
+            amount + 1,
+            bank.last_blockhash(),
+        );
+        let tx3 = system_transaction::transfer(
+            &mint_keypair,
+            &Pubkey::new_unique(),
+            amount,
+            bank.last_blockhash(),
+        );
+        let entry = next_entry(&new_hash, 1, vec![tx1, tx2, tx3]);
+
+        confirm_slot_entries(
+            &bank,
+            (vec![entry], 0, false),
+            &mut timing,
+            &mut progress,
+            false,
+            Some(&transaction_status_sender),
+            None,
+            None,
+            &VerifyRecyclers::default(),
+            None,
+            &PrioritizationFeeCache::new(0u64),
+        )
+        .unwrap();
+        assert_eq!(progress.num_txs, 5);
+        let batch = transaction_status_receiver.recv().unwrap();
+        if let TransactionStatusMessage::Batch(batch) = batch {
+            assert_eq!(batch.transactions.len(), 3);
+            assert_eq!(batch.transaction_indexes.len(), 3);
+            // Assert contains instead of the actual vec due to randomize
+            assert!(batch.transaction_indexes.contains(&2));
+            assert!(batch.transaction_indexes.contains(&3));
+            assert!(batch.transaction_indexes.contains(&4));
+        } else {
+            panic!("batch should have been sent");
+        }
+    }
+
+    #[test]
+    fn test_rebatch_transactions() {
+        let dummy_leader_pubkey = solana_sdk::pubkey::new_rand();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config_with_leader(500, &dummy_leader_pubkey, 100);
+        let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let pubkey = solana_sdk::pubkey::new_rand();
+        let keypair2 = Keypair::new();
+        let pubkey2 = solana_sdk::pubkey::new_rand();
+        let keypair3 = Keypair::new();
+        let pubkey3 = solana_sdk::pubkey::new_rand();
+
+        let txs = vec![
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &mint_keypair,
+                &pubkey,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair2,
+                &pubkey2,
+                1,
+                genesis_config.hash(),
+            )),
+            SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
+                &keypair3,
+                &pubkey3,
+                1,
+                genesis_config.hash(),
+            )),
+        ];
+
+        let batch = bank.prepare_sanitized_batch(&txs);
+        assert!(batch.needs_unlock());
+        let transaction_indexes = vec![42, 43, 44];
+
+        let batch2 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            0,
+            0,
+            &transaction_indexes,
+        );
+        assert!(batch.needs_unlock());
+        assert!(!batch2.batch.needs_unlock());
+        assert_eq!(batch2.transaction_indexes, vec![42]);
+
+        let batch3 = rebatch_transactions(
+            batch.lock_results(),
+            &bank,
+            batch.sanitized_transactions(),
+            1,
+            2,
+            &transaction_indexes,
+        );
+        assert!(!batch3.batch.needs_unlock());
+        assert_eq!(batch3.transaction_indexes, vec![43, 44]);
     }
 
     #[test]

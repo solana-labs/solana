@@ -67,34 +67,43 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn insert_or_delete(&self, insert: bool, _bin: usize) {
-        if insert {
-            self.inserts.fetch_add(1, Ordering::Relaxed);
-            self.count.fetch_add(1, Ordering::Relaxed);
-        } else {
-            self.deletes.fetch_add(1, Ordering::Relaxed);
-            self.count.fetch_sub(1, Ordering::Relaxed);
-        }
+    pub fn inc_insert(&self) {
+        self.inc_insert_count(1);
     }
 
-    pub fn insert_or_delete_mem(&self, insert: bool, bin: usize) {
-        self.insert_or_delete_mem_count(insert, bin, 1)
+    pub fn inc_insert_count(&self, count: u64) {
+        self.inserts.fetch_add(count, Ordering::Relaxed);
+        self.count.fetch_add(count as usize, Ordering::Relaxed);
     }
 
-    pub fn insert_or_delete_mem_count(&self, insert: bool, bin: usize, count: usize) {
+    pub fn inc_delete(&self) {
+        self.deletes.fetch_add(1, Ordering::Relaxed);
+        self.count.fetch_sub(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_mem_count(&self, bin: usize) {
+        self.add_mem_count(bin, 1);
+    }
+
+    pub fn dec_mem_count(&self, bin: usize) {
+        self.sub_mem_count(bin, 1);
+    }
+
+    pub fn add_mem_count(&self, bin: usize, count: usize) {
         let per_bucket = self.per_bucket_count.get(bin);
-        if insert {
-            self.count_in_mem.fetch_add(count, Ordering::Relaxed);
-            per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
-        } else {
-            self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
-            per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
-        }
+        self.count_in_mem.fetch_add(count, Ordering::Relaxed);
+        per_bucket.map(|stat| stat.fetch_add(count, Ordering::Relaxed));
+    }
+
+    pub fn sub_mem_count(&self, bin: usize, count: usize) {
+        let per_bucket = self.per_bucket_count.get(bin);
+        self.count_in_mem.fetch_sub(count, Ordering::Relaxed);
+        per_bucket.map(|stat| stat.fetch_sub(count, Ordering::Relaxed));
     }
 
     fn ms_per_age<T: IndexValue>(&self, storage: &BucketMapHolder<T>, elapsed_ms: u64) -> u64 {
         let age_now = storage.current_age();
-        let ages_flushed = storage.count_ages_flushed() as u64;
+        let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
         let last_ages_flushed = self.last_ages_flushed.swap(ages_flushed, Ordering::Relaxed) as u64;
         let mut age_now = age_now as u64;
@@ -397,6 +406,16 @@ impl BucketMapHolderStats {
                 (
                     "disk_index_flush_file_us",
                     disk.map(|disk| disk.stats.index.flush_file_us.swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_find_entry_mut_us",
+                    disk.map(|disk| disk
+                        .stats
+                        .index
+                        .find_entry_mut_us
+                        .swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),
                     i64
                 ),

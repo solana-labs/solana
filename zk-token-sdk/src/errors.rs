@@ -22,14 +22,12 @@ pub enum ProofError {
     ZeroBalanceProof,
     #[error("validity proof failed to verify")]
     ValidityProof,
-    #[error(
-        "`zk_token_elgamal::pod::ElGamalCiphertext` contains invalid ElGamalCiphertext ciphertext"
-    )]
-    InconsistentCTData,
-    #[error("failed to decrypt ciphertext from transfer data")]
+    #[error("public-key sigma proof failed to verify")]
+    PubkeySigmaProof,
+    #[error("failed to decrypt ciphertext")]
     Decryption,
-    #[error("discrete log number of threads not power-of-two")]
-    DiscreteLogThreads,
+    #[error("invalid ciphertext data")]
+    CiphertextDeserialization,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
@@ -64,5 +62,11 @@ impl From<ZeroBalanceProofError> for ProofError {
 impl From<ValidityProofError> for ProofError {
     fn from(_err: ValidityProofError) -> Self {
         Self::ValidityProof
+    }
+}
+
+impl From<PubkeySigmaProofError> for ProofError {
+    fn from(_err: PubkeySigmaProofError) -> Self {
+        Self::PubkeySigmaProof
     }
 }

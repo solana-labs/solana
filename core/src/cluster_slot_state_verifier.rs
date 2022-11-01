@@ -11,10 +11,11 @@ use {
 
 pub(crate) type DuplicateSlotsTracker = BTreeSet<Slot>;
 pub(crate) type DuplicateSlotsToRepair = HashMap<Slot, Hash>;
+pub(crate) type PurgeRepairSlotCounter = BTreeMap<Slot, usize>;
 pub(crate) type EpochSlotsFrozenSlots = BTreeMap<Slot, Hash>;
 pub(crate) type GossipDuplicateConfirmedSlots = BTreeMap<Slot, Hash>;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ClusterConfirmedHash {
     // Ordered from strongest confirmation to weakest. Stronger
     // confirmations take precedence over weaker ones.
@@ -22,7 +23,7 @@ pub enum ClusterConfirmedHash {
     EpochSlotsFrozen(Hash),
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum BankStatus {
     Frozen(Hash),
     Dead,
@@ -71,7 +72,7 @@ impl BankStatus {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DeadState {
     // Keep fields private, forces construction
     // via constructor
@@ -106,7 +107,7 @@ impl DeadState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct BankFrozenState {
     // Keep fields private, forces construction
     // via constructor
@@ -149,7 +150,7 @@ impl BankFrozenState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DuplicateConfirmedState {
     // Keep fields private, forces construction
     // via constructor
@@ -174,7 +175,7 @@ impl DuplicateConfirmedState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct DuplicateState {
     // Keep fields private, forces construction
     // via constructor
@@ -211,7 +212,7 @@ impl DuplicateState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct EpochSlotsFrozenState {
     // Keep fields private, forces construction
     // via constructor
@@ -255,7 +256,7 @@ impl EpochSlotsFrozenState {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum SlotStateUpdate {
     BankFrozen(BankFrozenState),
     DuplicateConfirmed(DuplicateConfirmedState),
@@ -280,7 +281,7 @@ impl SlotStateUpdate {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum ResultingStateChange {
     // Bank was frozen
     BankFrozen(Hash),
@@ -299,7 +300,7 @@ pub enum ResultingStateChange {
 impl SlotStateUpdate {
     fn into_state_changes(self, slot: Slot) -> Vec<ResultingStateChange> {
         let bank_frozen_hash = self.bank_hash();
-        if bank_frozen_hash == None {
+        if bank_frozen_hash.is_none() {
             // If the bank hasn't been frozen yet, then there's nothing to do
             // since replay of the slot hasn't finished yet.
             return vec![];
@@ -694,6 +695,7 @@ fn apply_state_changes(
     duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     blockstore: &Blockstore,
     ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+    purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     state_changes: Vec<ResultingStateChange>,
 ) {
     // Handle cases where the bank is frozen, but not duplicate confirmed
@@ -728,6 +730,7 @@ fn apply_state_changes(
                     )
                     .unwrap();
                 duplicate_slots_to_repair.remove(&slot);
+                purge_repair_slot_counter.remove(&slot);
             }
             ResultingStateChange::SendAncestorHashesReplayUpdate(ancestor_hashes_replay_update) => {
                 let _ = ancestor_hashes_replay_update_sender.send(ancestor_hashes_replay_update);
@@ -750,13 +753,11 @@ pub(crate) fn check_slot_agrees_with_cluster(
     fork_choice: &mut HeaviestSubtreeForkChoice,
     duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
     ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
+    purge_repair_slot_counter: &mut PurgeRepairSlotCounter,
     slot_state_update: SlotStateUpdate,
 ) {
     info!(
-        "check_slot_agrees_with_cluster()
-        slot: {},
-        root: {},
-        slot_state_update: {:?}",
+        "check_slot_agrees_with_cluster() slot: {}, root: {}, slot_state_update: {:?}",
         slot, root, slot_state_update
     );
 
@@ -766,11 +767,33 @@ pub(crate) fn check_slot_agrees_with_cluster(
 
     // Needs to happen before the bank_frozen_hash.is_none() check below to account for duplicate
     // signals arriving before the bank is constructed in replay.
-    if matches!(slot_state_update, SlotStateUpdate::Duplicate(_)) {
+    if let SlotStateUpdate::Duplicate(ref state) = slot_state_update {
         // If this slot has already been processed before, return
         if !duplicate_slots_tracker.insert(slot) {
             return;
         }
+
+        datapoint_info!(
+            "duplicate_slot",
+            ("slot", slot, i64),
+            (
+                "duplicate_confirmed_hash",
+                state
+                    .duplicate_confirmed_hash
+                    .unwrap_or_default()
+                    .to_string(),
+                String
+            ),
+            (
+                "my_hash",
+                state
+                    .bank_status
+                    .bank_hash()
+                    .unwrap_or_default()
+                    .to_string(),
+                String
+            ),
+        );
     }
 
     // Avoid duplicate work from multiple of the same DuplicateConfirmed signal. This can
@@ -781,6 +804,25 @@ pub(crate) fn check_slot_agrees_with_cluster(
                 return;
             }
         }
+
+        datapoint_info!(
+            "duplicate_confirmed_slot",
+            ("slot", slot, i64),
+            (
+                "duplicate_confirmed_hash",
+                state.duplicate_confirmed_hash.to_string(),
+                String
+            ),
+            (
+                "my_hash",
+                state
+                    .bank_status
+                    .bank_hash()
+                    .unwrap_or_default()
+                    .to_string(),
+                String
+            ),
+        );
     }
 
     if let SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state) = &slot_state_update {
@@ -801,6 +843,7 @@ pub(crate) fn check_slot_agrees_with_cluster(
         duplicate_slots_to_repair,
         blockstore,
         ancestor_hashes_replay_update_sender,
+        purge_repair_slot_counter,
         state_changes,
     );
 }
@@ -1336,14 +1379,7 @@ mod test {
         // Create simple fork 0 -> 1 -> 2 -> 3
         let forks = tr(0) / (tr(1) / (tr(2) / tr(3)));
         let (vote_simulator, blockstore) = setup_forks_from_tree(forks, 1, None);
-
-        let descendants = vote_simulator
-            .bank_forks
-            .read()
-            .unwrap()
-            .descendants()
-            .clone();
-
+        let descendants = vote_simulator.bank_forks.read().unwrap().descendants();
         InitialState {
             heaviest_subtree_fork_choice: vote_simulator.heaviest_subtree_fork_choice,
             progress: vote_simulator.progress,
@@ -1365,6 +1401,7 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // MarkSlotDuplicate should mark progress map and remove
         // the slot from fork choice
@@ -1383,6 +1420,7 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             vec![ResultingStateChange::MarkSlotDuplicate(duplicate_slot_hash)],
         );
         assert!(!heaviest_subtree_fork_choice
@@ -1405,6 +1443,7 @@ mod test {
             );
         }
         assert!(duplicate_slots_to_repair.is_empty());
+        assert!(purge_repair_slot_counter.is_empty());
 
         // Simulate detecting another hash that is the correct version,
         // RepairDuplicateConfirmedVersion should add the slot to repair
@@ -1417,6 +1456,7 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             vec![ResultingStateChange::RepairDuplicateConfirmedVersion(
                 correct_hash,
             )],
@@ -1426,6 +1466,7 @@ mod test {
             *duplicate_slots_to_repair.get(&duplicate_slot).unwrap(),
             correct_hash
         );
+        assert!(purge_repair_slot_counter.is_empty());
     }
 
     #[test]
@@ -1439,6 +1480,7 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         let duplicate_slot = bank_forks.read().unwrap().root() + 1;
         let duplicate_slot_hash = bank_forks
@@ -1459,6 +1501,7 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             vec![ResultingStateChange::BankFrozen(duplicate_slot_hash)],
         );
         assert_eq!(
@@ -1482,6 +1525,7 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             vec![ResultingStateChange::BankFrozen(new_bank_hash)],
         );
         assert_eq!(
@@ -1504,6 +1548,7 @@ mod test {
         } = setup();
 
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         let duplicate_slot = bank_forks.read().unwrap().root() + 1;
         let our_duplicate_slot_hash = bank_forks
@@ -1515,6 +1560,7 @@ mod test {
 
         // Setup and check the state that is about to change.
         duplicate_slots_to_repair.insert(duplicate_slot, Hash::new_unique());
+        purge_repair_slot_counter.insert(duplicate_slot, 1);
         assert!(blockstore.get_bank_hash(duplicate_slot).is_none());
         assert!(!blockstore.is_duplicate_confirmed(duplicate_slot));
 
@@ -1522,6 +1568,7 @@ mod test {
         // 1) Re-enable fork choice
         // 2) Clear any pending repairs from `duplicate_slots_to_repair` since we have the
         //    right version now
+        // 3) Clear the slot from `purge_repair_slot_counter`
         // 3) Set the status to duplicate confirmed in Blockstore
         let mut state_changes = vec![ResultingStateChange::DuplicateConfirmedSlotMatchesCluster(
             our_duplicate_slot_hash,
@@ -1535,6 +1582,7 @@ mod test {
             &mut duplicate_slots_to_repair,
             &blockstore,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             state_changes,
         );
         for child_slot in descendants
@@ -1554,6 +1602,7 @@ mod test {
             .is_candidate(&(duplicate_slot, our_duplicate_slot_hash))
             .unwrap());
         assert!(duplicate_slots_to_repair.is_empty());
+        assert!(purge_repair_slot_counter.is_empty());
         assert_eq!(
             blockstore.get_bank_hash(duplicate_slot).unwrap(),
             our_duplicate_slot_hash
@@ -1596,6 +1645,7 @@ mod test {
         let gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
         let duplicate_slot = 2;
         let duplicate_state = DuplicateState::new_from_state(
             duplicate_slot,
@@ -1615,6 +1665,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&duplicate_slot));
@@ -1650,6 +1701,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::BankFrozen(bank_frozen_state),
         );
 
@@ -1699,6 +1751,7 @@ mod test {
         );
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
 
         // Mark slot 2 as duplicate confirmed
@@ -1720,6 +1773,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(heaviest_subtree_fork_choice
@@ -1757,6 +1811,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&3));
@@ -1806,6 +1861,7 @@ mod test {
         let root = 0;
         let mut duplicate_slots_tracker = DuplicateSlotsTracker::default();
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 2 as duplicate
         let slot2_hash = bank_forks.read().unwrap().get(2).unwrap().hash();
@@ -1827,6 +1883,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&2));
@@ -1862,6 +1919,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut DuplicateSlotsToRepair::default(),
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         for slot in 0..=3 {
@@ -1923,6 +1981,7 @@ mod test {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 3 as duplicate confirmed
         gossip_duplicate_confirmed_slots.insert(3, slot3_hash);
@@ -1942,6 +2001,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         verify_all_slots_duplicate_confirmed(&bank_forks, &heaviest_subtree_fork_choice, 3, true);
@@ -1970,6 +2030,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::Duplicate(duplicate_state),
         );
         assert!(duplicate_slots_tracker.contains(&1));
@@ -2001,6 +2062,7 @@ mod test {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 3 as only epoch slots frozen, matching our `slot3_hash`, should not duplicate
         // confirm the slot
@@ -2024,6 +2086,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
         );
         verify_all_slots_duplicate_confirmed(
@@ -2053,6 +2116,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert_eq!(*epoch_slots_frozen_slots.get(&3).unwrap(), slot3_hash);
@@ -2089,6 +2153,7 @@ mod test {
         let mut gossip_duplicate_confirmed_slots = GossipDuplicateConfirmedSlots::default();
         let mut epoch_slots_frozen_slots = EpochSlotsFrozenSlots::default();
         let mut duplicate_slots_to_repair = DuplicateSlotsToRepair::default();
+        let mut purge_repair_slot_counter = PurgeRepairSlotCounter::default();
 
         // Mark 3 as only epoch slots frozen with different hash than the our
         // locally replayed `slot3_hash`. This should not duplicate confirm the slot,
@@ -2114,6 +2179,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::EpochSlotsFrozen(epoch_slots_frozen_state),
         );
         assert_eq!(*duplicate_slots_to_repair.get(&3).unwrap(), mismatched_hash);
@@ -2144,6 +2210,7 @@ mod test {
             &mut heaviest_subtree_fork_choice,
             &mut duplicate_slots_to_repair,
             &ancestor_hashes_replay_update_sender,
+            &mut purge_repair_slot_counter,
             SlotStateUpdate::DuplicateConfirmed(duplicate_confirmed_state),
         );
         assert!(duplicate_slots_to_repair.is_empty());

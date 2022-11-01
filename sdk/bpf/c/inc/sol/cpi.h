@@ -12,6 +12,28 @@ extern "C" {
 #endif
 
 /**
+ * Maximum CPI instruction data size. 10 KiB was chosen to ensure that CPI
+ * instructions are not more limited than transaction instructions if the size
+ * of transactions is doubled in the future.
+ */
+static const uint64_t MAX_CPI_INSTRUCTION_DATA_LEN = 10240;
+
+/**
+ * Maximum CPI instruction accounts. 255 was chosen to ensure that instruction
+ * accounts are always within the maximum instruction account limit for BPF
+ * program instructions.
+ */
+static const uint8_t MAX_CPI_INSTRUCTION_ACCOUNTS = 255;
+
+/**
+ * Maximum number of account info structs that can be used in a single CPI
+ * invocation. A limit on account info structs is effectively the same as
+ * limiting the number of unique accounts. 128 was chosen to match the max
+ * number of locked accounts per transaction (MAX_TX_ACCOUNT_LOCKS).
+ */
+static const uint16_t MAX_CPI_ACCOUNT_INFOS = 128;
+
+/**
  * Account Meta
  */
 typedef struct {
@@ -34,13 +56,34 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/cpi.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
 uint64_t sol_invoke_signed_c(
-  const SolInstruction *instruction,
-  const SolAccountInfo *account_infos,
-  int account_infos_len,
-  const SolSignerSeeds *signers_seeds,
-  int signers_seeds_len
+  const SolInstruction *,
+  const SolAccountInfo *,
+  int,
+  const SolSignerSeeds *,
+  int
 );
+#else
+typedef uint64_t(*sol_invoke_signed_c_pointer_type)(
+  const SolInstruction *,
+  const SolAccountInfo *,
+  int,
+  const SolSignerSeeds *,
+  int
+);
+static uint64_t sol_invoke_signed_c(
+  const SolInstruction * arg1,
+  const SolAccountInfo * arg2,
+  int arg3,
+  const SolSignerSeeds * arg4,
+  int
+ arg5) {
+  sol_invoke_signed_c_pointer_type sol_invoke_signed_c_pointer = (sol_invoke_signed_c_pointer_type) 2720767109;
+  return sol_invoke_signed_c_pointer(arg1, arg2, arg3, arg4, arg5);
+}
+#endif
 
 /**
  * Invoke another program and sign for some of the keys

@@ -4,7 +4,7 @@
 //!
 //! The sysvar ID is declared in [`sysvar::slot_hashes`].
 //!
-//! [`sysvar::slot_hashes`]: crate::slot_hashes
+//! [`sysvar::slot_hashes`]: crate::sysvar::slot_hashes
 
 pub use crate::clock::Slot;
 use {
@@ -33,7 +33,7 @@ pub fn set_entries_for_tests_only(entries: usize) {
 pub type SlotHash = (Slot, Hash);
 
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct SlotHashes(Vec<SlotHash>);
 
 impl SlotHashes {

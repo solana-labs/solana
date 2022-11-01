@@ -8,7 +8,7 @@ use {
     uriparse::{URIReference, URIReferenceBuilder, URIReferenceError},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Manufacturer {
     Unknown,
     Ledger,
@@ -23,7 +23,7 @@ impl Default for Manufacturer {
 const MANUFACTURER_UNKNOWN: &str = "unknown";
 const MANUFACTURER_LEDGER: &str = "ledger";
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("not a manufacturer")]
 pub struct ManufacturerError;
 
@@ -67,7 +67,7 @@ impl std::fmt::Display for Manufacturer {
     }
 }
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum LocatorError {
     #[error(transparent)]
     ManufacturerError(#[from] ManufacturerError),
@@ -87,7 +87,7 @@ impl From<Infallible> for LocatorError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Locator {
     pub manufacturer: Manufacturer,
     pub pubkey: Option<Pubkey>,

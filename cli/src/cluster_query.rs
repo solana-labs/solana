@@ -1,6 +1,7 @@
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        compute_unit_price::WithComputeUnitPrice,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -8,39 +9,39 @@ use {
     crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         input_parsers::*,
         input_validators::*,
         keypair::DefaultSigner,
         offline::{blockhash_arg, BLOCKHASH_ARG},
     },
     solana_cli_output::{
+        cli_version::CliVersion,
         display::{
             build_balance_message, format_labeled_address, new_spinner_progress_bar,
             println_transaction, unix_timestamp_to_string, writeln_name_value,
         },
         *,
     },
-    solana_client::{
-        client_error::ClientErrorKind,
-        pubsub_client::PubsubClient,
-        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-        rpc_config::{
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
+    solana_rpc_client_api::{
+        client_error::ErrorKind as ClientErrorKind,
+        config::{
             RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig,
             RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
             RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
         },
-        rpc_filter,
-        rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-        rpc_response::SlotInfo,
+        filter::{Memcmp, RpcFilterType},
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::SlotInfo,
     },
-    solana_program_runtime::compute_budget,
-    solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
-        compute_budget::ComputeBudgetInstruction,
         epoch_schedule::Epoch,
         hash::Hash,
         message::Message,
@@ -271,13 +272,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
-                .arg(
-                    Arg::with_name("additional_fee")
-                        .long("additional-fee")
-                        .value_name("NUMBER")
-                        .takes_value(true)
-                        .help("Request additional-fee for transaction"),
-                )
+                .arg(compute_unit_price_arg())
                 .arg(blockhash_arg()),
         )
         .subcommand(
@@ -329,6 +324,12 @@ impl ClusterQuerySubCommands for App<'_, '_> {
             SubCommand::with_name("stakes")
                 .about("Show stake account information")
                 .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display balance in lamports instead of SOL"),
+                )
+                .arg(
                     pubkey!(Arg::with_name("vote_account_pubkeys")
                         .index(1)
                         .value_name("VOTE_ACCOUNT_PUBKEYS")
@@ -336,10 +337,10 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         "Only show stake accounts delegated to the provided vote accounts. "),
                 )
                 .arg(
-                    Arg::with_name("lamports")
-                        .long("lamports")
-                        .takes_value(false)
-                        .help("Display balance in lamports instead of SOL"),
+                    pubkey!(Arg::with_name("withdraw_authority")
+                    .value_name("PUBKEY")
+                    .long("withdraw-authority"),
+                    "Only show stake accounts with the provided withdraw authority. "),
                 ),
         )
         .subcommand(
@@ -523,7 +524,7 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
-    let additional_fee = value_of(matches, "additional_fee");
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
@@ -531,7 +532,7 @@ pub fn parse_cluster_ping(
             timeout,
             blockhash,
             print_timestamp,
-            additional_fee,
+            compute_unit_price,
         },
         signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
     })
@@ -624,11 +625,12 @@ pub fn parse_show_stakes(
     let use_lamports_unit = matches.is_present("lamports");
     let vote_account_pubkeys =
         pubkeys_of_multiple_signers(matches, "vote_account_pubkeys", wallet_manager)?;
-
+    let withdraw_authority = pubkey_of(matches, "withdraw_authority");
     Ok(CliCommandInfo {
         command: CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdraw_authority,
         },
         signers: vec![],
     })
@@ -1094,27 +1096,52 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
-    let average_slot_time_ms = rpc_client
-        .get_recent_performance_samples(Some(60))
-        .ok()
-        .and_then(|samples| {
-            let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
-                (slots + sample.num_slots, secs + sample.sample_period_secs)
-            });
-            (secs as u64).saturating_mul(1000).checked_div(slots)
-        })
-        .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
-    let start_block_time = rpc_client
-        .get_block_time(epoch_info.absolute_slot - epoch_info.slot_index)
-        .ok();
-    let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
-    let epoch_info = CliEpochInfo {
+    let epoch_completed_percent =
+        epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64;
+    let mut cli_epoch_info = CliEpochInfo {
         epoch_info,
-        average_slot_time_ms,
-        start_block_time,
-        current_block_time,
+        epoch_completed_percent,
+        average_slot_time_ms: 0,
+        start_block_time: None,
+        current_block_time: None,
     };
-    Ok(config.output_format.formatted_string(&epoch_info))
+    match config.output_format {
+        OutputFormat::Json | OutputFormat::JsonCompact => {}
+        _ => {
+            let epoch_info = cli_epoch_info.epoch_info.clone();
+            let average_slot_time_ms = rpc_client
+                .get_recent_performance_samples(Some(60))
+                .ok()
+                .and_then(|samples| {
+                    let (slots, secs) = samples.iter().fold((0, 0), |(slots, secs), sample| {
+                        (slots + sample.num_slots, secs + sample.sample_period_secs)
+                    });
+                    (secs as u64).saturating_mul(1000).checked_div(slots)
+                })
+                .unwrap_or(clock::DEFAULT_MS_PER_SLOT);
+            let epoch_expected_start_slot = epoch_info.absolute_slot - epoch_info.slot_index;
+            let first_block_in_epoch = rpc_client
+                .get_blocks_with_limit(epoch_expected_start_slot, 1)
+                .ok()
+                .and_then(|slot_vec| slot_vec.first().cloned())
+                .unwrap_or(epoch_expected_start_slot);
+            let start_block_time =
+                rpc_client
+                    .get_block_time(first_block_in_epoch)
+                    .ok()
+                    .map(|time| {
+                        time + (((first_block_in_epoch - epoch_expected_start_slot)
+                            * average_slot_time_ms)
+                            / 1000) as i64
+                    });
+            let current_block_time = rpc_client.get_block_time(epoch_info.absolute_slot).ok();
+
+            cli_epoch_info.average_slot_time_ms = average_slot_time_ms;
+            cli_epoch_info.start_block_time = start_block_time;
+            cli_epoch_info.current_block_time = current_block_time;
+        }
+    }
+    Ok(config.output_format.formatted_string(&cli_epoch_info))
 }
 
 pub fn process_get_genesis_hash(rpc_client: &RpcClient) -> ProcessResult {
@@ -1364,7 +1391,7 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
-    additional_fee: &Option<u32>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1404,17 +1431,12 @@ pub fn process_ping(
         lamports += 1;
 
         let build_message = |lamports| {
-            let mut ixs = vec![system_instruction::transfer(
+            let ixs = vec![system_instruction::transfer(
                 &config.signers[0].pubkey(),
                 &to,
                 lamports,
-            )];
-            if let Some(additional_fee) = additional_fee {
-                ixs.push(ComputeBudgetInstruction::request_units(
-                    compute_budget::DEFAULT_UNITS,
-                    *additional_fee,
-                ));
-            }
+            )]
+            .with_compute_unit_price(compute_unit_price);
             Message::new(&ixs, Some(&config.signers[0].pubkey()))
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
@@ -1728,6 +1750,7 @@ pub fn process_show_stakes(
     config: &CliConfig,
     use_lamports_unit: bool,
     vote_account_pubkeys: Option<&[Pubkey]>,
+    withdraw_authority_pubkey: Option<&Pubkey>,
 ) -> ProcessResult {
     use crate::stake::build_stake_state;
 
@@ -1747,24 +1770,27 @@ pub fn process_show_stakes(
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
                 // Filter by `StakeState::Stake(_, _)`
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 0,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        bs58::encode([2, 0, 0, 0]).into_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 124,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        vote_account_pubkeys[0].to_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                    124,
+                    vote_account_pubkeys[0].as_ref(),
+                )),
             ]);
         }
     }
+
+    if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
+        // withdrawer filter
+        let withdrawer_filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            44,
+            withdraw_authority_pubkey.as_ref(),
+        ));
+
+        let filters = program_accounts_config.filters.get_or_insert(vec![]);
+        filters.push(withdrawer_filter);
+    }
+
     let all_stake_accounts = rpc_client
         .get_program_accounts_with_config(&stake::program::id(), program_accounts_config)?;
     let stake_history_account = rpc_client.get_account(&stake_history::id())?;
@@ -1874,13 +1900,13 @@ pub fn process_show_validators(
 
     progress_bar.set_message("Fetching version information...");
     let mut node_version = HashMap::new();
-    let unknown_version = "unknown".to_string();
     for contact_info in rpc_client.get_cluster_nodes()? {
         node_version.insert(
             contact_info.pubkey,
             contact_info
                 .version
-                .unwrap_or_else(|| unknown_version.clone()),
+                .and_then(|version| CliVersion::from_str(&version).ok())
+                .unwrap_or_else(CliVersion::unknown_version),
         );
     }
 
@@ -1909,8 +1935,8 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
@@ -1925,15 +1951,15 @@ pub fn process_show_validators(
                 epoch_info.epoch,
                 node_version
                     .get(&vote_account.node_pubkey)
-                    .unwrap_or(&unknown_version)
-                    .clone(),
+                    .cloned()
+                    .unwrap_or_else(CliVersion::unknown_version),
                 skip_rate.get(&vote_account.node_pubkey).cloned(),
                 &config.address_labels,
             )
         })
         .collect();
 
-    let mut stake_by_version: BTreeMap<_, CliValidatorsStakeByVersion> = BTreeMap::new();
+    let mut stake_by_version: BTreeMap<CliVersion, CliValidatorsStakeByVersion> = BTreeMap::new();
     for validator in current_validators.iter() {
         let mut entry = stake_by_version
             .entry(validator.version.clone())
@@ -2032,7 +2058,7 @@ pub fn process_transaction_history(
                         Some(status) => format!("{:?}", status),
                     }
                 },
-                result.memo.unwrap_or_else(|| "".to_string()),
+                result.memo.unwrap_or_default(),
             );
         } else {
             println!("{}", result.signature);
@@ -2100,7 +2126,7 @@ impl fmt::Display for CliRentCalculation {
 impl QuietDisplay for CliRentCalculation {}
 impl VerboseDisplay for CliRentCalculation {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RentLengthValue {
     Nonce,
     Stake,
@@ -2339,7 +2365,7 @@ mod tests {
                         Hash::from_str("4CCNp28j6AhGq7PkjPDP4wbQWBS8LLbQin2xV5n8frKX").unwrap()
                     ),
                     print_timestamp: true,
-                    additional_fee: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![default_keypair.into()],
             }

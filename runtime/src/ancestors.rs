@@ -65,10 +65,6 @@ impl Ancestors {
         self.ancestors.get_all()
     }
 
-    pub fn get(&self, slot: &Slot) -> bool {
-        self.ancestors.contains(slot)
-    }
-
     pub fn remove(&mut self, slot: &Slot) {
         self.ancestors.remove(slot);
     }
@@ -182,10 +178,10 @@ pub mod tests {
             let key = item.0;
             min = std::cmp::min(min, *key);
             max = std::cmp::max(max, *key);
-            assert!(ancestors.get(key));
+            assert!(ancestors.contains_key(key));
         }
         for slot in min - 1..max + 2 {
-            assert_eq!(ancestors.get(&slot), hashset.contains(&slot));
+            assert_eq!(ancestors.contains_key(&slot), hashset.contains(&slot));
         }
     }
 

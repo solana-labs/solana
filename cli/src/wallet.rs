@@ -4,13 +4,14 @@ use {
             log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
             CliConfig, CliError, ProcessResult,
         },
+        compute_unit_price::WithComputeUnitPrice,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
     clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
-    solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
         input_parsers::*,
         input_validators::*,
@@ -20,18 +21,18 @@ use {
         offline::*,
     },
     solana_cli_output::{
-        display::build_balance_message, return_signers_with_config, CliAccount,
-        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
-        ReturnSignersConfig,
-    },
-    solana_client::{
-        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-        rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
+        display::{build_balance_message, BuildBalanceMessageConfig},
+        return_signers_with_config, CliAccount, CliBalance, CliSignatureVerificationStatus,
+        CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::config::RpcTransactionConfig,
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
+        offchain_message::OffchainMessage,
         pubkey::Pubkey,
         signature::Signature,
         stake,
@@ -270,7 +271,73 @@ impl WalletSubCommands for App<'_, '_> {
                 .offline_args()
                 .nonce_args(false)
                 .arg(memo_arg())
-                .arg(fee_payer_arg()),
+                .arg(fee_payer_arg())
+                .arg(compute_unit_price_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("sign-offchain-message")
+                .about("Sign off-chain message")
+                .arg(
+                    Arg::with_name("message")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("STRING")
+                        .required(true)
+                        .help("The message text to be signed")
+                )
+                .arg(
+                    Arg::with_name("version")
+                        .long("version")
+                        .takes_value(true)
+                        .value_name("VERSION")
+                        .required(false)
+                        .default_value("0")
+                        .validator(|p| match p.parse::<u8>() {
+                            Err(_) => Err(String::from("Must be unsigned integer")),
+                            Ok(_) => { Ok(()) }
+                        })
+                        .help("The off-chain message version")
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("verify-offchain-signature")
+                .about("Verify off-chain message signature")
+                .arg(
+                    Arg::with_name("message")
+                        .index(1)
+                        .takes_value(true)
+                        .value_name("STRING")
+                        .required(true)
+                        .help("The text of the original message")
+                )
+                .arg(
+                    Arg::with_name("signature")
+                        .index(2)
+                        .value_name("SIGNATURE")
+                        .takes_value(true)
+                        .required(true)
+                        .help("The message signature to verify")
+                )
+                .arg(
+                    Arg::with_name("version")
+                        .long("version")
+                        .takes_value(true)
+                        .value_name("VERSION")
+                        .required(false)
+                        .default_value("0")
+                        .validator(|p| match p.parse::<u8>() {
+                            Err(_) => Err(String::from("Must be unsigned integer")),
+                            Ok(_) => { Ok(()) }
+                        })
+                        .help("The off-chain message version")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("signer")
+                        .long("signer")
+                        .value_name("PUBKEY")
+                        .required(false),
+                        "The pubkey of the message signer (if different from config default)")
+                )
         )
     }
 }
@@ -415,6 +482,7 @@ pub fn parse_transfer(
 
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     let derived_address_seed = matches
         .value_of("derived_address_seed")
@@ -438,8 +506,57 @@ pub fn parse_transfer(
             from: signer_info.index_of(from_pubkey).unwrap(),
             derived_address_seed,
             derived_address_program_id,
+            compute_unit_price,
         },
         signers: signer_info.signers,
+    })
+}
+
+pub fn parse_sign_offchain_message(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let version: u8 = value_of(matches, "version").unwrap();
+    let message_text: String = value_of(matches, "message")
+        .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
+    let message = OffchainMessage::new(version, message_text.as_bytes())
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::SignOffchainMessage { message },
+        signers: vec![default_signer.signer_from_path(matches, wallet_manager)?],
+    })
+}
+
+pub fn parse_verify_offchain_signature(
+    matches: &ArgMatches<'_>,
+    default_signer: &DefaultSigner,
+    wallet_manager: &mut Option<Arc<RemoteWalletManager>>,
+) -> Result<CliCommandInfo, CliError> {
+    let version: u8 = value_of(matches, "version").unwrap();
+    let message_text: String = value_of(matches, "message")
+        .ok_or_else(|| CliError::BadParameter("MESSAGE".to_string()))?;
+    let message = OffchainMessage::new(version, message_text.as_bytes())
+        .map_err(|_| CliError::BadParameter("VERSION or MESSAGE".to_string()))?;
+
+    let signer_pubkey = pubkey_of_signer(matches, "signer", wallet_manager)?;
+    let signers = if signer_pubkey.is_some() {
+        vec![]
+    } else {
+        vec![default_signer.signer_from_path(matches, wallet_manager)?]
+    };
+
+    let signature = value_of(matches, "signature")
+        .ok_or_else(|| CliError::BadParameter("SIGNATURE".to_string()))?;
+
+    Ok(CliCommandInfo {
+        command: CliCommand::VerifyOffchainSignature {
+            signer_pubkey,
+            signature,
+            message,
+        },
+        signers,
     })
 }
 
@@ -452,19 +569,7 @@ pub fn process_show_account(
 ) -> ProcessResult {
     let account = rpc_client.get_account(account_pubkey)?;
     let data = account.data.clone();
-    let cli_account = CliAccount {
-        keyed_account: RpcKeyedAccount {
-            pubkey: account_pubkey.to_string(),
-            account: UiAccount::encode(
-                account_pubkey,
-                &account,
-                UiAccountEncoding::Base64,
-                None,
-                None,
-            ),
-        },
-        use_lamports_unit,
-    };
+    let cli_account = CliAccount::new(account_pubkey, &account, use_lamports_unit);
 
     let mut account_string = config.output_format.formatted_string(&cli_account);
 
@@ -543,7 +648,16 @@ pub fn process_balance(
         config.pubkey()?
     };
     let balance = rpc_client.get_balance(&pubkey)?;
-    Ok(build_balance_message(balance, use_lamports_unit, true))
+    let balance_output = CliBalance {
+        lamports: balance,
+        config: BuildBalanceMessageConfig {
+            use_lamports_unit,
+            show_unit: true,
+            trim_trailing_zeros: true,
+        },
+    };
+
+    Ok(config.output_format.formatted_string(&balance_output))
 }
 
 pub fn process_confirm(
@@ -662,6 +776,7 @@ pub fn process_transfer(
     fee_payer: SignerIndex,
     derived_address_seed: Option<String>,
     derived_address_program_id: Option<&Pubkey>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let from = config.signers[from];
     let mut from_pubkey = from.pubkey();
@@ -706,8 +821,11 @@ pub fn process_transfer(
                 lamports,
             )]
             .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price)
         } else {
-            vec![system_instruction::transfer(&from_pubkey, to, lamports)].with_memo(memo)
+            vec![system_instruction::transfer(&from_pubkey, to, lamports)]
+                .with_memo(memo)
+                .with_compute_unit_price(compute_unit_price)
         };
 
         if let Some(nonce_account) = &nonce_account {
@@ -745,7 +863,7 @@ pub fn process_transfer(
         )
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -760,5 +878,31 @@ pub fn process_transfer(
             rpc_client.send_and_confirm_transaction_with_spinner(&tx)
         };
         log_instruction_custom_error::<SystemError>(result, config)
+    }
+}
+
+pub fn process_sign_offchain_message(
+    config: &CliConfig,
+    message: &OffchainMessage,
+) -> ProcessResult {
+    Ok(message.sign(config.signers[0])?.to_string())
+}
+
+pub fn process_verify_offchain_signature(
+    config: &CliConfig,
+    signer_pubkey: &Option<Pubkey>,
+    signature: &Signature,
+    message: &OffchainMessage,
+) -> ProcessResult {
+    let signer = if let Some(pubkey) = signer_pubkey {
+        *pubkey
+    } else {
+        config.signers[0].pubkey()
+    };
+
+    if message.verify(&signer, signature)? {
+        Ok("Signature is valid".to_string())
+    } else {
+        Err(CliError::InvalidSignature.into())
     }
 }

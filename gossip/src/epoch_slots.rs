@@ -14,7 +14,7 @@ use {
 };
 
 const MAX_SLOTS_PER_ENTRY: usize = 2048 * 8;
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Uncompressed {
     pub first_slot: Slot,
     pub num: usize,
@@ -42,7 +42,7 @@ impl Sanitize for Uncompressed {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, AbiExample)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, AbiExample)]
 pub struct Flate2 {
     pub first_slot: Slot,
     pub num: usize,
@@ -61,7 +61,7 @@ impl Sanitize for Flate2 {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Error {
     CompressError,
     DecompressError,
@@ -156,7 +156,7 @@ impl Uncompressed {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, AbiExample, AbiEnumVisitor)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, AbiExample, AbiEnumVisitor)]
 pub enum CompressedSlots {
     Flate2(Flate2),
     Uncompressed(Uncompressed),
@@ -216,8 +216,7 @@ impl CompressedSlots {
             CompressedSlots::Uncompressed(vals) => {
                 let unc = vals.clone();
                 let compressed = Flate2::deflate(unc)?;
-                let mut new = CompressedSlots::Flate2(compressed);
-                std::mem::swap(self, &mut new);
+                *self = CompressedSlots::Flate2(compressed);
                 Ok(())
             }
             CompressedSlots::Flate2(_) => Ok(()),
@@ -225,7 +224,7 @@ impl CompressedSlots {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, PartialEq, AbiExample)]
+#[derive(Serialize, Deserialize, Clone, Default, PartialEq, Eq, AbiExample)]
 pub struct EpochSlots {
     pub from: Pubkey,
     pub slots: Vec<CompressedSlots>,

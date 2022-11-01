@@ -7,7 +7,7 @@ use {
     solana_program::instruction::Instruction,
 };
 
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ProofInstruction {
     /// Verify a `CloseAccountData` struct
@@ -59,6 +59,16 @@ pub enum ProofInstruction {
     ///   `TransferWithFeeData`
     ///
     VerifyTransferWithFee,
+
+    /// Verify a `PubkeyValidityData` struct
+    ///
+    /// Accounts expected by this instruction:
+    ///   None
+    ///
+    /// Data expected by this instruction:
+    ///   `PubkeyValidityData`
+    ///
+    VerifyPubkeyValidity,
 }
 
 impl ProofInstruction {
@@ -73,7 +83,7 @@ impl ProofInstruction {
     }
 
     pub fn decode_type(input: &[u8]) -> Option<Self> {
-        input.get(0).and_then(|x| FromPrimitive::from_u8(*x))
+        input.first().and_then(|x| FromPrimitive::from_u8(*x))
     }
 
     pub fn decode_data<T: Pod>(input: &[u8]) -> Option<&T> {
@@ -103,4 +113,8 @@ pub fn verify_transfer(proof_data: &TransferData) -> Instruction {
 
 pub fn verify_transfer_with_fee(proof_data: &TransferWithFeeData) -> Instruction {
     ProofInstruction::VerifyTransferWithFee.encode(proof_data)
+}
+
+pub fn verify_pubkey_validity(proof_data: &PubkeyValidityData) -> Instruction {
+    ProofInstruction::VerifyPubkeyValidity.encode(proof_data)
 }

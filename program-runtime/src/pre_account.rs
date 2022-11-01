@@ -6,7 +6,6 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
-        system_program,
     },
     std::fmt::Debug,
 };
@@ -36,7 +35,6 @@ impl PreAccount {
         post: &AccountSharedData,
         timings: &mut ExecuteDetailsTimings,
         outermost_call: bool,
-        do_support_realloc: bool,
     ) -> Result<(), InstructionError> {
         let pre = &self.account;
 
@@ -72,30 +70,16 @@ impl PreAccount {
             }
         }
 
-        let data_len_changed = if do_support_realloc {
-            // Account data size cannot exceed a maxumum length
-            if post.data().len() > MAX_PERMITTED_DATA_LENGTH as usize {
-                return Err(InstructionError::InvalidRealloc);
-            }
+        // Account data size cannot exceed a maxumum length
+        if post.data().len() > MAX_PERMITTED_DATA_LENGTH as usize {
+            return Err(InstructionError::InvalidRealloc);
+        }
 
-            // The owner of the account can change the size of the data
-            let data_len_changed = pre.data().len() != post.data().len();
-            if data_len_changed && program_id != pre.owner() {
-                return Err(InstructionError::AccountDataSizeChanged);
-            }
-            data_len_changed
-        } else {
-            // Only the system program can change the size of the data
-            //  and only if the system program owns the account
-            let data_len_changed = pre.data().len() != post.data().len();
-            if data_len_changed
-                && (!system_program::check_id(program_id) // line coverage used to get branch coverage
-                    || !system_program::check_id(pre.owner()))
-            {
-                return Err(InstructionError::AccountDataSizeChanged);
-            }
-            data_len_changed
-        };
+        // The owner of the account can change the size of the data
+        let data_len_changed = pre.data().len() != post.data().len();
+        if data_len_changed && program_id != pre.owner() {
+            return Err(InstructionError::AccountDataSizeChanged);
+        }
 
         // Only the owner may change account data
         //   and if the account is writable
@@ -136,7 +120,6 @@ impl PreAccount {
 
         if outermost_call {
             timings.total_account_count = timings.total_account_count.saturating_add(1);
-            timings.total_data_size = timings.total_data_size.saturating_add(post.data().len());
             if owner_changed
                 || lamports_changed
                 || data_len_changed
@@ -145,8 +128,6 @@ impl PreAccount {
                 || self.changed
             {
                 timings.changed_account_count = timings.changed_account_count.saturating_add(1);
-                timings.data_size_changed =
-                    timings.data_size_changed.saturating_add(post.data().len());
             }
         }
 
@@ -283,7 +264,6 @@ mod tests {
                 &self.post,
                 &mut ExecuteDetailsTimings::default(),
                 false,
-                true,
             )
         }
     }

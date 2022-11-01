@@ -1,6 +1,10 @@
 use {
-    crate::leader_slot_banking_stage_timing_metrics::*,
+    crate::{
+        leader_slot_banking_stage_timing_metrics::*,
+        unprocessed_transaction_storage::InsertPacketBatchSummary,
+    },
     solana_poh::poh_recorder::BankStart,
+    solana_runtime::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
     std::time::Instant,
 };
@@ -45,6 +49,9 @@ pub(crate) struct ProcessTransactionsSummary {
 
     // Breakdown of time spent executing and comitting transactions
     pub execute_and_commit_timings: LeaderExecuteAndCommitTimings,
+
+    // Breakdown of all the transaction errors from transactions passed for execution
+    pub error_counters: TransactionErrorMetrics,
 }
 
 // Metrics describing packets ingested/processed in various parts of BankingStage during this
@@ -84,6 +91,13 @@ struct LeaderSlotPacketCountMetrics {
     // queue becaus they were retryable errors
     retryable_errored_transaction_count: u64,
 
+    // The size of the unprocessed buffer at the end of the slot
+    end_of_slot_unprocessed_buffer_len: u64,
+
+    // total number of transactions that were rebuffered into the queue after not being
+    // executed on a previous pass
+    retryable_packets_count: u64,
+
     // total number of transactions that attempted execution due to some fatal error (too old, duplicate signature, etc.)
     // AND were dropped from the buffered queue
     nonretryable_errored_transactions_count: u64,
@@ -92,6 +106,16 @@ struct LeaderSlotPacketCountMetrics {
     // the block ended. Some of these may be already counted in `nonretryable_errored_transactions_count` if they
     // then hit the age limit after failing to be comitted.
     executed_transactions_failed_commit_count: u64,
+
+    // total number of transactions that were excluded from the block because there were concurrent write locks active.
+    // These transactions are added back to the buffered queue and are already counted in
+    // `self.retrayble_errored_transaction_count`.
+    account_lock_throttled_transactions_count: u64,
+
+    // total number of transactions that were excluded from the block because their write
+    // account locks exceed the limit.
+    // These transactions are not retried.
+    account_locks_limit_throttled_transactions_count: u64,
 
     // total number of transactions that were excluded from the block because they were too expensive
     // according to the cost model. These transactions are added back to the buffered queue and are
@@ -111,8 +135,9 @@ struct LeaderSlotPacketCountMetrics {
     // total number of valid unprocessed packets in the buffer that were removed after being forwarded
     cleared_from_buffer_after_forward_count: u64,
 
-    // total number of packets removed at the end of the slot due to being too old, duplicate, etc.
-    end_of_slot_filtered_invalid_count: u64,
+    // total number of forwardable batches that were attempted for forwarding. A forwardable batch
+    // is defined in `ForwardPacketBatchesByAccounts` in `forward_packet_batches_by_accounts.rs`
+    forwardable_batches_count: u64,
 }
 
 impl LeaderSlotPacketCountMetrics {
@@ -171,6 +196,11 @@ impl LeaderSlotPacketCountMetrics {
                 i64
             ),
             (
+                "retryable_packets_count",
+                self.retryable_packets_count as i64,
+                i64
+            ),
+            (
                 "nonretryable_errored_transactions_count",
                 self.nonretryable_errored_transactions_count as i64,
                 i64
@@ -178,6 +208,16 @@ impl LeaderSlotPacketCountMetrics {
             (
                 "executed_transactions_failed_commit_count",
                 self.executed_transactions_failed_commit_count as i64,
+                i64
+            ),
+            (
+                "account_lock_throttled_transactions_count",
+                self.account_lock_throttled_transactions_count as i64,
+                i64
+            ),
+            (
+                "account_locks_limit_throttled_transactions_count",
+                self.account_locks_limit_throttled_transactions_count as i64,
                 i64
             ),
             (
@@ -206,8 +246,13 @@ impl LeaderSlotPacketCountMetrics {
                 i64
             ),
             (
-                "end_of_slot_filtered_invalid_count",
-                self.end_of_slot_filtered_invalid_count as i64,
+                "forwardable_batches_count",
+                self.forwardable_batches_count as i64,
+                i64
+            ),
+            (
+                "end_of_slot_unprocessed_buffer_len",
+                self.end_of_slot_unprocessed_buffer_len as i64,
                 i64
             ),
         );
@@ -226,6 +271,10 @@ pub(crate) struct LeaderSlotMetrics {
 
     packet_count_metrics: LeaderSlotPacketCountMetrics,
 
+    transaction_error_metrics: TransactionErrorMetrics,
+
+    vote_packet_count_metrics: VotePacketCountMetrics,
+
     timing_metrics: LeaderSlotTimingMetrics,
 
     // Used by tests to check if the `self.report()` method was called
@@ -238,6 +287,8 @@ impl LeaderSlotMetrics {
             id,
             slot,
             packet_count_metrics: LeaderSlotPacketCountMetrics::new(),
+            transaction_error_metrics: TransactionErrorMetrics::new(),
+            vote_packet_count_metrics: VotePacketCountMetrics::new(),
             timing_metrics: LeaderSlotTimingMetrics::new(bank_creation_time),
             is_reported: false,
         }
@@ -247,7 +298,9 @@ impl LeaderSlotMetrics {
         self.is_reported = true;
 
         self.timing_metrics.report(self.id, self.slot);
+        self.transaction_error_metrics.report(self.id, self.slot);
         self.packet_count_metrics.report(self.id, self.slot);
+        self.vote_packet_count_metrics.report(self.id, self.slot);
     }
 
     /// Returns `Some(self.slot)` if the metrics have been reported, otherwise returns None
@@ -258,6 +311,45 @@ impl LeaderSlotMetrics {
             None
         }
     }
+
+    fn mark_slot_end_detected(&mut self) {
+        self.timing_metrics.mark_slot_end_detected();
+    }
+}
+
+// Metrics describing vote tx packets that were processed in the tpu vote thread as well as
+// extraneous votes that were filtered out
+#[derive(Debug, Default)]
+pub(crate) struct VotePacketCountMetrics {
+    // How many votes ingested from gossip were dropped
+    dropped_gossip_votes: u64,
+
+    // How many votes ingested from tpu were dropped
+    dropped_tpu_votes: u64,
+}
+
+impl VotePacketCountMetrics {
+    fn new() -> Self {
+        Self { ..Self::default() }
+    }
+
+    fn report(&self, id: u32, slot: Slot) {
+        datapoint_info!(
+            "banking_stage-vote_packet_counts",
+            ("id", id, i64),
+            ("slot", slot, i64),
+            ("dropped_gossip_votes", self.dropped_gossip_votes, i64),
+            ("dropped_tpu_votes", self.dropped_tpu_votes, i64)
+        );
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum MetricsTrackerAction {
+    Noop,
+    ReportAndResetTracker,
+    NewTracker(Option<LeaderSlotMetrics>),
+    ReportAndNewTracker(Option<LeaderSlotMetrics>),
 }
 
 #[derive(Debug)]
@@ -276,48 +368,68 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    // Returns reported slot if metrics were reported
-    pub(crate) fn update_on_leader_slot_boundary(
+    // Check leader slot, return MetricsTrackerAction to be applied by apply_action()
+    pub(crate) fn check_leader_slot_boundary(
         &mut self,
         bank_start: &Option<BankStart>,
-    ) -> Option<Slot> {
+    ) -> MetricsTrackerAction {
         match (self.leader_slot_metrics.as_mut(), bank_start) {
-            (None, None) => None,
+            (None, None) => MetricsTrackerAction::Noop,
 
             (Some(leader_slot_metrics), None) => {
-                leader_slot_metrics.report();
-                // Ensure tests catch that `report()` method was called
-                let reported_slot = leader_slot_metrics.reported_slot();
-                // Slot has ended, time to report metrics
-                self.leader_slot_metrics = None;
-                reported_slot
+                leader_slot_metrics.mark_slot_end_detected();
+                MetricsTrackerAction::ReportAndResetTracker
             }
 
+            // Our leader slot has begain, time to create a new slot tracker
             (None, Some(bank_start)) => {
-                // Our leader slot has begain, time to create a new slot tracker
-                self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+                MetricsTrackerAction::NewTracker(Some(LeaderSlotMetrics::new(
                     self.id,
                     bank_start.working_bank.slot(),
                     &bank_start.bank_creation_time,
-                ));
-                self.leader_slot_metrics.as_ref().unwrap().reported_slot()
+                )))
             }
 
             (Some(leader_slot_metrics), Some(bank_start)) => {
                 if leader_slot_metrics.slot != bank_start.working_bank.slot() {
                     // Last slot has ended, new slot has began
-                    leader_slot_metrics.report();
-                    // Ensure tests catch that `report()` method was called
-                    let reported_slot = leader_slot_metrics.reported_slot();
-                    self.leader_slot_metrics = Some(LeaderSlotMetrics::new(
+                    leader_slot_metrics.mark_slot_end_detected();
+                    MetricsTrackerAction::ReportAndNewTracker(Some(LeaderSlotMetrics::new(
                         self.id,
                         bank_start.working_bank.slot(),
                         &bank_start.bank_creation_time,
-                    ));
-                    reported_slot
+                    )))
                 } else {
-                    leader_slot_metrics.reported_slot()
+                    MetricsTrackerAction::Noop
                 }
+            }
+        }
+    }
+
+    pub(crate) fn apply_action(&mut self, action: MetricsTrackerAction) -> Option<Slot> {
+        match action {
+            MetricsTrackerAction::Noop => None,
+            MetricsTrackerAction::ReportAndResetTracker => {
+                let mut reported_slot = None;
+                if let Some(leader_slot_metrics) = self.leader_slot_metrics.as_mut() {
+                    leader_slot_metrics.report();
+                    reported_slot = leader_slot_metrics.reported_slot();
+                }
+                self.leader_slot_metrics = None;
+                reported_slot
+            }
+            MetricsTrackerAction::NewTracker(new_slot_metrics) => {
+                self.leader_slot_metrics = new_slot_metrics;
+                self.leader_slot_metrics.as_ref().unwrap().reported_slot()
+            }
+            MetricsTrackerAction::ReportAndNewTracker(new_slot_metrics) => {
+                let mut reported_slot = None;
+                if let Some(leader_slot_metrics) = self.leader_slot_metrics.as_mut() {
+                    leader_slot_metrics.report();
+                    reported_slot = leader_slot_metrics.reported_slot();
+                }
+                self.leader_slot_metrics = new_slot_metrics;
+                reported_slot
             }
         }
     }
@@ -336,6 +448,7 @@ impl LeaderSlotMetricsTracker {
                 cost_model_throttled_transactions_count,
                 cost_model_us,
                 ref execute_and_commit_timings,
+                error_counters,
                 ..
             } = process_transactions_summary;
 
@@ -386,6 +499,20 @@ impl LeaderSlotMetricsTracker {
             saturating_add_assign!(
                 leader_slot_metrics
                     .packet_count_metrics
+                    .account_lock_throttled_transactions_count,
+                error_counters.account_in_use as u64
+            );
+
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .account_locks_limit_throttled_transactions_count,
+                error_counters.too_many_account_locks as u64
+            );
+
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
                     .cost_model_throttled_transactions_count,
                 *cost_model_throttled_transactions_count as u64
             );
@@ -402,6 +529,32 @@ impl LeaderSlotMetricsTracker {
                 .timing_metrics
                 .execute_and_commit_timings
                 .accumulate(execute_and_commit_timings);
+        }
+    }
+
+    pub(crate) fn accumulate_insert_packet_batches_summary(
+        &mut self,
+        insert_packet_batches_summary: &InsertPacketBatchSummary,
+    ) {
+        self.increment_exceeded_buffer_limit_dropped_packets_count(
+            insert_packet_batches_summary.total_dropped_packets() as u64,
+        );
+        self.increment_dropped_gossip_vote_count(
+            insert_packet_batches_summary.dropped_gossip_packets() as u64,
+        );
+        self.increment_dropped_tpu_vote_count(
+            insert_packet_batches_summary.dropped_tpu_packets() as u64
+        );
+    }
+
+    pub(crate) fn accumulate_transaction_errors(
+        &mut self,
+        error_metrics: &TransactionErrorMetrics,
+    ) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .transaction_error_metrics
+                .accumulate(error_metrics);
         }
     }
 
@@ -505,14 +658,33 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_end_of_slot_filtered_invalid_count(&mut self, count: u64) {
+    pub(crate) fn increment_forwardable_batches_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(
                 leader_slot_metrics
                     .packet_count_metrics
-                    .end_of_slot_filtered_invalid_count,
+                    .forwardable_batches_count,
                 count
             );
+        }
+    }
+
+    pub(crate) fn increment_retryable_packets_count(&mut self, count: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .retryable_packets_count,
+                count
+            );
+        }
+    }
+
+    pub(crate) fn set_end_of_slot_unprocessed_buffer_len(&mut self, len: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            leader_slot_metrics
+                .packet_count_metrics
+                .end_of_slot_unprocessed_buffer_len = len;
         }
     }
 
@@ -529,18 +701,6 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    pub(crate) fn increment_slot_metrics_check_slot_boundary_us(&mut self, us: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .timing_metrics
-                    .outer_loop_timings
-                    .slot_metrics_check_slot_boundary_us,
-                us
-            );
-        }
-    }
-
     pub(crate) fn increment_receive_and_buffer_packets_us(&mut self, us: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(
@@ -549,6 +709,13 @@ impl LeaderSlotMetricsTracker {
                     .outer_loop_timings
                     .receive_and_buffer_packets_us,
                 us
+            );
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .timing_metrics
+                    .outer_loop_timings
+                    .receive_and_buffer_packets_invoked_count,
+                1
             );
         }
     }
@@ -597,19 +764,6 @@ impl LeaderSlotMetricsTracker {
                     .timing_metrics
                     .process_buffered_packets_timings
                     .forward_and_hold_us,
-                us
-            );
-        }
-    }
-
-    // Consuming buffered packets timing metrics
-    pub(crate) fn increment_end_of_slot_filtering_us(&mut self, us: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .timing_metrics
-                    .consume_buffered_packets_timings
-                    .end_of_slot_filtering_us,
                 us
             );
         }
@@ -675,6 +829,28 @@ impl LeaderSlotMetricsTracker {
             );
         }
     }
+
+    pub(crate) fn increment_dropped_gossip_vote_count(&mut self, count: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .vote_packet_count_metrics
+                    .dropped_gossip_votes,
+                count
+            );
+        }
+    }
+
+    pub(crate) fn increment_dropped_tpu_vote_count(&mut self, count: u64) {
+        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .vote_packet_count_metrics
+                    .dropped_tpu_votes,
+                count
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -683,7 +859,7 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, genesis_utils::create_genesis_config},
         solana_sdk::pubkey::Pubkey,
-        std::sync::Arc,
+        std::{mem, sync::Arc},
     };
 
     struct TestSlotBoundaryComponents {
@@ -732,9 +908,12 @@ mod tests {
             ..
         } = setup_test_slot_boundary_banks();
         // Test that with no bank being tracked, and no new bank being tracked, nothing is reported
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&None)
-            .is_none());
+        let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+        assert_eq!(
+            mem::discriminant(&MetricsTrackerAction::Noop),
+            mem::discriminant(&action)
+        );
+        assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
     }
 
@@ -749,9 +928,13 @@ mod tests {
         // Test case where the thread has not detected a leader bank, and now sees a leader bank.
         // Metrics should not be reported because leader slot has not ended
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
+        let action =
+            leader_slot_metrics_tracker.check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+        assert_eq!(
+            mem::discriminant(&MetricsTrackerAction::NewTracker(None)),
+            mem::discriminant(&action)
+        );
+        assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
         assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
     }
 
@@ -767,19 +950,33 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's no more leader bank,
         // implying the slot has ended. Metrics should be reported for `first_bank.slot()`,
         // because that leader slot has just ended.
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&None)
-            .is_none());
+        {
+            // Setup first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
+        {
+            // Assert no-op if still no new bank
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::Noop),
+                mem::discriminant(&action)
+            );
+        }
     }
 
     #[test]
@@ -793,19 +990,35 @@ mod tests {
 
         // Test case where the thread has a leader bank, and now detects the same leader bank,
         // implying the slot is still running. Metrics should not be reported
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank.clone()))
-            .is_none());
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank.clone()));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert nop-op if same bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::Noop),
+                mem::discriminant(&action)
+            );
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 
     #[test]
@@ -821,22 +1034,39 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's a new leader bank
         // for a bigger slot, implying the slot has ended. Metrics should be reported for the
         // smaller slot
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            next_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with first_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if new bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(next_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndNewTracker(None)),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                next_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 
     #[test]
@@ -851,21 +1081,38 @@ mod tests {
         // Test case where the thread has a leader bank, and now detects there's a new leader bank
         // for a samller slot, implying the slot has ended. Metrics should be reported for the
         // bigger slot
-        assert!(leader_slot_metrics_tracker
-            .update_on_leader_slot_boundary(&Some(next_poh_recorder_bank))
-            .is_none());
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&Some(first_poh_recorder_bank))
-                .unwrap(),
-            next_bank.slot()
-        );
-        assert_eq!(
-            leader_slot_metrics_tracker
-                .update_on_leader_slot_boundary(&None)
-                .unwrap(),
-            first_bank.slot()
-        );
-        assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        {
+            // Setup with next_bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(next_poh_recorder_bank));
+            assert!(leader_slot_metrics_tracker.apply_action(action).is_none());
+        }
+        {
+            // Assert reporting if new bank
+            let action = leader_slot_metrics_tracker
+                .check_leader_slot_boundary(&Some(first_poh_recorder_bank));
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndNewTracker(None)),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                next_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_some());
+        }
+        {
+            // Assert reporting if slot has ended
+            let action = leader_slot_metrics_tracker.check_leader_slot_boundary(&None);
+            assert_eq!(
+                mem::discriminant(&MetricsTrackerAction::ReportAndResetTracker),
+                mem::discriminant(&action)
+            );
+            assert_eq!(
+                leader_slot_metrics_tracker.apply_action(action).unwrap(),
+                first_bank.slot()
+            );
+            assert!(leader_slot_metrics_tracker.leader_slot_metrics.is_none());
+        }
     }
 }

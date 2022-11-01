@@ -9,6 +9,7 @@ pull_request_rules:
       - author≠@core-contributors
       - author≠mergify[bot]
       - author≠dependabot[bot]
+      - author≠github-actions[bot]
     actions:
       label:
         add:
@@ -18,6 +19,7 @@ pull_request_rules:
       - author≠@core-contributors
       - author≠mergify[bot]
       - author≠dependabot[bot]
+      - author≠github-actions[bot]
       # Only request reviews from the pr subscribers group if no one
       # has reviewed the community PR yet. These checks only match
       # reviewers with admin, write or maintain permission on the repository.
@@ -38,8 +40,8 @@ pull_request_rules:
         - label!=no-automerge
         - author≠@dont-squash-my-commits
         - or:
-          # only require travis success if docs files changed
-          - status-success=Travis CI - Pull Request
+          # only require docs checks if docs files changed
+          - status-success=docs-build
           - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
@@ -59,11 +61,14 @@ pull_request_rules:
     conditions:
       - and:
         - status-success=buildkite/solana
-        - status-success=Travis CI - Pull Request
         - status-success=ci-gate
         - label=automerge
         - label!=no-automerge
         - author=@dont-squash-my-commits
+        - or:
+          # only require docs checks if docs files changed
+          - status-success=docs-build
+          - -files~=^docs/
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -102,32 +107,33 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v1.9 feature-gate backport
+  - name: v1.13 feature-gate backport
     conditions:
-      - label=v1.9
+      - label=v1.13
       - label=feature-gate
     actions:
       backport:
         assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
+ubscribers')) }}"
         ignore_conflicts: true
         labels:
           - feature-gate
         branches:
-          - v1.9
-  - name: v1.9 non-feature-gate backport
+          - v1.13
+  - name: v1.13 non-feature-gate backport
     conditions:
-      - label=v1.9
+      - label=v1.13
       - label!=feature-gate
     actions:
       backport:
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
-          - v1.9
-  - name: v1.10 feature-gate backport
+          - v1.13
+  - name: v1.14 feature-gate backport
     conditions:
-      - label=v1.10
+      - label=v1.14
       - label=feature-gate
     actions:
       backport:
@@ -136,17 +142,17 @@ pull_request_rules:
         labels:
           - feature-gate
         branches:
-          - v1.10
-  - name: v1.10 non-feature-gate backport
+          - v1.14
+  - name: v1.14 non-feature-gate backport
     conditions:
-      - label=v1.10
+      - label=v1.14
       - label!=feature-gate
     actions:
       backport:
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
-          - v1.10
+          - v1.14
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.

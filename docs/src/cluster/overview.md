@@ -24,7 +24,7 @@ A Solana cluster is capable of subsecond _confirmation_ for thousands of nodes w
 
 Solana defines confirmation as the duration of time from when the leader timestamps a new entry to the moment when it recognizes a supermajority of ledger votes.
 
-Scalable confirmation can be achieved using the follow combination of techniques:
+Scalable confirmation can be achieved using the following combination of techniques:
 
 1. Timestamp transactions with a VDF sample and sign the timestamp.
 

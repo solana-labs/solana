@@ -152,11 +152,12 @@ impl BucketStorage {
     }
 
     /// return ref to header of item 'ix' in mmapped file
-    fn header_mut_ptr(&mut self, ix: u64) -> &mut Header {
+    #[allow(clippy::mut_from_ref)]
+    fn header_mut_ptr(&self, ix: u64) -> &mut Header {
         let ix = (ix * self.cell_size) as usize;
-        let hdr_slice: &mut [u8] = &mut self.mmap[ix..ix + std::mem::size_of::<Header>()];
+        let hdr_slice: &[u8] = &self.mmap[ix..ix + std::mem::size_of::<Header>()];
         unsafe {
-            let hdr = hdr_slice.as_mut_ptr() as *mut Header;
+            let hdr = hdr_slice.as_ptr() as *mut Header;
             hdr.as_mut().unwrap()
         }
     }
@@ -181,12 +182,7 @@ impl BucketStorage {
 
     /// 'is_resizing' true if caller is resizing the index (so don't increment count)
     /// 'is_resizing' false if caller is adding an item to the index (so increment count)
-    pub fn allocate(
-        &mut self,
-        ix: u64,
-        uid: Uid,
-        is_resizing: bool,
-    ) -> Result<(), BucketStorageError> {
+    pub fn allocate(&self, ix: u64, uid: Uid, is_resizing: bool) -> Result<(), BucketStorageError> {
         assert!(ix < self.capacity(), "allocate: bad index size");
         assert!(UID_UNLOCKED != uid, "allocate: bad uid");
         let mut e = Err(BucketStorageError::AlreadyAllocated);

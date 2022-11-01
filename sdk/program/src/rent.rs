@@ -3,35 +3,53 @@
 //! [rent]: https://docs.solana.com/implemented-proposals/rent
 
 #![allow(clippy::integer_arithmetic)]
-use crate::clock::DEFAULT_SLOTS_PER_EPOCH;
 
+use {
+    crate::{clock::DEFAULT_SLOTS_PER_EPOCH, clone_zeroed, copy_field},
+    std::mem::MaybeUninit,
+};
+
+/// Configuration of network rent.
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, PartialEq, Copy, Debug, AbiExample)]
 pub struct Rent {
-    /// Rental rate
+    /// Rental rate in lamports/byte-year.
     pub lamports_per_byte_year: u64,
 
-    /// exemption threshold, in years
+    /// Amount of time (in years) a balance must include rent for the account to
+    /// be rent exempt.
     pub exemption_threshold: f64,
 
-    // What portion of collected rent are to be destroyed, percentage-wise
+    /// The percentage of collected rent that is burned.
+    ///
+    /// Valid values are in the range [0, 100]. The remaining percentage is
+    /// distributed to validators.
     pub burn_percent: u8,
 }
 
-/// default rental rate in lamports/byte-year, based on:
-///  10^9 lamports per SOL
-///  $1 per SOL
-///  $0.01 per megabyte day
-///  $3.65 per megabyte year
+/// Default rental rate in lamports/byte-year.
+///
+/// This calculation is based on:
+/// - 10^9 lamports per SOL
+/// - $1 per SOL
+/// - $0.01 per megabyte day
+/// - $3.65 per megabyte year
 pub const DEFAULT_LAMPORTS_PER_BYTE_YEAR: u64 = 1_000_000_000 / 100 * 365 / (1024 * 1024);
 
-/// default amount of time (in years) the balance has to include rent for
+/// Default amount of time (in years) the balance has to include rent for the
+/// account to be rent exempt.
 pub const DEFAULT_EXEMPTION_THRESHOLD: f64 = 2.0;
 
-/// default percentage of rent to burn (Valid values are 0 to 100)
+/// Default percentage of collected rent that is burned.
+///
+/// Valid values are in the range [0, 100]. The remaining percentage is
+/// distributed to validators.
 pub const DEFAULT_BURN_PERCENT: u8 = 50;
 
-/// account storage overhead for calculation of base rent
+/// Account storage overhead for calculation of base rent.
+///
+/// This is the number of bytes required to store an account with no data. It is
+/// added to an accounts data length when calculating [`Rent::minimum_balance`].
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
 
 impl Default for Rent {
@@ -44,29 +62,47 @@ impl Default for Rent {
     }
 }
 
+impl Clone for Rent {
+    fn clone(&self) -> Self {
+        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
+            let ptr = cloned.as_mut_ptr();
+            unsafe {
+                copy_field!(ptr, self, lamports_per_byte_year);
+                copy_field!(ptr, self, exemption_threshold);
+                copy_field!(ptr, self, burn_percent);
+            }
+        })
+    }
+}
+
 impl Rent {
-    /// calculate how much rent to burn from the collected rent
+    /// Calculate how much rent to burn from the collected rent.
+    ///
+    /// The first value returned is the amount burned. The second is the amount
+    /// to distribute to validators.
     pub fn calculate_burn(&self, rent_collected: u64) -> (u64, u64) {
         let burned_portion = (rent_collected * u64::from(self.burn_percent)) / 100;
         (burned_portion, rent_collected - burned_portion)
     }
-    /// minimum balance due for rent-exemption of a given size Account::data.len()
+
+    /// Minimum balance due for rent-exemption of a given account data size.
     ///
     /// Note: a stripped-down version of this calculation is used in
-    /// calculate_split_rent_exempt_reserve in the stake program. When this function is updated, --
-    /// eg. when making rent variable -- the stake program will need to be refactored
+    /// `calculate_split_rent_exempt_reserve` in the stake program. When this
+    /// function is updated, eg. when making rent variable, the stake program
+    /// will need to be refactored.
     pub fn minimum_balance(&self, data_len: usize) -> u64 {
         let bytes = data_len as u64;
         (((ACCOUNT_STORAGE_OVERHEAD + bytes) * self.lamports_per_byte_year) as f64
             * self.exemption_threshold) as u64
     }
 
-    /// whether a given balance and data_len would be exempt
+    /// Whether a given balance and data length would be exempt.
     pub fn is_exempt(&self, balance: u64, data_len: usize) -> bool {
         balance >= self.minimum_balance(data_len)
     }
 
-    /// rent due on account's data_len with balance
+    /// Rent due on account's data length with balance.
     pub fn due(&self, balance: u64, data_len: usize, years_elapsed: f64) -> RentDue {
         if self.is_exempt(balance, data_len) {
             RentDue::Exempt
@@ -75,13 +111,16 @@ impl Rent {
         }
     }
 
-    /// rent due for account that is known to be not exempt
+    /// Rent due for account that is known to be not exempt.
     pub fn due_amount(&self, data_len: usize, years_elapsed: f64) -> u64 {
         let actual_data_len = data_len as u64 + ACCOUNT_STORAGE_OVERHEAD;
         let lamports_per_year = self.lamports_per_byte_year * actual_data_len;
         (lamports_per_year as f64 * years_elapsed) as u64
     }
 
+    /// Creates a `Rent` that charges no lamports.
+    ///
+    /// This is used for testing.
     pub fn free() -> Self {
         Self {
             lamports_per_byte_year: 0,
@@ -89,6 +128,9 @@ impl Rent {
         }
     }
 
+    /// Creates a `Rent` that is scaled based on the number of slots in an epoch.
+    ///
+    /// This is used for testing.
     pub fn with_slots_per_epoch(slots_per_epoch: u64) -> Self {
         let ratio = slots_per_epoch as f64 / DEFAULT_SLOTS_PER_EPOCH as f64;
         let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD as f64 * ratio;
@@ -101,17 +143,17 @@ impl Rent {
     }
 }
 
-/// Enumerate return values from `Rent::due()`
+/// The return value of [`Rent::due`].
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RentDue {
-    /// Used to indicate the account is rent exempt
+    /// Used to indicate the account is rent exempt.
     Exempt,
-    /// The account owes rent, and the amount is the field
+    /// The account owes this much rent.
     Paying(u64),
 }
 
 impl RentDue {
-    /// Return the lamports due for rent
+    /// Return the lamports due for rent.
     pub fn lamports(&self) -> u64 {
         match self {
             RentDue::Exempt => 0,
@@ -119,7 +161,7 @@ impl RentDue {
         }
     }
 
-    /// Return 'true' if rent exempt
+    /// Return 'true' if rent exempt.
     pub fn is_exempt(&self) -> bool {
         match self {
             RentDue::Exempt => true,
@@ -190,5 +232,17 @@ mod tests {
     fn test_rent_due_is_exempt() {
         assert!(RentDue::Exempt.is_exempt());
         assert!(!RentDue::Paying(0).is_exempt());
+    }
+
+    #[test]
+    fn test_clone() {
+        let rent = Rent {
+            lamports_per_byte_year: 1,
+            exemption_threshold: 2.2,
+            burn_percent: 3,
+        };
+        #[allow(clippy::clone_on_copy)]
+        let cloned_rent = rent.clone();
+        assert_eq!(cloned_rent, rent);
     }
 }

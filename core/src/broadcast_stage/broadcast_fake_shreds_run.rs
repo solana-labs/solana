@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -11,6 +11,7 @@ pub(super) struct BroadcastFakeShredsRun {
     partition: usize,
     shred_version: u16,
     next_code_index: u32,
+    reed_solomon_cache: Arc<ReedSolomonCache>,
 }
 
 impl BroadcastFakeShredsRun {
@@ -20,6 +21,7 @@ impl BroadcastFakeShredsRun {
             partition,
             shred_version,
             next_code_index: 0,
+            reed_solomon_cache: Arc::<ReedSolomonCache>::default(),
         }
     }
 }
@@ -28,7 +30,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -60,6 +62,9 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            true, // merkle_variant
+            &self.reed_solomon_cache,
+            &mut ProcessShredsStats::default(),
         );
 
         // If the last blockhash is default, a new block is being created
@@ -78,6 +83,9 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            true, // merkle_variant
+            &self.reed_solomon_cache,
+            &mut ProcessShredsStats::default(),
         );
 
         if let Some(index) = coding_shreds
@@ -120,10 +128,10 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _bank_forks: &Arc<RwLock<BankForks>>,
+        _bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         for (data_shreds, batch_info) in receiver.lock().unwrap().iter() {
             let fake = batch_info.is_some();
@@ -132,18 +140,14 @@ impl BroadcastRun for BroadcastFakeShredsRun {
                 if fake == (i <= self.partition) {
                     // Send fake shreds to the first N peers
                     data_shreds.iter().for_each(|b| {
-                        sock.send_to(&b.payload, &peer.tvu_forwards).unwrap();
+                        sock.send_to(b.payload(), peer.tvu_forwards).unwrap();
                     });
                 }
             });
         }
         Ok(())
     }
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         for (data_shreds, _) in receiver.lock().unwrap().iter() {
             blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         }

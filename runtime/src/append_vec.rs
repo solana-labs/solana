@@ -28,6 +28,8 @@ use {
     },
 };
 
+pub mod test_utils;
+
 // Data placement should be aligned at the next boundary. Without alignment accessing the memory may
 // crash on some architectures.
 pub const ALIGN_BOUNDARY_OFFSET: usize = mem::size_of::<u64>();
@@ -44,7 +46,7 @@ pub type StoredMetaWriteVersion = u64;
 /// Meta contains enough context to recover the index from storage itself
 /// This struct will be backed by mmaped and snapshotted data files.
 /// So the data layout must be stable and consistent across the entire cluster!
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StoredMeta {
     /// global write version
     pub write_version: StoredMetaWriteVersion,
@@ -89,7 +91,7 @@ impl<'a, T: ReadableAccount> From<Option<&'a T>> for AccountMeta {
 
 /// References to account data stored elsewhere. Getting an `Account` requires cloning
 /// (see `StoredAccountMeta::clone_account()`).
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct StoredAccountMeta<'a> {
     pub meta: &'a StoredMeta,
     /// account data
@@ -110,6 +112,10 @@ impl<'a> StoredAccountMeta<'a> {
             rent_epoch: self.account_meta.rent_epoch,
             data: self.data.to_vec(),
         })
+    }
+
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.meta.pubkey
     }
 
     fn sanitize(&self) -> bool {
@@ -133,6 +139,33 @@ impl<'a> StoredAccountMeta<'a> {
         // UNSAFE: Force to interpret mmap-backed bool as u8 to really read the actual memory content
         let executable_byte: &u8 = unsafe { &*(executable_bool as *const bool as *const u8) };
         executable_byte
+    }
+}
+
+pub struct AppendVecAccountsIter<'a> {
+    append_vec: &'a AppendVec,
+    offset: usize,
+}
+
+impl<'a> AppendVecAccountsIter<'a> {
+    pub fn new(append_vec: &'a AppendVec) -> Self {
+        Self {
+            append_vec,
+            offset: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for AppendVecAccountsIter<'a> {
+    type Item = StoredAccountMeta<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((account, next_offset)) = self.append_vec.get_account(self.offset) {
+            self.offset = next_offset;
+            Some(account)
+        } else {
+            None
+        }
     }
 }
 
@@ -169,6 +202,7 @@ impl Drop for AppendVec {
                 // disabled due to many false positive warnings while running tests.
                 // blocked by rpc's upgrade to jsonrpc v17
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+                inc_new_counter_info!("append_vec_drop_fail", 1);
             }
         }
     }
@@ -234,26 +268,6 @@ impl AppendVec {
         self.remove_on_drop = false;
     }
 
-    pub fn new_empty_map(current_len: usize) -> Self {
-        let map = MmapMut::map_anon(1).unwrap_or_else(|e| {
-            error!(
-                "Failed to create VM map for snapshot. {:?}\n
-                        Please increase sysctl vm.max_map_count or equivalent for your platform.",
-                e
-            );
-            std::process::exit(1);
-        });
-
-        AppendVec {
-            path: PathBuf::from(String::default()),
-            map,
-            append_lock: Mutex::new(()),
-            current_len: AtomicUsize::new(current_len),
-            file_size: 0, // will be filled by set_file()
-            remove_on_drop: true,
-        }
-    }
-
     fn sanitize_len_and_size(current_len: usize, file_size: usize) -> io::Result<()> {
         if file_size == 0 {
             Err(std::io::Error::new(
@@ -311,32 +325,7 @@ impl AppendVec {
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(&path)?;
-
-        let file_size = std::fs::metadata(&path)?.len();
-        AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
-
-        let map = unsafe {
-            let result = MmapMut::map_mut(&data);
-            if result.is_err() {
-                // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
-                info!("memory map error: {:?}. This may be because vm.max_map_count is not set correctly.", result);
-            }
-            result?
-        };
-
-        let new = AppendVec {
-            path: path.as_ref().to_path_buf(),
-            map,
-            append_lock: Mutex::new(()),
-            current_len: AtomicUsize::new(current_len),
-            file_size,
-            remove_on_drop: true,
-        };
+        let new = Self::new_from_file_unchecked(path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
@@ -347,6 +336,39 @@ impl AppendVec {
         }
 
         Ok((new, num_accounts))
+    }
+
+    /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
+    pub fn new_from_file_unchecked<P: AsRef<Path>>(
+        path: P,
+        current_len: usize,
+    ) -> io::Result<Self> {
+        let file_size = std::fs::metadata(&path)?.len();
+        Self::sanitize_len_and_size(current_len, file_size as usize)?;
+
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(&path)?;
+
+        let map = unsafe {
+            let result = MmapMut::map_mut(&data);
+            if result.is_err() {
+                // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
+                info!("memory map error: {:?}. This may be because vm.max_map_count is not set correctly.", result);
+            }
+            result?
+        };
+
+        Ok(AppendVec {
+            path: path.as_ref().to_path_buf(),
+            map,
+            append_lock: Mutex::new(()),
+            current_len: AtomicUsize::new(current_len),
+            file_size,
+            remove_on_drop: true,
+        })
     }
 
     fn sanitize_layout_and_length(&self) -> (bool, usize) {
@@ -472,7 +494,12 @@ impl AppendVec {
         self.path.clone()
     }
 
-    /// Return account metadata for each account, starting from `offset`.
+    /// Return iterator for account metadata
+    pub fn account_iter(&self) -> AppendVecAccountsIter {
+        AppendVecAccountsIter::new(self)
+    }
+
+    /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {
@@ -539,53 +566,6 @@ impl AppendVec {
         } else {
             res.first().cloned()
         }
-    }
-}
-
-pub mod test_utils {
-    use {
-        super::StoredMeta,
-        rand::{distributions::Alphanumeric, thread_rng, Rng},
-        solana_sdk::{account::AccountSharedData, pubkey::Pubkey},
-        std::{fs::create_dir_all, path::PathBuf},
-    };
-
-    pub struct TempFile {
-        pub path: PathBuf,
-    }
-
-    impl Drop for TempFile {
-        fn drop(&mut self) {
-            let mut path = PathBuf::new();
-            std::mem::swap(&mut path, &mut self.path);
-            let _ignored = std::fs::remove_file(path);
-        }
-    }
-
-    pub fn get_append_vec_dir() -> String {
-        std::env::var("FARF_DIR").unwrap_or_else(|_| "farf/append_vec_tests".to_string())
-    }
-
-    pub fn get_append_vec_path(path: &str) -> TempFile {
-        let out_dir = get_append_vec_dir();
-        let rand_string: String = thread_rng().sample_iter(&Alphanumeric).take(30).collect();
-        let dir = format!("{}/{}", out_dir, rand_string);
-        let mut buf = PathBuf::new();
-        buf.push(&format!("{}/{}", dir, path));
-        create_dir_all(dir).expect("Create directory failed");
-        TempFile { path: buf }
-    }
-
-    pub fn create_test_account(sample: usize) -> (StoredMeta, AccountSharedData) {
-        let data_len = sample % 256;
-        let mut account = AccountSharedData::new(sample as u64, 0, &Pubkey::default());
-        account.set_data((0..data_len).map(|_| data_len as u8).collect());
-        let stored_meta = StoredMeta {
-            write_version: 0,
-            pubkey: Pubkey::default(),
-            data_len: data_len as u64,
-        };
-        (stored_meta, account)
     }
 }
 
@@ -683,7 +663,7 @@ pub mod tests {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .expect("create a test file for mmap");
 
         let result = AppendVec::new_from_file(path, 0);
@@ -917,15 +897,21 @@ pub mod tests {
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
 
+        // upper 7-bits are not 0, so sanitization should fail
+        assert!(!account.sanitize_executable());
+
         // we can observe crafted value by ref
         {
             let executable_bool: &bool = &account.account_meta.executable;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert!(!*executable_bool);
-            const FALSE: bool = false; // keep clippy happy
-            if *executable_bool == FALSE {
-                panic!("This didn't occur if this test passed.");
+            #[cfg(not(target_arch = "aarch64"))]
+            {
+                const FALSE: bool = false; // keep clippy happy
+                if *executable_bool == FALSE {
+                    panic!("This didn't occur if this test passed.");
+                }
             }
             assert_eq!(*account.ref_executable_byte(), crafted_executable);
         }

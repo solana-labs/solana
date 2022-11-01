@@ -6,14 +6,13 @@ use {
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
-    solana_client::{
-        client_error::{ClientErrorKind, Result as ClientResult},
-        nonblocking::pubsub_client::PubsubClient,
-        rpc_client::RpcClient,
-        rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-        rpc_request::RpcError,
-        rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
-        tpu_client::{TpuClient, TpuClientConfig},
+    solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::{ErrorKind as ClientErrorKind, Result as ClientResult},
+        config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
+        request::RpcError,
+        response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     },
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -26,11 +25,18 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::Arc,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -115,12 +121,14 @@ fn test_rpc_send_tx() {
     assert!(confirmed_tx);
 
     use {
-        solana_account_decoder::UiAccountEncoding, solana_client::rpc_config::RpcAccountInfoConfig,
+        solana_account_decoder::UiAccountEncoding,
+        solana_rpc_client_api::config::RpcAccountInfoConfig,
     };
     let config = RpcAccountInfoConfig {
         encoding: Some(UiAccountEncoding::Base64),
         commitment: None,
         data_slice: None,
+        min_context_slot: None,
     };
     let req = json_req!(
         "getAccountInfo",
@@ -193,17 +201,23 @@ fn test_rpc_slot_updates() {
 
     // Verify that updates are received in order for an upcoming slot
     let verify_slot = first_update.slot() + 2;
-    let mut expected_update_index = 0;
     let expected_updates = vec![
         "CreatedBank",
-        "Completed",
         "Frozen",
         "OptimisticConfirmation",
+        "Root", // TODO: debug why root signal is sent twice.
         "Root",
     ];
+    let mut expected_updates = expected_updates.into_iter().peekable();
+    // SlotUpdate::Completed is sent asynchronous to banking-stage and replay
+    // when shreds are inserted into blockstore. When the leader generates
+    // blocks, replay may freeze the bank before shreds are all inserted into
+    // blockstore; and so SlotUpdate::Completed may be received _after_
+    // SlotUpdate::Frozen.
+    let mut slot_update_completed = false;
 
     let test_start = Instant::now();
-    loop {
+    while expected_updates.peek().is_some() || !slot_update_completed {
         assert!(test_start.elapsed() < Duration::from_secs(30));
         let update = update_receiver
             .recv_timeout(Duration::from_secs(2))
@@ -211,17 +225,16 @@ fn test_rpc_slot_updates() {
         if update.slot() == verify_slot {
             let update_name = match update {
                 SlotUpdate::CreatedBank { .. } => "CreatedBank",
-                SlotUpdate::Completed { .. } => "Completed",
+                SlotUpdate::Completed { .. } => {
+                    slot_update_completed = true;
+                    continue;
+                }
                 SlotUpdate::Frozen { .. } => "Frozen",
                 SlotUpdate::OptimisticConfirmation { .. } => "OptimisticConfirmation",
                 SlotUpdate::Root { .. } => "Root",
                 _ => continue,
             };
-            assert_eq!(update_name, expected_updates[expected_update_index]);
-            expected_update_index += 1;
-            if expected_update_index == expected_updates.len() {
-                break;
-            }
+            assert_eq!(Some(update_name), expected_updates.next());
         }
     }
 }
@@ -232,7 +245,7 @@ fn test_rpc_subscriptions() {
 
     let alice = Keypair::new();
     let test_validator =
-        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        TestValidator::with_no_fees_udp(alice.pubkey(), None, SocketAddrSpace::Unspecified);
 
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     transactions_socket.connect(test_validator.tpu()).unwrap();
@@ -254,15 +267,13 @@ fn test_rpc_subscriptions() {
         .collect();
     let mut signature_set: HashSet<Signature> =
         transactions.iter().map(|tx| tx.signatures[0]).collect();
-    let account_set: HashSet<Pubkey> = transactions
+    let mut account_set: HashSet<Pubkey> = transactions
         .iter()
         .map(|tx| tx.message.account_keys[1])
         .collect();
 
-    // Track when subscriptions are ready
-    let (ready_sender, ready_receiver) = unbounded::<()>();
     // Track account notifications are received
-    let (account_sender, account_receiver) = unbounded::<RpcResponse<UiAccount>>();
+    let (account_sender, account_receiver) = unbounded::<(Pubkey, RpcResponse<UiAccount>)>();
     // Track when status notifications are received
     let (status_sender, status_receiver) =
         unbounded::<(Signature, RpcResponse<RpcSignatureResult>)>();
@@ -271,12 +282,19 @@ fn test_rpc_subscriptions() {
     let rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let signature_set_clone = signature_set.clone();
+    let account_set_clone = account_set.clone();
+    let signature_subscription_ready = Arc::new(AtomicUsize::new(0));
+    let account_subscription_ready = Arc::new(AtomicUsize::new(0));
+    let signature_subscription_ready_clone = signature_subscription_ready.clone();
+    let account_subscription_ready_clone = account_subscription_ready.clone();
+
     rt.spawn(async move {
         let pubsub_client = Arc::new(PubsubClient::new(&rpc_pubsub_url).await.unwrap());
 
         // Subscribe to signature notifications
         for signature in signature_set_clone {
             let status_sender = status_sender.clone();
+            let signature_subscription_ready_clone = signature_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -291,6 +309,8 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
+                    signature_subscription_ready_clone.fetch_add(1, Ordering::SeqCst);
+
                     let response = sig_notifications.next().await.unwrap();
                     status_sender.send((signature, response)).unwrap();
                     sig_unsubscribe().await;
@@ -299,8 +319,9 @@ fn test_rpc_subscriptions() {
         }
 
         // Subscribe to account notifications
-        for pubkey in account_set {
+        for pubkey in account_set_clone {
             let account_sender = account_sender.clone();
+            let account_subscription_ready_clone = account_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -315,28 +336,43 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
+                    account_subscription_ready_clone.fetch_add(1, Ordering::SeqCst);
+
                     let response = account_notifications.next().await.unwrap();
-                    account_sender.send(response).unwrap();
+                    account_sender.send((pubkey, response)).unwrap();
                     account_unsubscribe().await;
                 }
             });
         }
-
-        // Signal ready after the next slot notification
-        tokio::spawn({
-            let _pubsub_client = Arc::clone(&pubsub_client);
-            async move {
-                let (mut slot_notifications, slot_unsubscribe) =
-                    _pubsub_client.slot_subscribe().await.unwrap();
-                let _response = slot_notifications.next().await.unwrap();
-                ready_sender.send(()).unwrap();
-                slot_unsubscribe().await;
-            }
-        });
     });
 
-    // Wait for signature subscriptions
-    ready_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    let now = Instant::now();
+    while (signature_subscription_ready.load(Ordering::SeqCst) != transactions.len()
+        || account_subscription_ready.load(Ordering::SeqCst) != transactions.len())
+        && now.elapsed() < Duration::from_secs(15)
+    {
+        sleep(Duration::from_millis(100))
+    }
+
+    // check signature subscription
+    let num = signature_subscription_ready.load(Ordering::SeqCst);
+    if num != transactions.len() {
+        error!(
+            "signature subscription didn't setup properly, want: {}, got: {}",
+            transactions.len(),
+            num
+        );
+    }
+
+    // check account subscription
+    let num = account_subscription_ready.load(Ordering::SeqCst);
+    if num != transactions.len() {
+        error!(
+            "account subscriptions didn't setup properly, want: {}, got: {}",
+            transactions.len(),
+            num
+        );
+    }
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut mint_balance = rpc_client
@@ -367,7 +403,13 @@ fn test_rpc_subscriptions() {
     }
 
     // Wait for all signature subscriptions
-    let deadline = Instant::now() + Duration::from_secs(15);
+    /* Set a large 30-sec timeout here because the timing of the above tokio process is
+     * highly non-deterministic.  The test was too flaky at 15-second timeout.  Debugging
+     * show occasional multi-second delay which could come from multiple sources -- other
+     * tokio tasks, tokio scheduler, OS scheduler.  The async nature makes it hard to
+     * track down the origin of the delay.
+     */
+    let deadline = Instant::now() + Duration::from_secs(30);
     while !signature_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
@@ -389,19 +431,18 @@ fn test_rpc_subscriptions() {
         }
     }
 
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let mut account_notifications = transactions.len();
-    while account_notifications > 0 {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !account_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match account_receiver.recv_timeout(timeout) {
-            Ok(result) => {
+            Ok((pubkey, result)) => {
                 assert_eq!(result.value.lamports, Rent::default().minimum_balance(0));
-                account_notifications -= 1;
+                assert!(account_set.remove(&pubkey));
             }
             Err(_err) => {
                 panic!(
                     "recv_timeout, {}/{} accounts remaining",
-                    account_notifications,
+                    account_set.len(),
                     transactions.len()
                 );
             }
@@ -409,8 +450,7 @@ fn test_rpc_subscriptions() {
     }
 }
 
-#[test]
-fn test_tpu_send_transaction() {
+fn run_tpu_send_transaction(tpu_use_quic: bool) {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let test_validator =
@@ -419,11 +459,15 @@ fn test_tpu_send_transaction() {
         test_validator.rpc_url(),
         CommitmentConfig::processed(),
     ));
-
-    let tpu_client = TpuClient::new(
+    let connection_cache = match tpu_use_quic {
+        true => Arc::new(ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
+        false => Arc::new(ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE)),
+    };
+    let tpu_client = TpuClient::new_with_connection_cache(
         rpc_client.clone(),
         &test_validator.rpc_pubsub_url(),
         TpuClientConfig::default(),
+        connection_cache,
     )
     .unwrap();
 
@@ -442,6 +486,16 @@ fn test_tpu_send_transaction() {
             return;
         }
     }
+}
+
+#[test]
+fn test_tpu_send_transaction() {
+    run_tpu_send_transaction(/*tpu_use_quic*/ false)
+}
+
+#[test]
+fn test_tpu_send_transaction_with_quic() {
+    run_tpu_send_transaction(/*tpu_use_quic*/ true)
 }
 
 #[test]

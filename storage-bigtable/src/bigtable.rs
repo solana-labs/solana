@@ -8,14 +8,15 @@ use {
     },
     backoff::{future::retry, ExponentialBackoff},
     log::*,
-    std::time::{Duration, Instant},
-    thiserror::Error,
-    tonic::{
-        codegen::InterceptedService, metadata::MetadataValue, transport::ClientTlsConfig, Request,
-        Status,
+    std::{
+        str::FromStr,
+        time::{Duration, Instant},
     },
+    thiserror::Error,
+    tonic::{codegen::InterceptedService, transport::ClientTlsConfig, Request, Status},
 };
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 mod google {
     mod rpc {
         include!(concat!(
@@ -109,6 +110,7 @@ pub struct BigTableConnection {
     access_token: Option<AccessToken>,
     channel: tonic::transport::Channel,
     table_prefix: String,
+    app_profile_id: String,
     timeout: Option<Duration>,
 }
 
@@ -121,8 +123,12 @@ impl BigTableConnection {
     ///
     /// The BIGTABLE_EMULATOR_HOST environment variable is also respected.
     ///
+    /// The BIGTABLE_PROXY environment variable is used to configure the gRPC connection through a
+    /// forward proxy (see HTTP_PROXY).
+    ///
     pub async fn new(
         instance_name: &str,
+        app_profile_id: &str,
         read_only: bool,
         timeout: Option<Duration>,
         credential_type: CredentialType,
@@ -137,6 +143,7 @@ impl BigTableConnection {
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
                         .connect_lazy(),
                     table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
+                    app_profile_id: app_profile_id.to_string(),
                     timeout,
                 })
             }
@@ -177,10 +184,31 @@ impl BigTableConnection {
                     }
                 };
 
+                let mut http = hyper::client::HttpConnector::new();
+                http.enforce_http(false);
+                http.set_nodelay(true);
+                let channel = match std::env::var("BIGTABLE_PROXY") {
+                    Ok(proxy_uri) => {
+                        let proxy = hyper_proxy::Proxy::new(
+                            hyper_proxy::Intercept::All,
+                            proxy_uri
+                                .parse::<http::Uri>()
+                                .map_err(|err| Error::InvalidUri(proxy_uri, err.to_string()))?,
+                        );
+                        let mut proxy_connector =
+                            hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
+                        // tonic handles TLS as a separate layer
+                        proxy_connector.set_tls(None);
+                        endpoint.connect_with_connector_lazy(proxy_connector)
+                    }
+                    _ => endpoint.connect_with_connector_lazy(http),
+                };
+
                 Ok(Self {
                     access_token: Some(access_token),
-                    channel: endpoint.connect_lazy(),
+                    channel,
                     table_prefix,
+                    app_profile_id: app_profile_id.to_string(),
                     timeout,
                 })
             }
@@ -197,7 +225,7 @@ impl BigTableConnection {
             self.channel.clone(),
             move |mut req: Request<()>| {
                 if let Some(access_token) = &access_token {
-                    match MetadataValue::from_str(&access_token.get()) {
+                    match FromStr::from_str(&access_token.get()) {
                         Ok(authorization_header) => {
                             req.metadata_mut()
                                 .insert("authorization", authorization_header);
@@ -214,6 +242,7 @@ impl BigTableConnection {
             access_token: self.access_token.clone(),
             client,
             table_prefix: self.table_prefix.clone(),
+            app_profile_id: self.app_profile_id.clone(),
             timeout: self.timeout,
         }
     }
@@ -276,6 +305,7 @@ pub struct BigTable<F: FnMut(Request<()>) -> InterceptedRequestResult> {
     access_token: Option<AccessToken>,
     client: bigtable_client::BigtableClient<InterceptedService<tonic::transport::Channel, F>>,
     table_prefix: String,
+    app_profile_id: String,
     timeout: Option<Duration>,
 }
 
@@ -374,7 +404,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
     /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
-    /// If `rows_limit` is zero, the listing will continue until the end of the table.
+    /// If `rows_limit` is zero, this method will return an empty array.
     pub async fn get_row_keys(
         &mut self,
         table_name: &str,
@@ -382,11 +412,15 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         end_at: Option<RowKey>,
         rows_limit: i64,
     ) -> Result<Vec<RowKey>> {
+        if rows_limit == 0 {
+            return Ok(vec![]);
+        }
         self.refresh_access_token().await;
         let response = self
             .client
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
                 rows_limit,
                 rows: Some(RowSet {
                     row_keys: vec![],
@@ -416,13 +450,37 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                         ],
                     })),
                 }),
-                ..ReadRowsRequest::default()
             })
             .await?
             .into_inner();
 
         let rows = self.decode_read_rows_response(response).await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    /// Check whether a row key exists in a `table`
+    pub async fn row_key_exists(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
+                rows_limit: 1,
+                rows: Some(RowSet {
+                    row_keys: vec![row_key.into_bytes()],
+                    row_ranges: vec![],
+                }),
+                filter: Some(RowFilter {
+                    filter: Some(row_filter::Filter::StripValueTransformer(true)),
+                }),
+            })
+            .await?
+            .into_inner();
+
+        let rows = self.decode_read_rows_response(response).await?;
+        Ok(!rows.is_empty())
     }
 
     /// Get latest data from `table`.
@@ -436,7 +494,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
     /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
-    /// If `rows_limit` is zero, the listing will continue until the end of the table.
+    /// If `rows_limit` is zero, this method will return an empty array.
     pub async fn get_row_data(
         &mut self,
         table_name: &str,
@@ -444,12 +502,15 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         end_at: Option<RowKey>,
         rows_limit: i64,
     ) -> Result<Vec<(RowKey, RowData)>> {
+        if rows_limit == 0 {
+            return Ok(vec![]);
+        }
         self.refresh_access_token().await;
-
         let response = self
             .client
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
                 rows_limit,
                 rows: Some(RowSet {
                     row_keys: vec![],
@@ -465,7 +526,6 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
-                ..ReadRowsRequest::default()
             })
             .await?
             .into_inner();
@@ -485,7 +545,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .client
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
-                rows_limit: 0, // return all keys
+                app_profile_id: self.app_profile_id.clone(),
+                rows_limit: 0, // return all existing rows
                 rows: Some(RowSet {
                     row_keys: row_keys
                         .iter()
@@ -497,7 +558,6 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
-                ..ReadRowsRequest::default()
             })
             .await?
             .into_inner();
@@ -521,6 +581,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .client
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
                 rows_limit: 1,
                 rows: Some(RowSet {
                     row_keys: vec![row_key.into_bytes()],
@@ -530,7 +591,6 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
                     // Only return the latest version of each cell
                     filter: Some(row_filter::Filter::CellsPerColumnLimitFilter(1)),
                 }),
-                ..ReadRowsRequest::default()
             })
             .await?
             .into_inner();
@@ -562,8 +622,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .client
             .mutate_rows(MutateRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
                 entries,
-                ..MutateRowsRequest::default()
             })
             .await?
             .into_inner();
@@ -616,8 +676,8 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .client
             .mutate_rows(MutateRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
                 entries,
-                ..MutateRowsRequest::default()
             })
             .await?
             .into_inner();
@@ -868,6 +928,7 @@ mod tests {
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
                 return_data: Some(TransactionReturnData::default()),
+                compute_units_consumed: Some(1234),
             },
         });
         let expected_block = ConfirmedBlock {
@@ -926,6 +987,7 @@ mod tests {
                 meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.rewards = None; // Legacy bincode implementation does not support rewards
                 meta.return_data = None; // Legacy bincode implementation does not support return data
+                meta.compute_units_consumed = None; // Legacy bincode implementation does not support CU consumed
             }
             assert_eq!(block, bincode_block.into());
         } else {

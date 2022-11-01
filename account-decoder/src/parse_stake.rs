@@ -44,7 +44,7 @@ pub struct UiStakeAccount {
     pub stake: Option<UiStake>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiMeta {
     pub rent_exempt_reserve: StringAmount,
@@ -62,7 +62,7 @@ impl From<Meta> for UiMeta {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiLockup {
     pub unix_timestamp: UnixTimestamp,
@@ -80,7 +80,7 @@ impl From<Lockup> for UiLockup {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiAuthorized {
     pub staker: String,

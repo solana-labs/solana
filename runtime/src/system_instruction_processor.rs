@@ -19,14 +19,16 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::collections::HashSet,
 };
 
 // represents an address that may or may not have been generated
 //  from a seed
-#[derive(PartialEq, Default, Debug)]
+#[derive(PartialEq, Eq, Default, Debug)]
 struct Address {
     address: Pubkey,
     base: Option<Pubkey>,
@@ -106,7 +108,7 @@ fn allocate(
         return Err(SystemError::InvalidAccountDataLength.into());
     }
 
-    account.set_data(&vec![0; space as usize]);
+    account.set_data_length(space as usize)?;
 
     Ok(())
 }
@@ -128,8 +130,7 @@ fn assign(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    account.set_owner(&owner.to_bytes());
-    Ok(())
+    account.set_owner(&owner.to_bytes())
 }
 
 fn allocate_and_assign(
@@ -146,8 +147,8 @@ fn allocate_and_assign(
 
 #[allow(clippy::too_many_arguments)]
 fn create_account(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     to_address: &Address,
     lamports: u64,
     space: u64,
@@ -159,8 +160,8 @@ fn create_account(
 ) -> Result<(), InstructionError> {
     // if it looks like the `to` account is already in use, bail
     {
-        let mut to =
-            instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+        let mut to = instruction_context
+            .try_borrow_instruction_account(transaction_context, to_account_index)?;
         if to.get_lamports() > 0 {
             ic_msg!(
                 invoke_context,
@@ -183,15 +184,15 @@ fn create_account(
 }
 
 fn transfer_verified(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
 ) -> Result<(), InstructionError> {
-    let mut from =
-        instruction_context.try_borrow_account(transaction_context, from_account_index)?;
+    let mut from = instruction_context
+        .try_borrow_instruction_account(transaction_context, from_account_index)?;
     if !from.get_data().is_empty() {
         ic_msg!(invoke_context, "Transfer: `from` must not carry data");
         return Err(InstructionError::InvalidArgument);
@@ -208,14 +209,15 @@ fn transfer_verified(
 
     from.checked_sub_lamports(lamports)?;
     drop(from);
-    let mut to = instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    let mut to = instruction_context
+        .try_borrow_instruction_account(transaction_context, to_account_index)?;
     to.checked_add_lamports(lamports)?;
     Ok(())
 }
 
 fn transfer(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -229,12 +231,13 @@ fn transfer(
         return Ok(());
     }
 
-    if !instruction_context.is_signer(from_account_index)? {
+    if !instruction_context.is_instruction_account_signer(from_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: `from` account {} must sign",
             transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(from_account_index)?,
+                instruction_context
+                    .get_index_of_instruction_account_in_transaction(from_account_index)?,
             )?,
         );
         return Err(InstructionError::MissingRequiredSignature);
@@ -251,11 +254,11 @@ fn transfer(
 }
 
 fn transfer_with_seed(
-    from_account_index: usize,
-    from_base_account_index: usize,
+    from_account_index: IndexOfAccount,
+    from_base_account_index: IndexOfAccount,
     from_seed: &str,
     from_owner: &Pubkey,
-    to_account_index: usize,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -269,26 +272,28 @@ fn transfer_with_seed(
         return Ok(());
     }
 
-    if !instruction_context.is_signer(from_base_account_index)? {
+    if !instruction_context.is_instruction_account_signer(from_base_account_index)? {
         ic_msg!(
             invoke_context,
             "Transfer: 'from' account {:?} must sign",
             transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(from_base_account_index)?,
+                instruction_context
+                    .get_index_of_instruction_account_in_transaction(from_base_account_index)?,
             )?,
         );
         return Err(InstructionError::MissingRequiredSignature);
     }
     let address_from_seed = Pubkey::create_with_seed(
         transaction_context.get_key_of_account_at_index(
-            instruction_context.get_index_in_transaction(from_base_account_index)?,
+            instruction_context
+                .get_index_of_instruction_account_in_transaction(from_base_account_index)?,
         )?,
         from_seed,
         from_owner,
     )?;
 
     let from_key = transaction_context.get_key_of_account_at_index(
-        instruction_context.get_index_in_transaction(from_account_index)?,
+        instruction_context.get_index_of_instruction_account_in_transaction(from_account_index)?,
     )?;
     if *from_key != address_from_seed {
         ic_msg!(
@@ -311,7 +316,7 @@ fn transfer_with_seed(
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -321,7 +326,7 @@ pub fn process_instruction(
 
     trace!("process_instruction: {:?}", instruction);
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {
         SystemInstruction::CreateAccount {
             lamports,
@@ -331,14 +336,14 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             let to_address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(1)?,
                 )?,
                 None,
                 invoke_context,
             )?;
             create_account(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &to_address,
                 lamports,
                 space,
@@ -359,14 +364,14 @@ pub fn process_instruction(
             instruction_context.check_number_of_instruction_accounts(2)?;
             let to_address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 1)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(1)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,
             )?;
             create_account(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &to_address,
                 lamports,
                 space,
@@ -379,11 +384,11 @@ pub fn process_instruction(
         }
         SystemInstruction::Assign { owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 None,
                 invoke_context,
@@ -393,8 +398,8 @@ pub fn process_instruction(
         SystemInstruction::Transfer { lamports } => {
             instruction_context.check_number_of_instruction_accounts(2)?;
             transfer(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 lamports,
                 invoke_context,
                 transaction_context,
@@ -408,11 +413,11 @@ pub fn process_instruction(
         } => {
             instruction_context.check_number_of_instruction_accounts(3)?;
             transfer_with_seed(
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &from_seed,
                 &from_owner,
-                first_instruction_account + 2,
+                2,
                 lamports,
                 invoke_context,
                 transaction_context,
@@ -448,9 +453,9 @@ pub fn process_instruction(
             )?;
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 3)?;
             withdraw_nonce_account(
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &rent,
                 &signers,
                 invoke_context,
@@ -484,13 +489,29 @@ pub fn process_instruction(
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             authorize_nonce_account(&mut me, &nonce_authority, &signers, invoke_context)
         }
+        SystemInstruction::UpgradeNonceAccount => {
+            instruction_context.check_number_of_instruction_accounts(1)?;
+            let mut nonce_account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+            if !system_program::check_id(nonce_account.get_owner()) {
+                return Err(InstructionError::InvalidAccountOwner);
+            }
+            if !nonce_account.is_writable() {
+                return Err(InstructionError::InvalidArgument);
+            }
+            let nonce_versions: nonce::state::Versions = nonce_account.get_state()?;
+            match nonce_versions.upgrade() {
+                None => Err(InstructionError::InvalidArgument),
+                Some(nonce_versions) => nonce_account.set_state(&nonce_versions),
+            }
+        }
         SystemInstruction::Allocate { space } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 None,
                 invoke_context,
@@ -504,11 +525,11 @@ pub fn process_instruction(
             owner,
         } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,
@@ -524,11 +545,11 @@ pub fn process_instruction(
         }
         SystemInstruction::AssignWithSeed { base, seed, owner } => {
             instruction_context.check_number_of_instruction_accounts(1)?;
-            let mut account = instruction_context
-                .try_borrow_account(transaction_context, first_instruction_account)?;
+            let mut account =
+                instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let address = Address::create(
                 transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(0)?,
                 )?,
                 Some((&base, &seed, &owner)),
                 invoke_context,
@@ -550,11 +571,10 @@ pub fn get_system_account_kind(account: &AccountSharedData) -> Option<SystemAcco
         if account.data().is_empty() {
             Some(SystemAccountKind::System)
         } else if account.data().len() == nonce::State::size() {
-            match account.state().ok()? {
-                nonce::state::Versions::Current(state) => match *state {
-                    nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
-                    _ => None,
-                },
+            let nonce_versions: nonce::state::Versions = account.state().ok()?;
+            match nonce_versions.state() {
+                nonce::State::Uninitialized => None,
+                nonce::State::Initialized(_) => Some(SystemAccountKind::Nonce),
             }
         } else {
             None
@@ -570,11 +590,19 @@ mod tests {
     use solana_sdk::{
         account::{self, Account, AccountSharedData, ReadableAccount},
         client::SyncClient,
+        fee_calculator::FeeCalculator,
         genesis_config::create_genesis_config,
         hash::{hash, Hash},
         instruction::{AccountMeta, Instruction, InstructionError},
         message::Message,
-        nonce, nonce_account, recent_blockhashes_account,
+        native_token::sol_to_lamports,
+        nonce::{
+            self,
+            state::{
+                Data as NonceData, DurableNonce, State as NonceState, Versions as NonceVersions,
+            },
+        },
+        nonce_account, recent_blockhashes_account,
         signature::{Keypair, Signer},
         system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
@@ -654,12 +682,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -694,12 +722,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -736,12 +764,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: base,
@@ -760,7 +788,8 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";
@@ -830,12 +859,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -868,12 +897,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(SystemError::ResultWithNegativeLamports.into()),
@@ -884,19 +913,19 @@ mod tests {
     #[test]
     fn test_request_more_than_allowed_data_length() {
         let from = Pubkey::new_unique();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new_unique());
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1137,12 +1166,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -1192,9 +1221,7 @@ mod tests {
         let nonce = Pubkey::new_unique();
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -1218,7 +1245,7 @@ mod tests {
                 AccountMeta {
                     pubkey: new,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::InvalidArgument),
@@ -1242,7 +1269,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1255,7 +1282,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
             super::process_instruction,
@@ -1267,7 +1294,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1283,7 +1310,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1326,7 +1353,7 @@ mod tests {
     #[test]
     fn test_transfer_lamports() {
         let from = Pubkey::new_unique();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new(&[3; 32]);
         let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
         let transaction_accounts = vec![(from, from_account), (to, to_account)];
@@ -1334,12 +1361,12 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1384,12 +1411,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
@@ -1406,7 +1433,7 @@ mod tests {
         let from_seed = "42".to_string();
         let from_owner = system_program::id();
         let from = Pubkey::create_with_seed(&base, from_seed.as_str(), &from_owner).unwrap();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new(&[3; 32]);
         let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
         let transaction_accounts =
@@ -1415,7 +1442,7 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: base,
@@ -1425,7 +1452,7 @@ mod tests {
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1483,7 +1510,7 @@ mod tests {
         let from = Pubkey::new_unique();
         let from_account = AccountSharedData::new_data(
             100,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(nonce::state::Data {
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data {
                 authority: from,
                 ..nonce::state::Data::default()
             })),
@@ -1519,9 +1546,11 @@ mod tests {
 
     #[test]
     fn test_allocate() {
-        let (genesis_config, mint_keypair) = create_genesis_config(100);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
+        let data_len = 2;
+        let amount = genesis_config.rent.minimum_balance(data_len);
 
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
@@ -1530,7 +1559,7 @@ mod tests {
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
-            .transfer_and_confirm(50, &mint_keypair, &alice_pubkey)
+            .transfer_and_confirm(amount, &mint_keypair, &alice_pubkey)
             .unwrap();
 
         let allocate_with_seed = Message::new(
@@ -1538,7 +1567,7 @@ mod tests {
                 &alice_with_seed,
                 &alice_pubkey,
                 seed,
-                2,
+                data_len as u64,
                 &owner,
             )],
             Some(&alice_pubkey),
@@ -1548,7 +1577,7 @@ mod tests {
             .send_and_confirm_message(&[&alice_keypair], allocate_with_seed)
             .is_ok());
 
-        let allocate = system_instruction::allocate(&alice_pubkey, 2);
+        let allocate = system_instruction::allocate(&alice_pubkey, data_len as u64);
 
         assert!(bank_client
             .send_and_confirm_instruction(&alice_keypair, allocate)
@@ -1570,7 +1599,7 @@ mod tests {
         let program = Pubkey::new_unique();
         let collector = Pubkey::new_unique();
 
-        let mint_lamports = 10000;
+        let mint_lamports = sol_to_lamports(1.0);
         let len1 = 123;
         let len2 = 456;
 
@@ -1583,27 +1612,36 @@ mod tests {
             .unwrap();
 
         // create zero-lamports account to be cleaned
+        let account = AccountSharedData::new(0, len1, &program);
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
-        let bank_client = BankClient::new_shared(&bank);
-        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 0, len1, &program);
-        let message = Message::new(&[ix], Some(&alice_keypair.pubkey()));
-        let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
-        assert!(r.is_ok());
+        bank.store_account(&bob_pubkey, &account);
 
         // transfer some to bogus pubkey just to make previous bank (=slot) really cleanable
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
         bank_client
-            .transfer_and_confirm(50, &alice_keypair, &Pubkey::new_unique())
+            .transfer_and_confirm(
+                genesis_config.rent.minimum_balance(0),
+                &alice_keypair,
+                &Pubkey::new_unique(),
+            )
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts(None) or not
-        callback(&*bank);
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+        callback(&bank);
 
         // create a normal account at the same pubkey as the zero-lamports account
+        let lamports = genesis_config.rent.minimum_balance(len2);
         let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         let bank_client = BankClient::new_shared(&bank);
-        let ix = system_instruction::create_account(&alice_pubkey, &bob_pubkey, 1, len2, &program);
+        let ix = system_instruction::create_account(
+            &alice_pubkey,
+            &bob_pubkey,
+            lamports,
+            len2 as u64,
+            &program,
+        );
         let message = Message::new(&[ix], Some(&alice_pubkey));
         let r = bank_client.send_and_confirm_message(&[&alice_keypair, &bob_keypair], message);
         assert!(r.is_ok());
@@ -1616,9 +1654,9 @@ mod tests {
             bank.squash();
             bank.force_flush_accounts_cache();
             // do clean and assert that it actually did its job
+            assert_eq!(4, bank.get_snapshot_storages(None).len());
+            bank.clean_accounts(None);
             assert_eq!(3, bank.get_snapshot_storages(None).len());
-            bank.clean_accounts(false, false, None);
-            assert_eq!(2, bank.get_snapshot_storages(None).len());
         });
     }
 
@@ -1631,7 +1669,7 @@ mod tests {
 
     #[test]
     fn test_assign_with_seed() {
-        let (genesis_config, mint_keypair) = create_genesis_config(100);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.0));
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
 
@@ -1642,7 +1680,11 @@ mod tests {
         let alice_with_seed = Pubkey::create_with_seed(&alice_pubkey, seed, &owner).unwrap();
 
         bank_client
-            .transfer_and_confirm(50, &mint_keypair, &alice_pubkey)
+            .transfer_and_confirm(
+                genesis_config.rent.minimum_balance(0),
+                &mint_keypair,
+                &alice_pubkey,
+            )
             .unwrap();
 
         let assign_with_seed = Message::new(
@@ -1662,16 +1704,17 @@ mod tests {
 
     #[test]
     fn test_system_unsigned_transaction() {
-        let (genesis_config, alice_keypair) = create_genesis_config(100);
+        let (genesis_config, alice_keypair) = create_genesis_config(sol_to_lamports(1.0));
         let alice_pubkey = alice_keypair.pubkey();
         let mallory_keypair = Keypair::new();
         let mallory_pubkey = mallory_keypair.pubkey();
+        let amount = genesis_config.rent.minimum_balance(0);
 
         // Fund to account to bypass AccountNotFound error
         let bank = Bank::new_for_tests(&genesis_config);
         let bank_client = BankClient::new(bank);
         bank_client
-            .transfer_and_confirm(50, &alice_keypair, &mallory_pubkey)
+            .transfer_and_confirm(amount, &alice_keypair, &mallory_pubkey)
             .unwrap();
 
         // Erroneously sign transaction with recipient account key
@@ -1682,7 +1725,7 @@ mod tests {
         ];
         let malicious_instruction = Instruction::new_with_bincode(
             system_program::id(),
-            &SystemInstruction::Transfer { lamports: 10 },
+            &SystemInstruction::Transfer { lamports: amount },
             account_metas,
         );
         assert_eq!(
@@ -1692,8 +1735,11 @@ mod tests {
                 .unwrap(),
             TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature)
         );
-        assert_eq!(bank_client.get_balance(&alice_pubkey).unwrap(), 50);
-        assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), 50);
+        assert_eq!(
+            bank_client.get_balance(&alice_pubkey).unwrap(),
+            sol_to_lamports(1.0) - amount
+        );
+        assert_eq!(bank_client.get_balance(&mallory_pubkey).unwrap(), amount);
     }
 
     fn process_nonce_instruction(
@@ -1821,7 +1867,7 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
+            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
                 super::process_instruction(first_instruction_account, invoke_context)
             },
@@ -1893,7 +1939,7 @@ mod tests {
                 AccountMeta {
                     pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: blockhash_id,
@@ -2046,9 +2092,7 @@ mod tests {
     fn test_get_system_account_kind_nonce_ok() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -2077,9 +2121,7 @@ mod tests {
     fn test_get_system_account_kind_nonsystem_owner_with_nonce_data_fail() {
         let nonce_account = AccountSharedData::new_data(
             42,
-            &nonce::state::Versions::new_current(nonce::State::Initialized(
-                nonce::state::Data::default(),
-            )),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &Pubkey::new_unique(),
         )
         .unwrap();
@@ -2183,10 +2225,149 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
+            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
                 super::process_instruction(first_instruction_account, invoke_context)
             },
+        );
+    }
+
+    #[test]
+    fn test_nonce_account_upgrade_check_owner() {
+        let nonce_address = Pubkey::new_unique();
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Uninitialized));
+        let nonce_account = AccountSharedData::new_data(
+            1_000_000,             // lamports
+            &versions,             // state
+            &Pubkey::new_unique(), // owner
+        )
+        .unwrap();
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidAccountOwner),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+    }
+
+    fn new_nonce_account(versions: NonceVersions) -> AccountSharedData {
+        let nonce_account = AccountSharedData::new_data(
+            1_000_000,             // lamports
+            &versions,             // state
+            &system_program::id(), // owner
+        )
+        .unwrap();
+        assert_eq!(
+            nonce_account.deserialize_data::<NonceVersions>().unwrap(),
+            versions
+        );
+        nonce_account
+    }
+
+    #[test]
+    fn test_nonce_account_upgrade() {
+        let nonce_address = Pubkey::new_unique();
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Uninitialized));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let versions = NonceVersions::Current(Box::new(NonceState::Uninitialized));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let blockhash = Hash::from([171; 32]);
+        let durable_nonce = DurableNonce::from_blockhash(&blockhash);
+        let data = NonceData {
+            authority: Pubkey::new_unique(),
+            durable_nonce,
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 2718,
+            },
+        };
+        let versions = NonceVersions::Legacy(Box::new(NonceState::Initialized(data.clone())));
+        let nonce_account = new_nonce_account(versions);
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account.clone())],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: false, // Should fail!
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0], nonce_account);
+        let mut accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account)],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Ok(()),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        let nonce_account = accounts.remove(0);
+        let durable_nonce = DurableNonce::from_blockhash(durable_nonce.as_hash());
+        assert_ne!(data.durable_nonce, durable_nonce);
+        let data = NonceData {
+            durable_nonce,
+            ..data
+        };
+        let upgraded_nonce_account =
+            NonceVersions::Current(Box::new(NonceState::Initialized(data)));
+        assert_eq!(
+            nonce_account.deserialize_data::<NonceVersions>().unwrap(),
+            upgraded_nonce_account
+        );
+        let accounts = process_instruction(
+            &serialize(&SystemInstruction::UpgradeNonceAccount).unwrap(),
+            vec![(nonce_address, nonce_account)],
+            vec![AccountMeta {
+                pubkey: nonce_address,
+                is_signer: false,
+                is_writable: true,
+            }],
+            Err(InstructionError::InvalidArgument),
+            super::process_instruction,
+        );
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(
+            accounts[0].deserialize_data::<NonceVersions>().unwrap(),
+            upgraded_nonce_account
         );
     }
 }

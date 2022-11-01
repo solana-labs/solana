@@ -3,7 +3,7 @@
 extern crate test;
 use {
     solana_ledger::{
-        shred::{Shred, SIZE_OF_DATA_SHRED_PAYLOAD},
+        shred::{Shred, ShredFlags, LEGACY_SHRED_DATA_CAPACITY},
         sigverify_shreds::{sign_shreds_cpu, sign_shreds_gpu, sign_shreds_gpu_pinned_keypair},
     },
     solana_perf::{
@@ -21,20 +21,16 @@ const NUM_BATCHES: usize = 1;
 fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
     let recycler_cache = RecyclerCache::default();
 
-    let mut packet_batch = PacketBatch::default();
-    packet_batch.packets.set_pinnable();
+    let mut packet_batch = PacketBatch::new_pinned_with_capacity(NUM_PACKETS);
+    packet_batch.resize(NUM_PACKETS, Packet::default());
     let slot = 0xdead_c0de;
-    // need to pin explicitly since the resize will not cause re-allocation
-    packet_batch.packets.reserve_and_pin(NUM_PACKETS);
-    packet_batch.packets.resize(NUM_PACKETS, Packet::default());
-    for p in packet_batch.packets.iter_mut() {
+    for p in packet_batch.iter_mut() {
         let shred = Shred::new_from_data(
             slot,
             0xc0de,
             0xdead,
-            Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-            true,
-            true,
+            &[5; LEGACY_SHRED_DATA_CAPACITY],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             1,
             2,
             0,
@@ -58,15 +54,14 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
 fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
     let mut packet_batch = PacketBatch::default();
     let slot = 0xdead_c0de;
-    packet_batch.packets.resize(NUM_PACKETS, Packet::default());
-    for p in packet_batch.packets.iter_mut() {
+    packet_batch.resize(NUM_PACKETS, Packet::default());
+    for p in packet_batch.iter_mut() {
         let shred = Shred::new_from_data(
             slot,
             0xc0de,
             0xdead,
-            Some(&[5; SIZE_OF_DATA_SHRED_PAYLOAD]),
-            true,
-            true,
+            &[5; LEGACY_SHRED_DATA_CAPACITY],
+            ShredFlags::LAST_SHRED_IN_SLOT,
             1,
             2,
             0,

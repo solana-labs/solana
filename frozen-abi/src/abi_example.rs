@@ -215,9 +215,9 @@ atomic_example_impls! { AtomicI64 }
 atomic_example_impls! { AtomicIsize }
 atomic_example_impls! { AtomicBool }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use generic_array::{ArrayLength, GenericArray};
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl<T: Default, U: ArrayLength<T>> AbiExample for GenericArray<T, U> {
     fn example() -> Self {
         Self::default()
@@ -372,7 +372,7 @@ impl<
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl<
         T: Clone + std::cmp::Eq + std::hash::Hash + AbiExample,
         S: Clone + AbiExample,
@@ -411,7 +411,7 @@ lazy_static! {
 impl AbiExample for &Vec<u8> {
     fn example() -> Self {
         info!("AbiExample for (&Vec<u8>): {}", type_name::<Self>());
-        &*VEC_U8
+        &VEC_U8
     }
 }
 
@@ -449,14 +449,14 @@ impl<T: std::cmp::Ord + AbiExample> AbiExample for BTreeSet<T> {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl AbiExample for memmap2::MmapMut {
     fn example() -> Self {
         memmap2::MmapMut::map_anon(1).expect("failed to map the data file")
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl AbiExample for std::path::PathBuf {
     fn example() -> Self {
         std::path::PathBuf::from(String::example())
@@ -553,5 +553,11 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
         variant.serialize(digester.create_enum_child()?)?;
 
         digester.create_child()
+    }
+}
+
+impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
+    fn example() -> Self {
+        Self::with_value(T::example())
     }
 }

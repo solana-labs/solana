@@ -9,8 +9,8 @@ use {
     crossbeam_channel::unbounded,
     indicatif::{ProgressBar, ProgressStyle},
     serde::{Deserialize, Serialize},
-    solana_client::rpc_client::RpcClient,
     solana_config_program::{config_instruction, get_config_data, ConfigState},
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         hash::{Hash, Hasher},
         message::Message,
@@ -47,9 +47,12 @@ static RECYCLING: Emoji = Emoji("♻️  ", "");
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgresStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar
 }
 
@@ -115,6 +118,7 @@ fn download_to_temp(
             .template(
                 "{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
             )
+            .expect("ProgresStyle::template direct input to be correct")
             .progress_chars("=> "),
     );
     progress_bar.set_message(format!("{}Downloading", TRUCK));
@@ -163,7 +167,7 @@ fn extract_release_archive(
     progress_bar.set_message(format!("{}Extracting...", PACKAGE));
 
     if extract_dir.exists() {
-        let _ = fs::remove_dir_all(&extract_dir);
+        let _ = fs::remove_dir_all(extract_dir);
     }
 
     let tmp_extract_dir = extract_dir.with_file_name("tmp-extract");
@@ -184,7 +188,7 @@ fn extract_release_archive(
 }
 
 fn load_release_version(version_yml: &Path) -> Result<ReleaseVersion, String> {
-    let file = File::open(&version_yml)
+    let file = File::open(version_yml)
         .map_err(|err| format!("Unable to open {:?}: {:?}", version_yml, err))?;
     let version: ReleaseVersion = serde_yaml::from_reader(file)
         .map_err(|err| format!("Unable to parse {:?}: {:?}", version_yml, err))?;
@@ -831,6 +835,7 @@ pub fn gc(config_file: &str) -> Result<(), String> {
             progress_bar.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                    .expect("ProgresStyle::template direct input to be correct")
                     .progress_chars("=> "),
             );
             progress_bar.set_message(format!("{}Removing old releases", RECYCLING));

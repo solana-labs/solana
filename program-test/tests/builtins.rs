@@ -8,7 +8,7 @@ use {
 };
 
 #[tokio::test]
-async fn test_bpf_loader_upgradable_present() {
+async fn test_bpf_loader_upgradeable_present() {
     // Arrange
     let (mut banks_client, payer, recent_blockhash) = ProgramTest::default().start().await;
 
@@ -16,7 +16,7 @@ async fn test_bpf_loader_upgradable_present() {
     let upgrade_authority_keypair = Keypair::new();
 
     let rent = banks_client.get_rent().await.unwrap();
-    let buffer_rent = rent.minimum_balance(UpgradeableLoaderState::programdata_len(1).unwrap());
+    let buffer_rent = rent.minimum_balance(UpgradeableLoaderState::size_of_programdata(1));
 
     let create_buffer_instructions = bpf_loader_upgradeable::create_buffer(
         &payer.pubkey(),

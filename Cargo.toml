@@ -37,6 +37,7 @@ members = [
     "log-analyzer",
     "logger",
     "measure",
+    "memory-management",
     "merkle-root-bench",
     "merkle-tree",
     "metrics",
@@ -49,6 +50,7 @@ members = [
     "program-test",
     "programs/address-lookup-table",
     "programs/address-lookup-table-tests",
+    "programs/bpf-loader-tests",
     "programs/bpf_loader",
     "programs/bpf_loader/gen-syscall-list",
     "programs/compute-budget",
@@ -57,16 +59,24 @@ members = [
     "programs/stake",
     "programs/vote",
     "programs/zk-token-proof",
+    "pubsub-client",
+    "quic-client",
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",
     "rpc",
+    "rpc-client",
+    "rpc-client-api",
+    "rpc-client-nonce-utils",
     "rpc-test",
     "runtime",
     "runtime/store-tool",
     "sdk",
     "sdk/cargo-build-bpf",
+    "sdk/cargo-build-sbf",
     "sdk/cargo-test-bpf",
+    "sdk/cargo-test-sbf",
+    "sdk/gen-headers",
     "send-transaction-service",
     "stake-accounts",
     "storage-bigtable",
@@ -74,9 +84,12 @@ members = [
     "streamer",
     "sys-tuner",
     "test-validator",
+    "thin-client",
     "tokens",
+    "tpu-client",
     "transaction-dos",
     "transaction-status",
+    "udp-client",
     "upload-perf",
     "validator",
     "version",
@@ -85,8 +98,12 @@ members = [
 ]
 
 exclude = [
-    "programs/bpf",
+    "programs/sbf",
 ]
 
 # This prevents a Travis CI error when building for Windows.
 resolver = "2"
+
+# for details, see https://github.com/solana-labs/crossbeam/commit/fd279d707025f0e60951e429bf778b4813d1b6bf
+[patch.crates-io]
+crossbeam-epoch = { git = "https://github.com/solana-labs/crossbeam", rev = "fd279d707025f0e60951e429bf778b4813d1b6bf" }

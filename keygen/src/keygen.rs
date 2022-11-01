@@ -1,11 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     bip39::{Language, Mnemonic, MnemonicType, Seed},
-    clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, values_t_or_exit, App,
-        AppSettings, Arg, ArgMatches, SubCommand,
-    },
-    solana_clap_utils::{
+    clap::{crate_description, crate_name, Arg, ArgMatches, Command},
+    solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
         input_validators::{is_parsable, is_prompt_signer_source},
         keypair::{
@@ -17,10 +14,14 @@ use {
     solana_cli_config::{Config, CONFIG_FILE},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
+        derivation_path::DerivationPath,
         instruction::{AccountMeta, Instruction},
         message::Message,
         pubkey::{write_pubkey_file, Pubkey},
-        signature::{keypair_from_seed, write_keypair, write_keypair_file, Keypair, Signer},
+        signature::{
+            keypair_from_seed, keypair_from_seed_and_derivation_path, write_keypair,
+            write_keypair_file, Keypair, Signer,
+        },
     },
     std::{
         collections::HashSet,
@@ -37,6 +38,7 @@ use {
 };
 
 const NO_PASSPHRASE: &str = "";
+const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
 
 struct GrindMatch {
     starts: String,
@@ -68,20 +70,20 @@ const NO_OUTFILE_ARG: ArgConstant<'static> = ArgConstant {
     help: "Only print a seed phrase and pubkey. Do not output a keypair file",
 };
 
-fn word_count_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(WORD_COUNT_ARG.name)
+fn word_count_arg<'a>() -> Arg<'a> {
+    Arg::new(WORD_COUNT_ARG.name)
         .long(WORD_COUNT_ARG.long)
-        .possible_values(&["12", "15", "18", "21", "24"])
+        .possible_values(["12", "15", "18", "21", "24"])
         .default_value("12")
         .value_name("NUMBER")
         .takes_value(true)
         .help(WORD_COUNT_ARG.help)
 }
 
-fn language_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(LANGUAGE_ARG.name)
+fn language_arg<'a>() -> Arg<'a> {
+    Arg::new(LANGUAGE_ARG.name)
         .long(LANGUAGE_ARG.long)
-        .possible_values(&[
+        .possible_values([
             "english",
             "chinese-simplified",
             "chinese-traditional",
@@ -97,17 +99,16 @@ fn language_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(LANGUAGE_ARG.help)
 }
 
-fn no_passphrase_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NO_PASSPHRASE_ARG.name)
+fn no_passphrase_arg<'a>() -> Arg<'a> {
+    Arg::new(NO_PASSPHRASE_ARG.name)
         .long(NO_PASSPHRASE_ARG.long)
         .alias("no-passphrase")
         .help(NO_PASSPHRASE_ARG.help)
 }
 
-fn no_outfile_arg<'a, 'b>() -> Arg<'a, 'b> {
-    Arg::with_name(NO_OUTFILE_ARG.name)
+fn no_outfile_arg<'a>() -> Arg<'a> {
+    Arg::new(NO_OUTFILE_ARG.name)
         .long(NO_OUTFILE_ARG.long)
-        .conflicts_with_all(&["outfile", "silent"])
         .help(NO_OUTFILE_ARG.help)
 }
 
@@ -115,7 +116,7 @@ trait KeyGenerationCommonArgs {
     fn key_generation_common_args(self) -> Self;
 }
 
-impl KeyGenerationCommonArgs for App<'_, '_> {
+impl KeyGenerationCommonArgs for Command<'_> {
     fn key_generation_common_args(self) -> Self {
         self.arg(word_count_arg())
             .arg(language_arg())
@@ -142,7 +143,7 @@ fn get_keypair_from_matches(
     } else if !config.keypair_path.is_empty() {
         &config.keypair_path
     } else {
-        path.extend(&[".config", "solana", "id.json"]);
+        path.extend([".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
     signer_from_path(matches, path, "pubkey recovery", wallet_manager)
@@ -163,7 +164,7 @@ fn output_keypair(
     Ok(())
 }
 
-fn grind_validator_starts_with(v: String) -> Result<(), String> {
+fn grind_validator_starts_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between PREFIX and COUNT"));
     }
@@ -178,7 +179,7 @@ fn grind_validator_starts_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_validator_ends_with(v: String) -> Result<(), String> {
+fn grind_validator_ends_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 1 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from("Expected : between SUFFIX and COUNT"));
     }
@@ -193,7 +194,7 @@ fn grind_validator_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
+fn grind_validator_starts_and_ends_with(v: &str) -> Result<(), String> {
     if v.matches(':').count() != 2 || (v.starts_with(':') || v.ends_with(':')) {
         return Err(String::from(
             "Expected : between PREFIX and SUFFIX and COUNT",
@@ -213,7 +214,7 @@ fn grind_validator_starts_and_ends_with(v: String) -> Result<(), String> {
     Ok(())
 }
 
-fn acquire_language(matches: &ArgMatches<'_>) -> Language {
+fn acquire_language(matches: &ArgMatches) -> Language {
     match matches.value_of(LANGUAGE_ARG.name).unwrap() {
         "english" => Language::English,
         "chinese-simplified" => Language::ChineseSimplified,
@@ -232,7 +233,7 @@ fn no_passphrase_and_message() -> (String, String) {
 }
 
 fn acquire_passphrase_and_message(
-    matches: &ArgMatches<'_>,
+    matches: &ArgMatches,
 ) -> Result<(String, String), Box<dyn error::Error>> {
     if matches.is_present(NO_PASSPHRASE_ARG.name) {
         Ok(no_passphrase_and_message())
@@ -329,15 +330,43 @@ fn grind_parse_args(
     grind_matches
 }
 
+fn derivation_path_arg<'a>() -> Arg<'a> {
+    Arg::new("derivation_path")
+        .long("derivation-path")
+        .value_name("DERIVATION_PATH")
+        .takes_value(true)
+        .min_values(0)
+        .max_values(1)
+        .help("Derivation path. All indexes will be promoted to hardened. \
+            If arg is not presented then derivation path will not be used. \
+            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
+        )
+}
+
+fn acquire_derivation_path(
+    matches: &ArgMatches,
+) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
+    if matches.is_present("derivation_path") {
+        Ok(Some(DerivationPath::from_absolute_path_str(
+            matches
+                .value_of("derivation_path")
+                .unwrap_or(DEFAULT_DERIVATION_PATH),
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
-    let matches = App::new(crate_name!())
+    let matches = Command::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand_required(true)
+        .arg_required_else_help(true)
         .arg({
-            let arg = Arg::with_name("config_file")
-                .short("C")
+            let arg = Arg::new("config_file")
+                .short('C')
                 .long("config")
                 .value_name("FILEPATH")
                 .takes_value(true)
@@ -350,10 +379,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             }
         })
         .subcommand(
-            SubCommand::with_name("verify")
+            Command::new("verify")
                 .about("Verify a keypair can sign and verify a message.")
                 .arg(
-                    Arg::with_name("pubkey")
+                    Arg::new("pubkey")
                         .index(1)
                         .value_name("PUBKEY")
                         .takes_value(true)
@@ -361,7 +390,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Public key"),
                 )
                 .arg(
-                    Arg::with_name("keypair")
+                    Arg::new("keypair")
                         .index(2)
                         .value_name("KEYPAIR")
                         .takes_value(true)
@@ -369,73 +398,81 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("new")
+            Command::new("new")
                 .about("Generate new keypair file from a random seed phrase and optional BIP39 passphrase")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("outfile")
-                        .short("o")
+                    Arg::new("outfile")
+                        .short('o')
                         .long("outfile")
                         .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
-                        .short("f")
+                    Arg::new("force")
+                        .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
-                    Arg::with_name("silent")
-                        .short("s")
+                    Arg::new("silent")
+                        .short('s')
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
+                .arg(
+                    derivation_path_arg()
+                )
                 .key_generation_common_args()
-                .arg(no_outfile_arg())
+                .arg(no_outfile_arg()
+                    .conflicts_with_all(&["outfile", "silent"])
+                )
         )
         .subcommand(
-            SubCommand::with_name("grind")
+            Command::new("grind")
                 .about("Grind for vanity keypairs")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("ignore_case")
+                    Arg::new("ignore_case")
                         .long("ignore-case")
                         .help("Performs case insensitive matches"),
                 )
                 .arg(
-                    Arg::with_name("starts_with")
+                    Arg::new("starts_with")
                         .long("starts-with")
                         .value_name("PREFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple(true)
+                        .multiple_occurrences(true)
+                        .multiple_values(true)
                         .validator(grind_validator_starts_with)
                         .help("Saves specified number of keypairs whos public key starts with the indicated prefix\nExample: --starts-with sol:4\nPREFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("ends_with")
+                    Arg::new("ends_with")
                         .long("ends-with")
                         .value_name("SUFFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple(true)
+                        .multiple_occurrences(true)
+                        .multiple_values(true)
                         .validator(grind_validator_ends_with)
                         .help("Saves specified number of keypairs whos public key ends with the indicated suffix\nExample: --ends-with ana:4\nSUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("starts_and_ends_with")
+                    Arg::new("starts_and_ends_with")
                         .long("starts-and-ends-with")
                         .value_name("PREFIX:SUFFIX:COUNT")
                         .number_of_values(1)
                         .takes_value(true)
-                        .multiple(true)
+                        .multiple_occurrences(true)
+                        .multiple_values(true)
                         .validator(grind_validator_starts_and_ends_with)
                         .help("Saves specified number of keypairs whos public key starts and ends with the indicated perfix and suffix\nExample: --starts-and-ends-with sol:ana:4\nPREFIX and SUFFIX type is Base58\nCOUNT type is u64"),
                 )
                 .arg(
-                    Arg::with_name("num_threads")
+                    Arg::new("num_threads")
                         .long("num-threads")
                         .value_name("NUMBER")
                         .takes_value(true)
@@ -444,9 +481,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Specify the number of grind threads"),
                 )
                 .arg(
-                    Arg::with_name("use_mnemonic")
+                    Arg::new("use_mnemonic")
                         .long("use-mnemonic")
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
+                )
+                .arg(
+                    derivation_path_arg()
+                        .requires("use_mnemonic")
                 )
                 .key_generation_common_args()
                 .arg(
@@ -457,42 +498,42 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("pubkey")
+            Command::new("pubkey")
                 .about("Display the pubkey from a keypair file")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("keypair")
+                    Arg::new("keypair")
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
                         .help("Filepath or URL to a keypair"),
                 )
                 .arg(
-                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 )
                 .arg(
-                    Arg::with_name("outfile")
-                        .short("o")
+                    Arg::new("outfile")
+                        .short('o')
                         .long("outfile")
                         .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
-                        .short("f")
+                    Arg::new("force")
+                        .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
         )
         .subcommand(
-            SubCommand::with_name("recover")
+            Command::new("recover")
                 .about("Recover keypair from seed phrase and optional BIP39 passphrase")
-                .setting(AppSettings::DisableVersion)
+                .disable_version_flag(true)
                 .arg(
-                    Arg::with_name("prompt_signer")
+                    Arg::new("prompt_signer")
                         .index(1)
                         .value_name("KEYPAIR")
                         .takes_value(true)
@@ -500,21 +541,21 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("`prompt:` URI scheme or `ASK` keyword"),
                 )
                 .arg(
-                    Arg::with_name("outfile")
-                        .short("o")
+                    Arg::new("outfile")
+                        .short('o')
                         .long("outfile")
                         .value_name("FILEPATH")
                         .takes_value(true)
                         .help("Path to generated file"),
                 )
                 .arg(
-                    Arg::with_name("force")
-                        .short("f")
+                    Arg::new("force")
+                        .short('f')
                         .long("force")
                         .help("Overwrite the output file if it exists"),
                 )
                 .arg(
-                    Arg::with_name(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
+                    Arg::new(SKIP_SEED_PHRASE_VALIDATION_ARG.name)
                         .long(SKIP_SEED_PHRASE_VALIDATION_ARG.long)
                         .help(SKIP_SEED_PHRASE_VALIDATION_ARG.help),
                 ),
@@ -525,7 +566,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     do_main(&matches).map_err(|err| DisplayError::new_as_boxed(err).into())
 }
 
-fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
+fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
     let config = if let Some(config_file) = matches.value_of("config_file") {
         Config::load(config_file).unwrap_or_default()
     } else {
@@ -534,8 +575,10 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
     let mut wallet_manager = None;
 
-    match matches.subcommand() {
-        ("pubkey", Some(matches)) => {
+    let subcommand = matches.subcommand().unwrap();
+
+    match subcommand {
+        ("pubkey", matches) => {
             let pubkey =
                 get_keypair_from_matches(matches, config, &mut wallet_manager)?.try_pubkey()?;
 
@@ -547,14 +590,14 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 println!("{}", pubkey);
             }
         }
-        ("new", Some(matches)) => {
+        ("new", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile")
             } else if matches.is_present(NO_OUTFILE_ARG.name) {
                 None
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 Some(path.to_str().unwrap())
             };
 
@@ -564,7 +607,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 None => (),
             }
 
-            let word_count = value_t!(matches.value_of(WORD_COUNT_ARG.name), usize).unwrap();
+            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
 
@@ -572,11 +615,17 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             if !silent {
                 println!("Generating a new keypair");
             }
+
+            let derivation_path = acquire_derivation_path(matches)?;
+
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
 
             let seed = Seed::new(&mnemonic, &passphrase);
-            let keypair = keypair_from_seed(seed.as_bytes())?;
+            let keypair = match derivation_path {
+                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path),
+                None => keypair_from_seed(seed.as_bytes()),
+            }?;
 
             if let Some(outfile) = outfile {
                 output_keypair(&keypair, outfile, "new")
@@ -592,12 +641,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 );
             }
         }
-        ("recover", Some(matches)) => {
+        ("recover", matches) => {
             let mut path = dirs_next::home_dir().expect("home directory");
             let outfile = if matches.is_present("outfile") {
                 matches.value_of("outfile").unwrap()
             } else {
-                path.extend(&[".config", "solana", "id.json"]);
+                path.extend([".config", "solana", "id.json"]);
                 path.to_str().unwrap()
             };
 
@@ -614,11 +663,12 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
             };
             output_keypair(&keypair, outfile, "recovered")?;
         }
-        ("grind", Some(matches)) => {
+        ("grind", matches) => {
             let ignore_case = matches.is_present("ignore_case");
 
             let starts_with_args = if matches.is_present("starts_with") {
-                values_t_or_exit!(matches, "starts_with", String)
+                matches
+                    .values_of_t_or_exit::<String>("starts_with")
                     .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
@@ -626,7 +676,8 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
             let ends_with_args = if matches.is_present("ends_with") {
-                values_t_or_exit!(matches, "ends_with", String)
+                matches
+                    .values_of_t_or_exit::<String>("ends_with")
                     .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
@@ -634,7 +685,8 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 HashSet::new()
             };
             let starts_and_ends_with_args = if matches.is_present("starts_and_ends_with") {
-                values_t_or_exit!(matches, "starts_and_ends_with", String)
+                matches
+                    .values_of_t_or_exit::<String>("starts_and_ends_with")
                     .into_iter()
                     .map(|s| if ignore_case { s.to_lowercase() } else { s })
                     .collect()
@@ -652,7 +704,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 exit(1);
             }
 
-            let num_threads = value_t_or_exit!(matches.value_of("num_threads"), usize);
+            let num_threads: usize = matches.value_of_t_or_exit("num_threads");
 
             let grind_matches = grind_parse_args(
                 ignore_case,
@@ -664,7 +716,9 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
 
             let use_mnemonic = matches.is_present("use_mnemonic");
 
-            let word_count = value_t!(matches.value_of(WORD_COUNT_ARG.name), usize).unwrap();
+            let derivation_path = acquire_derivation_path(matches)?;
+
+            let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
             let language = acquire_language(matches);
 
@@ -689,6 +743,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                     let grind_matches_thread_safe = grind_matches_thread_safe.clone();
                     let passphrase = passphrase.clone();
                     let passphrase_message = passphrase_message.clone();
+                    let derivation_path = derivation_path.clone();
 
                     thread::spawn(move || loop {
                         if done.load(Ordering::Relaxed) {
@@ -706,7 +761,11 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                         let (keypair, phrase) = if use_mnemonic {
                             let mnemonic = Mnemonic::new(mnemonic_type, language);
                             let seed = Seed::new(&mnemonic, &passphrase);
-                            (keypair_from_seed(seed.as_bytes()).unwrap(), mnemonic.phrase().to_string())
+                            let keypair = match derivation_path {
+                                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path.clone()),
+                                None => keypair_from_seed(seed.as_bytes()),
+                            }.unwrap();
+                            (keypair, mnemonic.phrase().to_string())
                         } else {
                             (Keypair::new(), "".to_string())
                         };
@@ -766,7 +825,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
                 thread_handle.join().unwrap();
             }
         }
-        ("verify", Some(matches)) => {
+        ("verify", matches) => {
             let keypair = get_keypair_from_matches(matches, config, &mut wallet_manager)?;
             let simple_message = Message::new(
                 &[Instruction::new_with_bincode(

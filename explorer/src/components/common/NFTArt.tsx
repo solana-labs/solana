@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Stream, StreamPlayerApi } from "@cloudflare/stream-react";
+import { useEffect, useState } from "react";
+import { Stream } from "@cloudflare/stream-react";
 import { PublicKey } from "@solana/web3.js";
 import {
   programs,
@@ -11,7 +11,7 @@ import ContentLoader from "react-content-loader";
 import ErrorLogo from "img/logos-solana/dark-solana-logo.svg";
 import { getLast } from "utils";
 
-const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
+export const MAX_TIME_LOADING_IMAGE = 5000; /* 5 seconds */
 
 const LoadingPlaceholder = () => (
   <ContentLoader
@@ -42,7 +42,7 @@ const ViewOriginalArtContentLink = ({ src }: { src: string }) => {
   );
 };
 
-const CachedImageContent = ({ uri }: { uri?: string }) => {
+export const CachedImageContent = ({ uri }: { uri?: string }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [showError, setShowError] = useState<boolean>(false);
   const [timeout, setTimeout] = useState<NodeJS.Timeout | undefined>(undefined);
@@ -105,27 +105,11 @@ const VideoArtContent = ({
   files,
   uri,
   animationURL,
-  active,
 }: {
   files?: (MetadataJsonFile | string)[];
   uri?: string;
   animationURL?: string;
-  active?: boolean;
 }) => {
-  const [playerApi, setPlayerApi] = useState<StreamPlayerApi>();
-  const playerRef = useCallback(
-    (ref) => {
-      setPlayerApi(ref);
-    },
-    [setPlayerApi]
-  );
-
-  useEffect(() => {
-    if (playerApi) {
-      playerApi.currentTime = 0;
-    }
-  }, [active, playerApi]);
-
   const likelyVideo = (files || []).filter((f, index, arr) => {
     if (typeof f !== "string") {
       return false;
@@ -140,7 +124,6 @@ const VideoArtContent = ({
     likelyVideo.startsWith("https://watch.videodelivery.net/") ? (
       <div className={"d-block"}>
         <Stream
-          streamRef={(e: any) => playerRef(e)}
           src={likelyVideo.replace("https://watch.videodelivery.net/", "")}
           loop={true}
           height={180}
@@ -237,7 +220,6 @@ const HTMLContent = ({
 export const ArtContent = ({
   metadata,
   category,
-  active,
   pubkey,
   uri,
   animationURL,
@@ -246,7 +228,6 @@ export const ArtContent = ({
 }: {
   metadata: programs.metadata.MetadataData;
   category?: MetaDataJsonCategory;
-  active?: boolean;
   pubkey?: PublicKey | string;
   uri?: string;
   animationURL?: string;
@@ -271,12 +252,7 @@ export const ArtContent = ({
 
   const content =
     category === "video" ? (
-      <VideoArtContent
-        files={files}
-        uri={uri}
-        animationURL={animationURL}
-        active={active}
-      />
+      <VideoArtContent files={files} uri={uri} animationURL={animationURL} />
     ) : category === "html" || animationUrlExt === "html" ? (
       <HTMLContent animationUrl={animationURL} files={files} />
     ) : (

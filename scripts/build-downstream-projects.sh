@@ -6,14 +6,15 @@
 set -e
 cd "$(dirname "$0")"/..
 source ci/_
+source ci/semver_bash/semver.sh
 source scripts/patch-crates.sh
 source scripts/read-cargo-variable.sh
 
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
 cargo="$solana_dir"/cargo
-cargo_build_bpf="$solana_dir"/cargo-build-bpf
-cargo_test_bpf="$solana_dir"/cargo-test-bpf
+cargo_build_sbf="$solana_dir"/cargo-build-sbf
+cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
 mkdir -p target/downstream-projects
 cd target/downstream-projects
@@ -29,7 +30,7 @@ example_helloworld() {
     patch_crates_io_solana src/program-rust/Cargo.toml "$solana_dir"
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path src/program-rust/Cargo.toml
 
     # TODO: Build src/program-c/...
@@ -40,26 +41,35 @@ spl() {
   (
     # Mind the order!
     PROGRAMS=(
+      instruction-padding/program
       token/program
       token/program-2022
       token/program-2022-test
       associated-token-account/program
+      token-upgrade/program
       feature-proposal/program
       governance/addin-mock/program
       governance/program
       memo/program
       name-service/program
       stake-pool/program
-      )
+    )
     set -x
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
     cd spl
 
+    project_used_solana_version=$(sed -nE 's/solana-sdk = \"[>=<~]*(.*)\"/\1/p' <"token/program/Cargo.toml")
+    echo "used solana version: $project_used_solana_version"
+    if semverGT "$project_used_solana_version" "$solana_ver"; then
+      echo "skip"
+      return
+    fi
+
     ./patch.crates-io.sh "$solana_dir"
 
     for program in "${PROGRAMS[@]}"; do
-      $cargo_test_bpf --manifest-path "$program"/Cargo.toml
+      $cargo_test_sbf --manifest-path "$program"/Cargo.toml
     done
 
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
@@ -89,7 +99,7 @@ exclude = [
 EOF
     $cargo build
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
     $cargo test \

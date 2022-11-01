@@ -3,13 +3,13 @@
 
 use {
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::send_wire_transaction,
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
+    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
@@ -26,21 +26,22 @@ const CACHE_JITTER_SLOT: i64 = 20;
 
 impl WarmQuicCacheService {
     pub fn new(
+        connection_cache: Arc<ConnectionCache>,
         cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
-            .name("sol-warm-quic-service".to_string())
+            .name("solWarmQuicSvc".to_string())
             .spawn(move || {
                 let slot_jitter = thread_rng().gen_range(-CACHE_JITTER_SLOT, CACHE_JITTER_SLOT);
                 let mut maybe_last_leader = None;
                 while !exit.load(Ordering::Relaxed) {
-                    if let Some(leader_pubkey) = poh_recorder
-                        .lock()
+                    let leader_pubkey =  poh_recorder
+                        .read()
                         .unwrap()
-                        .leader_after_n_slots((CACHE_OFFSET_SLOT + slot_jitter) as u64)
-                    {
+                        .leader_after_n_slots((CACHE_OFFSET_SLOT + slot_jitter) as u64);
+                    if let Some(leader_pubkey) = leader_pubkey {
                         if maybe_last_leader
                             .map_or(true, |last_leader| last_leader != leader_pubkey)
                         {
@@ -48,7 +49,8 @@ impl WarmQuicCacheService {
                             if let Some(addr) = cluster_info
                                 .lookup_contact_info(&leader_pubkey, |leader| leader.tpu)
                             {
-                                if let Err(err) = send_wire_transaction(&[0u8], &addr) {
+                                let conn = connection_cache.get_connection(&addr);
+                                if let Err(err) = conn.send_wire_transaction([0u8]) {
                                     warn!(
                                         "Failed to warmup QUIC connection to the leader {:?}, Error {:?}",
                                         leader_pubkey, err

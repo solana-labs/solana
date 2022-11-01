@@ -1,48 +1,60 @@
-import React from "react";
 import { PublicKey } from "@solana/web3.js";
-import { CacheEntry, FetchStatus } from "providers/cache";
-import {
-  useFetchAccountInfo,
-  useAccountInfo,
-  Account,
-  TokenProgramData,
-  useMintAccountInfo,
-} from "providers/accounts";
-import { StakeAccountSection } from "components/account/StakeAccountSection";
-import { TokenAccountSection } from "components/account/TokenAccountSection";
-import { ErrorCard } from "components/common/ErrorCard";
-import { LoadingCard } from "components/common/LoadingCard";
-import { useCluster, ClusterStatus } from "providers/cluster";
-import { NavLink, Redirect, useLocation } from "react-router-dom";
-import { clusterPath } from "utils/url";
-import { UnknownAccountCard } from "components/account/UnknownAccountCard";
-import { OwnedTokensCard } from "components/account/OwnedTokensCard";
-import { TokenHistoryCard } from "components/account/TokenHistoryCard";
-import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
-import { VoteAccountSection } from "components/account/VoteAccountSection";
-import { NonceAccountSection } from "components/account/NonceAccountSection";
-import { VotesCard } from "components/account/VotesCard";
-import { SysvarAccountSection } from "components/account/SysvarAccountSection";
-import { SlotHashesCard } from "components/account/SlotHashesCard";
-import { StakeHistoryCard } from "components/account/StakeHistoryCard";
-import { BlockhashesCard } from "components/account/BlockhashesCard";
-import { ConfigAccountSection } from "components/account/ConfigAccountSection";
-import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
-import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
-import { useTokenRegistry } from "providers/mints/token-registry";
-import { Identicon } from "components/common/Identicon";
-import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
-import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
-import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
-import { RewardsCard } from "components/account/RewardsCard";
-import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
-import { NFTHeader } from "components/account/MetaplexNFTHeader";
-import { DomainsCard } from "components/account/DomainsCard";
-import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
-import { SecurityCard } from "components/account/SecurityCard";
 import { AnchorAccountCard } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
+import { BlockhashesCard } from "components/account/BlockhashesCard";
+import { ConfigAccountSection } from "components/account/ConfigAccountSection";
+import { DomainsCard } from "components/account/DomainsCard";
+import { TokenInstructionsCard } from "components/account/history/TokenInstructionsCard";
+import { TokenTransfersCard } from "components/account/history/TokenTransfersCard";
+import { TransactionHistoryCard } from "components/account/history/TransactionHistoryCard";
+import { MetaplexMetadataCard } from "components/account/MetaplexMetadataCard";
+import { MetaplexNFTAttributesCard } from "components/account/MetaplexNFTAttributesCard";
+import { MetaplexNFTHeader } from "components/account/MetaplexNFTHeader";
+import { NonceAccountSection } from "components/account/NonceAccountSection";
+import { OwnedTokensCard } from "components/account/OwnedTokensCard";
+import { RewardsCard } from "components/account/RewardsCard";
+import { SecurityCard } from "components/account/SecurityCard";
+import { SlotHashesCard } from "components/account/SlotHashesCard";
+import { StakeAccountSection } from "components/account/StakeAccountSection";
+import { StakeHistoryCard } from "components/account/StakeHistoryCard";
+import { SysvarAccountSection } from "components/account/SysvarAccountSection";
+import { TokenAccountSection } from "components/account/TokenAccountSection";
+import { TokenHistoryCard } from "components/account/TokenHistoryCard";
+import { TokenLargestAccountsCard } from "components/account/TokenLargestAccountsCard";
+import { UnknownAccountCard } from "components/account/UnknownAccountCard";
+import { UpgradeableLoaderAccountSection } from "components/account/UpgradeableLoaderAccountSection";
+import { VoteAccountSection } from "components/account/VoteAccountSection";
+import { VotesCard } from "components/account/VotesCard";
+import { ErrorCard } from "components/common/ErrorCard";
+import { Identicon } from "components/common/Identicon";
+import { LoadingCard } from "components/common/LoadingCard";
+import {
+  Account,
+  TokenProgramData,
+  useAccountInfo,
+  useFetchAccountInfo,
+  useMintAccountInfo,
+} from "providers/accounts";
+import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
+import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { useAnchorProgram } from "providers/anchor";
+import { CacheEntry, FetchStatus } from "providers/cache";
+import { ClusterStatus, useCluster } from "providers/cluster";
+import { useTokenRegistry } from "providers/mints/token-registry";
+import React, { Suspense } from "react";
+import { NavLink, Redirect, useLocation } from "react-router-dom";
+import { clusterPath } from "utils/url";
+import { NFTokenAccountHeader } from "../components/account/nftoken/NFTokenAccountHeader";
+import { NFTokenAccountSection } from "../components/account/nftoken/NFTokenAccountSection";
+import { NFTokenCollectionNFTGrid } from "../components/account/nftoken/NFTokenCollectionNFTGrid";
+import { NFTOKEN_ADDRESS } from "../components/account/nftoken/nftoken";
+import {
+  isNFTokenAccount,
+  parseNFTokenCollectionAccount,
+} from "../components/account/nftoken/isNFTokenAccount";
+import { isAddressLookupTableAccount } from "components/account/address-lookup-table/types";
+import { AddressLookupTableAccountSection } from "components/account/address-lookup-table/AddressLookupTableAccountSection";
+import { LookupTableEntriesCard } from "components/account/address-lookup-table/LookupTableEntriesCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -69,6 +81,11 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "metadata",
       title: "Metadata",
       path: "/metadata",
+    },
+    {
+      slug: "attributes",
+      title: "Attributes",
+      path: "/attributes",
     },
   ],
   stake: [
@@ -118,6 +135,20 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       path: "/security",
     },
   ],
+  "nftoken:collection": [
+    {
+      slug: "nftoken-collection-nfts",
+      title: "NFTs",
+      path: "/nfts",
+    },
+  ],
+  "address-lookup-table": [
+    {
+      slug: "entries",
+      title: "Table Entries",
+      path: "/entries",
+    },
+  ],
 };
 
 const TOKEN_TABS_HIDDEN = [
@@ -142,7 +173,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
   // Fetch account on load
   React.useEffect(() => {
     if (!info && status === ClusterStatus.Connected && pubkey) {
-      fetchAccount(pubkey);
+      fetchAccount(pubkey, "parsed");
     }
   }, [address, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -150,7 +181,7 @@ export function AccountDetailsPage({ address, tab }: Props) {
     <div className="container mt-n3">
       <div className="header">
         <div className="header-body">
-          <AccountHeader address={address} info={info} />
+          <AccountHeader address={address} account={info?.data} />
         </div>
       </div>
       {!pubkey ? (
@@ -164,35 +195,65 @@ export function AccountDetailsPage({ address, tab }: Props) {
 
 export function AccountHeader({
   address,
-  info,
+  account,
 }: {
   address: string;
-  info?: CacheEntry<Account>;
+  account?: Account;
 }) {
   const { tokenRegistry } = useTokenRegistry();
   const tokenDetails = tokenRegistry.get(address);
   const mintInfo = useMintAccountInfo(address);
-  const account = info?.data;
-  const data = account?.details?.data;
-  const isToken = data?.program === "spl-token" && data?.parsed.type === "mint";
+  const parsedData = account?.data.parsed;
+  const isToken =
+    parsedData?.program === "spl-token" && parsedData?.parsed.type === "mint";
 
-  if (isMetaplexNFT(data, mintInfo)) {
+  if (isMetaplexNFT(parsedData, mintInfo)) {
     return (
-      <NFTHeader
-        nftData={(data as TokenProgramData).nftData!}
+      <MetaplexNFTHeader
+        nftData={(parsedData as TokenProgramData).nftData!}
         address={address}
       />
     );
   }
 
-  if (tokenDetails && isToken) {
+  const nftokenNFT = account && isNFTokenAccount(account);
+  if (nftokenNFT && account) {
+    return <NFTokenAccountHeader account={account} />;
+  }
+
+  if (isToken) {
+    let token;
+    let unverified = false;
+
+    // Fall back to legacy token list when there is stub metadata (blank uri), updatable by default by the mint authority
+    if (!parsedData?.nftData?.metadata.data.uri && tokenDetails) {
+      token = tokenDetails;
+    } else if (parsedData?.nftData) {
+      token = {
+        logoURI: parsedData?.nftData?.json?.image,
+        name:
+          parsedData?.nftData?.json?.name ??
+          parsedData?.nftData.metadata.data.name,
+      };
+      unverified = true;
+    } else if (tokenDetails) {
+      token = tokenDetails;
+    }
+
     return (
       <div className="row align-items-end">
+        {unverified && (
+          <div className="alert alert-warning alert-scam" role="alert">
+            Warning! Token names and logos are not unique. This token may have
+            spoofed its name and logo to look like another token. Verify the
+            token's mint address to ensure it is correct.
+          </div>
+        )}
         <div className="col-auto">
           <div className="avatar avatar-lg header-avatar-top">
-            {tokenDetails?.logoURI ? (
+            {token?.logoURI ? (
               <img
-                src={tokenDetails.logoURI}
+                src={token.logoURI}
                 alt="token logo"
                 className="avatar-img rounded-circle border border-4 border-body"
               />
@@ -208,9 +269,7 @@ export function AccountHeader({
 
         <div className="col mb-3 ms-n3 ms-md-n2">
           <h6 className="header-pretitle">Token</h6>
-          <h2 className="header-title">
-            {tokenDetails?.name || "Unknown Token"}
-          </h2>
+          <h2 className="header-title">{token?.name || "Unknown Token"}</h2>
         </div>
       </div>
     );
@@ -244,7 +303,12 @@ function DetailsSections({
     info.status === FetchStatus.FetchFailed ||
     info.data?.lamports === undefined
   ) {
-    return <ErrorCard retry={() => fetchAccount(pubkey)} text="Fetch Failed" />;
+    return (
+      <ErrorCard
+        retry={() => fetchAccount(pubkey, "parsed")}
+        text="Fetch Failed"
+      />
+    );
   }
 
   const account = info.data;
@@ -282,38 +346,68 @@ function DetailsSections({
 }
 
 function InfoSection({ account }: { account: Account }) {
-  const data = account?.details?.data;
+  const parsedData = account.data.parsed;
+  const rawData = account.data.raw;
 
-  if (data && data.program === "bpf-upgradeable-loader") {
+  if (parsedData && parsedData.program === "bpf-upgradeable-loader") {
     return (
       <UpgradeableLoaderAccountSection
         account={account}
-        parsedData={data.parsed}
-        programData={data.programData}
+        parsedData={parsedData.parsed}
+        programData={parsedData.programData}
       />
     );
-  } else if (data && data.program === "stake") {
+  } else if (parsedData && parsedData.program === "stake") {
     return (
       <StakeAccountSection
         account={account}
-        stakeAccount={data.parsed.info}
-        activation={data.activation}
-        stakeAccountType={data.parsed.type}
+        stakeAccount={parsedData.parsed.info}
+        activation={parsedData.activation}
+        stakeAccountType={parsedData.parsed.type}
       />
     );
-  } else if (data && data.program === "spl-token") {
-    return <TokenAccountSection account={account} tokenAccount={data.parsed} />;
-  } else if (data && data.program === "nonce") {
-    return <NonceAccountSection account={account} nonceAccount={data.parsed} />;
-  } else if (data && data.program === "vote") {
-    return <VoteAccountSection account={account} voteAccount={data.parsed} />;
-  } else if (data && data.program === "sysvar") {
+  } else if (account.owner.toBase58() === NFTOKEN_ADDRESS) {
+    return <NFTokenAccountSection account={account} />;
+  } else if (parsedData && parsedData.program === "spl-token") {
     return (
-      <SysvarAccountSection account={account} sysvarAccount={data.parsed} />
+      <TokenAccountSection account={account} tokenAccount={parsedData.parsed} />
     );
-  } else if (data && data.program === "config") {
+  } else if (parsedData && parsedData.program === "nonce") {
     return (
-      <ConfigAccountSection account={account} configAccount={data.parsed} />
+      <NonceAccountSection account={account} nonceAccount={parsedData.parsed} />
+    );
+  } else if (parsedData && parsedData.program === "vote") {
+    return (
+      <VoteAccountSection account={account} voteAccount={parsedData.parsed} />
+    );
+  } else if (parsedData && parsedData.program === "sysvar") {
+    return (
+      <SysvarAccountSection
+        account={account}
+        sysvarAccount={parsedData.parsed}
+      />
+    );
+  } else if (parsedData && parsedData.program === "config") {
+    return (
+      <ConfigAccountSection
+        account={account}
+        configAccount={parsedData.parsed}
+      />
+    );
+  } else if (
+    parsedData &&
+    parsedData.program === "address-lookup-table" &&
+    parsedData.parsed.type === "lookupTable"
+  ) {
+    return (
+      <AddressLookupTableAccountSection
+        account={account}
+        lookupTableAccount={parsedData.parsed.info}
+      />
+    );
+  } else if (rawData && isAddressLookupTableAccount(account.owner, rawData)) {
+    return (
+      <AddressLookupTableAccountSection account={account} data={rawData} />
     );
   } else {
     return <UnknownAccountCard account={account} />;
@@ -334,6 +428,7 @@ type TabComponent = {
 export type MoreTabs =
   | "history"
   | "tokens"
+  | "nftoken-collection-nfts"
   | "largest"
   | "vote-history"
   | "slot-hashes"
@@ -343,10 +438,12 @@ export type MoreTabs =
   | "instructions"
   | "rewards"
   | "metadata"
+  | "attributes"
   | "domains"
   | "security"
   | "anchor-program"
-  | "anchor-account";
+  | "anchor-account"
+  | "entries";
 
 function MoreSection({
   account,
@@ -358,7 +455,8 @@ function MoreSection({
   tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const data = account?.details?.data;
+  const parsedData = account.data.parsed;
+  const rawData = account.data.raw;
 
   return (
     <>
@@ -380,33 +478,46 @@ function MoreSection({
       {tab === "instructions" && <TokenInstructionsCard pubkey={pubkey} />}
       {tab === "largest" && <TokenLargestAccountsCard pubkey={pubkey} />}
       {tab === "rewards" && <RewardsCard pubkey={pubkey} />}
-      {tab === "vote-history" && data?.program === "vote" && (
-        <VotesCard voteAccount={data.parsed} />
+      {tab === "vote-history" && parsedData?.program === "vote" && (
+        <VotesCard voteAccount={parsedData.parsed} />
       )}
       {tab === "slot-hashes" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "slotHashes" && (
-          <SlotHashesCard sysvarAccount={data.parsed} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "slotHashes" && (
+          <SlotHashesCard sysvarAccount={parsedData.parsed} />
         )}
       {tab === "stake-history" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "stakeHistory" && (
-          <StakeHistoryCard sysvarAccount={data.parsed} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "stakeHistory" && (
+          <StakeHistoryCard sysvarAccount={parsedData.parsed} />
         )}
       {tab === "blockhashes" &&
-        data?.program === "sysvar" &&
-        data.parsed.type === "recentBlockhashes" && (
-          <BlockhashesCard blockhashes={data.parsed.info} />
+        parsedData?.program === "sysvar" &&
+        parsedData.parsed.type === "recentBlockhashes" && (
+          <BlockhashesCard blockhashes={parsedData.parsed.info} />
         )}
       {tab === "metadata" && (
         <MetaplexMetadataCard
-          nftData={(account.details?.data as TokenProgramData).nftData!}
+          nftData={(account.data.parsed as TokenProgramData).nftData!}
+        />
+      )}
+      {tab === "nftoken-collection-nfts" && (
+        <Suspense
+          fallback={<LoadingCard message="Loading NFTs for collection." />}
+        >
+          <NFTokenCollectionNFTGrid collection={account.pubkey.toBase58()} />
+        </Suspense>
+      )}
+      {tab === "attributes" && (
+        <MetaplexNFTAttributesCard
+          nftData={(account.data.parsed as TokenProgramData).nftData!}
         />
       )}
       {tab === "domains" && <DomainsCard pubkey={pubkey} />}
-      {tab === "security" && data?.program === "bpf-upgradeable-loader" && (
-        <SecurityCard data={data} />
-      )}
+      {tab === "security" &&
+        parsedData?.program === "bpf-upgradeable-loader" && (
+          <SecurityCard data={parsedData} />
+        )}
       {tab === "anchor-program" && (
         <React.Suspense
           fallback={<LoadingCard message="Loading anchor program IDL" />}
@@ -423,13 +534,23 @@ function MoreSection({
           <AnchorAccountCard account={account} />
         </React.Suspense>
       )}
+      {tab === "entries" &&
+        rawData &&
+        isAddressLookupTableAccount(account.owner, rawData) && (
+          <LookupTableEntriesCard lookupTableAccountData={rawData} />
+        )}
+      {tab === "entries" &&
+        parsedData?.program === "address-lookup-table" &&
+        parsedData.parsed.type === "lookupTable" && (
+          <LookupTableEntriesCard parsedLookupTable={parsedData.parsed.info} />
+        )}
     </>
   );
 }
 
 function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
   const address = pubkey.toBase58();
-  const data = account.details?.data;
+  const parsedData = account.data.parsed;
   const tabs: Tab[] = [
     {
       slug: "history",
@@ -439,33 +560,54 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
   ];
 
   let programTypeKey = "";
-  if (data && "parsed" in data && "type" in data.parsed) {
-    programTypeKey = `${data.program}:${data.parsed.type}`;
+  if (parsedData) {
+    programTypeKey = `${parsedData.program}:${parsedData.parsed.type}`;
   }
 
-  if (data && data.program in TABS_LOOKUP) {
-    tabs.push(...TABS_LOOKUP[data.program]);
+  if (parsedData && parsedData.program in TABS_LOOKUP) {
+    tabs.push(...TABS_LOOKUP[parsedData.program]);
   }
 
-  if (data && programTypeKey in TABS_LOOKUP) {
+  if (parsedData && programTypeKey in TABS_LOOKUP) {
     tabs.push(...TABS_LOOKUP[programTypeKey]);
+  }
+
+  // Add the key for address lookup tables
+  if (
+    account.data.raw &&
+    isAddressLookupTableAccount(account.owner, account.data.raw)
+  ) {
+    tabs.push(...TABS_LOOKUP["address-lookup-table"]);
   }
 
   // Add the key for Metaplex NFTs
   if (
-    data &&
+    parsedData &&
     programTypeKey === "spl-token:mint" &&
-    (data as TokenProgramData).nftData
+    (parsedData as TokenProgramData).nftData
   ) {
     tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
   }
 
+  const isNFToken = account && isNFTokenAccount(account);
+  if (isNFToken) {
+    const collection = parseNFTokenCollectionAccount(account);
+    if (collection) {
+      tabs.push({
+        slug: "nftoken-collection-nfts",
+        title: "NFTs",
+        path: "/nftoken-collection-nfts",
+      });
+    }
+  }
+
   if (
-    !data ||
-    !(
-      TOKEN_TABS_HIDDEN.includes(data.program) ||
-      TOKEN_TABS_HIDDEN.includes(programTypeKey)
-    )
+    !isNFToken &&
+    (!parsedData ||
+      !(
+        TOKEN_TABS_HIDDEN.includes(parsedData.program) ||
+        TOKEN_TABS_HIDDEN.includes(programTypeKey)
+      ))
   ) {
     tabs.push({
       slug: "tokens",
@@ -529,7 +671,7 @@ function getAnchorTabs(pubkey: PublicKey, account: Account) {
         <AccountDataLink
           tab={accountDataTab}
           address={pubkey.toString()}
-          programId={account.details?.owner}
+          programId={account.owner}
         />
       </React.Suspense>
     ),
@@ -548,7 +690,7 @@ function AnchorProgramLink({
   pubkey: PublicKey;
 }) {
   const { url } = useCluster();
-  const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
+  const anchorProgram = useAnchorProgram(pubkey.toString(), url);
 
   if (!anchorProgram) {
     return null;
@@ -574,13 +716,10 @@ function AccountDataLink({
 }: {
   address: string;
   tab: Tab;
-  programId: PublicKey | undefined;
+  programId: PublicKey;
 }) {
   const { url } = useCluster();
-  const accountAnchorProgram = useAnchorProgram(
-    programId?.toString() ?? "",
-    url
-  );
+  const accountAnchorProgram = useAnchorProgram(programId.toString(), url);
 
   if (!accountAnchorProgram) {
     return null;

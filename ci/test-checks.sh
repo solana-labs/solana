@@ -17,7 +17,11 @@ scripts/increment-cargo-version.sh check
   _ scripts/cargo-for-all-lock-files.sh tree >/dev/null
   set +e
   if ! _ git diff --exit-code; then
-    echo -e "\nError: Uncommitted Cargo.lock changes" 1>&2
+    cat <<EOF 1>&2
+
+Error: Uncommitted Cargo.lock changes.
+Run './scripts/cargo-for-all-lock-files.sh tree' and commit the result.
+EOF
     exit 1
   fi
 )
@@ -65,10 +69,16 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
+nightly_clippy_allows=()
+
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+ _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- \
+   --deny=warnings \
+   --deny=clippy::integer_arithmetic \
+   "${nightly_clippy_allows[@]}"
 
+_ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check
 _ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
 
  _ ci/do-audit.sh

@@ -59,7 +59,7 @@ pub enum ConfigAccountType {
     ValidatorInfo(UiConfig<Value>),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfigKey {
     pub pubkey: String,
@@ -82,7 +82,7 @@ impl From<StakeConfig> for UiStakeConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfig<T> {
     pub keys: Vec<UiConfigKey>,

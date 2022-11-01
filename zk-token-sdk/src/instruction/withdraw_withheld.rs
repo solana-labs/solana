@@ -2,7 +2,7 @@ use {
     crate::zk_token_elgamal::pod,
     bytemuck::{Pod, Zeroable},
 };
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::{
         encryption::{
@@ -21,9 +21,9 @@ use {
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
 /// the proof
 ///
-/// - The pre-instruction should call WithdrawData::verify_proof(&self)
-/// - The actual program should check that `current_ct` is consistent with what is
-///   currently stored in the confidential token account TODO: update this statement
+/// - The pre-instruction should call WithdrawWithheldTokensData::verify_proof(&self)
+/// - The actual program should check that the ciphertext in this struct is consistent with what is
+/// currently stored in the confidential token account
 ///
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
@@ -39,8 +39,8 @@ pub struct WithdrawWithheldTokensData {
     pub proof: WithdrawWithheldTokensProof,
 }
 
+#[cfg(not(target_os = "solana"))]
 impl WithdrawWithheldTokensData {
-    #[cfg(not(target_arch = "bpf"))]
     pub fn new(
         withdraw_withheld_authority_keypair: &ElGamalKeypair,
         destination_pubkey: &ElGamalPubkey,
@@ -84,7 +84,7 @@ impl WithdrawWithheldTokensData {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl Verifiable for WithdrawWithheldTokensData {
     fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
@@ -121,7 +121,7 @@ pub struct WithdrawWithheldTokensProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl WithdrawWithheldTokensProof {
     fn transcript_new(
         withdraw_withheld_authority_pubkey: &pod::ElGamalPubkey,

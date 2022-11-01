@@ -28,7 +28,7 @@ impl<'a> SortedStorages<'a> {
     }
 
     /// primary method of retrieving (Slot, SnapshotStorage)
-    pub fn iter_range<R>(&'a self, range: R) -> SortedStoragesIter<'a>
+    pub fn iter_range<R>(&'a self, range: &R) -> SortedStoragesIter<'a>
     where
         R: RangeBounds<Slot>,
     {
@@ -50,6 +50,10 @@ impl<'a> SortedStorages<'a> {
 
     pub fn range(&self) -> &Range<Slot> {
         &self.range
+    }
+
+    pub fn max_slot_inclusive(&self) -> Slot {
+        self.range.end.saturating_sub(1)
     }
 
     pub fn slot_count(&self) -> usize {
@@ -171,7 +175,7 @@ impl<'a> Iterator for SortedStoragesIter<'a> {
 impl<'a> SortedStoragesIter<'a> {
     pub fn new<R: RangeBounds<Slot>>(
         storages: &'a SortedStorages<'a>,
-        range: R,
+        range: &R,
     ) -> SortedStoragesIter<'a> {
         let storage_range = storages.range();
         let next_slot = match range.start_bound() {
@@ -242,19 +246,19 @@ pub mod tests {
         };
         assert_eq!(
             (0..5).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (1..5).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(1..5).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(1..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (0..0).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (0..0).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
 
         // only item is slot 3
@@ -274,7 +278,7 @@ pub mod tests {
                 assert_eq!(
                     (start..end).into_iter().collect::<Vec<_>>(),
                     storages
-                        .iter_range(start..end)
+                        .iter_range(&(start..end))
                         .map(check)
                         .collect::<Vec<_>>()
                 );
@@ -282,15 +286,15 @@ pub mod tests {
         }
         assert_eq!(
             (3..5).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (1..=3).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (3..=3).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
 
         // items in slots 2 and 4
@@ -314,7 +318,7 @@ pub mod tests {
                 assert_eq!(
                     (start..end).into_iter().collect::<Vec<_>>(),
                     storages
-                        .iter_range(start..end)
+                        .iter_range(&(start..end))
                         .map(check)
                         .collect::<Vec<_>>()
                 );
@@ -322,15 +326,15 @@ pub mod tests {
         }
         assert_eq!(
             (2..5).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..5).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..5)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (1..=4).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(1..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(1..)).map(check).collect::<Vec<_>>()
         );
         assert_eq!(
             (2..=4).into_iter().collect::<Vec<_>>(),
-            storages.iter_range(..).map(check).collect::<Vec<_>>()
+            storages.iter_range(&(..)).map(check).collect::<Vec<_>>()
         );
     }
 

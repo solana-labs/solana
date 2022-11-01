@@ -55,9 +55,7 @@ impl EpochStakes {
     pub fn vote_account_stake(&self, vote_account: &Pubkey) -> u64 {
         self.stakes
             .vote_accounts()
-            .get(vote_account)
-            .map(|(stake, _)| *stake)
-            .unwrap_or(0)
+            .get_delegated_stake(vote_account)
     }
 
     fn parse_epoch_vote_accounts(
@@ -190,10 +188,8 @@ pub(crate) mod tests {
             .iter()
             .flat_map(|(_, vote_accounts)| {
                 vote_accounts.iter().map(|v| {
-                    (
-                        v.vote_account,
-                        (stake_per_account, VoteAccount::from(v.account.clone())),
-                    )
+                    let vote_account = VoteAccount::try_from(v.account.clone()).unwrap();
+                    (v.vote_account, (stake_per_account, vote_account))
                 })
             })
             .collect();

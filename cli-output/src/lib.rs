@@ -1,5 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 mod cli_output;
+pub mod cli_version;
 pub mod display;
 pub use cli_output::*;
 

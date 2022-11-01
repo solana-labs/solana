@@ -1,10 +1,12 @@
 //! The `sendmmsg` module provides sendmmsg() API implementation
 
 #[cfg(target_os = "linux")]
+#[allow(deprecated)]
+use nix::sys::socket::InetAddr;
+#[cfg(target_os = "linux")]
 use {
     itertools::izip,
     libc::{iovec, mmsghdr, sockaddr_in, sockaddr_in6, sockaddr_storage},
-    nix::sys::socket::InetAddr,
     std::os::unix::io::AsRawFd,
 };
 use {
@@ -74,6 +76,7 @@ fn mmsghdr_for_packet(
     hdr.msg_hdr.msg_iovlen = 1;
     hdr.msg_hdr.msg_name = addr as *mut _ as *mut _;
 
+    #[allow(deprecated)]
     match InetAddr::from_std(dest) {
         InetAddr::V4(dest) => {
             unsafe {
@@ -131,7 +134,8 @@ where
 {
     let size = packets.len();
     #[allow(clippy::uninit_assumed_init)]
-    let mut iovs = vec![unsafe { std::mem::MaybeUninit::uninit().assume_init() }; size];
+    let iovec = std::mem::MaybeUninit::<iovec>::uninit();
+    let mut iovs = vec![unsafe { iovec.assume_init() }; size];
     let mut addrs = vec![unsafe { std::mem::zeroed() }; size];
     let mut hdrs = vec![unsafe { std::mem::zeroed() }; size];
     for ((pkt, dest), hdr, iov, addr) in izip!(packets, &mut hdrs, &mut iovs, &mut addrs) {
@@ -241,7 +245,7 @@ mod tests {
 
         let sent = multi_target_send(
             &sender,
-            &packet.data[..packet.meta.size],
+            packet.data(..).unwrap(),
             &[&addr, &addr2, &addr3, &addr4],
         )
         .ok();

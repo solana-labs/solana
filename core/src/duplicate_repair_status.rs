@@ -17,7 +17,7 @@ pub const ANCESTOR_HASH_REPAIR_SAMPLE_SIZE: usize = 21;
 const MINIMUM_ANCESTOR_AGREEMENT_SIZE: usize = (ANCESTOR_HASH_REPAIR_SAMPLE_SIZE + 1) / 2;
 const RETRY_INTERVAL_SECONDS: usize = 5;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DuplicateAncestorDecision {
     InvalidSample,
     AncestorsAllMatch,
@@ -67,7 +67,7 @@ impl DuplicateAncestorDecision {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DuplicateSlotRepairStatus {
     // Any ancestor slots that are either missing or are mismatched.
     // A mismatched ancestor slot is one that has been replayed (frozen)

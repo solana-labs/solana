@@ -113,11 +113,12 @@ pub(crate) mod tests {
             let account = AccountSharedData::new_data(
                 rng.gen(), // lamports
                 &VoteStateVersions::new_current(vote_state),
-                &Pubkey::new_unique(), // owner
+                &solana_vote_program::id(), // owner
             )
             .unwrap();
             let vote_pubkey = Pubkey::new_unique();
-            (vote_pubkey, (stake, VoteAccount::from(account)))
+            let vote_account = VoteAccount::try_from(account).unwrap();
+            (vote_pubkey, (stake, vote_account))
         });
         let result = vote_accounts.collect::<VoteAccounts>().staked_nodes();
         assert_eq!(result.len(), 2);

@@ -21,7 +21,7 @@ use {
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
     },
-    solana_measure::measure::Measure,
+    solana_measure::measure,
     solana_metrics::poh_timing_point::{send_poh_timing_point, PohTimingSender, SlotPohTimingInfo},
     solana_runtime::bank::Bank,
     solana_sdk::{
@@ -32,7 +32,7 @@ use {
         cmp,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -80,18 +80,22 @@ impl BankStart {
     }
 }
 
+// Sends the Result of the record operation, including the index in the slot of the first
+// transaction, if being tracked by WorkingBank
+type RecordResultSender = Sender<Result<Option<usize>>>;
+
 pub struct Record {
     pub mixin: Hash,
     pub transactions: Vec<VersionedTransaction>,
     pub slot: Slot,
-    pub sender: Sender<Result<()>>,
+    pub sender: RecordResultSender,
 }
 impl Record {
     pub fn new(
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
         slot: Slot,
-        sender: Sender<Result<()>>,
+        sender: RecordResultSender,
     ) -> Self {
         Self {
             mixin,
@@ -123,12 +127,13 @@ impl TransactionRecorder {
             is_exited,
         }
     }
+    // Returns the index of `transactions.first()` in the slot, if being tracked by WorkingBank
     pub fn record(
         &self,
         bank_slot: Slot,
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
-    ) -> Result<()> {
+    ) -> Result<Option<usize>> {
         // create a new channel so that there is only 1 sender and when it goes out of scope, the receiver fails
         let (result_sender, result_receiver) = unbounded();
         let res =
@@ -191,9 +196,10 @@ pub struct WorkingBank {
     pub start: Arc<Instant>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
+    pub transaction_index: Option<usize>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PohLeaderStatus {
     NotReached,
     Reached { poh_slot: Slot, parent_slot: Slot },
@@ -453,7 +459,6 @@ impl PohRecorder {
     // synchronize PoH with a bank
     pub fn reset(&mut self, reset_bank: Arc<Bank>, next_leader_slot: Option<(Slot, Slot)>) {
         self.clear_bank();
-        let mut cache = vec![];
         let blockhash = reset_bank.last_blockhash();
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
@@ -469,8 +474,7 @@ impl PohRecorder {
             reset_bank.slot()
         );
 
-        std::mem::swap(&mut cache, &mut self.tick_cache);
-
+        self.tick_cache = vec![];
         self.start_bank = reset_bank;
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
@@ -495,12 +499,13 @@ impl PohRecorder {
         self.leader_last_tick_height = leader_last_tick_height;
     }
 
-    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
+    pub fn set_bank(&mut self, bank: &Arc<Bank>, track_transaction_indexes: bool) {
         let working_bank = WorkingBank {
             bank: bank.clone(),
             start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
+            transaction_index: track_transaction_indexes.then_some(0),
         };
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
@@ -647,8 +652,8 @@ impl PohRecorder {
     }
 
     pub fn tick(&mut self) {
-        let ((poh_entry, target_time), tick_lock_contention_time) = Measure::this(
-            |_| {
+        let ((poh_entry, target_time), tick_lock_contention_time) = measure!(
+            {
                 let mut poh_l = self.poh.lock().unwrap();
                 let poh_entry = poh_l.tick();
                 let target_time = if poh_entry.is_some() {
@@ -658,7 +663,6 @@ impl PohRecorder {
                 };
                 (poh_entry, target_time)
             },
-            (),
             "tick_lock_contention",
         );
         self.tick_lock_contention_us += tick_lock_contention_time.as_us();
@@ -685,11 +689,11 @@ impl PohRecorder {
             ));
 
             let (_flush_res, flush_cache_and_tick_time) =
-                Measure::this(|_| self.flush_cache(true), (), "flush_cache_and_tick");
+                measure!(self.flush_cache(true), "flush_cache_and_tick");
             self.flush_cache_tick_us += flush_cache_and_tick_time.as_us();
 
-            let sleep_time = Measure::this(
-                |_| {
+            let sleep_time = measure!(
+                {
                     let target_time = target_time.unwrap();
                     // sleep is not accurate enough to get a predictable time.
                     // Kernel can not schedule the thread for a while.
@@ -698,7 +702,6 @@ impl PohRecorder {
                         std::hint::spin_loop();
                     }
                 },
-                (),
                 "poh_sleep",
             )
             .1;
@@ -739,47 +742,47 @@ impl PohRecorder {
         }
     }
 
+    // Returns the index of `transactions.first()` in the slot, if being tracked by WorkingBank
     pub fn record(
         &mut self,
         bank_slot: Slot,
         mixin: Hash,
         transactions: Vec<VersionedTransaction>,
-    ) -> Result<()> {
+    ) -> Result<Option<usize>> {
         // Entries without transactions are used to track real-time passing in the ledger and
         // cannot be generated by `record()`
         assert!(!transactions.is_empty(), "No transactions provided");
 
-        let ((), report_metrics_time) =
-            Measure::this(|_| self.report_metrics(bank_slot), (), "report_metrics");
+        let ((), report_metrics_time) = measure!(self.report_metrics(bank_slot), "report_metrics");
         self.report_metrics_us += report_metrics_time.as_us();
 
         loop {
             let (flush_cache_res, flush_cache_time) =
-                Measure::this(|_| self.flush_cache(false), (), "flush_cache");
+                measure!(self.flush_cache(false), "flush_cache");
             self.flush_cache_no_tick_us += flush_cache_time.as_us();
             flush_cache_res?;
 
             let working_bank = self
                 .working_bank
-                .as_ref()
+                .as_mut()
                 .ok_or(PohRecorderError::MaxHeightReached)?;
             if bank_slot != working_bank.bank.slot() {
                 return Err(PohRecorderError::MaxHeightReached);
             }
 
-            let (mut poh_lock, poh_lock_time) =
-                Measure::this(|_| self.poh.lock().unwrap(), (), "poh_lock");
+            let (mut poh_lock, poh_lock_time) = measure!(self.poh.lock().unwrap(), "poh_lock");
             self.record_lock_contention_us += poh_lock_time.as_us();
 
             let (record_mixin_res, record_mixin_time) =
-                Measure::this(|_| poh_lock.record(mixin), (), "record_mixin");
+                measure!(poh_lock.record(mixin), "record_mixin");
             self.record_us += record_mixin_time.as_us();
 
             drop(poh_lock);
 
             if let Some(poh_entry) = record_mixin_res {
-                let (send_entry_res, send_entry_time) = Measure::this(
-                    |_| {
+                let num_transactions = transactions.len();
+                let (send_entry_res, send_entry_time) = measure!(
+                    {
                         let entry = Entry {
                             num_hashes: poh_entry.num_hashes,
                             hash: poh_entry.hash,
@@ -788,11 +791,18 @@ impl PohRecorder {
                         let bank_clone = working_bank.bank.clone();
                         self.sender.send((bank_clone, (entry, self.tick_height)))
                     },
-                    (),
                     "send_poh_entry",
                 );
                 self.send_entry_us += send_entry_time.as_us();
-                return Ok(send_entry_res?);
+                send_entry_res?;
+                let starting_transaction_index =
+                    working_bank.transaction_index.map(|transaction_index| {
+                        let next_starting_transaction_index =
+                            transaction_index.saturating_add(num_transactions);
+                        working_bank.transaction_index = Some(next_starting_transaction_index);
+                        transaction_index
+                    });
+                return Ok(starting_transaction_index);
             }
 
             // record() might fail if the next PoH hash needs to be a tick.  But that's ok, tick()
@@ -937,7 +947,7 @@ pub fn create_test_recorder(
     leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
 ) -> (
     Arc<AtomicBool>,
-    Arc<Mutex<PohRecorder>>,
+    Arc<RwLock<PohRecorder>>,
     PohService,
     Receiver<WorkingBankEntry>,
 ) {
@@ -959,9 +969,9 @@ pub fn create_test_recorder(
         &poh_config,
         exit.clone(),
     );
-    poh_recorder.set_bank(bank);
+    poh_recorder.set_bank(bank, false);
 
-    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+    let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,
@@ -1097,7 +1107,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             assert!(poh_recorder.working_bank.is_some());
             poh_recorder.clear_bank();
             assert!(poh_recorder.working_bank.is_none());
@@ -1131,7 +1141,7 @@ mod tests {
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
 
             // Set a working bank
-            poh_recorder.set_bank(&bank1);
+            poh_recorder.set_bank(&bank1, false);
 
             // Tick until poh_recorder.tick_height == working bank's min_tick_height
             let num_new_ticks = bank1.tick_height() - poh_recorder.tick_height();
@@ -1200,7 +1210,7 @@ mod tests {
             );
             assert_eq!(poh_recorder.tick_height, bank.max_tick_height() + 1);
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             poh_recorder.tick();
 
             assert_eq!(poh_recorder.tick_height, bank.max_tick_height() + 2);
@@ -1241,7 +1251,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1);
+            poh_recorder.set_bank(&bank1, false);
             // Let poh_recorder tick up to bank1.tick_height() - 1
             for _ in 0..bank1.tick_height() - 1 {
                 poh_recorder.tick()
@@ -1282,7 +1292,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             let tx = test_tx();
             let h1 = hash(b"hello world!");
 
@@ -1326,7 +1336,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1);
+            poh_recorder.set_bank(&bank1, false);
 
             // Record up to exactly min tick height
             let min_tick_height = poh_recorder.working_bank.as_ref().unwrap().min_tick_height;
@@ -1380,7 +1390,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             let num_ticks_to_max = bank.max_tick_height() - poh_recorder.tick_height;
             for _ in 0..num_ticks_to_max {
                 poh_recorder.tick();
@@ -1394,6 +1404,78 @@ mod tests {
                 let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
                 assert!(entry.is_tick());
             }
+        }
+        Blockstore::destroy(&ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_poh_recorder_record_transaction_index() {
+        let ledger_path = get_tmp_ledger_path!();
+        {
+            let blockstore = Blockstore::open(&ledger_path)
+                .expect("Expected to be able to open database ledger");
+            let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
+            let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+            let prev_hash = bank.last_blockhash();
+            let (mut poh_recorder, _entry_receiver, _record_receiver) = PohRecorder::new(
+                0,
+                prev_hash,
+                bank.clone(),
+                Some((4, 4)),
+                bank.ticks_per_slot(),
+                &Pubkey::default(),
+                &Arc::new(blockstore),
+                &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
+                &Arc::new(PohConfig::default()),
+                Arc::new(AtomicBool::default()),
+            );
+
+            poh_recorder.set_bank(&bank, true);
+            poh_recorder.tick();
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                0
+            );
+
+            let tx0 = test_tx();
+            let tx1 = test_tx();
+            let h1 = hash(b"hello world!");
+            let record_result = poh_recorder
+                .record(bank.slot(), h1, vec![tx0.into(), tx1.into()])
+                .unwrap()
+                .unwrap();
+            assert_eq!(record_result, 0);
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                2
+            );
+
+            let tx = test_tx();
+            let h2 = hash(b"foobar");
+            let record_result = poh_recorder
+                .record(bank.slot(), h2, vec![tx.into()])
+                .unwrap()
+                .unwrap();
+            assert_eq!(record_result, 2);
+            assert_eq!(
+                poh_recorder
+                    .working_bank
+                    .as_ref()
+                    .unwrap()
+                    .transaction_index
+                    .unwrap(),
+                3
+            );
         }
         Blockstore::destroy(&ledger_path).unwrap();
     }
@@ -1422,7 +1504,7 @@ mod tests {
 
             bank0.fill_bank_with_ticks_for_tests();
             let bank1 = Arc::new(Bank::new_from_parent(&bank0, &Pubkey::default(), 1));
-            poh_recorder.set_bank(&bank1);
+            poh_recorder.set_bank(&bank1, false);
 
             // Check we can make two ticks without hitting min_tick_height
             let remaining_ticks_to_min =
@@ -1570,7 +1652,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             assert_eq!(bank.slot(), 0);
             poh_recorder.reset(bank, Some((4, 4)));
             assert!(poh_recorder.working_bank.is_none());
@@ -1602,7 +1684,7 @@ mod tests {
                     None,
                     Arc::new(AtomicBool::default()),
                 );
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             poh_recorder.clear_bank();
             assert!(receiver.try_recv().is_ok());
         }
@@ -1637,7 +1719,7 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
 
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
 
             // Simulate ticking much further than working_bank.max_tick_height
             let max_tick_height = poh_recorder.working_bank.as_ref().unwrap().max_tick_height;
@@ -1932,7 +2014,7 @@ mod tests {
             // Move the bank up a slot (so that max_tick_height > slot 0's tick_height)
             let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), 1));
             // If we set the working bank, the node should be leader within next 2 slots
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             assert!(poh_recorder.would_be_leader(2 * bank.ticks_per_slot()));
         }
     }
@@ -1966,7 +2048,7 @@ mod tests {
             for _ in 0..(bank.ticks_per_slot() * 3) {
                 poh_recorder.tick();
             }
-            poh_recorder.set_bank(&bank);
+            poh_recorder.set_bank(&bank, false);
             assert!(!bank.is_hash_valid_for_age(&genesis_hash, 0));
             assert!(bank.is_hash_valid_for_age(&genesis_hash, 1));
         }

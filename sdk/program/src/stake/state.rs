@@ -4,7 +4,6 @@ use {
         clock::{Clock, Epoch, UnixTimestamp},
         instruction::InstructionError,
         pubkey::Pubkey,
-        rent::Rent,
         stake::{
             config::Config,
             instruction::{LockupArgs, StakeError},
@@ -79,10 +78,6 @@ impl StakeState {
         200 // see test_size_of
     }
 
-    pub fn get_rent_exempt_reserve(rent: &Rent) -> u64 {
-        rent.minimum_balance(Self::size_of())
-    }
-
     pub fn stake(&self) -> Option<Stake> {
         match self {
             StakeState::Stake(_meta, stake) => Some(*stake),
@@ -118,7 +113,7 @@ impl StakeState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy, AbiExample)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, AbiExample)]
 pub enum StakeAuthorize {
     Staker,
     Withdrawer,
@@ -130,6 +125,7 @@ pub enum StakeAuthorize {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,
@@ -164,6 +160,7 @@ impl Lockup {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,
@@ -243,6 +240,7 @@ impl Authorized {
     Serialize,
     Deserialize,
     PartialEq,
+    Eq,
     Clone,
     Copy,
     AbiExample,

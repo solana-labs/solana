@@ -26,9 +26,16 @@ typedef struct {
  *
  * @param key The public key to print
  */
-void sol_log_pubkey(
-  const SolPubkey *pubkey
-);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+void sol_log_pubkey(const SolPubkey *);
+#else
+typedef void(*sol_log_pubkey_pointer_type)(const SolPubkey *);
+static void sol_log_pubkey(const SolPubkey * arg1) {
+  sol_log_pubkey_pointer_type sol_log_pubkey_pointer = (sol_log_pubkey_pointer_type) 2129692874;
+  sol_log_pubkey_pointer(arg1);
+}
+#endif
 
 /**
  * Compares two public keys
@@ -71,12 +78,16 @@ typedef struct {
  * @param program_id Program id of the signer
  * @param program_address Program address created, filled on return
  */
-uint64_t sol_create_program_address(
-    const SolSignerSeed *seeds,
-    int seeds_len,
-    const SolPubkey *program_id,
-    SolPubkey *program_address
-);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+uint64_t sol_create_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
+#else
+typedef uint64_t(*sol_create_program_address_pointer_type)(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *);
+static uint64_t sol_create_program_address(const SolSignerSeed * arg1, int arg2, const SolPubkey * arg3, SolPubkey * arg4) {
+  sol_create_program_address_pointer_type sol_create_program_address_pointer = (sol_create_program_address_pointer_type) 2474062396;
+  return sol_create_program_address_pointer(arg1, arg2, arg3, arg4);
+}
+#endif
 
 /**
  * Try to find a program address and return corresponding bump seed
@@ -87,13 +98,16 @@ uint64_t sol_create_program_address(
  * @param program_address Program address created, filled on return
  * @param bump_seed Bump seed required to create a valid program address
  */
-uint64_t sol_try_find_program_address(
-    const SolSignerSeed *seeds,
-    int seeds_len,
-    const SolPubkey *program_id,
-    SolPubkey *program_address,
-    uint8_t *bump_seed
-);
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/pubkey.inc AND RUN `cargo run --bin gen-headers` */
+#ifndef SOL_SBFV2
+uint64_t sol_try_find_program_address(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
+#else
+typedef uint64_t(*sol_try_find_program_address_pointer_type)(const SolSignerSeed *, int, const SolPubkey *, SolPubkey *, uint8_t *);
+static uint64_t sol_try_find_program_address(const SolSignerSeed * arg1, int arg2, const SolPubkey * arg3, SolPubkey * arg4, uint8_t * arg5) {
+  sol_try_find_program_address_pointer_type sol_try_find_program_address_pointer = (sol_try_find_program_address_pointer_type) 1213221432;
+  return sol_try_find_program_address_pointer(arg1, arg2, arg3, arg4, arg5);
+}
+#endif
 
 #ifdef SOL_TEST
 /**

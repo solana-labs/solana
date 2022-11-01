@@ -1,5 +1,5 @@
-#[cfg(not(target_arch = "bpf"))]
-use solana_sdk::transaction::TransactionError;
+#[cfg(not(target_os = "solana"))]
+use solana_program::message::AddressLoaderError;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
@@ -21,14 +21,14 @@ pub enum AddressLookupError {
     InvalidLookupIndex,
 }
 
-#[cfg(not(target_arch = "bpf"))]
-impl From<AddressLookupError> for TransactionError {
+#[cfg(not(target_os = "solana"))]
+impl From<AddressLookupError> for AddressLoaderError {
     fn from(err: AddressLookupError) -> Self {
         match err {
-            AddressLookupError::LookupTableAccountNotFound => Self::AddressLookupTableNotFound,
-            AddressLookupError::InvalidAccountOwner => Self::InvalidAddressLookupTableOwner,
-            AddressLookupError::InvalidAccountData => Self::InvalidAddressLookupTableData,
-            AddressLookupError::InvalidLookupIndex => Self::InvalidAddressLookupTableIndex,
+            AddressLookupError::LookupTableAccountNotFound => Self::LookupTableAccountNotFound,
+            AddressLookupError::InvalidAccountOwner => Self::InvalidAccountOwner,
+            AddressLookupError::InvalidAccountData => Self::InvalidAccountData,
+            AddressLookupError::InvalidLookupIndex => Self::InvalidLookupIndex,
         }
     }
 }

@@ -44,15 +44,15 @@ fn id_to_tokens(
     tokens: &mut proc_macro2::TokenStream,
 ) {
     tokens.extend(quote! {
-        /// The static program ID
+        /// The static program ID.
         pub static ID: #pubkey_type = #id;
 
-        /// Confirms that a given pubkey is equivalent to the program ID
+        /// Returns `true` if given pubkey is the program ID.
         pub fn check_id(id: &#pubkey_type) -> bool {
             id == &ID
         }
 
-        /// Returns the program ID
+        /// Returns the program ID.
         pub fn id() -> #pubkey_type {
             ID
         }
@@ -71,16 +71,16 @@ fn deprecated_id_to_tokens(
     tokens: &mut proc_macro2::TokenStream,
 ) {
     tokens.extend(quote! {
-        /// The static program ID
+        /// The static program ID.
         pub static ID: #pubkey_type = #id;
 
-        /// Confirms that a given pubkey is equivalent to the program ID
+        /// Returns `true` if given pubkey is the program ID.
         #[deprecated()]
         pub fn check_id(id: &#pubkey_type) -> bool {
             id == &ID
         }
 
-        /// Returns the program ID
+        /// Returns the program ID.
         #[deprecated()]
         pub fn id() -> #pubkey_type {
             ID
@@ -291,10 +291,10 @@ fn parse_pubkey(
 ) -> Result<proc_macro2::TokenStream> {
     let id_vec = bs58::decode(id_literal.value())
         .into_vec()
-        .map_err(|_| syn::Error::new_spanned(&id_literal, "failed to decode base58 string"))?;
+        .map_err(|_| syn::Error::new_spanned(id_literal, "failed to decode base58 string"))?;
     let id_array = <[u8; 32]>::try_from(<&[u8]>::clone(&&id_vec[..])).map_err(|_| {
         syn::Error::new_spanned(
-            &id_literal,
+            id_literal,
             format!("pubkey array is not 32 bytes long: len={}", id_vec.len()),
         )
     })?;
@@ -379,7 +379,7 @@ pub fn pubkeys(input: TokenStream) -> TokenStream {
 }
 
 // The normal `wasm_bindgen` macro generates a .bss section which causes the resulting
-// BPF program to fail to load, so for now this stub should be used when building for BPF
+// SBF program to fail to load, so for now this stub should be used when building for SBF
 #[proc_macro_attribute]
 pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match parse_macro_input!(item as syn::Item) {

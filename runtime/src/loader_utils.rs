@@ -140,7 +140,7 @@ pub fn load_upgradeable_program<T: Client>(
             1.max(
                 bank_client
                     .get_minimum_balance_for_rent_exemption(
-                        UpgradeableLoaderState::program_len().unwrap(),
+                        UpgradeableLoaderState::size_of_program(),
                     )
                     .unwrap(),
             ),

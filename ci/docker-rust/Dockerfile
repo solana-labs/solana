@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/rust-version.sh to pick up the new image tag
-FROM rust:1.60.0
+FROM rust:1.64.0
 
 # Add Google Protocol Buffers for Libra's metrics library.
 ENV PROTOC_VERSION 3.8.0
@@ -35,6 +35,7 @@ RUN set -x \
  && rustup component add clippy \
  && rustup target add wasm32-unknown-unknown \
  && cargo install cargo-audit \
+ && cargo install cargo-sort \
  && cargo install mdbook \
  && cargo install mdbook-linkcheck \
  && cargo install svgbob_cli \

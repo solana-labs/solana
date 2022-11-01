@@ -2,12 +2,15 @@ use {
     crate::{
         accounts_index::{AccountsIndexConfig, IndexLimitMb, IndexValue},
         bucket_map_holder_stats::BucketMapHolderStats,
-        in_mem_accounts_index::{InMemAccountsIndex, SlotT},
+        in_mem_accounts_index::InMemAccountsIndex,
         waitable_condvar::WaitableCondvar,
     },
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
-    solana_sdk::{clock::SLOT_MS, timing::AtomicInterval},
+    solana_sdk::{
+        clock::{Slot, SLOT_MS},
+        timing::AtomicInterval,
+    },
     std::{
         fmt::Debug,
         sync::{
@@ -25,10 +28,21 @@ const AGE_MS: u64 = SLOT_MS; // match one age per slot time
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);
 
 pub struct BucketMapHolder<T: IndexValue> {
-    pub disk: Option<BucketMap<SlotT<T>>>,
+    pub disk: Option<BucketMap<(Slot, T)>>,
 
-    pub count_ages_flushed: AtomicUsize,
+    pub count_buckets_flushed: AtomicUsize,
+
+    /// These three ages are individual atomics because their values are read many times from code during runtime.
+    /// Instead of accessing the single age and doing math each time, each value is incremented each time the age occurs, which is ~400ms.
+    /// Callers can ask for the precomputed value they already want.
+    /// rolling 'current' age
     pub age: AtomicU8,
+    /// rolling age that is 'ages_to_stay_in_cache' + 'age'
+    pub future_age_to_flush: AtomicU8,
+    /// rolling age that is effectively 'age' - 1
+    /// these items are expected to be flushed from the accounts write cache or otherwise modified before this age occurs
+    pub future_age_to_flush_cached: AtomicU8,
+
     pub stats: BucketMapHolderStats,
 
     age_timer: AtomicInterval,
@@ -43,7 +57,9 @@ pub struct BucketMapHolder<T: IndexValue> {
     // how much mb are we allowed to keep in the in-mem index?
     // Rest goes to disk.
     pub mem_budget_mb: Option<usize>,
-    ages_to_stay_in_cache: Age,
+
+    /// how many ages should elapse from the last time an item is used where the item will remain in the cache
+    pub ages_to_stay_in_cache: Age,
 
     /// startup is a special time for flush to focus on moving everything to disk as fast and efficiently as possible
     /// with less thread count limitations. LRU and access patterns are not important. Freeing memory
@@ -68,16 +84,30 @@ impl<T: IndexValue> BucketMapHolder<T> {
     pub fn increment_age(&self) {
         // since we are about to change age, there are now 0 buckets that have been flushed at this age
         // this should happen before the age.fetch_add
-        let previous = self.count_ages_flushed.swap(0, Ordering::Acquire);
+        // Otherwise, as soon as we increment the age, a thread could race us and flush before we swap this out since it detects the age has moved forward and a bucket will be eligible for flushing.
+        let previous = self.count_buckets_flushed.swap(0, Ordering::AcqRel);
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
-        assert!(previous >= self.bins); // we should not have increased age before previous age was fully flushed
+        self.future_age_to_flush.fetch_add(1, Ordering::Release);
+        self.future_age_to_flush_cached
+            .fetch_add(1, Ordering::Release);
+        assert!(
+            previous >= self.bins,
+            "previous: {}, bins: {}",
+            previous,
+            self.bins
+        ); // we should not have increased age before previous age was fully flushed
         self.wait_dirty_or_aged.notify_all(); // notify all because we can age scan in parallel
     }
 
-    pub fn future_age_to_flush(&self) -> Age {
-        self.current_age().wrapping_add(self.ages_to_stay_in_cache)
+    pub fn future_age_to_flush(&self, is_cached: bool) -> Age {
+        if is_cached {
+            &self.future_age_to_flush_cached
+        } else {
+            &self.future_age_to_flush
+        }
+        .load(Ordering::Acquire)
     }
 
     fn has_age_interval_elapsed(&self) -> bool {
@@ -123,23 +153,38 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.age.load(Ordering::Acquire)
     }
 
-    pub fn bucket_flushed_at_current_age(&self) {
-        self.count_ages_flushed.fetch_add(1, Ordering::Release);
-        self.maybe_advance_age();
+    pub fn bucket_flushed_at_current_age(&self, can_advance_age: bool) {
+        let count_buckets_flushed = 1 + self.count_buckets_flushed.fetch_add(1, Ordering::AcqRel);
+        if can_advance_age {
+            self.maybe_advance_age_internal(
+                self.all_buckets_flushed_at_current_age_internal(count_buckets_flushed),
+            );
+        }
     }
 
     /// have all buckets been flushed at the current age?
     pub fn all_buckets_flushed_at_current_age(&self) -> bool {
-        self.count_ages_flushed() >= self.bins
+        self.all_buckets_flushed_at_current_age_internal(self.count_buckets_flushed())
     }
 
-    pub fn count_ages_flushed(&self) -> usize {
-        self.count_ages_flushed.load(Ordering::Acquire)
+    /// have all buckets been flushed at the current age?
+    fn all_buckets_flushed_at_current_age_internal(&self, count_buckets_flushed: usize) -> bool {
+        count_buckets_flushed >= self.bins
     }
 
+    pub fn count_buckets_flushed(&self) -> usize {
+        self.count_buckets_flushed.load(Ordering::Acquire)
+    }
+
+    /// if all buckets are flushed at the current age and time has elapsed, then advance age
     pub fn maybe_advance_age(&self) -> bool {
-        // check has_age_interval_elapsed last as calling it modifies state on success
-        if self.all_buckets_flushed_at_current_age() && self.has_age_interval_elapsed() {
+        self.maybe_advance_age_internal(self.all_buckets_flushed_at_current_age())
+    }
+
+    /// if all buckets are flushed at the current age and time has elapsed, then advance age
+    fn maybe_advance_age_internal(&self, all_buckets_flushed_at_current_age: bool) -> bool {
+        // call has_age_interval_elapsed last since calling it modifies state on success
+        if all_buckets_flushed_at_current_age && self.has_age_interval_elapsed() {
             self.increment_age();
             true
         } else {
@@ -196,8 +241,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
         Self {
             disk,
             ages_to_stay_in_cache,
-            count_ages_flushed: AtomicUsize::default(),
+            count_buckets_flushed: AtomicUsize::default(),
+            // age = 0
             age: AtomicU8::default(),
+            // future age = age (=0) + ages_to_stay_in_cache
+            future_age_to_flush: AtomicU8::new(ages_to_stay_in_cache),
+            // effectively age (0) - 1. So, the oldest possible age from 'now'
+            future_age_to_flush_cached: AtomicU8::new(0_u8.wrapping_sub(1)),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: Arc::default(),
             next_bucket_to_flush: AtomicUsize::new(0),
@@ -257,13 +307,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
     fn throttling_wait_ms(&self) -> Option<u64> {
         let interval_ms = self.age_interval_ms();
         let elapsed_ms = self.age_timer.elapsed_ms();
-        let bins_flushed = self.count_ages_flushed() as u64;
+        let bins_flushed = self.count_buckets_flushed() as u64;
         self.throttling_wait_ms_internal(interval_ms, elapsed_ms, bins_flushed)
     }
 
     /// true if this thread can sleep
     fn should_thread_sleep(&self) -> bool {
-        let bins_flushed = self.count_ages_flushed();
+        let bins_flushed = self.count_buckets_flushed();
         if bins_flushed >= self.bins {
             // all bins flushed, so this thread can sleep
             true
@@ -275,7 +325,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
     }
 
     // intended to execute in a bg thread
-    pub fn background(&self, exit: Arc<AtomicBool>, in_mem: Vec<Arc<InMemAccountsIndex<T>>>) {
+    pub fn background(
+        &self,
+        exit: Vec<Arc<AtomicBool>>,
+        in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
+        can_advance_age: bool,
+    ) {
         let bins = in_mem.len();
         let flush = self.disk.is_some();
         let mut throttling_wait_ms = None;
@@ -290,6 +345,10 @@ impl<T: IndexValue> BucketMapHolder<T> {
                         .remaining_until_next_interval(self.age_interval_ms()),
                     self.stats.remaining_until_next_interval(),
                 );
+                if !can_advance_age {
+                    // if this thread cannot advance age, then make sure we don't sleep 0
+                    wait = wait.max(1);
+                }
                 if let Some(throttling_wait_ms) = throttling_wait_ms {
                     self.stats
                         .bg_throttling_wait_us
@@ -305,11 +364,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
                     .bg_waiting_us
                     .fetch_add(m.as_us(), Ordering::Relaxed);
                 // likely some time has elapsed. May have been waiting for age time interval to elapse.
-                self.maybe_advance_age();
+                if can_advance_age {
+                    self.maybe_advance_age();
+                }
             }
             throttling_wait_ms = None;
 
-            if exit.load(Ordering::Relaxed) {
+            if exit.iter().any(|exit| exit.load(Ordering::Relaxed)) {
                 break;
             }
 
@@ -317,7 +378,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             for _ in 0..bins {
                 if flush {
                     let index = self.next_bucket_to_flush();
-                    in_mem[index].flush();
+                    in_mem[index].flush(can_advance_age);
                 }
                 self.stats.report_stats(self);
                 if self.all_buckets_flushed_at_current_age() {
@@ -362,6 +423,26 @@ pub mod tests {
     }
 
     #[test]
+    fn test_ages() {
+        solana_logger::setup();
+        let bins = 4;
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        assert_eq!(0, test.current_age());
+        assert_eq!(test.ages_to_stay_in_cache, test.future_age_to_flush(false));
+        assert_eq!(u8::MAX, test.future_age_to_flush(true));
+        (0..bins).for_each(|_| {
+            test.bucket_flushed_at_current_age(false);
+        });
+        test.increment_age();
+        assert_eq!(1, test.current_age());
+        assert_eq!(
+            test.ages_to_stay_in_cache + 1,
+            test.future_age_to_flush(false)
+        );
+        assert_eq!(0, test.future_age_to_flush(true));
+    }
+
+    #[test]
     fn test_age_increment() {
         solana_logger::setup();
         let bins = 4;
@@ -376,7 +457,8 @@ pub mod tests {
             }
 
             // this would normally happen once time went off and all buckets had been flushed at the previous age
-            test.count_ages_flushed.fetch_add(bins, Ordering::Release);
+            test.count_buckets_flushed
+                .fetch_add(bins, Ordering::Release);
             test.increment_age();
         }
     }
@@ -427,18 +509,30 @@ pub mod tests {
         let bins = 1;
         let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
         let threads = 2;
-        let time = AGE_MS * 5 / 2;
+        let time = AGE_MS * 8 / 3;
         let expected = (time / AGE_MS) as Age;
         let now = Instant::now();
-        test.bucket_flushed_at_current_age(); // done with age 0
+        test.bucket_flushed_at_current_age(true); // done with age 0
         (0..threads).into_par_iter().for_each(|_| {
-            while now.elapsed().as_millis() < (time as u128) {
+            // This test used to be more strict with time, but in a parallel, multi test environment,
+            // sometimes threads starve and this test intermittently fails. So, give it more time than it should require.
+            // This may be aggrevated by the strategy of only allowing thread 0 to advance the age.
+            while now.elapsed().as_millis() < (time as u128) * 100 {
                 if test.maybe_advance_age() {
-                    test.bucket_flushed_at_current_age();
+                    test.bucket_flushed_at_current_age(true);
+                }
+
+                if test.current_age() >= expected {
+                    break;
                 }
             }
         });
-        assert_eq!(test.current_age(), expected);
+        assert!(
+            test.current_age() >= expected,
+            "{}, {}",
+            test.current_age(),
+            expected
+        );
     }
 
     #[test]
@@ -449,7 +543,7 @@ pub mod tests {
         assert_eq!(test.current_age(), 0);
         for _ in 0..bins {
             assert!(!test.all_buckets_flushed_at_current_age());
-            test.bucket_flushed_at_current_age();
+            test.bucket_flushed_at_current_age(true);
         }
         std::thread::sleep(std::time::Duration::from_millis(AGE_MS * 2));
         test.maybe_advance_age();

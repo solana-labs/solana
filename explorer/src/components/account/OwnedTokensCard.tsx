@@ -66,6 +66,12 @@ export function OwnedTokensCard({ pubkey }: { pubkey: PublicKey }) {
     );
   }
 
+  if (tokens.length > 100) {
+    return (
+      <ErrorCard text="Token holdings is not available for accounts with over 100 token accounts" />
+    );
+  }
+
   return (
     <>
       {showDropdown && (

@@ -2,19 +2,11 @@
 //! because these tests are run separately from the rest of local cluster tests.
 #![allow(clippy::integer_arithmetic)]
 use {
-    common::{
-        copy_blocks, create_custom_leader_schedule, last_vote_in_tower, open_blockstore,
-        purge_slots, remove_tower, wait_for_last_vote_in_tower_to_land_in_ledger, RUST_LOG_FILTER,
-    },
+    common::*,
     log::*,
     serial_test::serial,
     solana_core::validator::ValidatorConfig,
-    solana_ledger::{
-        ancestor_iterator::AncestorIterator,
-        blockstore::Blockstore,
-        blockstore_db::{AccessType, BlockstoreOptions},
-        leader_schedule::FixedSchedule,
-    },
+    solana_ledger::{ancestor_iterator::AncestorIterator, leader_schedule::FixedSchedule},
     solana_local_cluster::{
         cluster::Cluster,
         local_cluster::{ClusterConfig, LocalCluster},
@@ -91,7 +83,12 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
     // First set up the cluster with 4 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![31, 36, 33, 0];
+    let node_stakes = vec![
+        31 * DEFAULT_NODE_STAKE,
+        36 * DEFAULT_NODE_STAKE,
+        33 * DEFAULT_NODE_STAKE,
+        0,
+    ];
 
     let base_slot: Slot = 26; // S2
     let next_slot_on_a: Slot = 27; // S3
@@ -147,7 +144,6 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     }
 
     default_config.fixed_leader_schedule = Some(FixedSchedule {
-        start_epoch: 0,
         leader_schedule: Arc::new(leader_schedule),
     });
     let mut validator_configs =
@@ -157,7 +153,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     validator_configs[2].voting_disabled = true;
 
     let mut config = ClusterConfig {
-        cluster_lamports: 100_000,
+        cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes,
         validator_configs,
         validator_keys: Some(validator_keys),
@@ -247,7 +243,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         remove_tower(&val_c_ledger_path, &validator_b_pubkey);
 
         let blockstore = open_blockstore(&val_c_ledger_path);
-        purge_slots(&blockstore, base_slot + 1, truncated_slots);
+        purge_slots_with_count(&blockstore, base_slot + 1, truncated_slots);
     }
     info!("Create validator A's ledger");
     {
@@ -261,7 +257,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         copy_blocks(b_last_vote, &b_blockstore, &a_blockstore);
 
         // Purge uneccessary slots
-        purge_slots(&a_blockstore, next_slot_on_a + 1, truncated_slots);
+        purge_slots_with_count(&a_blockstore, next_slot_on_a + 1, truncated_slots);
     }
 
     // This should be guaranteed because we waited for validator `A` to vote on a slot > `next_slot_on_a`
@@ -274,7 +270,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
     {
         let blockstore = open_blockstore(&val_a_ledger_path);
-        purge_slots(&blockstore, next_slot_on_a + 1, truncated_slots);
+        purge_slots_with_count(&blockstore, next_slot_on_a + 1, truncated_slots);
         if !with_tower {
             info!("Removing tower!");
             remove_tower(&val_a_ledger_path, &validator_a_pubkey);
@@ -285,7 +281,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
             // hasn't gotten the heavier fork from validator C yet.
             // Then it will be stuck on 27 unable to switch because C doesn't
             // have enough stake to generate a switching proof
-            purge_slots(&blockstore, next_slot_on_a, truncated_slots);
+            purge_slots_with_count(&blockstore, next_slot_on_a, truncated_slots);
         } else {
             info!("Not removing tower!");
         }
@@ -335,16 +331,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
         if let Some((last_vote, _)) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
             a_votes.push(last_vote);
-            let blockstore = Blockstore::open_with_options(
-                &val_a_ledger_path,
-                BlockstoreOptions {
-                    access_type: AccessType::TryPrimaryThenSecondary,
-                    recovery_mode: None,
-                    enforce_ulimit_nofile: true,
-                    ..BlockstoreOptions::default()
-                },
-            )
-            .unwrap();
+            let blockstore = open_blockstore(&val_a_ledger_path);
             let mut ancestors = AncestorIterator::new(last_vote, &blockstore);
             if ancestors.any(|a| votes_on_c_fork.contains(&a)) {
                 bad_vote_detected = true;

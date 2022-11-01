@@ -1,6 +1,6 @@
 use crate::clock::{Epoch, Slot};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochInfo {
     /// The current epoch

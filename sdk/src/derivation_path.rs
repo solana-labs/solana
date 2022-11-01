@@ -14,7 +14,7 @@ const ACCOUNT_INDEX: usize = 2;
 const CHANGE_INDEX: usize = 3;
 
 /// Derivation path error.
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DerivationPathError {
     #[error("invalid derivation path: {0}")]
     InvalidDerivationPath(String),
@@ -28,7 +28,7 @@ impl From<Infallible> for DerivationPathError {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DerivationPath(DerivationPathInner);
 
 impl Default for DerivationPath {
@@ -79,7 +79,7 @@ impl DerivationPath {
         Ok(Self::new_bip44_with_coin(coin, account, change))
     }
 
-    fn from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
+    pub fn from_absolute_path_str(path: &str) -> Result<Self, DerivationPathError> {
         let inner = DerivationPath::_from_absolute_path_insecure_str(path)?
             .into_iter()
             .map(|c| ChildIndex::Hardened(c.to_u32()))
@@ -203,7 +203,7 @@ impl<'a> IntoIterator for &'a DerivationPath {
 const QUERY_KEY_FULL_PATH: &str = "full-path";
 const QUERY_KEY_KEY: &str = "key";
 
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("invalid query key `{0}`")]
 struct QueryKeyError(String);
 

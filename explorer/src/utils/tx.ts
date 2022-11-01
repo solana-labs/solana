@@ -23,7 +23,8 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export enum PROGRAM_NAMES {
   // native built-ins
-  ADDRESS_MAP = "Address Map Program",
+  ADDRESS_LOOKUP_TABLE = "Address Lookup Table Program",
+  COMPUTE_BUDGET = "Compute Budget Program",
   CONFIG = "Config Program",
   STAKE = "Stake Program",
   SYSTEM = "System Program",
@@ -92,8 +93,12 @@ export enum PROGRAM_NAMES {
   SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  WORMHOLE_CORE = "Wormhole Core Bridge",
+  WORMHOLE_TOKEN = "Wormhole Token Bridge",
+  WORMHOLE_NFT = "Wormhole NFT Bridge",
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
+  STEPN_DEX = "STEPN Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -112,8 +117,12 @@ export type ProgramInfo = {
 
 export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   // native built-ins
-  AddressMap111111111111111111111111111111111: {
-    name: PROGRAM_NAMES.ADDRESS_MAP,
+  AddressLookupTab1e1111111111111111111111111: {
+    name: PROGRAM_NAMES.ADDRESS_LOOKUP_TABLE,
+    deployments: ALL_CLUSTERS,
+  },
+  ComputeBudget111111111111111111111111111111: {
+    name: PROGRAM_NAMES.COMPUTE_BUDGET,
     deployments: ALL_CLUSTERS,
   },
   Config1111111111111111111111111111111111111: {
@@ -370,12 +379,40 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.WORMHOLE,
     deployments: [Cluster.MainnetBeta],
   },
+  worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth: {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5": {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.Devnet],
+  },
+  wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.MainnetBeta],
+  },
+  DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.Devnet],
+  },
+  WnFt12ZrnzZrFZkt2xsNsaNWoQribnuQ5B5FrDbwDhD: {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "2rHhojZ7hpu1zA91nvZmT8TqWWvMcKmmNBCr2mKTtMq4": {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.Devnet],
+  },
   CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz: {
     name: PROGRAM_NAMES.SOLANART,
     deployments: [Cluster.MainnetBeta],
   },
   "5ZfZAwP2m93waazg8DkrrVmsupeiPEvaEHowiUP7UAbJ": {
     name: PROGRAM_NAMES.SOLANART_GO,
+    deployments: [Cluster.MainnetBeta],
+  },
+  Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
+    name: PROGRAM_NAMES.STEPN_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };
@@ -406,6 +443,12 @@ export const SYSVAR_IDS = {
   [SYSVAR_STAKE_HISTORY_PUBKEY.toBase58()]: "Sysvar: Stake History",
   Sysvar1nstructions1111111111111111111111111: "Sysvar: Instructions",
 };
+
+export function getProgramName(address: string, cluster: Cluster): string {
+  const label = programLabel(address, cluster);
+  if (label) return label;
+  return `Unknown Program (${address})`;
+}
 
 export function programLabel(
   address: string,

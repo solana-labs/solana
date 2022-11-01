@@ -58,6 +58,8 @@ windows)
     git config core.symlinks true
     find . -type l -delete
     git reset --hard
+    # patched crossbeam doesn't build on windows
+    sed -i 's/^crossbeam-epoch/#crossbeam-epoch/' Cargo.toml
   )
   ;;
 *)
@@ -100,10 +102,10 @@ MAYBE_TARBALLS=
 if [[ "$CI_OS_NAME" = linux ]]; then
   (
     set -x
-    sdk/bpf/scripts/package.sh
-    [[ -f bpf-sdk.tar.bz2 ]]
+    sdk/sbf/scripts/package.sh
+    [[ -f sbf-sdk.tar.bz2 ]]
   )
-  MAYBE_TARBALLS="bpf-sdk.tar.bz2"
+  MAYBE_TARBALLS="sbf-sdk.tar.bz2"
 fi
 
 source ci/upload-ci-artifact.sh
@@ -136,28 +138,18 @@ for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.
       mkdir -p travis-release-upload/
       cp -v "$file" travis-release-upload/
     fi
+  elif [[ -n $GITHUB_ACTIONS ]]; then
+    mkdir -p github-action-s3-upload/"$CHANNEL_OR_TAG"
+    cp -v "$file" github-action-s3-upload/"$CHANNEL_OR_TAG"/
+
+    if [[ -n $TAG ]]; then
+      mkdir -p github-action-release-upload/
+      cp -v "$file" github-action-release-upload/
+    fi
   elif [[ -n $APPVEYOR ]]; then
     # Add artifacts for .appveyor.yml to upload
     appveyor PushArtifact "$file" -FileName "$CHANNEL_OR_TAG"/"$file"
   fi
 done
-
-
-# Create install wrapper for release.solana.com
-if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
-  echo "Skipping publishing install wrapper"
-elif [[ -n $BUILDKITE ]]; then
-  cat > release.solana.com-install <<EOF
-SOLANA_RELEASE=$CHANNEL_OR_TAG
-SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
-SOLANA_DOWNLOAD_ROOT=https://release.solana.com
-EOF
-  cat install/solana-install-init.sh >> release.solana.com-install
-
-  echo --- AWS S3 Store: "install"
-  $DRYRUN upload-s3-artifact "/solana/release.solana.com-install" "s3://release.solana.com/$CHANNEL_OR_TAG/install"
-  echo Published to:
-  $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/install
-fi
 
 echo --- ok

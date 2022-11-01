@@ -61,7 +61,10 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --tpu-use-quic ]]; then
+    elif [[ $1 = --tpu-disable-quic ]]; then
+      args+=("$1")
+      shift
+    elif [[ $1 = --tpu-enable-udp ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --rpc-send-batch-ms ]]; then
@@ -103,6 +106,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --skip-require-tower ]]; then
       maybeRequireTower=false
       shift
+    elif [[ $1 = --log-messages-bytes-limit ]]; then
+      args+=("$1" "$2")
+      shift 2
     else
       echo "Unknown argument: $1"
       $program --help

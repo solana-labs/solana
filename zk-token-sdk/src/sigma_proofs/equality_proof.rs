@@ -10,7 +10,7 @@
 //! The protocol guarantees computationally soundness (by the hardness of discrete log) and perfect
 //! zero-knowledge in the random oracle model.
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     crate::encryption::{
         elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
@@ -46,7 +46,7 @@ pub struct CtxtCommEqualityProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl CtxtCommEqualityProof {
     /// Equality proof constructor. The proof is with respect to a ciphertext and commitment.
     ///
@@ -205,6 +205,10 @@ impl CtxtCommEqualityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
+        if bytes.len() != 192 {
+            return Err(EqualityProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 192];
         let (Y_0, Y_1, Y_2, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32];
 
@@ -243,7 +247,7 @@ pub struct CtxtCtxtEqualityProof {
 }
 
 #[allow(non_snake_case)]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl CtxtCtxtEqualityProof {
     /// Equality proof constructor. The proof is with respect to two ciphertexts.
     ///
@@ -424,6 +428,10 @@ impl CtxtCtxtEqualityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
+        if bytes.len() != 224 {
+            return Err(EqualityProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 224];
         let (Y_0, Y_1, Y_2, Y_3, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32, 32];
 

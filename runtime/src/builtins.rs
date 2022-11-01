@@ -1,54 +1,11 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-#[cfg(debug_assertions)]
-#[allow(deprecated)]
-use solana_sdk::AutoTraitBreakSendSync;
 use {
     crate::system_instruction_processor,
-    solana_program_runtime::{
-        invoke_context::{InvokeContext, ProcessInstructionWithContext},
-        stable_log,
-    },
-    solana_sdk::{
-        feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
-    },
+    solana_program_runtime::invoke_context::ProcessInstructionWithContext,
+    solana_sdk::{feature_set, pubkey::Pubkey, stake, system_program},
     std::fmt,
 };
-
-fn process_instruction_with_program_logging(
-    process_instruction: ProcessInstructionWithContext,
-    first_instruction_account: usize,
-    invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    let logger = invoke_context.get_log_collector();
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    stable_log::program_invoke(&logger, program_id, invoke_context.get_stack_height());
-
-    let result = process_instruction(first_instruction_account, invoke_context);
-
-    let transaction_context = &invoke_context.transaction_context;
-    let instruction_context = transaction_context.get_current_instruction_context()?;
-    let program_id = instruction_context.get_program_key(transaction_context)?;
-    match &result {
-        Ok(()) => stable_log::program_success(&logger, program_id),
-        Err(err) => stable_log::program_failure(&logger, program_id, err),
-    }
-    result
-}
-
-macro_rules! with_program_logging {
-    ($process_instruction:expr) => {
-        |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
-            process_instruction_with_program_logging(
-                $process_instruction,
-                first_instruction_account,
-                invoke_context,
-            )
-        }
-    };
-}
 
 #[derive(Clone)]
 pub struct Builtin {
@@ -107,7 +64,7 @@ pub enum BuiltinAction {
 /// State transition enum used for adding and removing builtin programs through
 /// feature activations.
 #[derive(Debug, Clone, AbiExample)]
-enum InnerBuiltinFeatureTransition {
+pub enum BuiltinFeatureTransition {
     /// Add a builtin program if a feature is activated.
     Add {
         builtin: Builtin,
@@ -122,40 +79,15 @@ enum InnerBuiltinFeatureTransition {
     },
 }
 
-#[allow(deprecated)]
-#[cfg(debug_assertions)]
-impl AutoTraitBreakSendSync for InnerBuiltinFeatureTransition {}
-
-#[derive(AbiExample, Clone, Debug)]
-pub struct BuiltinFeatureTransition(InnerBuiltinFeatureTransition);
-
-// https://github.com/solana-labs/solana/pull/23233 added `BuiltinFeatureTransition`
-// to `Bank` which triggers https://github.com/rust-lang/rust/issues/92987 while
-// attempting to resolve `Sync` on `BankRc` in `AccountsBackgroundService::new` ala,
-//
-// query stack during panic:
-// #0 [evaluate_obligation] evaluating trait selection obligation `bank::BankRc: core::marker::Sync`
-// #1 [typeck] type-checking `accounts_background_service::<impl at runtime/src/accounts_background_service.rs:358:1: 520:2>::new`
-// #2 [typeck_item_bodies] type-checking all item bodies
-// #3 [analysis] running analysis passes on this crate
-// end of query stack
-//
-// Yoloing a `Sync` onto it avoids the auto trait evaluation and thus the ICE.
-//
-// We should remove this when upgrading to Rust 1.60.0, where the bug has been
-// fixed by https://github.com/rust-lang/rust/pull/93064
-unsafe impl Send for BuiltinFeatureTransition {}
-unsafe impl Sync for BuiltinFeatureTransition {}
-
 impl BuiltinFeatureTransition {
     pub fn to_action(
         &self,
         should_apply_action_for_feature: &impl Fn(&Pubkey) -> bool,
     ) -> Option<BuiltinAction> {
-        match &self.0 {
-            InnerBuiltinFeatureTransition::Add {
+        match self {
+            Self::Add {
                 builtin,
-                ref feature_id,
+                feature_id,
             } => {
                 if should_apply_action_for_feature(feature_id) {
                     Some(BuiltinAction::Add(builtin.clone()))
@@ -163,10 +95,10 @@ impl BuiltinFeatureTransition {
                     None
                 }
             }
-            InnerBuiltinFeatureTransition::RemoveOrRetain {
+            Self::RemoveOrRetain {
                 previously_added_builtin,
-                ref addition_feature_id,
-                ref removal_feature_id,
+                addition_feature_id,
+                removal_feature_id,
             } => {
                 if should_apply_action_for_feature(removal_feature_id) {
                     Some(BuiltinAction::Remove(previously_added_builtin.id))
@@ -187,79 +119,53 @@ fn genesis_builtins() -> Vec<Builtin> {
         Builtin::new(
             "system_program",
             system_program::id(),
-            with_program_logging!(system_instruction_processor::process_instruction),
+            system_instruction_processor::process_instruction,
         ),
         Builtin::new(
             "vote_program",
             solana_vote_program::id(),
-            with_program_logging!(solana_vote_program::vote_processor::process_instruction),
+            solana_vote_program::vote_processor::process_instruction,
         ),
         Builtin::new(
             "stake_program",
             stake::program::id(),
-            with_program_logging!(solana_stake_program::stake_instruction::process_instruction),
+            solana_stake_program::stake_instruction::process_instruction,
         ),
         Builtin::new(
             "config_program",
             solana_config_program::id(),
-            with_program_logging!(solana_config_program::config_processor::process_instruction),
+            solana_config_program::config_processor::process_instruction,
         ),
     ]
-}
-
-/// place holder for precompile programs, remove when the precompile program is deactivated via feature activation
-fn dummy_process_instruction(
-    _first_instruction_account: usize,
-    _invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    Ok(())
 }
 
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "compute_budget_program",
                 solana_sdk::compute_budget::id(),
                 solana_compute_budget_program::process_instruction,
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
-            previously_added_builtin: Builtin::new(
-                "secp256k1_program",
-                solana_sdk::secp256k1_program::id(),
-                dummy_process_instruction,
-            ),
-            addition_feature_id: feature_set::secp256k1_program_enabled::id(),
-            removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
-            previously_added_builtin: Builtin::new(
-                "ed25519_program",
-                solana_sdk::ed25519_program::id(),
-                dummy_process_instruction,
-            ),
-            addition_feature_id: feature_set::ed25519_program_enabled::id(),
-            removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "address_lookup_table_program",
                 solana_address_lookup_table_program::id(),
                 solana_address_lookup_table_program::processor::process_instruction,
             ),
             feature_id: feature_set::versioned_tx_message_enabled::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
-                with_program_logging!(solana_zk_token_proof_program::process_instruction),
+                solana_zk_token_proof_program::process_instruction,
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
-        }),
+        },
     ]
 }
 
@@ -268,4 +174,17 @@ pub(crate) fn get() -> Builtins {
         genesis_builtins: genesis_builtins(),
         feature_transitions: builtin_feature_transitions(),
     }
+}
+
+/// Returns the addresses of all builtin programs.
+pub fn get_pubkeys() -> Vec<Pubkey> {
+    let builtins = get();
+
+    let mut pubkeys = Vec::new();
+    pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.id));
+    pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
+        BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.id),
+        BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
+    }));
+    pubkeys
 }

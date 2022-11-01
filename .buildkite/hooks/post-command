@@ -1,23 +1,6 @@
 #!/bin/bash -e
 
 #
-# Save target/ for the next CI build on this machine
-#
-if [[ -z $CARGO_TARGET_CACHE ]]; then
-  echo "+++ CARGO_TARGET_CACHE not defined" # pre-command should have defined it
-else
-  (
-    set -x
-    mkdir -p "$CARGO_TARGET_CACHE"
-    set -x
-    rsync -a --delete --link-dest="$PWD" target "$CARGO_TARGET_CACHE"
-    du -hs "$CARGO_TARGET_CACHE"
-    read -r cacheSizeInGB _ < <(du -s --block-size=1800000000 "$CARGO_TARGET_CACHE")
-    echo "--- ${cacheSizeInGB}GB: $CARGO_TARGET_CACHE"
-  )
-fi
-
-#
 # Add job_stats data point
 #
 if [[ -z $CI_BUILD_START ]]; then
@@ -35,6 +18,15 @@ else
   SUCCESS=true
   if [[ $BUILDKITE_COMMAND_EXIT_STATUS != 0 ]]; then
     SUCCESS=false
+  fi
+
+  if [[ -n $BUILDKITE && -f "results.json" ]]; then
+    # prepare result file
+    awk '/{ "type": .* }/' results.json > sanitized-results.json
+
+    # upload to datadog
+    cargo2junit > results.xml < sanitized-results.json
+    datadog-ci junit upload --service solana results.xml
   fi
 
   point_tags="pipeline=$BUILDKITE_PIPELINE_SLUG,job=$CI_LABEL,pr=$PR,success=$SUCCESS"

@@ -165,9 +165,7 @@ impl LeaderScheduleCache {
     fn slot_leader_at_no_compute(&self, slot: Slot) -> Option<Pubkey> {
         let (epoch, slot_index) = self.epoch_schedule.get_epoch_and_slot_index(slot);
         if let Some(ref fixed_schedule) = self.fixed_schedule {
-            if epoch >= fixed_schedule.start_epoch {
-                return Some(fixed_schedule.leader_schedule[slot_index]);
-            }
+            return Some(fixed_schedule.leader_schedule[slot_index]);
         }
         self.cached_schedules
             .read()
@@ -207,9 +205,7 @@ impl LeaderScheduleCache {
         bank: &Bank,
     ) -> Option<Arc<LeaderSchedule>> {
         if let Some(ref fixed_schedule) = self.fixed_schedule {
-            if epoch >= fixed_schedule.start_epoch {
-                return Some(fixed_schedule.leader_schedule.clone());
-            }
+            return Some(fixed_schedule.leader_schedule.clone());
         }
         let epoch_schedule = self.get_epoch_leader_schedule(epoch);
         if epoch_schedule.is_some() {
@@ -455,7 +451,7 @@ mod tests {
 
         // Write a shred into slot 2 that chains to slot 1,
         // but slot 1 is empty so should not be skipped
-        let (shreds, _) = make_slot_entries(2, 1, 1);
+        let (shreds, _) = make_slot_entries(2, 1, 1, /*merkle_variant:*/ true);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         assert_eq!(
             cache
@@ -466,7 +462,7 @@ mod tests {
         );
 
         // Write a shred into slot 1
-        let (shreds, _) = make_slot_entries(1, 0, 1);
+        let (shreds, _) = make_slot_entries(1, 0, 1, /*merkle_variant:*/ true);
 
         // Check that slot 1 and 2 are skipped
         blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -522,7 +518,8 @@ mod tests {
             &mint_keypair,
             &vote_account,
             &validator_identity,
-            bootstrap_validator_stake_lamports(),
+            bootstrap_validator_stake_lamports()
+                + solana_stake_program::get_minimum_delegation(&bank.feature_set),
         );
         let node_pubkey = validator_identity.pubkey();
 
