@@ -1632,21 +1632,15 @@ pub mod test {
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 0),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
+        let delta =
+            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS - QUIC_MIN_STAKED_CONCURRENT_STREAMS) as f64;
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1000, 10000),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (10_f64)) as usize
+            (delta / (10_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, 10000),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (100_f64)) as usize
-        );
-        assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 10000),
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS
-        );
-        assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1, 10000),
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+            (delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 10000),
