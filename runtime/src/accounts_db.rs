@@ -222,11 +222,6 @@ impl CurrentAncientAppendVec {
         &self.slot_and_append_vec.as_ref().unwrap().1
     }
 
-    /// note this requires that 'slot_and_append_vec' is Some
-    fn append_vec_id(&self) -> AppendVecId {
-        self.append_vec().append_vec_id()
-    }
-
     /// helper function to cleanup call to 'store_accounts_frozen'
     fn store_ancient_accounts(
         &self,
@@ -318,6 +313,7 @@ impl AncientSlotPubkeys {
 
 struct ShrinkCollect<'a> {
     original_bytes: u64,
+    /// ids of stores that were scanned during account collection
     store_ids: Vec<AppendVecId>,
     aligned_total: u64,
     unrefed_pubkeys: Vec<&'a Pubkey>,
@@ -3876,17 +3872,13 @@ impl AccountsDb {
     }
 
     /// common code from shrink and combine_ancient_slots
+    /// get rid of all original store_ids in the slot
     /// returns remaining stores
-    fn remove_old_stores_shrink(
-        &self,
-        keep_store_ids: &[AppendVecId],
-        shrink_collect: &ShrinkCollect,
-        slot: Slot,
-    ) -> usize {
+    fn remove_old_stores_shrink(&self, shrink_collect: &ShrinkCollect, slot: Slot) -> usize {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
             slot,
-            |store| !keep_store_ids.contains(&store.append_vec_id()),
+            |store| !shrink_collect.store_ids.contains(&store.append_vec_id()),
             // If all accounts are zero lamports, then we want to mark the entire OLD append vec as dirty.
             // otherwise, we'll call 'add_uncleaned_pubkeys_after_shrink' just on the unref'd keys below.
             shrink_collect.all_are_zero_lamports,
@@ -3984,9 +3976,8 @@ impl AccountsDb {
             // those here
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
-            let (remaining_stores, remove_old_stores_shrink) = measure!(
-                self.remove_old_stores_shrink(&shrink_collect.store_ids, &shrink_collect, slot)
-            );
+            let (remaining_stores, remove_old_stores_shrink) =
+                measure!(self.remove_old_stores_shrink(&shrink_collect, slot));
             remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
@@ -4520,18 +4511,13 @@ impl AccountsDb {
             }
             rewrite_elapsed.stop();
 
-            let keep_store_ids = if slot == current_ancient.slot() {
-                // this slot became an ancient append vec, so we want to keep the append vec storage for the slot
-                // and remove the old, normal append vec
-                vec![current_ancient.append_vec_id()]
-            } else {
+            if slot != current_ancient.slot() {
                 // all append vecs in this slot have been combined into an ancient append vec
                 dropped_roots.push(slot);
-                Vec::default()
-            };
+            }
 
             let (_remaining_stores, remove_old_stores_shrink) =
-                measure!(self.remove_old_stores_shrink(&keep_store_ids, &shrink_collect, slot));
+                measure!(self.remove_old_stores_shrink(&shrink_collect, slot));
 
             // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
@@ -9836,6 +9822,13 @@ pub mod tests {
         }
         fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS
+        }
+    }
+
+    impl CurrentAncientAppendVec {
+        /// note this requires that 'slot_and_append_vec' is Some
+        fn append_vec_id(&self) -> AppendVecId {
+            self.append_vec().append_vec_id()
         }
     }
 
@@ -17282,13 +17275,6 @@ pub mod tests {
     fn test_current_ancient_slot_assert() {
         let current_ancient = CurrentAncientAppendVec::default();
         _ = current_ancient.slot();
-    }
-
-    #[test]
-    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
-    fn test_current_ancient_append_vec_id_assert() {
-        let current_ancient = CurrentAncientAppendVec::default();
-        _ = current_ancient.append_vec_id();
     }
 
     #[test]
