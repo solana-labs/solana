@@ -17568,6 +17568,55 @@ pub mod tests {
     }
 
     #[test]
+    fn test_handle_dropped_roots_for_ancient() {
+        solana_logger::setup();
+        let db = AccountsDb::new_single_for_tests();
+        db.handle_dropped_roots_for_ancient(Vec::default());
+        let slot0 = 0;
+        let dropped_roots = vec![slot0];
+        db.bank_hashes
+            .write()
+            .unwrap()
+            .insert(slot0, BankHashInfo::default());
+        db.storage.map.insert(slot0, Arc::default());
+        assert!(!db.bank_hashes.read().unwrap().is_empty());
+        db.accounts_index.add_root(slot0, false);
+        assert!(db.accounts_index.is_uncleaned_root(slot0));
+        assert!(db.accounts_index.is_alive_root(slot0));
+        db.handle_dropped_roots_for_ancient(dropped_roots);
+        assert!(db.bank_hashes.read().unwrap().is_empty());
+        assert!(!db.accounts_index.is_uncleaned_root(slot0));
+        assert!(!db.accounts_index.is_alive_root(slot0));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "assertion failed: self.storage.map.remove(slot).unwrap().1.read().unwrap().is_empty()"
+    )]
+    fn test_handle_dropped_roots_for_ancient_assert() {
+        solana_logger::setup();
+        let common_store_path = Path::new("");
+        let store_file_size = 2 * PAGE_SIZE;
+        let entry = Arc::new(AccountStorageEntry::new(
+            common_store_path,
+            0,
+            1,
+            store_file_size,
+        ));
+        let db = AccountsDb::new_single_for_tests();
+        let slot0 = 0;
+        let dropped_roots = vec![slot0];
+        db.bank_hashes
+            .write()
+            .unwrap()
+            .insert(slot0, BankHashInfo::default());
+        let mut hm = HashMap::default();
+        hm.insert(0, entry);
+        db.storage.map.insert(slot0, Arc::new(RwLock::new(hm)));
+        db.handle_dropped_roots_for_ancient(dropped_roots);
+    }
+
+    #[test]
     fn test_should_move_to_ancient_append_vec() {
         solana_logger::setup();
         let db = AccountsDb::new_single_for_tests();
