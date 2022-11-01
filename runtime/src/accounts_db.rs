@@ -4278,7 +4278,11 @@ impl AccountsDb {
             return;
         }
 
-        self.combine_ancient_slots(self.get_sorted_potential_ancient_slots());
+        let can_randomly_shrink = true;
+        self.combine_ancient_slots(
+            self.get_sorted_potential_ancient_slots(),
+            can_randomly_shrink,
+        );
     }
 
     /// create and return new ancient append vec
@@ -4353,8 +4357,8 @@ impl AccountsDb {
         &self,
         slot: Slot,
         current_ancient: &mut CurrentAncientAppendVec,
+        can_randomly_shrink: bool,
     ) -> Option<SnapshotStorage> {
-        let can_randomly_shrink = true;
         self.get_storages_for_slot(slot).and_then(|all_storages| {
             self.should_move_to_ancient_append_vec(
                 &all_storages,
@@ -4415,8 +4419,8 @@ impl AccountsDb {
     }
 
     /// Combine all account data from storages in 'sorted_slots' into ancient append vecs.
-    /// This keeps us from accumulating append vecs in slots older than an epoch.
-    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>) {
+    /// This keeps us from accumulating append vecs for each slot older than an epoch.
+    fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, can_randomly_shrink: bool) {
         if sorted_slots.is_empty() {
             return;
         }
@@ -4431,14 +4435,17 @@ impl AccountsDb {
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
-            let old_storages =
-                match self.get_storages_to_move_to_ancient_append_vec(slot, &mut current_ancient) {
-                    Some(old_storages) => old_storages,
-                    None => {
-                        // nothing to squash for this slot
-                        continue;
-                    }
-                };
+            let old_storages = match self.get_storages_to_move_to_ancient_append_vec(
+                slot,
+                &mut current_ancient,
+                can_randomly_shrink,
+            ) {
+                Some(old_storages) => old_storages,
+                None => {
+                    // nothing to squash for this slot
+                    continue;
+                }
+            };
 
             if guard.is_none() {
                 // we are now doing interesting work in squashing ancient
@@ -17559,6 +17566,16 @@ pub mod tests {
         }
     }
 
+    const CAN_RANDOMLY_SHRINK_FALSE: bool = false;
+
+    #[test]
+    fn test_combine_ancient_slots_empty() {
+        solana_logger::setup();
+        let db = AccountsDb::new_single_for_tests();
+        // empty slots
+        db.combine_ancient_slots(Vec::default(), CAN_RANDOMLY_SHRINK_FALSE);
+    }
+
     #[test]
     fn test_should_move_to_ancient_append_vec() {
         solana_logger::setup();
@@ -17574,8 +17591,12 @@ pub mod tests {
             .unwrap();
         let mut current_ancient = CurrentAncientAppendVec::default();
 
-        let should_move =
-            db.should_move_to_ancient_append_vec(&storages, &mut current_ancient, slot5, false);
+        let should_move = db.should_move_to_ancient_append_vec(
+            &storages,
+            &mut current_ancient,
+            slot5,
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
         assert!(current_ancient.is_none());
         // slot is not ancient, so it is good to move
         assert!(should_move);
@@ -17583,14 +17604,22 @@ pub mod tests {
         // try 2 storages in 1 slot, should not be able to move
         current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storages[0])); // just 'some', contents don't matter
         let two_storages = vec![storages[0].clone(), storages[0].clone()];
-        let should_move =
-            db.should_move_to_ancient_append_vec(&two_storages, &mut current_ancient, slot5, false);
+        let should_move = db.should_move_to_ancient_append_vec(
+            &two_storages,
+            &mut current_ancient,
+            slot5,
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
         assert!(current_ancient.is_none());
         assert!(!should_move);
 
         current_ancient = CurrentAncientAppendVec::new(slot5, Arc::clone(&storages[0])); // just 'some', contents don't matter
-        let should_move =
-            db.should_move_to_ancient_append_vec(&storages, &mut current_ancient, slot5, false);
+        let should_move = db.should_move_to_ancient_append_vec(
+            &storages,
+            &mut current_ancient,
+            slot5,
+            CAN_RANDOMLY_SHRINK_FALSE,
+        );
         // should have kept the same 'current_ancient'
         assert_eq!(current_ancient.slot(), slot5);
         assert_eq!(current_ancient.append_vec().slot(), slot5);
@@ -17607,7 +17636,7 @@ pub mod tests {
             &vec![ancient1.clone()],
             &mut current_ancient,
             slot1_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
         assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
@@ -17623,7 +17652,7 @@ pub mod tests {
             &vec![ancient2.clone()],
             &mut current_ancient,
             slot2_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
         assert_eq!(current_ancient.append_vec_id(), ancient2.append_vec_id());
@@ -17638,7 +17667,7 @@ pub mod tests {
             &vec![full_ancient_3.clone()],
             &mut current_ancient,
             slot3_full_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
         assert_eq!(
@@ -17653,7 +17682,7 @@ pub mod tests {
             &vec![full_ancient_3.clone()],
             &mut current_ancient,
             slot3_full_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(!should_move);
         assert_eq!(
@@ -17671,7 +17700,7 @@ pub mod tests {
             &vec![full_ancient_3.clone()],
             &mut current_ancient,
             slot3_full_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(should_move);
         assert!(current_ancient.is_none());
@@ -17683,7 +17712,7 @@ pub mod tests {
             &vec![full_ancient_3],
             &mut current_ancient,
             slot3_full_ancient,
-            false,
+            CAN_RANDOMLY_SHRINK_FALSE,
         );
         assert!(should_move);
         assert_eq!(current_ancient.append_vec_id(), ancient1.append_vec_id());
