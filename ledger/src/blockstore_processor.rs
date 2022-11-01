@@ -1493,7 +1493,16 @@ fn load_frozen_forks(
             )
             .is_err()
             {
+                // Remove the bank we had just inserted into BankForks
                 assert!(bank_forks.write().unwrap().remove(bank.slot()).is_some());
+                // Clear the accounts for this bank
+                let root_bank = bank_forks.read().unwrap().root_bank();
+                root_bank.remove_unrooted_slots(&vec![(bank.slot(), bank.bank_id())]);
+                // TODO: think we want clear_slot_signatures() but not positive
+                // Clear the slot signatures from status cache for this slot
+                // root_bank.clear_slot_signatures(bank.slot());
+                // Bank::drop() can now safely run without racing Bank::remove_unrooted_slots()
+                drop(bank);
                 continue;
             }
             txs += progress.num_txs;
