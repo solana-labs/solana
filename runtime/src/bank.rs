@@ -4892,7 +4892,6 @@ impl Bank {
             &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
-            self.preserve_rent_epoch_for_rent_exempt_accounts(),
             self.include_slot_in_hash(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
@@ -5321,15 +5320,12 @@ impl Bank {
         let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
-        let preserve_rent_epoch_for_rent_exempt_accounts =
-            self.preserve_rent_epoch_for_rent_exempt_accounts();
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                    preserve_rent_epoch_for_rent_exempt_accounts,
                 ));
             time_collecting_rent_us += measure.as_us();
 
@@ -7411,11 +7407,6 @@ impl Bank {
             .is_active(&feature_set::send_to_tpu_vote_port::id())
     }
 
-    fn preserve_rent_epoch_for_rent_exempt_accounts(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
-    }
-
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }
@@ -8415,7 +8406,6 @@ pub(crate) mod tests {
                 &keypairs[4].pubkey(),
                 &mut account_copy,
                 None,
-                true, // preserve_rent_epoch_for_rent_exempt_accounts
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
@@ -14508,13 +14498,13 @@ pub(crate) mod tests {
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4u8bxZRLYdQBkWRBwmpcwcQVMCJoEpzY7hCuAzxr3kCe"
+                    "Ddk6ouAvSSA1U3Cw6BoKdM5v5LdRc9ShruGDzci9fKbY"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4c5F8UbcDD8FM7qXcfv6BPPo6nHNYJQmN5gHiCMTdEzX"
+                    "ANodC5vnedLWqeAyhcoErzR3ptNansb5YX6UTQ9cfP7S"
                 );
                 break;
             }
@@ -19864,7 +19854,6 @@ pub(crate) mod tests {
                 &keypair.pubkey(),
                 &mut account,
                 None,
-                true, // preserve_rent_epoch_for_rent_exempt_accounts
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }

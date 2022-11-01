@@ -33,7 +33,7 @@ use {
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+        clock::{BankId, Slot},
         feature_set::{
             self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
             FeatureSet,
@@ -272,8 +272,6 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
-            let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
-                .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -301,7 +299,6 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
-                                                preserve_rent_epoch_for_rent_exempt_accounts,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -1210,7 +1207,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        preserve_rent_epoch_for_rent_exempt_accounts: bool,
         include_slot_in_hash: IncludeSlotInHash,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
@@ -1220,7 +1216,6 @@ impl Accounts {
             rent_collector,
             durable_nonce,
             lamports_per_signature,
-            preserve_rent_epoch_for_rent_exempt_accounts,
         );
         self.accounts_db.store_cached(
             (slot, &accounts_to_store[..], include_slot_in_hash),
@@ -1246,10 +1241,9 @@ impl Accounts {
         txs: &'a [SanitizedTransaction],
         execution_results: &'a [TransactionExecutionResult],
         load_results: &'a mut [TransactionLoadResult],
-        rent_collector: &RentCollector,
+        _rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        preserve_rent_epoch_for_rent_exempt_accounts: bool,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
         Vec<Option<&'a Signature>>,
@@ -1303,24 +1297,6 @@ impl Accounts {
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
-                        if !preserve_rent_epoch_for_rent_exempt_accounts
-                            && account.rent_epoch() == INITIAL_RENT_EPOCH
-                        {
-                            let rent = rent_collector
-                                .collect_from_created_account(
-                                    address,
-                                    account,
-                                    preserve_rent_epoch_for_rent_exempt_accounts,
-                                )
-                                .rent_amount;
-                            loaded_transaction.rent += rent;
-                            loaded_transaction.rent_debits.insert(
-                                address,
-                                rent,
-                                account.lamports(),
-                            );
-                        }
-
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
                         signatures.push(Some(tx.signature()));
@@ -3052,7 +3028,6 @@ mod tests {
             &rent_collector,
             &DurableNonce::default(),
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -3536,7 +3511,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3651,7 +3625,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
