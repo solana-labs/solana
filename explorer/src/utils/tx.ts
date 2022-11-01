@@ -99,6 +99,15 @@ export enum PROGRAM_NAMES {
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
+  CLASH_PLATFORM = "Clash Platform",
+  CLASH_PVP_WALLET_1 = "Clash PvP Wallet 1",
+  CLASH_REWARDS_WALLET_1 = "Clash Rewards Wallet 1",
+  CLASH_TOURNAMENT_WALLET_1 = "Clash Tournament Wallet 1",
+  CLASH_AUTHORITY_WALLET = "Clash Authority Wallet",
+  CLASH_GAS_FEE = "Clash Gas Fee",
+  CLASH_PVP_WALLET_2 = "Clash PvP Wallet 2",
+  CLASH_REWARDS_WALLET_2 = "Clash Rewards Wallet 2",
+  CLASH_TOURNAMENT_WALLET_2 = "Clash Tournament Wallet 2",
 }
 
 const ALL_CLUSTERS = [
@@ -413,6 +422,42 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
+    deployments: [Cluster.MainnetBeta],
+  },
+  Auc6pav58pHNg91c9fJqLwodaya6yEaJuzGtNHnPC1eH: {
+    name: PROGRAM_NAMES.CLASH_PLATFORM,
+    deployments: [Cluster.MainnetBeta],
+  },
+  95qzVfqw7nWSSwP2K38D7LFLVNNz2M1XrA5VfZ1yidsk: {
+    name: PROGRAM_NAMES.CLASH_PVP_WALLET_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  55PbwE7eMHH2J5KWDCW7bejiqVnz5x3cUE3tkQS4QT9d: {
+    name: PROGRAM_NAMES.CLASH_REWARDS_WALLET_1,
+    deployments: [Cluster.MainnetBeta],
+  },
+  3osPrnbddUNpa1qStdi4AqESCzrMWvHERj9Hc8vGZW45: {
+    name: PROGRAM_NAMES.CLASH_TOURNAMENT_WALLET_1,
+    deployments: [Cluster.MainnetBeta],
+  }, 
+  FP3DDXybsDFm3visceG3BTLEJGu6rhNy3pcxzzvGhPWt: {
+    name: PROGRAM_NAMES.CLASH_AUTHORITY_WALLET,
+    deployments: [Cluster.MainnetBeta],
+  },
+  AtFwFRqDpSmxSHfR7HqEbg5HmzWPWEUZh8XDKgRPisXx: {
+    name: PROGRAM_NAMES.CLASH_GAS_FEE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  9pe6KuqEantbC8BexLuW6QniNNdNFGq6GSoE1nbR5FXM: {
+    name: PROGRAM_NAMES.CLASH_PVP_WALLET_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  pzRYmwdmE9ZGhfSbruGxSX2HrvutStmmt7TvAC425cG: {
+    name: PROGRAM_NAMES.CLASH_REWARDS_WALLET_2,
+    deployments: [Cluster.MainnetBeta],
+  },
+  AywfAy2ciNtoyrqPmCjHfNZo18gw2uqk2emQrjG6S1NE: {
+    name: PROGRAM_NAMES.CLASH_TOURNAMENT_WALLET_2,
     deployments: [Cluster.MainnetBeta],
   },
 };
