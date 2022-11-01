@@ -5,10 +5,12 @@ on:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
   pull_request:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
 
 jobs:
   # needed for grouping check-web3 strategies into one check for mergify
