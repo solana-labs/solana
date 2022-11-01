@@ -25,13 +25,13 @@ jobs:
         id: check
         run: |
           source ci/env.sh
-          echo "::set-output name=tag::$CI_TAG"
+          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"
-          echo "::set-output name=channel::$CHANNEL"
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
 
       - name: Get specific changed files
         id: changed-files-specific
-        uses: tj-actions/changed-files@v29.0.7
+        uses: tj-actions/changed-files@v34
         with:
           files: |
             .github/workflows/docs.yml
@@ -43,7 +43,7 @@ jobs:
           echo "tag: ${{ steps.check.outputs.tag }}"
           echo "channel: ${{ steps.check.outputs.channel }}"
           echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
-          echo "::set-output name=need_to_build::${{
+          echo "need_to_build=${{
             steps.check.outputs.tag != ''
             ||
             (
@@ -51,7 +51,7 @@ jobs:
               &&
               steps.changed-files-specific.outputs.any_changed != ''
             )
-          }}"
+          }}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Setup Node

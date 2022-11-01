@@ -50,7 +50,7 @@ A fee could be calculated based on:
      requested amount.  After processing, the actual number of units consumed
      will be known, and the payer will be refunded the difference, so the payer
      only pays for what they used.  Builtin programs will have a fixed cost
-     while BPF program's cost will be measured at runtime.
+     while SBF program's cost will be measured at runtime.
 6. Precompiled programs
    - Precompiled programs are performing compute-intensive operations.  The work
      incurred by a precompiled program is predictable based on the instruction's

@@ -34,7 +34,7 @@ impl Default for RentCollector {
 
 /// when rent is collected for this account, this is the action to apply to the account
 #[derive(Debug)]
-pub(crate) enum RentResult {
+enum RentResult {
     /// maybe collect rent later, leave account alone
     LeaveAloneNoRent,
     /// collect rent
@@ -159,7 +159,7 @@ impl RentCollector {
 
     /// determine what should happen to collect rent from this account
     #[must_use]
-    pub(crate) fn calculate_rent_result(
+    fn calculate_rent_result(
         &self,
         address: &Pubkey,
         account: &impl ReadableAccount,

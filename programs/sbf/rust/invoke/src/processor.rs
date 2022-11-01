@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that issues a cross-program-invocation
+//! Example Rust-based SBF program that issues a cross-program-invocation
 
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]

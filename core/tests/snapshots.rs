@@ -24,6 +24,7 @@ use {
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
+        snapshot_hash::SnapshotHash,
         snapshot_package::{
             AccountsPackage, AccountsPackageType, PendingSnapshotPackage, SnapshotPackage,
             SnapshotType,
@@ -149,7 +150,7 @@ fn restore_from_snapshot(
     let full_snapshot_archive_path = snapshot_utils::build_full_snapshot_archive_path(
         full_snapshot_archives_dir,
         old_last_bank.slot(),
-        &old_last_bank.get_accounts_hash(),
+        &old_last_bank.get_snapshot_hash(),
         ArchiveFormat::TarBzip2,
     );
     let full_snapshot_archive_info =
@@ -249,7 +250,7 @@ fn run_bank_forks_snapshot_n<F>(
         if slot % set_root_interval == 0 || slot == last_slot {
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
         }
     }
@@ -279,7 +280,6 @@ fn run_bank_forks_snapshot_n<F>(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
-        None,
         None,
     );
     let snapshot_package = SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
@@ -468,7 +468,7 @@ fn test_concurrent_snapshot_packaging(
                 slot,
                 // this needs to match the hash value that we reserialize with later. It is complicated, so just use default.
                 // This hash value is just used to build the file name. Since this is mocked up test code, it is sufficient to pass default here.
-                &Hash::default(),
+                &SnapshotHash(Hash::default()),
                 ArchiveFormat::TarBzip2,
             ));
         }
@@ -518,7 +518,6 @@ fn test_concurrent_snapshot_packaging(
                 accounts_package.slot,
                 &Hash::default(),
                 None,
-                None,
             );
             let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
             pending_snapshot_package
@@ -562,7 +561,6 @@ fn test_concurrent_snapshot_packaging(
         saved_snapshots_dir.path(),
         saved_slot,
         &Hash::default(),
-        None,
         None,
     );
 
@@ -765,7 +763,7 @@ fn test_bank_forks_incremental_snapshot(
         if slot % SET_ROOT_INTERVAL == 0 {
             // set_root sends a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
                 false,
                 false,
@@ -1056,7 +1054,7 @@ fn test_snapshots_with_background_services(
                 .write()
                 .unwrap()
                 .set_root(slot, &abs_request_sender, None);
-            bank.update_accounts_hash();
+            bank.update_accounts_hash_for_tests();
         }
 
         // Sleep for a second when making a snapshot archive so the background services get a
@@ -1113,10 +1111,10 @@ fn test_snapshots_with_background_services(
             .as_ref()
     );
 
-    // Stop the background services
+    // Stop the background services, ignore any errors
     info!("Shutting down background services...");
     exit.store(true, Ordering::Relaxed);
-    accounts_background_service.join().unwrap();
-    accounts_hash_verifier.join().unwrap();
-    snapshot_packager_service.join().unwrap();
+    _ = accounts_background_service.join();
+    _ = accounts_hash_verifier.join();
+    _ = snapshot_packager_service.join();
 }

@@ -363,6 +363,14 @@ function NonFungibleTokenMintAccountCard({
             </td>
           </tr>
         )}
+        {mintInfo.freezeAuthority && (
+          <tr>
+            <td>Freeze Authority</td>
+            <td className="text-lg-end">
+              <Address pubkey={mintInfo.freezeAuthority} alignRight link />
+            </td>
+          </tr>
+        )}
         <tr>
           <td>Update Authority</td>
           <td className="text-lg-end">

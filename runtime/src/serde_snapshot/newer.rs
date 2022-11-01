@@ -347,7 +347,6 @@ impl<'a> TypeContext<'a> for Context {
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
-        epoch_accounts_hash: Option<&Hash>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -355,12 +354,12 @@ impl<'a> TypeContext<'a> for Context {
     {
         let (bank_fields, mut accounts_db_fields) =
             Self::deserialize_bank_fields(stream_reader).unwrap();
-        accounts_db_fields.3.snapshot_hash = *accounts_hash;
+        accounts_db_fields.3.accounts_hash = *accounts_hash;
         let mut rhs = bank_fields;
         let blockhash_queue = RwLock::new(std::mem::take(&mut rhs.blockhash_queue));
         let hard_forks = RwLock::new(std::mem::take(&mut rhs.hard_forks));
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
-        let epoch_accounts_hash = epoch_accounts_hash.or(rhs.epoch_accounts_hash.as_ref());
+        let epoch_accounts_hash = rhs.epoch_accounts_hash.as_ref();
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,

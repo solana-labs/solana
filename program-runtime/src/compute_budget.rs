@@ -48,9 +48,9 @@ pub struct ComputeBudget {
     pub sha256_byte_cost: u64,
     /// Maximum number of slices hashed per syscall
     pub sha256_max_slices: u64,
-    /// Maximum BPF to BPF call depth
+    /// Maximum SBF to BPF call depth
     pub max_call_depth: usize,
-    /// Size of a stack frame in bytes, must match the size specified in the LLVM BPF backend
+    /// Size of a stack frame in bytes, must match the size specified in the LLVM SBF backend
     pub stack_frame_size: usize,
     /// Number of compute units consumed by logging a `Pubkey`
     pub log_pubkey_units: u64,

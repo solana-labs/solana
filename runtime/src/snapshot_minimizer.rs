@@ -365,7 +365,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 write_versions.push(alive_account.account.meta.write_version);
             }
 
-            let (new_storage, _time) = self.accounts_db().get_store_for_shrink(slot, aligned_total);
+            let new_storage = self.accounts_db().get_store_for_shrink(slot, aligned_total);
             self.accounts_db().store_accounts_frozen(
                 (
                     slot,
@@ -385,12 +385,15 @@ impl<'a> SnapshotMinimizer<'a> {
             .iter()
             .map(|storage| storage.append_vec_id())
             .collect();
-        self.accounts_db().mark_dirty_dead_stores(
+        let (_, mut dead_storages_this_time) = self.accounts_db().mark_dirty_dead_stores(
             slot,
-            &mut dead_storages.lock().unwrap(),
             |store| !append_vec_set.contains(&store.append_vec_id()),
             true, // add_dirty_stores
         );
+        dead_storages
+            .lock()
+            .unwrap()
+            .append(&mut dead_storages_this_time);
     }
 
     /// Purge dead slots from storage and cache

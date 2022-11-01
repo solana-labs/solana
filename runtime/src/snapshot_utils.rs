@@ -1,13 +1,17 @@
 use {
     crate::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorage, SnapshotStorages,
+            AccountShrinkThreshold, AccountStorageMap, AccountsDbConfig, AtomicAppendVecId,
+            CalcAccountsHashDataSource, SnapshotStorage, SnapshotStorages,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, BankFieldsToDeserialize, BankSlotDelta},
         builtins::Builtins,
-        hardened_unpack::{unpack_snapshot, ParallelSelector, UnpackError, UnpackedAppendVecMap},
+        hardened_unpack::{
+            streaming_unpack_snapshot, unpack_snapshot, ParallelSelector, UnpackError,
+            UnpackedAppendVecMap,
+        },
         runtime_config::RuntimeConfig,
         serde_snapshot::{
             bank_from_streams, bank_to_stream, fields_from_streams, SerdeStyle, SnapshotStreams,
@@ -16,12 +20,16 @@ use {
         snapshot_archive_info::{
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
+        snapshot_hash::SnapshotHash,
         snapshot_package::{AccountsPackage, AccountsPackageType, SnapshotPackage, SnapshotType},
-        snapshot_utils::snapshot_storage_rebuilder::SnapshotStorageRebuilder,
+        snapshot_utils::snapshot_storage_rebuilder::{
+            RebuiltSnapshotStorage, SnapshotStorageRebuilder,
+        },
         status_cache,
     },
     bincode::{config::Options, serialize_into},
     bzip2::bufread::BzDecoder,
+    crossbeam_channel::Sender,
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
@@ -48,6 +56,7 @@ use {
             atomic::{AtomicBool, AtomicU32},
             Arc,
         },
+        thread::{Builder, JoinHandle},
     },
     tar::{self, Archive},
     tempfile::TempDir,
@@ -57,15 +66,6 @@ use {
 mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
-use {
-    crate::{
-        accounts_db::{AccountStorageMap, AtomicAppendVecId},
-        hardened_unpack::streaming_unpack_snapshot,
-        snapshot_utils::snapshot_storage_rebuilder::RebuiltSnapshotStorage,
-    },
-    crossbeam_channel::Sender,
-    std::thread::{Builder, JoinHandle},
-};
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
@@ -244,7 +244,7 @@ pub enum SnapshotError {
     NoSnapshotArchives,
 
     #[error("snapshot has mismatch: deserialized bank: {:?}, snapshot archive info: {:?}", .0, .1)]
-    MismatchedSlotHash((Slot, Hash), (Slot, Hash)),
+    MismatchedSlotHash((Slot, SnapshotHash), (Slot, SnapshotHash)),
 
     #[error("snapshot slot deltas are invalid: {0}")]
     VerifySlotDeltas(#[from] VerifySlotDeltasError),
@@ -1011,6 +1011,18 @@ pub fn bank_from_snapshot_archives(
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
 
+    verify_bank_against_expected_slot_hash(
+        &bank,
+        incremental_snapshot_archive_info.as_ref().map_or(
+            full_snapshot_archive_info.slot(),
+            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
+        ),
+        incremental_snapshot_archive_info.as_ref().map_or(
+            *full_snapshot_archive_info.hash(),
+            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
+        ),
+    )?;
+
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
@@ -1127,18 +1139,6 @@ pub fn bank_from_latest_snapshot_archives(
         ),
     );
 
-    verify_bank_against_expected_slot_hash(
-        &bank,
-        incremental_snapshot_archive_info.as_ref().map_or(
-            full_snapshot_archive_info.slot(),
-            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
-        ),
-        incremental_snapshot_archive_info.as_ref().map_or(
-            *full_snapshot_archive_info.hash(),
-            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
-        ),
-    )?;
-
     Ok((
         bank,
         full_snapshot_archive_info,
@@ -1151,10 +1151,10 @@ pub fn bank_from_latest_snapshot_archives(
 fn verify_bank_against_expected_slot_hash(
     bank: &Bank,
     expected_slot: Slot,
-    expected_hash: Hash,
+    expected_hash: SnapshotHash,
 ) -> Result<()> {
     let bank_slot = bank.slot();
-    let bank_hash = bank.get_accounts_hash();
+    let bank_hash = bank.get_snapshot_hash();
 
     if bank_slot != expected_slot || bank_hash != expected_hash {
         return Err(SnapshotError::MismatchedSlotHash(
@@ -1356,13 +1356,13 @@ pub fn build_snapshot_archives_remote_dir(snapshot_archives_dir: impl AsRef<Path
 pub fn build_full_snapshot_archive_path(
     full_snapshot_archives_dir: impl AsRef<Path>,
     slot: Slot,
-    hash: &Hash,
+    hash: &SnapshotHash,
     archive_format: ArchiveFormat,
 ) -> PathBuf {
     full_snapshot_archives_dir.as_ref().join(format!(
         "snapshot-{}-{}.{}",
         slot,
-        hash,
+        hash.0,
         archive_format.extension(),
     ))
 }
@@ -1374,14 +1374,14 @@ pub fn build_incremental_snapshot_archive_path(
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     base_slot: Slot,
     slot: Slot,
-    hash: &Hash,
+    hash: &SnapshotHash,
     archive_format: ArchiveFormat,
 ) -> PathBuf {
     incremental_snapshot_archives_dir.as_ref().join(format!(
         "incremental-snapshot-{}-{}-{}.{}",
         base_slot,
         slot,
-        hash,
+        hash.0,
         archive_format.extension(),
     ))
 }
@@ -1389,7 +1389,7 @@ pub fn build_incremental_snapshot_archive_path(
 /// Parse a full snapshot archive filename into its Slot, Hash, and Archive Format
 pub(crate) fn parse_full_snapshot_archive_filename(
     archive_filename: &str,
-) -> Result<(Slot, Hash, ArchiveFormat)> {
+) -> Result<(Slot, SnapshotHash, ArchiveFormat)> {
     lazy_static! {
         static ref RE: Regex = Regex::new(FULL_SNAPSHOT_ARCHIVE_FILENAME_REGEX).unwrap();
     }
@@ -1409,7 +1409,7 @@ pub(crate) fn parse_full_snapshot_archive_filename(
                 .map(|x| x.as_str().parse::<ArchiveFormat>())?
                 .ok()?;
 
-            Some((slot, hash, archive_format))
+            Some((slot, SnapshotHash(hash), archive_format))
         })
     };
 
@@ -1421,7 +1421,7 @@ pub(crate) fn parse_full_snapshot_archive_filename(
 /// Parse an incremental snapshot archive filename into its base Slot, actual Slot, Hash, and Archive Format
 pub(crate) fn parse_incremental_snapshot_archive_filename(
     archive_filename: &str,
-) -> Result<(Slot, Slot, Hash, ArchiveFormat)> {
+) -> Result<(Slot, Slot, SnapshotHash, ArchiveFormat)> {
     lazy_static! {
         static ref RE: Regex = Regex::new(INCREMENTAL_SNAPSHOT_ARCHIVE_FILENAME_REGEX).unwrap();
     }
@@ -1445,7 +1445,7 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
                 .map(|x| x.as_str().parse::<ArchiveFormat>())?
                 .ok()?;
 
-            Some((base_slot, slot, hash, archive_format))
+            Some((base_slot, slot, SnapshotHash(hash), archive_format))
         })
     };
 
@@ -2171,7 +2171,7 @@ pub fn bank_to_full_snapshot_archive(
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
     bank.clean_accounts(Some(bank.slot()));
-    bank.update_accounts_hash();
+    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
@@ -2218,7 +2218,7 @@ pub fn bank_to_incremental_snapshot_archive(
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
     bank.clean_accounts(Some(full_snapshot_slot));
-    bank.update_accounts_hash();
+    bank.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, false);
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
@@ -2275,7 +2275,6 @@ pub fn package_and_archive_full_snapshot(
         accounts_package.slot,
         &bank.get_accounts_hash(),
         None,
-        None, // todo: this needs to be passed through
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2329,7 +2328,6 @@ pub fn package_and_archive_incremental_snapshot(
         accounts_package.slot,
         &bank.get_accounts_hash(),
         None,
-        None, // todo: this needs to be passed through
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2543,7 +2541,7 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (42, Hash::default(), ArchiveFormat::TarBzip2)
+            (42, SnapshotHash(Hash::default()), ArchiveFormat::TarBzip2)
         );
         assert_eq!(
             parse_full_snapshot_archive_filename(&format!(
@@ -2551,12 +2549,12 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (43, Hash::default(), ArchiveFormat::TarZstd)
+            (43, SnapshotHash(Hash::default()), ArchiveFormat::TarZstd)
         );
         assert_eq!(
             parse_full_snapshot_archive_filename(&format!("snapshot-44-{}.tar", Hash::default()))
                 .unwrap(),
-            (44, Hash::default(), ArchiveFormat::Tar)
+            (44, SnapshotHash(Hash::default()), ArchiveFormat::Tar)
         );
         assert_eq!(
             parse_full_snapshot_archive_filename(&format!(
@@ -2564,7 +2562,7 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (45, Hash::default(), ArchiveFormat::TarLz4)
+            (45, SnapshotHash(Hash::default()), ArchiveFormat::TarLz4)
         );
 
         assert!(parse_full_snapshot_archive_filename("invalid").is_err());
@@ -2616,7 +2614,12 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (42, 123, Hash::default(), ArchiveFormat::TarBzip2)
+            (
+                42,
+                123,
+                SnapshotHash(Hash::default()),
+                ArchiveFormat::TarBzip2
+            )
         );
         assert_eq!(
             parse_incremental_snapshot_archive_filename(&format!(
@@ -2624,7 +2627,12 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (43, 234, Hash::default(), ArchiveFormat::TarZstd)
+            (
+                43,
+                234,
+                SnapshotHash(Hash::default()),
+                ArchiveFormat::TarZstd
+            )
         );
         assert_eq!(
             parse_incremental_snapshot_archive_filename(&format!(
@@ -2632,7 +2640,7 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (44, 345, Hash::default(), ArchiveFormat::Tar)
+            (44, 345, SnapshotHash(Hash::default()), ArchiveFormat::Tar)
         );
         assert_eq!(
             parse_incremental_snapshot_archive_filename(&format!(
@@ -2640,7 +2648,12 @@ mod tests {
                 Hash::default()
             ))
             .unwrap(),
-            (45, 456, Hash::default(), ArchiveFormat::TarLz4)
+            (
+                45,
+                456,
+                SnapshotHash(Hash::default()),
+                ArchiveFormat::TarLz4
+            )
         );
 
         assert!(parse_incremental_snapshot_archive_filename("invalid").is_err());

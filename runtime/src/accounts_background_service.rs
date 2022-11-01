@@ -1,10 +1,11 @@
-// Service to clean up dead slots in accounts_db
-//
-// This can be expensive since we have to walk the append vecs being cleaned up.
+//! Service to clean up dead slots in accounts_db
+//!
+//! This can be expensive since we have to walk the append vecs being cleaned up.
 
 mod stats;
 use {
     crate::{
+        accounts_db::CalcAccountsHashDataSource,
         accounts_hash::CalcAccountsHashConfig,
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
@@ -113,6 +114,10 @@ pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
     pub request_type: SnapshotRequestType,
+
+    /// The instant this request was send to the queue.
+    /// Used to track how long requests wait before processing.
+    pub enqueued: Instant,
 }
 
 impl Debug for SnapshotRequest {
@@ -169,7 +174,12 @@ impl SnapshotRequestHandler {
                 "num-re-enqueued-requests",
                 num_re_enqueued_requests as i64,
                 i64
-            )
+            ),
+            (
+                "enqueued-time-us",
+                snapshot_request.enqueued.elapsed().as_micros() as i64,
+                i64
+            ),
         );
 
         Some(self.handle_snapshot_request(
@@ -273,14 +283,12 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type,
+            request_type: _,
+            enqueued: _,
         } = snapshot_request;
 
-        // we should not rely on the state of this validator until startup verification is complete (unless handling an EAH request)
-        assert!(
-            snapshot_root_bank.is_startup_verification_complete()
-                || request_type == SnapshotRequestType::EpochAccountsHash
-        );
+        // we should not rely on the state of this validator until startup verification is complete
+        assert!(snapshot_root_bank.is_startup_verification_complete());
 
         if accounts_package_type == AccountsPackageType::Snapshot(SnapshotType::FullSnapshot) {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
@@ -288,8 +296,13 @@ impl SnapshotRequestHandler {
 
         let previous_hash = if test_hash_calculation {
             // We have to use the index version here.
-            // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
-            snapshot_root_bank.update_accounts_hash_with_index_option(true, false, false)
+            // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
+            // This comment is out of date and can be re-evaluated.
+            snapshot_root_bank.update_accounts_hash(
+                CalcAccountsHashDataSource::IndexForTests,
+                false,
+                false,
+            )
         } else {
             Hash::default()
         };
@@ -323,14 +336,13 @@ impl SnapshotRequestHandler {
         flush_accounts_cache_time.stop();
 
         let hash_for_testing = if test_hash_calculation {
-            let use_index_hash_calculation = false;
             let check_hash = false;
 
             let (this_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
-                .calculate_accounts_hash_helper(
-                    use_index_hash_calculation,
+                .calculate_accounts_hash(
+                    CalcAccountsHashDataSource::Storages,
                     snapshot_root_bank.slot(),
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: true,
@@ -609,13 +621,22 @@ impl AccountsBackgroundService {
                     // request for `N` to the snapshot request channel before setting a root `R > N`, and
                     // snapshot_request_handler.handle_requests() will always look for the latest
                     // available snapshot in the channel.
-                    let snapshot_block_height_option_result = request_handlers
-                        .handle_snapshot_requests(
-                            accounts_db_caching_enabled,
-                            test_hash_calculation,
-                            non_snapshot_time,
-                            &mut last_full_snapshot_slot,
-                        );
+                    //
+                    // NOTE: We must wait for startup verification to complete before handling
+                    // snapshot requests.  This is because startup verification and snapshot
+                    // request handling can both kick off accounts hash calculations in background
+                    // threads, and these must not happen concurrently.
+                    let snapshot_block_height_option_result = bank
+                        .is_startup_verification_complete()
+                        .then(|| {
+                            request_handlers.handle_snapshot_requests(
+                                accounts_db_caching_enabled,
+                                test_hash_calculation,
+                                non_snapshot_time,
+                                &mut last_full_snapshot_slot,
+                            )
+                        })
+                        .flatten();
                     if snapshot_block_height_option_result.is_some() {
                         last_snapshot_end_time = Some(Instant::now());
                     }
@@ -838,6 +859,7 @@ mod test {
                 snapshot_root_bank,
                 status_cache_slot_deltas: Vec::default(),
                 request_type,
+                enqueued: Instant::now(),
             };
             snapshot_request_sender.send(snapshot_request).unwrap();
         };

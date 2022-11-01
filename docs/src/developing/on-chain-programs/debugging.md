@@ -43,15 +43,15 @@ limited but there are many points of possible failures. The following are
 possible failure points and information about what errors to expect and where to
 get more information:
 
-- The BPF loader may fail to parse the program, this should not happen since the
+- The SBF loader may fail to parse the program, this should not happen since the
   loader has already _finalized_ the program's account data.
   - `InstructionError::InvalidAccountData` will be returned as part of the
     transaction error.
-- The BPF loader may fail to setup the program's execution environment
+- The SBF loader may fail to setup the program's execution environment
   - `InstructionError::Custom(0x0b9f_0001)` will be returned as part of the
     transaction error. "0x0b9f_0001" is the hexadecimal representation of
     [`VirtualMachineCreationFailed`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/programs/bpf_loader/src/lib.rs#L44).
-- The BPF loader may have detected a fatal error during program executions
+- The SBF loader may have detected a fatal error during program executions
   (things like panics, memory violations, system call errors, etc...)
   - `InstructionError::Custom(0x0b9f_0002)` will be returned as part of the
     transaction error. "0x0b9f_0002" is the hexadecimal representation of
@@ -71,7 +71,7 @@ logs](debugging.md#logging).
 For example, an access violation involving the stack will look something like
 this:
 
-`BPF program 4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM failed: out of bounds memory store (insn #615), addr 0x200001e38/8`
+`SBF program 4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM failed: out of bounds memory store (insn #615), addr 0x200001e38/8`
 
 ## Monitoring Compute Budget Consumption
 
@@ -89,7 +89,7 @@ for more information.
 
 ## ELF Dump
 
-The BPF shared object internals can be dumped to a text file to gain more
+The SBF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime.
 
 - [Create a dump file of a Rust program](developing-rust.md#elf-dump)
@@ -97,14 +97,14 @@ insight into a program's composition and what it may be doing at runtime.
 
 ## Instruction Tracing
 
-During execution the runtime BPF interpreter can be configured to log a trace
-message for each BPF instruction executed. This can be very helpful for things
+During execution the runtime SBF interpreter can be configured to log a trace
+message for each SBF instruction executed. This can be very helpful for things
 like pin-pointing the runtime context leading up to a memory access violation.
 
 The trace logs together with the [ELF dump](#elf-dump) can provide a lot of
 insight (though the traces produce a lot of information).
 
-To turn on BPF interpreter trace messages in a local cluster configure the
+To turn on SBF interpreter trace messages in a local cluster configure the
 `solana_rbpf` level in `RUST_LOG` to `trace`. For example:
 
 `export RUST_LOG=solana_rbpf=trace`

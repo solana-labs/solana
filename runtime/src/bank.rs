@@ -44,8 +44,9 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, IncludeSlotInHash, SnapshotStorages,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            AccountShrinkThreshold, AccountsDbConfig, CalcAccountsHashDataSource,
+            IncludeSlotInHash, SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
+            ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -59,6 +60,7 @@ use {
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
         runtime_config::RuntimeConfig,
+        snapshot_hash::SnapshotHash,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -83,11 +85,12 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
+    solana_perf::perf_libs,
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
         executor_cache::{
-            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
+            BankExecutorCache, Executor, TransactionExecutorCache, TxBankExecutorCacheDiff,
             MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
@@ -101,10 +104,11 @@ use {
             AccountSharedData, InheritableAccountFields, ReadableAccount, WritableAccount,
         },
         account_utils::StateMut,
+        bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{
             BankId, Epoch, Slot, SlotCount, SlotIndex, UnixTimestamp, DEFAULT_TICKS_PER_SECOND,
             INITIAL_RENT_EPOCH, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
-            SECONDS_PER_DAY,
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU, SECONDS_PER_DAY,
         },
         ed25519_program,
         epoch_info::EpochInfo,
@@ -140,7 +144,7 @@ use {
         sysvar::{self, Sysvar, SysvarId},
         timing::years_as_slots,
         transaction::{
-            MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
+            self, MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
             TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
@@ -489,7 +493,15 @@ pub type TransactionBalances = Vec<Vec<u64>>;
 
 /// An ordered list of compiled instructions that were invoked during a
 /// transaction instruction
-pub type InnerInstructions = Vec<CompiledInstruction>;
+pub type InnerInstructions = Vec<InnerInstruction>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InnerInstruction {
+    pub instruction: CompiledInstruction,
+    /// Invocation stack height of this instruction. Instruction stack height
+    /// starts at 1 for transaction instructions.
+    pub stack_height: u8,
+}
 
 /// A list of compiled instructions that were invoked during each instruction of
 /// a transaction
@@ -509,10 +521,12 @@ pub fn inner_instructions_list_from_instruction_trace(
         if let Ok(instruction_context) =
             transaction_context.get_instruction_context_at_index_in_trace(index_in_trace)
         {
-            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
+            let stack_height = instruction_context.get_stack_height();
+            if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
                 outer_instructions.push(Vec::new());
             } else if let Some(inner_instructions) = outer_instructions.last_mut() {
-                inner_instructions.push(CompiledInstruction::new_from_raw_parts(
+                let stack_height = u8::try_from(stack_height).unwrap_or(u8::MAX);
+                let instruction = CompiledInstruction::new_from_raw_parts(
                     instruction_context
                         .get_index_of_program_account_in_transaction(
                             instruction_context
@@ -530,7 +544,11 @@ pub fn inner_instructions_list_from_instruction_trace(
                                 .unwrap_or_default() as u8
                         })
                         .collect(),
-                ));
+                );
+                inner_instructions.push(InnerInstruction {
+                    instruction,
+                    stack_height,
+                });
             } else {
                 debug_assert!(false);
             }
@@ -1974,6 +1992,11 @@ impl Bank {
         // (BankFieldsToSerialize/BankFieldsToDeserialize) and initializing
         // from the passed in genesis_config instead (as new()/new_with_paths() already do)
         assert_eq!(
+            bank.genesis_creation_time, genesis_config.creation_time,
+            "Bank snapshot genesis creation time does not match genesis.bin creation time.\
+             The snapshot and genesis.bin might pertain to different clusters"
+        );
+        assert_eq!(
             bank.hashes_per_tick,
             genesis_config.poh_config.hashes_per_tick
         );
@@ -1983,7 +2006,6 @@ impl Bank {
             genesis_config.poh_config.target_tick_duration.as_nanos()
                 * genesis_config.ticks_per_slot as u128
         );
-        assert_eq!(bank.genesis_creation_time, genesis_config.creation_time);
         assert_eq!(bank.max_tick_height, (bank.slot + 1) * bank.ticks_per_slot);
         assert_eq!(
             bank.slots_per_year,
@@ -4044,6 +4066,73 @@ impl Bank {
             });
     }
 
+    #[allow(dead_code)] // Preparation for BankExecutorCache rework
+    fn create_executor(&self, pubkey: &Pubkey) -> Result<Arc<dyn Executor>> {
+        let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
+            program
+        } else {
+            return Err(TransactionError::ProgramAccountNotFound);
+        };
+        let mut transaction_accounts = vec![(*pubkey, program)];
+        let is_upgradeable_loader =
+            bpf_loader_upgradeable::check_id(transaction_accounts[0].1.owner());
+        if is_upgradeable_loader {
+            if let Ok(UpgradeableLoaderState::Program {
+                programdata_address,
+            }) = transaction_accounts[0].1.state()
+            {
+                if let Some(programdata_account) =
+                    self.get_account_with_fixed_root(&programdata_address)
+                {
+                    transaction_accounts.push((programdata_address, programdata_account));
+                } else {
+                    return Err(TransactionError::ProgramAccountNotFound);
+                }
+            } else {
+                return Err(TransactionError::ProgramAccountNotFound);
+            }
+        }
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts,
+            Some(sysvar::rent::Rent::default()),
+            1,
+            1,
+        );
+        let instruction_context = transaction_context
+            .get_next_instruction_context()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        instruction_context.configure(if is_upgradeable_loader { &[0, 1] } else { &[0] }, &[], &[]);
+        transaction_context
+            .push()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let program = instruction_context
+            .try_borrow_program_account(&transaction_context, 0)
+            .map_err(|err| TransactionError::InstructionError(0, err))?;
+        let programdata = if is_upgradeable_loader {
+            Some(
+                instruction_context
+                    .try_borrow_program_account(&transaction_context, 1)
+                    .map_err(|err| TransactionError::InstructionError(0, err))?,
+            )
+        } else {
+            None
+        };
+        solana_bpf_loader_program::create_executor_from_account(
+            &self.feature_set,
+            &self.runtime_config.compute_budget.unwrap_or_default(),
+            None, // log_collector
+            None, // tx_executor_cache
+            &program,
+            programdata.as_ref().unwrap_or(&program),
+            self.runtime_config.bpf_jit,
+        )
+        .map(|(executor, _create_executor_metrics)| executor)
+        .map_err(|err| TransactionError::InstructionError(0, err))
+    }
+
     /// Remove an executor from the bank's cache
     fn remove_executor(&self, pubkey: &Pubkey) {
         let _ = self.executor_cache.write().unwrap().remove(pubkey);
@@ -5225,7 +5314,6 @@ impl Bank {
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();
-        let bank_slot = self.slot();
         let mut rewrites_skipped = Vec::with_capacity(accounts.len());
         let mut accounts_to_store =
             Vec::<(&Pubkey, &AccountSharedData)>::with_capacity(accounts.len());
@@ -5235,8 +5323,7 @@ impl Bank {
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         let preserve_rent_epoch_for_rent_exempt_accounts =
             self.preserve_rent_epoch_for_rent_exempt_accounts();
-        for (pubkey, account, loaded_slot) in accounts.iter_mut() {
-            let old_rent_epoch = account.rent_epoch();
+        for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
@@ -5248,18 +5335,10 @@ impl Bank {
 
             // only store accounts where we collected rent
             // but get the hash for all these accounts even if collected rent is 0 (= not updated).
-            // Also, there's another subtle side-effect from this: this
+            // Also, there's another subtle side-effect from rewrites: this
             // ensures we verify the whole on-chain state (= all accounts)
             // via the bank delta hash slowly once per an epoch.
-            if can_skip_rewrites
-                && Self::skip_rewrite(
-                    bank_slot,
-                    rent_collected_info.rent_amount,
-                    *loaded_slot,
-                    old_rent_epoch,
-                    account,
-                )
-            {
+            if can_skip_rewrites && Self::skip_rewrite(rent_collected_info.rent_amount, account) {
                 // this would have been rewritten previously. Now we skip it.
                 // calculate the hash that we would have gotten if we did the rewrite.
                 // This will be needed to calculate the bank's hash.
@@ -5479,31 +5558,11 @@ impl Bank {
     }
 
     /// return true iff storing this account is just a rewrite and can be skipped
-    fn skip_rewrite(
-        bank_slot: Slot,
-        rent_amount: u64,
-        loaded_slot: Slot,
-        old_rent_epoch: Epoch,
-        account: &AccountSharedData,
-    ) -> bool {
-        if rent_amount != 0 || account.rent_epoch() == 0 {
-            // rent was != 0
-            // or special case for default rent value
-            // these cannot be skipped and must be written
-            return false;
-        }
-        if old_rent_epoch != account.rent_epoch() && loaded_slot == bank_slot {
-            // account's rent_epoch should increment even though we're not collecting rent.
-            // and we already wrote this account in this slot, but we did not adjust rent_epoch (sys vars for example)
-            // so, force ourselves to rewrite account if account was already written in this slot
-            // Now, the account that was written IN this slot, where normally we would have collected rent, has the corrent 'rent_epoch'.
-            // Only this last store will remain in the append vec.
-            // Otherwise, later code would assume the account was written successfully in this slot with the correct 'rent_epoch'.
-            return false;
-        }
-
-        // rent was 0 and no reason to rewrite, so THIS is a rewrite we can skip
-        true
+    fn skip_rewrite(rent_amount: u64, account: &AccountSharedData) -> bool {
+        // if rent was != 0
+        // or special case for default rent value
+        // these cannot be skipped and must be written
+        rent_amount == 0 && account.rent_epoch() != 0
     }
 
     fn prefix_from_pubkey(pubkey: &Pubkey) -> u64 {
@@ -6914,6 +6973,11 @@ impl Bank {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
+    pub fn get_snapshot_hash(&self) -> SnapshotHash {
+        let accounts_hash = self.get_accounts_hash();
+        SnapshotHash::new(&accounts_hash)
+    }
+
     pub fn get_thread_pool(&self) -> &ThreadPool {
         &self.rc.accounts.accounts_db.thread_pool_clean
     }
@@ -6925,26 +6989,22 @@ impl Bank {
             .load_account_into_read_cache(&self.ancestors, key);
     }
 
-    pub fn update_accounts_hash_with_index_option(
+    pub fn update_accounts_hash(
         &self,
-        use_index: bool,
+        data_source: CalcAccountsHashDataSource,
         mut debug_verify: bool,
         is_startup: bool,
     ) -> Hash {
-        let (hash, total_lamports) = self
-            .rc
-            .accounts
-            .accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
-                debug_verify,
-                self.slot(),
-                &self.ancestors,
-                Some(self.capitalization()),
-                self.epoch_schedule(),
-                &self.rent_collector,
-                is_startup,
-            );
+        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+            data_source,
+            debug_verify,
+            self.slot(),
+            &self.ancestors,
+            Some(self.capitalization()),
+            self.epoch_schedule(),
+            &self.rent_collector,
+            is_startup,
+        );
         if total_lamports != self.capitalization() {
             datapoint_info!(
                 "capitalization_mismatch",
@@ -6957,19 +7017,16 @@ impl Bank {
                 // cap mismatch detected. It has been logged to metrics above.
                 // Run both versions of the calculation to attempt to get more info.
                 debug_verify = true;
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .update_accounts_hash_with_index_option(
-                        use_index,
-                        debug_verify,
-                        self.slot(),
-                        &self.ancestors,
-                        Some(self.capitalization()),
-                        self.epoch_schedule(),
-                        &self.rent_collector,
-                        is_startup,
-                    );
+                self.rc.accounts.accounts_db.update_accounts_hash(
+                    data_source,
+                    debug_verify,
+                    self.slot(),
+                    &self.ancestors,
+                    Some(self.capitalization()),
+                    self.epoch_schedule(),
+                    &self.rent_collector,
+                    is_startup,
+                );
             }
 
             panic!(
@@ -6982,8 +7039,8 @@ impl Bank {
         hash
     }
 
-    pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, false)
+    pub fn update_accounts_hash_for_tests(&self) -> Hash {
+        self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash
@@ -7648,26 +7705,7 @@ impl Bank {
         let rent_collector = self.rent_collector();
         let mut total_accounts_stats = TotalAccountsStats::default();
         accounts.for_each(|(pubkey, account)| {
-            let data_len = account.data().len();
-            total_accounts_stats.num_accounts += 1;
-            total_accounts_stats.data_len += data_len;
-
-            if account.executable() {
-                total_accounts_stats.num_executable_accounts += 1;
-                total_accounts_stats.executable_data_len += data_len;
-            }
-
-            if !rent_collector.should_collect_rent(pubkey, account)
-                || rent_collector.get_rent_due(account).is_exempt()
-            {
-                total_accounts_stats.num_rent_exempt_accounts += 1;
-            } else {
-                total_accounts_stats.num_rent_paying_accounts += 1;
-                total_accounts_stats.lamports_in_rent_paying_accounts += account.lamports();
-                if data_len == 0 {
-                    total_accounts_stats.num_rent_paying_accounts_without_data += 1;
-                }
-            }
+            total_accounts_stats.accumulate_account(pubkey, account, rent_collector);
         });
 
         total_accounts_stats
@@ -7686,6 +7724,36 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .try_get_epoch_accounts_hash()
+    }
+
+    /// Checks a batch of sanitized transactions again bank for age and status
+    pub fn check_transactions_with_forwarding_delay(
+        &self,
+        transactions: &[SanitizedTransaction],
+        filter: &[transaction::Result<()>],
+        forward_transactions_to_leader_at_slot_offset: u64,
+    ) -> Vec<TransactionCheckResult> {
+        let mut error_counters = TransactionErrorMetrics::default();
+        // The following code also checks if the blockhash for a transaction is too old
+        // The check accounts for
+        //  1. Transaction forwarding delay
+        //  2. The slot at which the next leader will actually process the transaction
+        // Drop the transaction if it will expire by the time the next node receives and processes it
+        let api = perf_libs::api();
+        let max_tx_fwd_delay = if api.is_none() {
+            MAX_TRANSACTION_FORWARDING_DELAY
+        } else {
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        };
+
+        self.check_transactions(
+            transactions,
+            filter,
+            (MAX_PROCESSING_AGE)
+                .saturating_sub(max_tx_fwd_delay)
+                .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
+            &mut error_counters,
+        )
     }
 }
 
@@ -7811,6 +7879,36 @@ pub struct TotalAccountsStats {
     pub lamports_in_rent_paying_accounts: u64,
 }
 
+impl TotalAccountsStats {
+    pub fn accumulate_account(
+        &mut self,
+        address: &Pubkey,
+        account: &AccountSharedData,
+        rent_collector: &RentCollector,
+    ) {
+        let data_len = account.data().len();
+        self.num_accounts += 1;
+        self.data_len += data_len;
+
+        if account.executable() {
+            self.num_executable_accounts += 1;
+            self.executable_data_len += data_len;
+        }
+
+        if !rent_collector.should_collect_rent(address, account)
+            || rent_collector.get_rent_due(account).is_exempt()
+        {
+            self.num_rent_exempt_accounts += 1;
+        } else {
+            self.num_rent_paying_accounts += 1;
+            self.lamports_in_rent_paying_accounts += account.lamports();
+            if data_len == 0 {
+                self.num_rent_paying_accounts_without_data += 1;
+            }
+        }
+    }
+}
+
 impl Drop for Bank {
     fn drop(&mut self) {
         if let Some(drop_callback) = self.drop_callback.read().unwrap().0.as_ref() {
@@ -7852,6 +7950,7 @@ pub(crate) mod tests {
             accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
+            bank_client::BankClient,
             genesis_utils::{
                 self, activate_all_features, bootstrap_validator_stake_lamports,
                 create_genesis_config_with_leader, create_genesis_config_with_vote_accounts,
@@ -7866,12 +7965,14 @@ pub(crate) mod tests {
         solana_program_runtime::{
             compute_budget::MAX_COMPUTE_UNIT_LIMIT,
             executor_cache::Executor,
-            invoke_context::InvokeContext,
+            invoke_context::{mock_process_instruction, InvokeContext},
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
         solana_sdk::{
             account::Account,
-            bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
+            bpf_loader, bpf_loader_deprecated,
+            bpf_loader_upgradeable::{self, UpgradeableLoaderState},
+            client::SyncClient,
             clock::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_RECENT_BLOCKHASHES},
             compute_budget::ComputeBudgetInstruction,
             entrypoint::MAX_PERMITTED_DATA_INCREASE,
@@ -7880,6 +7981,7 @@ pub(crate) mod tests {
             genesis_config::create_genesis_config,
             hash,
             instruction::{AccountMeta, CompiledInstruction, Instruction, InstructionError},
+            loader_upgradeable_instruction::UpgradeableLoaderInstruction,
             message::{Message, MessageHeader},
             native_token::LAMPORTS_PER_SOL,
             nonce,
@@ -7907,7 +8009,8 @@ pub(crate) mod tests {
             },
         },
         std::{
-            result, str::FromStr, sync::atomic::Ordering::Release, thread::Builder, time::Duration,
+            fs::File, io::Read, result, str::FromStr, sync::atomic::Ordering::Release,
+            thread::Builder, time::Duration,
         },
         test_utils::goto_end_of_slot,
     };
@@ -9899,16 +10002,6 @@ pub(crate) mod tests {
         account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
 
         let just_rewrites = true;
-        // 'later_slot' here is the slot the account was loaded from.
-        // Since 'later_slot' is the same slot the bank is in, this means that the account was already written IN this slot.
-        // So, we should NOT skip rewrites.
-        let result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account.clone(), later_slot)],
-            just_rewrites,
-            None,
-            PartitionIndex::default(),
-        );
-        assert!(result.rewrites_skipped.is_empty());
         // loaded from previous slot, so we skip rent collection on it
         let result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
@@ -10262,9 +10355,9 @@ pub(crate) mod tests {
         bank.freeze();
         bank.squash();
         bank.force_flush_accounts_cache();
-        let hash = bank.update_accounts_hash();
+        let hash = bank.update_accounts_hash_for_tests();
         bank.clean_accounts_for_tests();
-        assert_eq!(bank.update_accounts_hash(), hash);
+        assert_eq!(bank.update_accounts_hash_for_tests(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
         let blockhash = bank.last_blockhash();
@@ -10285,9 +10378,9 @@ pub(crate) mod tests {
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank0 purge");
-        let hash = bank0.update_accounts_hash();
+        let hash = bank0.update_accounts_hash_for_tests();
         bank0.clean_accounts_for_tests();
-        assert_eq!(bank0.update_accounts_hash(), hash);
+        assert_eq!(bank0.update_accounts_hash_for_tests(), hash);
 
         assert_eq!(
             bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
@@ -10313,7 +10406,7 @@ pub(crate) mod tests {
 
         bank1.freeze();
         bank1.squash();
-        bank1.update_accounts_hash();
+        bank1.update_accounts_hash_for_tests();
         assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         // keypair should have 0 tokens on both forks
@@ -11426,7 +11519,7 @@ pub(crate) mod tests {
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_for_tests();
         assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
@@ -11451,18 +11544,18 @@ pub(crate) mod tests {
 
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_for_tests();
         assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
         assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
-        bank3.update_accounts_hash();
+        bank3.update_accounts_hash_for_tests();
         assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash();
+        bank2.update_accounts_hash_for_tests();
         assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
@@ -11487,7 +11580,7 @@ pub(crate) mod tests {
         )
         .unwrap();
         bank.freeze();
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_for_tests();
         assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
 
         // tamper the bank after freeze!
@@ -12672,11 +12765,11 @@ pub(crate) mod tests {
         );
 
         // Re-adding builtin programs should be no-op
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_for_tests();
         let old_hash = bank.get_accounts_hash();
         bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
         bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
-        bank.update_accounts_hash();
+        bank.update_accounts_hash_for_tests();
         let new_hash = bank.get_accounts_hash();
         assert_eq!(old_hash, new_hash);
         {
@@ -15136,6 +15229,39 @@ pub(crate) mod tests {
         assert!(stored_executors.borrow().executors.contains_key(&key2));
         assert!(stored_executors.borrow().executors.contains_key(&key3));
 
+        // Force compilation of an executor
+        let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so").unwrap();
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+        let programdata_key = solana_sdk::pubkey::new_rand();
+        let mut program_account = AccountSharedData::new_data(
+            40,
+            &UpgradeableLoaderState::Program {
+                programdata_address: programdata_key,
+            },
+            &bpf_loader_upgradeable::id(),
+        )
+        .unwrap();
+        program_account.set_executable(true);
+        program_account.set_rent_epoch(1);
+        let programdata_data_offset = UpgradeableLoaderState::size_of_programdata_metadata();
+        let mut programdata_account = AccountSharedData::new(
+            40,
+            programdata_data_offset + elf.len(),
+            &bpf_loader_upgradeable::id(),
+        );
+        programdata_account
+            .set_state(&UpgradeableLoaderState::ProgramData {
+                slot: 42,
+                upgrade_authority_address: None,
+            })
+            .unwrap();
+        programdata_account.data_mut()[programdata_data_offset..].copy_from_slice(&elf);
+        programdata_account.set_rent_epoch(1);
+        bank.store_account_and_update_capitalization(&key1, &program_account);
+        bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
+        bank.create_executor(&key1).unwrap();
+
         // Remove all
         bank.remove_executor(&key1);
         bank.remove_executor(&key2);
@@ -15198,6 +15324,721 @@ pub(crate) mod tests {
         assert_eq!(executors.borrow().executors.len(), 1);
         let executors = fork2.get_tx_executor_cache(accounts);
         assert_eq!(executors.borrow().executors.len(), 1);
+    }
+
+    #[test]
+    fn test_bpf_loader_upgradeable_deploy_with_max_len() {
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.feature_set = Arc::new(FeatureSet::all_enabled());
+        bank.add_builtin(
+            "solana_bpf_loader_upgradeable_program",
+            &bpf_loader_upgradeable::id(),
+            solana_bpf_loader_program::process_instruction,
+        );
+        let bank = Arc::new(bank);
+        let bank_client = BankClient::new_shared(&bank);
+
+        // Setup keypairs and addresses
+        let payer_keypair = Keypair::new();
+        let program_keypair = Keypair::new();
+        let buffer_address = Pubkey::new_unique();
+        let (programdata_address, _) = Pubkey::find_program_address(
+            &[program_keypair.pubkey().as_ref()],
+            &bpf_loader_upgradeable::id(),
+        );
+        let upgrade_authority_keypair = Keypair::new();
+
+        // Load program file
+        let mut file = File::open("../programs/bpf_loader/test_elfs/out/noop_aligned.so")
+            .expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+
+        // Compute rent exempt balances
+        let program_len = elf.len();
+        let min_program_balance =
+            bank.get_minimum_balance_for_rent_exemption(UpgradeableLoaderState::size_of_program());
+        let min_buffer_balance = bank.get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::size_of_buffer(program_len),
+        );
+        let min_programdata_balance = bank.get_minimum_balance_for_rent_exemption(
+            UpgradeableLoaderState::size_of_programdata(program_len),
+        );
+
+        // Setup accounts
+        let buffer_account = {
+            let mut account = AccountSharedData::new(
+                min_buffer_balance,
+                UpgradeableLoaderState::size_of_buffer(elf.len()),
+                &bpf_loader_upgradeable::id(),
+            );
+            account
+                .set_state(&UpgradeableLoaderState::Buffer {
+                    authority_address: Some(upgrade_authority_keypair.pubkey()),
+                })
+                .unwrap();
+            account
+                .data_as_mut_slice()
+                .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
+                .unwrap()
+                .copy_from_slice(&elf);
+            account
+        };
+        let program_account = AccountSharedData::new(
+            min_programdata_balance,
+            UpgradeableLoaderState::size_of_program(),
+            &bpf_loader_upgradeable::id(),
+        );
+        let programdata_account = AccountSharedData::new(
+            1,
+            UpgradeableLoaderState::size_of_programdata(elf.len()),
+            &bpf_loader_upgradeable::id(),
+        );
+
+        // Test successful deploy
+        let payer_base_balance = LAMPORTS_PER_SOL;
+        let deploy_fees = {
+            let fee_calculator = genesis_config.fee_rate_governor.create_fee_calculator();
+            3 * fee_calculator.lamports_per_signature
+        };
+        let min_payer_balance = min_program_balance
+            .saturating_add(min_programdata_balance)
+            .saturating_sub(min_buffer_balance.saturating_add(deploy_fees));
+        bank.store_account(
+            &payer_keypair.pubkey(),
+            &AccountSharedData::new(
+                payer_base_balance.saturating_add(min_payer_balance),
+                0,
+                &system_program::id(),
+            ),
+        );
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &payer_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&payer_keypair.pubkey()),
+        );
+        assert!(bank_client
+            .send_and_confirm_message(
+                &[&payer_keypair, &program_keypair, &upgrade_authority_keypair],
+                message
+            )
+            .is_ok());
+        assert_eq!(
+            bank.get_balance(&payer_keypair.pubkey()),
+            payer_base_balance
+        );
+        assert_eq!(bank.get_balance(&buffer_address), 0);
+        assert_eq!(None, bank.get_account(&buffer_address));
+        let post_program_account = bank.get_account(&program_keypair.pubkey()).unwrap();
+        assert_eq!(post_program_account.lamports(), min_program_balance);
+        assert_eq!(post_program_account.owner(), &bpf_loader_upgradeable::id());
+        assert_eq!(
+            post_program_account.data().len(),
+            UpgradeableLoaderState::size_of_program()
+        );
+        let state: UpgradeableLoaderState = post_program_account.state().unwrap();
+        assert_eq!(
+            state,
+            UpgradeableLoaderState::Program {
+                programdata_address
+            }
+        );
+        let post_programdata_account = bank.get_account(&programdata_address).unwrap();
+        assert_eq!(post_programdata_account.lamports(), min_programdata_balance);
+        assert_eq!(
+            post_programdata_account.owner(),
+            &bpf_loader_upgradeable::id()
+        );
+        let state: UpgradeableLoaderState = post_programdata_account.state().unwrap();
+        assert_eq!(
+            state,
+            UpgradeableLoaderState::ProgramData {
+                slot: bank_client.get_slot().unwrap(),
+                upgrade_authority_address: Some(upgrade_authority_keypair.pubkey())
+            }
+        );
+        for (i, byte) in post_programdata_account
+            .data()
+            .get(UpgradeableLoaderState::size_of_programdata_metadata()..)
+            .unwrap()
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(*elf.get(i).unwrap(), *byte);
+        }
+
+        // Invoke deployed program
+        mock_process_instruction(
+            &bpf_loader_upgradeable::id(),
+            vec![0, 1],
+            &[],
+            vec![
+                (programdata_address, post_programdata_account),
+                (program_keypair.pubkey(), post_program_account),
+            ],
+            Vec::new(),
+            None,
+            None,
+            Ok(()),
+            solana_bpf_loader_program::process_instruction,
+        );
+
+        // Test initialized program account
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        let message = Message::new(
+            &[Instruction::new_with_bincode(
+                bpf_loader_upgradeable::id(),
+                &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                    max_data_len: elf.len(),
+                },
+                vec![
+                    AccountMeta::new(mint_keypair.pubkey(), true),
+                    AccountMeta::new(programdata_address, false),
+                    AccountMeta::new(program_keypair.pubkey(), false),
+                    AccountMeta::new(buffer_address, false),
+                    AccountMeta::new_readonly(sysvar::rent::id(), false),
+                    AccountMeta::new_readonly(sysvar::clock::id(), false),
+                    AccountMeta::new_readonly(system_program::id(), false),
+                    AccountMeta::new_readonly(upgrade_authority_keypair.pubkey(), true),
+                ],
+            )],
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(0, InstructionError::AccountAlreadyInitialized),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair, &upgrade_authority_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test initialized ProgramData account
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::Custom(0)),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test deploy no authority
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &program_account);
+        bank.store_account(&programdata_address, &programdata_account);
+        let message = Message::new(
+            &[Instruction::new_with_bincode(
+                bpf_loader_upgradeable::id(),
+                &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                    max_data_len: elf.len(),
+                },
+                vec![
+                    AccountMeta::new(mint_keypair.pubkey(), true),
+                    AccountMeta::new(programdata_address, false),
+                    AccountMeta::new(program_keypair.pubkey(), false),
+                    AccountMeta::new(buffer_address, false),
+                    AccountMeta::new_readonly(sysvar::rent::id(), false),
+                    AccountMeta::new_readonly(sysvar::clock::id(), false),
+                    AccountMeta::new_readonly(system_program::id(), false),
+                ],
+            )],
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(0, InstructionError::NotEnoughAccountKeys),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test deploy authority not a signer
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &program_account);
+        bank.store_account(&programdata_address, &programdata_account);
+        let message = Message::new(
+            &[Instruction::new_with_bincode(
+                bpf_loader_upgradeable::id(),
+                &UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                    max_data_len: elf.len(),
+                },
+                vec![
+                    AccountMeta::new(mint_keypair.pubkey(), true),
+                    AccountMeta::new(programdata_address, false),
+                    AccountMeta::new(program_keypair.pubkey(), false),
+                    AccountMeta::new(buffer_address, false),
+                    AccountMeta::new_readonly(sysvar::rent::id(), false),
+                    AccountMeta::new_readonly(sysvar::clock::id(), false),
+                    AccountMeta::new_readonly(system_program::id(), false),
+                    AccountMeta::new_readonly(upgrade_authority_keypair.pubkey(), false),
+                ],
+            )],
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(0, InstructionError::MissingRequiredSignature),
+            bank_client
+                .send_and_confirm_message(&[&mint_keypair], message)
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test invalid Buffer account state
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &AccountSharedData::default());
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test program account not rent exempt
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance.saturating_sub(1),
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::ExecutableAccountNotRentExempt),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test program account not rent exempt because data is larger than needed
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            &upgrade_authority_keypair.pubkey(),
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap();
+        *instructions.get_mut(0).unwrap() = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            min_program_balance,
+            (UpgradeableLoaderState::size_of_program() as u64).saturating_add(1),
+            &bpf_loader_upgradeable::id(),
+        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::ExecutableAccountNotRentExempt),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test program account too small
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            &upgrade_authority_keypair.pubkey(),
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap();
+        *instructions.get_mut(0).unwrap() = system_instruction::create_account(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            min_program_balance,
+            (UpgradeableLoaderState::size_of_program() as u64).saturating_sub(1),
+            &bpf_loader_upgradeable::id(),
+        );
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::AccountDataTooSmall),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test Insufficient payer funds (need more funds to cover the
+        // difference between buffer lamports and programdata lamports)
+        bank.clear_signatures();
+        bank.store_account(
+            &mint_keypair.pubkey(),
+            &AccountSharedData::new(
+                deploy_fees.saturating_add(min_program_balance),
+                0,
+                &system_program::id(),
+            ),
+        );
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::Custom(1)),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+        bank.store_account(
+            &mint_keypair.pubkey(),
+            &AccountSharedData::new(1_000_000_000, 0, &system_program::id()),
+        );
+
+        // Test max_data_len
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len().saturating_sub(1),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::AccountDataTooSmall),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test max_data_len too large
+        bank.clear_signatures();
+        bank.store_account(
+            &mint_keypair.pubkey(),
+            &AccountSharedData::new(u64::MAX / 2, 0, &system_program::id()),
+        );
+        let mut modified_buffer_account = buffer_account.clone();
+        modified_buffer_account.set_lamports(u64::MAX / 2);
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                usize::MAX,
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidArgument),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test not the system account
+        bank.clear_signatures();
+        bank.store_account(&buffer_address, &buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let mut instructions = bpf_loader_upgradeable::deploy_with_max_program_len(
+            &mint_keypair.pubkey(),
+            &program_keypair.pubkey(),
+            &buffer_address,
+            &upgrade_authority_keypair.pubkey(),
+            min_program_balance,
+            elf.len(),
+        )
+        .unwrap();
+        *instructions
+            .get_mut(1)
+            .unwrap()
+            .accounts
+            .get_mut(6)
+            .unwrap() = AccountMeta::new_readonly(Pubkey::new_unique(), false);
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::MissingAccount),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        fn truncate_data(account: &mut AccountSharedData, len: usize) {
+            let mut data = account.data().to_vec();
+            data.truncate(len);
+            account.set_data(data);
+        }
+
+        // Test Bad ELF data
+        bank.clear_signatures();
+        let mut modified_buffer_account = buffer_account;
+        truncate_data(
+            &mut modified_buffer_account,
+            UpgradeableLoaderState::size_of_buffer(1),
+        );
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Test small buffer account
+        bank.clear_signatures();
+        let mut modified_buffer_account = AccountSharedData::new(
+            min_programdata_balance,
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
+            &bpf_loader_upgradeable::id(),
+        );
+        modified_buffer_account
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(upgrade_authority_keypair.pubkey()),
+            })
+            .unwrap();
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
+            .unwrap()
+            .copy_from_slice(&elf);
+        truncate_data(&mut modified_buffer_account, 5);
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::InvalidAccountData),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Mismatched buffer and program authority
+        bank.clear_signatures();
+        let mut modified_buffer_account = AccountSharedData::new(
+            min_programdata_balance,
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
+            &bpf_loader_upgradeable::id(),
+        );
+        modified_buffer_account
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: Some(buffer_address),
+            })
+            .unwrap();
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
+            .unwrap()
+            .copy_from_slice(&elf);
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::IncorrectAuthority),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
+
+        // Deploy buffer with mismatched None authority
+        bank.clear_signatures();
+        let mut modified_buffer_account = AccountSharedData::new(
+            min_programdata_balance,
+            UpgradeableLoaderState::size_of_buffer(elf.len()),
+            &bpf_loader_upgradeable::id(),
+        );
+        modified_buffer_account
+            .set_state(&UpgradeableLoaderState::Buffer {
+                authority_address: None,
+            })
+            .unwrap();
+        modified_buffer_account
+            .data_as_mut_slice()
+            .get_mut(UpgradeableLoaderState::size_of_buffer_metadata()..)
+            .unwrap()
+            .copy_from_slice(&elf);
+        bank.store_account(&buffer_address, &modified_buffer_account);
+        bank.store_account(&program_keypair.pubkey(), &AccountSharedData::default());
+        bank.store_account(&programdata_address, &AccountSharedData::default());
+        let message = Message::new(
+            &bpf_loader_upgradeable::deploy_with_max_program_len(
+                &mint_keypair.pubkey(),
+                &program_keypair.pubkey(),
+                &buffer_address,
+                &upgrade_authority_keypair.pubkey(),
+                min_program_balance,
+                elf.len(),
+            )
+            .unwrap(),
+            Some(&mint_keypair.pubkey()),
+        );
+        assert_eq!(
+            TransactionError::InstructionError(1, InstructionError::IncorrectAuthority),
+            bank_client
+                .send_and_confirm_message(
+                    &[&mint_keypair, &program_keypair, &upgrade_authority_keypair],
+                    message
+                )
+                .unwrap_err()
+                .unwrap()
+        );
     }
 
     #[test]
@@ -18360,18 +19201,9 @@ pub(crate) mod tests {
                 for loaded_slot in (bank_slot - 1)..=bank_slot {
                     for old_rent_epoch in account_rent_epoch.saturating_sub(1)..=account_rent_epoch
                     {
-                        let skip = Bank::skip_rewrite(
-                            bank_slot,
-                            rent_amount,
-                            loaded_slot,
-                            old_rent_epoch,
-                            &account,
-                        );
+                        let skip = Bank::skip_rewrite(rent_amount, &account);
                         let mut should_skip = true;
-                        if rent_amount != 0
-                            || account_rent_epoch == 0
-                            || (account_rent_epoch != old_rent_epoch && loaded_slot == bank_slot)
-                        {
+                        if rent_amount != 0 || account_rent_epoch == 0 {
                             should_skip = false;
                         }
                         assert_eq!(
@@ -18462,12 +19294,24 @@ pub(crate) mod tests {
         assert_eq!(
             inner_instructions,
             vec![
-                vec![CompiledInstruction::new_from_raw_parts(0, vec![1], vec![])],
+                vec![InnerInstruction {
+                    instruction: CompiledInstruction::new_from_raw_parts(0, vec![1], vec![]),
+                    stack_height: 2,
+                }],
                 vec![],
                 vec![
-                    CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
-                    CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
-                    CompiledInstruction::new_from_raw_parts(0, vec![6], vec![])
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),
+                        stack_height: 2,
+                    },
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![5], vec![]),
+                        stack_height: 3,
+                    },
+                    InnerInstruction {
+                        instruction: CompiledInstruction::new_from_raw_parts(0, vec![6], vec![]),
+                        stack_height: 2,
+                    },
                 ]
             ]
         );

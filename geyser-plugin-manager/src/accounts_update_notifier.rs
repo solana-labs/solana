@@ -125,7 +125,7 @@ impl AccountsUpdateNotifierImpl {
         stored_account_meta: &'a StoredAccountMeta,
     ) -> Option<ReplicaAccountInfoV2<'a>> {
         Some(ReplicaAccountInfoV2 {
-            pubkey: stored_account_meta.meta.pubkey.as_ref(),
+            pubkey: stored_account_meta.pubkey().as_ref(),
             lamports: stored_account_meta.account_meta.lamports,
             owner: stored_account_meta.account_meta.owner.as_ref(),
             executable: stored_account_meta.account_meta.executable,
