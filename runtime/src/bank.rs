@@ -54,7 +54,6 @@ use {
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
-        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
@@ -6385,33 +6384,7 @@ impl Bank {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        match self.rc.accounts.load_with_fixed_root(ancestors, pubkey) {
-            Some((mut account, storage_slot)) => {
-                if !self.feature_set.is_active(
-                    &solana_sdk::feature_set::on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(),
-                ) {
-                    // this was a bug in 1.14+. This code should not have run once this feature was activated:
-                    //  preserve rent epoch for rent exempt accounts #26479
-                    // But, it did run. On mnb, this caused bank mismatches.
-                    // On testnet, where ALL validators were running this code incorrectly, the rent_epoch was updated here.
-                    // The network was happy, but the behavior was wrong. So, correctly removing this code disagreed with
-                    // what the network agreed was 'correct'. So, we have to preserve the previous erroneous behavior on testnet
-                    // until we can activate this feature to switch the network's understanding of 'correct'.
-                    ExpectedRentCollection::maybe_update_rent_epoch_on_load(
-                        &mut account,
-                        &SlotInfoInEpoch::new_small(storage_slot),
-                        &SlotInfoInEpoch::new_small(self.slot()),
-                        self.epoch_schedule(),
-                        self.rent_collector(),
-                        pubkey,
-                        &self.rewrites_skipped_this_slot,
-                    );
-                }
-
-                Some((account, storage_slot))
-            }
-            None => None,
-        }
+        self.rc.accounts.load_with_fixed_root(ancestors, pubkey)
     }
 
     pub fn get_program_accounts(
