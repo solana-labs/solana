@@ -66,6 +66,4 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web3.js/package-lock.json
       - run: |
-          source .travis/before_install.sh
-          npm install
-          source .travis/script.sh
+          scripts/test.sh
