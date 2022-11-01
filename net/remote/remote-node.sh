@@ -316,7 +316,7 @@ EOF
     if $enableUdp; then
       args+=(--tpu-enable-udp)
     fi
-    
+
     if ${TPU_CLIENT}; then
         args+=(--use-tpu-client)
     elif ${RPC_CLIENT}; then
