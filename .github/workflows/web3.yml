@@ -5,10 +5,12 @@ on:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
   pull_request:
     branches: [ master ]
     paths:
       - "web3.js/**"
+      - ".github/workflows/web3.yml"
 
 jobs:
   # needed for grouping check-web3 strategies into one check for mergify
@@ -66,6 +68,4 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web3.js/package-lock.json
       - run: |
-          source .travis/before_install.sh
-          npm install
-          source .travis/script.sh
+          scripts/test.sh
