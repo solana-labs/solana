@@ -176,18 +176,6 @@ impl RentCollector {
         }
     }
 
-    #[must_use = "add to Bank::collected_rent"]
-    #[cfg(test)]
-    fn collect_from_created_account(
-        &self,
-        address: &Pubkey,
-        account: &mut AccountSharedData,
-    ) -> CollectedInfo {
-        // initialize rent_epoch as created at this epoch
-        account.set_rent_epoch(self.epoch);
-        self.collect_from_existing_account(address, account, /*filler_account_suffix:*/ None)
-    }
-
     /// Performs easy checks to see if rent collection can be skipped
     fn can_skip_rent_collection(
         &self,
@@ -239,6 +227,21 @@ mod tests {
 
     fn default_rent_collector_clone_with_epoch(epoch: Epoch) -> RentCollector {
         RentCollector::default().clone_with_epoch(epoch)
+    }
+
+    impl RentCollector {
+        #[must_use = "add to Bank::collected_rent"]
+        fn collect_from_created_account(
+            &self,
+            address: &Pubkey,
+            account: &mut AccountSharedData,
+        ) -> CollectedInfo {
+            // initialize rent_epoch as created at this epoch
+            account.set_rent_epoch(self.epoch);
+            self.collect_from_existing_account(
+                address, account, /*filler_account_suffix:*/ None,
+            )
+        }
     }
 
     #[test]
