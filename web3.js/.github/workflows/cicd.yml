@@ -20,7 +20,7 @@ jobs:
 
       - name: Build
         run: |
-          script.sh
+          scripts/test.sh
 
       - name: Publish NPM
         run: |
