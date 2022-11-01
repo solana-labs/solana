@@ -321,7 +321,7 @@ struct ShrinkCollect<'a> {
     store_ids: Vec<AppendVecId>,
     aligned_total: u64,
     unrefed_pubkeys: Vec<&'a Pubkey>,
-    alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
+    alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
     alive_total: usize,
     total_starting_accounts: usize,
     /// true if all alive accounts are zero lamports
@@ -362,7 +362,7 @@ struct LoadAccountsIndexForShrink<'a> {
     /// number of alive accounts
     alive_total: usize,
     /// the specific alive accounts
-    alive_accounts: Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
+    alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
     /// pubkeys that were unref'd in the accounts index because they were dead
     unrefed_pubkeys: Vec<&'a Pubkey>,
     /// true if all alive accounts are zero lamport accounts
@@ -370,7 +370,7 @@ struct LoadAccountsIndexForShrink<'a> {
 }
 
 pub struct GetUniqueAccountsResult<'a> {
-    pub stored_accounts: Vec<(Pubkey, FoundStoredAccount<'a>)>,
+    pub stored_accounts: Vec<FoundStoredAccount<'a>>,
     pub original_bytes: u64,
     store_ids: Vec<AppendVecId>,
 }
@@ -417,6 +417,12 @@ pub struct AccountsDbConfig {
 pub struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
     pub store_id: AppendVecId,
+}
+
+impl<'a> FoundStoredAccount<'a> {
+    pub fn pubkey(&self) -> &Pubkey {
+        self.account.pubkey()
+    }
 }
 
 #[cfg(not(test))]
@@ -3670,7 +3676,7 @@ impl AccountsDb {
     /// return sum of account size for all alive accounts
     fn load_accounts_index_for_shrink<'a>(
         &'a self,
-        accounts: &'a [(Pubkey, FoundStoredAccount<'a>)],
+        accounts: &'a [FoundStoredAccount<'a>],
     ) -> LoadAccountsIndexForShrink<'a> {
         let count = accounts.len();
         let mut alive_accounts = Vec::with_capacity(count);
@@ -3683,12 +3689,11 @@ impl AccountsDb {
         let mut index = 0;
         let mut all_are_zero_lamports = true;
         self.accounts_index.scan(
-            accounts.iter().map(|(key, _)| key),
+            accounts.iter().map(|account| account.pubkey()),
             |pubkey, slots_refs| {
                 let mut result = AccountsIndexScanResult::None;
                 if let Some((slot_list, _ref_count)) = slots_refs {
-                    let pair = &accounts[index];
-                    let stored_account = &pair.1;
+                    let stored_account = &accounts[index];
                     let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
                         acct_info.matches_storage_location(
                             stored_account.store_id,
@@ -3705,7 +3710,7 @@ impl AccountsDb {
                         dead += 1;
                     } else {
                         all_are_zero_lamports &= stored_account.account.lamports() == 0;
-                        alive_accounts.push(pair);
+                        alive_accounts.push(stored_account);
                         alive_total += stored_account.account.stored_size;
                         alive += 1;
                     }
@@ -3767,8 +3772,12 @@ impl AccountsDb {
             .collect();
 
         // sort by pubkey to keep account index lookups close
-        let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-        stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        let mut stored_accounts = stored_accounts
+            .drain()
+            .into_iter()
+            .map(|(_k, v)| v)
+            .collect::<Vec<_>>();
+        stored_accounts.sort_unstable_by(|a, b| a.pubkey().cmp(b.pubkey()));
 
         GetUniqueAccountsResult {
             stored_accounts,
@@ -3782,7 +3791,7 @@ impl AccountsDb {
     fn shrink_collect<'a: 'b, 'b, I>(
         &'a self,
         stores: I,
-        stored_accounts: &'b mut Vec<(Pubkey, FoundStoredAccount<'b>)>,
+        stored_accounts: &'b mut Vec<FoundStoredAccount<'b>>,
         stats: &ShrinkStats,
     ) -> ShrinkCollect<'b>
     where
@@ -3940,8 +3949,8 @@ impl AccountsDb {
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
 
-            for (pubkey, alive_account) in &shrink_collect.alive_accounts {
-                accounts.push((pubkey, &alive_account.account));
+            for alive_account in &shrink_collect.alive_accounts {
+                accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
                 write_versions.push(alive_account.account.meta.write_version);
             }
@@ -9863,8 +9872,7 @@ pub mod tests {
             hash: &hash,
         };
         let found = FoundStoredAccount { account, store_id };
-        let item = (pubkey, found);
-        let map = vec![&item];
+        let map = vec![&found];
         let to_store = AccountsToStore::new(available_bytes, &map, slot0);
         // Done: setup 'to_store'
 
@@ -17490,7 +17498,7 @@ pub mod tests {
                                     shrink_collect
                                         .alive_accounts
                                         .iter()
-                                        .map(|(pubkey, _)| *pubkey)
+                                        .map(|account| *account.pubkey())
                                         .sorted()
                                         .collect::<Vec<_>>(),
                                     expected_alive_accounts
