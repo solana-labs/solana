@@ -6058,7 +6058,6 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "tokio",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
