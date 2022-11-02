@@ -298,12 +298,16 @@ impl AccountsHashVerifier {
             );
 
         measure_hash.stop();
-        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-            accounts_package.snapshot_links.path(),
-            accounts_package.slot,
-            &accounts_hash,
-            None,
-        );
+
+        if let Some(snapshot_info) = &accounts_package.snapshot_info {
+            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                snapshot_info.snapshot_links.path(),
+                accounts_package.slot,
+                &accounts_hash,
+                None,
+            );
+        }
+
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
@@ -535,14 +539,12 @@ mod tests {
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             ..SnapshotConfig::default()
         };
-        let accounts = Arc::new(solana_runtime::accounts::Accounts::default_for_tests());
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+            let slot = full_snapshot_archive_interval_slots + i as u64;
             let accounts_package = AccountsPackage {
-                package_type: AccountsPackageType::AccountsHashVerifier,
-                slot: full_snapshot_archive_interval_slots + i as u64,
-                block_height: full_snapshot_archive_interval_slots + i as u64,
-                accounts: Arc::clone(&accounts),
+                slot,
+                block_height: slot,
                 ..AccountsPackage::default_for_tests()
             };
 
@@ -558,7 +560,7 @@ mod tests {
                 Some(&snapshot_config),
             );
 
-            // sleep for 1ms to create a newer timestmap for gossip entry
+            // sleep for 1ms to create a newer timestamp for gossip entry
             // otherwise the timestamp won't be newer.
             std::thread::sleep(Duration::from_millis(1));
         }
