@@ -468,18 +468,13 @@ mod tests {
         super::*,
         rand::seq::SliceRandom,
         solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
-        solana_runtime::{
-            rent_collector::RentCollector,
-            snapshot_utils::{ArchiveFormat, SnapshotVersion},
-        },
         solana_sdk::{
             genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
-            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::{str::FromStr, time::Instant},
+        std::str::FromStr,
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -526,7 +521,6 @@ mod tests {
     #[test]
     fn test_max_hashes() {
         solana_logger::setup();
-        use {std::path::PathBuf, tempfile::TempDir};
         let keypair = Keypair::new();
 
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
@@ -549,20 +543,9 @@ mod tests {
                 package_type: AccountsPackageType::AccountsHashVerifier,
                 slot: full_snapshot_archive_interval_slots + i as u64,
                 block_height: full_snapshot_archive_interval_slots + i as u64,
-                slot_deltas: vec![],
-                snapshot_links: TempDir::new().unwrap(),
-                snapshot_storages: vec![],
-                archive_format: ArchiveFormat::TarBzip2,
-                snapshot_version: SnapshotVersion::default(),
-                full_snapshot_archives_dir: PathBuf::default(),
-                incremental_snapshot_archives_dir: PathBuf::default(),
-                expected_capitalization: 0,
-                accounts_hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,
                 accounts: Arc::clone(&accounts),
-                epoch_schedule: EpochSchedule::default(),
-                rent_collector: RentCollector::default(),
-                enqueued: Instant::now(),
+                ..AccountsPackage::default_for_tests()
             };
 
             AccountsHashVerifier::process_accounts_package(
