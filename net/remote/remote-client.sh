@@ -68,15 +68,15 @@ case $clientToRun in
 solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
-  
+
   args=()
-  
+
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
   fi
-  
+
   clientCommand="\
     solana-bench-tps \
       --entrypoint $entrypointIp:8001 \
