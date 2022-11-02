@@ -219,7 +219,13 @@ pub mod columns {
     pub struct Root;
 
     #[derive(Debug)]
-    /// The index column
+    /// The index column.
+    ///
+    /// This column family persists presence/absence of shreds of a given slot
+    /// for both data shreds and coding shreds.  For every (`slot`, `index`)
+    /// entry in [`ShredData`] or [`ShredCode`] column family, the Index column
+    /// family will also have a corresponding entry for `slot`, and its value
+    /// will reflect the fact that shred `index` presents in `slot`.
     ///
     /// index type: u64 (see `SlotColumn`)
     /// value type: `blockstore_meta::Index`
