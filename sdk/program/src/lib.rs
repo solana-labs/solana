@@ -546,7 +546,7 @@ pub mod config {
     }
 }
 
-/// A vector of Solana SDK IDs
+/// A vector of Solana SDK IDs.
 pub mod sdk_ids {
     use {
         crate::{

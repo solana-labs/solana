@@ -1,3 +1,5 @@
+//! Fee structures.
+
 use crate::native_token::sol_to_lamports;
 
 /// A fee and its associated compute unit limit

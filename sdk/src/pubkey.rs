@@ -1,3 +1,5 @@
+//! Solana account addresses.
+
 pub use solana_program::pubkey::*;
 
 /// New random Pubkey for tests and benchmarks.

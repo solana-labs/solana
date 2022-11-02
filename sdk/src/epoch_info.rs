@@ -1,3 +1,9 @@
+//! Information about the current epoch.
+//!
+//! As returned by the [`getEpochInfo`] RPC method.
+//!
+//! [`getEpochInfo`]: https://docs.solana.com/developing/clients/jsonrpc-api#getepochinfo
+
 use crate::clock::{Epoch, Slot};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]

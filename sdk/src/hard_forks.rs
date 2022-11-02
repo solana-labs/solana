@@ -1,5 +1,5 @@
-//! The `hard_forks` module is used to maintain the list of slot boundaries for when a hard fork
-//! should occur.
+//! Used to maintain the list of slot boundaries for when a hard fork should
+//! occur.
 
 #![cfg(feature = "full")]
 

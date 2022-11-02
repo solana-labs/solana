@@ -1,3 +1,5 @@
+//! Definitions of Solana's proof of history.
+
 use {
     crate::{clock::DEFAULT_TICKS_PER_SECOND, unchecked_div_by_const},
     std::time::Duration,

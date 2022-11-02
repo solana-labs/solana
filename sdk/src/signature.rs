@@ -1,4 +1,4 @@
-//! The `signature` module provides functionality for public, and private keys.
+//! Functionality for public and private keys.
 #![cfg(feature = "full")]
 
 // legacy module paths

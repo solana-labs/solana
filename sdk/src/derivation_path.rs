@@ -1,3 +1,13 @@
+//! Definitions of standard Solana [BIP-44] key derivation paths.
+//!
+//! [BIP-44]: https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+//!
+//! The standard Solana BIP-44 derivation path prefix is
+//!
+//! > `m/44'/501'`
+//!
+//! with 501 being the Solana coin type.
+
 use {
     core::{iter::IntoIterator, slice::Iter},
     derivation_path::{ChildIndex, DerivationPath as DerivationPathInner},

@@ -1,3 +1,5 @@
+//! The compute budget native program.
+
 #![cfg(feature = "full")]
 
 use {
