@@ -503,7 +503,7 @@ impl Rocks {
         from_key: &[u8],
         to_key: &[u8],
     ) -> Result<()> {
-        self.db.delete_file_in_range_cf(cf, from_key, to_key)?;
+        self.0.delete_file_in_range_cf(cf, from_key, to_key)?;
         Ok(())
     }
 
