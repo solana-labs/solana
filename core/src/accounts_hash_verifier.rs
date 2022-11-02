@@ -469,7 +469,6 @@ mod tests {
         rand::seq::SliceRandom,
         solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
         solana_sdk::{
-            genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
         },
@@ -543,7 +542,6 @@ mod tests {
                 package_type: AccountsPackageType::AccountsHashVerifier,
                 slot: full_snapshot_archive_interval_slots + i as u64,
                 block_height: full_snapshot_archive_interval_slots + i as u64,
-                cluster_type: ClusterType::MainnetBeta,
                 accounts: Arc::clone(&accounts),
                 ..AccountsPackage::default_for_tests()
             };
