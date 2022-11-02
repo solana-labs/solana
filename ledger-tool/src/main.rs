@@ -1396,7 +1396,11 @@ fn main() {
             .hidden(true);
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
-        .help("AppendVecs that are older than an epoch are squashed together.")
+        .value_name("SLOT-OFFSET")
+        .validator(is_parsable::<u64>)
+        .takes_value(true)
+        .default_value("0")
+        .help("AppendVecs that are older than an epoch (- SLOT-OFFSET) are squashed together.")
         .hidden(true);
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
             .long("halt-at-slot-store-hash-raw-data")
@@ -2742,7 +2746,8 @@ fn main() {
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vecs: value_t!(matches, "accounts_db_ancient_append_vecs", u64)
+                        .ok(),
                     exhaustively_verify_refcounts: arg_matches
                         .is_present("accounts_db_verify_refcounts"),
                     skip_initial_hash_calc: arg_matches
@@ -3002,7 +3007,8 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vecs: value_t!(matches, "accounts_db_ancient_append_vecs", u64)
+                        .ok(),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
