@@ -1321,7 +1321,7 @@ impl Scheduler<ExecuteTimings> {
             .parse::<usize>()
             .unwrap();
 
-        let send_metrics = std::env::var("SEND_METRICS").is_ok();
+        let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
         let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
 

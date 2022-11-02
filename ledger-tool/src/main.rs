@@ -313,7 +313,7 @@ fn output_slot(
                 .spawn(move || {
                     use solana_metrics::datapoint_info;
                     let current_thread_name = std::thread::current().name().unwrap().to_string();
-                    let send_metrics = std::env::var("SEND_METRICS").is_ok();
+                    let send_metrics = std::env::var("SOLANA_TRANSACTION_TIMINGS").is_ok();
 
                     for step in 0.. {
                         let mut ee = pre_execute_env_receiver.recv().unwrap().0;
