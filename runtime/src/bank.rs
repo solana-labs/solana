@@ -4537,7 +4537,7 @@ impl Bank {
             std::thread::current().name().unwrap().into(),
             &process_message_time,
             &cpu_elapsed,
-            tx.get_transaction_priority_details().unwrap().priority,
+            tx.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(),
             account_locks_in_json,
         );
 
