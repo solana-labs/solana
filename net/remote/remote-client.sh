@@ -85,7 +85,7 @@ solana-bench-tps)
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
-      ${args[@]} \
+      ${args[*]} \
   "
   ;;
 idle)
