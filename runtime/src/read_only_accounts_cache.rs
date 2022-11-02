@@ -54,6 +54,17 @@ impl ReadOnlyAccountsCache {
         }
     }
 
+    /// reset the read only accounts cache
+    /// useful for benches/tests
+    pub fn reset_for_tests(&self) {
+        self.cache.clear();
+        self.queue.lock().unwrap().clear();
+        self.data_size.store(0, Ordering::Relaxed);
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses.store(0, Ordering::Relaxed);
+        self.evicts.store(0, Ordering::Relaxed);
+    }
+
     /// true if pubkey is in cache at slot
     pub fn in_cache(&self, pubkey: &Pubkey, slot: Slot) -> bool {
         self.cache.contains_key(&(*pubkey, slot))

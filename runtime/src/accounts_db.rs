@@ -5260,6 +5260,12 @@ impl AccountsDb {
         )
     }
 
+    /// remove all entries from the read only accounts cache
+    /// useful for benches/tests
+    pub fn flush_read_only_cache_for_tests(&self) {
+        self.read_only_accounts_cache.reset_for_tests();
+    }
+
     /// if 'load_into_read_cache_only', then return value is meaningless.
     ///   The goal is to get the account into the read-only cache.
     fn do_load_with_populate_read_cache(
