@@ -6747,11 +6747,6 @@ impl Bank {
         datapoint_info!(
             "bank-wait_get_epoch_accounts_hash",
             ("slot", self.slot() as i64, i64),
-            (
-                "epoch_accounts_hash",
-                epoch_accounts_hash.as_ref().to_string(),
-                String
-            ),
             ("waiting-time-us", measure.as_us() as i64, i64),
         );
         epoch_accounts_hash
