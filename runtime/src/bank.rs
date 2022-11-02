@@ -1423,6 +1423,8 @@ impl Scheduler<ExecuteTimings> {
                 loop {
                 while let Ok(r) = retired_ee_receiver.recv_timeout(std::time::Duration::from_millis(20))
                 {
+                    use crate::transaction_priority_details::GetTransactionPriorityDetails;
+
                     match r {
                         solana_scheduler::ExaminablePayload(solana_scheduler::Flushable::Payload((mut ee, timings))) => {
                             cumulative_timings.accumulate(&timings);
@@ -1436,7 +1438,7 @@ impl Scheduler<ExecuteTimings> {
                                     ("index", ee.transaction_index, i64),
                                     ("thread", format!("solScExLane{:02}", ee.thx), String),
                                     ("signature", &sig, String),
-                                    ("account_locks_in_json", "{}", String),
+                                    ("account_locks_in_json", serde_json::to_string(&ee.task.tx.0.get_account_locks_unchecked()).unwrap(), String),
                                     (
                                         "status",
                                         format!("{:?}", ee.execution_result.as_ref().unwrap()),
@@ -1445,6 +1447,7 @@ impl Scheduler<ExecuteTimings> {
                                     ("duration", ee.execution_us, i64),
                                     ("cpu_duration", ee.execution_cpu_us, i64),
                                     ("compute_units", ee.cu, i64),
+                                    ("priority", ee.task.tx.0.get_transaction_priority_details().map(|d| d.priority).unwrap_or_default(), i64),
                                 );
                                 info!("execute_substage: slot: {} transaction_index: {} timings: {:?}", ee.slot, ee.transaction_index, timings);
                             }
