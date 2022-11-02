@@ -181,8 +181,7 @@ impl ClusterSlots {
                     let peer_stake = validator_stakes
                         .get(&peer.id)
                         .map(|node| node.total_stake)
-                        .unwrap_or(0)
-                        + 1;
+                        .unwrap_or(1);
                     max_stake = std::cmp::max(max_stake, peer_stake);
                     peer_stake
                 })
@@ -199,7 +198,7 @@ impl ClusterSlots {
             .zip(stakes)
             .map(|(did_complete_slot, peer_stake)| {
                 if did_complete_slot {
-                    max_stake
+                    peer_stake.saturating_add(max_stake)
                 } else {
                     peer_stake
                 }
@@ -293,7 +292,8 @@ mod tests {
         let mut map = HashMap::new();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
-        map.insert(k1, std::u64::MAX / 2);
+        let max_stake = 1;
+        map.insert(k1, 1);
         map.insert(k2, 0);
         cs.cluster_slots
             .write()
@@ -303,7 +303,10 @@ mod tests {
         c2.id = k2;
         // `map` stake is ignored because only the stakes in the
         // `ClusterSlots.validator_stakes` matter, which is default here.
-        assert_eq!(cs.compute_weights(0, &[c1, c2]), vec![1, 1]);
+        assert_eq!(
+            cs.compute_weights(0, &[c1, c2]),
+            vec![max_stake + 1, max_stake + 1]
+        );
     }
 
     #[test]
@@ -313,10 +316,13 @@ mod tests {
         let mut c2 = ContactInfo::default();
         let k1 = solana_sdk::pubkey::new_rand();
         let k2 = solana_sdk::pubkey::new_rand();
+        let k1_stake = 1;
+        let k2_stake = 0;
+        let max_stake = std::cmp::max(k1_stake, k2_stake);
         let validator_stakes: HashMap<_, _> = vec![(
             k1,
             NodeVoteAccounts {
-                total_stake: std::u64::MAX / 2,
+                total_stake: k1_stake,
                 vote_accounts: vec![Pubkey::default()],
             },
         )]
@@ -329,9 +335,9 @@ mod tests {
         let contact_infos = vec![c1, c2];
         assert_eq!(
             cs.compute_weights(0, &contact_infos),
-            vec![std::u64::MAX / 2 + 1, 1]
+            vec![max_stake, max_stake]
         );
-        // Because k2 completed the slot, it should now have the max weight
+        // Because k2 completed the slot, it should now have the max weight + max(k2_stake, 1)
         let mut map = HashMap::new();
         map.insert(k2, 0);
         cs.cluster_slots
@@ -340,20 +346,20 @@ mod tests {
             .insert(0, Arc::new(RwLock::new(map)));
         assert_eq!(
             cs.compute_weights(0, &contact_infos),
-            vec![std::u64::MAX / 2 + 1, std::u64::MAX / 2 + 1]
+            vec![max_stake, std::cmp::max(k2_stake, 1) + max_stake]
         );
-        // Even though k1 completed the slot, it should still only have
-        // the max weight
+
+        // When k1 completed the slot, it should have max weight
         let mut map = HashMap::new();
-        map.insert(k1, std::u64::MAX / 2 + 1);
-        map.insert(k2, std::u64::MAX / 2 + 1);
+        map.insert(k1, 0);
+        map.insert(k2, 0);
         cs.cluster_slots
             .write()
             .unwrap()
             .insert(0, Arc::new(RwLock::new(map)));
         assert_eq!(
             cs.compute_weights(0, &contact_infos),
-            vec![std::u64::MAX / 2 + 1, std::u64::MAX / 2 + 1]
+            vec![2 * max_stake, std::cmp::max(k2_stake, 1) + max_stake]
         );
     }
 
