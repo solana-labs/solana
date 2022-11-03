@@ -21,7 +21,8 @@ use {
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO,
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
-            QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO, QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
+            QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO, QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
+            QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
         },
         signature::Keypair,
         timing,
@@ -40,7 +41,6 @@ use {
     },
 };
 
-const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
 const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 pub const DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS: u64 = 10000;
 
@@ -186,20 +186,27 @@ pub fn compute_max_allowed_uni_streams(
     peer_stake: u64,
     total_stake: u64,
 ) -> usize {
+    // Treat stake = 0 as unstaked
     if peer_stake == 0 {
-        // Treat stake = 0 as unstaked
         QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
     } else {
         match peer_type {
             ConnectionPeerType::Staked => {
                 // No checked math for f64 type. So let's explicitly check for 0 here
-                if total_stake == 0 {
+                if total_stake == 0 || peer_stake > total_stake {
+                    warn!(
+                        "Invalid stake values: peer_stake: {:?}, total_stake: {:?}",
+                        peer_stake, total_stake,
+                    );
+
                     QUIC_MIN_STAKED_CONCURRENT_STREAMS
                 } else {
-                    (((peer_stake as f64 / total_stake as f64)
-                        * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS as f64)
-                        as usize)
-                        .max(QUIC_MIN_STAKED_CONCURRENT_STREAMS)
+                    let delta = (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS
+                        - QUIC_MIN_STAKED_CONCURRENT_STREAMS)
+                        as f64;
+
+                    ((peer_stake as f64 / total_stake as f64) * delta) as usize
+                        + QUIC_MIN_STAKED_CONCURRENT_STREAMS
                 }
             }
             _ => QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
@@ -1625,21 +1632,15 @@ pub mod test {
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 0),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
+        let delta =
+            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS - QUIC_MIN_STAKED_CONCURRENT_STREAMS) as f64;
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1000, 10000),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (10_f64)) as usize
+            (delta / (10_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, 10000),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (100_f64)) as usize
-        );
-        assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 10000),
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS
-        );
-        assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1, 10000),
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+            (delta / (100_f64)) as usize + QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 10000),
