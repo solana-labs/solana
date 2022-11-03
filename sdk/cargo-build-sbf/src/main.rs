@@ -72,7 +72,7 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    let mut msg = format!("cargo-build-sbf child: {}", program.display());
+    let mut msg = format!("spawn: {}", program.display());
     for arg in args.iter() {
         msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
     }
