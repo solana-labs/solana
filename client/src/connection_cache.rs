@@ -95,7 +95,7 @@ impl ConnectionCacheStats {
         self.total_client_stats.send_timeout.fetch_add(
             client_stats.send_timeout.load(Ordering::Relaxed),
             Ordering::Relaxed,
-        );        
+        );
         self.sent_packets
             .fetch_add(num_packets as u64, Ordering::Relaxed);
         self.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -234,7 +234,7 @@ impl ConnectionCacheStats {
                     .send_timeout
                     .swap(0, Ordering::Relaxed),
                 i64
-            ),            
+            ),
         );
     }
 }
