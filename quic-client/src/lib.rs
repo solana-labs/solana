@@ -175,6 +175,7 @@ mod tests {
         super::*,
         solana_sdk::quic::{
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+            QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
         },
         solana_tpu_client::tpu_connection_cache::TpuConnectionCache,
     };
@@ -208,9 +209,13 @@ mod tests {
             .unwrap()
             .pubkey_stake_map
             .insert(pubkey, 1);
+
+        let delta =
+            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS - QUIC_MIN_STAKED_CONCURRENT_STREAMS) as f64;
+
         assert_eq!(
             tpu_config.compute_max_parallel_streams(),
-            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+            (QUIC_MIN_STAKED_CONCURRENT_STREAMS as f64 + (1f64 / 10000f64) * delta) as usize
         );
 
         staked_nodes
