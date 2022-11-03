@@ -244,62 +244,62 @@ impl BlockstoreRocksDbColumnFamilyMetrics {
             // Size related
             (
                 "total_sst_files_size",
-                self.total_sst_files_size as i64,
+                self.total_sst_files_size,
                 i64
             ),
-            ("size_all_mem_tables", self.size_all_mem_tables as i64, i64),
+            ("size_all_mem_tables", self.size_all_mem_tables, i64),
             // Snapshot related
-            ("num_snapshots", self.num_snapshots as i64, i64),
+            ("num_snapshots", self.num_snapshots, i64),
             (
                 "oldest_snapshot_time",
-                self.oldest_snapshot_time as i64,
+                self.oldest_snapshot_time,
                 i64
             ),
             // Write related
             (
                 "actual_delayed_write_rate",
-                self.actual_delayed_write_rate as i64,
+                self.actual_delayed_write_rate,
                 i64
             ),
-            ("is_write_stopped", self.is_write_stopped as i64, i64),
+            ("is_write_stopped", self.is_write_stopped, i64),
             // Memory / block cache related
             (
                 "block_cache_capacity",
-                self.block_cache_capacity as i64,
+                self.block_cache_capacity,
                 i64
             ),
-            ("block_cache_usage", self.block_cache_usage as i64, i64),
+            ("block_cache_usage", self.block_cache_usage, i64),
             (
                 "block_cache_pinned_usage",
-                self.block_cache_pinned_usage as i64,
+                self.block_cache_pinned_usage,
                 i64
             ),
             (
                 "estimate_table_readers_mem",
-                self.estimate_table_readers_mem as i64,
+                self.estimate_table_readers_mem,
                 i64
             ),
             // Flush and compaction
             (
                 "mem_table_flush_pending",
-                self.mem_table_flush_pending as i64,
+                self.mem_table_flush_pending,
                 i64
             ),
-            ("compaction_pending", self.compaction_pending as i64, i64),
+            ("compaction_pending", self.compaction_pending, i64),
             (
                 "num_running_compactions",
-                self.num_running_compactions as i64,
+                self.num_running_compactions,
                 i64
             ),
-            ("num_running_flushes", self.num_running_flushes as i64, i64),
+            ("num_running_flushes", self.num_running_flushes, i64),
             // FIFO Compaction related
             (
                 "estimate_oldest_key_time",
-                self.estimate_oldest_key_time as i64,
+                self.estimate_oldest_key_time,
                 i64
             ),
             // Misc
-            ("background_errors", self.background_errors as i64, i64),
+            ("background_errors", self.background_errors, i64),
         );
     }
 }

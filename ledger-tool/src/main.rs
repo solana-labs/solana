@@ -3676,7 +3676,7 @@ fn main() {
                             let mut csv_writer = if arg_matches.is_present("csv_filename") {
                                 let csv_filename =
                                     value_t_or_exit!(arg_matches, "csv_filename", String);
-                                let file = File::create(&csv_filename).unwrap();
+                                let file = File::create(csv_filename).unwrap();
                                 Some(csv::WriterBuilder::new().from_writer(file))
                             } else {
                                 None

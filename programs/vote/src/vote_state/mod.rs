@@ -1063,7 +1063,7 @@ mod tests {
                 .convert_to_current();
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
-            process_slot_vote_unchecked(&mut vote_state, (INITIAL_LOCKOUT as usize * i) as u64);
+            process_slot_vote_unchecked(&mut vote_state, (INITIAL_LOCKOUT * i) as u64);
         }
 
         // The last vote should have been popped b/c it reached a depth of MAX_LOCKOUT_HISTORY

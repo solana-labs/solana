@@ -372,7 +372,7 @@ impl TpuClient {
             LeaderTpuService::new(rpc_client.clone(), websocket_url, exit.clone()).await?;
 
         Ok(Self {
-            fanout_slots: config.fanout_slots.min(MAX_FANOUT_SLOTS).max(1),
+            fanout_slots: config.fanout_slots.clamp(1, MAX_FANOUT_SLOTS),
             leader_tpu_service,
             exit,
             rpc_client,
