@@ -1836,6 +1836,10 @@ impl CleanAccountsStats {
 struct ShrinkAncientStats {
     shrink_stats: ShrinkStats,
     ancient_append_vecs_shrunk: AtomicU64,
+    total_us: AtomicU64,
+    random_shrink: AtomicU64,
+    slots_considered: AtomicU64,
+    ancient_scanned: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -2095,6 +2099,26 @@ impl ShrinkAncientStats {
                 (
                     "ancient_append_vecs_shrunk",
                     self.ancient_append_vecs_shrunk.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "random",
+                    self.random_shrink.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "slots_considered",
+                    self.slots_considered.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "ancient_scanned",
+                    self.ancient_scanned.swap(0, Ordering::Relaxed) as i64,
+                    i64
+                ),
+                (
+                    "total_us",
+                    self.total_us.swap(0, Ordering::Relaxed) as i64,
                     i64
                 ),
             );
@@ -4390,7 +4414,15 @@ impl AccountsDb {
         let storage = all_storages.first().unwrap();
         let accounts = &storage.accounts;
 
+        self.shrink_ancient_stats
+            .slots_considered
+            .fetch_add(1, Ordering::Relaxed);
+
         if is_ancient(accounts) {
+            self.shrink_ancient_stats
+                .ancient_scanned
+                .fetch_add(1, Ordering::Relaxed);
+
             // randomly shrink ancient slots
             // this exercises the ancient shrink code more often
             let is_candidate = self.is_candidate_for_shrink(storage, true);
@@ -4398,6 +4430,11 @@ impl AccountsDb {
                 // we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate the dead accounts
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
+                if !is_candidate {
+                    self.shrink_ancient_stats
+                        .random_shrink
+                        .fetch_add(1, Ordering::Relaxed);
+                }
                 self.shrink_ancient_stats
                     .ancient_append_vecs_shrunk
                     .fetch_add(1, Ordering::Relaxed);
@@ -4415,6 +4452,7 @@ impl AccountsDb {
     /// Combine all account data from storages in 'sorted_slots' into ancient append vecs.
     /// This keeps us from accumulating append vecs for each slot older than an epoch.
     fn combine_ancient_slots(&self, sorted_slots: Vec<Slot>, can_randomly_shrink: bool) {
+        let mut total = Measure::start("combine_ancient_slots");
         if sorted_slots.is_empty() {
             return;
         }
@@ -4527,6 +4565,11 @@ impl AccountsDb {
         }
 
         self.handle_dropped_roots_for_ancient(dropped_roots);
+
+        total.stop();
+        self.shrink_ancient_stats
+            .total_us
+            .fetch_add(total.as_us(), Ordering::Relaxed);
 
         self.shrink_ancient_stats.report();
     }
