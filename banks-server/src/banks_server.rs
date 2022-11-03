@@ -3,17 +3,19 @@ use {
     crossbeam_channel::{unbounded, Receiver, Sender},
     futures::{future, prelude::stream::StreamExt},
     solana_banks_interface::{
-        Banks, BanksRequest, BanksResponse, BanksTransactionResultWithSimulation,
-        TransactionConfirmationStatus, TransactionSimulationDetails, TransactionStatus,
+        Banks, BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
+        BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
+        TransactionSimulationDetails, TransactionStatus,
     },
+    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, TransactionSimulationResult},
+        bank::{Bank, TransactionExecutionResult, TransactionResults, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
     solana_sdk::{
         account::Account,
-        clock::Slot,
+        clock::{Slot, MAX_PROCESSING_AGE},
         commitment_config::CommitmentLevel,
         feature_set::FeatureSet,
         fee_calculator::FeeCalculator,
@@ -21,7 +23,7 @@ use {
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, SanitizedTransaction, Transaction},
+        transaction::{self, SanitizedTransaction, Transaction, VersionedTransaction},
     },
     solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -329,6 +331,58 @@ impl Banks for BanksServer {
         self.transaction_sender.send(info).unwrap();
         self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
             .await
+    }
+
+    async fn process_versioned_transaction_with_commitment_and_context(
+        self,
+        _: Context,
+        transaction: VersionedTransaction,
+        commitment: CommitmentLevel,
+    ) -> BanksTransactionResultWithMetadata {
+        let bank = self.bank(commitment);
+        let batch = match bank.prepare_entry_batch(vec![transaction]) {
+            Ok(batch) => batch,
+            Err(err) => {
+                return BanksTransactionResultWithMetadata {
+                    result: Err(err),
+                    metadata: None,
+                }
+            }
+        };
+
+        let (
+            TransactionResults {
+                mut execution_results,
+                ..
+            },
+            ..,
+        ) = bank.load_execute_and_commit_transactions(
+            &batch,
+            MAX_PROCESSING_AGE,
+            false, // collect balances
+            false, // enable cpi recording
+            true,  // enable log recording
+            false, // enable return data recording
+            &mut ExecuteTimings::default(),
+            Some(1000 * 1000),
+        );
+
+        let execution_result = execution_results.remove(0);
+        match execution_result {
+            TransactionExecutionResult::NotExecuted(error) => BanksTransactionResultWithMetadata {
+                result: Err(error),
+                metadata: None,
+            },
+            TransactionExecutionResult::Executed { details, .. } => {
+                BanksTransactionResultWithMetadata {
+                    result: details.status,
+                    metadata: Some(TransactionMetadata {
+                        compute_units_consumed: details.executed_units,
+                        log_messages: details.log_messages.unwrap_or_default(),
+                    }),
+                }
+            }
+        }
     }
 
     async fn get_account_with_commitment_and_context(

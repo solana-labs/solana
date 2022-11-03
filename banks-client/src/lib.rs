@@ -12,7 +12,10 @@ pub use {
 use {
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
-    solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
+    solana_banks_interface::{
+        BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
+        BanksTransactionResultWithSimulation,
+    },
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
         rent::Rent, sysvar::Sysvar,
@@ -22,7 +25,7 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
     },
     tarpc::{
         client::{self, NewClient, RequestDispatch},
@@ -138,6 +141,18 @@ impl BanksClient {
             .map_err(Into::into)
     }
 
+    pub fn process_versioned_transaction_with_commitment_and_context(
+        &mut self,
+        ctx: Context,
+        transaction: VersionedTransaction,
+        commitment: CommitmentLevel,
+    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
+    {
+        self.inner
+            .process_versioned_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .map_err(Into::into)
+    }
+
     pub fn simulate_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
@@ -229,6 +244,21 @@ impl BanksClient {
                 )),
                 Some(transaction_result) => Ok(transaction_result?),
             })
+    }
+
+    /// Process a versioned transaction and return the result with metadata.
+    pub fn process_versioned_transaction(
+        &mut self,
+        transaction: VersionedTransaction,
+    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
+    {
+        let mut ctx = context::current();
+        ctx.deadline += Duration::from_secs(50);
+        self.process_versioned_transaction_with_commitment_and_context(
+            ctx,
+            transaction,
+            CommitmentLevel::default(),
+        )
     }
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return

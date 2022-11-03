@@ -11,7 +11,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, Transaction, TransactionError},
+        transaction::{self, Transaction, TransactionError, VersionedTransaction},
         transaction_context::TransactionReturnData,
     },
 };
@@ -40,9 +40,22 @@ pub struct TransactionSimulationDetails {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionMetadata {
+    pub log_messages: Vec<String>,
+    pub compute_units_consumed: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BanksTransactionResultWithSimulation {
     pub result: Option<transaction::Result<()>>,
     pub simulation_details: Option<TransactionSimulationDetails>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BanksTransactionResultWithMetadata {
+    pub result: transaction::Result<()>,
+    pub metadata: Option<TransactionMetadata>,
 }
 
 #[tarpc::service]
@@ -67,6 +80,10 @@ pub trait Banks {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
+    async fn process_versioned_transaction_with_commitment_and_context(
+        transaction: VersionedTransaction,
+        commitment: CommitmentLevel,
+    ) -> BanksTransactionResultWithMetadata;
     async fn simulate_transaction_with_commitment_and_context(
         transaction: Transaction,
         commitment: CommitmentLevel,
