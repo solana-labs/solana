@@ -699,7 +699,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             #[cfg(windows)]
             let output = spawn(
                 &llvm_bin.join("llvm-objcopy"),
-                &[
+                [
                     "--strip-all".as_ref(),
                     program_unstripped_so.as_os_str(),
                     program_so.as_os_str(),
