@@ -3673,6 +3673,7 @@ impl AccountsDb {
     fn load_accounts_index_for_shrink<'a>(
         &'a self,
         accounts: &'a [FoundStoredAccount<'a>],
+        stats: &ShrinkStats,
     ) -> LoadAccountsIndexForShrink<'a> {
         let count = accounts.len();
         let mut alive_accounts = Vec::with_capacity(count);
@@ -3717,12 +3718,8 @@ impl AccountsDb {
             None,
         );
         assert_eq!(index, std::cmp::min(accounts.len(), count));
-        self.shrink_stats
-            .alive_accounts
-            .fetch_add(alive, Ordering::Relaxed);
-        self.shrink_stats
-            .dead_accounts
-            .fetch_add(dead, Ordering::Relaxed);
+        stats.alive_accounts.fetch_add(alive, Ordering::Relaxed);
+        stats.dead_accounts.fetch_add(dead, Ordering::Relaxed);
 
         LoadAccountsIndexForShrink {
             alive_total,
@@ -3819,7 +3816,7 @@ impl AccountsDb {
                         mut alive_accounts,
                         mut unrefed_pubkeys,
                         all_are_zero_lamports,
-                    } = self.load_accounts_index_for_shrink(stored_accounts);
+                    } = self.load_accounts_index_for_shrink(stored_accounts, stats);
 
                     // collect
                     alive_accounts_collect
@@ -4396,11 +4393,8 @@ impl AccountsDb {
         if is_ancient(accounts) {
             // randomly shrink ancient slots
             // this exercises the ancient shrink code more often
-            if self.is_candidate_for_shrink(storage, true)
-                || (can_randomly_shrink
-                    && thread_rng().gen_range(0, 100) == 0
-                    && is_ancient(accounts))
-            {
+            let is_candidate = self.is_candidate_for_shrink(storage, true);
+            if is_candidate || (can_randomly_shrink && thread_rng().gen_range(0, 100) == 0) {
                 // we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate the dead accounts
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
