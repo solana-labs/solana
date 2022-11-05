@@ -25,8 +25,8 @@ type PageRcInner = triomphe::Arc<(
     std::sync::atomic::AtomicUsize,
 )>;
 
-#[derive(Debug, Clone)]
-pub struct PageRc(PageRcInner);
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PageRc(by_address::ByAddress<PageRcInner>);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
@@ -108,7 +108,7 @@ pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        self.0 .0.borrow_mut()
+        self.0.0 .0.borrow_mut()
     }
 }
 
@@ -350,6 +350,7 @@ impl Page {
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 type TaskId = UniqueWeight;
 type WeightedTaskIds = std::collections::BTreeMap<TaskId, TaskInQueue>;
+type WeightedTaskIds2 = std::collections::BTreeMap<TaskId, (TaskInQueue, std::collections::HashSet<PageRc>)>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
@@ -359,7 +360,7 @@ type StuckTaskId = (CU, TaskId);
 #[derive(Default)]
 pub struct AddressBook {
     book: AddressMap,
-    uncontended_task_ids: WeightedTaskIds,
+    uncontended_task_ids: WeightedTaskIds2,
     fulfilled_provisional_task_ids: WeightedTaskIds,
     stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue>,
 }
@@ -586,11 +587,11 @@ impl Preloader {
     #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
-            PageRc(PageRcInner::new((
+            PageRc(by_address::ByAddress(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(&address, Usage::unused())),
                 //Default::default(),
                 Default::default(),
-            )))
+            ))))
         }))
     }
 }
@@ -1039,10 +1040,9 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
 
 pub struct ScheduleStage {}
 
-#[derive(PartialEq, Eq)]
 enum TaskSource {
     Runnable,
-    Contended,
+    Contended(std::collections::HashSet<PageRc>),
     Stuck,
 }
 
@@ -1075,7 +1075,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
-    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
+    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, (TaskInQueue, std::collections::HashSet<PageRc>)>> {
         address_book.uncontended_task_ids.last_entry()
     }
 
@@ -1110,7 +1110,7 @@ impl ScheduleStage {
                     None
                 } else {
                     let t = weight_from_contended.remove();
-                    Some((TaskSource::Contended, t))
+                    Some((TaskSource::Contended(t.1), t.0))
                 }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
@@ -1138,7 +1138,7 @@ impl ScheduleStage {
                     } else {
                         trace!("select: contended > runnnable, !runnable_exclusive)");
                         let t = weight_from_contended.remove();
-                        Some((TaskSource::Contended, t))
+                        Some((TaskSource::Contended(t.1), t.0))
                     }
                 } else {
                     unreachable!(
@@ -1203,7 +1203,7 @@ impl ScheduleStage {
                 contended_count,
                 task_selection,
             ) {
-                let from_runnable = task_source == TaskSource::Runnable;
+                let from_runnable = matches!(task_source, TaskSource::Runnable);
                 if from_runnable {
                     next_task.record_queue_time(*sequence_clock, *queue_clock);
                     *queue_clock = queue_clock.checked_add(1).unwrap();
@@ -1270,7 +1270,7 @@ impl ScheduleStage {
                         //address_book.uncontended_task_ids.clear();
                     }
 
-                    if from_runnable || task_source == TaskSource::Stuck {
+                    if from_runnable || matches!(task_source, TaskSource::Stuck) {
                         // for the case of being struck, we have already removed it from
                         // stuck_tasks, so pretend to add anew one.
                         // todo: optimize this needless operation
@@ -1285,7 +1285,7 @@ impl ScheduleStage {
                         if from_runnable {
                             // continue; // continue to prefer depleting the possibly-non-empty runnable queue
                             break;
-                        } else if task_source == TaskSource::Stuck {
+                        } else if matches!(task_source, TaskSource::Stuck) {
                             // need to bail out immediately to avoid going to infinite loop of re-processing
                             // the struck task again.
                             // todo?: buffer restuck tasks until readd to the stuck tasks until
@@ -1295,7 +1295,7 @@ impl ScheduleStage {
                         } else {
                             unreachable!();
                         }
-                    } else if task_source == TaskSource::Contended {
+                    } else if matches!(task_source, TaskSource::Contended(_)) {
                         // todo: remove this task from stuck_tasks before update_busiest_page_cu
                         /*
                         let removed = address_book
@@ -1354,6 +1354,18 @@ impl ScheduleStage {
                 if !from_runnable {
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
+                    if let TaskSource::Contended(uncontendeds) = task_source {
+                        for lock_attempt in next_task.lock_attempts_mut(ast).iter().filter(|l| l.requested_usage == RequestedUsage::Readonly && uncontendeds.contains(&l.target)) {
+                            if let Some(task) = lock_attempt.target_page_mut(ast).task_ids.reindex(false, &unique_weight) {
+                                if task.currently_contended() {
+                                    let uti = address_book
+                                        .uncontended_task_ids
+                                        .entry(task.unique_weight).or_insert((task, Default::default()));
+                                    uti.1.insert(lock_attempt.target.clone());
+                                }
+                            }
+                        }
+                    }
                 } else {
                     next_task.update_busiest_page_cu(busiest_page_cu);
                 }
@@ -1428,9 +1440,10 @@ impl ScheduleStage {
                     task.currently_contended() {
                         //assert!(task.currently_contended());
                         //inserted = true;
-                        address_book
+                        let uti = address_book
                             .uncontended_task_ids
-                            .insert(task.unique_weight, task);
+                            .entry(task.unique_weight).or_insert((task, Default::default()));
+                        uti.1.insert(l.target.clone());
                     } /*else {
                           let contended_unique_weights = &page.contended_unique_weights;
                           contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
@@ -1450,7 +1463,8 @@ impl ScheduleStage {
                               }
                               found.then(|| Task::clone_in_queue(task))
                           }).flatten().map(|task| {
-                              address_book.uncontended_task_ids.insert(task.unique_weight, task);
+                              let uti = address_book.uncontended_task_ids.entry(task.unique_weight).or_insert(task);
+                              uti.1.insert(????);
                               ()
                           });
                       }*/
