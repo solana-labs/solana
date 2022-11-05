@@ -1355,7 +1355,7 @@ impl ScheduleStage {
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
                     if let TaskSource::Contended(uncontendeds) = task_source {
-                        for lock_attempt in next_task.lock_attempts_mut(ast).iter().filter(|l| l.requested_usage == RequestedUsage::Readonly && uncontendeds.contains(&l.target)) {
+                        for lock_attempt in next_task.lock_attempts_mut(ast).iter().filter(|l| l.requested_usage == RequestedUsage::Readonly /*&& uncontendeds.contains(&l.target)*/) {
                             if let Some(task) = lock_attempt.target_page_mut(ast).task_ids.reindex(false, &unique_weight) {
                                 if task.currently_contended() {
                                     let uti = address_book
