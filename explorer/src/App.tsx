@@ -10,6 +10,8 @@ import { SearchBar } from "components/SearchBar";
 import { AccountDetailsPage } from "pages/AccountDetailsPage";
 import { TransactionInspectorPage } from "pages/inspector/InspectorPage";
 import { ClusterStatsPage } from "pages/ClusterStatsPage";
+import { StakeDelegationsPage } from "pages/StakeDelegationsPage";
+
 import { SupplyPage } from "pages/SupplyPage";
 import { TransactionDetailsPage } from "pages/TransactionDetailsPage";
 import { BlockDetailsPage } from "pages/BlockDetailsPage";
@@ -98,6 +100,10 @@ function App() {
           />
           <Route exact path="/">
             <ClusterStatsPage />
+          </Route>
+
+          <Route exact path="/staking">
+            <StakeDelegationsPage />
           </Route>
           <Route
             render={({ location }) => (
