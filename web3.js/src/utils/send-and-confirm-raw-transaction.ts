@@ -1,9 +1,6 @@
 import type {Buffer} from 'buffer';
 
-import {
-  BlockheightBasedTransactionConfirmationStrategy,
-  Connection,
-} from '../connection';
+import {BlockhashWithExpiryBlockHeight, Connection} from '../connection';
 import type {TransactionSignature} from '../transaction';
 import type {ConfirmOptions} from '../connection';
 
@@ -14,19 +11,19 @@ import type {ConfirmOptions} from '../connection';
  *
  * @param {Connection} connection
  * @param {Buffer} rawTransaction
- * @param {BlockheightBasedTransactionConfirmationStrategy} confirmationStrategy
+ * @param {BlockhashWithExpiryBlockHeight} blockhashWithExpiryBlockHeight
  * @param {ConfirmOptions} [options]
  * @returns {Promise<TransactionSignature>}
  */
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
-  confirmationStrategy: BlockheightBasedTransactionConfirmationStrategy,
+  blockhashWithExpiryBlockHeight: BlockhashWithExpiryBlockHeight,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature>;
 
 /**
- * @deprecated Calling `sendAndConfirmRawTransaction()` without a `confirmationStrategy`
+ * @deprecated Calling `sendAndConfirmRawTransaction()` without a `blockhashWithExpiryBlockHeight`
  * is no longer supported and will be removed in a future version.
  */
 // eslint-disable-next-line no-redeclare
@@ -40,28 +37,28 @@ export async function sendAndConfirmRawTransaction(
 export async function sendAndConfirmRawTransaction(
   connection: Connection,
   rawTransaction: Buffer,
-  confirmationStrategyOrConfirmOptions:
-    | BlockheightBasedTransactionConfirmationStrategy
+  blockhashWithExpiryBlockHeightOrConfirmOptions:
+    | BlockhashWithExpiryBlockHeight
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
 ): Promise<TransactionSignature> {
-  let confirmationStrategy:
-    | BlockheightBasedTransactionConfirmationStrategy
+  let blockhashWithExpiryBlockHeight:
+    | BlockhashWithExpiryBlockHeight
     | undefined;
   let options: ConfirmOptions | undefined;
   if (
-    confirmationStrategyOrConfirmOptions &&
+    blockhashWithExpiryBlockHeightOrConfirmOptions &&
     Object.prototype.hasOwnProperty.call(
-      confirmationStrategyOrConfirmOptions,
+      blockhashWithExpiryBlockHeightOrConfirmOptions,
       'lastValidBlockHeight',
     )
   ) {
-    confirmationStrategy =
-      confirmationStrategyOrConfirmOptions as BlockheightBasedTransactionConfirmationStrategy;
+    blockhashWithExpiryBlockHeight =
+      blockhashWithExpiryBlockHeightOrConfirmOptions as BlockhashWithExpiryBlockHeight;
     options = maybeConfirmOptions;
   } else {
-    options = confirmationStrategyOrConfirmOptions as
+    options = blockhashWithExpiryBlockHeightOrConfirmOptions as
       | ConfirmOptions
       | undefined;
   }
@@ -77,8 +74,11 @@ export async function sendAndConfirmRawTransaction(
   );
 
   const commitment = options && options.commitment;
-  const confirmationPromise = confirmationStrategy
-    ? connection.confirmTransaction(confirmationStrategy, commitment)
+  const confirmationPromise = blockhashWithExpiryBlockHeight
+    ? connection.confirmTransaction(
+        {...blockhashWithExpiryBlockHeight, signature},
+        commitment,
+      )
     : connection.confirmTransaction(signature, commitment);
   const status = (await confirmationPromise).value;
 
