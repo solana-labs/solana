@@ -1,58 +1,111 @@
-import React from "react";
+import { useEffect } from "react";
 
-import axios from "axios";
-import { TableCardBody } from "components/common/TableCardBody";
-import { Slot } from "components/common/Slot";
-
-import {
-  ClusterStatsStatus,
-  useDashboardInfo,
-  usePerformanceInfo,
-  useStatsProvider,
-} from "providers/stats/solanaClusterStats";
-import { abbreviatedNumber, lamportsToSol, slotsToHumanString } from "utils";
-import { ClusterStatus, useCluster } from "providers/cluster";
-import { LiveTransactionStatsCard } from "components/LiveTransactionStatsCard";
-import { displayTimestampWithoutDate } from "utils/date";
-import { Status, useFetchSupply, useSupply } from "providers/supply";
-import { ErrorCard } from "components/common/ErrorCard";
-import { LoadingCard } from "components/common/LoadingCard";
 import { useVoteAccounts } from "providers/accounts/vote-accounts";
-import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
-import { Epoch } from "components/common/Epoch";
-import { TimestampToggle } from "components/common/TimestampToggle";
-import { StakeMeta } from "validators/accounts/stake";
-
-const CLUSTER_STATS_TIMEOUT = 5000;
 
 export function StakeDelegationsPage() {
-  const url = "https://api.solanabeach.io/v1";
-  const auth = "d2498ef9-f0c7-4551-9f9f-69b26366204f";
+  const { voteAccounts, fetchVoteAccounts } = useVoteAccounts();
+  useEffect(() => {
+    fetchVoteAccounts();
+    console.log(voteAccounts?.current);
+  }, [voteAccounts]);
 
-  const config = {
-    headers: { Authorization: `Bearer ${auth}` },
-  };
-
-  const bodyParameters = {
-    key: "value",
-  };
-
-  axios.post(url, bodyParameters, config).then(console.log).catch(console.log);
+  // return <div> For testing purposes</div>;
   return (
-    <div className="container mt-4">
-      <StakingComponent />
+    <>
       <div className="card">
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
-              <h4 className="card-header-title">
-                Staking Data for the Network
-              </h4>
+              <h2 className="card-header-title"> Current Validator Data </h2>
+            </div>
+            <div className="col-auto">
+              Total Nodes: {voteAccounts?.current.length}
             </div>
           </div>
         </div>
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
+                <th className="text-muted">#</th>
+                <th className="text-muted">IDENTITY</th>
+                <th className="text-muted text-end">IP</th>
+                <th className="text-muted text-end">Gossip</th>
+                <th className="text-muted text-end">TPU</th>
+                <th className="text-muted text-end">Version</th>
+              </tr>
+            </thead>
+            <tbody className="list">
+              <tr>
+                <td>
+                  <span className="badge bg-gray-soft badge-pill">
+                    goog thing
+                  </span>
+                </td>
+                <td className="text-start">3439894343</td>
+                <td className="text-end">good thing</td>
+                <td className="text-end">NUll page</td>
+                <td className="text-end">googd</td>
+                <td className="text-end">dfdtere</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+      <div className="card">
+        <div className="card-header">
+          <div className="row align-items-center">
+            <div className="col">
+              <h2 className="card-header-title centered ">Network Nodes</h2>
+            </div>
+            <div className="col-auto">Total Nodes:34</div>
+          </div>
+        </div>
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
+                <th className="text-muted">#</th>
+                <th className="text-muted">IDENTITY</th>
+                <th className="text-muted text-end">IP</th>
+                <th className="text-muted text-end">Gossip</th>
+                <th className="text-muted text-end">TPU</th>
+                <th className="text-muted text-end">Version</th>
+              </tr>
+            </thead>
+            <tbody className="list">
+              <tr>
+                <td>
+                  <span className="badge bg-gray-soft badge-pill">
+                    goog thing
+                  </span>
+                </td>
+                <td className="text-start">3439894343</td>
+                <td className="text-end">good thing</td>
+                <td className="text-end">NUll page</td>
+                <td className="text-end">googd</td>
+                <td className="text-end">dfdtere</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+
+    // <div className="container mt-4">
+    //   <StakingComponent />
+    //   <div className="card">
+    //     <div className="card-header">
+    //       <div className="row align-items-center">
+    //         <div className="col">
+    //           <h4 className="card-header-title">
+    //             Staking Data for the Network
+    //           </h4>
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </div>
+    // </div>
   );
 }
 

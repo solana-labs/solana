@@ -30,6 +30,7 @@ function App() {
         <MessageBanner />
         <NetworkStatusNotifier />
         <ClusterStatusBanner />
+        <p> Example of a good thing that has ever happened to the human mind</p>
         <SearchBar />
         <Switch>
           <Route exact path={["/supply", "/accounts", "accounts/top"]}>
