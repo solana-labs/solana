@@ -298,12 +298,14 @@ impl AccountsHashVerifier {
             );
 
         measure_hash.stop();
-        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-            accounts_package.snapshot_links.path(),
-            accounts_package.slot,
-            &accounts_hash,
-            None,
-        );
+        if let Some(snapshot_info) = &accounts_package.snapshot_info {
+            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                snapshot_info.snapshot_links.path(),
+                accounts_package.slot,
+                &accounts_hash,
+                None,
+            );
+        }
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
