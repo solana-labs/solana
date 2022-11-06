@@ -83,9 +83,10 @@ impl ExecutionEnvironment {
             };
 
             if should_remove && lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt
-                    .target_contended_write_task_count()
-                    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                //lock_attempt
+                //    .target_contended_write_task_count()
+                //    .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt.target_page_mut(ast).write_task_ids.remove(&uq);
             }
         }
     }
@@ -154,11 +155,18 @@ impl LockAttempt {
     pub fn target_contended_unique_weights(&self) -> &TaskIds {
         panic!()//&self.target.0 .1
     }
-    */
 
     pub fn target_contended_write_task_count(&self) -> &std::sync::atomic::AtomicUsize {
         &self.target.0 .1
     }
+
+    */
+
+    /*
+    pub fn remember_write_task_id<AST: AtScheduleThread>(&self, kst: AST, unique_weight: UniqueWeight) {
+        self.target_page_mut(ast).write_task_ids.insert(unique_weight);
+    }
+    */
 
     fn target_page_mut<AST: AtScheduleThread>(&self, ast: AST) -> std::cell::RefMut<'_, Page> {
         self.target.page_mut(ast)
@@ -323,6 +331,7 @@ pub struct Page {
     provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
     cu: CU,
     task_ids: TaskIds,
+    write_task_ids: std::collections::BTreeSet<UniqueWeight>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -337,6 +346,7 @@ impl Page {
             provisional_task_ids: Default::default(),
             cu: Default::default(),
             task_ids: Default::default(),
+            write_task_ids: Default::default(),
         }
     }
 
@@ -418,10 +428,13 @@ impl AddressBook {
         } else if tcuw.unwrap() == *unique_weight {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly
+            /*
             && attempt
                 .target_contended_write_task_count()
                 .load(std::sync::atomic::Ordering::SeqCst)
                 == 0
+            */
+            && attempt.target_page_mut(ast).write_task_ids.last().map(|j| unique_weight > j).unwrap_or(true)
         {
             true
         } else {
@@ -840,9 +853,10 @@ impl Task {
                 .insert_task(this.unique_weight, Task::clone_in_queue(this));
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt
-                    .target_contended_write_task_count()
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                //lock_attempt
+                //    .target_contended_write_task_count()
+                //    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                lock_attempt.target_page_mut(ast).write_task_ids.insert(this.unique_weight);
             }
         }
         //let a = Task::clone_in_queue(this);
