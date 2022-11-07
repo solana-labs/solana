@@ -374,19 +374,31 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        snapshot_utils::snapshot_bank(
-            &snapshot_root_bank,
-            status_cache_slot_deltas,
-            &self.accounts_package_sender,
+        let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
+        let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
             &self.snapshot_config.bank_snapshots_dir,
-            &self.snapshot_config.full_snapshot_archives_dir,
-            &self.snapshot_config.incremental_snapshot_archives_dir,
+            &snapshot_root_bank,
+            &snapshot_storages,
             self.snapshot_config.snapshot_version,
-            self.snapshot_config.archive_format,
-            hash_for_testing,
-            accounts_package_type,
         )
         .expect("snapshot bank");
+        let accounts_package = AccountsPackage::new(
+            accounts_package_type,
+            &snapshot_root_bank,
+            &bank_snapshot_info,
+            &self.snapshot_config.bank_snapshots_dir,
+            status_cache_slot_deltas,
+            &self.snapshot_config.full_snapshot_archives_dir,
+            &self.snapshot_config.incremental_snapshot_archives_dir,
+            snapshot_storages,
+            self.snapshot_config.archive_format,
+            self.snapshot_config.snapshot_version,
+            hash_for_testing,
+        )
+        .expect("failed to hard link bank snapshot into a tmpdir");
+        self.accounts_package_sender
+            .send(accounts_package)
+            .expect("send accounts package");
         snapshot_time.stop();
         info!(
             "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
