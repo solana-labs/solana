@@ -19,6 +19,7 @@ use {
         RequestMiddlewareAction, ServerBuilder,
     },
     regex::Regex,
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
@@ -40,7 +41,6 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
-    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         collections::HashSet,
         net::SocketAddr,

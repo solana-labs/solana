@@ -40,6 +40,7 @@ solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.15.
 solana-clap-utils = { path = "../clap-utils", version = "=1.15.0" }
 solana-cli-config = { path = "../cli-config", version = "=1.15.0" }
 solana-cli-output = { path = "../cli-output", version = "=1.15.0" }
+solana-client = { path = "../client", version = "=1.15.0" }
 solana-config-program = { path = "../programs/config", version = "=1.15.0" }
 solana-faucet = { path = "../faucet", version = "=1.15.0" }
 solana-logger = { path = "../logger", version = "=1.15.0" }

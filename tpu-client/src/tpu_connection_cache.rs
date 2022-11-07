@@ -16,7 +16,7 @@ use {
 };
 
 // Should be non-zero
-pub(crate) static MAX_CONNECTIONS: usize = 1024;
+pub static MAX_CONNECTIONS: usize = 1024;
 
 /// Used to decide whether the TPU and underlying connection cache should use
 /// QUIC connections.

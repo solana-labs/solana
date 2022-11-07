@@ -1,6 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
 
-pub mod connection_cache;
 pub mod connection_cache_stats;
 pub mod nonblocking;
 pub mod quic_client;

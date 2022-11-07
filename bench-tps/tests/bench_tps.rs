@@ -8,6 +8,11 @@ use {
         send_batch::generate_durable_nonce_accounts,
         spl_convert::FromOtherSolana,
     },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        thin_client::ThinClient,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
     solana_local_cluster::{
@@ -25,11 +30,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidatorGenesis,
-    solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     std::{sync::Arc, time::Duration},
 };
 

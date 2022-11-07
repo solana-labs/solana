@@ -70,7 +70,7 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{
+    solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
     },
     solana_validator::{

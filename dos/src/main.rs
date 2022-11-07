@@ -45,6 +45,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
+    solana_client::connection_cache::ConnectionCache,
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
@@ -67,8 +68,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        tpu_connection::TpuConnection,
+        tpu_connection::TpuConnection, tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     },
     std::{
         net::{SocketAddr, UdpSocket},
@@ -786,6 +786,7 @@ fn main() {
 pub mod test {
     use {
         super::*,
+        solana_client::thin_client::ThinClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
@@ -795,7 +796,6 @@ pub mod test {
         },
         solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::timing::timestamp,
-        solana_thin_client::thin_client::ThinClient,
     };
 
     const TEST_SEND_BATCH_SIZE: usize = 1;

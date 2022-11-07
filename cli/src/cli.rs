@@ -31,7 +31,7 @@ use {
         stake::{instruction::LockupArgs, state::Lockup},
         transaction::{TransactionError, VersionedTransaction},
     },
-    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
+    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_vote_program::vote_state::VoteAuthorize,
     std::{collections::HashMap, error, io::stdout, str::FromStr, sync::Arc, time::Duration},
     thiserror::Error,
