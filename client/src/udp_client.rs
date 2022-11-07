@@ -1,7 +1,7 @@
 //! Simple TPU client that communicates with the given UDP port with UDP and provides
 //! an interface for sending transactions
 
-pub use solana_tpu_client::udp_client::UdpTpuConnection;
+pub use solana_udp_client::udp_client::UdpTpuConnection;
 use {
     crate::tpu_connection::TpuConnection, core::iter::repeat,
     solana_sdk::transport::Result as TransportResult, solana_streamer::sendmmsg::batch_send,

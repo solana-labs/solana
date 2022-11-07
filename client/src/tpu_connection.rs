@@ -4,6 +4,7 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_quic_client::quic_client::QuicTpuConnection,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
+    solana_tpu_client::quic_client::QuicTpuConnection,
     solana_udp_client::udp_client::UdpTpuConnection,
     std::net::SocketAddr,
 };

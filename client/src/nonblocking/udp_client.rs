@@ -1,7 +1,7 @@
 //! Simple UDP client that communicates with the given UDP port with UDP and provides
 //! an interface for sending transactions
 
-pub use solana_tpu_client::nonblocking::udp_client::UdpTpuConnection;
+pub use solana_udp_client::nonblocking::udp_client::UdpTpuConnection;
 use {
     crate::nonblocking::tpu_connection::TpuConnection, async_trait::async_trait,
     core::iter::repeat, solana_sdk::transport::Result as TransportResult,

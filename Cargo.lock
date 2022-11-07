@@ -5007,6 +5007,7 @@ dependencies = [
  "solana-streamer",
  "solana-thin-client",
  "solana-tpu-client",
+ "solana-udp-client",
  "thiserror",
  "tokio",
 ]
@@ -6677,9 +6678,13 @@ dependencies = [
 name = "solana-udp-client"
 version = "1.15.0"
 dependencies = [
+ "async-trait",
  "solana-net-utils",
+ "solana-sdk 1.15.0",
+ "solana-streamer",
  "solana-tpu-client",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
