@@ -515,8 +515,8 @@ impl QuicClient {
 }
 
 pub struct QuicTpuConnection {
-    client: Arc<QuicClient>,
-    connection_stats: Arc<ConnectionCacheStats>,
+    pub client: Arc<QuicClient>,
+    pub connection_stats: Arc<ConnectionCacheStats>,
 }
 
 impl QuicTpuConnection {

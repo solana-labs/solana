@@ -4,7 +4,7 @@
 //! unstable and may change in future releases.
 
 use {
-    crate::connection_cache::ConnectionCache,
+    crate::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     log::*,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{config::RpcProgramAccountsConfig, response::Response},
@@ -27,7 +27,6 @@ use {
         transport::Result as TransportResult,
     },
     solana_thin_client::thin_client::temporary_pub::*,
-    solana_tpu_client::tpu_connection::TpuConnection,
     std::{
         io,
         net::SocketAddr,

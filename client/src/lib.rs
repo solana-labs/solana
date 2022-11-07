@@ -2,9 +2,15 @@
 
 pub mod connection_cache;
 pub mod nonblocking;
+pub mod quic_client;
 pub mod thin_client;
 pub mod tpu_client;
+pub mod tpu_connection;
 pub mod transaction_executor;
+pub mod udp_client;
+
+#[macro_use]
+extern crate solana_metrics;
 
 pub use solana_rpc_client::mock_sender_for_cli;
 
@@ -22,11 +28,6 @@ pub mod nonce_utils {
 }
 pub mod pubsub_client {
     pub use solana_pubsub_client::pubsub_client::*;
-}
-/// Simple client that connects to a given UDP port with the QUIC protocol and provides
-/// an interface for sending transactions which is restricted by the server's flow control.
-pub mod quic_client {
-    pub use solana_tpu_client::quic_client::*;
 }
 /// Communication with a Solana node over RPC.
 ///
@@ -61,12 +62,4 @@ pub mod rpc_response {
 /// A transport for RPC calls.
 pub mod rpc_sender {
     pub use solana_rpc_client::rpc_sender::*;
-}
-pub mod tpu_connection {
-    pub use solana_tpu_client::tpu_connection::*;
-}
-/// Simple TPU client that communicates with the given UDP port with UDP and provides
-/// an interface for sending transactions
-pub mod udp_client {
-    pub use solana_tpu_client::udp_client::*;
 }

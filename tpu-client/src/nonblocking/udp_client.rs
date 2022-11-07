@@ -9,8 +9,8 @@ use {
 };
 
 pub struct UdpTpuConnection {
-    socket: UdpSocket,
-    addr: SocketAddr,
+    pub socket: UdpSocket,
+    pub addr: SocketAddr,
 }
 
 impl UdpTpuConnection {

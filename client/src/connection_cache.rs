@@ -2,6 +2,9 @@ pub use solana_tpu_client::tpu_connection_cache::{
     DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
 };
 use {
+    crate::{
+        nonblocking::tpu_connection::NonblockingConnection, tpu_connection::BlockingConnection,
+    },
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -15,11 +18,9 @@ use {
     },
     solana_tpu_client::{
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
-        nonblocking::{
-            quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
-            tpu_connection::NonblockingConnection,
+        nonblocking::quic_client::{
+            QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        tpu_connection::BlockingConnection,
         tpu_connection_cache::MAX_CONNECTIONS,
     },
     std::{

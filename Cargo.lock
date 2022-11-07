@@ -4984,7 +4984,9 @@ dependencies = [
 name = "solana-client"
 version = "1.15.0"
 dependencies = [
+ "async-trait",
  "bincode",
+ "enum_dispatch",
  "futures 0.3.24",
  "futures-util",
  "indexmap",
@@ -4995,6 +4997,7 @@ dependencies = [
  "rayon",
  "solana-logger 1.15.0",
  "solana-measure",
+ "solana-metrics",
  "solana-net-utils",
  "solana-pubsub-client",
  "solana-rpc-client",
