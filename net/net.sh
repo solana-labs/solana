@@ -814,6 +814,7 @@ extraPrimordialStakes=0
 disableQuic=false
 enableUdp=false
 clientType=thin-client
+url=""
 
 command=$1
 [[ -n $command ]] || usage
@@ -959,6 +960,9 @@ while [[ -n $1 ]]; do
           exit 1
           ;;
       esac
+      shift 2
+    elif [[ $1 = --url ]]; then
+      url=$2
       shift 2
     else
       usage "Unknown long option: $1"

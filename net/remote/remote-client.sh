@@ -12,6 +12,7 @@ fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
 clientType="${7:-thin-client}"
+url="${8:-""}"
 
 
 missing() {
@@ -75,11 +76,20 @@ solana-bench-tps)
     args+=(--use-tpu-client)
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
+  else
+    args+=(--entrypoint "$entrypointIp:8001")
+  fi
+
+  if ${TPU_CLIENT} || ${RPC_CLIENT}; then 
+    if [[ url = "" ]]; then
+       echo "URL param must be specified for tpu and rpc client"
+       exit 1
+    fi
+    args+=(--url "$url")
   fi
 
   clientCommand="\
     solana-bench-tps \
-      --entrypoint $entrypointIp:8001 \
       --duration 7500 \
       --sustained \
       --threads $threadCount \
