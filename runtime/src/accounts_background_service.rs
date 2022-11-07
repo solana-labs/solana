@@ -374,7 +374,7 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        let result = snapshot_utils::snapshot_bank(
+        snapshot_utils::snapshot_bank(
             &snapshot_root_bank,
             status_cache_slot_deltas,
             &self.accounts_package_sender,
@@ -385,26 +385,16 @@ impl SnapshotRequestHandler {
             self.snapshot_config.archive_format,
             hash_for_testing,
             accounts_package_type,
-        );
-        if let Err(e) = result {
-            warn!(
-                "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
-                snapshot_root_bank.slot(),
-                accounts_package_type,
-                e,
-            );
-
-            if Self::is_snapshot_error_fatal(&e) {
-                return Err(e);
-            }
-        }
+        )
+        .expect("snapshot bank");
         snapshot_time.stop();
-        info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-              accounts_package_type,
-              snapshot_root_bank.slot(),
-              snapshot_root_bank.get_accounts_hash(),
-              snapshot_root_bank.hash(),
-              );
+        info!(
+            "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+            accounts_package_type,
+            snapshot_root_bank.slot(),
+            snapshot_root_bank.get_accounts_hash(),
+            snapshot_root_bank.hash(),
+          );
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -431,31 +421,6 @@ impl SnapshotRequestHandler {
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
         Ok(snapshot_root_bank.block_height())
-    }
-
-    /// Check if a SnapshotError should be treated as 'fatal' by SnapshotRequestHandler, and
-    /// `handle_snapshot_requests()` in particular.  Fatal errors will cause the node to shutdown.
-    /// Non-fatal errors are logged and then swallowed.
-    ///
-    /// All `SnapshotError`s are enumerated, and there is **NO** default case.  This way, if
-    /// a new error is added to SnapshotError, a conscious decision must be made on how it should
-    /// be handled.
-    fn is_snapshot_error_fatal(err: &SnapshotError) -> bool {
-        match err {
-            SnapshotError::Io(..) => true,
-            SnapshotError::Serialize(..) => true,
-            SnapshotError::ArchiveGenerationFailure(..) => true,
-            SnapshotError::StoragePathSymlinkInvalid => true,
-            SnapshotError::UnpackError(..) => true,
-            SnapshotError::IoWithSource(..) => true,
-            SnapshotError::PathToFileNameError(..) => true,
-            SnapshotError::FileNameToStrError(..) => true,
-            SnapshotError::ParseSnapshotArchiveFileNameError(..) => true,
-            SnapshotError::MismatchedBaseSlot(..) => true,
-            SnapshotError::NoSnapshotArchives => true,
-            SnapshotError::MismatchedSlotHash(..) => true,
-            SnapshotError::VerifySlotDeltas(..) => true,
-        }
     }
 }
 
