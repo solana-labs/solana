@@ -12,8 +12,6 @@ fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
 clientType="${7:-thin-client}"
-url="${8:-""}"
-
 
 missing() {
   echo "Error: $1 not specified"
@@ -74,18 +72,12 @@ solana-bench-tps)
 
   if ${TPU_CLIENT}; then
     args+=(--use-tpu-client)
+    args+=(--url "$entrypointIp:8899")
   elif ${RPC_CLIENT}; then
     args+=(--use-rpc-client)
+    args+=(--url "$entrypointIp:8899")
   else
     args+=(--entrypoint "$entrypointIp:8001")
-  fi
-
-  if ${TPU_CLIENT} || ${RPC_CLIENT}; then 
-    if [[ url = "" ]]; then
-       echo "URL param must be specified for tpu and rpc client"
-       exit 1
-    fi
-    args+=(--url "$url")
   fi
 
   clientCommand="\
