@@ -5796,7 +5796,6 @@ dependencies = [
  "async-mutex",
  "async-trait",
  "bincode",
- "enum_dispatch",
  "futures 0.3.24",
  "futures-util",
  "indexmap",

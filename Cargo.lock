@@ -6594,7 +6594,6 @@ dependencies = [
  "async-trait",
  "bincode",
  "crossbeam-channel",
- "enum_dispatch",
  "futures 0.3.24",
  "futures-util",
  "indexmap",
