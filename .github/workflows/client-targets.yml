@@ -3,7 +3,7 @@ name: client_targets
 on:
   pull_request:
     branches:
-     - master
+      - master
     paths:
       - "client/**"
       - "sdk/**"
@@ -41,7 +41,7 @@ jobs:
 
       - name: Nightly build
         run: ./cargo nightly ndk --target ${{ matrix.target }} build -p solana-client
-      
+
       - name: Send Slack notifiaction
         if: failure()
         env:
