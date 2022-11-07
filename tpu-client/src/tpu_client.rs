@@ -1,8 +1,8 @@
 pub use crate::nonblocking::tpu_client::TpuSenderError;
 use {
     crate::{
-        connection_cache::ConnectionCache,
         nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
+        tpu_connection_cache::{ConnectionPool, TpuConnectionCache},
     },
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_rpc_client::rpc_client::RpcClient,
@@ -57,14 +57,14 @@ impl Default for TpuClientConfig {
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
-pub struct TpuClient {
+pub struct TpuClient<P: ConnectionPool> {
     _deprecated: UdpSocket, // TpuClient now uses the connection_cache to choose a send_socket
     //todo: get rid of this field
     rpc_client: Arc<RpcClient>,
-    tpu_client: Arc<NonblockingTpuClient>,
+    tpu_client: Arc<NonblockingTpuClient<P>>,
 }
 
-impl TpuClient {
+impl<P: ConnectionPool> TpuClient<P> {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
@@ -126,7 +126,7 @@ impl TpuClient {
         rpc_client: Arc<RpcClient>,
         websocket_url: &str,
         config: TpuClientConfig,
-        connection_cache: Arc<ConnectionCache>,
+        connection_cache: Arc<TpuConnectionCache<P>>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
             rpc_client.get_inner_client().clone(),

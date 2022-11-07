@@ -262,7 +262,7 @@ pub enum ConnectionPoolError {
 }
 
 pub trait NewTpuConfig {
-    type ClientError;
+    type ClientError: std::fmt::Debug;
     fn new() -> Result<Self, Self::ClientError>
     where
         Self: Sized;
