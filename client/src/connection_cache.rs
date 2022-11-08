@@ -8,6 +8,9 @@ use {
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
+    solana_quic_client::nonblocking::quic_client::{
+        QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
+    },
     solana_sdk::{
         pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
     },
@@ -18,9 +21,6 @@ use {
     },
     solana_tpu_client::{
         connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
-        nonblocking::quic_client::{
-            QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
-        },
         tpu_connection_cache::MAX_CONNECTIONS,
     },
     std::{

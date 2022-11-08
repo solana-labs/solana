@@ -3,8 +3,8 @@
 use {
     async_trait::async_trait,
     enum_dispatch::enum_dispatch,
+    solana_quic_client::nonblocking::quic_client::QuicTpuConnection,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    solana_tpu_client::nonblocking::quic_client::QuicTpuConnection,
     solana_udp_client::nonblocking::udp_client::UdpTpuConnection,
     std::net::SocketAddr,
 };

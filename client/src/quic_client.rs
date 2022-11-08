@@ -1,14 +1,14 @@
 //! Simple client that connects to a given UDP port with the QUIC protocol and provides
 //! an interface for sending transactions which is restricted by the server's flow control.
 
-pub use solana_tpu_client::quic_client::QuicTpuConnection;
+pub use solana_quic_client::quic_client::QuicTpuConnection;
 use {
     crate::{
         nonblocking::tpu_connection::TpuConnection as NonblockingTpuConnection,
         tpu_connection::TpuConnection,
     },
+    solana_quic_client::quic_client::temporary_pub::*,
     solana_sdk::transport::Result as TransportResult,
-    solana_tpu_client::quic_client::temporary_pub::*,
     std::net::SocketAddr,
 };
 

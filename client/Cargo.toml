@@ -24,6 +24,7 @@ solana-measure = { path = "../measure", version = "=1.15.0" }
 solana-metrics = { path = "../metrics", version = "=1.15.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.15.0" }
 solana-pubsub-client = { path = "../pubsub-client", version = "=1.15.0" }
+solana-quic-client = { path = "../quic-client", version = "=1.15.0" }
 solana-rpc-client = { path = "../rpc-client", version = "=1.15.0" }
 solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
 solana-rpc-client-nonce-utils = { path = "../rpc-client-nonce-utils", version = "=1.15.0" }
