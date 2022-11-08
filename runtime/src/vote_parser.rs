@@ -23,15 +23,7 @@ pub(crate) fn is_simple_vote_transaction(transaction: &SanitizedTransaction) -> 
         if program_pubkey == &solana_vote_program::id() {
             if let Ok(vote_instruction) = limited_deserialize::<VoteInstruction>(&instruction.data)
             {
-                return matches!(
-                    vote_instruction,
-                    VoteInstruction::Vote(_)
-                        | VoteInstruction::VoteSwitch(_, _)
-                        | VoteInstruction::UpdateVoteState(_)
-                        | VoteInstruction::UpdateVoteStateSwitch(_, _)
-                        | VoteInstruction::CompactUpdateVoteState(_)
-                        | VoteInstruction::CompactUpdateVoteStateSwitch(..)
-                );
+                return vote_instruction.is_simple_vote();
             }
         }
     }

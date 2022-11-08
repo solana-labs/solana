@@ -1,10 +1,10 @@
 use {
     crate::{
         bench_tps_client::*,
-        cli::Config,
-        inline_instruction_padding_program::{create_padded_instruction, InstructionPaddingConfig},
+        cli::{Config, InstructionPaddingConfig},
         perf_utils::{sample_txs, SampleStats},
         send_batch::*,
+        spl_convert::FromOtherSolana,
     },
     log::*,
     rand::distributions::{Distribution, Uniform},
@@ -25,6 +25,7 @@ use {
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
+    spl_instruction_padding::instruction::wrap_instruction,
     std::{
         collections::{HashSet, VecDeque},
         process::exit,
@@ -46,7 +47,7 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
-/// calculate maximum possible prioritizatino fee, if `use-randomized-compute-unit-price` is
+/// calculate maximum possible prioritization fee, if `use-randomized-compute-unit-price` is
 /// enabled, round to nearest lamports.
 pub fn max_lamports_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
     if use_randomized_compute_unit_price {
@@ -552,13 +553,15 @@ fn transfer_with_compute_unit_price_and_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        create_padded_instruction(
-            instruction_padding_config.program_id,
-            transfer_instruction,
-            vec![],
-            instruction_padding_config.data_size,
+        FromOtherSolana::from(
+            wrap_instruction(
+                FromOtherSolana::from(instruction_padding_config.program_id),
+                FromOtherSolana::from(transfer_instruction),
+                vec![],
+                instruction_padding_config.data_size,
+            )
+            .expect("Could not create padded instruction"),
         )
-        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };
@@ -645,13 +648,15 @@ fn nonced_transfer_with_padding(
     let from_pubkey = from_keypair.pubkey();
     let transfer_instruction = system_instruction::transfer(&from_pubkey, to, lamports);
     let instruction = if let Some(instruction_padding_config) = instruction_padding_config {
-        create_padded_instruction(
-            instruction_padding_config.program_id,
-            transfer_instruction,
-            vec![],
-            instruction_padding_config.data_size,
+        FromOtherSolana::from(
+            wrap_instruction(
+                FromOtherSolana::from(instruction_padding_config.program_id),
+                FromOtherSolana::from(transfer_instruction),
+                vec![],
+                instruction_padding_config.data_size,
+            )
+            .expect("Could not create padded instruction"),
         )
-        .expect("Could not create padded instruction")
     } else {
         transfer_instruction
     };

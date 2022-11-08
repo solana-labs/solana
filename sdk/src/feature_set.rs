@@ -482,16 +482,20 @@ pub mod compact_vote_state_updates {
     solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
 }
 
-pub mod sign_repair_requests {
-    solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
-}
-
 pub mod incremental_snapshot_only_incremental_hash_calculation {
     solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
 }
 
 pub mod disable_cpi_setting_executable_and_rent_epoch {
     solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
+}
+
+pub mod on_load_preserve_rent_epoch_for_rent_exempt_accounts {
+    solana_sdk::declare_id!("CpkdQmspsaZZ8FVAouQTtTWZkc8eeQ7V3uj7dWz543rZ");
+}
+
+pub mod account_hash_ignore_slot {
+    solana_sdk::declare_id!("SVn36yVApPLYsa8koK3qUcy14zXDnqkNYWyUh1f4oK1");
 }
 
 pub mod relax_authority_signer_check_for_lookup_table_creation {
@@ -524,6 +528,14 @@ pub mod increase_tx_account_lock_limit {
 
 pub mod limit_max_instruction_trace_length {
     solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
+}
+
+pub mod check_syscall_outputs_do_not_overlap {
+    solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
+}
+
+pub mod enable_bpf_loader_set_authority_checked_ix {
+    solana_sdk::declare_id!("5x3825XS7M2A3Ekbn5VGGkvFoAg5qrRWkTrY4bARP1GL");
 }
 
 lazy_static! {
@@ -597,8 +609,8 @@ lazy_static! {
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
         (bank_tranaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
-        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* BPF instructions"),
-        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved BPF symbols at runtime"),
+        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* SBF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved SBF symbols at runtime"),
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
@@ -636,12 +648,13 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (account_hash_ignore_slot::id(), "ignore slot when calculating an account hash #28420"),
+        (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
-        (sign_repair_requests::id(), "sign repair requests #26834"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
         (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
         (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
@@ -651,7 +664,9 @@ lazy_static! {
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
-        (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
+        (limit_max_instruction_trace_length::id(), "limit max instruction trace length #27939"),
+        (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
+        (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
@@ -690,7 +705,7 @@ lazy_static! {
 }
 
 /// `FeatureSet` holds the set of currently active/inactive runtime features
-#[derive(AbiExample, Debug, Clone)]
+#[derive(AbiExample, Debug, Clone, Eq, PartialEq)]
 pub struct FeatureSet {
     pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,

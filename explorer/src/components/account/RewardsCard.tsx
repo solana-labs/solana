@@ -7,22 +7,27 @@ import { ErrorCard } from "components/common/ErrorCard";
 import { Slot } from "components/common/Slot";
 import { lamportsToSolString } from "utils";
 import { useAccountInfo } from "providers/accounts";
-import BN from "bn.js";
 import { Epoch } from "components/common/Epoch";
 
-const MAX_EPOCH = new BN(2).pow(new BN(64)).sub(new BN(1));
+const U64_MAX = BigInt("0xffffffffffffffff");
 
 export function RewardsCard({ pubkey }: { pubkey: PublicKey }) {
   const address = React.useMemo(() => pubkey.toBase58(), [pubkey]);
   const info = useAccountInfo(address);
   const account = info?.data;
-  const data = account?.details?.data?.parsed.info;
+  const parsedData = account?.data.parsed;
 
   const highestEpoch = React.useMemo(() => {
-    if (data.stake && !data.stake.delegation.deactivationEpoch.eq(MAX_EPOCH)) {
-      return data.stake.delegation.deactivationEpoch.toNumber();
+    if (!parsedData) return;
+    if (parsedData.program !== "stake") return;
+    const stakeInfo = parsedData.parsed.info.stake;
+    if (
+      stakeInfo !== null &&
+      stakeInfo.delegation.deactivationEpoch !== U64_MAX
+    ) {
+      return Number(stakeInfo.delegation.deactivationEpoch);
     }
-  }, [data]);
+  }, [parsedData]);
 
   const rewards = useRewards(address);
   const fetchRewards = useFetchRewards();

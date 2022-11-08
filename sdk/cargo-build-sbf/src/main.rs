@@ -72,7 +72,7 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    let mut msg = format!("cargo-build-sbf child: {}", program.display());
+    let mut msg = format!("spawn: {}", program.display());
     for arg in args.iter() {
         msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
     }
@@ -830,7 +830,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.29";
+    let sbf_tools_version = "v1.31";
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

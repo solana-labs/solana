@@ -430,15 +430,10 @@ impl AncestorHashesService {
                     return None;
                 }
                 stats.ping_count += 1;
-                // Respond both with and without domain so that the other node
-                // will accept the response regardless of its upgrade status.
-                // TODO: remove domain = false once cluster is upgraded.
-                for domain in [false, true] {
-                    if let Ok(pong) = Pong::new(domain, &ping, keypair) {
-                        let pong = RepairProtocol::Pong(pong);
-                        if let Ok(pong_bytes) = serialize(&pong) {
-                            let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
-                        }
+                if let Ok(pong) = Pong::new(&ping, keypair) {
+                    let pong = RepairProtocol::Pong(pong);
+                    if let Ok(pong_bytes) = serialize(&pong) {
+                        let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
                     }
                 }
                 None
@@ -643,7 +638,6 @@ impl AncestorHashesService {
                     repair_stats,
                     outstanding_requests,
                     identity_keypair,
-                    &root_bank,
                 ) {
                     request_throttle.push(timestamp());
                     repairable_dead_slot_pool.take(&slot).unwrap();
@@ -719,7 +713,6 @@ impl AncestorHashesService {
         repair_stats: &mut AncestorRepairRequestsStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         identity_keypair: &Keypair,
-        root_bank: &Bank,
     ) -> bool {
         let sampled_validators = serve_repair.repair_request_ancestor_hashes_sample_peers(
             duplicate_slot,
@@ -738,7 +731,6 @@ impl AncestorHashesService {
                     .add_request(AncestorHashesRepairType(duplicate_slot), timestamp());
                 let request_bytes = serve_repair.ancestor_repair_request_bytes(
                     identity_keypair,
-                    root_bank,
                     pubkey,
                     duplicate_slot,
                     nonce,
@@ -768,7 +760,7 @@ mod test {
     use {
         super::*,
         crate::{
-            cluster_slot_state_verifier::DuplicateSlotsToRepair,
+            cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
             repair_service::DuplicateSlotsResetReceiver,
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
@@ -1164,7 +1156,6 @@ mod test {
         } = ManageAncestorHashesState::new(vote_simulator.bank_forks);
 
         let RepairInfo {
-            bank_forks,
             cluster_info: requester_cluster_info,
             cluster_slots,
             repair_validators,
@@ -1181,7 +1172,6 @@ mod test {
             &mut repair_stats,
             &outstanding_requests,
             &requester_cluster_info.keypair(),
-            &bank_forks.read().unwrap().root_bank(),
         );
         assert!(ancestor_hashes_request_statuses.is_empty());
 
@@ -1200,7 +1190,6 @@ mod test {
             &mut repair_stats,
             &outstanding_requests,
             &requester_cluster_info.keypair(),
-            &bank_forks.read().unwrap().root_bank(),
         );
 
         assert_eq!(ancestor_hashes_request_statuses.len(), 1);
@@ -1553,6 +1542,7 @@ mod test {
             &bank_forks,
             &requester_blockstore,
             None,
+            &mut PurgeRepairSlotCounter::default(),
         );
 
         // Simulate making a request

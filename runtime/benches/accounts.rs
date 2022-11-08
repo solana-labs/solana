@@ -94,13 +94,9 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     let slot = 0;
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
-    let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
-        0,
-        &ancestors,
-        &EpochSchedule::default(),
-        &RentCollector::default(),
-        true,
-    );
+    let (_, total_lamports) = accounts
+        .accounts_db
+        .update_accounts_hash_for_tests(0, &ancestors, false, false);
     let test_hash_calculation = false;
     bencher.iter(|| {
         assert!(accounts.verify_bank_hash_and_lamports(
@@ -112,7 +108,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             &RentCollector::default(),
             false,
             false,
-            true,
             false,
         ))
     });
@@ -132,13 +127,9 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, 50_000, 0);
     let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
-        accounts.accounts_db.update_accounts_hash(
-            0,
-            &ancestors,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-            true,
-        );
+        accounts
+            .accounts_db
+            .update_accounts_hash_for_tests(0, &ancestors, false, false);
     });
 }
 

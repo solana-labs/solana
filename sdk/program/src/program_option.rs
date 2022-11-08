@@ -960,16 +960,6 @@ impl<T> From<COption<T>> for Option<T> {
     }
 }
 
-#[rustversion::before(1.49.0)] // Remove `Into` once the BPF toolchain upgrades to 1.49.0 or newer
-impl<T> Into<Option<T>> for COption<T> {
-    fn into(self) -> Option<T> {
-        match self {
-            COption::Some(value) => Some(value),
-            COption::None => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

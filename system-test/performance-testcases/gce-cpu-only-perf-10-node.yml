@@ -3,12 +3,13 @@ steps:
     label: "GCE performance testnets CPU ONLY"
     env:
       UPLOAD_RESULTS_TO_SLACK: "true"
+      UPLOAD_RESULTS_TO_DISCORD: "true"
       CLOUD_PROVIDER: "gce"
       TESTNET_TAG: "gce-perf-cpu-only"
       TEST_DURATION_SECONDS: 600
       NUMBER_OF_VALIDATOR_NODES: 10
       ENABLE_GPU: "false"
-      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n1-standard-16"
+      VALIDATOR_NODE_MACHINE_TYPE: "--machine-type n2-standard-16"
       NUMBER_OF_CLIENT_NODES: 1
       CLIENT_OPTIONS: "bench-tps=1=--tx_count 10000 --thread-batch-sleep-ms 250"
       TESTNET_ZONES: "us-west1-a,us-west1-b,us-central1-a,europe-west4-a"

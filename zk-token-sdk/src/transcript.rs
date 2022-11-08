@@ -58,6 +58,9 @@ pub trait TranscriptProtocol {
     /// Append a domain separator for fee sigma proof.
     fn fee_sigma_proof_domain_sep(&mut self);
 
+    /// Append a domain separator for public-key proof.
+    fn pubkey_proof_domain_sep(&mut self);
+
     /// Check that a point is not the identity, then append it to the
     /// transcript.  Otherwise, return an error.
     fn validate_and_append_point(
@@ -160,5 +163,9 @@ impl TranscriptProtocol for Transcript {
 
     fn fee_sigma_proof_domain_sep(&mut self) {
         self.append_message(b"dom-sep", b"fee-sigma-proof")
+    }
+
+    fn pubkey_proof_domain_sep(&mut self) {
+        self.append_message(b"dom-sep", b"pubkey-proof")
     }
 }

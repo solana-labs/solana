@@ -20,7 +20,7 @@ static const uint64_t MAX_CPI_INSTRUCTION_DATA_LEN = 10240;
 
 /**
  * Maximum CPI instruction accounts. 255 was chosen to ensure that instruction
- * accounts are always within the maximum instruction account limit for BPF
+ * accounts are always within the maximum instruction account limit for SBF
  * program instructions.
  */
 static const uint8_t MAX_CPI_INSTRUCTION_ACCOUNTS = 255;

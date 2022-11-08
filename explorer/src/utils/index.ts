@@ -169,7 +169,7 @@ export function abbreviatedNumber(value: number, fixed = 1) {
 }
 
 export const pubkeyToString = (key: PublicKey | string = "") => {
-  return typeof key === "string" ? key : key?.toBase58() || "";
+  return typeof key === "string" ? key : key.toBase58();
 };
 
 export const getLast = (arr: string[]) => {

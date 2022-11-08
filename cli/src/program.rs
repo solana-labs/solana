@@ -405,43 +405,8 @@ impl ProgramSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("Deploy a non-upgradeable program. Use `solana program deploy` instead to deploy upgradeable programs")
+                .about("Deploy has been removed. Use `solana program deploy` instead to deploy upgradeable programs")
                 .setting(AppSettings::Hidden)
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PROGRAM_FILEPATH")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                )
-                .arg(
-                    Arg::with_name("address_signer")
-                        .index(2)
-                        .value_name("PROGRAM_ADDRESS_SIGNER")
-                        .takes_value(true)
-                        .validator(is_valid_signer)
-                        .help("The signer for the desired address of the program [default: new random address]")
-                )
-                .arg(
-                    Arg::with_name("use_deprecated_loader")
-                        .long("use-deprecated-loader")
-                        .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
-                        .help("Use the deprecated BPF loader")
-                )
-                .arg(
-                    Arg::with_name("allow_excessive_balance")
-                        .long("allow-excessive-deploy-account-balance")
-                        .takes_value(false)
-                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
-                )
-                .arg(
-                    Arg::with_name("skip_fee_check")
-                        .long("skip-fee-check")
-                        .hidden(true)
-                        .takes_value(false)
-                ),
         )
     }
 }
@@ -1433,7 +1398,7 @@ fn process_show(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())
@@ -1503,7 +1468,7 @@ fn process_dump(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())
@@ -1693,53 +1658,6 @@ fn process_close(
                 use_lamports_unit,
             }))
     }
-}
-
-/// Deploy using non-upgradeable loader
-pub fn process_deploy(
-    rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
-    program_location: &str,
-    buffer_signer_index: Option<SignerIndex>,
-    use_deprecated_loader: bool,
-    allow_excessive_balance: bool,
-    skip_fee_check: bool,
-) -> ProcessResult {
-    // Create ephemeral keypair to use for Buffer account, if not provided
-    let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
-    let buffer_signer = if let Some(i) = buffer_signer_index {
-        config.signers[i]
-    } else {
-        &buffer_keypair
-    };
-
-    let program_data = read_and_verify_elf(program_location)?;
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let loader_id = if use_deprecated_loader {
-        bpf_loader_deprecated::id()
-    } else {
-        bpf_loader::id()
-    };
-
-    let result = do_process_program_write_and_deploy(
-        rpc_client,
-        config,
-        &program_data,
-        program_data.len(),
-        program_data.len(),
-        minimum_balance,
-        &loader_id,
-        Some(&[buffer_signer]),
-        Some(buffer_signer),
-        &buffer_signer.pubkey(),
-        Some(buffer_signer),
-        allow_excessive_balance,
-        skip_fee_check,
-    );
-    if result.is_err() && buffer_signer_index.is_none() {
-        report_ephemeral_mnemonic(words, mnemonic);
-    }
-    result
 }
 
 fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
@@ -2083,7 +2001,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
     let mut transaction_context = TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
     let executable = Executable::<ThisInstructionMeter>::from_elf(
@@ -2092,7 +2010,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
             reject_broken_elfs: true,
             ..Config::default()
         },
-        register_syscalls(&mut invoke_context, true).unwrap(),
+        register_syscalls(&invoke_context.feature_set, true).unwrap(),
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 

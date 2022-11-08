@@ -133,7 +133,7 @@ pub fn write_keypair<W: Write>(
 ) -> Result<String, Box<dyn error::Error>> {
     let keypair_bytes = keypair.0.to_bytes();
     let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
-    writer.write_all(&serialized.clone().into_bytes())?;
+    writer.write_all(serialized.as_bytes())?;
     Ok(serialized)
 }
 

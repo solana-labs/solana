@@ -54,11 +54,11 @@ export function TokenAccountSection({
       case "mint": {
         const info = create(tokenAccount.info, MintAccountInfo);
 
-        if (isMetaplexNFT(account.details?.data, info)) {
+        if (isMetaplexNFT(account.data.parsed, info)) {
           return (
             <NonFungibleTokenMintAccountCard
               account={account}
-              nftData={(account.details!.data as TokenProgramData).nftData!}
+              nftData={(account.data.parsed as TokenProgramData).nftData!}
               mintInfo={info}
             />
           );
@@ -95,7 +95,7 @@ function FungibleTokenMintAccountCard({
   const { tokenRegistry } = useTokenRegistry();
   const mintAddress = account.pubkey.toBase58();
   const fetchInfo = useFetchAccountInfo();
-  const refresh = () => fetchInfo(account.pubkey);
+  const refresh = () => fetchInfo(account.pubkey, "parsed");
   const tokenInfo = tokenRegistry.get(mintAddress);
 
   const bridgeContractAddress = getEthAddress(
@@ -303,7 +303,7 @@ function NonFungibleTokenMintAccountCard({
   mintInfo: MintAccountInfo;
 }) {
   const fetchInfo = useFetchAccountInfo();
-  const refresh = () => fetchInfo(account.pubkey);
+  const refresh = () => fetchInfo(account.pubkey, "parsed");
 
   return (
     <div className="card">
@@ -360,6 +360,14 @@ function NonFungibleTokenMintAccountCard({
             <td>Mint Authority</td>
             <td className="text-lg-end">
               <Address pubkey={mintInfo.mintAuthority} alignRight link />
+            </td>
+          </tr>
+        )}
+        {mintInfo.freezeAuthority && (
+          <tr>
+            <td>Freeze Authority</td>
+            <td className="text-lg-end">
+              <Address pubkey={mintInfo.freezeAuthority} alignRight link />
             </td>
           </tr>
         )}
@@ -437,7 +445,7 @@ function TokenAccountCard({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
@@ -516,7 +524,7 @@ function MultisigAccountCard({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
