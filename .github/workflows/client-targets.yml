@@ -1,6 +1,9 @@
 name: client_targets
 
 on:
+  push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
