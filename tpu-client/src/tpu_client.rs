@@ -19,20 +19,25 @@ use {
     tokio::time::Duration,
 };
 
-type Result<T> = std::result::Result<T, TpuSenderError>;
+pub mod temporary_pub {
+    use super::*;
+
+    pub type Result<T> = std::result::Result<T, TpuSenderError>;
+
+    /// Send at ~100 TPS
+    #[cfg(feature = "spinner")]
+    pub const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
+    /// Retry batch send after 4 seconds
+    #[cfg(feature = "spinner")]
+    pub const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
+}
+use temporary_pub::*;
 
 /// Default number of slots used to build TPU socket fanout set
 pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
 
 /// Maximum number of slots used to build TPU socket fanout set
 pub const MAX_FANOUT_SLOTS: u64 = 100;
-
-/// Send at ~100 TPS
-#[cfg(feature = "spinner")]
-pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
-/// Retry batch send after 4 seconds
-#[cfg(feature = "spinner")]
-pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Config params for `TpuClient`
 #[derive(Clone, Debug)]

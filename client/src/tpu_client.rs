@@ -1,4 +1,7 @@
-pub use crate::nonblocking::tpu_client::TpuSenderError;
+pub use {
+    crate::nonblocking::tpu_client::TpuSenderError,
+    solana_tpu_client::tpu_client::{TpuClientConfig, DEFAULT_FANOUT_SLOTS, MAX_FANOUT_SLOTS},
+};
 use {
     crate::{
         connection_cache::ConnectionCache,
@@ -7,48 +10,14 @@ use {
     rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
-        clock::Slot,
         message::Message,
         signers::Signers,
         transaction::{Transaction, TransactionError},
         transport::Result as TransportResult,
     },
-    std::{
-        collections::VecDeque,
-        net::UdpSocket,
-        sync::{Arc, RwLock},
-    },
-    tokio::time::Duration,
+    solana_tpu_client::tpu_client::temporary_pub::Result,
+    std::{net::UdpSocket, sync::Arc},
 };
-
-type Result<T> = std::result::Result<T, TpuSenderError>;
-
-/// Default number of slots used to build TPU socket fanout set
-pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
-
-/// Maximum number of slots used to build TPU socket fanout set
-pub const MAX_FANOUT_SLOTS: u64 = 100;
-
-/// Send at ~100 TPS
-pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
-/// Retry batch send after 4 seconds
-pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
-
-/// Config params for `TpuClient`
-#[derive(Clone, Debug)]
-pub struct TpuClientConfig {
-    /// The range of upcoming slots to include when determining which
-    /// leaders to send transactions to (min: 1, max: `MAX_FANOUT_SLOTS`)
-    pub fanout_slots: u64,
-}
-
-impl Default for TpuClientConfig {
-    fn default() -> Self {
-        Self {
-            fanout_slots: DEFAULT_FANOUT_SLOTS,
-        }
-    }
-}
 
 /// Client which sends transactions directly to the current leader's TPU port over UDP.
 /// The client uses RPC to determine the current leader and fetch node contact info
@@ -159,94 +128,5 @@ impl TpuClient {
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.
         tokio::task::block_in_place(move || self.rpc_client.runtime().block_on(f))
-    }
-}
-
-// 48 chosen because it's unlikely that 12 leaders in a row will miss their slots
-const MAX_SLOT_SKIP_DISTANCE: u64 = 48;
-
-#[derive(Clone, Debug)]
-pub(crate) struct RecentLeaderSlots(Arc<RwLock<VecDeque<Slot>>>);
-impl RecentLeaderSlots {
-    pub(crate) fn new(current_slot: Slot) -> Self {
-        let mut recent_slots = VecDeque::new();
-        recent_slots.push_back(current_slot);
-        Self(Arc::new(RwLock::new(recent_slots)))
-    }
-
-    pub(crate) fn record_slot(&self, current_slot: Slot) {
-        let mut recent_slots = self.0.write().unwrap();
-        recent_slots.push_back(current_slot);
-        // 12 recent slots should be large enough to avoid a misbehaving
-        // validator from affecting the median recent slot
-        while recent_slots.len() > 12 {
-            recent_slots.pop_front();
-        }
-    }
-
-    // Estimate the current slot from recent slot notifications.
-    pub(crate) fn estimated_current_slot(&self) -> Slot {
-        let mut recent_slots: Vec<Slot> = self.0.read().unwrap().iter().cloned().collect();
-        assert!(!recent_slots.is_empty());
-        recent_slots.sort_unstable();
-
-        // Validators can broadcast invalid blocks that are far in the future
-        // so check if the current slot is in line with the recent progression.
-        let max_index = recent_slots.len() - 1;
-        let median_index = max_index / 2;
-        let median_recent_slot = recent_slots[median_index];
-        let expected_current_slot = median_recent_slot + (max_index - median_index) as u64;
-        let max_reasonable_current_slot = expected_current_slot + MAX_SLOT_SKIP_DISTANCE;
-
-        // Return the highest slot that doesn't exceed what we believe is a
-        // reasonable slot.
-        recent_slots
-            .into_iter()
-            .rev()
-            .find(|slot| *slot <= max_reasonable_current_slot)
-            .unwrap()
-    }
-}
-
-#[cfg(test)]
-impl From<Vec<Slot>> for RecentLeaderSlots {
-    fn from(recent_slots: Vec<Slot>) -> Self {
-        assert!(!recent_slots.is_empty());
-        Self(Arc::new(RwLock::new(recent_slots.into_iter().collect())))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_slot(recent_slots: RecentLeaderSlots, expected_slot: Slot) {
-        assert_eq!(recent_slots.estimated_current_slot(), expected_slot);
-    }
-
-    #[test]
-    fn test_recent_leader_slots() {
-        assert_slot(RecentLeaderSlots::new(0), 0);
-
-        let mut recent_slots: Vec<Slot> = (1..=12).collect();
-        assert_slot(RecentLeaderSlots::from(recent_slots.clone()), 12);
-
-        recent_slots.reverse();
-        assert_slot(RecentLeaderSlots::from(recent_slots), 12);
-
-        assert_slot(
-            RecentLeaderSlots::from(vec![0, 1 + MAX_SLOT_SKIP_DISTANCE]),
-            1 + MAX_SLOT_SKIP_DISTANCE,
-        );
-        assert_slot(
-            RecentLeaderSlots::from(vec![0, 2 + MAX_SLOT_SKIP_DISTANCE]),
-            0,
-        );
-
-        assert_slot(RecentLeaderSlots::from(vec![1]), 1);
-        assert_slot(RecentLeaderSlots::from(vec![1, 100]), 1);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 100]), 2);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 3, 100]), 3);
-        assert_slot(RecentLeaderSlots::from(vec![1, 2, 3, 99, 100]), 3);
     }
 }
