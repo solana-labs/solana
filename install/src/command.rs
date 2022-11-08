@@ -400,7 +400,7 @@ fn add_to_path(new_path: &str) -> bool {
         return false;
     };
 
-    if !old_path.contains(&new_path) {
+    if !old_path.contains(new_path) {
         let mut new_path = new_path.to_string();
         if !old_path.is_empty() {
             new_path.push(';');
