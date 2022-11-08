@@ -28,7 +28,6 @@ function App() {
       <div className="main-content pb-4">
         <Navbar />
         <MessageBanner />
-        <NetworkStatusNotifier />
         <ClusterStatusBanner />
         <SearchBar />
         <Switch>
