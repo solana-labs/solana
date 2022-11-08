@@ -26,96 +26,15 @@ use {
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
+    solana_thin_client::thin_client::temporary_pub::*,
     solana_tpu_client::tpu_connection::TpuConnection,
     std::{
         io,
         net::SocketAddr,
-        sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, RwLock,
-        },
+        sync::Arc,
         time::{Duration, Instant},
     },
 };
-
-struct ClientOptimizer {
-    cur_index: AtomicUsize,
-    experiment_index: AtomicUsize,
-    experiment_done: AtomicBool,
-    times: RwLock<Vec<u64>>,
-    num_clients: usize,
-}
-
-fn min_index(array: &[u64]) -> (u64, usize) {
-    let mut min_time = std::u64::MAX;
-    let mut min_index = 0;
-    for (i, time) in array.iter().enumerate() {
-        if *time < min_time {
-            min_time = *time;
-            min_index = i;
-        }
-    }
-    (min_time, min_index)
-}
-
-impl ClientOptimizer {
-    fn new(num_clients: usize) -> Self {
-        Self {
-            cur_index: AtomicUsize::new(0),
-            experiment_index: AtomicUsize::new(0),
-            experiment_done: AtomicBool::new(false),
-            times: RwLock::new(vec![std::u64::MAX; num_clients]),
-            num_clients,
-        }
-    }
-
-    fn experiment(&self) -> usize {
-        if self.experiment_index.load(Ordering::Relaxed) < self.num_clients {
-            let old = self.experiment_index.fetch_add(1, Ordering::Relaxed);
-            if old < self.num_clients {
-                old
-            } else {
-                self.best()
-            }
-        } else {
-            self.best()
-        }
-    }
-
-    fn report(&self, index: usize, time_ms: u64) {
-        if self.num_clients > 1
-            && (!self.experiment_done.load(Ordering::Relaxed) || time_ms == std::u64::MAX)
-        {
-            trace!(
-                "report {} with {} exp: {}",
-                index,
-                time_ms,
-                self.experiment_index.load(Ordering::Relaxed)
-            );
-
-            self.times.write().unwrap()[index] = time_ms;
-
-            if index == (self.num_clients - 1) || time_ms == std::u64::MAX {
-                let times = self.times.read().unwrap();
-                let (min_time, min_index) = min_index(&times);
-                trace!(
-                    "done experimenting min: {} time: {} times: {:?}",
-                    min_index,
-                    min_time,
-                    times
-                );
-
-                // Only 1 thread should grab the num_clients-1 index, so this should be ok.
-                self.cur_index.store(min_index, Ordering::Relaxed);
-                self.experiment_done.store(true, Ordering::Relaxed);
-            }
-        }
-    }
-
-    fn best(&self) -> usize {
-        self.cur_index.load(Ordering::Relaxed)
-    }
-}
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -624,29 +543,5 @@ impl AsyncClient for ThinClient {
         let conn = self.connection_cache.get_connection(self.tpu_addr());
         conn.par_serialize_and_send_transaction_batch(&batch[..])?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use {super::*, rayon::prelude::*};
-
-    #[test]
-    fn test_client_optimizer() {
-        solana_logger::setup();
-
-        const NUM_CLIENTS: usize = 5;
-        let optimizer = ClientOptimizer::new(NUM_CLIENTS);
-        (0..NUM_CLIENTS).into_par_iter().for_each(|_| {
-            let index = optimizer.experiment();
-            optimizer.report(index, (NUM_CLIENTS - index) as u64);
-        });
-
-        let index = optimizer.experiment();
-        optimizer.report(index, 50);
-        assert_eq!(optimizer.best(), NUM_CLIENTS - 1);
-
-        optimizer.report(optimizer.best(), std::u64::MAX);
-        assert_eq!(optimizer.best(), NUM_CLIENTS - 2);
     }
 }
