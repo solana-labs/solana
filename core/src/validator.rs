@@ -322,14 +322,14 @@ impl BlockstoreRootScan {
 }
 
 #[derive(Default)]
-struct TransactionHistoryServices {
-    transaction_status_sender: Option<TransactionStatusSender>,
-    transaction_status_service: Option<TransactionStatusService>,
-    max_complete_transaction_status_slot: Arc<AtomicU64>,
-    rewards_recorder_sender: Option<RewardsRecorderSender>,
-    rewards_recorder_service: Option<RewardsRecorderService>,
-    cache_block_meta_sender: Option<CacheBlockMetaSender>,
-    cache_block_meta_service: Option<CacheBlockMetaService>,
+pub struct TransactionHistoryServices {
+    pub transaction_status_sender: Option<TransactionStatusSender>,
+    pub transaction_status_service: Option<TransactionStatusService>,
+    pub max_complete_transaction_status_slot: Arc<AtomicU64>,
+    pub rewards_recorder_sender: Option<RewardsRecorderSender>,
+    pub rewards_recorder_service: Option<RewardsRecorderService>,
+    pub cache_block_meta_sender: Option<CacheBlockMetaSender>,
+    pub cache_block_meta_service: Option<CacheBlockMetaService>,
 }
 
 pub struct Validator {

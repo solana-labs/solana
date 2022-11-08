@@ -281,7 +281,7 @@ fn output_slot(
 }
 
 fn output_ledger(
-    blockstore: Blockstore,
+    blockstore: Arc<Blockstore>,
     starting_slot: Slot,
     ending_slot: Slot,
     allow_dead_slots: bool,
@@ -807,7 +807,7 @@ fn open_blockstore(
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     shred_storage_type: &ShredStorageType,
-) -> Blockstore {
+) -> Arc<Blockstore> {
     match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -820,7 +820,7 @@ fn open_blockstore(
             },
         },
     ) {
-        Ok(blockstore) => blockstore,
+        Ok(blockstore) => Arc::new(blockstore),
         Err(err) => {
             eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
             exit(1);
@@ -840,7 +840,7 @@ fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
 fn load_bank_forks(
     arg_matches: &ArgMatches,
     genesis_config: &GenesisConfig,
-    blockstore: &Blockstore,
+    blockstore: &Arc<Blockstore>,
     process_options: ProcessOptions,
     snapshot_archive_path: Option<PathBuf>,
     incremental_snapshot_archive_path: Option<PathBuf>,
@@ -954,12 +954,17 @@ fn load_bank_forks(
         None,
     );
 
+    let transaction_history_service =
+        initialize_rpc_transaction_history_services(blockstore.clone(), &exit, true, false, None);
+
     let result = blockstore_processor::process_blockstore_from_root(
         blockstore,
         &bank_forks,
         &leader_schedule_cache,
         &process_options,
-        None,
+        transaction_history_service
+            .transaction_status_sender
+            .as_ref(),
         None,
         &AbsRequestSender::default(),
     )
@@ -969,6 +974,54 @@ fn load_bank_forks(
     accounts_background_service.join().unwrap();
 
     result
+}
+
+fn initialize_rpc_transaction_history_services(
+    blockstore: Arc<Blockstore>,
+    exit: &Arc<AtomicBool>,
+    enable_rpc_transaction_history: bool,
+    enable_extended_tx_metadata_storage: bool,
+    transaction_notifier: Option<TransactionNotifierLock>,
+) -> TransactionHistoryServices {
+    let max_complete_transaction_status_slot = Arc::new(AtomicU64::new(blockstore.max_root()));
+    let (transaction_status_sender, transaction_status_receiver) = unbounded();
+    let transaction_status_sender = Some(TransactionStatusSender {
+        sender: transaction_status_sender,
+    });
+    let transaction_status_service = Some(TransactionStatusService::new(
+        transaction_status_receiver,
+        max_complete_transaction_status_slot.clone(),
+        enable_rpc_transaction_history,
+        transaction_notifier.clone(),
+        blockstore.clone(),
+        enable_extended_tx_metadata_storage,
+        exit,
+    ));
+
+    let (rewards_recorder_sender, rewards_receiver) = unbounded();
+    let rewards_recorder_sender = Some(rewards_recorder_sender);
+    let rewards_recorder_service = Some(RewardsRecorderService::new(
+        rewards_receiver,
+        blockstore.clone(),
+        exit,
+    ));
+
+    let (cache_block_meta_sender, cache_block_meta_receiver) = unbounded();
+    let cache_block_meta_sender = Some(cache_block_meta_sender);
+    let cache_block_meta_service = Some(CacheBlockMetaService::new(
+        cache_block_meta_receiver,
+        blockstore,
+        exit,
+    ));
+    TransactionHistoryServices {
+        transaction_status_sender,
+        transaction_status_service,
+        max_complete_transaction_status_slot,
+        rewards_recorder_sender,
+        rewards_recorder_service,
+        cache_block_meta_sender,
+        cache_block_meta_service,
+    }
 }
 
 fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
@@ -1065,6 +1118,19 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use {
+    crossbeam_channel::unbounded,
+    solana_core::{
+        cache_block_meta_service::CacheBlockMetaService,
+        rewards_recorder_service::RewardsRecorderService, validator::TransactionHistoryServices,
+    },
+    solana_ledger::blockstore_processor::TransactionStatusSender,
+    solana_rpc::{
+        transaction_notifier_interface::TransactionNotifierLock,
+        transaction_status_service::TransactionStatusService,
+    },
+    std::sync::atomic::AtomicU64,
+};
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -3948,16 +4014,16 @@ fn main() {
                 };
             }
             ("analyze-storage", _) => {
-                analyze_storage(
-                    &open_blockstore(
-                        &ledger_path,
-                        AccessType::Secondary,
-                        wal_recovery_mode,
-                        &shred_storage_type,
-                    )
-                    .db(),
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
                 );
-                println!("Ok.");
+                if let Ok(blockstore) = Arc::try_unwrap(blockstore) {
+                    analyze_storage(&blockstore.db());
+                    println!("Ok.");
+                }
             }
             ("compute-slot-cost", Some(arg_matches)) => {
                 let blockstore = open_blockstore(

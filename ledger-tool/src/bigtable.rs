@@ -37,7 +37,7 @@ use {
 };
 
 async fn upload(
-    blockstore: Blockstore,
+    blockstore: Arc<Blockstore>,
     mut starting_slot: Slot,
     ending_slot: Option<Slot>,
     force_reupload: bool,
@@ -51,8 +51,8 @@ async fn upload(
         force_reupload,
         ..ConfirmedBlockUploadConfig::default()
     };
-    let blockstore = Arc::new(blockstore);
 
+    let blockstore = blockstore;
     let ending_slot = ending_slot.unwrap_or_else(|| blockstore.last_root());
 
     while starting_slot <= ending_slot {
