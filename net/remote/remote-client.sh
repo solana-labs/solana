@@ -11,6 +11,7 @@ if [[ -n $4 ]]; then
 fi
 benchTpsExtraArgs="$5"
 clientIndex="$6"
+clientType="${7:-thin-client}"
 
 missing() {
   echo "Error: $1 not specified"
@@ -41,18 +42,52 @@ skip)
   exit 1
 esac
 
+TPU_CLIENT=false
+RPC_CLIENT=false
+case "$clientType" in
+  thin-client)
+    TPU_CLIENT=false
+    RPC_CLIENT=false
+    ;;
+  tpu-client)
+    TPU_CLIENT=true
+    RPC_CLIENT=false
+    ;;
+  rpc-client)
+    TPU_CLIENT=false
+    RPC_CLIENT=true
+    ;;
+  *)
+    echo "Unexpected clientType: \"$clientType\""
+    exit 1
+    ;;
+esac
+
 case $clientToRun in
 solana-bench-tps)
   net/scripts/rsync-retry.sh -vPrc \
     "$entrypointIp":~/solana/config/bench-tps"$clientIndex".yml ./client-accounts.yml
+
+  args=()
+
+  if ${TPU_CLIENT}; then
+    args+=(--use-tpu-client)
+    args+=(--url "$entrypointIp:8899")
+  elif ${RPC_CLIENT}; then
+    args+=(--use-rpc-client)
+    args+=(--url "$entrypointIp:8899")
+  else
+    args+=(--entrypoint "$entrypointIp:8001")
+  fi
+
   clientCommand="\
     solana-bench-tps \
-      --entrypoint $entrypointIp:8001 \
       --duration 7500 \
       --sustained \
       --threads $threadCount \
       $benchTpsExtraArgs \
       --read-client-keys ./client-accounts.yml \
+      ${args[*]} \
   "
   ;;
 idle)
