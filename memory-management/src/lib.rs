@@ -1,6 +1,5 @@
 #![deny(clippy::integer_arithmetic)]
 pub mod aligned_memory;
-pub mod dynamic_layout;
 
 /// Returns true if `ptr` is aligned to `align`.
 pub fn is_memory_aligned(ptr: usize, align: usize) -> bool {
