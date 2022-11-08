@@ -4,7 +4,9 @@ import { useVoteAccounts } from "providers/accounts/vote-accounts";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
-import { PublicKey } from "@solana/web3.js";
+import { LeaderSchedule, PublicKey } from "@solana/web3.js";
+
+import { useLeaderSchedule } from "providers/accounts/leader-schedule";
 
 const PAGINATION_COUNT = 7;
 
@@ -12,11 +14,17 @@ export function StakeDelegationsPage() {
   const { status } = useCluster();
 
   const { voteAccounts, fetchVoteAccounts } = useVoteAccounts();
+  const { leaderSchedule, fetchLeaderSchedule } = useLeaderSchedule();
   useEffect(() => {
-    if (status === ClusterStatus.Connected) fetchVoteAccounts();
+    if (status === ClusterStatus.Connected) {
+      fetchVoteAccounts();
+      fetchLeaderSchedule();
+    }
   }, [status]);
 
-  if (voteAccounts)
+  console.log(leaderSchedule);
+
+  if (voteAccounts && leaderSchedule)
     return (
       <>
         <div>
@@ -28,6 +36,7 @@ export function StakeDelegationsPage() {
             title="Deliquent Validators Data"
             cardData={voteAccounts.delinquent}
           />
+          <RenderLeaderSchedule leaderSchedule={leaderSchedule} />
         </div>
       </>
     );
@@ -75,28 +84,110 @@ function RenderCardSection({
             <tbody className="list">
               {cardData
                 .slice(0, displayedCount)
-                .map((data: any, index: number) => {
+                .map((data: rowData, index: number): JSX.Element => {
                   return renderRowData(index, data);
                 })}
             </tbody>
-            {cardData.length > PAGINATION_COUNT && (
-              <div className="card-footer">
-                <button
-                  className="btn btn-primary"
-                  onClick={() =>
-                    setDisplayedCount(
-                      (displayed) => displayed + PAGINATION_COUNT
-                    )
-                  }
-                >
-                  Load More
-                </button>
-              </div>
-            )}
           </table>
+          {cardData.length > PAGINATION_COUNT && (
+            <div className="card-footer">
+              <button
+                className="btn btn-primary w-100"
+                onClick={() =>
+                  setDisplayedCount(
+                    (displayed: number): number => displayed + PAGINATION_COUNT
+                  )
+                }
+              >
+                Load More
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>
+  );
+}
+
+function RenderLeaderSchedule({
+  leaderSchedule,
+}: {
+  leaderSchedule: LeaderSchedule;
+}): JSX.Element {
+  const [displayedCount, setDisplayedCount] =
+    React.useState<number>(PAGINATION_COUNT);
+  return (
+    <>
+      <div className="card">
+        <div className="card-header">
+          <div className="row align-items-center">
+            <div className="col">
+              <h2 className="card-header-title">
+                These are the Leader Schedule for the current epoch
+              </h2>
+            </div>
+            <div className="col-auto">
+              Total Nodes: {Object.keys(leaderSchedule).length}
+            </div>
+          </div>
+        </div>
+        <div className="table-responsive mb-0">
+          <table className="table table-sm table-nowrap card-table">
+            <thead>
+              <tr>
+                <th className="text-muted">#</th>
+                <th className="text-muted">IDENTITY</th>
+              </tr>
+            </thead>
+            {Object.keys(leaderSchedule)
+              .slice(0, displayedCount)
+              .map((leaderPubKey: string, index: number) => {
+                const data = {
+                  leaderKey: leaderPubKey,
+                  data: leaderSchedule[leaderPubKey],
+                };
+                return renderLeaderSchedule(index, data);
+              })}
+          </table>
+          {Object.keys(leaderSchedule).length > PAGINATION_COUNT && (
+            <div className="card-footer">
+              <button
+                className="btn btn-primary w-100"
+                onClick={() =>
+                  setDisplayedCount(
+                    (displayed: number): number => displayed + PAGINATION_COUNT
+                  )
+                }
+              >
+                Load More
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+type leaderSchedule = {
+  leaderKey: string;
+  data: number[];
+};
+function renderLeaderSchedule(
+  index: number,
+  data: leaderSchedule
+): JSX.Element {
+  const leaderKey: PublicKey = new PublicKey(data.leaderKey);
+
+  return (
+    <tr key={index}>
+      <td>
+        <span className="badge bg-gray-soft badge-pill">{index + 1}</span>
+      </td>
+      <td className="text-start">
+        <Address pubkey={leaderKey} link />
+      </td>
+    </tr>
   );
 }
 
