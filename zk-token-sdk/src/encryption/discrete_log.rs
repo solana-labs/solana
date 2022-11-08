@@ -127,7 +127,7 @@ impl DiscreteLog {
     }
 
     /// Solves the discrete log problem under the assumption that the solution
-    /// is a 32-bit number.
+    /// is a positive 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
         let mut starting_point = self.target;
         let handles = (0..self.num_threads)
@@ -144,7 +144,6 @@ impl DiscreteLog {
                         self.range_bound,
                         self.compression_batch_size,
                     )
-                    // Self::decode_range(ristretto_iterator, self.range_bound)
                 });
 
                 starting_point -= G;
@@ -174,6 +173,7 @@ impl DiscreteLog {
             .take(range_bound)
             .chunks(compression_batch_size)
         {
+            // batch compression currently errors if any point in the batch is the identity point
             let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
                 .filter(|(point, index)| {
                     if point.is_identity() {
@@ -199,7 +199,7 @@ impl DiscreteLog {
     }
 }
 
-/// HashableRistretto iterator.
+/// Hashable Ristretto iterator.
 ///
 /// Given an initial point X and a stepping point P, the iterator iterates through
 /// X + 0*P, X + 1*P, X + 2*P, X + 3*P, ...
