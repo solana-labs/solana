@@ -32,15 +32,11 @@ jobs:
 
       - name: Setup Rust
         run: |
-          source ci/rust-version.sh all
+          source ci/rust-version.sh stable
           rustup target add --toolchain "$rust_stable" ${{ matrix.target }}
-          rustup target add --toolchain "$rust_nightly" ${{ matrix.target }}
 
       - name: Stable build
         run: ./cargo stable ndk --target ${{ matrix.target }} build -p solana-client
-
-      - name: Nightly build
-        run: ./cargo nightly ndk --target ${{ matrix.target }} build -p solana-client
 
       - name: Send Slack notifiaction
         if: failure()
@@ -68,15 +64,11 @@ jobs:
 
       - name: Setup Rust
         run: |
-          source ci/rust-version.sh all
+          source ci/rust-version.sh stable
           rustup target add --toolchain "$rust_stable" ${{ matrix.target }}
-          rustup target add --toolchain "$rust_nightly" ${{ matrix.target }}
 
       - name: Stable build
         run: ./cargo stable build --target ${{ matrix.target }} -p solana-client
-
-      - name: Nightly build
-        run: ./cargo nightly build --target ${{ matrix.target }} -p solana-client
 
       - name: Send Slack notifiaction
         if: failure()
