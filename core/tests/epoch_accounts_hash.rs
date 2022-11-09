@@ -63,10 +63,10 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     /// A small, round number to make the tests run quickly, and easy to debug
-    const SLOTS_PER_EPOCH: u64 = 100;
+    const SLOTS_PER_EPOCH: u64 = 400;
 
     /// A small, round number to ensure accounts packages are sent to the background services
-    const ACCOUNTS_HASH_INTERVAL: u64 = 10;
+    const ACCOUNTS_HASH_INTERVAL: u64 = 40;
 
     #[must_use]
     fn new() -> TestEnvironment {
@@ -252,7 +252,7 @@ impl Drop for BackgroundServices {
 /// Ensure that EAHs are requested, calculated, and awaited correctly.
 /// Test both with and without snapshots to make sure they don't interfere with EAH.
 #[test_case(TestEnvironment::new()                      ; "without snapshots")]
-#[test_case(TestEnvironment::new_with_snapshots(20, 10) ; "with snapshots")]
+#[test_case(TestEnvironment::new_with_snapshots(80, 40) ; "with snapshots")]
 fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
     solana_logger::setup();
 
@@ -366,10 +366,10 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;
 
-    // Since slots-per-epoch is 100, EAH start will be slots 25 and 125, and EAH stop will be slots
-    // 75 and 175.  Pick a full snapshot interval that triggers in the three scenarios outlined in
+    // Since slots-per-epoch is 400, EAH start will be slots 100 and 500, and EAH stop will be slots
+    // 300 and 700.  Pick a full snapshot interval that triggers in the three scenarios outlined in
     // the test's description.
-    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 80;
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
@@ -484,7 +484,7 @@ fn test_background_services_request_handling() {
     solana_logger::setup();
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;
-    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 80;
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
