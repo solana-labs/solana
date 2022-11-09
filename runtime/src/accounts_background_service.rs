@@ -382,7 +382,7 @@ impl SnapshotRequestHandler {
             self.snapshot_config.snapshot_version,
         )
         .expect("snapshot bank");
-        let accounts_package = AccountsPackage::new(
+        let accounts_package = AccountsPackage::new_for_snapshot(
             accounts_package_type,
             &snapshot_root_bank,
             &bank_snapshot_info,
