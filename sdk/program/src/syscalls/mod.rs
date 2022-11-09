@@ -1,3 +1,7 @@
+//! Declarations of Solana program syscalls.
+//!
+//! This module is mostly empty when not compiling for BPF targets.
+
 #[cfg(target_os = "solana")]
 mod definitions;
 
