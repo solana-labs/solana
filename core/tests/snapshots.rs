@@ -37,6 +37,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        epoch_schedule::EpochSchedule,
         genesis_config::{
             ClusterType::{self, Development, Devnet, MainnetBeta, Testnet},
             GenesisConfig,
@@ -94,6 +95,8 @@ impl SnapshotTestConfig {
             &solana_sdk::pubkey::new_rand(), // validator_pubkey
             1,                               // validator_stake_lamports
         );
+        // NOTE: Must set `warmup == false` until EAH can handle short epochs
+        genesis_config_info.genesis_config.epoch_schedule = EpochSchedule::without_warmup();
         genesis_config_info.genesis_config.cluster_type = cluster_type;
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
