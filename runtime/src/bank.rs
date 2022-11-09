@@ -6984,7 +6984,8 @@ impl Bank {
 
     pub fn get_snapshot_hash(&self) -> SnapshotHash {
         let accounts_hash = self.get_accounts_hash();
-        SnapshotHash::new(&accounts_hash)
+        let epoch_accounts_hash = self.get_epoch_accounts_hash_to_serialize();
+        SnapshotHash::new(&accounts_hash, epoch_accounts_hash.as_ref())
     }
 
     pub fn get_thread_pool(&self) -> &ThreadPool {
