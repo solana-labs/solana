@@ -22,10 +22,9 @@
 
 use {
     crate::{
-        clone_zeroed, copy_field, fee_calculator::FeeCalculator, impl_sysvar_get,
-        program_error::ProgramError, sysvar::Sysvar,
+        fee_calculator::FeeCalculator, impl_sysvar_get, program_error::ProgramError, sysvar::Sysvar,
     },
-    std::mem::MaybeUninit,
+    solana_sdk_macro::CloneZeroed,
 };
 
 crate::declare_deprecated_sysvar_id!("SysvarFees111111111111111111111111111111111", Fees);
@@ -36,20 +35,9 @@ crate::declare_deprecated_sysvar_id!("SysvarFees11111111111111111111111111111111
     note = "Please do not use, will no longer be available in the future"
 )]
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, CloneZeroed, Default, PartialEq, Eq)]
 pub struct Fees {
     pub fee_calculator: FeeCalculator,
-}
-
-impl Clone for Fees {
-    fn clone(&self) -> Self {
-        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
-            let ptr = cloned.as_mut_ptr();
-            unsafe {
-                copy_field!(ptr, self, fee_calculator);
-            }
-        })
-    }
 }
 
 impl Fees {
