@@ -23,6 +23,7 @@ use {
     bincode::{self, config::Options, Error},
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
@@ -42,7 +43,7 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc,
+            Arc, RwLock,
         },
         thread::Builder,
     },
@@ -318,6 +319,7 @@ pub(crate) fn bank_from_streams<R>(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -340,6 +342,7 @@ where
         accounts_db_config,
         accounts_update_notifier,
         exit,
+        bpf_tracer_plugin_manager,
     )
 }
 
@@ -530,6 +533,7 @@ fn reconstruct_bank_from_fields<E>(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -564,6 +568,7 @@ where
         additional_builtins,
         debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
+        bpf_tracer_plugin_manager,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());

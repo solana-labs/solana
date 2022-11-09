@@ -10,6 +10,7 @@ use {
     log::*,
     rand::{seq::SliceRandom, thread_rng},
     rayon::{prelude::*, ThreadPool},
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
@@ -725,6 +726,7 @@ pub fn test_process_blockstore(
     blockstore: &Blockstore,
     opts: &ProcessOptions,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
     // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle all
     // EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze() waiting for
@@ -768,6 +770,7 @@ pub fn test_process_blockstore(
         None,
         None,
         exit,
+        bpf_tracer_plugin_manager,
     );
 
     process_blockstore_from_root(

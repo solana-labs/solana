@@ -15,6 +15,7 @@ use {
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
+    log::{error, log_enabled, trace, Level::Trace},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -33,7 +34,10 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{
+            Config, EbpfVm, InstructionMeter, ProgramResult, TraceRecord, Tracer,
+            VerifiedExecutable,
+        },
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -1402,6 +1406,7 @@ impl Executor for BpfExecutor {
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
+            let bpf_tracer_plugin_manager = invoke_context.bpf_tracer_plugin_manager.clone();
             let compute_meter_prev = invoke_context.get_remaining();
             let mut vm = match create_vm(
                 // We dropped the lifetime tracking in the Executor by setting it to 'static,
@@ -1430,6 +1435,54 @@ impl Executor for BpfExecutor {
                 compute_units_consumed,
                 compute_meter_prev
             );
+
+            let mut bpf_tracing_enabled = log_enabled!(Trace);
+            if !bpf_tracing_enabled {
+                if let Some(manager) = bpf_tracer_plugin_manager.as_ref() {
+                    for plugin in manager.write().unwrap().bpf_tracer_plugins() {
+                        if !plugin.bpf_tracing_enabled() {
+                            continue;
+                        }
+                        bpf_tracing_enabled = true;
+                        break;
+                    }
+                }
+            }
+
+            if bpf_tracing_enabled {
+                let analysis =
+                    Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
+
+                let trace: Vec<TraceRecord> = vm
+                    .get_program_environment()
+                    .tracer
+                    .iter(&analysis)
+                    .collect();
+
+                if let Some(manager) = bpf_tracer_plugin_manager.as_ref() {
+                    for plugin in manager.write().unwrap().bpf_tracer_plugins() {
+                        if !(plugin.bpf_tracing_enabled()) {
+                            continue;
+                        }
+
+                        if let Err(err) = plugin.trace_bpf(&trace) {
+                            error!(
+                                "Error running BPF tracing plugin: {}. Error: {:?}",
+                                plugin.name(),
+                                err
+                            );
+                        }
+                    }
+                }
+
+                if log_enabled!(Trace) {
+                    let mut trace_buffer = Vec::<u8>::new();
+                    Tracer::print(&mut trace_buffer, trace.iter()).unwrap();
+                    let trace_string = String::from_utf8(trace_buffer).unwrap();
+                    trace!("SBF Program Instruction Trace:\n{}", trace_string);
+                }
+            }
+            drop(vm);
             let (_returned_from_program_id, return_data) =
                 invoke_context.transaction_context.get_return_data();
             if !return_data.is_empty() {

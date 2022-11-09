@@ -25,6 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -535,6 +536,9 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
+            geyser_plugin_service.as_ref().map(|service| {
+                Arc::clone(service.plugin_manager()) as Arc<RwLock<dyn BpfTracerPluginManager>>
+            }),
         )?;
 
         node.info.wallclock = timestamp();
@@ -1339,6 +1343,7 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<
     (
         GenesisConfig,
@@ -1455,6 +1460,7 @@ fn load_blockstore(
                 .as_ref(),
             accounts_update_notifier,
             exit,
+            bpf_tracer_plugin_manager,
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that

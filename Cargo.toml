@@ -6,6 +6,7 @@ members = [
     "banking-bench",
     "banks-client",
     "banks-interface",
+    "bpf-tracer-plugin-interface",
     "banks-server",
     "bench-streamer",
     "bench-tps",

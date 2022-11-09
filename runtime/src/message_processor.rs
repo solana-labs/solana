@@ -1,5 +1,6 @@
 use {
     serde::{Deserialize, Serialize},
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -21,7 +22,12 @@ use {
         transaction::TransactionError,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
-    std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
+    std::{
+        borrow::Cow,
+        cell::RefCell,
+        rc::Rc,
+        sync::{Arc, RwLock},
+    },
 };
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -66,6 +72,7 @@ impl MessageProcessor {
         lamports_per_signature: u64,
         current_accounts_data_len: u64,
         accumulated_consumed_units: &mut u64,
+        bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     ) -> Result<ProcessedMessageInfo, TransactionError> {
         let mut invoke_context = InvokeContext::new(
             transaction_context,
@@ -79,6 +86,7 @@ impl MessageProcessor {
             blockhash,
             lamports_per_signature,
             current_accounts_data_len,
+            bpf_tracer_plugin_manager,
         );
 
         debug_assert_eq!(program_indices.len(), message.instructions().len());

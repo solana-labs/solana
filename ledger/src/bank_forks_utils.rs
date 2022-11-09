@@ -8,6 +8,7 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     log::*,
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -51,6 +52,7 @@ pub fn load(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> LoadResult {
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) = load_bank_forks(
         genesis_config,
@@ -62,6 +64,7 @@ pub fn load(
         cache_block_meta_sender,
         accounts_update_notifier,
         exit,
+        bpf_tracer_plugin_manager,
     );
 
     blockstore_processor::process_blockstore_from_root(
@@ -87,6 +90,7 @@ pub fn load_bank_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> (
     Arc<RwLock<BankForks>>,
     LeaderScheduleCache,
@@ -128,6 +132,7 @@ pub fn load_bank_forks(
             process_options,
             accounts_update_notifier,
             exit,
+            bpf_tracer_plugin_manager,
         )
     } else {
         let maybe_filler_accounts = process_options
@@ -192,6 +197,7 @@ fn bank_forks_from_snapshot(
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
@@ -221,6 +227,7 @@ fn bank_forks_from_snapshot(
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
             exit,
+            bpf_tracer_plugin_manager,
         )
         .expect("Load from snapshot failed");
 

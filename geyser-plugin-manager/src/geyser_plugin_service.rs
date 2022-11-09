@@ -215,4 +215,8 @@ impl GeyserPluginService {
         self.plugin_manager.write().unwrap().unload();
         Ok(())
     }
+
+    pub fn plugin_manager(&self) -> &Arc<RwLock<GeyserPluginManager>> {
+        &self.plugin_manager
+    }
 }

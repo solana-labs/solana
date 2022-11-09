@@ -1140,6 +1140,7 @@ fn load_bank_forks(
             None,
             accounts_update_notifier,
             &Arc::default(),
+            None,
         );
 
     let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();

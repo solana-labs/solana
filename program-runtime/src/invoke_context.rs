@@ -10,6 +10,7 @@ use {
         sysvar_cache::SysvarCache,
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::measure::Measure,
     solana_rbpf::vm::ContextObject,
     solana_sdk::{
@@ -32,7 +33,7 @@ use {
         cell::RefCell,
         fmt::{self, Debug},
         rc::Rc,
-        sync::Arc,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -116,6 +117,7 @@ pub struct InvokeContext<'a> {
     pub blockhash: Hash,
     pub lamports_per_signature: u64,
     syscall_context: Vec<Option<SyscallContext>>,
+    pub bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 }
 
 impl<'a> InvokeContext<'a> {
@@ -132,6 +134,7 @@ impl<'a> InvokeContext<'a> {
         blockhash: Hash,
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
+        bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     ) -> Self {
         Self {
             transaction_context,
@@ -151,6 +154,7 @@ impl<'a> InvokeContext<'a> {
             blockhash,
             lamports_per_signature,
             syscall_context: Vec::new(),
+            bpf_tracer_plugin_manager,
         }
     }
 
@@ -188,6 +192,7 @@ impl<'a> InvokeContext<'a> {
             Hash::default(),
             0,
             0,
+            None,
         )
     }
 

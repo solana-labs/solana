@@ -35,6 +35,7 @@ use {
     log::*,
     rayon::prelude::*,
     regex::Regex,
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::{measure, measure::Measure},
     solana_sdk::{
         clock::Slot,
@@ -54,7 +55,7 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU32},
-            Arc,
+            Arc, RwLock,
         },
         thread::{Builder, JoinHandle},
     },
@@ -969,6 +970,7 @@ pub fn bank_from_snapshot_archives(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
@@ -1012,6 +1014,7 @@ pub fn bank_from_snapshot_archives(
         accounts_db_config,
         accounts_update_notifier,
         exit,
+        bpf_tracer_plugin_manager,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -1073,6 +1076,7 @@ pub fn bank_from_latest_snapshot_archives(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<(
     Bank,
     FullSnapshotArchiveInfo,
@@ -1118,6 +1122,7 @@ pub fn bank_from_latest_snapshot_archives(
         accounts_db_config,
         accounts_update_notifier,
         exit,
+        bpf_tracer_plugin_manager,
     )?;
 
     datapoint_info!(
@@ -1800,6 +1805,7 @@ fn rebuild_bank_from_snapshots(
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Result<Bank> {
     let accounts_db_caching_enabled = true;
     let (full_snapshot_version, full_snapshot_root_paths) =
@@ -1851,6 +1857,7 @@ fn rebuild_bank_from_snapshots(
                     accounts_db_config,
                     accounts_update_notifier,
                     exit,
+                    bpf_tracer_plugin_manager,
                 ),
             }?,
         )
