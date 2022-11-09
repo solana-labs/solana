@@ -360,6 +360,7 @@ pub fn retransmitter(
     let mut stats = RetransmitStats::new(Instant::now());
     let mut shreds_received = LruCache::<ShredId, _>::new(DEFAULT_LRU_SIZE);
     let mut packet_hasher = PacketHasher::default();
+    #[allow(clippy::manual_clamp)]
     let num_threads = get_thread_count().min(8).max(sockets.len());
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)

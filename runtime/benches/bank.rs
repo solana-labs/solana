@@ -156,7 +156,7 @@ fn do_bench_transactions(
         bench_work(&bank, &bank_client, &transactions);
     });
 
-    let summary = bencher.bench(|_bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     info!("  {:?} transactions", transactions.len());
     info!("  {:?} ns/iter median", summary.median as u64);
     assert!(0f64 != summary.median);
