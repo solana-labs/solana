@@ -407,7 +407,7 @@ pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 // Sets padding in structures to zero explicitly.
-// Otherwise that could be inconsistent across the network and lead to divergence / consensus failure.
+// Otherwise padding could be inconsistent across the network and lead to divergence / consensus failures.
 #[proc_macro_derive(CloneZeroed)]
 pub fn derive_clone_zeroed(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match parse_macro_input!(input as syn::Item) {
