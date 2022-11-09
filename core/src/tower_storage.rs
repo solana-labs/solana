@@ -184,7 +184,7 @@ impl TowerStorage for FileTowerStorage {
                 .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey))
         } else {
             // Old format
-            let file = File::open(&self.old_filename(node_pubkey))?;
+            let file = File::open(self.old_filename(node_pubkey))?;
             let mut stream = BufReader::new(file);
             bincode::deserialize_from(&mut stream)
                 .map_err(|e| e.into())

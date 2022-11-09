@@ -895,7 +895,7 @@ mod tests {
             instructions: vec![],
         };
         let mut tx = Transaction::new_unsigned(message);
-        tx.signatures = vec![Signature::default(); actual_num_sigs as usize];
+        tx.signatures = vec![Signature::default(); actual_num_sigs];
         Packet::from_data(None, tx).unwrap()
     }
 

@@ -2059,7 +2059,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
-            std::fs::remove_dir_all(&path_delete).unwrap();
+            std::fs::remove_dir_all(path_delete).unwrap();
         })
         .unwrap();
 }

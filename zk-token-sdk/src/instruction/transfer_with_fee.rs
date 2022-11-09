@@ -402,8 +402,8 @@ impl TransferWithFeeProof {
             RangeProof::new(
                 vec![
                     source_new_balance,
-                    transfer_amount_lo as u64,
-                    transfer_amount_hi as u64,
+                    transfer_amount_lo,
+                    transfer_amount_hi,
                     delta_fee,
                     MAX_FEE_BASIS_POINTS - delta_fee,
                 ],
@@ -425,15 +425,15 @@ impl TransferWithFeeProof {
             )
         } else {
             let transfer_amount_lo_negated =
-                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo as u64;
+                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
                 vec![
                     source_new_balance,
-                    transfer_amount_lo as u64,
+                    transfer_amount_lo,
                     transfer_amount_lo_negated,
-                    transfer_amount_hi as u64,
+                    transfer_amount_hi,
                     delta_fee,
                     MAX_FEE_BASIS_POINTS - delta_fee,
                 ],

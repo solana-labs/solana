@@ -123,13 +123,13 @@ impl LedgerCleanupService {
             max_ledger_shreds,
             iterate_time
         );
-        if (total_shreds as u64) < max_ledger_shreds {
+        if total_shreds < max_ledger_shreds {
             return (false, 0, total_shreds);
         }
         let mut num_shreds_to_clean = 0;
         let mut lowest_cleanup_slot = total_slots[0].0;
         for (slot, num_shreds) in total_slots.iter().rev() {
-            num_shreds_to_clean += *num_shreds as u64;
+            num_shreds_to_clean += *num_shreds;
             if num_shreds_to_clean > max_ledger_shreds {
                 lowest_cleanup_slot = *slot;
                 break;

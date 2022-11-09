@@ -828,7 +828,7 @@ mod test {
             let num_slots = 2;
 
             // Create some shreds
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, 150);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
@@ -856,7 +856,7 @@ mod test {
                 .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |shred_index| ShredRepairType::Shred(slot as u64, *shred_index))
+                        .map(move |shred_index| ShredRepairType::Shred(slot, *shred_index))
                 })
                 .collect();
 
@@ -969,10 +969,10 @@ mod test {
                     let expected: Vec<ShredRepairType> = (repair_slot_range.start
                         ..=repair_slot_range.end)
                         .map(|slot_index| {
-                            if slots.contains(&(slot_index as u64)) {
-                                ShredRepairType::Shred(slot_index as u64, 0)
+                            if slots.contains(&slot_index) {
+                                ShredRepairType::Shred(slot_index, 0)
                             } else {
-                                ShredRepairType::HighestShred(slot_index as u64, 0)
+                                ShredRepairType::HighestShred(slot_index, 0)
                             }
                         })
                         .collect();

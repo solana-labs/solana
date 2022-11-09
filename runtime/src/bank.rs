@@ -3119,7 +3119,7 @@ impl Bank {
     // still being stake-weighted.
     // Ref: distribute_rent_to_validators
     fn collect_fees(&self) {
-        let collector_fees = self.collector_fees.load(Relaxed) as u64;
+        let collector_fees = self.collector_fees.load(Relaxed);
 
         if collector_fees != 0 {
             let (deposit, mut burn) = self.fee_rate_governor.burn(collector_fees);
@@ -6665,7 +6665,7 @@ impl Bank {
             .accounts
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
         let mut signature_count_buf = [0u8; 8];
-        LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count() as u64);
+        LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
@@ -9297,7 +9297,7 @@ pub(crate) mod tests {
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
         genesis_config.cluster_type = ClusterType::MainnetBeta;
 
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_config.epoch_schedule =
             EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, false);
@@ -9367,7 +9367,7 @@ pub(crate) mod tests {
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
         genesis_config.cluster_type = ClusterType::MainnetBeta;
 
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_config.epoch_schedule =
             EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, false);
@@ -9425,7 +9425,7 @@ pub(crate) mod tests {
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
         genesis_config.cluster_type = ClusterType::MainnetBeta;
 
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64 * 8;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH * 8;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_config.epoch_schedule =
             EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, true);
@@ -9481,7 +9481,7 @@ pub(crate) mod tests {
         let mut genesis_config =
             create_genesis_config_with_leader(5, &leader_pubkey, leader_lamports).genesis_config;
 
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64 * 8;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH * 8;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         genesis_config.epoch_schedule =
             EpochSchedule::custom(SLOTS_PER_EPOCH, LEADER_SCHEDULE_SLOT_OFFSET, true);
@@ -10089,9 +10089,7 @@ pub(crate) mod tests {
             // set it up so the first epoch is a full year long
             poh_config: PohConfig {
                 target_tick_duration: Duration::from_secs(
-                    SECONDS_PER_YEAR as u64
-                        / MINIMUM_SLOTS_PER_EPOCH as u64
-                        / DEFAULT_TICKS_PER_SLOT,
+                    SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
                 ),
                 hashes_per_tick: None,
                 target_tick_count: None,
@@ -10218,9 +10216,7 @@ pub(crate) mod tests {
             // set it up so the first epoch is a full year long
             poh_config: PohConfig {
                 target_tick_duration: Duration::from_secs(
-                    SECONDS_PER_YEAR as u64
-                        / MINIMUM_SLOTS_PER_EPOCH as u64
-                        / DEFAULT_TICKS_PER_SLOT,
+                    SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
                 ),
                 hashes_per_tick: None,
                 target_tick_count: None,
@@ -11985,7 +11981,7 @@ pub(crate) mod tests {
 
         // set this up weird, forces future generation, odd mod(), etc.
         //  this says: "vote_accounts for epoch X should be generated at slot index 3 in epoch X-2...
-        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH as u64;
+        const SLOTS_PER_EPOCH: u64 = MINIMUM_SLOTS_PER_EPOCH;
         const LEADER_SCHEDULE_SLOT_OFFSET: u64 = SLOTS_PER_EPOCH * 3 - 3;
         // no warmup allows me to do the normal division stuff below
         genesis_config.epoch_schedule =
@@ -12106,11 +12102,8 @@ pub(crate) mod tests {
 
         let bank = Bank::new_for_tests(&genesis_config);
 
-        assert_eq!(bank.get_slots_in_epoch(0), MINIMUM_SLOTS_PER_EPOCH as u64);
-        assert_eq!(
-            bank.get_slots_in_epoch(2),
-            (MINIMUM_SLOTS_PER_EPOCH * 4) as u64
-        );
+        assert_eq!(bank.get_slots_in_epoch(0), MINIMUM_SLOTS_PER_EPOCH);
+        assert_eq!(bank.get_slots_in_epoch(2), (MINIMUM_SLOTS_PER_EPOCH * 4));
         assert_eq!(
             bank.get_slots_in_epoch(5000),
             genesis_config.epoch_schedule.slots_per_epoch
@@ -14383,7 +14376,7 @@ pub(crate) mod tests {
                         let account_indexes = (0..num_accounts_to_pass)
                             .map(|_| thread_rng().gen_range(0, num_keys))
                             .collect();
-                        let program_index: u8 = thread_rng().gen_range(0, num_keys) as u8;
+                        let program_index: u8 = thread_rng().gen_range(0, num_keys);
                         if thread_rng().gen_ratio(4, 5) {
                             let programs_index = thread_rng().gen_range(0, program_keys.len());
                             account_keys[program_index as usize] = program_keys[programs_index].0;
@@ -14415,7 +14408,7 @@ pub(crate) mod tests {
                 } else {
                     1
                 };
-                thread_rng().gen_range(0, max) as u8
+                thread_rng().gen_range(0, max)
             };
 
             let num_readonly_unsigned_accounts = if thread_rng().gen_ratio(1, 5)
@@ -14675,7 +14668,7 @@ pub(crate) mod tests {
 
         let pubkey0_size = get_shrink_account_size();
 
-        let account0 = AccountSharedData::new(1000, pubkey0_size as usize, &Pubkey::new_unique());
+        let account0 = AccountSharedData::new(1000, pubkey0_size, &Pubkey::new_unique());
         bank0.store_account(&pubkey0, &account0);
 
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
@@ -19858,8 +19851,8 @@ pub(crate) mod tests {
         bank.collect_rent_eagerly(false);
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
-        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent as i64
-            - accounts_data_size_delta_before_collecting_rent as i64;
+        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
+            - accounts_data_size_delta_before_collecting_rent;
         assert!(accounts_data_size_delta_delta < 0);
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 

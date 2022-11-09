@@ -104,11 +104,13 @@ pub struct Notifier {
     notifiers: Vec<NotificationChannel>,
 }
 
-impl Notifier {
-    pub fn default() -> Self {
+impl Default for Notifier {
+    fn default() -> Self {
         Self::new("")
     }
+}
 
+impl Notifier {
     pub fn new(env_prefix: &str) -> Self {
         info!("Initializing {}Notifier", env_prefix);
 
@@ -218,7 +220,7 @@ impl Notifier {
                     let data = json!({ "chat_id": chat_id, "text": msg });
                     let url = format!("https://api.telegram.org/bot{}/sendMessage", bot_token);
 
-                    if let Err(err) = self.client.post(&url).json(&data).send() {
+                    if let Err(err) = self.client.post(url).json(&data).send() {
                         warn!("Failed to send Telegram message: {:?}", err);
                     }
                 }
@@ -234,7 +236,7 @@ impl Notifier {
                         account, token, account
                     );
                     let params = [("To", to), ("From", from), ("Body", &msg.to_string())];
-                    if let Err(err) = self.client.post(&url).form(&params).send() {
+                    if let Err(err) = self.client.post(url).form(&params).send() {
                         warn!("Failed to send Twilio message: {:?}", err);
                     }
                 }

@@ -4297,7 +4297,7 @@ pub(crate) mod tests {
             assert!(blockstore.is_dead(bank1.slot()));
             res.map(|_| ())
         };
-        let _ignored = remove_dir_all(&ledger_path);
+        let _ignored = remove_dir_all(ledger_path);
         res
     }
 

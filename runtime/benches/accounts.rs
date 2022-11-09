@@ -164,8 +164,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
     let zero_account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
     for i in 0..1000 {
         let pubkey = solana_sdk::pubkey::new_rand();
-        let account =
-            AccountSharedData::new((i + 1) as u64, 0, AccountSharedData::default().owner());
+        let account = AccountSharedData::new(i + 1, 0, AccountSharedData::default().owner());
         accounts.store_slow_uncached(i, &pubkey, &account);
         accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
         old_pubkey = pubkey;

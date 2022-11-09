@@ -68,7 +68,7 @@ impl SnapshotStorageRebuilder {
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
-        let snapshot_version_str = snapshot_version_from_file(&snapshot_version_path)?;
+        let snapshot_version_str = snapshot_version_from_file(snapshot_version_path)?;
         let snapshot_version = snapshot_version_str.parse().map_err(|_| {
             get_io_error(&format!(
                 "unsupported snapshot version: {}",
@@ -283,7 +283,7 @@ impl SnapshotStorageRebuilder {
                     .snapshot_storage_lengths
                     .get(&slot)
                     .unwrap()
-                    .get(&(old_append_vec_id as usize))
+                    .get(&old_append_vec_id)
                     .unwrap();
 
                 let storage_entry = remap_and_reconstruct_single_storage(

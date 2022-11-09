@@ -265,7 +265,7 @@ mod tests {
             storage_now,
             storage_now as i64 - *storage_previous as i64,
             data_shred_storage_now,
-            data_shred_storage_now as i64 - *data_shred_storage_previous as i64,
+            data_shred_storage_now - *data_shred_storage_previous as i64,
             cpu_user,
             cpu_system,
             cpu_idle,

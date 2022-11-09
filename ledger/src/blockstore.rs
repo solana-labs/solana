@@ -3353,7 +3353,7 @@ fn update_slot_meta(
     let maybe_first_insert = slot_meta.received == 0;
     // Index is zero-indexed, while the "received" height starts from 1,
     // so received = index + 1 for the same shred.
-    slot_meta.received = cmp::max((u64::from(index) + 1) as u64, slot_meta.received);
+    slot_meta.received = cmp::max(u64::from(index) + 1, slot_meta.received);
     if maybe_first_insert && slot_meta.received > 0 {
         // predict the timestamp of what would have been the first shred in this slot
         let slot_time_elapsed = u64::from(reference_tick) * 1000 / DEFAULT_TICKS_PER_SECOND;
@@ -3923,7 +3923,7 @@ pub fn create_new_ledger(
             let mut error_messages = String::new();
 
             fs::rename(
-                &ledger_path.join(DEFAULT_GENESIS_ARCHIVE),
+                ledger_path.join(DEFAULT_GENESIS_ARCHIVE),
                 ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_ARCHIVE)),
             )
             .unwrap_or_else(|e| {
@@ -3934,7 +3934,7 @@ pub fn create_new_ledger(
                 );
             });
             fs::rename(
-                &ledger_path.join(DEFAULT_GENESIS_FILE),
+                ledger_path.join(DEFAULT_GENESIS_FILE),
                 ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_FILE)),
             )
             .unwrap_or_else(|e| {
@@ -3945,7 +3945,7 @@ pub fn create_new_ledger(
                 );
             });
             fs::rename(
-                &ledger_path.join(blockstore_dir),
+                ledger_path.join(blockstore_dir),
                 ledger_path.join(format!("{}.failed", blockstore_dir)),
             )
             .unwrap_or_else(|e| {
@@ -4841,11 +4841,11 @@ pub mod tests {
             assert_eq!(meta.last_index, Some(num_shreds - 1));
             if i != 0 {
                 assert_eq!(result.len(), 0);
-                assert!(meta.consumed == 0 && meta.received == num_shreds as u64);
+                assert!(meta.consumed == 0 && meta.received == num_shreds);
             } else {
                 assert_eq!(meta.parent_slot, Some(0));
                 assert_eq!(result, entries);
-                assert!(meta.consumed == num_shreds as u64 && meta.received == num_shreds as u64);
+                assert!(meta.consumed == num_shreds && meta.received == num_shreds);
             }
         }
     }
@@ -4957,7 +4957,7 @@ pub mod tests {
             );
             for b in shreds.iter_mut() {
                 b.set_index(index);
-                b.set_slot(slot as u64);
+                b.set_slot(slot);
                 index += 1;
             }
             blockstore
@@ -5421,9 +5421,9 @@ pub mod tests {
             // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the
             // slots we just inserted will chain to that gap, so next_slots for that orphan slot
             // won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
-            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+            let meta = blockstore.meta(slot).unwrap().unwrap();
             if slot % 2 == 0 {
-                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
+                assert_eq!(meta.next_slots, vec![slot + 1]);
                 assert_eq!(meta.parent_slot, None);
             } else {
                 assert!(meta.next_slots.is_empty());
@@ -5445,9 +5445,9 @@ pub mod tests {
         for slot in 0..num_slots {
             // Check that all the slots chain correctly once the missing slots
             // have been filled
-            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+            let meta = blockstore.meta(slot).unwrap().unwrap();
             if slot != num_slots - 1 {
-                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
+                assert_eq!(meta.next_slots, vec![slot + 1]);
             } else {
                 assert!(meta.next_slots.is_empty());
             }
@@ -5492,10 +5492,10 @@ pub mod tests {
 
         // Check metadata
         for slot in 0..num_slots {
-            let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+            let meta = blockstore.meta(slot).unwrap().unwrap();
             // The last slot will not chain to any other slots
-            if slot as u64 != num_slots - 1 {
-                assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
+            if slot != num_slots - 1 {
+                assert_eq!(meta.next_slots, vec![slot + 1]);
             } else {
                 assert!(meta.next_slots.is_empty());
             }
@@ -5521,13 +5521,13 @@ pub mod tests {
                 blockstore.insert_shreds(vec![shred], None, false).unwrap();
 
                 for slot in 0..num_slots {
-                    let meta = blockstore.meta(slot as u64).unwrap().unwrap();
+                    let meta = blockstore.meta(slot).unwrap().unwrap();
                     if slot != num_slots - 1 {
-                        assert_eq!(meta.next_slots, vec![slot as u64 + 1]);
+                        assert_eq!(meta.next_slots, vec![slot + 1]);
                     } else {
                         assert!(meta.next_slots.is_empty());
                     }
-                    if slot <= slot_index as u64 + 3 {
+                    if slot <= slot_index + 3 {
                         assert!(meta.is_connected);
                     } else {
                         assert!(!meta.is_connected);

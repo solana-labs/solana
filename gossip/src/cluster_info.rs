@@ -925,7 +925,7 @@ impl ClusterInfo {
         let mut entries = Vec::default();
         let keypair = self.keypair();
         while !update.is_empty() {
-            let ix = (epoch_slot_index % crds_value::MAX_EPOCH_SLOTS) as u8;
+            let ix = epoch_slot_index % crds_value::MAX_EPOCH_SLOTS;
             let now = timestamp();
             let mut slots = if !reset {
                 self.lookup_epoch_slots(ix)

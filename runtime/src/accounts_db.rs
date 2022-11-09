@@ -6455,7 +6455,7 @@ impl AccountsDb {
                     filler_accounts = filler_account_slots * filler_accounts_per_slot;
 
                     // keep space for filler accounts
-                    let addl_size = (filler_accounts as u64)
+                    let addl_size = filler_accounts
                         * ((self.filler_accounts_config.size + STORE_META_OVERHEAD) as u64);
                     total_size += addl_size;
                 }
@@ -9179,7 +9179,7 @@ impl AccountsDb {
                     let len = map_bin.len_for_stats();
                     min_bin_size = std::cmp::min(min_bin_size, len);
                     max_bin_size = std::cmp::max(max_bin_size, len);
-                    len as usize
+                    len
                 })
                 .sum();
 

@@ -173,7 +173,7 @@ pub fn ledger_lockfile(ledger_path: &Path) -> RwLock<File> {
         OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&lockfile)
+            .open(lockfile)
             .unwrap(),
     )
 }

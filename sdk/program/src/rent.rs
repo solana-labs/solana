@@ -117,7 +117,7 @@ impl Rent {
     /// This is used for testing.
     pub fn with_slots_per_epoch(slots_per_epoch: u64) -> Self {
         let ratio = slots_per_epoch as f64 / DEFAULT_SLOTS_PER_EPOCH as f64;
-        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD as f64 * ratio;
+        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD * ratio;
         let lamports_per_byte_year = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 / ratio) as u64;
         Self {
             lamports_per_byte_year,

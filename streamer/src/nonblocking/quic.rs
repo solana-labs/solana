@@ -397,12 +397,12 @@ fn compute_recieve_window(
 ) -> Result<VarInt, VarIntBoundsExceeded> {
     match peer_type {
         ConnectionPeerType::Unstaked => {
-            VarInt::from_u64((PACKET_DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO) as u64)
+            VarInt::from_u64(PACKET_DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO)
         }
         ConnectionPeerType::Staked => {
             let ratio =
                 compute_receive_window_ratio_for_staked_node(max_stake, min_stake, peer_stake);
-            VarInt::from_u64((PACKET_DATA_SIZE as u64 * ratio) as u64)
+            VarInt::from_u64(PACKET_DATA_SIZE as u64 * ratio)
         }
     }
 }
@@ -1506,11 +1506,11 @@ pub mod test {
             )
             .is_some());
 
-        assert_eq!(table.total_size, num_entries as usize);
+        assert_eq!(table.total_size, num_entries);
 
         let new_max_size = 3;
         let pruned = table.prune_oldest(new_max_size);
-        assert!(pruned >= num_entries as usize - new_max_size);
+        assert!(pruned >= num_entries - new_max_size);
         assert!(table.table.len() <= new_max_size);
         assert!(table.total_size <= new_max_size);
 

@@ -235,7 +235,7 @@ fn serialize_parameters_unaligned(
                     .map_err(|_| InstructionError::InvalidArgument)?;
                 s.write_all(account.get_owner().as_ref());
                 s.write::<u8>(account.is_executable() as u8);
-                s.write::<u64>((account.get_rent_epoch() as u64).to_le());
+                s.write::<u64>((account.get_rent_epoch()).to_le());
             }
         };
     }
@@ -351,7 +351,7 @@ fn serialize_parameters_aligned(
                 s.write::<u64>((borrowed_account.get_data().len() as u64).to_le());
                 s.write_account(&borrowed_account)
                     .map_err(|_| InstructionError::InvalidArgument)?;
-                s.write::<u64>((borrowed_account.get_rent_epoch() as u64).to_le());
+                s.write::<u64>((borrowed_account.get_rent_epoch()).to_le());
             }
             SerializeAccount::Duplicate(position) => {
                 s.write::<u8>(position as u8);

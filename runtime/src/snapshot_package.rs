@@ -94,7 +94,7 @@ impl AccountsPackage {
                 snapshot_utils::path_to_file_name_str(&bank_snapshot_info.snapshot_path)?;
             fs::hard_link(
                 &bank_snapshot_info.snapshot_path,
-                &snapshot_hardlink_dir.join(file_name),
+                snapshot_hardlink_dir.join(file_name),
             )?;
         }
 

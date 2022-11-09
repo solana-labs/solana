@@ -127,7 +127,7 @@ impl Dashboard {
                 let new_identity = rpc_client.get_identity().unwrap_or(identity);
                 if identity != new_identity {
                     identity = new_identity;
-                    progress_bar.println(&format_name_value("Identity:", &identity.to_string()));
+                    progress_bar.println(format_name_value("Identity:", &identity.to_string()));
                 }
 
                 match get_validator_stats(&rpc_client, &identity) {

@@ -500,9 +500,8 @@ fn generate_system_txs(
     if use_randomized_compute_unit_price {
         let mut rng = rand::thread_rng();
         let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
-        let compute_unit_prices: Vec<_> = (0..pairs.len())
-            .map(|_| range.sample(&mut rng) as u64)
-            .collect();
+        let compute_unit_prices: Vec<_> =
+            (0..pairs.len()).map(|_| range.sample(&mut rng)).collect();
         let pairs_with_compute_unit_prices: Vec<_> =
             pairs.iter().zip(compute_unit_prices.iter()).collect();
 
