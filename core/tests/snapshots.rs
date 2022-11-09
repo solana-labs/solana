@@ -262,7 +262,7 @@ fn run_bank_forks_snapshot_n<F>(
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
     let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
-    let accounts_package = AccountsPackage::new(
+    let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
@@ -277,7 +277,7 @@ fn run_bank_forks_snapshot_n<F>(
     )
     .unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links.path(),
+        accounts_package.snapshot_links_dir(),
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
         None,
@@ -416,7 +416,7 @@ fn test_concurrent_snapshot_packaging(
             snapshot_config.snapshot_version,
         )
         .unwrap();
-        let accounts_package = AccountsPackage::new(
+        let accounts_package = AccountsPackage::new_for_snapshot(
             AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
             &bank,
             &bank_snapshot_info,
@@ -524,7 +524,7 @@ fn test_concurrent_snapshot_packaging(
         .spawn(move || {
             let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                accounts_package.snapshot_links.path(),
+                accounts_package.snapshot_links_dir(),
                 accounts_package.slot,
                 &Hash::default(),
                 None,
