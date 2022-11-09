@@ -175,7 +175,7 @@ impl AccountsPackage {
                 self.snapshot_info.as_ref().unwrap().snapshot_links.path()
             }
             AccountsPackageType::EpochAccountsHash => {
-                unimplemented!("EAH accounts packages do not contain snapshot information")
+                panic!("EAH accounts packages do not contain snapshot information")
             }
         }
     }
