@@ -147,7 +147,7 @@ impl ComputeBudget {
             heap_cost: 8,
             mem_op_base_cost: 10,
             account_property_update_cost: 10,
-            big_modular_exponentiation_cost: 1000, // TODO: precisely determine big integer modular exponentiation costs
+            big_modular_exponentiation_cost: 6,
         }
     }
 

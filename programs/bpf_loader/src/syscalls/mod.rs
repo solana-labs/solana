@@ -1729,12 +1729,6 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        let budget = invoke_context.get_compute_budget();
-        invoke_context.get_compute_meter().consume(
-                budget.syscall_base_cost.saturating_add(
-                    budget.big_modular_exponentiation_cost
-                )
-        )?;
 
         let params = &translate_slice::<BigModExpParams>(
                 memory_mapping,
@@ -1743,6 +1737,19 @@ declare_syscall!(
                 invoke_context.get_check_aligned(),
                 invoke_context.get_check_size(),
         )?[0];
+
+        let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
+        let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
+
+        let budget = invoke_context.get_compute_budget();
+        invoke_context.get_compute_meter().consume(
+                budget.syscall_base_cost.saturating_add(
+                    budget
+                .big_modular_exponentiation_cost
+                .saturating_mul(input_len)
+                .saturating_mul(input_len)
+                )
+        )?;
 
         let base = translate_slice::<u8>(
                 memory_mapping,
