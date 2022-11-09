@@ -1055,7 +1055,7 @@ pub fn keypair_from_seed_phrase(
     derivation_path: Option<DerivationPath>,
     legacy: bool,
 ) -> Result<Keypair, Box<dyn error::Error>> {
-    let seed_phrase = prompt_password(&format!("[{}] seed phrase: ", keypair_name))?;
+    let seed_phrase = prompt_password(format!("[{}] seed phrase: ", keypair_name))?;
     let seed_phrase = seed_phrase.trim();
     let passphrase_prompt = format!(
         "[{}] If this seed phrase has an associated passphrase, enter it now. Otherwise, press ENTER to continue: ",
@@ -1184,7 +1184,7 @@ mod tests {
         ));
         let stdin = "stdin:".to_string();
         assert!(matches!(
-            parse_signer_source(&stdin).unwrap(),
+            parse_signer_source(stdin).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Stdin,
                 derivation_path: None,
@@ -1201,7 +1201,7 @@ mod tests {
         ));
         let pubkey = Pubkey::new_unique();
         assert!(
-            matches!(parse_signer_source(&pubkey.to_string()).unwrap(), SignerSource {
+            matches!(parse_signer_source(pubkey.to_string()).unwrap(), SignerSource {
                 kind: SignerSourceKind::Pubkey(p),
                 derivation_path: None,
                 legacy: false,
@@ -1241,7 +1241,7 @@ mod tests {
             manufacturer: Manufacturer::Ledger,
             pubkey: None,
         };
-        assert!(matches!(parse_signer_source(&usb).unwrap(), SignerSource {
+        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: None,
                 legacy: false,
@@ -1252,7 +1252,7 @@ mod tests {
             pubkey: None,
         };
         let expected_derivation_path = Some(DerivationPath::new_bip44(Some(0), Some(0)));
-        assert!(matches!(parse_signer_source(&usb).unwrap(), SignerSource {
+        assert!(matches!(parse_signer_source(usb).unwrap(), SignerSource {
                 kind: SignerSourceKind::Usb(u),
                 derivation_path: d,
                 legacy: false,
@@ -1267,7 +1267,7 @@ mod tests {
 
         let prompt = "prompt:".to_string();
         assert!(matches!(
-            parse_signer_source(&prompt).unwrap(),
+            parse_signer_source(prompt).unwrap(),
             SignerSource {
                 kind: SignerSourceKind::Prompt,
                 derivation_path: None,
@@ -1275,14 +1275,14 @@ mod tests {
             }
         ));
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", absolute_path_str)).unwrap(), SignerSource {
+            matches!(parse_signer_source(format!("file:{}", absolute_path_str)).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,
             } if p == absolute_path_str)
         );
         assert!(
-            matches!(parse_signer_source(&format!("file:{}", relative_path_str)).unwrap(), SignerSource {
+            matches!(parse_signer_source(format!("file:{}", relative_path_str)).unwrap(), SignerSource {
                 kind: SignerSourceKind::Filepath(p),
                 derivation_path: None,
                 legacy: false,

@@ -40,7 +40,7 @@ pub trait TpuConnection {
     ) -> TransportResult<()> {
         let wire_transaction =
             bincode::serialize(transaction).expect("serialize Transaction in send_batch");
-        self.send_wire_transaction(&wire_transaction)
+        self.send_wire_transaction(wire_transaction)
     }
 
     fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>

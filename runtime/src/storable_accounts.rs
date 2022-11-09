@@ -256,7 +256,7 @@ pub mod tests {
                     for entry in 0..entries {
                         let pk = Pubkey::new(&[entry; 32]);
                         let account = AccountSharedData::create(
-                            ((entry as u64) * starting_slot) as u64,
+                            (entry as u64) * starting_slot,
                             Vec::default(),
                             Pubkey::default(),
                             false,

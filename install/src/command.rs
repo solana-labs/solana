@@ -841,7 +841,7 @@ pub fn gc(config_file: &str) -> Result<(), String> {
             progress_bar.set_message(format!("{}Removing old releases", RECYCLING));
             for (release, _modified_type) in old_releases {
                 progress_bar.inc(1);
-                let _ = fs::remove_dir_all(&release);
+                let _ = fs::remove_dir_all(release);
             }
             progress_bar.finish_and_clear();
         }

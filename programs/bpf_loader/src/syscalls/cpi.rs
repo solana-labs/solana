@@ -382,12 +382,12 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
-            ix_c.accounts_len as u64,
+            ix_c.accounts_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
 
-        let ix_data_len = ix_c.data_len as u64;
+        let ix_data_len = ix_c.data_len;
         if invoke_context
             .feature_set
             .is_active(&feature_set::loosen_cpi_size_restriction::id())

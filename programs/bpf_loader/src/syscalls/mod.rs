@@ -516,7 +516,7 @@ declare_syscall!(
         };
         if free_addr == 0 {
             match allocator.alloc(layout) {
-                Ok(addr) => Ok(addr as u64),
+                Ok(addr) => Ok(addr),
                 Err(_) => Ok(0),
             }
         } else {
@@ -1532,14 +1532,14 @@ declare_syscall!(
                 let data = translate_slice_mut::<u8>(
                     memory_mapping,
                     data_addr,
-                    result_header.data_len as u64,
+                    result_header.data_len,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
                 let accounts = translate_slice_mut::<AccountMeta>(
                     memory_mapping,
                     accounts_addr,
-                    result_header.accounts_len as u64,
+                    result_header.accounts_len,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
@@ -3937,7 +3937,7 @@ mod tests {
         let data = translate_slice_mut::<u8>(
             &memory_mapping,
             VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
-            processed_sibling_instruction.data_len as u64,
+            processed_sibling_instruction.data_len,
             true,
             true,
         )
@@ -3945,7 +3945,7 @@ mod tests {
         let accounts = translate_slice_mut::<AccountMeta>(
             &memory_mapping,
             VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
-            processed_sibling_instruction.accounts_len as u64,
+            processed_sibling_instruction.accounts_len,
             true,
             true,
         )
@@ -4096,7 +4096,7 @@ mod tests {
             AccountPropertyUpdate {
                 instruction_account_index: 1,
                 attribute: TransactionContextAttribute::TransactionAccountOwner as u16,
-                value: VM_ADDRESS_KEYS as u64,
+                value: VM_ADDRESS_KEYS,
                 _marker: std::marker::PhantomData::default(),
             },
         ];

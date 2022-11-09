@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(amount, decoded.unwrap());
 
         // max amount
-        let amount: u64 = ((1_u64 << 32) - 1) as u64;
+        let amount: u64 = (1_u64 << 32) - 1;
 
         let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 

@@ -75,7 +75,7 @@ impl EpochSchedule {
         )
     }
     pub fn custom(slots_per_epoch: u64, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
-        assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH as u64);
+        assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
             let log2_slots_per_epoch = next_power_of_two
@@ -102,7 +102,7 @@ impl EpochSchedule {
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         if epoch < self.first_normal_epoch {
             2u64.saturating_pow(
-                (epoch as u32).saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32),
+                (epoch as u32).saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros()),
             )
         } else {
             self.slots_per_epoch

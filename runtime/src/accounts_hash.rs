@@ -1647,7 +1647,7 @@ pub mod tests {
                     let packaged_result: ExpectedType = (
                         human_readable,
                         is_last_slice,
-                        lamports2 as u64,
+                        lamports2,
                         hash_result_as_string,
                     );
                     assert_eq!(expected[expected_index], packaged_result);
@@ -1719,7 +1719,7 @@ pub mod tests {
         let vecs = vec![vec![account_maps.to_vec()]];
         let slice = convert_to_slice2(&vecs);
         let result = test_de_dup_accounts_in_parallel(&slice);
-        assert_eq!(result, (vec![&val.hash], val.lamports as u64, 1));
+        assert_eq!(result, (vec![&val.hash], val.lamports, 1));
 
         // zero original lamports, higher version
         let val = CalculateHashIntermediate::new(hash, 0, key);

@@ -105,13 +105,13 @@ impl BucketMapHolderStats {
         let age_now = storage.current_age();
         let ages_flushed = storage.count_buckets_flushed() as u64;
         let last_age = self.last_age.swap(age_now, Ordering::Relaxed) as u64;
-        let last_ages_flushed = self.last_ages_flushed.swap(ages_flushed, Ordering::Relaxed) as u64;
+        let last_ages_flushed = self.last_ages_flushed.swap(ages_flushed, Ordering::Relaxed);
         let mut age_now = age_now as u64;
         if last_age > age_now {
             // age wrapped
             age_now += u8::MAX as u64 + 1;
         }
-        let age_delta = age_now.saturating_sub(last_age) as u64;
+        let age_delta = age_now.saturating_sub(last_age);
         if age_delta > 0 {
             return elapsed_ms / age_delta;
         } else {
