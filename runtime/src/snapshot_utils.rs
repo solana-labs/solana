@@ -1019,16 +1019,16 @@ pub fn bank_from_snapshot_archives(
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
 
+    let snapshot_archive_info = incremental_snapshot_archive_info.map_or_else(
+        || full_snapshot_archive_info.snapshot_archive_info(),
+        |incremental_snapshot_archive_info| {
+            incremental_snapshot_archive_info.snapshot_archive_info()
+        },
+    );
     verify_bank_against_expected_slot_hash(
         &bank,
-        incremental_snapshot_archive_info.as_ref().map_or(
-            full_snapshot_archive_info.slot(),
-            |incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot(),
-        ),
-        incremental_snapshot_archive_info.as_ref().map_or(
-            *full_snapshot_archive_info.hash(),
-            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
-        ),
+        snapshot_archive_info.slot,
+        snapshot_archive_info.hash,
     )?;
 
     let mut measure_verify = Measure::start("verify");
