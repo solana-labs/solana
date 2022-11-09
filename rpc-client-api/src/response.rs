@@ -17,6 +17,16 @@ use {
     thiserror::Error,
 };
 
+/// Wrapper for rpc return types of methods that provide responses both with and without context.
+/// Main purpose of this is to fix methods that lack context information in their return type,
+/// without breaking backwards compatibility.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptionalContext<T> {
+    Context(Response<T>),
+    NoContext(T),
+}
+
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
