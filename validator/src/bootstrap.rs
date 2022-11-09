@@ -717,8 +717,8 @@ fn get_highest_local_snapshot_hash(
     incremental_snapshot_archives_dir: impl AsRef<Path>,
     incremental_snapshot_fetch: bool,
 ) -> Option<(Slot, Hash)> {
-    snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir).and_then(
-        |full_snapshot_info| {
+    snapshot_utils::get_highest_full_snapshot_archive_info(full_snapshot_archives_dir)
+        .and_then(|full_snapshot_info| {
             if incremental_snapshot_fetch {
                 snapshot_utils::get_highest_incremental_snapshot_archive_info(
                     incremental_snapshot_archives_dir,
@@ -734,8 +734,8 @@ fn get_highest_local_snapshot_hash(
                 None
             }
             .or_else(|| Some((full_snapshot_info.slot(), *full_snapshot_info.hash())))
-        },
-    )
+        })
+        .map(|(slot, snapshot_hash)| (slot, snapshot_hash.0))
 }
 
 /// Get peer snapshot hashes
@@ -1171,7 +1171,7 @@ fn download_snapshots(
         .into_iter()
         .any(|snapshot_archive| {
             snapshot_archive.slot() == full_snapshot_hash.0
-                && snapshot_archive.hash() == &full_snapshot_hash.1
+                && snapshot_archive.hash().0 == full_snapshot_hash.1
         })
     {
         info!(
@@ -1201,7 +1201,7 @@ fn download_snapshots(
             .into_iter()
             .any(|snapshot_archive| {
                 snapshot_archive.slot() == incremental_snapshot_hash.0
-                    && snapshot_archive.hash() == &incremental_snapshot_hash.1
+                    && snapshot_archive.hash().0 == incremental_snapshot_hash.1
                     && snapshot_archive.base_slot() == full_snapshot_hash.0
             })
         {
@@ -1262,6 +1262,10 @@ fn download_snapshot(
         slot: desired_snapshot_hash.0,
         rpc_addr: rpc_contact_info.rpc,
     };
+    let desired_snapshot_hash = (
+        desired_snapshot_hash.0,
+        solana_runtime::snapshot_hash::SnapshotHash(desired_snapshot_hash.1),
+    );
     download_snapshot_archive(
         &rpc_contact_info.rpc,
         full_snapshot_archives_dir,

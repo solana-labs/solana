@@ -805,7 +805,7 @@ impl JsonRpcRequestProcessor {
 
     fn get_transaction_count(&self, config: RpcContextConfig) -> Result<u64> {
         let bank = self.get_bank_with_config(config)?;
-        Ok(bank.transaction_count() as u64)
+        Ok(bank.transaction_count())
     }
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -975,9 +975,8 @@ impl JsonRpcRequestProcessor {
                 })
             })
             .partition(|vote_account_info| {
-                if bank.slot() >= delinquent_validator_slot_distance as u64 {
-                    vote_account_info.last_vote
-                        > bank.slot() - delinquent_validator_slot_distance as u64
+                if bank.slot() >= delinquent_validator_slot_distance {
+                    vote_account_info.last_vote > bank.slot() - delinquent_validator_slot_distance
                 } else {
                     vote_account_info.last_vote > 0
                 }
@@ -2651,11 +2650,11 @@ pub mod rpc_minimal {
                 .unwrap();
 
             let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_slot(full_snapshot_archives_dir)
                     .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &incremental_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 
@@ -4105,7 +4104,7 @@ pub mod rpc_deprecated_v1_9 {
             meta.snapshot_config
                 .and_then(|snapshot_config| {
                     snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.full_snapshot_archives_dir,
+                        snapshot_config.full_snapshot_archives_dir,
                     )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
@@ -4429,7 +4428,7 @@ where
             inc_new_counter_info!("rpc-base58_encoded_tx", 1);
             if encoded.len() > MAX_BASE58_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    "base58 encoded {} too large: {} bytes (max: encoded/raw {}/{})",
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE58_SIZE,
@@ -4438,31 +4437,30 @@ where
             }
             bs58::decode(encoded)
                 .into_vec()
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+                .map_err(|e| Error::invalid_params(format!("invalid base58 encoding: {:?}", e)))?
         }
         TransactionBinaryEncoding::Base64 => {
             inc_new_counter_info!("rpc-base64_encoded_tx", 1);
             if encoded.len() > MAX_BASE64_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    "base64 encoded {} too large: {} bytes (max: encoded/raw {}/{})",
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE64_SIZE,
                     PACKET_DATA_SIZE,
                 )));
             }
-            base64::decode(encoded).map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+            base64::decode(encoded)
+                .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {:?}", e)))?
         }
     };
     if wire_output.len() > PACKET_DATA_SIZE {
-        let err = format!(
-            "encoded {} too large: {} bytes (max: {} bytes)",
+        return Err(Error::invalid_params(format!(
+            "decoded {} too large: {} bytes (max: {} bytes)",
             type_name::<T>(),
             wire_output.len(),
             PACKET_DATA_SIZE
-        );
-        info!("{}", err);
-        return Err(Error::invalid_params(&err));
+        )));
     }
     bincode::options()
         .with_limit(PACKET_DATA_SIZE as u64)
@@ -4470,8 +4468,11 @@ where
         .allow_trailing_bytes()
         .deserialize_from(&wire_output[..])
         .map_err(|err| {
-            info!("deserialize error: {}", err);
-            Error::invalid_params(&err.to_string())
+            Error::invalid_params(format!(
+                "failed to deserialize {}: {}",
+                type_name::<T>(),
+                &err.to_string()
+            ))
         })
         .map(|output| (wire_output, output))
 }
@@ -8387,45 +8388,89 @@ pub mod tests {
         // +2 because +1 still fits in base64 encoded worst-case
         let too_big = PACKET_DATA_SIZE + 2;
         let tx_ser = vec![0xffu8; too_big];
+
         let tx58 = bs58::encode(&tx_ser).into_string();
         let tx58_len = tx58.len();
-        let expect58 = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
-            expect58
-        );
+            Error::invalid_params(format!(
+                "base58 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+                tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
+            )
+        ));
+
         let tx64 = base64::encode(&tx_ser);
         let tx64_len = tx64.len();
-        let expect64 = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
-            expect64
-        );
+            Error::invalid_params(format!(
+                "base64 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+                tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
+            )
+        ));
+
         let too_big = PACKET_DATA_SIZE + 1;
         let tx_ser = vec![0x00u8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
-        let expect = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
-            too_big, PACKET_DATA_SIZE
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
-            expect
+            Error::invalid_params(format!(
+                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
+                too_big, PACKET_DATA_SIZE
+            ))
         );
+
         let tx64 = base64::encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
-            expect
+            Error::invalid_params(format!(
+                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
+                too_big, PACKET_DATA_SIZE
+            ))
+        );
+
+        let tx_ser = vec![0xffu8; PACKET_DATA_SIZE - 2];
+        let mut tx64 = base64::encode(&tx_ser);
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx64.clone(), TransactionBinaryEncoding::Base64)
+                .unwrap_err(),
+            Error::invalid_params(
+                "failed to deserialize solana_sdk::transaction::Transaction: invalid value: \
+                continue signal on byte-three, expected a terminal signal on or before byte-three"
+                    .to_string()
+            )
+        );
+
+        tx64.push('!');
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
+                .unwrap_err(),
+            Error::invalid_params("invalid base64 encoding: InvalidByte(1640, 33)".to_string())
+        );
+
+        let mut tx58 = bs58::encode(&tx_ser).into_string();
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx58.clone(), TransactionBinaryEncoding::Base58)
+                .unwrap_err(),
+            Error::invalid_params(
+                "failed to deserialize solana_sdk::transaction::Transaction: invalid value: \
+                continue signal on byte-three, expected a terminal signal on or before byte-three"
+                    .to_string()
+            )
+        );
+
+        tx58.push('!');
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
+                .unwrap_err(),
+            Error::invalid_params(
+                "invalid base58 encoding: InvalidCharacter { character: '!', index: 1680 }"
+                    .to_string(),
+            )
         );
     }
 
@@ -8515,7 +8560,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&legacy_msg).unwrap())])),
+                Some(json!([base64::encode(serialize(&legacy_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
@@ -8534,7 +8579,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&v0_msg).unwrap())])),
+                Some(json!([base64::encode(serialize(&v0_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);

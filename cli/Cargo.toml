@@ -54,7 +54,7 @@ solana-tpu-client = { path = "../tpu-client", version = "=1.15.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 solana-version = { path = "../version", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
-solana_rbpf = "=0.2.34"
+solana_rbpf = "=0.2.35"
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"

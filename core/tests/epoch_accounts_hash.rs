@@ -310,7 +310,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                 .rc
                 .accounts
                 .accounts_db
-                .calculate_accounts_hash(
+                .calculate_accounts_hash_from_index(
                     bank.slot(),
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: false,

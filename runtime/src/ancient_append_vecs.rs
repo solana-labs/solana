@@ -8,7 +8,7 @@ use {
         accounts_db::FoundStoredAccount,
         append_vec::{AppendVec, StoredAccountMeta},
     },
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{clock::Slot, hash::Hash},
 };
 
 /// a set of accounts need to be stored.
@@ -26,7 +26,7 @@ pub enum StorageSelector {
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
     hashes: Vec<&'a Hash>,
-    accounts: Vec<(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)>,
+    accounts: Vec<(&'a StoredAccountMeta<'a>, Slot)>,
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
@@ -37,7 +37,7 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        stored_accounts: &'a [&'a (Pubkey, FoundStoredAccount<'a>)],
+        stored_accounts: &'a [&'a FoundStoredAccount<'a>],
         slot: Slot,
     ) -> Self {
         let num_accounts = stored_accounts.len();
@@ -46,7 +46,7 @@ impl<'a> AccountsToStore<'a> {
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
         stored_accounts.iter().for_each(|account| {
-            let account_size = account.1.account.stored_size as u64;
+            let account_size = account.account.stored_size as u64;
             if available_bytes >= account_size {
                 available_bytes = available_bytes.saturating_sub(account_size);
             } else if index_first_item_overflow == num_accounts {
@@ -54,10 +54,10 @@ impl<'a> AccountsToStore<'a> {
                 // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
                 index_first_item_overflow = hashes.len();
             }
-            hashes.push(account.1.account.hash);
+            hashes.push(account.account.hash);
             // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
             // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
-            accounts.push((&account.1.account.meta.pubkey, &account.1.account, slot));
+            accounts.push((&account.account, slot));
         });
         Self {
             hashes,
@@ -75,10 +75,7 @@ impl<'a> AccountsToStore<'a> {
     pub fn get(
         &self,
         storage: StorageSelector,
-    ) -> (
-        &[(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)],
-        &[&'a Hash],
-    ) {
+    ) -> (&[(&'a StoredAccountMeta<'a>, Slot)], &[&'a Hash]) {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
@@ -109,7 +106,10 @@ pub mod tests {
             accounts_db::{get_temp_accounts_paths, AppendVecId},
             append_vec::{AccountMeta, StoredMeta},
         },
-        solana_sdk::account::{AccountSharedData, ReadableAccount},
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            pubkey::Pubkey,
+        },
     };
 
     #[test]
@@ -158,8 +158,7 @@ pub mod tests {
             hash: &hash,
         };
         let found = FoundStoredAccount { account, store_id };
-        let item = (pubkey, found);
-        let map = vec![&item];
+        let map = vec![&found];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
@@ -169,9 +168,7 @@ pub mod tests {
             let (accounts, hashes) = accounts_to_store.get(selector);
             assert_eq!(
                 accounts,
-                map.iter()
-                    .map(|(a, b)| (a, &b.account, slot))
-                    .collect::<Vec<_>>(),
+                map.iter().map(|b| (&b.account, slot)).collect::<Vec<_>>(),
                 "mismatch"
             );
             assert_eq!(hashes, vec![&hash]);

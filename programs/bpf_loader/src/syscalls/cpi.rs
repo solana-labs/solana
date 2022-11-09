@@ -1,8 +1,11 @@
 use {
     super::*,
     crate::declare_syscall,
-    solana_sdk::syscalls::{
-        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+    solana_sdk::{
+        feature_set::enable_bpf_loader_set_authority_checked_ix,
+        syscalls::{
+            MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+        },
     },
 };
 
@@ -379,12 +382,12 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         let meta_cs = translate_slice::<SolAccountMeta>(
             memory_mapping,
             ix_c.accounts_addr,
-            ix_c.accounts_len as u64,
+            ix_c.accounts_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
 
-        let ix_data_len = ix_c.data_len as u64;
+        let ix_data_len = ix_c.data_len;
         if invoke_context
             .feature_set
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
@@ -833,6 +836,12 @@ fn check_authorized_program(
         || (bpf_loader_upgradeable::check_id(program_id)
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
+                || (invoke_context
+                    .feature_set
+                    .is_active(&enable_bpf_loader_set_authority_checked_ix::id())
+                    && bpf_loader_upgradeable::is_set_authority_checked_instruction(
+                        instruction_data,
+                    ))
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
         || is_precompile(program_id, |feature_id: &Pubkey| {
             invoke_context.feature_set.is_active(feature_id)

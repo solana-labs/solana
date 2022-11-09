@@ -27,7 +27,7 @@ pub fn parse_bpf_upgradeable_loader(
             BpfUpgradeableLoaderAccountType::Buffer(UiBuffer {
                 authority: authority_address.map(|pubkey| pubkey.to_string()),
                 data: UiAccountData::Binary(
-                    base64::encode(&data[offset as usize..]),
+                    base64::encode(&data[offset..]),
                     UiAccountEncoding::Base64,
                 ),
             })
@@ -51,7 +51,7 @@ pub fn parse_bpf_upgradeable_loader(
                 slot,
                 authority: upgrade_authority_address.map(|pubkey| pubkey.to_string()),
                 data: UiAccountData::Binary(
-                    base64::encode(&data[offset as usize..]),
+                    base64::encode(&data[offset..]),
                     UiAccountEncoding::Base64,
                 ),
             })

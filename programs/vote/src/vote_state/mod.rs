@@ -105,7 +105,7 @@ impl VoteTransaction {
 
     pub fn last_voted_slot(&self) -> Option<Slot> {
         match self {
-            VoteTransaction::Vote(vote) => vote.slots.last().copied(),
+            VoteTransaction::Vote(vote) => vote.last_voted_slot(),
             VoteTransaction::VoteStateUpdate(vote_state_update)
             | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.last_voted_slot()
@@ -1063,7 +1063,7 @@ mod tests {
                 .convert_to_current();
 
         for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
-            process_slot_vote_unchecked(&mut vote_state, (INITIAL_LOCKOUT as usize * i) as u64);
+            process_slot_vote_unchecked(&mut vote_state, (INITIAL_LOCKOUT * i) as u64);
         }
 
         // The last vote should have been popped b/c it reached a depth of MAX_LOCKOUT_HISTORY

@@ -798,7 +798,6 @@ use {
     },
     digest::Digest,
     serde_derive::{Deserialize, Serialize},
-    std::sync::Arc,
 };
 
 pub const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
@@ -929,11 +928,11 @@ pub fn construct_eth_pubkey(
 /// `feature_set` is the set of active Solana features. It is used to enable or
 /// disable a few minor additional checks that were activated on chain
 /// subsequent to the addition of the secp256k1 native program. For many
-/// purposes passing `Arc::new<FeatureSet::all_enabled()>` is reasonable.
+/// purposes passing `FeatureSet::all_enabled()` is reasonable.
 pub fn verify(
     data: &[u8],
     instruction_datas: &[&[u8]],
-    feature_set: &Arc<FeatureSet>,
+    feature_set: &FeatureSet,
 ) -> Result<(), PrecompileError> {
     if data.is_empty() {
         return Err(PrecompileError::InvalidInstructionDataSize);
@@ -1061,7 +1060,6 @@ pub mod test {
             transaction::Transaction,
         },
         rand::{thread_rng, Rng},
-        std::sync::Arc,
     };
 
     fn test_case(
@@ -1080,7 +1078,7 @@ pub mod test {
             .inactive
             .insert(libsecp256k1_0_5_upgrade_enabled::id());
 
-        verify(&instruction_data, &[&[0u8; 100]], &Arc::new(feature_set))
+        verify(&instruction_data, &[&[0u8; 100]], &feature_set)
     }
 
     #[test]
@@ -1102,7 +1100,7 @@ pub mod test {
             .insert(libsecp256k1_0_5_upgrade_enabled::id());
 
         assert_eq!(
-            verify(&instruction_data, &[&[0u8; 100]], &Arc::new(feature_set)),
+            verify(&instruction_data, &[&[0u8; 100]], &feature_set),
             Err(PrecompileError::InvalidInstructionDataSize)
         );
 
@@ -1237,7 +1235,7 @@ pub mod test {
             .insert(libsecp256k1_0_5_upgrade_enabled::id());
 
         assert_eq!(
-            verify(&instruction_data, &[&[0u8; 100]], &Arc::new(feature_set)),
+            verify(&instruction_data, &[&[0u8; 100]], &feature_set),
             Err(PrecompileError::InvalidInstructionDataSize)
         );
     }
@@ -1262,7 +1260,7 @@ pub mod test {
         feature_set
             .inactive
             .insert(feature_set::libsecp256k1_0_5_upgrade_enabled::id());
-        let feature_set = Arc::new(feature_set);
+        let feature_set = feature_set;
 
         let tx = Transaction::new_signed_with_payer(
             &[secp_instruction.clone()],
@@ -1349,7 +1347,7 @@ pub mod test {
         verify(
             &instruction_data,
             &[&instruction_data],
-            &Arc::new(FeatureSet::all_enabled()),
+            &FeatureSet::all_enabled(),
         )
         .unwrap();
     }

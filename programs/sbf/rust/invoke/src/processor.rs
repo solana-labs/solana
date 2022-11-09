@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that issues a cross-program-invocation
+//! Example Rust-based SBF program that issues a cross-program-invocation
 
 #![cfg(feature = "program")]
 #![allow(unreachable_code)]
@@ -576,7 +576,7 @@ fn process_instruction(
         TEST_MAX_ACCOUNT_INFOS_EXCEEDED => {
             msg!("Test max account infos exceeded");
             let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
-            let account_infos_len = (MAX_CPI_ACCOUNT_INFOS as usize).saturating_add(1);
+            let account_infos_len = MAX_CPI_ACCOUNT_INFOS.saturating_add(1);
             let account_infos = vec![accounts[0].clone(); account_infos_len];
             invoke_signed(&instruction, &account_infos, &[])?;
         }

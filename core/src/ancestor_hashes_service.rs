@@ -760,7 +760,7 @@ mod test {
     use {
         super::*,
         crate::{
-            cluster_slot_state_verifier::DuplicateSlotsToRepair,
+            cluster_slot_state_verifier::{DuplicateSlotsToRepair, PurgeRepairSlotCounter},
             repair_service::DuplicateSlotsResetReceiver,
             replay_stage::{
                 tests::{replay_blockstore_components, ReplayBlockstoreComponents},
@@ -1542,6 +1542,7 @@ mod test {
             &bank_forks,
             &requester_blockstore,
             None,
+            &mut PurgeRepairSlotCounter::default(),
         );
 
         // Simulate making a request

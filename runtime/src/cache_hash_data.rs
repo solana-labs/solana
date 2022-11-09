@@ -226,7 +226,7 @@ impl CacheHashData {
     ) -> Result<CacheHashDataFile, std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.map(file_name, &mut stats);
-        self.stats.lock().unwrap().merge(&stats);
+        self.stats.lock().unwrap().accumulate(&stats);
         result
     }
 
@@ -294,7 +294,7 @@ impl CacheHashData {
     pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
-        self.stats.lock().unwrap().merge(&stats);
+        self.stats.lock().unwrap().accumulate(&stats);
         result
     }
 

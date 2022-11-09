@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that tests duplicate accounts passed via accounts
+//! Example Rust-based SBF program that tests duplicate accounts passed via accounts
 
 extern crate solana_program;
 use solana_program::{

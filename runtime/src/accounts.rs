@@ -4,8 +4,8 @@ use {
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
             AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, IncludeSlotInHash, LoadHint, LoadedAccount, ScanStorageResult,
-            ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
+            BankHashInfo, CalcAccountsHashDataSource, IncludeSlotInHash, LoadHint, LoadedAccount,
+            ScanStorageResult, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
             AccountSecondaryIndexes, IndexKey, ScanConfig, ScanError, ScanResult, ZeroLamport,
@@ -33,7 +33,7 @@ use {
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        clock::{BankId, Slot, INITIAL_RENT_EPOCH},
+        clock::{BankId, Slot},
         feature_set::{
             self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
             FeatureSet,
@@ -272,8 +272,6 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
-            let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
-                .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -301,7 +299,6 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
-                                                preserve_rent_epoch_for_rent_exempt_accounts,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -742,10 +739,11 @@ impl Accounts {
         if num == 0 {
             return Ok(vec![]);
         }
-        let account_balances = self.accounts_db.scan_accounts(
+        let mut account_balances = BinaryHeap::new();
+        self.accounts_db.scan_accounts(
             ancestors,
             bank_id,
-            |collector: &mut BinaryHeap<Reverse<(u64, Pubkey)>>, option| {
+            |option| {
                 if let Some((pubkey, account, _slot)) = option {
                     if account.lamports() == 0 {
                         return;
@@ -758,16 +756,16 @@ impl Accounts {
                     if !collect {
                         return;
                     }
-                    if collector.len() == num {
-                        let Reverse(entry) = collector
+                    if account_balances.len() == num {
+                        let Reverse(entry) = account_balances
                             .peek()
                             .expect("BinaryHeap::peek should succeed when len > 0");
                         if *entry >= (account.lamports(), *pubkey) {
                             return;
                         }
-                        collector.pop();
+                        account_balances.pop();
                     }
-                    collector.push(Reverse((account.lamports(), *pubkey)));
+                    account_balances.push(Reverse((account.lamports(), *pubkey)));
                 }
             },
             &ScanConfig::default(),
@@ -788,14 +786,13 @@ impl Accounts {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
-        let use_index = false;
         let is_startup = true;
         self.accounts_db
             .verify_accounts_hash_in_bg
             .wait_for_complete();
         self.accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
+            .update_accounts_hash(
+                CalcAccountsHashDataSource::Storages,
                 debug_verify,
                 slot,
                 ancestors,
@@ -878,16 +875,19 @@ impl Accounts {
         program_id: &Pubkey,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner() == program_id
-                })
-            },
-            config,
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
+                        account.owner() == program_id
+                    })
+                },
+                config,
+            )
+            .map(|_| collector)
     }
 
     pub fn load_by_program_with_filter<F: Fn(&AccountSharedData) -> bool>(
@@ -898,16 +898,19 @@ impl Accounts {
         filter: F,
         config: &ScanConfig,
     ) -> ScanResult<Vec<TransactionAccount>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                Self::load_while_filtering(collector, some_account_tuple, |account| {
-                    account.owner() == program_id && filter(account)
-                })
-            },
-            config,
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
+                        account.owner() == program_id && filter(account)
+                    })
+                },
+                config,
+            )
+            .map(|_| collector)
     }
 
     fn calc_scan_result_size(account: &AccountSharedData) -> usize {
@@ -957,14 +960,15 @@ impl Accounts {
     ) -> ScanResult<Vec<TransactionAccount>> {
         let sum = AtomicUsize::default();
         let config = config.recreate_with_abort();
+        let mut collector = Vec::new();
         let result = self
             .accounts_db
             .index_scan_accounts(
                 ancestors,
                 bank_id,
                 *index_key,
-                |collector: &mut Vec<TransactionAccount>, some_account_tuple| {
-                    Self::load_while_filtering(collector, some_account_tuple, |account| {
+                |some_account_tuple| {
+                    Self::load_while_filtering(&mut collector, some_account_tuple, |account| {
                         let use_account = filter(account);
                         if use_account
                             && Self::accumulate_and_check_scan_result_size(
@@ -981,7 +985,7 @@ impl Accounts {
                 },
                 &config,
             )
-            .map(|result| result.0);
+            .map(|_| collector);
         Self::maybe_abort_scan(result, &config)
     }
 
@@ -994,18 +998,21 @@ impl Accounts {
         ancestors: &Ancestors,
         bank_id: BankId,
     ) -> ScanResult<Vec<PubkeyAccountSlot>> {
-        self.accounts_db.scan_accounts(
-            ancestors,
-            bank_id,
-            |collector: &mut Vec<PubkeyAccountSlot>, some_account_tuple| {
-                if let Some((pubkey, account, slot)) = some_account_tuple
-                    .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
-                {
-                    collector.push((*pubkey, account, slot))
-                }
-            },
-            &ScanConfig::default(),
-        )
+        let mut collector = Vec::new();
+        self.accounts_db
+            .scan_accounts(
+                ancestors,
+                bank_id,
+                |some_account_tuple| {
+                    if let Some((pubkey, account, slot)) = some_account_tuple
+                        .filter(|(_, account, _)| Self::is_loadable(account.lamports()))
+                    {
+                        collector.push((*pubkey, account, slot))
+                    }
+                },
+                &ScanConfig::default(),
+            )
+            .map(|_| collector)
     }
 
     pub fn hold_range_in_memory<R>(
@@ -1026,15 +1033,15 @@ impl Accounts {
         ancestors: &Ancestors,
         range: R,
     ) -> Vec<PubkeyAccountSlot> {
+        let mut collector = Vec::new();
         self.accounts_db.range_scan_accounts(
             "", // disable logging of this. We now parallelize it and this results in multiple parallel logs
             ancestors,
             range,
             &ScanConfig::new(true),
-            |collector: &mut Vec<PubkeyAccountSlot>, option| {
-                Self::load_with_slot(collector, option)
-            },
-        )
+            |option| Self::load_with_slot(&mut collector, option),
+        );
+        collector
     }
 
     /// Slow because lock is held for 1 operation instead of many.
@@ -1200,7 +1207,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        preserve_rent_epoch_for_rent_exempt_accounts: bool,
         include_slot_in_hash: IncludeSlotInHash,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
@@ -1210,7 +1216,6 @@ impl Accounts {
             rent_collector,
             durable_nonce,
             lamports_per_signature,
-            preserve_rent_epoch_for_rent_exempt_accounts,
         );
         self.accounts_db.store_cached(
             (slot, &accounts_to_store[..], include_slot_in_hash),
@@ -1236,10 +1241,9 @@ impl Accounts {
         txs: &'a [SanitizedTransaction],
         execution_results: &'a [TransactionExecutionResult],
         load_results: &'a mut [TransactionLoadResult],
-        rent_collector: &RentCollector,
+        _rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        preserve_rent_epoch_for_rent_exempt_accounts: bool,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
         Vec<Option<&'a Signature>>,
@@ -1293,24 +1297,6 @@ impl Accounts {
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
-                        if !preserve_rent_epoch_for_rent_exempt_accounts
-                            && account.rent_epoch() == INITIAL_RENT_EPOCH
-                        {
-                            let rent = rent_collector
-                                .collect_from_created_account(
-                                    address,
-                                    account,
-                                    preserve_rent_epoch_for_rent_exempt_accounts,
-                                )
-                                .rent_amount;
-                            loaded_transaction.rent += rent;
-                            loaded_transaction.rent_debits.insert(
-                                address,
-                                rent,
-                                account.lamports(),
-                            );
-                        }
-
                         // Add to the accounts to store
                         accounts.push((&*address, &*account));
                         signatures.push(Some(tx.signature()));
@@ -3042,7 +3028,6 @@ mod tests {
             &rent_collector,
             &DurableNonce::default(),
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -3088,8 +3073,7 @@ mod tests {
         info!("storing..");
         for i in 0..2_000 {
             let pubkey = solana_sdk::pubkey::new_rand();
-            let account =
-                AccountSharedData::new((i + 1) as u64, 0, AccountSharedData::default().owner());
+            let account = AccountSharedData::new(i + 1, 0, AccountSharedData::default().owner());
             accounts.store_slow_uncached(i, &pubkey, &account);
             accounts.store_slow_uncached(i, &old_pubkey, &zero_account);
             old_pubkey = pubkey;
@@ -3526,7 +3510,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3641,7 +3624,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

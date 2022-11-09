@@ -133,8 +133,8 @@ program will process this instruction. The program's account's owner specifies
 which loader should be used to load and execute the program, and the data
 contains information about how the runtime should execute the program.
 
-In the case of [on-chain BPF programs](developing/on-chain-programs/overview.md),
-the owner is the BPF Loader and the account data holds the BPF bytecode. Program
+In the case of [on-chain SBF programs](developing/on-chain-programs/overview.md),
+the owner is the SBF Loader and the account data holds the BPF bytecode. Program
 accounts are permanently marked as executable by the loader once they are
 successfully deployed. The runtime will reject transactions that specify programs
 that are not executable.

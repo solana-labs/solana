@@ -112,10 +112,10 @@ impl RequestResponse for ShredRepairType {
         match self {
             ShredRepairType::Orphan(slot) => response_shred.slot() <= *slot,
             ShredRepairType::HighestShred(slot, index) => {
-                response_shred.slot() as u64 == *slot && response_shred.index() as u64 >= *index
+                response_shred.slot() == *slot && response_shred.index() as u64 >= *index
             }
             ShredRepairType::Shred(slot, index) => {
-                response_shred.slot() as u64 == *slot && response_shred.index() as u64 == *index
+                response_shred.slot() == *slot && response_shred.index() as u64 == *index
             }
         }
     }

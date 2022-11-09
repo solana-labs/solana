@@ -3,8 +3,7 @@ use {
     common::{add_upgradeable_loader_account, assert_ix_error, setup_test_context},
     solana_program_test::*,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
-        account_utils::StateMut,
+        account::{AccountSharedData, ReadableAccount, WritableAccount},
         bpf_loader_upgradeable::{extend_program, id, UpgradeableLoaderState},
         instruction::InstructionError,
         pubkey::Pubkey,
@@ -31,6 +30,7 @@ async fn test_extend_program() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -41,6 +41,7 @@ async fn test_extend_program() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         program_data_len,
+        |_| {},
     )
     .await;
 
@@ -84,6 +85,7 @@ async fn test_extend_program_not_upgradeable() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -94,6 +96,7 @@ async fn test_extend_program_not_upgradeable() {
             upgrade_authority_address: None,
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -121,6 +124,7 @@ async fn test_extend_program_by_zero_bytes() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -131,6 +135,7 @@ async fn test_extend_program_by_zero_bytes() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -158,6 +163,7 @@ async fn test_extend_program_past_max_size() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -168,6 +174,7 @@ async fn test_extend_program_past_max_size() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         MAX_PERMITTED_DATA_LENGTH as usize,
+        |_| {},
     )
     .await;
 
@@ -196,6 +203,7 @@ async fn test_extend_program_with_invalid_payer() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -206,6 +214,7 @@ async fn test_extend_program_with_invalid_payer() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -293,6 +302,7 @@ async fn test_extend_program_without_payer() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     let program_data_len = 100;
@@ -304,6 +314,7 @@ async fn test_extend_program_without_payer() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         program_data_len,
+        |_| {},
     )
     .await;
 
@@ -364,6 +375,7 @@ async fn test_extend_program_with_invalid_system_program() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     let program_data_len = 100;
@@ -375,6 +387,7 @@ async fn test_extend_program_with_invalid_system_program() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         program_data_len,
+        |_| {},
     )
     .await;
 
@@ -415,6 +428,7 @@ async fn test_extend_program_with_mismatch_program_data() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
 
@@ -427,6 +441,7 @@ async fn test_extend_program_with_mismatch_program_data() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -466,6 +481,7 @@ async fn test_extend_program_with_readonly_program_data() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -476,6 +492,7 @@ async fn test_extend_program_with_readonly_program_data() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -504,7 +521,6 @@ async fn test_extend_program_with_readonly_program_data() {
 #[tokio::test]
 async fn test_extend_program_with_invalid_program_data_state() {
     let mut context = setup_test_context().await;
-    let rent = context.banks_client.get_rent().await.unwrap();
     let payer_address = context.payer.pubkey();
 
     let program_address = Pubkey::new_unique();
@@ -516,18 +532,19 @@ async fn test_extend_program_with_invalid_program_data_state() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
-
-    {
-        let mut account = AccountSharedData::new(rent.minimum_balance(100), 100, &id());
-        account
-            .set_state(&UpgradeableLoaderState::Buffer {
-                authority_address: Some(payer_address),
-            })
-            .expect("serialization failed");
-        context.set_account(&programdata_address, &account);
-    }
+    add_upgradeable_loader_account(
+        &mut context,
+        &programdata_address,
+        &UpgradeableLoaderState::Buffer {
+            authority_address: Some(payer_address),
+        },
+        100,
+        |_| {},
+    )
+    .await;
 
     assert_ix_error(
         &mut context,
@@ -542,7 +559,6 @@ async fn test_extend_program_with_invalid_program_data_state() {
 #[tokio::test]
 async fn test_extend_program_with_invalid_program_data_owner() {
     let mut context = setup_test_context().await;
-    let rent = context.banks_client.get_rent().await.unwrap();
     let payer_address = context.payer.pubkey();
 
     let program_address = Pubkey::new_unique();
@@ -554,20 +570,22 @@ async fn test_extend_program_with_invalid_program_data_owner() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
 
-    {
-        let invalid_owner = Pubkey::new_unique();
-        let mut account = AccountSharedData::new(rent.minimum_balance(100), 100, &invalid_owner);
-        account
-            .set_state(&UpgradeableLoaderState::ProgramData {
-                slot: 0,
-                upgrade_authority_address: Some(payer_address),
-            })
-            .expect("serialization failed");
-        context.set_account(&programdata_address, &account);
-    }
+    let invalid_owner = Pubkey::new_unique();
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_address,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(payer_address),
+        },
+        100,
+        |account| account.set_owner(invalid_owner),
+    )
+    .await;
 
     assert_ix_error(
         &mut context,
@@ -593,6 +611,7 @@ async fn test_extend_program_with_readonly_program() {
             programdata_address,
         },
         UpgradeableLoaderState::size_of_program(),
+        |_| {},
     )
     .await;
     add_upgradeable_loader_account(
@@ -603,6 +622,7 @@ async fn test_extend_program_with_readonly_program() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -631,28 +651,21 @@ async fn test_extend_program_with_readonly_program() {
 #[tokio::test]
 async fn test_extend_program_with_invalid_program_owner() {
     let mut context = setup_test_context().await;
-    let rent = context.banks_client.get_rent().await.unwrap();
     let payer_address = context.payer.pubkey();
 
     let program_address = Pubkey::new_unique();
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-
-    {
-        let invalid_owner = Pubkey::new_unique();
-        let program_len = UpgradeableLoaderState::size_of_program();
-        let mut account = AccountSharedData::new(
-            rent.minimum_balance(program_len),
-            program_len,
-            &invalid_owner,
-        );
-        account
-            .set_state(&UpgradeableLoaderState::Program {
-                programdata_address,
-            })
-            .expect("serialization failed");
-        context.set_account(&program_address, &account);
-    }
-
+    let invalid_owner = Pubkey::new_unique();
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_address,
+        &UpgradeableLoaderState::Program {
+            programdata_address,
+        },
+        UpgradeableLoaderState::size_of_program(),
+        |account| account.set_owner(invalid_owner),
+    )
+    .await;
     add_upgradeable_loader_account(
         &mut context,
         &programdata_address,
@@ -661,6 +674,7 @@ async fn test_extend_program_with_invalid_program_owner() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 
@@ -677,21 +691,20 @@ async fn test_extend_program_with_invalid_program_owner() {
 #[tokio::test]
 async fn test_extend_program_with_invalid_program_state() {
     let mut context = setup_test_context().await;
-    let rent = context.banks_client.get_rent().await.unwrap();
     let payer_address = context.payer.pubkey();
 
     let program_address = Pubkey::new_unique();
     let (programdata_address, _) = Pubkey::find_program_address(&[program_address.as_ref()], &id());
-
-    {
-        let mut account = AccountSharedData::new(rent.minimum_balance(100), 100, &id());
-        account
-            .set_state(&UpgradeableLoaderState::Buffer {
-                authority_address: Some(payer_address),
-            })
-            .expect("serialization failed");
-        context.set_account(&program_address, &account);
-    }
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_address,
+        &UpgradeableLoaderState::Buffer {
+            authority_address: Some(payer_address),
+        },
+        100,
+        |_| {},
+    )
+    .await;
 
     add_upgradeable_loader_account(
         &mut context,
@@ -701,6 +714,7 @@ async fn test_extend_program_with_invalid_program_state() {
             upgrade_authority_address: Some(Pubkey::new_unique()),
         },
         100,
+        |_| {},
     )
     .await;
 

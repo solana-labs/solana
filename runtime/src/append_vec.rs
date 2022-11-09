@@ -114,6 +114,10 @@ impl<'a> StoredAccountMeta<'a> {
         })
     }
 
+    pub fn pubkey(&self) -> &Pubkey {
+        &self.meta.pubkey
+    }
+
     fn sanitize(&self) -> bool {
         self.sanitize_executable() && self.sanitize_lamports()
     }

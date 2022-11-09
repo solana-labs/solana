@@ -1,6 +1,6 @@
 //! Basic low-level memory operations.
 //!
-//! Within the BPF environment, these are implemented as syscalls and executed by
+//! Within the SBF environment, these are implemented as syscalls and executed by
 //! the runtime in native code.
 
 /// Like C `memcpy`.
@@ -13,13 +13,13 @@
 ///
 /// # Errors
 ///
-/// When executed within a BPF program, the memory regions spanning `n` bytes
+/// When executed within a SBF program, the memory regions spanning `n` bytes
 /// from from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
 /// The memory regions spanning `n` bytes from `dst` and `src` from the start
 /// of `dst` and `src` must not overlap. If they do, then the program will abort
-/// or, if run outside of the BPF VM, will panic.
+/// or, if run outside of the SBF VM, will panic.
 ///
 /// # Safety
 ///
@@ -52,7 +52,7 @@ pub fn sol_memcpy(dst: &mut [u8], src: &[u8], n: usize) {
 ///
 /// # Errors
 ///
-/// When executed within a BPF program, the memory regions spanning `n` bytes
+/// When executed within a SBF program, the memory regions spanning `n` bytes
 /// from from `dst` and `src` must be mapped program memory. If not, the program
 /// will abort.
 ///
@@ -80,7 +80,7 @@ pub unsafe fn sol_memmove(dst: *mut u8, src: *mut u8, n: usize) {
 ///
 /// # Errors
 ///
-/// When executed within a BPF program, the memory regions spanning `n` bytes
+/// When executed within a SBF program, the memory regions spanning `n` bytes
 /// from from the start of `dst` and `src` must be mapped program memory. If not,
 /// the program will abort.
 ///
@@ -119,7 +119,7 @@ pub fn sol_memcmp(s1: &[u8], s2: &[u8], n: usize) -> i32 {
 ///
 /// # Errors
 ///
-/// When executed within a BPF program, the memory region spanning `n` bytes
+/// When executed within a SBF program, the memory region spanning `n` bytes
 /// from from the start of `s` must be mapped program memory. If not, the program
 /// will abort.
 ///

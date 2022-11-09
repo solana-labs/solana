@@ -1,4 +1,4 @@
-//! The solana-program-test provides a BanksClient-based test framework BPF programs
+//! The solana-program-test provides a BanksClient-based test framework SBF programs
 #![allow(clippy::integer_arithmetic)]
 
 // Export tokio for test clients
@@ -117,7 +117,7 @@ pub fn builtin_process_instruction(
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
     let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
-    // Serialize entrypoint parameters with BPF ABI
+    // Serialize entrypoint parameters with SBF ABI
     let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
@@ -423,7 +423,7 @@ fn default_shared_object_dirs() -> Vec<PathBuf> {
     if let Ok(dir) = std::env::current_dir() {
         search_path.push(dir);
     }
-    trace!("BPF .so search path: {:?}", search_path);
+    trace!("SBF .so search path: {:?}", search_path);
     search_path
 }
 
@@ -456,7 +456,7 @@ impl Default for ProgramTest {
     /// used to override this preference at runtime.  `cargo test-bpf` will set `BPF_OUT_DIR`
     /// automatically.
     ///
-    /// BPF program shared objects and account data files are searched for in
+    /// SBF program shared objects and account data files are searched for in
     /// * the value of the `BPF_OUT_DIR` environment variable
     /// * the `tests/fixtures` sub-directory
     /// * the current working directory
@@ -501,7 +501,7 @@ impl ProgramTest {
         me
     }
 
-    /// Override default BPF program selection
+    /// Override default SBF program selection
     pub fn prefer_bpf(&mut self, prefer_bpf: bool) {
         self.prefer_bpf = prefer_bpf;
     }
@@ -516,14 +516,14 @@ impl ProgramTest {
         self.transaction_account_lock_limit = Some(transaction_account_lock_limit);
     }
 
-    /// Override the BPF compute budget
+    /// Override the SBF compute budget
     #[allow(deprecated)]
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.compute_max_units = Some(bpf_compute_max_units);
     }
 
-    /// Execute the BPF program with JIT if true, interpreted if false
+    /// Execute the SBF program with JIT if true, interpreted if false
     pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
         self.use_bpf_jit = use_bpf_jit;
     }
@@ -578,13 +578,13 @@ impl ProgramTest {
         );
     }
 
-    /// Add a BPF program to the test environment.
+    /// Add a SBF program to the test environment.
     ///
-    /// `program_name` will also be used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
     /// directory.
     ///
     /// If `process_instruction` is provided, the natively built-program may be used instead of the
-    /// BPF shared object depending on the `BPF_OUT_DIR` environment variable.
+    /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,
@@ -594,7 +594,7 @@ impl ProgramTest {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
             info!(
-                "\"{}\" BPF program from {}{}",
+                "\"{}\" SBF program from {}{}",
                 program_name,
                 program_file.display(),
                 std::fs::metadata(&program_file)
@@ -654,7 +654,7 @@ impl ProgramTest {
             if valid_program_names.is_empty() {
                 // This should be unreachable as `test-bpf` should guarantee at least one shared
                 // object exists somewhere.
-                warn!("No BPF shared objects found.");
+                warn!("No SBF shared objects found.");
                 return;
             }
 
@@ -670,17 +670,17 @@ impl ProgramTest {
 
         let program_file = find_file(&format!("{}.so", program_name));
         match (self.prefer_bpf, program_file, process_instruction) {
-            // If BPF is preferred (i.e., `test-bpf` is invoked) and a BPF shared object exists,
+            // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
             (true, Some(file), _) => add_bpf(self, file),
 
-            // If BPF is not required (i.e., we were invoked with `test`), use the provided
+            // If SBF is not required (i.e., we were invoked with `test`), use the provided
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
             (false, _, Some(process)) => add_native(self, process),
 
-            // Invalid: `test-bpf` invocation with no matching BPF shared object.
+            // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
                 panic!(
