@@ -12,10 +12,7 @@
 //! epochs increasing in slots until they last for [`DEFAULT_SLOTS_PER_EPOCH`].
 
 pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
-use {
-    crate::{clone_zeroed, copy_field},
-    std::mem::MaybeUninit,
-};
+use solana_sdk_macro::CloneZeroed;
 
 /// The default number of slots before an epoch starts to calculate the leader schedule.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
@@ -32,7 +29,7 @@ pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]
-#[derive(Debug, Copy, PartialEq, Eq, Deserialize, Serialize, AbiExample)]
+#[derive(Debug, CloneZeroed, Copy, PartialEq, Eq, Deserialize, Serialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
@@ -63,21 +60,6 @@ impl Default for EpochSchedule {
             DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET,
             true,
         )
-    }
-}
-
-impl Clone for EpochSchedule {
-    fn clone(&self) -> Self {
-        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
-            let ptr = cloned.as_mut_ptr();
-            unsafe {
-                copy_field!(ptr, self, slots_per_epoch);
-                copy_field!(ptr, self, leader_schedule_slot_offset);
-                copy_field!(ptr, self, warmup);
-                copy_field!(ptr, self, first_normal_epoch);
-                copy_field!(ptr, self, first_normal_slot);
-            }
-        })
     }
 }
 

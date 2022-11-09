@@ -405,3 +405,38 @@ pub fn wasm_bindgen_stub(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+// Sets padding in structures to zero explicitly.
+// Otherwise padding could be inconsistent across the network and lead to divergence / consensus failures.
+#[proc_macro_derive(CloneZeroed)]
+pub fn derive_clone_zeroed(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match parse_macro_input!(input as syn::Item) {
+        syn::Item::Struct(item_struct) => {
+            let clone_statements = match item_struct.fields {
+                syn::Fields::Named(ref fields) => fields.named.iter().map(|f| {
+                    let name = &f.ident;
+                    quote! {
+                        std::ptr::addr_of_mut!((*ptr).#name).write(self.#name);
+                    }
+                }),
+                _ => unimplemented!(),
+            };
+            let name = &item_struct.ident;
+            quote! {
+                impl Clone for #name {
+                    fn clone(&self) -> Self {
+                        let mut value = std::mem::MaybeUninit::<Self>::uninit();
+                        unsafe {
+                            std::ptr::write_bytes(&mut value, 0, 1);
+                            let ptr = value.as_mut_ptr();
+                            #(#clone_statements)*
+                            value.assume_init()
+                        }
+                    }
+                }
+            }
+        }
+        _ => unimplemented!(),
+    }
+    .into()
+}
