@@ -27,6 +27,15 @@ pub enum OptionalContext<T> {
     NoContext(T),
 }
 
+impl<T> OptionalContext<T> {
+    pub fn parse_value(self) -> T {
+        match self {
+            Self::Context(response) => response.value,
+            Self::NoContext(value) => value,
+        }
+    }
+}
+
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
