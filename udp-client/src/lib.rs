@@ -16,7 +16,14 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::Arc,
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum UdpClientError {
+    #[error("IO error: {0:?}")]
+    IoError(#[from] std::io::Error),
+}
 
 pub struct UdpPool {
     connections: Vec<Arc<Udp>>,
@@ -64,12 +71,17 @@ pub struct UdpConfig {
 
 impl Default for UdpConfig {
     fn default() -> Self {
-        Self {
-            tpu_udp_socket: Arc::new(
-                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                    .expect("Unable to bind to UDP socket"),
-            ),
-        }
+        Self::new().expect("Unable to bind to UDP socket")
+    }
+}
+
+impl UdpConfig {
+    pub fn new() -> Result<Self, UdpClientError> {
+        let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            .map_err(Into::<UdpClientError>::into)?;
+        Ok(Self {
+            tpu_udp_socket: Arc::new(socket),
+        })
     }
 }
 

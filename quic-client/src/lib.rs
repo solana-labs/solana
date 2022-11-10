@@ -26,7 +26,14 @@ use {
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum QuicClientError {
+    #[error("Certificate error: {0}")]
+    CertificateError(String),
+}
 
 pub struct QuicPool {
     connections: Vec<Arc<Quic>>,
@@ -83,23 +90,27 @@ pub struct QuicConfig {
 
 impl Default for QuicConfig {
     fn default() -> Self {
+        Self::new().expect("Failed to initialize QUIC client certificates")
+    }
+}
+
+impl QuicConfig {
+    pub fn new() -> Result<Self, QuicClientError> {
         let (certs, priv_key) = new_self_signed_tls_certificate_chain(
             &Keypair::new(),
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         )
-        .expect("Failed to initialize QUIC client certificates");
-        Self {
+        .map_err(|err| QuicClientError::CertificateError(err.to_string()))?;
+        Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificates: certs,
                 key: priv_key,
             }),
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
-        }
+        })
     }
-}
 
-impl QuicConfig {
     fn create_endpoint(&self) -> Arc<QuicLazyInitializedEndpoint> {
         Arc::new(QuicLazyInitializedEndpoint::new(
             self.client_certificate.clone(),

@@ -12,3 +12,4 @@ edition = "2021"
 [dependencies]
 solana-net-utils = { path = "../net-utils", version = "=1.15.0" }
 solana-tpu-client = { path = "../tpu-client", version = "=1.15.0" }
+thiserror = "1.0"
