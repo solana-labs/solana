@@ -90,12 +90,6 @@ pub struct QuicConfig {
     maybe_client_pubkey: Option<Pubkey>,
 }
 
-impl Default for QuicConfig {
-    fn default() -> Self {
-        Self::new().expect("Failed to initialize QUIC client certificates")
-    }
-}
-
 impl NewTpuConfig for QuicConfig {
     type ClientError = QuicClientError;
 

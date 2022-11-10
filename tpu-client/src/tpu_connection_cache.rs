@@ -270,7 +270,7 @@ pub trait NewTpuConfig {
 
 pub trait ConnectionPool {
     type PoolTpuConnection: BaseTpuConnection;
-    type TpuConfig: Default + NewTpuConfig;
+    type TpuConfig: NewTpuConfig;
     const PORT_OFFSET: u16 = 0;
 
     /// Create a new connection pool based on protocol-specific configuration

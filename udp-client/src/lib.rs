@@ -71,12 +71,6 @@ pub struct UdpConfig {
     tpu_udp_socket: Arc<UdpSocket>,
 }
 
-impl Default for UdpConfig {
-    fn default() -> Self {
-        Self::new().expect("Unable to bind to UDP socket")
-    }
-}
-
 impl NewTpuConfig for UdpConfig {
     type ClientError = UdpClientError;
 
