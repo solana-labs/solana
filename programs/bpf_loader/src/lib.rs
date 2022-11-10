@@ -9,9 +9,6 @@ pub mod upgradeable;
 pub mod upgradeable_with_jit;
 pub mod with_jit;
 
-#[macro_use]
-extern crate solana_metrics;
-
 use {
     crate::{
         allocator_bump::BpfAllocator,
@@ -22,13 +19,13 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor_cache::{Executor, TransactionExecutorCache},
+        executor::{CreateMetrics, Executor},
+        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
-        timings::ExecuteDetailsTimings,
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
@@ -91,39 +88,6 @@ pub enum BpfError {
 }
 impl UserDefinedError for BpfError {}
 
-mod executor_metrics {
-    use super::*;
-
-    #[derive(Debug, Default)]
-    pub struct CreateMetrics {
-        pub program_id: String,
-        pub register_syscalls_us: u64,
-        pub load_elf_us: u64,
-        pub verify_code_us: u64,
-        pub jit_compile_us: u64,
-    }
-
-    impl CreateMetrics {
-        pub fn submit_datapoint(&self, timings: &mut ExecuteDetailsTimings) {
-            saturating_add_assign!(
-                timings.create_executor_register_syscalls_us,
-                self.register_syscalls_us
-            );
-            saturating_add_assign!(timings.create_executor_load_elf_us, self.load_elf_us);
-            saturating_add_assign!(timings.create_executor_verify_code_us, self.verify_code_us);
-            saturating_add_assign!(timings.create_executor_jit_compile_us, self.jit_compile_us);
-            datapoint_trace!(
-                "create_executor_trace",
-                ("program_id", self.program_id, String),
-                ("register_syscalls_us", self.register_syscalls_us, i64),
-                ("load_elf_us", self.load_elf_us, i64),
-                ("verify_code_us", self.verify_code_us, i64),
-                ("jit_compile_us", self.jit_compile_us, i64),
-            );
-        }
-    }
-}
-
 // The BPF loader is special in that it is the only place in the runtime and its built-in programs,
 // where data comes not only from instruction account but also program accounts.
 // Thus, these two helper methods have to distinguish the mixed sources via index_in_instruction.
@@ -162,7 +126,7 @@ fn create_executor_from_bytes(
     feature_set: &FeatureSet,
     compute_budget: &ComputeBudget,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
-    create_executor_metrics: &mut executor_metrics::CreateMetrics,
+    create_executor_metrics: &mut CreateMetrics,
     programdata: &[u8],
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
@@ -246,7 +210,7 @@ pub fn create_executor_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
-) -> Result<(Arc<dyn Executor>, Option<executor_metrics::CreateMetrics>), InstructionError> {
+) -> Result<(Arc<dyn Executor>, Option<CreateMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
             log_collector,
@@ -292,9 +256,9 @@ pub fn create_executor_from_account(
         }
     }
 
-    let mut create_executor_metrics = executor_metrics::CreateMetrics {
+    let mut create_executor_metrics = CreateMetrics {
         program_id: program.get_key().to_string(),
-        ..executor_metrics::CreateMetrics::default()
+        ..CreateMetrics::default()
     };
     let executor = create_executor_from_bytes(
         feature_set,
@@ -489,7 +453,7 @@ fn process_instruction_common(
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
         }
 
-        executor.execute(program_account_index, invoke_context)
+        executor.execute(invoke_context)
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -702,7 +666,7 @@ fn process_loader_upgradeable_instruction(
             let instruction_context = transaction_context.get_current_instruction_context()?;
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
+            let mut create_executor_metrics = CreateMetrics::default();
             let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
@@ -881,7 +845,7 @@ fn process_loader_upgradeable_instruction(
             // Load and verify the program bits
             let buffer =
                 instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
-            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
+            let mut create_executor_metrics = CreateMetrics::default();
             let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
@@ -1378,7 +1342,7 @@ fn process_loader_instruction(
                 ic_msg!(invoke_context, "key[0] did not sign the transaction");
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
+            let mut create_executor_metrics = CreateMetrics::default();
             let executor = create_executor_from_bytes(
                 &invoke_context.feature_set,
                 invoke_context.get_compute_budget(),
@@ -1436,11 +1400,7 @@ impl Debug for BpfExecutor {
 }
 
 impl Executor for BpfExecutor {
-    fn execute(
-        &self,
-        _first_instruction_account: IndexOfAccount,
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), InstructionError> {
+    fn execute(&self, invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
         let stack_height = invoke_context.get_stack_height();
