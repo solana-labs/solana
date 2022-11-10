@@ -1,5 +1,6 @@
-use solana_rbpf::vm::TraceRecord;
 use {
+    solana_rbpf::vm::TraceRecord,
+    solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{
         any::Any,
         {error, io},
@@ -50,5 +51,10 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
     }
 
     /// Called when BPF tracing is ready in `tracer` structure.
-    fn trace_bpf<'a>(&mut self, trace: &[TraceRecord<'a>]) -> Result<()>;
+    fn trace_bpf<'a>(
+        &mut self,
+        program_id: &Pubkey,
+        blockhash: &Hash,
+        trace: &[TraceRecord<'a>],
+    ) -> Result<()>;
 }

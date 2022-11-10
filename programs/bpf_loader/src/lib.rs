@@ -1407,6 +1407,7 @@ impl Executor for BpfExecutor {
         let mut execute_time;
         let execution_result = {
             let bpf_tracer_plugin_manager = invoke_context.bpf_tracer_plugin_manager.clone();
+            let blockhash = invoke_context.blockhash;
             let compute_meter_prev = invoke_context.get_remaining();
             let mut vm = match create_vm(
                 // We dropped the lifetime tracking in the Executor by setting it to 'static,
@@ -1465,10 +1466,11 @@ impl Executor for BpfExecutor {
                             continue;
                         }
 
-                        if let Err(err) = plugin.trace_bpf(&trace) {
+                        if let Err(err) = plugin.trace_bpf(&program_id, &blockhash, &trace) {
                             error!(
-                                "Error running BPF tracing plugin: {}. Error: {:?}",
+                                "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
                                 plugin.name(),
+                                program_id,
                                 err
                             );
                         }
