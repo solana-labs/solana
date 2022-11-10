@@ -241,52 +241,42 @@ pub struct SnapshotPackage {
 
 impl SnapshotPackage {
     pub fn new(accounts_package: AccountsPackage, accounts_hash: Hash) -> Self {
-        assert!(
-            accounts_package.snapshot_info.is_some(),
-            "The AccountsPackage must have snapshot info in order to make a SnapshotPackage!"
-        );
-        let snapshot_info = accounts_package.snapshot_info.unwrap();
+        let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
+            panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
+        };
+        let Some(snapshot_info) = accounts_package.snapshot_info else {
+            panic!("The AccountsPackage must have snapshot info in order to make a SnapshotPackage!");
+        };
         let snapshot_hash = SnapshotHash::new(&accounts_hash);
         let mut snapshot_storages = accounts_package.snapshot_storages;
-        let (snapshot_type, snapshot_archive_path) = match accounts_package.package_type {
-            AccountsPackageType::Snapshot(snapshot_type) => match snapshot_type {
-                SnapshotType::FullSnapshot => (
-                    snapshot_type,
-                    snapshot_utils::build_full_snapshot_archive_path(
-                        snapshot_info.full_snapshot_archives_dir,
-                        accounts_package.slot,
-                        &snapshot_hash,
-                        snapshot_info.archive_format,
-                    ),
-                ),
-                SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
-                    snapshot_storages.retain(|storages| {
-                        storages
-                            .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
-                            .map(|storage| storage.slot() > incremental_snapshot_base_slot)
-                            .unwrap_or_default()
-                    });
-                    assert!(
-                        snapshot_storages.iter().all(|storage| storage
-                            .iter()
-                            .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
-                            "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
-                    );
-                    (
-                        snapshot_type,
-                        snapshot_utils::build_incremental_snapshot_archive_path(
-                            snapshot_info.incremental_snapshot_archives_dir,
-                            incremental_snapshot_base_slot,
-                            accounts_package.slot,
-                            &snapshot_hash,
-                            snapshot_info.archive_format,
-                        ),
-                    )
-                }
-            },
-            _ => panic!(
-                "The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!"
+        let snapshot_archive_path = match snapshot_type {
+            SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
+                snapshot_info.full_snapshot_archives_dir,
+                accounts_package.slot,
+                &snapshot_hash,
+                snapshot_info.archive_format,
             ),
+            SnapshotType::IncrementalSnapshot(incremental_snapshot_base_slot) => {
+                snapshot_storages.retain(|storages| {
+                    storages
+                        .first() // storages are grouped by slot in the outer Vec, so all storages will have the same slot as the first
+                        .map(|storage| storage.slot() > incremental_snapshot_base_slot)
+                        .unwrap_or_default()
+                });
+                assert!(
+                    snapshot_storages.iter().all(|storage| storage
+                        .iter()
+                        .all(|entry| entry.slot() > incremental_snapshot_base_slot)),
+                    "Incremental snapshot package must only contain storage entries where slot > incremental snapshot base slot (i.e. full snapshot slot)!"
+                );
+                snapshot_utils::build_incremental_snapshot_archive_path(
+                    snapshot_info.incremental_snapshot_archives_dir,
+                    incremental_snapshot_base_slot,
+                    accounts_package.slot,
+                    &snapshot_hash,
+                    snapshot_info.archive_format,
+                )
+            }
         };
 
         Self {
