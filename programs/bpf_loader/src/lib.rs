@@ -19,8 +19,8 @@ use {
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
-        executor::CreateMetrics,
-        executor_cache::{Executor, TransactionExecutorCache},
+        executor::{CreateMetrics, Executor},
+        executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
         log_collector::LogCollector,

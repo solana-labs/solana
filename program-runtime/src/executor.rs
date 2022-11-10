@@ -1,4 +1,19 @@
-use {crate::timings::ExecuteDetailsTimings, solana_sdk::saturating_add_assign};
+use {
+    crate::{invoke_context::InvokeContext, timings::ExecuteDetailsTimings},
+    solana_sdk::{
+        instruction::InstructionError, saturating_add_assign, transaction_context::IndexOfAccount,
+    },
+};
+
+/// Program executor
+pub trait Executor: std::fmt::Debug + Send + Sync {
+    /// Execute the program
+    fn execute(
+        &self,
+        first_instruction_account: IndexOfAccount,
+        invoke_context: &mut InvokeContext,
+    ) -> Result<(), InstructionError>;
+}
 
 #[derive(Debug, Default)]
 pub struct CreateMetrics {
