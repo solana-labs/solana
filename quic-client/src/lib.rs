@@ -19,7 +19,9 @@ use {
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats,
-        tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
+        tpu_connection_cache::{
+            BaseTpuConnection, ConnectionPool, ConnectionPoolError, NewTpuConfig,
+        },
     },
     std::{
         error::Error,
@@ -94,8 +96,10 @@ impl Default for QuicConfig {
     }
 }
 
-impl QuicConfig {
-    pub fn new() -> Result<Self, QuicClientError> {
+impl NewTpuConfig for QuicConfig {
+    type ClientError = QuicClientError;
+
+    fn new() -> Result<Self, QuicClientError> {
         let (certs, priv_key) = new_self_signed_tls_certificate_chain(
             &Keypair::new(),
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -110,7 +114,9 @@ impl QuicConfig {
             maybe_client_pubkey: None,
         })
     }
+}
 
+impl QuicConfig {
     fn create_endpoint(&self) -> Arc<QuicLazyInitializedEndpoint> {
         Arc::new(QuicLazyInitializedEndpoint::new(
             self.client_certificate.clone(),
@@ -188,13 +194,16 @@ mod tests {
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
         },
-        solana_tpu_client::tpu_connection_cache::TpuConnectionCache,
+        solana_tpu_client::tpu_connection_cache::{
+            TpuConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        },
     };
 
     #[test]
     fn test_connection_cache_max_parallel_chunks() {
         solana_logger::setup();
-        let connection_cache = TpuConnectionCache::<QuicPool>::default();
+        let connection_cache =
+            TpuConnectionCache::<QuicPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
         let mut tpu_config = connection_cache.tpu_config;
         assert_eq!(
             tpu_config.compute_max_parallel_streams(),

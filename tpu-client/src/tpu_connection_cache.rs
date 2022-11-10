@@ -36,8 +36,11 @@ pub struct TpuConnectionCache<P: ConnectionPool> {
 }
 
 impl<P: ConnectionPool> TpuConnectionCache<P> {
-    pub fn new(connection_pool_size: usize) -> Self {
-        Self::new_with_config(connection_pool_size, P::TpuConfig::default())
+    pub fn new(
+        connection_pool_size: usize,
+    ) -> Result<Self, <P::TpuConfig as NewTpuConfig>::ClientError> {
+        let config = P::TpuConfig::new()?;
+        Ok(Self::new_with_config(connection_pool_size, config))
     }
 
     pub fn new_with_config(connection_pool_size: usize, tpu_config: P::TpuConfig) -> Self {
@@ -258,9 +261,16 @@ pub enum ConnectionPoolError {
     IndexOutOfRange,
 }
 
+pub trait NewTpuConfig {
+    type ClientError;
+    fn new() -> Result<Self, Self::ClientError>
+    where
+        Self: Sized;
+}
+
 pub trait ConnectionPool {
     type PoolTpuConnection: BaseTpuConnection;
-    type TpuConfig: Default;
+    type TpuConfig: Default + NewTpuConfig;
     const PORT_OFFSET: u16 = 0;
 
     /// Create a new connection pool based on protocol-specific configuration
@@ -407,6 +417,19 @@ mod tests {
         }
     }
 
+    impl NewTpuConfig for MockUdpConfig {
+        type ClientError = String;
+
+        fn new() -> Result<Self, String> {
+            Ok(Self {
+                tpu_udp_socket: Arc::new(
+                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                        .map_err(|_| "Unable to bind to UDP socket".to_string())?,
+                ),
+            })
+        }
+    }
+
     pub struct MockUdp(Arc<UdpSocket>);
     impl BaseTpuConnection for MockUdp {
         type BlockingConnectionType = MockUdpTpuConnection;
@@ -504,7 +527,7 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let connection_cache =
-            TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
+            TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
         let port_offset = MOCK_PORT_OFFSET;
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
@@ -551,7 +574,7 @@ mod tests {
         let port = u16::MAX - MOCK_PORT_OFFSET + 1;
         assert!(port.checked_add(MOCK_PORT_OFFSET).is_none());
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
-        let connection_cache = TpuConnectionCache::<MockUdpPool>::new(1);
+        let connection_cache = TpuConnectionCache::<MockUdpPool>::new(1).unwrap();
 
         let conn: MockUdpTpuConnection = connection_cache.get_connection(&addr);
         // We (intentionally) don't have an interface that allows us to distinguish between

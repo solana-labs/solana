@@ -10,7 +10,9 @@ use {
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats,
-        tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
+        tpu_connection_cache::{
+            BaseTpuConnection, ConnectionPool, ConnectionPoolError, NewTpuConfig,
+        },
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -75,8 +77,10 @@ impl Default for UdpConfig {
     }
 }
 
-impl UdpConfig {
-    pub fn new() -> Result<Self, UdpClientError> {
+impl NewTpuConfig for UdpConfig {
+    type ClientError = UdpClientError;
+
+    fn new() -> Result<Self, UdpClientError> {
         let socket = solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
             .map_err(Into::<UdpClientError>::into)?;
         Ok(Self {
