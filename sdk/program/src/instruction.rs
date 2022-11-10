@@ -743,34 +743,6 @@ pub fn get_stack_height() -> usize {
     }
 }
 
-/// Used to specify which properties of which accounts to update
-/// when calling the `sol_set_account_properties` syscall.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct AccountPropertyUpdate<'a> {
-    /// Index of the account to update
-    pub instruction_account_index: u16,
-    /// Index of the property to update
-    pub attribute: u16,
-    /// Value to set, encoding depends on the attribute
-    pub value: u64,
-    /// Holds the lifetime parameter in case that the value is a pointer
-    pub _marker: std::marker::PhantomData<&'a ()>,
-}
-
-/// Sets properties of accounts according to the given list of updates
-pub fn set_account_properties(updates: &[AccountPropertyUpdate]) {
-    #[cfg(target_os = "solana")]
-    unsafe {
-        crate::syscalls::sol_set_account_properties(updates.as_ptr(), updates.len() as u64);
-    }
-
-    #[cfg(not(target_os = "solana"))]
-    {
-        crate::program_stubs::sol_set_account_properties(updates);
-    }
-}
-
 #[test]
 fn test_account_meta_layout() {
     #[derive(Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize)]

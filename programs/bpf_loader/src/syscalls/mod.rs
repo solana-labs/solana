@@ -39,8 +39,8 @@ use {
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
-            AccountMeta, AccountPropertyUpdate, Instruction, InstructionError,
-            ProcessedSiblingInstruction, TRANSACTION_LEVEL_STACK_HEIGHT,
+            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
+            TRANSACTION_LEVEL_STACK_HEIGHT,
         },
         keccak, native_loader,
         precompiles::is_precompile,
@@ -51,7 +51,7 @@ use {
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
         sysvar::{Sysvar, SysvarId},
-        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
+        transaction_context::{IndexOfAccount, InstructionAccount},
     },
     std::{
         alloc::Layout,
@@ -246,13 +246,7 @@ pub fn register_syscalls(
     syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
     syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
 
-    if is_abi_v2 {
-        // Set account attributes
-        syscall_registry.register_syscall_by_name(
-            b"sol_set_account_attributes",
-            SyscallSetAccountProperties::call,
-        )?;
-    } else {
+    if !is_abi_v2 {
         // Processed sibling instructions
         syscall_registry.register_syscall_by_name(
             b"sol_get_processed_sibling_instruction",
@@ -1637,77 +1631,6 @@ declare_syscall!(
             .consume(budget.syscall_base_cost)?;
 
         Ok(invoke_context.get_stack_height() as u64)
-    }
-);
-
-declare_syscall!(
-    /// Update the properties of accounts
-    SyscallSetAccountProperties,
-    fn inner_call(
-        invoke_context: &mut InvokeContext,
-        updates_addr: u64,
-        updates_count: u64,
-        _arg3: u64,
-        _arg4: u64,
-        _arg5: u64,
-        memory_mapping: &mut MemoryMapping,
-    ) -> Result<u64, EbpfError> {
-        let budget = invoke_context.get_compute_budget();
-
-        invoke_context.get_compute_meter().consume(
-            budget.syscall_base_cost.saturating_add(
-                budget
-                    .account_property_update_cost
-                    .saturating_mul(updates_count),
-            ),
-        )?;
-        let transaction_context = &invoke_context.transaction_context;
-        let instruction_context = transaction_context
-            .get_current_instruction_context()
-            .map_err(SyscallError::InstructionError)?;
-        let updates = translate_slice::<AccountPropertyUpdate>(
-            memory_mapping,
-            updates_addr,
-            updates_count,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
-        )?;
-        for update in updates.iter() {
-            let mut borrowed_account = instruction_context
-                .try_borrow_instruction_account(
-                    transaction_context,
-                    update.instruction_account_index,
-                )
-                .map_err(SyscallError::InstructionError)?;
-            let attribute =
-                unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
-            match attribute {
-                TransactionContextAttribute::TransactionAccountOwner => {
-                    let owner_pubkey = translate_type::<Pubkey>(
-                        memory_mapping,
-                        update.value,
-                        invoke_context.get_check_aligned(),
-                    )?;
-
-                    borrowed_account
-                        .set_owner(&owner_pubkey.to_bytes())
-                        .map_err(SyscallError::InstructionError)?;
-                }
-                TransactionContextAttribute::TransactionAccountLamports => borrowed_account
-                    .set_lamports(update.value)
-                    .map_err(SyscallError::InstructionError)?,
-                TransactionContextAttribute::TransactionAccountData => borrowed_account
-                    .set_data_length(update.value as usize)
-                    .map_err(SyscallError::InstructionError)?,
-                TransactionContextAttribute::TransactionAccountIsExecutable => borrowed_account
-                    .set_executable(update.value != 0)
-                    .map_err(SyscallError::InstructionError)?,
-                _ => {
-                    return Err(SyscallError::InvalidAttribute.into());
-                }
-            }
-        }
-        Ok(0)
     }
 );
 
@@ -4024,148 +3947,6 @@ mod tests {
                 SyscallError::CopyOverlapping
             ),
         ));
-    }
-
-    #[test]
-    fn test_syscall_sol_set_account_properties() {
-        let program_key = Pubkey::new_unique();
-        let loader_key = bpf_loader::id();
-        let transaction_accounts = vec![
-            (
-                loader_key,
-                AccountSharedData::new(0, 0, &native_loader::id()),
-            ),
-            (program_key, AccountSharedData::new(0, 0, &loader_key)),
-            (
-                Pubkey::new_unique(),
-                AccountSharedData::new(0, 0, &program_key),
-            ),
-            (
-                Pubkey::new_unique(),
-                AccountSharedData::new(0, 0, &program_key),
-            ),
-        ];
-        let mut transaction_context =
-            TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-        transaction_context
-            .get_next_instruction_context()
-            .unwrap()
-            .configure(
-                &[0, 1],
-                &[
-                    InstructionAccount {
-                        index_in_transaction: 2,
-                        index_in_caller: 2,
-                        index_in_callee: 0,
-                        is_signer: false,
-                        is_writable: true,
-                    },
-                    InstructionAccount {
-                        index_in_transaction: 3,
-                        index_in_caller: 3,
-                        index_in_callee: 0,
-                        is_signer: false,
-                        is_writable: true,
-                    },
-                ],
-                &[],
-            );
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.push().unwrap();
-
-        let keys = [loader_key];
-        let updates_list = [
-            AccountPropertyUpdate {
-                instruction_account_index: 0,
-                attribute: TransactionContextAttribute::TransactionAccountLamports as u16,
-                value: 10000000,
-                _marker: std::marker::PhantomData::default(),
-            },
-            AccountPropertyUpdate {
-                instruction_account_index: 0,
-                attribute: TransactionContextAttribute::TransactionAccountData as u16,
-                value: 512,
-                _marker: std::marker::PhantomData::default(),
-            },
-            AccountPropertyUpdate {
-                instruction_account_index: 0,
-                attribute: TransactionContextAttribute::TransactionAccountIsExecutable as u16,
-                value: true as u64,
-                _marker: std::marker::PhantomData::default(),
-            },
-            AccountPropertyUpdate {
-                instruction_account_index: 1,
-                attribute: TransactionContextAttribute::TransactionAccountOwner as u16,
-                value: VM_ADDRESS_KEYS,
-                _marker: std::marker::PhantomData::default(),
-            },
-        ];
-
-        let cost = invoke_context
-            .get_compute_budget()
-            .syscall_base_cost
-            .saturating_add(
-                invoke_context
-                    .get_compute_budget()
-                    .account_property_update_cost
-                    .saturating_mul(updates_list.len() as u64),
-            );
-
-        const VM_ADDRESS_KEYS: u64 = 0x100000000;
-        const VM_ADDRESS_UPDATES_LIST: u64 = 0x200000000;
-        let config = Config::default();
-        let mut memory_mapping = MemoryMapping::new(
-            vec![
-                MemoryRegion {
-                    host_addr: keys.as_ptr() as u64,
-                    vm_addr: VM_ADDRESS_KEYS,
-                    len: (keys.len() * std::mem::size_of::<Pubkey>()) as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-                MemoryRegion {
-                    host_addr: updates_list.as_ptr() as u64,
-                    vm_addr: VM_ADDRESS_UPDATES_LIST,
-                    len: (updates_list.len() * std::mem::size_of::<AccountPropertyUpdate>()) as u64,
-                    vm_gap_shift: 63,
-                    is_writable: true,
-                },
-            ],
-            &config,
-        )
-        .unwrap();
-
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost);
-        let mut result = ProgramResult::Ok(0);
-        SyscallSetAccountProperties::call(
-            &mut invoke_context,
-            VM_ADDRESS_UPDATES_LIST,
-            updates_list.len() as u64,
-            0,
-            0,
-            0,
-            &mut memory_mapping,
-            &mut result,
-        );
-        assert_eq!(result.unwrap(), 0);
-        {
-            let transaction_context = &invoke_context.transaction_context;
-            let account = transaction_context
-                .get_account_at_index(2)
-                .unwrap()
-                .borrow();
-            assert_eq!(account.lamports(), 10000000);
-            assert_eq!(account.data().len(), 512);
-            assert!(account.executable());
-            let account = transaction_context
-                .get_account_at_index(3)
-                .unwrap()
-                .borrow();
-            assert_eq!(account.owner(), &loader_key);
-        }
     }
 
     #[test]
