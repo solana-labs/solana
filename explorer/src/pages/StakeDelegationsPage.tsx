@@ -8,7 +8,7 @@ import { LeaderSchedule, PublicKey } from "@solana/web3.js";
 
 import { useLeaderSchedule } from "providers/accounts/leader-schedule";
 
-const PAGINATION_COUNT = 7;
+const PAGINATION_COUNT: number = 7;
 
 export function StakeDelegationsPage() {
   const { status } = useCluster();
@@ -21,8 +21,6 @@ export function StakeDelegationsPage() {
       fetchLeaderSchedule();
     }
   }, [status]);
-
-  console.log(leaderSchedule);
 
   if (voteAccounts && leaderSchedule)
     return (
@@ -60,7 +58,7 @@ function RenderCardSection({
     React.useState<number>(PAGINATION_COUNT);
   return (
     <>
-      <div className="card">
+      <div className="container card mt-n3 mb-6">
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
@@ -75,9 +73,9 @@ function RenderCardSection({
               <tr>
                 <th className="text-muted">#</th>
                 <th className="text-muted">IDENTITY</th>
-                <th className="text-muted text-end">ACTIVE STAKE</th>
-                <th className="text-muted text-end">COMMISSION</th>
-                <th className="text-muted text-end">LAST VOTE</th>
+                <th className="text-muted ">ACTIVE STAKE</th>
+                <th className="text-muted ">COMMISSION</th>
+                <th className="text-muted ">LAST VOTE</th>
                 <th className="text-muted text-start">VOTE IDENTITY</th>
               </tr>
             </thead>
@@ -118,7 +116,7 @@ function RenderLeaderSchedule({
     React.useState<number>(PAGINATION_COUNT);
   return (
     <>
-      <div className="card">
+      <div className="container card mt-n3">
         <div className="card-header">
           <div className="row align-items-center">
             <div className="col">
@@ -131,7 +129,7 @@ function RenderLeaderSchedule({
             </div>
           </div>
         </div>
-        <div className="table-responsive mb-0">
+        <div className="table-responsive mb-100">
           <table className="table table-sm table-nowrap card-table">
             <thead>
               <tr>
@@ -141,7 +139,7 @@ function RenderLeaderSchedule({
             </thead>
             {Object.keys(leaderSchedule)
               .slice(0, displayedCount)
-              .map((leaderPubKey: string, index: number) => {
+              .map((leaderPubKey: string, index: number): JSX.Element => {
                 const data = {
                   leaderKey: leaderPubKey,
                   data: leaderSchedule[leaderPubKey],
