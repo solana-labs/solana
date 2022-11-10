@@ -37,9 +37,16 @@ pub struct TpuConnectionCache<P: ConnectionPool> {
 
 impl<P: ConnectionPool> TpuConnectionCache<P> {
     pub fn new(connection_pool_size: usize) -> Self {
+        Self::new_with_config(connection_pool_size, P::TpuConfig::default())
+    }
+
+    pub fn new_with_config(connection_pool_size: usize, tpu_config: P::TpuConfig) -> Self {
         Self {
+            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
+            stats: Arc::new(ConnectionCacheStats::default()),
+            last_stats: AtomicInterval::default(),
             connection_pool_size: 1.max(connection_pool_size), // The minimum pool size is 1.
-            ..Self::default()
+            tpu_config,
         }
     }
 
@@ -242,18 +249,6 @@ impl<P: ConnectionPool> TpuConnectionCache<P> {
     ) -> <P::PoolTpuConnection as BaseTpuConnection>::NonblockingConnectionType {
         let (connection, connection_cache_stats) = self.get_connection_and_log_stats(addr);
         connection.new_nonblocking_connection(*addr, connection_cache_stats)
-    }
-}
-
-impl<P: ConnectionPool> Default for TpuConnectionCache<P> {
-    fn default() -> Self {
-        Self {
-            map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
-            stats: Arc::new(ConnectionCacheStats::default()),
-            last_stats: AtomicInterval::default(),
-            connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            tpu_config: P::TpuConfig::default(),
-        }
     }
 }
 
@@ -508,7 +503,8 @@ mod tests {
         // we can actually connect to those addresses - TPUConnection implementations should either
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
-        let connection_cache = TpuConnectionCache::<MockUdpPool>::default();
+        let connection_cache =
+            TpuConnectionCache::<MockUdpPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
         let port_offset = MOCK_PORT_OFFSET;
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
