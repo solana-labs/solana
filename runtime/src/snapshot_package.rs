@@ -117,6 +117,24 @@ impl AccountsPackage {
         ))
     }
 
+    /// Package up fields needed to compute an EpochAccountsHash
+    #[must_use]
+    pub fn new_for_epoch_accounts_hash(
+        package_type: AccountsPackageType,
+        bank: &Bank,
+        snapshot_storages: SnapshotStorages,
+        accounts_hash_for_testing: Option<Hash>,
+    ) -> Self {
+        assert_eq!(package_type, AccountsPackageType::EpochAccountsHash);
+        Self::_new(
+            package_type,
+            bank,
+            snapshot_storages,
+            accounts_hash_for_testing,
+            None,
+        )
+    }
+
     fn _new(
         package_type: AccountsPackageType,
         bank: &Bank,

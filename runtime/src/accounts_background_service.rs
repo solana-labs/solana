@@ -283,7 +283,7 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type: _,
+            request_type,
             enqueued: _,
         } = snapshot_request;
 
@@ -375,27 +375,40 @@ impl SnapshotRequestHandler {
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
         let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
-        let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
-            &self.snapshot_config.bank_snapshots_dir,
-            &snapshot_root_bank,
-            &snapshot_storages,
-            self.snapshot_config.snapshot_version,
-        )
-        .expect("snapshot bank");
-        let accounts_package = AccountsPackage::new_for_snapshot(
-            accounts_package_type,
-            &snapshot_root_bank,
-            &bank_snapshot_info,
-            &self.snapshot_config.bank_snapshots_dir,
-            status_cache_slot_deltas,
-            &self.snapshot_config.full_snapshot_archives_dir,
-            &self.snapshot_config.incremental_snapshot_archives_dir,
-            snapshot_storages,
-            self.snapshot_config.archive_format,
-            self.snapshot_config.snapshot_version,
-            hash_for_testing,
-        )
-        .expect("failed to hard link bank snapshot into a tmpdir");
+        let accounts_package = match request_type {
+            SnapshotRequestType::Snapshot => {
+                let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
+                    &self.snapshot_config.bank_snapshots_dir,
+                    &snapshot_root_bank,
+                    &snapshot_storages,
+                    self.snapshot_config.snapshot_version,
+                )
+                .expect("snapshot bank");
+                AccountsPackage::new_for_snapshot(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    &bank_snapshot_info,
+                    &self.snapshot_config.bank_snapshots_dir,
+                    status_cache_slot_deltas,
+                    &self.snapshot_config.full_snapshot_archives_dir,
+                    &self.snapshot_config.incremental_snapshot_archives_dir,
+                    snapshot_storages,
+                    self.snapshot_config.archive_format,
+                    self.snapshot_config.snapshot_version,
+                    hash_for_testing,
+                )
+                .expect("new accounts package for snapshot")
+            }
+            SnapshotRequestType::EpochAccountsHash => {
+                // skip the bank snapshot, just make an accounts package to send to AHV
+                AccountsPackage::new_for_epoch_accounts_hash(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    snapshot_storages,
+                    hash_for_testing,
+                )
+            }
+        };
         self.accounts_package_sender
             .send(accounts_package)
             .expect("send accounts package");
