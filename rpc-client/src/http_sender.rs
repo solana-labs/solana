@@ -21,16 +21,22 @@ use {
             atomic::{AtomicU64, Ordering},
             Arc, RwLock,
         },
-        time::{Duration, Instant},
+        time::Duration,
     },
 };
 
 
 #[cfg(not(target_arch = "wasm32"))]
-use tokio::time::sleep;
+use {
+    std::time::Instant,
+    tokio::time::sleep,
+};
 
 #[cfg(target_arch = "wasm32")]
-use gloo_timers::future::sleep;
+use {
+    gloo_timers::future::sleep,
+    instant::Instant,
+};
 
 
 pub struct HttpSender {

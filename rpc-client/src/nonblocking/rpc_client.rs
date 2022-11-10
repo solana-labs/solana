@@ -58,16 +58,17 @@ use {
     std::{
         net::SocketAddr,
         str::FromStr,
-        time::{Duration, Instant},
+        time::Duration,
     },
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-use tokio::{sync::RwLock, time::sleep};
+use tokio::{sync::RwLock, time::{sleep, Instant}};
 
 #[cfg(target_arch = "wasm32")]
 use {
     gloo_timers::future::sleep,
+    instant::Instant,
     std::sync::RwLock,
 };
 
