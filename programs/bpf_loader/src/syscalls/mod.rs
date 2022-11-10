@@ -1747,7 +1747,6 @@ declare_syscall!(
                     budget
                 .big_modular_exponentiation_cost
                 .saturating_mul(input_len)
-                .saturating_mul(input_len)
                 )
         )?;
 
