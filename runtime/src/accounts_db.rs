@@ -1334,7 +1334,7 @@ pub struct AccountsDb {
     // Stats for purges called outside of clean_accounts()
     external_purge_slots_stats: PurgeStats,
 
-    shrink_stats: ShrinkStats,
+    pub(crate) shrink_stats: ShrinkStats,
 
     shrink_ancient_stats: ShrinkAncientStats,
 
@@ -1843,7 +1843,7 @@ struct ShrinkAncientStats {
 }
 
 #[derive(Debug, Default)]
-struct ShrinkStats {
+pub(crate) struct ShrinkStats {
     last_report: AtomicInterval,
     num_slots_shrunk: AtomicUsize,
     storage_read_elapsed: AtomicU64,
@@ -3890,7 +3890,12 @@ impl AccountsDb {
     /// common code from shrink and combine_ancient_slots
     /// get rid of all original store_ids in the slot
     /// returns remaining stores
-    fn remove_old_stores_shrink(&self, shrink_collect: &ShrinkCollect, slot: Slot) -> usize {
+    fn remove_old_stores_shrink(
+        &self,
+        shrink_collect: &ShrinkCollect,
+        slot: Slot,
+        stats: &ShrinkStats,
+    ) -> usize {
         // Purge old, overwritten storage entries
         let (remaining_stores, dead_storages) = self.mark_dirty_dead_stores(
             slot,
@@ -3907,7 +3912,7 @@ impl AccountsDb {
             );
         }
 
-        self.drop_or_recycle_stores(dead_storages);
+        self.drop_or_recycle_stores(dead_storages, stats);
         remaining_stores
     }
 
@@ -3993,7 +3998,7 @@ impl AccountsDb {
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
 
             let (remaining_stores, remove_old_stores_shrink) =
-                measure!(self.remove_old_stores_shrink(&shrink_collect, slot));
+                measure!(self.remove_old_stores_shrink(&shrink_collect, slot, &self.shrink_stats));
             remove_old_stores_shrink_us = remove_old_stores_shrink.as_us();
             if remaining_stores > 1 {
                 inc_new_counter_info!("accounts_db_shrink_extra_stores", 1);
@@ -4087,7 +4092,11 @@ impl AccountsDb {
         (remaining_stores, dead_storages)
     }
 
-    pub(crate) fn drop_or_recycle_stores(&self, dead_storages: Vec<Arc<AccountStorageEntry>>) {
+    pub(crate) fn drop_or_recycle_stores(
+        &self,
+        dead_storages: Vec<Arc<AccountStorageEntry>>,
+        stats: &ShrinkStats,
+    ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
         let mut recycle_stores = self.recycle_stores.write().unwrap();
         recycle_stores_write_elapsed.stop();
@@ -4104,10 +4113,10 @@ impl AccountsDb {
             drop(dead_storages);
         }
         drop_storage_entries_elapsed.stop();
-        self.shrink_stats
+        stats
             .drop_storage_entries_elapsed
             .fetch_add(drop_storage_entries_elapsed.as_us(), Ordering::Relaxed);
-        self.shrink_stats
+        stats
             .recycle_stores_write_elapsed
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
@@ -4543,8 +4552,12 @@ impl AccountsDb {
                 dropped_roots.push(slot);
             }
 
-            let (_remaining_stores, remove_old_stores_shrink) =
-                measure!(self.remove_old_stores_shrink(&shrink_collect, slot));
+            let (_remaining_stores, remove_old_stores_shrink) = measure!(self
+                .remove_old_stores_shrink(
+                    &shrink_collect,
+                    slot,
+                    &self.shrink_ancient_stats.shrink_stats
+                ));
 
             // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
             self.shrink_candidate_slots.lock().unwrap().remove(&slot);
