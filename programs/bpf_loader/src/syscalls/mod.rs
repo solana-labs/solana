@@ -28,8 +28,10 @@ use {
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
+        feature_set::FeatureSet,
         feature_set::{
-            self, blake3_syscall_enabled, check_physical_overlapping, curve25519_syscall_enabled,
+            self, blake3_syscall_enabled, check_physical_overlapping,
+            check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
             enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
@@ -76,9 +78,9 @@ pub const MAX_SIGNERS: usize = 16;
 pub enum SyscallError {
     #[error("{0}: {1:?}")]
     InvalidString(Utf8Error, Vec<u8>),
-    #[error("BPF program panicked")]
+    #[error("SBF program panicked")]
     Abort,
-    #[error("BPF program Panicked in {0} at {1}:{2}")]
+    #[error("SBF program Panicked in {0} at {1}:{2}")]
     Panic(String, u64, u64),
     #[error("Cannot borrow invoke context")]
     InvokeContextBorrowFailed,
@@ -151,18 +153,12 @@ macro_rules! register_feature_gated_syscall {
 }
 
 pub fn register_syscalls(
-    invoke_context: &mut InvokeContext,
+    feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry, EbpfError> {
-    let blake3_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&blake3_syscall_enabled::id());
-    let curve25519_syscall_enabled = invoke_context
-        .feature_set
-        .is_active(&curve25519_syscall_enabled::id());
-    let disable_fees_sysvar = invoke_context
-        .feature_set
-        .is_active(&disable_fees_sysvar::id());
+    let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
+    let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
+    let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let is_abi_v2 = false;
 
     let mut syscall_registry = SyscallRegistry::default();
@@ -208,9 +204,7 @@ pub fn register_syscalls(
         SyscallBlake3::call,
     )?;
 
-    // Elliptic Curve Point Validation
-    //
-    // TODO: add group operations and multiscalar multiplications
+    // Elliptic Curve Operations
     register_feature_gated_syscall!(
         syscall_registry,
         curve25519_syscall_enabled,
@@ -222,6 +216,12 @@ pub fn register_syscalls(
         curve25519_syscall_enabled,
         b"sol_curve_group_op",
         SyscallCurveGroupOps::call,
+    )?;
+    register_feature_gated_syscall!(
+        syscall_registry,
+        curve25519_syscall_enabled,
+        b"sol_curve_multiscalar_mul",
+        SyscallCurveMultiscalarMultiplication::call,
     )?;
 
     // Sysvars
@@ -386,7 +386,7 @@ fn translate_slice<'a, T>(
     .map(|value| &*value)
 }
 
-/// Take a virtual pointer to a string (points to BPF VM memory space), translate it
+/// Take a virtual pointer to a string (points to SBF VM memory space), translate it
 /// pass it to a user-defined work function
 fn translate_string_and_do(
     memory_mapping: &MemoryMapping,
@@ -435,10 +435,10 @@ macro_rules! declare_syscall {
 }
 
 declare_syscall!(
-    /// Abort syscall functions, called when the BPF program calls `abort()`
+    /// Abort syscall functions, called when the SBF program calls `abort()`
     /// LLVM will insert calls to `abort()` if it detects an untenable situation,
     /// `abort()` is not intended to be called explicitly by the program.
-    /// Causes the BPF program to be halted immediately
+    /// Causes the SBF program to be halted immediately
     SyscallAbort,
     fn inner_call(
         _invoke_context: &mut InvokeContext,
@@ -454,8 +454,8 @@ declare_syscall!(
 );
 
 declare_syscall!(
-    /// Panic syscall function, called when the BPF program calls 'sol_panic_()`
-    /// Causes the BPF program to be halted immediately
+    /// Panic syscall function, called when the SBF program calls 'sol_panic_()`
+    /// Causes the SBF program to be halted immediately
     SyscallPanic,
     fn inner_call(
         invoke_context: &mut InvokeContext,
@@ -480,7 +480,7 @@ declare_syscall!(
 );
 
 declare_syscall!(
-    /// Dynamic memory allocation syscall called when the BPF program calls
+    /// Dynamic memory allocation syscall called when the SBF program calls
     /// `sol_alloc_free_()`.  The allocator is expected to allocate/free
     /// from/to a given chunk of memory and enforce size restrictions.  The
     /// memory chunk is given to the allocator during allocator creation and
@@ -650,10 +650,21 @@ declare_syscall!(
                     let address = translate_slice_mut::<u8>(
                         memory_mapping,
                         address_addr,
-                        32,
+                        std::mem::size_of::<Pubkey>() as u64,
                         invoke_context.get_check_aligned(),
                         invoke_context.get_check_size(),
                     )?;
+                    if !is_nonoverlapping(
+                        bump_seed_ref as *const _ as usize,
+                        std::mem::size_of_val(bump_seed_ref),
+                        address.as_ptr() as usize,
+                        std::mem::size_of::<Pubkey>(),
+                    ) && invoke_context
+                        .feature_set
+                        .is_active(&check_syscall_outputs_do_not_overlap::id())
+                    {
+                        return Err(SyscallError::CopyOverlapping.into());
+                    }
                     *bump_seed_ref = bump_seed[0];
                     address.copy_from_slice(new_address.as_ref());
                     return Ok(0);
@@ -1145,6 +1156,111 @@ declare_syscall!(
 );
 
 declare_syscall!(
+    // Elliptic Curve Multiscalar Multiplication
+    //
+    // Currently, only curve25519 Edwards and Ristretto representations are supported
+    SyscallCurveMultiscalarMultiplication,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        curve_id: u64,
+        scalars_addr: u64,
+        points_addr: u64,
+        points_len: u64,
+        result_point_addr: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        use solana_zk_token_sdk::curve25519::{
+            curve_syscall_traits::*, edwards, ristretto, scalar,
+        };
+        match curve_id {
+            CURVE25519_EDWARDS => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_msm_base_cost
+                    .saturating_add(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_edwards_msm_incremental_cost
+                            .saturating_mul(points_len.saturating_sub(1)),
+                    );
+                invoke_context.get_compute_meter().consume(cost)?;
+
+                let scalars = translate_slice::<scalar::PodScalar>(
+                    memory_mapping,
+                    scalars_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                let points = translate_slice::<edwards::PodEdwardsPoint>(
+                    memory_mapping,
+                    points_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                if let Some(result_point) = edwards::multiscalar_multiply_edwards(scalars, points) {
+                    *translate_type_mut::<edwards::PodEdwardsPoint>(
+                        memory_mapping,
+                        result_point_addr,
+                        invoke_context.get_check_aligned(),
+                    )? = result_point;
+                    Ok(0)
+                } else {
+                    Ok(1)
+                }
+            }
+
+            CURVE25519_RISTRETTO => {
+                let cost = invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_msm_base_cost
+                    .saturating_add(
+                        invoke_context
+                            .get_compute_budget()
+                            .curve25519_ristretto_msm_incremental_cost
+                            .saturating_mul(points_len.saturating_sub(1)),
+                    );
+                invoke_context.get_compute_meter().consume(cost)?;
+
+                let scalars = translate_slice::<scalar::PodScalar>(
+                    memory_mapping,
+                    scalars_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                let points = translate_slice::<ristretto::PodRistrettoPoint>(
+                    memory_mapping,
+                    points_addr,
+                    points_len,
+                    invoke_context.get_check_aligned(),
+                    invoke_context.get_check_size(),
+                )?;
+
+                if let Some(result_point) =
+                    ristretto::multiscalar_multiply_ristretto(scalars, points)
+                {
+                    *translate_type_mut::<ristretto::PodRistrettoPoint>(
+                        memory_mapping,
+                        result_point_addr,
+                        invoke_context.get_check_aligned(),
+                    )? = result_point;
+                    Ok(0)
+                } else {
+                    Ok(1)
+                }
+            }
+
+            _ => Ok(1),
+        }
+    }
+);
+
+declare_syscall!(
     // Blake3
     SyscallBlake3,
     fn inner_call(
@@ -1328,6 +1444,18 @@ declare_syscall!(
                 invoke_context.get_check_aligned(),
             )?;
 
+            if !is_nonoverlapping(
+                to_slice.as_ptr() as usize,
+                length as usize,
+                program_id_result as *const _ as usize,
+                std::mem::size_of::<Pubkey>(),
+            ) && invoke_context
+                .feature_set
+                .is_active(&check_syscall_outputs_do_not_overlap::id())
+            {
+                return Err(SyscallError::CopyOverlapping.into());
+            }
+
             *program_id_result = *program_id;
         }
 
@@ -1386,17 +1514,14 @@ declare_syscall!(
         }
 
         if let Some(instruction_context) = found_instruction_context {
-            let ProcessedSiblingInstruction {
-                data_len,
-                accounts_len,
-            } = translate_type_mut::<ProcessedSiblingInstruction>(
+            let result_header = translate_type_mut::<ProcessedSiblingInstruction>(
                 memory_mapping,
                 meta_addr,
                 invoke_context.get_check_aligned(),
             )?;
 
-            if *data_len == (instruction_context.get_instruction_data().len() as u64)
-                && *accounts_len
+            if result_header.data_len == (instruction_context.get_instruction_data().len() as u64)
+                && result_header.accounts_len
                     == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = translate_type_mut::<Pubkey>(
@@ -1407,17 +1532,57 @@ declare_syscall!(
                 let data = translate_slice_mut::<u8>(
                     memory_mapping,
                     data_addr,
-                    *data_len as u64,
+                    result_header.data_len as u64,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
                 let accounts = translate_slice_mut::<AccountMeta>(
                     memory_mapping,
                     accounts_addr,
-                    *accounts_len as u64,
+                    result_header.accounts_len as u64,
                     invoke_context.get_check_aligned(),
                     invoke_context.get_check_size(),
                 )?;
+
+                if (!is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    result_header as *const _ as usize,
+                    std::mem::size_of::<ProcessedSiblingInstruction>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                ) || !is_nonoverlapping(
+                    program_id as *const _ as usize,
+                    std::mem::size_of::<Pubkey>(),
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                ) || !is_nonoverlapping(
+                    data.as_ptr() as usize,
+                    result_header.data_len as usize,
+                    accounts.as_ptr() as usize,
+                    std::mem::size_of::<AccountMeta>()
+                        .saturating_mul(result_header.accounts_len as usize),
+                )) && invoke_context
+                    .feature_set
+                    .is_active(&check_syscall_outputs_do_not_overlap::id())
+                {
+                    return Err(SyscallError::CopyOverlapping.into());
+                }
 
                 *program_id = *instruction_context
                     .get_last_program_key(invoke_context.transaction_context)
@@ -1444,8 +1609,9 @@ declare_syscall!(
                     .map_err(SyscallError::InstructionError)?;
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len() as u64;
-            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
+            result_header.data_len = instruction_context.get_instruction_data().len() as u64;
+            result_header.accounts_len =
+                instruction_context.get_number_of_instruction_accounts() as u64;
             return Ok(true as u64);
         }
         Ok(false as u64)
@@ -1499,7 +1665,7 @@ declare_syscall!(
         let instruction_context = transaction_context
             .get_current_instruction_context()
             .map_err(SyscallError::InstructionError)?;
-        let updates = translate_slice_mut::<AccountPropertyUpdate>(
+        let updates = translate_slice::<AccountPropertyUpdate>(
             memory_mapping,
             updates_addr,
             updates_count,
@@ -1517,7 +1683,7 @@ declare_syscall!(
                 unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
             match attribute {
                 TransactionContextAttribute::TransactionAccountOwner => {
-                    let owner_pubkey = translate_type_mut::<Pubkey>(
+                    let owner_pubkey = translate_type::<Pubkey>(
                         memory_mapping,
                         update.value,
                         invoke_context.get_check_aligned(),
@@ -3149,6 +3315,149 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn test_syscall_multiscalar_multiplication() {
+        use solana_zk_token_sdk::curve25519::curve_syscall_traits::{
+            CURVE25519_EDWARDS, CURVE25519_RISTRETTO,
+        };
+
+        let config = Config::default();
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let scalar_a: [u8; 32] = [
+            254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
+            78, 137, 3, 107, 136, 237, 49, 126, 117, 223, 37, 191, 88, 6,
+        ];
+        let scalar_b: [u8; 32] = [
+            254, 198, 23, 138, 67, 243, 184, 110, 236, 115, 236, 205, 205, 215, 79, 114, 45, 250,
+            78, 137, 3, 107, 136, 237, 49, 126, 117, 223, 37, 191, 88, 6,
+        ];
+
+        let scalars = [scalar_a, scalar_b];
+        let scalars_va = 0x100000000;
+
+        let edwards_point_x: [u8; 32] = [
+            252, 31, 230, 46, 173, 95, 144, 148, 158, 157, 63, 10, 8, 68, 58, 176, 142, 192, 168,
+            53, 61, 105, 194, 166, 43, 56, 246, 236, 28, 146, 114, 133,
+        ];
+        let edwards_point_y: [u8; 32] = [
+            10, 111, 8, 236, 97, 189, 124, 69, 89, 176, 222, 39, 199, 253, 111, 11, 248, 186, 128,
+            90, 120, 128, 248, 210, 232, 183, 93, 104, 111, 150, 7, 241,
+        ];
+        let edwards_points = [edwards_point_x, edwards_point_y];
+        let edwards_points_va = 0x200000000;
+
+        let ristretto_point_x: [u8; 32] = [
+            130, 35, 97, 25, 18, 199, 33, 239, 85, 143, 119, 111, 49, 51, 224, 40, 167, 185, 240,
+            179, 25, 194, 213, 41, 14, 155, 104, 18, 181, 197, 15, 112,
+        ];
+        let ristretto_point_y: [u8; 32] = [
+            152, 156, 155, 197, 152, 232, 92, 206, 219, 159, 193, 134, 121, 128, 139, 36, 56, 191,
+            51, 143, 72, 204, 87, 76, 110, 124, 101, 96, 238, 158, 42, 108,
+        ];
+        let ristretto_points = [ristretto_point_x, ristretto_point_y];
+        let ristretto_points_va = 0x300000000;
+
+        let result_point: [u8; 32] = [0; 32];
+        let result_point_va = 0x400000000;
+
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion {
+                    host_addr: scalars.as_ptr() as *const _ as u64,
+                    vm_addr: scalars_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: edwards_points.as_ptr() as *const _ as u64,
+                    vm_addr: edwards_points_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: ristretto_points.as_ptr() as *const _ as u64,
+                    vm_addr: ristretto_points_va,
+                    len: 64,
+                    vm_gap_shift: 63,
+                    is_writable: false,
+                },
+                MemoryRegion {
+                    host_addr: result_point.as_ptr() as *const _ as u64,
+                    vm_addr: result_point_va,
+                    len: 32,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(
+                invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_msm_base_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_edwards_msm_incremental_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_msm_base_cost
+                    + invoke_context
+                        .get_compute_budget()
+                        .curve25519_ristretto_msm_incremental_cost,
+            );
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallCurveMultiscalarMultiplication::call(
+            &mut invoke_context,
+            CURVE25519_EDWARDS,
+            scalars_va,
+            edwards_points_va,
+            2,
+            result_point_va,
+            &mut memory_mapping,
+            &mut result,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            30, 174, 168, 34, 160, 70, 63, 166, 236, 18, 74, 144, 185, 222, 208, 243, 5, 54, 223,
+            172, 185, 75, 244, 26, 70, 18, 248, 46, 207, 184, 235, 60,
+        ];
+        assert_eq!(expected_product, result_point);
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallCurveMultiscalarMultiplication::call(
+            &mut invoke_context,
+            CURVE25519_RISTRETTO,
+            scalars_va,
+            ristretto_points_va,
+            2,
+            result_point_va,
+            &mut memory_mapping,
+            &mut result,
+        );
+
+        assert_eq!(0, result.unwrap());
+        let expected_product = [
+            78, 120, 86, 111, 152, 64, 146, 84, 14, 236, 77, 147, 237, 190, 251, 241, 136, 167, 21,
+            94, 84, 118, 92, 140, 120, 81, 30, 246, 173, 140, 195, 86,
+        ];
+        assert_eq!(expected_product, result_point);
+    }
+
     fn create_filled_type<T: Default>(zero_init: bool) -> T {
         let mut val = T::default();
         let p = &mut val as *mut _ as *mut u8;
@@ -3373,6 +3682,7 @@ mod tests {
         invoke_context: &'a mut InvokeContext<'b>,
         seeds: &[&[u8]],
         program_id: &Pubkey,
+        overlap_outputs: bool,
         syscall: SyscallFunction<&'a mut InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
@@ -3440,7 +3750,11 @@ mod tests {
             seeds.len() as u64,
             PROGRAM_ID_VA,
             ADDRESS_VA,
-            BUMP_SEED_VA,
+            if overlap_outputs {
+                ADDRESS_VA
+            } else {
+                BUMP_SEED_VA
+            },
             &mut memory_mapping,
             &mut result,
         );
@@ -3456,6 +3770,7 @@ mod tests {
             invoke_context,
             seeds,
             address,
+            false,
             SyscallCreateProgramAddress::call,
         )?;
         Ok(address)
@@ -3470,8 +3785,83 @@ mod tests {
             invoke_context,
             seeds,
             address,
+            false,
             SyscallTryFindProgramAddress::call,
         )
+    }
+
+    #[test]
+    fn test_set_and_get_return_data() {
+        const SRC_VA: u64 = 0x100000000;
+        const DST_VA: u64 = 0x200000000;
+        const PROGRAM_ID_VA: u64 = 0x300000000;
+        let data = vec![42; 24];
+        let mut data_buffer = vec![0; 16];
+        let mut id_buffer = vec![0; 32];
+
+        let config = Config::default();
+        let mut memory_mapping = MemoryMapping::new(
+            vec![
+                MemoryRegion::new_readonly(&data, SRC_VA),
+                MemoryRegion::new_writable(&mut data_buffer, DST_VA),
+                MemoryRegion::new_writable(&mut id_buffer, PROGRAM_ID_VA),
+            ],
+            &config,
+        )
+        .unwrap();
+
+        prepare_mockup!(
+            invoke_context,
+            transaction_context,
+            program_id,
+            bpf_loader::id(),
+        );
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallSetReturnData::call(
+            &mut invoke_context,
+            SRC_VA,
+            data.len() as u64,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result.unwrap(), 0);
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetReturnData::call(
+            &mut invoke_context,
+            DST_VA,
+            data_buffer.len() as u64,
+            PROGRAM_ID_VA,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result.unwrap() as usize, data.len());
+        assert_eq!(data.get(0..data_buffer.len()).unwrap(), data_buffer);
+        assert_eq!(id_buffer, program_id.to_bytes());
+
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetReturnData::call(
+            &mut invoke_context,
+            PROGRAM_ID_VA,
+            data_buffer.len() as u64,
+            PROGRAM_ID_VA,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert!(matches!(
+            result,
+            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
+            ),
+        ));
     }
 
     #[test]
@@ -3612,6 +4002,28 @@ mod tests {
             &mut result,
         );
         assert_eq!(result.unwrap(), 0);
+
+        invoke_context
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        let mut result = ProgramResult::Ok(0);
+        SyscallGetProcessedSiblingInstruction::call(
+            &mut invoke_context,
+            0,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert!(matches!(
+            result,
+            ProgramResult::Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
+            ),
+        ));
     }
 
     #[test]
@@ -3970,6 +4382,19 @@ mod tests {
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
                 SyscallError::BadSeeds(PubkeyError::MaxSeedLengthExceeded)
+            ),
+        ));
+
+        assert!(matches!(
+            call_program_address_common(
+                &mut invoke_context,
+                seeds,
+                &address,
+                true,
+                SyscallTryFindProgramAddress::call,
+            ),
+            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
+                SyscallError::CopyOverlapping
             ),
         ));
     }

@@ -8,7 +8,7 @@ use {
     },
     solana_runtime::bank::{DurableNonceFee, TransactionExecutionDetails},
     solana_transaction_status::{
-        extract_and_fmt_memos, InnerInstructions, Reward, TransactionStatusMeta,
+        extract_and_fmt_memos, InnerInstruction, InnerInstructions, Reward, TransactionStatusMeta,
     },
     std::{
         sync::{
@@ -128,7 +128,13 @@ impl TransactionStatusService {
                                 .enumerate()
                                 .map(|(index, instructions)| InnerInstructions {
                                     index: index as u8,
-                                    instructions,
+                                    instructions: instructions
+                                        .into_iter()
+                                        .map(|info| InnerInstruction {
+                                            instruction: info.instruction,
+                                            stack_height: Some(u32::from(info.stack_height)),
+                                        })
+                                        .collect(),
                                 })
                                 .filter(|i| !i.instructions.is_empty())
                                 .collect()

@@ -1,4 +1,5 @@
 pub mod close_account;
+pub mod pubkey_validity;
 pub mod transfer;
 pub mod transfer_with_fee;
 pub mod withdraw;
@@ -17,7 +18,7 @@ use {
     subtle::ConstantTimeEq,
 };
 pub use {
-    close_account::CloseAccountData, transfer::TransferData,
+    close_account::CloseAccountData, pubkey_validity::PubkeyValidityData, transfer::TransferData,
     transfer_with_fee::TransferWithFeeData, withdraw::WithdrawData,
     withdraw_withheld::WithdrawWithheldTokensData,
 };

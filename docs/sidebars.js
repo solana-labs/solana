@@ -339,6 +339,7 @@ module.exports = {
     "offline-signing",
     "offline-signing/durable-nonce",
     "cli/usage",
+    "cli/sign-offchain-message",
   ],
   architectureSidebar: [
     {

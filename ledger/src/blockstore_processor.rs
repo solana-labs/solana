@@ -1360,6 +1360,7 @@ fn process_next_slots(
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Bank, Hash)>,
+    halt_at_slot: Option<Slot>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     if meta.next_slots.is_empty() {
         return Ok(());
@@ -1367,6 +1368,13 @@ fn process_next_slots(
 
     // This is a fork point if there are multiple children, create a new child bank for each fork
     for next_slot in &meta.next_slots {
+        let skip_next_slot = halt_at_slot
+            .map(|halt_at_slot| *next_slot > halt_at_slot)
+            .unwrap_or(false);
+        if skip_next_slot {
+            continue;
+        }
+
         let next_meta = blockstore
             .meta(*next_slot)
             .map_err(|err| {
@@ -1438,11 +1446,11 @@ fn load_frozen_forks(
         blockstore,
         leader_schedule_cache,
         &mut pending_slots,
+        opts.halt_at_slot,
     )?;
 
-    let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
     let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
-    if bank_forks.read().unwrap().root() != halt_at_slot {
+    if Some(bank_forks.read().unwrap().root()) != opts.halt_at_slot {
         let mut set_root_us = 0;
         let mut root_retain_us = 0;
         let mut process_single_slot_us = 0;
@@ -1588,20 +1596,25 @@ fn load_frozen_forks(
                 slot,
             );
 
+            let done_processing = opts
+                .halt_at_slot
+                .map(|halt_at_slot| slot >= halt_at_slot)
+                .unwrap_or(false);
+            if done_processing {
+                if opts.run_final_accounts_hash_calc {
+                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                }
+                break;
+            }
+
             process_next_slots(
                 &bank,
                 &meta,
                 blockstore,
                 leader_schedule_cache,
                 &mut pending_slots,
+                opts.halt_at_slot,
             )?;
-
-            if slot >= halt_at_slot {
-                if opts.run_final_accounts_hash_calc {
-                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
-                }
-                break;
-            }
         }
     } else if on_halt_store_hash_raw_data_for_debug {
         run_final_hash_calc(

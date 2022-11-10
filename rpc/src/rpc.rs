@@ -420,7 +420,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice.is_some())?;
 
         let response = get_encoded_account(&bank, pubkey, encoding, data_slice)?;
         Ok(new_response(&bank, response))
@@ -442,7 +441,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Base64);
-        check_slice_and_encoding(&encoding, data_slice.is_some())?;
 
         let accounts = pubkeys
             .into_iter()
@@ -478,7 +476,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         optimize_filters(&mut filters);
         let keyed_accounts = {
             if let Some(owner) = get_spl_token_owner_filter(program_id, &filters) {
@@ -1901,7 +1898,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![];
@@ -1952,7 +1948,6 @@ impl JsonRpcRequestProcessor {
             min_context_slot,
         })?;
         let encoding = encoding.unwrap_or(UiAccountEncoding::Binary);
-        check_slice_and_encoding(&encoding, data_slice_config.is_some())?;
         let (token_program_id, mint) = get_token_program_id_and_mint(&bank, token_account_filter)?;
 
         let mut filters = vec![
@@ -2289,29 +2284,6 @@ pub(crate) fn check_is_at_least_confirmed(commitment: CommitmentConfig) -> Resul
         ));
     }
     Ok(())
-}
-
-fn check_slice_and_encoding(encoding: &UiAccountEncoding, data_slice_is_some: bool) -> Result<()> {
-    match encoding {
-        UiAccountEncoding::JsonParsed => {
-            if data_slice_is_some {
-                let message =
-                    "Sliced account data can only be encoded using binary (base 58) or base64 encoding."
-                        .to_string();
-                Err(error::Error {
-                    code: error::ErrorCode::InvalidRequest,
-                    message,
-                    data: None,
-                })
-            } else {
-                Ok(())
-            }
-        }
-        UiAccountEncoding::Binary
-        | UiAccountEncoding::Base58
-        | UiAccountEncoding::Base64
-        | UiAccountEncoding::Base64Zstd => Ok(()),
-    }
 }
 
 fn get_encoded_account(
@@ -4457,7 +4429,7 @@ where
             inc_new_counter_info!("rpc-base58_encoded_tx", 1);
             if encoded.len() > MAX_BASE58_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    "base58 encoded {} too large: {} bytes (max: encoded/raw {}/{})",
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE58_SIZE,
@@ -4466,31 +4438,30 @@ where
             }
             bs58::decode(encoded)
                 .into_vec()
-                .map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+                .map_err(|e| Error::invalid_params(format!("invalid base58 encoding: {:?}", e)))?
         }
         TransactionBinaryEncoding::Base64 => {
             inc_new_counter_info!("rpc-base64_encoded_tx", 1);
             if encoded.len() > MAX_BASE64_SIZE {
                 return Err(Error::invalid_params(format!(
-                    "encoded {} too large: {} bytes (max: encoded/raw {}/{})",
+                    "base64 encoded {} too large: {} bytes (max: encoded/raw {}/{})",
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE64_SIZE,
                     PACKET_DATA_SIZE,
                 )));
             }
-            base64::decode(encoded).map_err(|e| Error::invalid_params(format!("{:?}", e)))?
+            base64::decode(encoded)
+                .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {:?}", e)))?
         }
     };
     if wire_output.len() > PACKET_DATA_SIZE {
-        let err = format!(
-            "encoded {} too large: {} bytes (max: {} bytes)",
+        return Err(Error::invalid_params(format!(
+            "decoded {} too large: {} bytes (max: {} bytes)",
             type_name::<T>(),
             wire_output.len(),
             PACKET_DATA_SIZE
-        );
-        info!("{}", err);
-        return Err(Error::invalid_params(&err));
+        )));
     }
     bincode::options()
         .with_limit(PACKET_DATA_SIZE as u64)
@@ -4498,8 +4469,11 @@ where
         .allow_trailing_bytes()
         .deserialize_from(&wire_output[..])
         .map_err(|err| {
-            info!("deserialize error: {}", err);
-            Error::invalid_params(&err.to_string())
+            Error::invalid_params(format!(
+                "failed to deserialize {}: {}",
+                type_name::<T>(),
+                &err.to_string()
+            ))
         })
         .map(|output| (wire_output, output))
 }
@@ -5484,7 +5458,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": "",
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
         });
         assert_eq!(result, expected);
@@ -5502,6 +5477,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([base64::encode(&data), "base64"]);
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5510,6 +5486,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = json!([base64::encode(&data[1..3]), "base64"]);
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5518,6 +5495,7 @@ pub mod tests {
         let result: Value = parse_success_result(rpc.handle_request_sync(request));
         let expected = bs58::encode(&data[1..3]).into_string();
         assert_eq!(result["value"]["data"], expected);
+        assert_eq!(result["value"]["space"], 5);
 
         let request = create_test_request(
             "getAccountInfo",
@@ -5525,12 +5503,12 @@ pub mod tests {
                 json!([address, {"encoding": "jsonParsed", "dataSlice": {"length": 2, "offset": 1}}]),
             ),
         );
-        let response = parse_failure_response(rpc.handle_request_sync(request));
-        let expected = (
-            ErrorCode::InvalidRequest.code(),
-            String::from("Sliced account data can only be encoded using binary (base 58) or base64 encoding."),
+        let result: Value = parse_success_result(rpc.handle_request_sync(request));
+        let expected = json!([base64::encode(&data[1..3]), "base64"]);
+        assert_eq!(
+            result["value"]["data"], expected,
+            "should use data slice if parsing fails"
         );
-        assert_eq!(response, expected);
     }
 
     #[test]
@@ -5561,7 +5539,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
             null,
             {
@@ -5569,7 +5548,8 @@ pub mod tests {
                 "lamports": 42,
                 "data": [base64::encode(&data), "base64"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 5,
             }
         ]);
         assert_eq!(result.value, expected);
@@ -5593,7 +5573,8 @@ pub mod tests {
                 "lamports": TEST_MINT_LAMPORTS,
                 "data": ["", "base58"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 0,
             },
             null,
             {
@@ -5601,7 +5582,8 @@ pub mod tests {
                 "lamports": 42,
                 "data": [bs58::encode(&data).into_string(), "base58"],
                 "executable": false,
-                "rentEpoch": 0
+                "rentEpoch": 0,
+                "space": 5,
             }
         ]);
         assert_eq!(result.value, expected);
@@ -5617,12 +5599,30 @@ pub mod tests {
                 {"encoding": "jsonParsed", "dataSlice": {"length": 2, "offset": 1}},
             ])),
         );
-        let response = parse_failure_response(rpc.handle_request_sync(request));
-        let expected = (
-            ErrorCode::InvalidRequest.code(),
-            String::from("Sliced account data can only be encoded using binary (base 58) or base64 encoding."),
+        let result: RpcResponse<Value> = parse_success_result(rpc.handle_request_sync(request));
+        let expected = json!([
+            {
+                "owner": "11111111111111111111111111111111",
+                "lamports": TEST_MINT_LAMPORTS,
+                "data": ["", "base64"],
+                "executable": false,
+                "rentEpoch": 0,
+                "space": 0,
+            },
+            null,
+            {
+                "owner": "11111111111111111111111111111111",
+                "lamports": 42,
+                "data": [base64::encode(&data[1..3]), "base64"],
+                "executable": false,
+                "rentEpoch": 0,
+                "space": 5,
+            }
+        ]);
+        assert_eq!(
+            result.value, expected,
+            "should use data slice if parsing fails"
         );
-        assert_eq!(response, expected);
     }
 
     #[test]
@@ -5838,7 +5838,8 @@ pub mod tests {
                             "executable": false,
                             "owner": "11111111111111111111111111111111",
                             "lamports": rent_exempt_amount,
-                            "rentEpoch": 0
+                            "rentEpoch": 0,
+                            "space": 0,
                         }
                     ],
                     "err":null,
@@ -8388,45 +8389,89 @@ pub mod tests {
         // +2 because +1 still fits in base64 encoded worst-case
         let too_big = PACKET_DATA_SIZE + 2;
         let tx_ser = vec![0xffu8; too_big];
+
         let tx58 = bs58::encode(&tx_ser).into_string();
         let tx58_len = tx58.len();
-        let expect58 = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
-            expect58
-        );
+            Error::invalid_params(format!(
+                "base58 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+                tx58_len, MAX_BASE58_SIZE, PACKET_DATA_SIZE,
+            )
+        ));
+
         let tx64 = base64::encode(&tx_ser);
         let tx64_len = tx64.len();
-        let expect64 = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
-            tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
-            expect64
-        );
+            Error::invalid_params(format!(
+                "base64 encoded solana_sdk::transaction::Transaction too large: {} bytes (max: encoded/raw {}/{})",
+                tx64_len, MAX_BASE64_SIZE, PACKET_DATA_SIZE,
+            )
+        ));
+
         let too_big = PACKET_DATA_SIZE + 1;
         let tx_ser = vec![0x00u8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
-        let expect = Error::invalid_params(format!(
-            "encoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
-            too_big, PACKET_DATA_SIZE
-        ));
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
-            expect
+            Error::invalid_params(format!(
+                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
+                too_big, PACKET_DATA_SIZE
+            ))
         );
+
         let tx64 = base64::encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
-            expect
+            Error::invalid_params(format!(
+                "decoded solana_sdk::transaction::Transaction too large: {} bytes (max: {} bytes)",
+                too_big, PACKET_DATA_SIZE
+            ))
+        );
+
+        let tx_ser = vec![0xffu8; PACKET_DATA_SIZE - 2];
+        let mut tx64 = base64::encode(&tx_ser);
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx64.clone(), TransactionBinaryEncoding::Base64)
+                .unwrap_err(),
+            Error::invalid_params(
+                "failed to deserialize solana_sdk::transaction::Transaction: invalid value: \
+                continue signal on byte-three, expected a terminal signal on or before byte-three"
+                    .to_string()
+            )
+        );
+
+        tx64.push('!');
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
+                .unwrap_err(),
+            Error::invalid_params("invalid base64 encoding: InvalidByte(1640, 33)".to_string())
+        );
+
+        let mut tx58 = bs58::encode(&tx_ser).into_string();
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx58.clone(), TransactionBinaryEncoding::Base58)
+                .unwrap_err(),
+            Error::invalid_params(
+                "failed to deserialize solana_sdk::transaction::Transaction: invalid value: \
+                continue signal on byte-three, expected a terminal signal on or before byte-three"
+                    .to_string()
+            )
+        );
+
+        tx58.push('!');
+        assert_eq!(
+            decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
+                .unwrap_err(),
+            Error::invalid_params(
+                "invalid base58 encoding: InvalidCharacter { character: '!', index: 1680 }"
+                    .to_string(),
+            )
         );
     }
 

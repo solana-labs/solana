@@ -1,6 +1,6 @@
 #pragma once
 /**
- * @brief Solana C-based BPF program types and utility functions
+ * @brief Solana C-based SBF program types and utility functions
  */
 
 #include <sol/assert.h>

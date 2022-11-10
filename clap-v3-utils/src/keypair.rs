@@ -455,7 +455,7 @@ pub(crate) fn parse_signer_source<S: AsRef<str>>(
                     break;
                 }
             }
-            source.replace("\\", "/")
+            source.replace('\\', "/")
         }
         #[cfg(not(target_family = "windows"))]
         {

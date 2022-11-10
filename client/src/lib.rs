@@ -39,6 +39,7 @@ pub mod nonblocking {
     /// [JSON-RPC], using the [`RpcClient`] type.
     ///
     /// [JSON-RPC]: https://www.jsonrpc.org/specification
+    /// [`RpcClient`]: crate::nonblocking::rpc_client::RpcClient
     pub mod rpc_client {
         pub use solana_rpc_client::nonblocking::rpc_client::*;
     }
@@ -74,6 +75,7 @@ pub mod quic_client {
 /// [JSON-RPC], using the [`RpcClient`] type.
 ///
 /// [JSON-RPC]: https://www.jsonrpc.org/specification
+/// [`RpcClient`]: crate::rpc_client::RpcClient
 pub mod rpc_client {
     pub use solana_rpc_client::rpc_client::*;
 }

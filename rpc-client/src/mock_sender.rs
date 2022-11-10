@@ -214,6 +214,7 @@ impl RpcSender for MockSender {
                                         program_id_index: 2,
                                         accounts: vec![0, 1],
                                         data: "3Bxs49DitAvXtoDR".to_string(),
+                                        stack_height: None,
                                     }],
                                     address_table_lookups: None,
                                 })

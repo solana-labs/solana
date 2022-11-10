@@ -1358,7 +1358,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // if 'avoid_callback_result' is Some(_), then callback is NOT called
         //  and _ is returned as if callback were called.
         F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
-        I: IntoIterator<Item = &'a Pubkey>,
+        I: Iterator<Item = &'a Pubkey>,
     {
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
@@ -1666,11 +1666,6 @@ impl<T: IndexValue> AccountsIndex<T> {
 
         map.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         self.update_secondary_indexes(pubkey, account, account_indexes);
-    }
-
-    pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let map = self.get_bin(pubkey);
-        map.unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {

@@ -222,15 +222,15 @@ Solana API node.
   passing the last block you have already processed as the start-slot parameter:
 
 ```bash
-curl localhost:8899 -X POST -H "Content-Type: application/json" -d '{
+curl https://api.devnet.solana.com -X POST -H "Content-Type: application/json" -d '{
   "jsonrpc": "2.0",
   "id": 1,
   "method": "getBlocks",
-  "params": [5]
+  "params": [160017005, 160017015]
 }'
 
 # Result
-{"jsonrpc":"2.0","result":[5,6,8,9,11],"id":1}
+{"jsonrpc":"2.0","result":[160017005,160017006,160017007,160017012,160017013,160017014,160017015],"id":1}
 ```
 
 Not every slot produces a block, so there may be gaps in the sequence of integers.
@@ -337,8 +337,8 @@ changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
 example, if the deposit address of interest is
-`3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN`, this transaction represents a
-transfer of 2769675090 - 1800195048 = 969,480,042 lamports = 0.969485042 SOL
+`G1wZ113tiUHdSpQEBcid8n1x8BAvcWZoZgxPKxgE5B7o`, this transaction represents a
+transfer of 1040000000 - 1030000000 = 10,000,000 lamports = 0.01 SOL
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our

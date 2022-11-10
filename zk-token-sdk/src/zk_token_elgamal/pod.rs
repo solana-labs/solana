@@ -146,6 +146,11 @@ unsafe impl Pod for ZeroBalanceProof {}
 #[repr(transparent)]
 pub struct FeeSigmaProof(pub [u8; 256]);
 
+/// Serialization of public-key sigma proof
+#[derive(Clone, Copy, Pod, Zeroable)]
+#[repr(transparent)]
+pub struct PubkeySigmaProof(pub [u8; 64]);
+
 /// Serialization of range proofs for 64-bit numbers (for `Withdraw` instruction)
 #[derive(Clone, Copy)]
 #[repr(transparent)]

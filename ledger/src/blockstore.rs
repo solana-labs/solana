@@ -177,7 +177,6 @@ pub struct Blockstore {
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
-    no_compaction: bool,
     pub slots_stats: SlotsStats,
 }
 
@@ -335,7 +334,6 @@ impl Blockstore {
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
-            no_compaction: false,
             slots_stats: SlotsStats::default(),
         };
         if initialize_transaction_status_index {
@@ -408,18 +406,6 @@ impl Blockstore {
             }
             walk.forward();
         }
-    }
-
-    /// Whether to disable compaction in [`Blockstore::compact_storage`], which is used
-    /// by the ledger cleanup service and `solana_core::validator::backup_and_clear_blockstore`.
-    ///
-    /// Note that this setting is not related to the RocksDB's background
-    /// compaction.
-    ///
-    /// To disable RocksDB's background compaction, open the Blockstore
-    /// with AccessType::PrimaryForMaintenance.
-    pub fn set_no_compaction(&mut self, no_compaction: bool) {
-        self.no_compaction = no_compaction;
     }
 
     /// Deletes the blockstore at the specified path.
@@ -2889,53 +2875,51 @@ impl Blockstore {
         end_index: u32,
         slot_meta: Option<&SlotMeta>,
     ) -> Result<Vec<Entry>> {
-        let data_shred_cf = self.db.column::<cf::ShredData>();
-
-        // Short circuit on first error
-        let data_shreds: Result<Vec<Shred>> = (start_index..=end_index)
-            .map(|i| {
-                data_shred_cf
-                    .get_bytes((slot, u64::from(i)))
-                    .and_then(|serialized_shred| {
-                        if serialized_shred.is_none() {
-                            if let Some(slot_meta) = slot_meta {
-                                if slot > self.lowest_cleanup_slot() {
-                                    panic!(
-                                        "Shred with
-                                        slot: {},
-                                        index: {},
-                                        consumed: {},
-                                        completed_indexes: {:?}
-                                        must exist if shred index was included in a range: {} {}",
-                                        slot,
-                                        i,
-                                        slot_meta.consumed,
-                                        slot_meta.completed_data_indexes,
-                                        start_index,
-                                        end_index
-                                    );
-                                }
-                            }
-                            return Err(BlockstoreError::InvalidShredData(Box::new(
-                                bincode::ErrorKind::Custom(format!(
-                                    "Missing shred for slot {}, index {}",
-                                    slot, i
-                                )),
-                            )));
-                        }
-
-                        Shred::new_from_serialized_shred(serialized_shred.unwrap()).map_err(|err| {
-                            BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                                format!(
-                                    "Could not reconstruct shred from shred payload: {:?}",
-                                    err
-                                ),
-                            )))
-                        })
-                    })
-            })
+        let keys: Vec<(Slot, u64)> = (start_index..=end_index)
+            .map(|index| (slot, u64::from(index)))
             .collect();
 
+        let data_shreds: Result<Vec<Option<Vec<u8>>>> = self
+            .data_shred_cf
+            .multi_get_bytes(keys)
+            .into_iter()
+            .collect();
+        let data_shreds = data_shreds?;
+
+        let data_shreds: Result<Vec<Shred>> =
+            data_shreds
+                .into_iter()
+                .enumerate()
+                .map(|(idx, shred_bytes)| {
+                    if shred_bytes.is_none() {
+                        if let Some(slot_meta) = slot_meta {
+                            if slot > self.lowest_cleanup_slot() {
+                                panic!(
+                                    "Shred with slot: {}, index: {}, consumed: {}, completed_indexes: {:?} \
+                                    must exist if shred index was included in a range: {} {}",
+                                    slot,
+                                    idx,
+                                    slot_meta.consumed,
+                                    slot_meta.completed_data_indexes,
+                                    start_index,
+                                    end_index
+                                );
+                            }
+                        }
+                        return Err(BlockstoreError::InvalidShredData(Box::new(
+                            bincode::ErrorKind::Custom(format!(
+                                "Missing shred for slot {}, index {}",
+                                slot, idx
+                            )),
+                        )));
+                    }
+                    Shred::new_from_serialized_shred(shred_bytes.unwrap()).map_err(|err| {
+                        BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
+                            format!("Could not reconstruct shred from shred payload: {:?}", err),
+                        )))
+                    })
+                })
+                .collect();
         let data_shreds = data_shreds?;
         let last_shred = data_shreds.last().unwrap();
         assert!(last_shred.data_complete() || last_shred.last_in_slot());
@@ -4408,7 +4392,9 @@ pub mod tests {
             transaction_context::TransactionReturnData,
         },
         solana_storage_proto::convert::generated,
-        solana_transaction_status::{InnerInstructions, Reward, Rewards, TransactionTokenBalance},
+        solana_transaction_status::{
+            InnerInstruction, InnerInstructions, Reward, Rewards, TransactionTokenBalance,
+        },
         std::{thread::Builder, time::Duration},
     };
 
@@ -6840,7 +6826,10 @@ pub mod tests {
         let post_balances_vec = vec![3, 2, 1];
         let inner_instructions_vec = vec![InnerInstructions {
             index: 0,
-            instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+            instructions: vec![InnerInstruction {
+                instruction: CompiledInstruction::new(1, &(), vec![0]),
+                stack_height: Some(2),
+            }],
         }];
         let log_messages_vec = vec![String::from("Test message\n")];
         let pre_token_balances_vec = vec![];
@@ -7374,10 +7363,7 @@ pub mod tests {
         assert_eq!(counter, 2);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(
-        simulate_compaction: bool,
-        simulate_ledger_cleanup_service: bool,
-    ) {
+    fn do_test_lowest_cleanup_slot_and_special_cfs(simulate_ledger_cleanup_service: bool) {
         solana_logger::setup();
 
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -7493,20 +7479,12 @@ pub mod tests {
         assert_eq!(are_missing, (false, false, false));
         assert_existing_always();
 
-        if simulate_compaction {
-            blockstore.set_max_expired_slot(lowest_cleanup_slot);
-            // force compaction filters to run across whole key range.
-            blockstore
-                .compact_storage(Slot::min_value(), Slot::max_value())
-                .unwrap();
-        }
-
         if simulate_ledger_cleanup_service {
             *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
         }
 
         let are_missing = check_for_missing();
-        if simulate_compaction || simulate_ledger_cleanup_service {
+        if simulate_ledger_cleanup_service {
             // ... when either simulation (or both) is effective, we should observe to be missing
             // consistently
             assert_eq!(are_missing, (true, true, true));
@@ -7518,27 +7496,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_with_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, true);
+    fn test_lowest_cleanup_slot_and_special_cfs_with_ledger_cleanup_service_simulation() {
+        do_test_lowest_cleanup_slot_and_special_cfs(true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_without_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, false);
-    }
-
-    #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_with_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, true);
-    }
-
-    #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_without_ledger_cleanup_service_simulation(
-    ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, false);
+    fn test_lowest_cleanup_slot_and_special_cfs_without_ledger_cleanup_service_simulation() {
+        do_test_lowest_cleanup_slot_and_special_cfs(false);
     }
 
     #[test]
@@ -7572,7 +7536,10 @@ pub mod tests {
                 }
                 let inner_instructions = Some(vec![InnerInstructions {
                     index: 0,
-                    instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+                    instructions: vec![InnerInstruction {
+                        instruction: CompiledInstruction::new(1, &(), vec![0]),
+                        stack_height: Some(2),
+                    }],
                 }]);
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);
@@ -7689,7 +7656,10 @@ pub mod tests {
                 }
                 let inner_instructions = Some(vec![InnerInstructions {
                     index: 0,
-                    instructions: vec![CompiledInstruction::new(1, &(), vec![0])],
+                    instructions: vec![InnerInstruction {
+                        instruction: CompiledInstruction::new(1, &(), vec![0]),
+                        stack_height: Some(2),
+                    }],
                 }]);
                 let log_messages = Some(vec![String::from("Test message\n")]);
                 let pre_token_balances = Some(vec![]);

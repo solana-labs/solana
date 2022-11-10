@@ -1,16 +1,13 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
 use {
-    crate::{
-        banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
-        result::{Error, Result},
-    },
+    crate::result::{Error, Result},
     crossbeam_channel::{unbounded, RecvTimeoutError},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{
-        clock::DEFAULT_TICKS_PER_SLOT,
+        clock::{DEFAULT_TICKS_PER_SLOT, HOLD_TRANSACTIONS_SLOT_OFFSET},
         packet::{Packet, PacketFlags},
     },
     solana_streamer::streamer::{
