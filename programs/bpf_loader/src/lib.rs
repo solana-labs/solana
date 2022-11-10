@@ -453,7 +453,7 @@ fn process_instruction_common(
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
         }
 
-        executor.execute(program_account_index, invoke_context)
+        executor.execute(invoke_context)
     } else {
         drop(program);
         debug_assert_eq!(first_instruction_account, 1);
@@ -1400,11 +1400,7 @@ impl Debug for BpfExecutor {
 }
 
 impl Executor for BpfExecutor {
-    fn execute(
-        &self,
-        _first_instruction_account: IndexOfAccount,
-        invoke_context: &mut InvokeContext,
-    ) -> Result<(), InstructionError> {
+    fn execute(&self, invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let compute_meter = invoke_context.get_compute_meter();
         let stack_height = invoke_context.get_stack_height();
