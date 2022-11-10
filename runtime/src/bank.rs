@@ -89,8 +89,9 @@ use {
     solana_program_runtime::{
         accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
         compute_budget::{self, ComputeBudget},
+        executor::Executor,
         executor_cache::{
-            BankExecutorCache, Executor, TransactionExecutorCache, TxBankExecutorCacheDiff,
+            BankExecutorCache, TransactionExecutorCache, TxBankExecutorCacheDiff,
             MAX_CACHED_EXECUTORS,
         },
         invoke_context::{BuiltinProgram, ProcessInstructionWithContext},
@@ -7950,7 +7951,6 @@ pub(crate) mod tests {
         rand::Rng,
         solana_program_runtime::{
             compute_budget::MAX_COMPUTE_UNIT_LIMIT,
-            executor_cache::Executor,
             invoke_context::{mock_process_instruction, InvokeContext},
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
         },
@@ -15129,7 +15129,6 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
