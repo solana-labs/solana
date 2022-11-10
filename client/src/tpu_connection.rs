@@ -21,6 +21,7 @@ pub struct ClientStats {
     pub tx_data_blocked: MovingStat,
     pub tx_acks: MovingStat,
     pub make_connection_ms: AtomicU64,
+    pub send_timeout: AtomicU64,
 }
 
 #[enum_dispatch]
