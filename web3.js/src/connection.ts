@@ -2636,6 +2636,23 @@ export type FetchFn = typeof fetchImpl;
 
 /**
  * A callback used to augment the outgoing HTTP request
+ *
+ * For example, to log all outgoing requests:
+ * ```ts
+ * let connection = new Connection("https://api.devnet.solana.com", {
+ *   fetchMiddleware: (url, options, fetch) => {
+ *     let { method, params } = JSON.parse(options?.body ?? "{}");
+ *     if (method && Array.isArray(params)) {
+ *       console.group(method);
+ *       for (let param of params) console.warn(param);
+ *       console.groupEnd();
+ *       console.warn();
+ *     }
+ *
+ *     fetch(url, options);
+ *   }
+ * });
+ * ```
  */
 export type FetchMiddleware = (
   info: Parameters<FetchFn>[0],
