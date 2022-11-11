@@ -1111,8 +1111,8 @@ fn load_bank_forks(
     };
 
     let mut accounts_update_notifier = Option::<AccountsUpdateNotifier>::default();
-    if arg_matches.is_present("geyser_plugin_config") {
-        let geyser_config_files = values_t_or_exit!(arg_matches, "geyser_plugin_config", String)
+    if arg_matches.is_present("plugin_config") {
+        let plugin_config_files = values_t_or_exit!(arg_matches, "plugin_config", String)
             .into_iter()
             .map(PathBuf::from)
             .collect::<Vec<_>>();
@@ -1120,7 +1120,7 @@ fn load_bank_forks(
         let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
         drop(confirmed_bank_sender);
         let geyser_service =
-            GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
+            GeyserPluginService::new(confirmed_bank_receiver, &plugin_config_files).unwrap_or_else(
                 |err| {
                     eprintln!("Failed to setup Geyser service: {:?}", err);
                     exit(1);
@@ -1493,12 +1493,13 @@ fn main() {
     .default_value(default_max_incremental_snapshot_archives_to_retain)
     .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.");
 
-    let geyser_plugin_args = Arg::with_name("geyser_plugin_config")
-        .long("geyser-plugin-config")
+    let geyser_plugin_args = Arg::with_name("plugin_config")
+        .long("plugin-config")
+        .alias("geyser-plugin-config")
         .value_name("FILE")
         .takes_value(true)
         .multiple(true)
-        .help("Specify the configuration file for the Geyser plugin.");
+        .help("Specify the configuration file for the Geyser or BPF tracing plugin.");
 
     let accounts_data_encoding_arg = Arg::with_name("encoding")
         .long("encoding")

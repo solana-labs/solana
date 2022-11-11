@@ -973,9 +973,9 @@ pub fn main() {
 
     let accounts_db_config = Some(accounts_db_config);
 
-    let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
+    let plugin_config_files = if matches.is_present("plugin_config") {
         Some(
-            values_t_or_exit!(matches, "geyser_plugin_config", String)
+            values_t_or_exit!(matches, "plugin_config", String)
                 .into_iter()
                 .map(PathBuf::from)
                 .collect(),
@@ -1071,7 +1071,7 @@ pub fn main() {
                 usize
             )),
         },
-        geyser_plugin_config_files,
+        plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
             (
                 SocketAddr::new(rpc_bind_address, rpc_port),

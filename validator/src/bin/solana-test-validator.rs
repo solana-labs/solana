@@ -479,9 +479,9 @@ fn main() {
         genesis.bind_ip_addr(bind_address);
     }
 
-    if matches.is_present("geyser_plugin_config") {
+    if matches.is_present("plugin_config") {
         genesis.geyser_plugin_config_files = Some(
-            values_t_or_exit!(matches, "geyser_plugin_config", String)
+            values_t_or_exit!(matches, "plugin_config", String)
                 .into_iter()
                 .map(PathBuf::from)
                 .collect(),

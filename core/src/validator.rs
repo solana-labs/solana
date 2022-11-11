@@ -126,7 +126,7 @@ pub struct ValidatorConfig {
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
-    pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
+    pub plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
     pub snapshot_config: Option<SnapshotConfig>,
@@ -189,7 +189,7 @@ impl Default for ValidatorConfig {
             account_paths: Vec::new(),
             account_shrink_paths: None,
             rpc_config: JsonRpcConfig::default(),
-            geyser_plugin_config_files: None,
+            plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
             snapshot_config: Some(SnapshotConfig::new_load_only()),
@@ -398,7 +398,7 @@ impl Validator {
         let mut bank_notification_senders = Vec::new();
 
         let geyser_plugin_service =
-            if let Some(geyser_plugin_config_files) = &config.geyser_plugin_config_files {
+            if let Some(geyser_plugin_config_files) = &config.plugin_config_files {
                 let (confirmed_bank_sender, confirmed_bank_receiver) = unbounded();
                 bank_notification_senders.push(confirmed_bank_sender);
                 let result =
