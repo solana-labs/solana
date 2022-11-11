@@ -11,7 +11,6 @@ edition = "2021"
 
 [dependencies]
 array-bytes = "=1.4.1"
-num-bigint = "0.4.3"
 serde_json = "1.0.56"
 serde = { version = "1.0.112", features = ["derive"] }
 solana-program = { path = "../../../../sdk/program", version = "=1.15.0" }

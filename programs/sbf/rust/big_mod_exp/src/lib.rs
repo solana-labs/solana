@@ -2,14 +2,13 @@
 
 extern crate solana_program;
 use solana_program::{
-    custom_panic_default, msg,
+    custom_panic_default, msg, big_mod_exp::big_mod_exp,
 };
 
 fn big_mod_exp_test(){
-    use num_bigint::BigUint;
 
-    #[serde(rename_all = "PascalCase")]
     #[derive(serde::Deserialize)]
+    #[serde(rename_all = "PascalCase")]
     struct TestCase{
         base: String,
         exponent: String,
@@ -28,7 +27,7 @@ fn big_mod_exp_test(){
             "Base":     "2222222222222222222222222222222222222222222222222222222222222222",
             "Exponent": "2222222222222222222222222222222222222222222222222222222222222222",
             "Modulus":  "1111111111111111111111111111111111111111111111111111111111111111",
-            "Expected": "00"
+            "Expected": "0000000000000000000000000000000000000000000000000000000000000000"
         },
         {
             "Base":     "3333333333333333333333333333333333333333333333333333333333333333",
@@ -62,21 +61,16 @@ fn big_mod_exp_test(){
         }
     ]"#;
 
-    let to_big = |str : &String| -> BigUint {
-        let vec = array_bytes::hex2bytes_unchecked(str);
-        BigUint::from_bytes_be(vec.as_slice())
-    };
-
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
     test_cases.iter().for_each(|test|{
-        let base = to_big(&test.base);
-        let exponent = to_big(&test.exponent);
-        let modulus = to_big(&test.modulus);
-        let expected = to_big(&test.expected);
-
-        let result = base.modpow(&exponent, &modulus);
+        let base = array_bytes::hex2bytes_unchecked(&test.base);
+        let exponent = array_bytes::hex2bytes_unchecked(&test.exponent);
+        let modulus = array_bytes::hex2bytes_unchecked(&test.modulus);
+        let expected = array_bytes::hex2bytes_unchecked(&test.expected);
+        let result = big_mod_exp(base.as_slice(), exponent.as_slice(), modulus.as_slice());
         assert_eq!(result, expected);
     });
+
 }
 
 
@@ -89,5 +83,4 @@ pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {
     0
 }
 
-custom_heap_default!();
 custom_panic_default!();

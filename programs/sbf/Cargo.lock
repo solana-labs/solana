@@ -4199,7 +4199,6 @@ name = "solana-bpf-rust-big-mod-exp"
 version = "1.15.0"
 dependencies = [
  "array-bytes",
- "num-bigint 0.4.3",
  "serde",
  "serde_json",
  "solana-program 1.15.0",
