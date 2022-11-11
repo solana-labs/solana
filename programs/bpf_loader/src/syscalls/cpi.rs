@@ -1618,7 +1618,7 @@ mod tests {
             CallerAccount {
                 lamports: &mut self.lamports,
                 owner: &mut self.owner,
-                original_data_len: data.len() as usize,
+                original_data_len: data.len(),
                 data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: &mut self.len,
