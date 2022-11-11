@@ -240,7 +240,8 @@ impl<'a> SnapshotMinimizer<'a> {
         info!("{purge_dead_slots_measure}");
 
         let (_, drop_or_recycle_stores_measure) = measure!(
-            self.accounts_db().drop_or_recycle_stores(dead_storages),
+            self.accounts_db()
+                .drop_or_recycle_stores(dead_storages, &self.accounts_db().shrink_stats),
             "drop or recycle stores"
         );
         info!("{drop_or_recycle_stores_measure}");
