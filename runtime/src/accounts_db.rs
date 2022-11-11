@@ -336,7 +336,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
-    ancient_append_vecs: false,
+    ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
 };
@@ -347,7 +347,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
-    ancient_append_vecs: false,
+    ancient_append_vec_offset: None,
     skip_initial_hash_calc: false,
     exhaustively_verify_refcounts: false,
 };
@@ -405,7 +405,9 @@ pub struct AccountsDbConfig {
     pub hash_calc_num_passes: Option<usize>,
     pub write_cache_limit_bytes: Option<u64>,
     pub skip_rewrites: bool,
-    pub ancient_append_vecs: bool,
+    /// if None, ancient append vecs are disabled
+    /// Some(offset) means include slots up to (max_slot - (slots_per_epoch - 'offset'))
+    pub ancient_append_vec_offset: Option<Slot>,
     pub skip_initial_hash_calc: bool,
     pub exhaustively_verify_refcounts: bool,
 }
@@ -1269,8 +1271,9 @@ pub struct AccountsDb {
     /// true iff rent exempt accounts are not rewritten in their normal rent collection slot
     pub skip_rewrites: bool,
 
-    /// true iff we want to squash old append vecs together into 'ancient append vecs'
-    pub ancient_append_vecs: bool,
+    /// Some(offset) iff we want to squash old append vecs together into 'ancient append vecs'
+    /// Some(offset) means for slots up to (max_slot - (slots_per_epoch - 'offset')), put them in ancient append vecs
+    pub ancient_append_vec_offset: Option<Slot>,
 
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
@@ -2333,7 +2336,7 @@ impl AccountsDb {
             accounts_hash_complete_one_epoch_old: RwLock::default(),
             skip_rewrites: false,
             skip_initial_hash_calc: false,
-            ancient_append_vecs: false,
+            ancient_append_vec_offset: None,
             accounts_index,
             storage: AccountStorage::default(),
             accounts_cache: AccountsCache::default(),
@@ -2445,9 +2448,9 @@ impl AccountsDb {
             .map(|config| config.skip_initial_hash_calc)
             .unwrap_or_default();
 
-        let ancient_append_vecs = accounts_db_config
+        let ancient_append_vec_offset = accounts_db_config
             .as_ref()
-            .map(|config| config.ancient_append_vecs)
+            .map(|config| config.ancient_append_vec_offset)
             .unwrap_or_default();
 
         let exhaustively_verify_refcounts = accounts_db_config
@@ -2465,7 +2468,7 @@ impl AccountsDb {
             paths,
             skip_rewrites,
             skip_initial_hash_calc,
-            ancient_append_vecs,
+            ancient_append_vec_offset,
             cluster_type: Some(*cluster_type),
             account_indexes,
             caching_enabled,
@@ -4285,13 +4288,13 @@ impl AccountsDb {
 
     /// return all slots that are more than one epoch old and thus could already be an ancient append vec
     /// or which could need to be combined into a new or existing ancient append vec
+    /// offset is used to combine newer slots than we normally would. This is designed to be used for testing.
     fn get_sorted_potential_ancient_slots(&self) -> Vec<Slot> {
-        // If we squash accounts in a slot that is still within an epoch of a hash calculation's max slot, then
-        //  we could calculate the wrong rent_epoch and slot for an individual account and thus the wrong overall accounts hash.
-        // So, only squash accounts in slots that are more than 1 epoch older than the last hash calculation.
-        // Subsequent hash calculations should be a higher slot.
-        let mut old_slots =
-            self.get_roots_less_than(self.get_accounts_hash_complete_one_epoch_old());
+        let mut reference_slot = self.get_accounts_hash_complete_one_epoch_old();
+        if let Some(offset) = self.ancient_append_vec_offset {
+            reference_slot = reference_slot.saturating_add(offset);
+        }
+        let mut old_slots = self.get_roots_less_than(reference_slot);
         old_slots.sort_unstable();
         old_slots
     }
@@ -4299,7 +4302,7 @@ impl AccountsDb {
     /// get a sorted list of slots older than an epoch
     /// squash those slots into ancient append vecs
     fn shrink_ancient_slots(&self) {
-        if !self.ancient_append_vecs {
+        if self.ancient_append_vec_offset.is_none() {
             return;
         }
 
@@ -7141,19 +7144,21 @@ impl AccountsDb {
         }
     }
 
-    /// if ancient append vecs are enabled, return a slot one epoch old from 'max_slot_inclusive'
+    /// if ancient append vecs are enabled, return a slot 'max_slot_inclusive' - (slots_per_epoch - `self.ancient_append_vec_offset`)
     /// otherwise, return 0
     fn get_one_epoch_old_slot_for_hash_calc_scan(
         &self,
         max_slot_inclusive: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Slot {
-        if self.ancient_append_vecs {
+        if let Some(offset) = self.ancient_append_vec_offset {
             // we are going to use a fixed slots per epoch here.
             // We are mainly interested in the network at steady state.
             let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
             // For performance, this is required when ancient appendvecs are enabled
-            max_slot_inclusive.saturating_sub(slots_in_epoch)
+            max_slot_inclusive
+                .saturating_sub(slots_in_epoch)
+                .saturating_add(offset)
         } else {
             // This causes the entire range to be chunked together, treating older append vecs just like new ones.
             // This performs well if there are many old append vecs that haven't been cleaned yet.
@@ -16798,7 +16803,7 @@ pub mod tests {
             db.get_one_epoch_old_slot_for_hash_calc_scan(slot + offset, &config),
             0
         );
-        db.ancient_append_vecs = true;
+        db.ancient_append_vec_offset = Some(0);
         assert_eq!(
             db.get_one_epoch_old_slot_for_hash_calc_scan(slot, &config),
             0
