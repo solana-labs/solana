@@ -4816,6 +4816,7 @@ dependencies = [
 name = "solana-program"
 version = "1.15.0"
 dependencies = [
+ "array-bytes",
  "base64 0.13.0",
  "bincode",
  "bitflags",
