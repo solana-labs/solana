@@ -1,8 +1,6 @@
 //! Data shared between program runtime and built-in programs as well as SBF programs
 #![deny(clippy::indexing_slicing)]
 
-#[cfg(target_os = "solana")]
-use crate::instruction::AccountPropertyUpdate;
 #[cfg(not(target_os = "solana"))]
 use crate::{
     account::WritableAccount,
@@ -23,59 +21,6 @@ use {
         pin::Pin,
     },
 };
-
-/// For addressing (nested) properties of the TransactionContext
-#[repr(u16)]
-pub enum TransactionContextAttribute {
-    /// TransactionContext -> &[u8]
-    ReturnData,
-    /// TransactionContext -> u128
-    AccountsResizeDelta,
-    /// TransactionContext -> u16
-    TransactionAccountCount,
-    /// TransactionContext -> &[TransactionAccount] -> Pubkey
-    TransactionAccountKey,
-    /// TransactionContext -> &[TransactionAccount] -> Pubkey
-    TransactionAccountOwner,
-    /// TransactionContext -> &[TransactionAccount] -> u64
-    TransactionAccountLamports,
-    /// TransactionContext -> &[TransactionAccount] -> &[u8]
-    TransactionAccountData,
-    /// TransactionContext -> &[TransactionAccount] -> bool
-    TransactionAccountIsExecutable,
-    /// TransactionContext -> &[TransactionAccount] -> u64
-    TransactionAccountRentEpoch,
-    /// TransactionContext -> &[TransactionAccount] -> bool
-    TransactionAccountTouchedFlag,
-    /// TransactionContext -> u8
-    InstructionStackHeight,
-    /// TransactionContext -> u8
-    InstructionStackCapacity,
-    /// TransactionContext -> &[u8]
-    InstructionStackEntry,
-    /// TransactionContext -> u16
-    InstructionTraceLength,
-    /// TransactionContext -> u16
-    InstructionTraceCapacity,
-    /// TransactionContext -> &[InstructionContext] -> u8
-    InstructionTraceNestingLevel,
-    /// TransactionContext -> &[InstructionContext] -> u128
-    InstructionTraceLamportSum,
-    /// TransactionContext -> &[InstructionContext] -> &[u8]
-    InstructionTraceInstructionData,
-    /// TransactionContext -> &[InstructionContext] -> &[u16]
-    InstructionTraceProgramAccount,
-    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
-    InstructionAccountIndexInTransaction,
-    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
-    InstructionAccountIndexInCaller,
-    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
-    InstructionAccountIndexInCallee,
-    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> bool
-    InstructionAccountIsSigner,
-    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> bool
-    InstructionAccountIsWritable,
-}
 
 /// Index of an account inside of the TransactionContext or an InstructionContext.
 pub type IndexOfAccount = u16;
@@ -752,16 +697,6 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
-    #[cfg(target_os = "solana")]
-    pub fn set_owner<'b>(&mut self, pubkey: &'b [u8]) -> AccountPropertyUpdate<'b> {
-        AccountPropertyUpdate {
-            instruction_account_index: self.index_in_instruction as u16,
-            attribute: TransactionContextAttribute::TransactionAccountOwner as u16,
-            value: pubkey.as_ptr() as u64,
-            _marker: std::marker::PhantomData::default(),
-        }
-    }
-
     /// Returns the number of lamports of this account (transaction wide)
     #[inline]
     pub fn get_lamports(&self) -> u64 {
@@ -795,16 +730,6 @@ impl<'a> BorrowedAccount<'a> {
         }
         self.account.set_lamports(lamports);
         Ok(())
-    }
-
-    #[cfg(target_os = "solana")]
-    pub fn set_lamports(&mut self, lamports: u64) -> AccountPropertyUpdate<'static> {
-        AccountPropertyUpdate {
-            instruction_account_index: self.index_in_instruction as u16,
-            attribute: TransactionContextAttribute::TransactionAccountLamports as u16,
-            value: lamports,
-            _marker: std::marker::PhantomData::default(),
-        }
     }
 
     /// Adds lamports to this account (transaction wide)
@@ -892,16 +817,6 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
-    #[cfg(target_os = "solana")]
-    pub fn set_data_length(&mut self, new_length: usize) -> AccountPropertyUpdate<'static> {
-        AccountPropertyUpdate {
-            instruction_account_index: self.index_in_instruction as u16,
-            attribute: TransactionContextAttribute::TransactionAccountData as u16,
-            value: new_length as u64,
-            _marker: std::marker::PhantomData::default(),
-        }
-    }
-
     /// Appends all elements in a slice to the account
     #[cfg(not(target_os = "solana"))]
     pub fn extend_from_slice(&mut self, data: &[u8]) -> Result<(), InstructionError> {
@@ -974,16 +889,6 @@ impl<'a> BorrowedAccount<'a> {
         }
         self.account.set_executable(is_executable);
         Ok(())
-    }
-
-    #[cfg(target_os = "solana")]
-    pub fn set_executable(&mut self, is_executable: bool) -> AccountPropertyUpdate<'static> {
-        AccountPropertyUpdate {
-            instruction_account_index: self.index_in_instruction as u16,
-            attribute: TransactionContextAttribute::TransactionAccountIsExecutable as u16,
-            value: is_executable as u64,
-            _marker: std::marker::PhantomData::default(),
-        }
     }
 
     /// Returns the rent epoch of this account (transaction wide)

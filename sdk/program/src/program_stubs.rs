@@ -4,11 +4,8 @@
 
 use {
     crate::{
-        account_info::AccountInfo,
-        entrypoint::ProgramResult,
-        instruction::{AccountPropertyUpdate, Instruction},
-        program_error::UNSUPPORTED_SYSVAR,
-        pubkey::Pubkey,
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
     itertools::Itertools,
     std::sync::{Arc, RwLock},
@@ -100,7 +97,6 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_stack_height(&self) -> u64 {
         0
     }
-    fn sol_set_account_properties(&self, _updates: &[AccountPropertyUpdate]) {}
 }
 
 struct DefaultSyscallStubs {}
@@ -196,13 +192,6 @@ pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Inst
 
 pub(crate) fn sol_get_stack_height() -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
-}
-
-pub(crate) fn sol_set_account_properties(updates: &[AccountPropertyUpdate]) {
-    SYSCALL_STUBS
-        .read()
-        .unwrap()
-        .sol_set_account_properties(updates)
 }
 
 /// Check that two regions do not overlap.
