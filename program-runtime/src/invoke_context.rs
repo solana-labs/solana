@@ -11,6 +11,7 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
+    solana_rbpf::vm::ContextObject,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -85,6 +86,17 @@ impl ComputeMeter {
     /// Construct a new one with the given remaining units
     pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self { remaining }))
+    }
+}
+
+impl<'a> ContextObject for InvokeContext<'a> {
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore error, Ebpf will bail if exceeded
+        let _ = self.compute_meter.borrow_mut().consume(amount);
+    }
+    fn get_remaining(&self) -> u64 {
+        self.compute_meter.borrow().get_remaining()
     }
 }
 

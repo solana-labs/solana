@@ -4,7 +4,6 @@ use {
     serde_json::Result,
     solana_bpf_loader_program::{
         create_vm, serialization::serialize_parameters, syscalls::register_syscalls,
-        ThisInstructionMeter,
     },
     solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
     solana_rbpf::{
@@ -242,8 +241,6 @@ native machine code before execting it in the virtual machine.",
         true, // should_cap_ix_accounts
     )
     .unwrap();
-    let compute_meter = invoke_context.get_compute_meter();
-    let mut instruction_meter = ThisInstructionMeter { compute_meter };
 
     let program = matches.value_of("PROGRAM").unwrap();
     let mut file = File::open(Path::new(program)).unwrap();
@@ -254,10 +251,10 @@ native machine code before execting it in the virtual machine.",
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&invoke_context.feature_set, true).unwrap();
     let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<ThisInstructionMeter>::from_elf(&contents, config, syscall_registry)
+        Executable::<InvokeContext>::from_elf(&contents, config, syscall_registry)
             .map_err(|err| format!("Executable constructor failed: {:?}", err))
     } else {
-        assemble::<ThisInstructionMeter>(
+        assemble::<InvokeContext>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
             config,
             syscall_registry,
@@ -266,7 +263,7 @@ native machine code before execting it in the virtual machine.",
     .unwrap();
 
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| format!("Executable verifier failed: {:?}", err))
             .unwrap();
 
@@ -299,23 +296,23 @@ native machine code before execting it in the virtual machine.",
     .unwrap();
     let start_time = Instant::now();
     let result = if matches.value_of("use").unwrap() == "interpreter" {
-        vm.execute_program_interpreted(&mut instruction_meter)
+        vm.execute_program_interpreted()
     } else {
-        vm.execute_program_jit(&mut instruction_meter)
+        vm.execute_program_jit()
     };
     let duration = Instant::now() - start_time;
 
     if matches.is_present("trace") {
         eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        vm.get_program_environment()
+        vm.program_environment
             .tracer
             .write(&mut file, analysis.analyze())
             .unwrap();
     }
     if matches.is_present("profile") {
         eprintln!("Profile is saved in profile.dot");
-        let tracer = &vm.get_program_environment().tracer;
+        let tracer = &vm.program_environment.tracer;
         let analysis = analysis.analyze();
         let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();
@@ -374,20 +371,20 @@ impl Debug for Output {
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
-struct LazyAnalysis<'a> {
-    analysis: Option<Analysis<'a, ThisInstructionMeter>>,
-    executable: &'a Executable<ThisInstructionMeter>,
+struct LazyAnalysis<'a, 'b> {
+    analysis: Option<Analysis<'a, InvokeContext<'b>>>,
+    executable: &'a Executable<InvokeContext<'b>>,
 }
 
-impl<'a> LazyAnalysis<'a> {
-    fn new(executable: &'a Executable<ThisInstructionMeter>) -> Self {
+impl<'a, 'b> LazyAnalysis<'a, 'b> {
+    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
         Self {
             analysis: None,
             executable,
         }
     }
 
-    fn analyze(&mut self) -> &Analysis<ThisInstructionMeter> {
+    fn analyze(&mut self) -> &Analysis<InvokeContext<'b>> {
         if let Some(ref analysis) = self.analysis {
             return analysis;
         }

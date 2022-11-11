@@ -22,7 +22,7 @@ use {
         executor::{CreateMetrics, Executor},
         executor_cache::TransactionExecutorCache,
         ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, InvokeContext},
+        invoke_context::InvokeContext,
         log_collector::LogCollector,
         stable_log,
         sysvar_cache::get_sysvar_with_account_check,
@@ -35,7 +35,7 @@ use {
         memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter, ProgramResult, VerifiedExecutable},
+        vm::{Config, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -168,18 +168,17 @@ fn create_executor_from_bytes(
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut load_elf_time = Measure::start("load_elf_time");
-    let executable =
-        Executable::<ThisInstructionMeter>::from_elf(programdata, config, syscall_registry)
-            .map_err(|err| {
-                ic_logger_msg!(log_collector, "{}", err);
-                InstructionError::InvalidAccountData
-            });
+    let executable = Executable::<InvokeContext>::from_elf(programdata, config, syscall_registry)
+        .map_err(|err| {
+            ic_logger_msg!(log_collector, "{}", err);
+            InstructionError::InvalidAccountData
+        });
     load_elf_time.stop();
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| {
                 ic_logger_msg!(log_collector, "{}", err);
                 InstructionError::InvalidAccountData
@@ -316,11 +315,11 @@ fn check_loader_id(id: &Pubkey) -> bool {
 
 /// Create the SBF virtual machine
 pub fn create_vm<'a, 'b>(
-    program: &'a VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
+    program: &'a VerifiedExecutable<RequisiteVerifier, InvokeContext<'b>>,
     regions: Vec<MemoryRegion>,
     orig_account_lengths: Vec<usize>,
     invoke_context: &'a mut InvokeContext<'b>,
-) -> Result<EbpfVm<'a, RequisiteVerifier, ThisInstructionMeter>, EbpfError> {
+) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
     let _ = invoke_context.get_compute_meter().borrow_mut().consume(
@@ -331,7 +330,6 @@ pub fn create_vm<'a, 'b>(
     let mut heap =
         AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
 
-    let vm = EbpfVm::new(program, invoke_context, heap.as_slice_mut(), regions)?;
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -345,6 +343,8 @@ pub fn create_vm<'a, 'b>(
     let check_size = invoke_context
         .feature_set
         .is_active(&check_slice_translation_size::id());
+    let heap_slice =
+        unsafe { std::slice::from_raw_parts_mut(heap.as_slice_mut().as_mut_ptr(), heap.len()) };
     invoke_context
         .set_syscall_context(
             check_aligned,
@@ -353,6 +353,7 @@ pub fn create_vm<'a, 'b>(
             Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START))),
         )
         .map_err(SyscallError::InstructionError)?;
+    let vm = EbpfVm::new(program, invoke_context, heap_slice, regions)?;
     Ok(vm)
 }
 
@@ -1366,29 +1367,9 @@ fn process_loader_instruction(
     Ok(())
 }
 
-/// Passed to the VM to enforce the compute budget
-pub struct ThisInstructionMeter {
-    pub compute_meter: Rc<RefCell<ComputeMeter>>,
-}
-impl ThisInstructionMeter {
-    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
-        Self { compute_meter }
-    }
-}
-impl InstructionMeter for ThisInstructionMeter {
-    fn consume(&mut self, amount: u64) {
-        // 1 to 1 instruction to compute unit mapping
-        // ignore error, Ebpf will bail if exceeded
-        let _ = self.compute_meter.borrow_mut().consume(amount);
-    }
-    fn get_remaining(&self) -> u64 {
-        self.compute_meter.borrow().get_remaining()
-    }
-}
-
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
-    verified_executable: VerifiedExecutable<RequisiteVerifier, ThisInstructionMeter>,
+    verified_executable: VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
     use_jit: bool,
 }
 
@@ -1422,7 +1403,9 @@ impl Executor for BpfExecutor {
         let mut execute_time;
         let execution_result = {
             let mut vm = match create_vm(
-                &self.verified_executable,
+                // We dropped the lifetime tracking in the Executor by setting it to 'static,
+                // thus we need to reintroduce the correct lifetime of InvokeContext here again.
+                unsafe { std::mem::transmute(&self.verified_executable) },
                 regions,
                 account_lengths,
                 invoke_context,
@@ -1437,12 +1420,11 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let mut instruction_meter = ThisInstructionMeter::new(compute_meter.clone());
             let before = compute_meter.borrow().get_remaining();
             let result = if self.use_jit {
-                vm.execute_program_jit(&mut instruction_meter)
+                vm.execute_program_jit()
             } else {
-                vm.execute_program_interpreted(&mut instruction_meter)
+                vm.execute_program_interpreted()
             };
             let after = compute_meter.borrow().get_remaining();
             ic_logger_msg!(
@@ -1456,7 +1438,7 @@ impl Executor for BpfExecutor {
                 let mut trace_buffer = Vec::<u8>::new();
                 let analysis =
                     Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
-                vm.get_program_environment()
+                vm.program_environment
                     .tracer
                     .write(&mut trace_buffer, &analysis)
                     .unwrap();
@@ -1558,7 +1540,11 @@ mod tests {
         super::*,
         rand::Rng,
         solana_program_runtime::invoke_context::mock_process_instruction,
-        solana_rbpf::{ebpf::MM_INPUT_START, verifier::Verifier, vm::SyscallRegistry},
+        solana_rbpf::{
+            ebpf::MM_INPUT_START,
+            verifier::Verifier,
+            vm::{ContextObject, FunctionRegistry, SyscallRegistry},
+        },
         solana_sdk::{
             account::{
                 create_account_shared_data_for_test as create_account_for_test, AccountSharedData,
@@ -1574,10 +1560,10 @@ mod tests {
         std::{fs::File, io::Read, ops::Range},
     };
 
-    struct TestInstructionMeter {
+    struct TestContextObject {
         remaining: u64,
     }
-    impl InstructionMeter for TestInstructionMeter {
+    impl ContextObject for TestContextObject {
         fn consume(&mut self, amount: u64) {
             self.remaining = self.remaining.saturating_sub(amount);
         }
@@ -1621,7 +1607,11 @@ mod tests {
 
     struct TautologyVerifier {}
     impl Verifier for TautologyVerifier {
-        fn verify(_prog: &[u8], _config: &Config) -> std::result::Result<(), VerifierError> {
+        fn verify(
+            _prog: &[u8],
+            _config: &Config,
+            _function_registry: &FunctionRegistry,
+        ) -> std::result::Result<(), VerifierError> {
             Ok(())
         }
     }
@@ -1647,7 +1637,7 @@ mod tests {
             "entrypoint",
         )
         .unwrap();
-        let executable = Executable::<TestInstructionMeter>::from_text_bytes(
+        let executable = Executable::<TestContextObject>::from_text_bytes(
             program,
             config,
             syscall_registry,
@@ -1655,16 +1645,18 @@ mod tests {
         )
         .unwrap();
         let verified_executable =
-            VerifiedExecutable::<TautologyVerifier, TestInstructionMeter>::from_executable(
-                executable,
-            )
-            .unwrap();
+            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(executable)
+                .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
-        let mut vm =
-            EbpfVm::new(&verified_executable, &mut (), &mut [], vec![input_region]).unwrap();
-        let mut instruction_meter = TestInstructionMeter { remaining: 10 };
-        vm.execute_program_interpreted(&mut instruction_meter)
-            .unwrap();
+        let mut context_object = TestContextObject { remaining: 10 };
+        let mut vm = EbpfVm::new(
+            &verified_executable,
+            &mut context_object,
+            &mut [],
+            vec![input_region],
+        )
+        .unwrap();
+        vm.execute_program_interpreted().unwrap();
     }
 
     #[test]
@@ -1673,7 +1665,7 @@ mod tests {
         let prog = &[
             0x18, 0x00, 0x00, 0x00, 0x88, 0x77, 0x66, 0x55, // first half of lddw
         ];
-        RequisiteVerifier::verify(prog, &Config::default()).unwrap();
+        RequisiteVerifier::verify(prog, &Config::default(), &FunctionRegistry::default()).unwrap();
     }
 
     #[test]
