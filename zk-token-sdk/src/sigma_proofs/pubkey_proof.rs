@@ -136,8 +136,10 @@ impl PubkeySigmaProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+    use {
+        super::*,
+        solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    };
 
     #[test]
     fn test_pubkey_proof_correctness() {
