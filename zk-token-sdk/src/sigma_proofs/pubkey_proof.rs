@@ -136,11 +136,26 @@ impl PubkeySigmaProof {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {
+        super::*,
+        solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    };
 
     #[test]
     fn test_pubkey_proof_correctness() {
+        // random ElGamal keypair
         let keypair = ElGamalKeypair::new_rand();
+
+        let mut prover_transcript = Transcript::new(b"test");
+        let mut verifier_transcript = Transcript::new(b"test");
+
+        let proof = PubkeySigmaProof::new(&keypair, &mut prover_transcript);
+        assert!(proof
+            .verify(&keypair.public, &mut verifier_transcript)
+            .is_ok());
+
+        // derived ElGamal keypair
+        let keypair = ElGamalKeypair::new(&Keypair::new(), &Pubkey::default()).unwrap();
 
         let mut prover_transcript = Transcript::new(b"test");
         let mut verifier_transcript = Transcript::new(b"test");
