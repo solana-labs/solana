@@ -4429,7 +4429,13 @@ impl AccountsDb {
 
             // randomly shrink ancient slots
             // this exercises the ancient shrink code more often
-            let is_candidate = self.is_candidate_for_shrink(storage, true);
+            let written_bytes = storage.written_bytes();
+            let is_candidate = if written_bytes > 0 {
+                let alive_ratio = (storage.alive_bytes() as u64) * 100 / written_bytes;
+                alive_ratio < 90
+            } else {
+                false
+            };
             if is_candidate || (can_randomly_shrink && thread_rng().gen_range(0, 100) == 0) {
                 // we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate the dead accounts
