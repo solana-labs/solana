@@ -13,7 +13,9 @@ use {
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
-        fmt, ptr,
+        fmt,
+        mem::MaybeUninit,
+        ptr,
         rc::Rc,
         sync::Arc,
     },
@@ -599,6 +601,10 @@ impl AccountSharedData {
 
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = Arc::new(data);
+    }
+
+    pub fn spare_data_capacity_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        self.data_mut().spare_capacity_mut()
     }
 
     pub fn new(lamports: u64, space: usize, owner: &Pubkey) -> Self {

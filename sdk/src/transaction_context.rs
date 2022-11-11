@@ -13,6 +13,7 @@ use {
         },
     },
     solana_program::entrypoint::MAX_PERMITTED_DATA_INCREASE,
+    std::mem::MaybeUninit,
 };
 use {
     crate::{
@@ -787,6 +788,16 @@ impl<'a> BorrowedAccount<'a> {
         self.touch()?;
         self.make_data_mut();
         Ok(self.account.data_as_mut_slice())
+    }
+
+    /// Returns the spare capacity of the vector backing the account data.
+    ///
+    /// This method should only ever be used during CPI, where after a shrinking
+    /// realloc we want to zero the spare capacity.
+    #[cfg(not(target_os = "solana"))]
+    pub fn spare_data_capacity_mut(&mut self) -> Result<&mut [MaybeUninit<u8>], InstructionError> {
+        debug_assert!(!self.account.is_shared());
+        Ok(self.account.spare_data_capacity_mut())
     }
 
     /// Overwrites the account data and size (transaction wide).

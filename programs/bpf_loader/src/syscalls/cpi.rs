@@ -10,7 +10,7 @@ use {
         },
         transaction_context::BorrowedAccount,
     },
-    std::{mem, slice},
+    std::{mem, ptr, slice},
 };
 
 /// Host side representation of AccountInfo or SolAccountInfo passed to the CPI syscall.
@@ -1141,9 +1141,7 @@ fn update_caller_account(
         // invalid address.
         let min_capacity = caller_account.original_data_len;
         if callee_account.capacity() < min_capacity {
-            callee_account
-                .reserve(min_capacity.saturating_sub(callee_account.capacity()))
-                .map_err(SyscallError::InstructionError)?;
+            callee_account.reserve(min_capacity.saturating_sub(callee_account.capacity()))?
         }
 
         // replace the region in case the allocation changed
@@ -1189,14 +1187,17 @@ fn update_caller_account(
         if post_len < prev_len {
             if direct_mapping {
                 if post_len < caller_account.original_data_len {
-                    // zero the spare capacity in the account data
-                    let spare_capacity = unsafe {
-                        slice::from_raw_parts_mut(
-                            callee_account.get_data_mut()?.as_mut_ptr().add(post_len),
-                            caller_account.original_data_len.saturating_sub(post_len),
-                        )
-                    };
-                    spare_capacity.fill(0);
+                    // zero the spare capacity in the account data. We only need
+                    // to zero up to the original data length, everything else
+                    // is not accessible from the vm anyway.
+                    let spare_len = caller_account.original_data_len.saturating_sub(post_len);
+                    let dst = callee_account
+                        .spare_data_capacity_mut()?
+                        .get_mut(..spare_len)
+                        .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
+                        .as_mut_ptr();
+                    // Safety: we check bounds above
+                    unsafe { ptr::write_bytes(dst, 0, spare_len) };
                 }
 
                 // zero the spare capacity in the realloc padding
@@ -1289,6 +1290,7 @@ mod tests {
             clock::Epoch,
             feature_set::bpf_account_data_direct_mapping,
             instruction::Instruction,
+            system_program,
             transaction_context::TransactionAccount,
         },
         std::{
@@ -1335,6 +1337,18 @@ mod tests {
                 .configure(program_accounts, &instruction_accounts, instruction_data);
             $invoke_context.push().unwrap();
         };
+    }
+
+    macro_rules! borrow_instruction_account {
+        ($invoke_context:expr, $index:expr) => {{
+            let instruction_context = $invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap();
+            instruction_context
+                .try_borrow_instruction_account($invoke_context.transaction_context, $index)
+                .unwrap()
+        }};
     }
 
     #[test]
@@ -1478,11 +1492,6 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account = MockCallerAccount::new(
             1234,
             *account.owner(),
@@ -1500,9 +1509,7 @@ mod tests {
 
         let mut caller_account = mock_caller_account.caller_account();
 
-        let mut callee_account = instruction_context
-            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-            .unwrap();
+        let mut callee_account = borrow_instruction_account!(invoke_context, 0);
 
         callee_account.set_lamports(42).unwrap();
         callee_account
@@ -1539,11 +1546,6 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account = MockCallerAccount::new(
             account.lamports(),
             *account.owner(),
@@ -1568,9 +1570,7 @@ mod tests {
         let serialized_len = || unsafe { *len_ptr.cast::<u64>() as usize };
         let mut caller_account = mock_caller_account.caller_account();
 
-        let mut callee_account = instruction_context
-            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-            .unwrap();
+        let mut callee_account = borrow_instruction_account!(invoke_context, 0);
 
         for (new_value, expected_realloc_size) in [
             (b"foo".to_vec(), MAX_PERMITTED_DATA_INCREASE + 3),
@@ -1632,18 +1632,23 @@ mod tests {
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc,
         ));
-    }
 
-    macro_rules! borrow_instruction_account {
-        ($invoke_context:expr, $index:expr) => {{
-            let instruction_context = $invoke_context
-                .transaction_context
-                .get_current_instruction_context()
-                .unwrap();
-            instruction_context
-                .try_borrow_instruction_account($invoke_context.transaction_context, $index)
-                .unwrap()
-        }};
+        // close the account
+        callee_account.set_data_length(0).unwrap();
+        callee_account
+            .set_owner(system_program::id().as_ref())
+            .unwrap();
+        update_caller_account(
+            &invoke_context,
+            &mut memory_mapping,
+            false,
+            &mut caller_account,
+            &mut callee_account,
+            false,
+        )
+        .unwrap();
+        let data_len = callee_account.get_data().len();
+        assert_eq!(data_len, 0);
     }
 
     #[test]
@@ -1661,11 +1666,6 @@ mod tests {
             &[0],
             &[1]
         );
-
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
 
         let mut mock_caller_account = MockCallerAccount::new(
             account.lamports(),
@@ -1691,9 +1691,7 @@ mod tests {
         let serialized_len = || unsafe { *len_ptr.cast::<u64>() as usize };
         let mut caller_account = mock_caller_account.caller_account();
 
-        let mut callee_account = instruction_context
-            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-            .unwrap();
+        let mut callee_account = borrow_instruction_account!(invoke_context, 0);
 
         for (new_value, expected_realloc_used) in [
             (b"foobazbad".to_vec(), 3), // > original_data_len, writes into realloc
@@ -1784,21 +1782,39 @@ mod tests {
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc
         ));
+
+        // close the account
+        callee_account.set_data_length(0).unwrap();
+        callee_account
+            .set_owner(system_program::id().as_ref())
+            .unwrap();
+        update_caller_account(
+            &invoke_context,
+            &mut memory_mapping,
+            false,
+            &mut caller_account,
+            &mut callee_account,
+            true,
+        )
+        .unwrap();
+        let data_len = callee_account.get_data().len();
+        assert_eq!(data_len, 0);
     }
 
     #[test]
     fn test_update_caller_account_data_capacity_direct_mapping() {
-        let transaction_accounts = one_writable_instruction_account(b"foobar".to_vec());
+        let transaction_accounts =
+            transaction_with_one_writable_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
-
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let mut mock_caller_account = MockCallerAccount::new(
             account.lamports(),
@@ -1813,7 +1829,7 @@ mod tests {
             ..Config::default()
         };
         let mut memory_mapping =
-            MemoryMapping::new(mock_caller_account.regions.clone(), &config).unwrap();
+            MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
 
@@ -1826,9 +1842,7 @@ mod tests {
             account.set_data(b"foo".to_vec());
         }
 
-        let mut callee_account = instruction_context
-            .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-            .unwrap();
+        let mut callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.capacity(), 3);
 
         update_caller_account(
@@ -1928,6 +1942,23 @@ mod tests {
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.get_data(), caller_account.serialized_data);
+
+        // close the account
+        let mut data = Vec::new();
+        caller_account.serialized_data = &mut data;
+        *caller_account.ref_to_len_in_vm = 0;
+        let mut owner = system_program::id();
+        caller_account.owner = &mut owner;
+        update_callee_account(
+            &invoke_context,
+            false,
+            &caller_account,
+            callee_account,
+            false,
+        )
+        .unwrap();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
+        assert_eq!(callee_account.get_data(), b"");
     }
 
     #[test]
@@ -1945,11 +1976,6 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account = MockCallerAccount::new(
             1234,
             *account.owner(),
@@ -1960,12 +1986,7 @@ mod tests {
 
         let mut caller_account = mock_caller_account.caller_account();
 
-        let get_callee = || {
-            instruction_context
-                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-                .unwrap()
-        };
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         caller_account.serialized_data[0] = b'b';
         assert!(matches!(
@@ -1976,9 +1997,7 @@ mod tests {
                 callee_account,
                 false,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::ExternalAccountDataModified)
-            )
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::ExternalAccountDataModified
         ));
 
         // without direct mapping
@@ -1986,7 +2005,7 @@ mod tests {
         *caller_account.ref_to_len_in_vm = data.len() as u64;
         caller_account.serialized_data = &mut data;
 
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert!(matches!(
             update_callee_account(
                 &invoke_context,
@@ -1995,9 +2014,7 @@ mod tests {
                 callee_account,
                 false,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::AccountDataSizeChanged)
-            )
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::AccountDataSizeChanged
         ));
 
         // with direct mapping
@@ -2005,7 +2022,7 @@ mod tests {
         *caller_account.ref_to_len_in_vm = 9;
         caller_account.serialized_data = &mut data;
 
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert!(matches!(
             update_callee_account(
                 &invoke_context,
@@ -2014,9 +2031,7 @@ mod tests {
                 callee_account,
                 true,
             ),
-            Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
-                SyscallError::InstructionError(InstructionError::AccountDataSizeChanged)
-            )
+            Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::AccountDataSizeChanged
         ));
     }
 
@@ -2035,11 +2050,6 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account = MockCallerAccount::new(
             1234,
             *account.owner(),
@@ -2050,12 +2060,7 @@ mod tests {
 
         let mut caller_account = mock_caller_account.caller_account();
 
-        let get_callee = || {
-            instruction_context
-                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-                .unwrap()
-        };
-        let mut callee_account = get_callee();
+        let mut callee_account = borrow_instruction_account!(invoke_context, 0);
 
         // this is done when a writable account is mapped, and it ensures
         // through make_data_mut() that the account is made writable and resized
@@ -2079,9 +2084,26 @@ mod tests {
                 true,
             )
             .unwrap();
-            callee_account = get_callee();
+            callee_account = borrow_instruction_account!(invoke_context, 0);
             assert_eq!(callee_account.get_data(), expected);
         }
+
+        // close the account
+        let mut data = Vec::new();
+        caller_account.serialized_data = &mut data;
+        *caller_account.ref_to_len_in_vm = 0;
+        let mut owner = system_program::id();
+        caller_account.owner = &mut owner;
+        update_callee_account(
+            &invoke_context,
+            false,
+            &caller_account,
+            callee_account,
+            true,
+        )
+        .unwrap();
+        callee_account = borrow_instruction_account!(invoke_context, 0);
+        assert_eq!(callee_account.get_data(), b"");
     }
 
     #[test]
