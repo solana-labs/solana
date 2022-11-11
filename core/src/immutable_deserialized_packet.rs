@@ -129,8 +129,12 @@ impl PartialOrd for ImmutableDeserializedPacket {
 }
 
 impl Ord for ImmutableDeserializedPacket {
+    /// Order by priority (higher first), then by compute_unit_limit (lower first)
     fn cmp(&self, other: &Self) -> Ordering {
-        self.priority().cmp(&other.priority())
+        match self.priority().cmp(&other.priority()) {
+            Ordering::Equal => other.compute_unit_limit().cmp(&self.compute_unit_limit()),
+            ordering => ordering,
+        }
     }
 }
 
@@ -154,6 +158,24 @@ mod tests {
         solana_sdk::{signature::Keypair, system_transaction},
     };
 
+    fn create_transfer_with_priority(cu_price: u64, cu_limit: u64) -> ImmutableDeserializedPacket {
+        let tx = system_transaction::transfer(
+            &Keypair::new(),
+            &solana_sdk::pubkey::new_rand(),
+            1,
+            Hash::new_unique(),
+        );
+        let packet = Packet::from_data(None, tx).unwrap();
+        ImmutableDeserializedPacket::new(
+            packet,
+            Some(TransactionPriorityDetails {
+                priority: cu_price,
+                compute_unit_limit: cu_limit,
+            }),
+        )
+        .unwrap()
+    }
+
     #[test]
     fn simple_deserialized_packet() {
         let tx = system_transaction::transfer(
@@ -166,5 +188,19 @@ mod tests {
         let deserialized_packet = ImmutableDeserializedPacket::new(packet, None);
 
         assert!(matches!(deserialized_packet, Ok(_)));
+    }
+
+    #[test]
+    fn priority_ordering() {
+        let packet1 = create_transfer_with_priority(1, 2_000);
+        let packet2 = create_transfer_with_priority(2, 1_000);
+        assert!(packet2 > packet1);
+    }
+
+    #[test]
+    fn compute_unit_limit_ordering() {
+        let packet1 = create_transfer_with_priority(1, 2_000);
+        let packet2 = create_transfer_with_priority(1, 1_000);
+        assert!(packet2 > packet1);
     }
 }
