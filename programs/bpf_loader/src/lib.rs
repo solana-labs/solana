@@ -16,6 +16,7 @@ use {
         syscalls::SyscallError,
     },
     log::{error, log_enabled, trace, Level::Trace},
+    solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -34,10 +35,7 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{
-            Config, EbpfVm, InstructionMeter, ProgramResult, TraceRecord, Tracer,
-            VerifiedExecutable,
-        },
+        vm::{Config, EbpfVm, InstructionMeter, ProgramResult, TraceRecord, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -51,6 +49,7 @@ use {
             error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
             reject_callx_r10, FeatureSet,
         },
+        hash::Hash,
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
@@ -69,7 +68,7 @@ use {
         cell::{RefCell, RefMut},
         fmt::Debug,
         rc::Rc,
-        sync::Arc,
+        sync::{Arc, RwLock},
     },
     thiserror::Error,
 };
@@ -1372,6 +1371,82 @@ fn process_loader_instruction(
     Ok(())
 }
 
+fn trace_bpf(
+    vm: &mut EbpfVm<RequisiteVerifier, ThisInstructionMeter>,
+    executable: &Executable<ThisInstructionMeter>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
+    blockhash: &Hash,
+    program_id: &Pubkey,
+) {
+    let mut bpf_tracer_plugins_guard_opt = bpf_tracer_plugin_manager
+        .as_ref()
+        .map(|manager| manager.write().unwrap());
+
+    let bpf_tracing_plugins = match bpf_tracer_plugins_guard_opt {
+        None => vec![],
+        Some(ref mut guard) => guard
+            .bpf_tracer_plugins()
+            .iter_mut()
+            .filter(|plugin| plugin.bpf_tracing_enabled())
+            .collect(),
+    };
+
+    if bpf_tracing_plugins.is_empty() && !log_enabled!(Trace) {
+        return;
+    }
+
+    let analysis = Analysis::from_executable(executable).unwrap();
+
+    if !bpf_tracing_plugins.is_empty() {
+        let trace: Vec<TraceRecord> = vm
+            .get_program_environment()
+            .tracer
+            .iter(&analysis)
+            .collect();
+
+        for plugin in bpf_tracing_plugins.into_iter() {
+            if let Err(err) = plugin.trace_bpf(program_id, blockhash, &trace) {
+                error!(
+                    "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
+                    plugin.name(),
+                    program_id,
+                    err
+                );
+            }
+        }
+    }
+
+    if log_enabled!(Trace) {
+        let mut trace_buffer = Vec::<u8>::new();
+        vm.get_program_environment()
+            .tracer
+            .write(&mut trace_buffer, &analysis)
+            .unwrap();
+        let trace_string = String::from_utf8(trace_buffer).unwrap();
+        trace!("SBF Program Instruction Trace:\n{}", trace_string);
+    }
+}
+
+/// Passed to the VM to enforce the compute budget
+pub struct ThisInstructionMeter {
+    pub compute_meter: Rc<RefCell<ComputeMeter>>,
+}
+impl ThisInstructionMeter {
+    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
+        Self { compute_meter }
+    }
+}
+impl InstructionMeter for ThisInstructionMeter {
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore error, Ebpf will bail if exceeded
+        let _ = self.compute_meter.borrow_mut().consume(amount);
+    }
+    fn get_remaining(&self) -> u64 {
+        self.compute_meter.borrow().get_remaining()
+    }
+}
+
 /// BPF Loader's Executor implementation
 pub struct BpfExecutor {
     verified_executable: VerifiedExecutable<RequisiteVerifier, InvokeContext<'static>>,
@@ -1437,54 +1512,16 @@ impl Executor for BpfExecutor {
                 compute_meter_prev
             );
 
-            let mut bpf_tracing_enabled = log_enabled!(Trace);
-            if !bpf_tracing_enabled {
-                if let Some(manager) = bpf_tracer_plugin_manager.as_ref() {
-                    for plugin in manager.write().unwrap().bpf_tracer_plugins() {
-                        if !plugin.bpf_tracing_enabled() {
-                            continue;
-                        }
-                        bpf_tracing_enabled = true;
-                        break;
-                    }
-                }
-            }
+            trace_bpf(
+                &mut vm,
+                self.verified_executable.get_executable(),
+                bpf_tracer_plugin_manager,
+                &blockhash,
+                &program_id,
+            );
 
-            if bpf_tracing_enabled {
-                let analysis =
-                    Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
-
-                let trace: Vec<TraceRecord> = vm
-                    .get_program_environment()
-                    .tracer
-                    .iter(&analysis)
-                    .collect();
-
-                if let Some(manager) = bpf_tracer_plugin_manager.as_ref() {
-                    for plugin in manager.write().unwrap().bpf_tracer_plugins() {
-                        if !(plugin.bpf_tracing_enabled()) {
-                            continue;
-                        }
-
-                        if let Err(err) = plugin.trace_bpf(&program_id, &blockhash, &trace) {
-                            error!(
-                                "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
-                                plugin.name(),
-                                program_id,
-                                err
-                            );
-                        }
-                    }
-                }
-
-                if log_enabled!(Trace) {
-                    let mut trace_buffer = Vec::<u8>::new();
-                    Tracer::print(&mut trace_buffer, trace.iter()).unwrap();
-                    let trace_string = String::from_utf8(trace_buffer).unwrap();
-                    trace!("SBF Program Instruction Trace:\n{}", trace_string);
-                }
-            }
             drop(vm);
+
             let (_returned_from_program_id, return_data) =
                 invoke_context.transaction_context.get_return_data();
             if !return_data.is_empty() {

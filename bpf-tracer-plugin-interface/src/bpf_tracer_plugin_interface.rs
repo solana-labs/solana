@@ -46,11 +46,17 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
     fn on_unload(&mut self) {}
 
     /// Check if the plugin is accepting BPF tracing.
+    ///
+    /// Note: This associated function is expected to return as soon as possible in order to
+    /// not affect validator's performance.
     fn bpf_tracing_enabled(&self) -> bool {
         true
     }
 
-    /// Called when BPF tracing is ready in `tracer` structure.
+    /// Called when BPF trace is ready.
+    ///
+    /// Note: This associated function is expected to return as soon as possible in order to
+    /// not affect validator's performance.
     fn trace_bpf<'a>(
         &mut self,
         program_id: &Pubkey,
