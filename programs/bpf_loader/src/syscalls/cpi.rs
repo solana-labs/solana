@@ -1226,17 +1226,7 @@ mod tests {
 
         let key = Pubkey::new_unique();
         let vm_addr = MM_INPUT_START;
-        let (_mem, region) = MockAccountInfo {
-            key,
-            is_signer: false,
-            is_writable: false,
-            lamports: account.lamports(),
-            data: account.data(),
-            owner: *account.owner(),
-            executable: account.executable(),
-            rent_epoch: account.rent_epoch(),
-        }
-        .into_region(vm_addr);
+        let (_mem, region) = MockAccountInfo::new(key, &account).into_region(vm_addr);
 
         let config = Config {
             aligned_memory_mapping: false,
@@ -1520,17 +1510,7 @@ mod tests {
             .unwrap();
 
         let vm_addr = MM_INPUT_START;
-        let (_mem, region) = MockAccountInfo {
-            key,
-            is_signer: false,
-            is_writable: false,
-            lamports: account.lamports(),
-            data: account.data(),
-            owner: *account.owner(),
-            executable: account.executable(),
-            rent_epoch: account.rent_epoch(),
-        }
-        .into_region(vm_addr);
+        let (_mem, region) = MockAccountInfo::new(key, &account).into_region(vm_addr);
 
         let config = Config {
             aligned_memory_mapping: false,
@@ -1741,9 +1721,9 @@ mod tests {
     }
 
     struct MockAccountInfo<'a> {
-        pub key: Pubkey,
-        pub is_signer: bool,
-        pub is_writable: bool,
+        key: Pubkey,
+        is_signer: bool,
+        is_writable: bool,
         lamports: u64,
         data: &'a [u8],
         owner: Pubkey,
@@ -1752,6 +1732,19 @@ mod tests {
     }
 
     impl<'a> MockAccountInfo<'a> {
+        fn new(key: Pubkey, account: &AccountSharedData) -> MockAccountInfo {
+            MockAccountInfo {
+                key,
+                is_signer: false,
+                is_writable: false,
+                lamports: account.lamports(),
+                data: account.data(),
+                owner: *account.owner(),
+                executable: account.executable(),
+                rent_epoch: account.rent_epoch(),
+            }
+        }
+
         fn into_region(self, vm_addr: u64) -> (Vec<u8>, MemoryRegion) {
             let size = mem::size_of::<AccountInfo>()
                 + mem::size_of::<Pubkey>() * 2
