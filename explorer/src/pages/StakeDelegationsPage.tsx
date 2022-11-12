@@ -7,6 +7,7 @@ import { Address } from "components/common/Address";
 import { LeaderSchedule, PublicKey } from "@solana/web3.js";
 
 import { useLeaderSchedule } from "providers/accounts/leader-schedule";
+import MapChart from "components/WorldMap";
 
 const PAGINATION_COUNT: number = 7;
 
@@ -26,6 +27,7 @@ export function StakeDelegationsPage() {
     return (
       <>
         <div>
+          <MapChart />
           <RenderCardSection
             title="Current Validators Data"
             cardData={voteAccounts.current}
@@ -38,7 +40,12 @@ export function StakeDelegationsPage() {
         </div>
       </>
     );
-  else return <LoadingCard message="Loading validators data" />;
+  else
+    return (
+      <div className="container">
+        <LoadingCard message="Loading validators data" />
+      </div>
+    );
 }
 interface rowData {
   activatedStake: number;
