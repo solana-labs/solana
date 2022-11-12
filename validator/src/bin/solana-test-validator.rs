@@ -156,7 +156,7 @@ fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .default_value(&default_faucet_port)
-                .validator(solana_validator::port_validator)
+                .validator(solana_validator::cli::port_validator)
                 .help("Enable the faucet on this port"),
         )
         .arg(
@@ -165,7 +165,7 @@ fn main() {
                 .value_name("PORT")
                 .takes_value(true)
                 .default_value(&default_rpc_port)
-                .validator(solana_validator::port_validator)
+                .validator(solana_validator::cli::port_validator)
                 .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
         )
         .arg(
@@ -256,7 +256,7 @@ fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF. Windows always disables JIT."),
+                .help("Disable the just-in-time compiler and instead use the interpreter for BPF. Windows always disables JIT."),
         )
         .arg(
             Arg::with_name("ticks_per_slot")
@@ -311,7 +311,7 @@ fn main() {
                 .long("dynamic-port-range")
                 .value_name("MIN_PORT-MAX_PORT")
                 .takes_value(true)
-                .validator(solana_validator::port_range_validator)
+                .validator(solana_validator::cli::port_range_validator)
                 .help(
                     "Range to use for dynamically assigned ports \
                     [default: 1024-65535]",
