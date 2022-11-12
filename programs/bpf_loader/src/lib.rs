@@ -1631,15 +1631,7 @@ mod tests {
         let mut input_mem = [0x00];
         let config = Config::default();
         let syscall_registry = SyscallRegistry::default();
-        let mut bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
-        solana_rbpf::elf::register_bpf_function(
-            &config,
-            &mut bpf_functions,
-            &syscall_registry,
-            0,
-            "entrypoint",
-        )
-        .unwrap();
+        let bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
         let executable = Executable::<TestContextObject>::from_text_bytes(
             program,
             config,
