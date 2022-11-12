@@ -4747,7 +4747,6 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "solana-measure",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-zk-token-sdk 1.15.0",
