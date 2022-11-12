@@ -1091,12 +1091,58 @@ mod tests {
         std::{cell::Cell, mem, ptr, slice},
     };
 
+    macro_rules! mock_invoke_context {
+        ($invoke_context:ident,
+         $transaction_context:ident,
+         $instruction_data:expr,
+         $transaction_accounts:expr,
+         $program_accounts:expr,
+         $instruction_accounts:expr) => {
+            let program_accounts = $program_accounts;
+            let instruction_data = $instruction_data;
+            let instruction_accounts = $instruction_accounts
+                .iter()
+                .enumerate()
+                .map(
+                    |(index_in_callee, index_in_transaction)| InstructionAccount {
+                        index_in_transaction: *index_in_transaction as IndexOfAccount,
+                        index_in_caller: *index_in_transaction as IndexOfAccount,
+                        index_in_callee: index_in_callee as IndexOfAccount,
+                        is_signer: false,
+                        is_writable: $transaction_accounts[*index_in_transaction as usize].2,
+                    },
+                )
+                .collect::<Vec<_>>();
+            let transaction_accounts = $transaction_accounts
+                .into_iter()
+                .map(|a| (a.0, a.1))
+                .collect::<Vec<TransactionAccount>>();
+
+            let program_accounts = program_accounts;
+            let mut $transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+
+            let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
+            $invoke_context
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(program_accounts, &instruction_accounts, instruction_data);
+            $invoke_context.push().unwrap();
+        };
+    }
+
     #[test]
     fn test_translate_instruction() {
         let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let mut invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let program_id = Pubkey::new_unique();
         let accounts = vec![AccountMeta {
@@ -1133,9 +1179,14 @@ mod tests {
     #[test]
     fn test_translate_signers() {
         let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let program_id = Pubkey::new_unique();
         let (derived_key, bump_seed) = Pubkey::find_program_address(&[b"foo"], &program_id);
@@ -1164,9 +1215,14 @@ mod tests {
     fn test_caller_account_from_account_info() {
         let transaction_accounts = transaction_with_one_instruction_account(b"foo".to_vec());
         let account = transaction_accounts[1].1.clone();
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let key = Pubkey::new_unique();
         let vm_addr = MM_INPUT_START;
@@ -1214,10 +1270,14 @@ mod tests {
     fn test_update_caller_account_lamports_owner() {
         let transaction_accounts = transaction_with_one_instruction_account(vec![]);
         let account = transaction_accounts[1].1.clone();
-
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let instruction_context = invoke_context
             .transaction_context
@@ -1263,9 +1323,14 @@ mod tests {
         let account = transaction_accounts[1].1.clone();
         let original_data_len = account.data().len();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let instruction_context = invoke_context
             .transaction_context
@@ -1359,9 +1424,14 @@ mod tests {
         let transaction_accounts = transaction_with_one_instruction_account(vec![]);
         let account = transaction_accounts[1].1.clone();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let instruction_context = invoke_context
             .transaction_context
@@ -1395,9 +1465,14 @@ mod tests {
         let transaction_accounts = transaction_with_one_instruction_account(b"foobar".to_vec());
         let account = transaction_accounts[1].1.clone();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1]);
-        let invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1]
+        );
 
         let instruction_context = invoke_context
             .transaction_context
@@ -1432,9 +1507,14 @@ mod tests {
         let key = transaction_accounts[1].0;
         let original_data_len = account.data().len();
 
-        let mut invoke_context_builder =
-            MockInvokeContext::new(transaction_accounts, *b"instruction data", [0], &[1, 1]);
-        let mut invoke_context = invoke_context_builder.invoke_context();
+        mock_invoke_context!(
+            invoke_context,
+            transaction_context,
+            b"instruction data",
+            transaction_accounts,
+            &[0],
+            &[1, 1]
+        );
         invoke_context
             .set_syscall_context(
                 true,
@@ -1498,67 +1578,6 @@ mod tests {
     }
 
     pub type TestTransactionAccount = (Pubkey, AccountSharedData, bool);
-
-    struct MockInvokeContext {
-        transaction_context: TransactionContext,
-        program_accounts: Vec<IndexOfAccount>,
-        instruction_accounts: Vec<InstructionAccount>,
-        instruction_data: Vec<u8>,
-    }
-
-    impl MockInvokeContext {
-        fn new(
-            transaction_accounts: Vec<TestTransactionAccount>,
-            instruction_data: impl Into<Vec<u8>>,
-            program_accounts: impl Into<Vec<IndexOfAccount>>,
-            instruction_accounts: &[IndexOfAccount],
-        ) -> Self {
-            let program_accounts = program_accounts.into();
-            let instruction_data = instruction_data.into();
-            let instruction_accounts = instruction_accounts
-                .iter()
-                .enumerate()
-                .map(
-                    |(index_in_callee, index_in_transaction)| InstructionAccount {
-                        index_in_transaction: *index_in_transaction as IndexOfAccount,
-                        index_in_caller: *index_in_transaction as IndexOfAccount,
-                        index_in_callee: index_in_callee as IndexOfAccount,
-                        is_signer: false,
-                        is_writable: transaction_accounts[*index_in_transaction as usize].2,
-                    },
-                )
-                .collect();
-            let transaction_accounts = transaction_accounts
-                .into_iter()
-                .map(|a| (a.0, a.1))
-                .collect::<Vec<TransactionAccount>>();
-
-            let program_accounts = program_accounts;
-            let transaction_context =
-                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-            Self {
-                transaction_context,
-                program_accounts,
-                instruction_accounts,
-                instruction_data,
-            }
-        }
-
-        fn invoke_context(&mut self) -> InvokeContext<'_> {
-            let mut invoke_context = InvokeContext::new_mock(&mut self.transaction_context, &[]);
-            invoke_context
-                .transaction_context
-                .get_next_instruction_context()
-                .unwrap()
-                .configure(
-                    &self.program_accounts,
-                    &self.instruction_accounts,
-                    &self.instruction_data,
-                );
-            invoke_context.push().unwrap();
-            invoke_context
-        }
-    }
 
     struct MockCallerAccount {
         lamports: u64,
