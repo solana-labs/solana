@@ -13,10 +13,7 @@ pub use self::{
 use {
     crate::BpfError,
     solana_program_runtime::{
-        ic_logger_msg, ic_msg,
-        invoke_context::{ComputeMeter, InvokeContext},
-        stable_log,
-        timings::ExecuteTimings,
+        ic_logger_msg, ic_msg, invoke_context::InvokeContext, stable_log, timings::ExecuteTimings,
     },
     solana_rbpf::{
         error::EbpfError,
@@ -55,9 +52,7 @@ use {
     },
     std::{
         alloc::Layout,
-        cell::RefCell,
         mem::{align_of, size_of},
-        rc::Rc,
         slice::from_raw_parts_mut,
         str::{from_utf8, Utf8Error},
         sync::Arc,
@@ -129,17 +124,14 @@ impl From<SyscallError> for EbpfError {
     }
 }
 
-trait SyscallConsume {
-    fn consume(&mut self, amount: u64) -> Result<(), EbpfError>;
-}
-impl SyscallConsume for Rc<RefCell<ComputeMeter>> {
-    fn consume(&mut self, amount: u64) -> Result<(), EbpfError> {
-        self.try_borrow_mut()
-            .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
-            .consume(amount)
-            .map_err(SyscallError::InstructionError)?;
-        Ok(())
-    }
+fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<(), EbpfError> {
+    invoke_context
+        .get_compute_meter()
+        .try_borrow_mut()
+        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
+        .consume(amount)
+        .map_err(SyscallError::InstructionError)?;
+    Ok(())
 }
 
 macro_rules! register_feature_gated_syscall {
@@ -460,7 +452,7 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-        invoke_context.get_compute_meter().consume(len)?;
+        consume_compute_meter(invoke_context, len)?;
 
         translate_string_and_do(
             memory_mapping,
@@ -572,7 +564,7 @@ declare_syscall!(
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         let (seeds, program_id) = translate_and_check_program_address_inputs(
             seeds_addr,
@@ -616,7 +608,7 @@ declare_syscall!(
         let cost = invoke_context
             .get_compute_budget()
             .create_program_address_units;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         let (seeds, program_id) = translate_and_check_program_address_inputs(
             seeds_addr,
@@ -665,7 +657,7 @@ declare_syscall!(
                 }
             }
             bump_seed[0] = bump_seed[0].saturating_sub(1);
-            invoke_context.get_compute_meter().consume(cost)?;
+            consume_compute_meter(invoke_context, cost)?;
         }
         Ok(1)
     }
@@ -694,9 +686,7 @@ declare_syscall!(
             return Err(SyscallError::TooManySlices.into());
         }
 
-        invoke_context
-            .get_compute_meter()
-            .consume(compute_budget.sha256_base_cost)?;
+        consume_compute_meter(invoke_context, compute_budget.sha256_base_cost)?;
 
         let hash_result = translate_slice_mut::<u8>(
             memory_mapping,
@@ -727,7 +717,7 @@ declare_syscall!(
                         .sha256_byte_cost
                         .saturating_mul((val.len() as u64).saturating_div(2)),
                 );
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
             }
         }
@@ -759,9 +749,7 @@ declare_syscall!(
             return Err(SyscallError::TooManySlices.into());
         }
 
-        invoke_context
-            .get_compute_meter()
-            .consume(compute_budget.sha256_base_cost)?;
+        consume_compute_meter(invoke_context, compute_budget.sha256_base_cost)?;
 
         let hash_result = translate_slice_mut::<u8>(
             memory_mapping,
@@ -792,7 +780,7 @@ declare_syscall!(
                         .sha256_byte_cost
                         .saturating_mul((val.len() as u64).saturating_div(2)),
                 );
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
             }
         }
@@ -814,7 +802,7 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         let cost = invoke_context.get_compute_budget().secp256k1_recover_cost;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         let hash = translate_slice::<u8>(
             memory_mapping,
@@ -911,7 +899,7 @@ declare_syscall!(
                 let cost = invoke_context
                     .get_compute_budget()
                     .curve25519_edwards_validate_point_cost;
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
 
                 let point = translate_type::<edwards::PodEdwardsPoint>(
                     memory_mapping,
@@ -929,7 +917,7 @@ declare_syscall!(
                 let cost = invoke_context
                     .get_compute_budget()
                     .curve25519_ristretto_validate_point_cost;
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
 
                 let point = translate_type::<ristretto::PodRistrettoPoint>(
                     memory_mapping,
@@ -971,7 +959,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_edwards_add_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let left_point = translate_type::<edwards::PodEdwardsPoint>(
                         memory_mapping,
@@ -999,7 +987,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_edwards_subtract_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let left_point = translate_type::<edwards::PodEdwardsPoint>(
                         memory_mapping,
@@ -1027,7 +1015,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_edwards_multiply_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let scalar = translate_type::<scalar::PodScalar>(
                         memory_mapping,
@@ -1059,7 +1047,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_ristretto_add_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let left_point = translate_type::<ristretto::PodRistrettoPoint>(
                         memory_mapping,
@@ -1087,7 +1075,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_ristretto_subtract_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let left_point = translate_type::<ristretto::PodRistrettoPoint>(
                         memory_mapping,
@@ -1117,7 +1105,7 @@ declare_syscall!(
                     let cost = invoke_context
                         .get_compute_budget()
                         .curve25519_ristretto_multiply_cost;
-                    invoke_context.get_compute_meter().consume(cost)?;
+                    consume_compute_meter(invoke_context, cost)?;
 
                     let scalar = translate_type::<scalar::PodScalar>(
                         memory_mapping,
@@ -1177,7 +1165,7 @@ declare_syscall!(
                             .curve25519_edwards_msm_incremental_cost
                             .saturating_mul(points_len.saturating_sub(1)),
                     );
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
 
                 let scalars = translate_slice::<scalar::PodScalar>(
                     memory_mapping,
@@ -1217,7 +1205,7 @@ declare_syscall!(
                             .curve25519_ristretto_msm_incremental_cost
                             .saturating_mul(points_len.saturating_sub(1)),
                     );
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
 
                 let scalars = translate_slice::<scalar::PodScalar>(
                     memory_mapping,
@@ -1277,9 +1265,7 @@ declare_syscall!(
             return Err(SyscallError::TooManySlices.into());
         }
 
-        invoke_context
-            .get_compute_meter()
-            .consume(compute_budget.sha256_base_cost)?;
+        consume_compute_meter(invoke_context, compute_budget.sha256_base_cost)?;
 
         let hash_result = translate_slice_mut::<u8>(
             memory_mapping,
@@ -1310,7 +1296,7 @@ declare_syscall!(
                         .sha256_byte_cost
                         .saturating_mul((val.len() as u64).saturating_div(2)),
                 );
-                invoke_context.get_compute_meter().consume(cost)?;
+                consume_compute_meter(invoke_context, cost)?;
                 hasher.hash(bytes);
             }
         }
@@ -1345,7 +1331,7 @@ declare_syscall!(
                 len / budget.cpi_bytes_per_unit + budget.syscall_base_cost
             }
         };
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         if len > MAX_RETURN_DATA as u64 {
             return Err(SyscallError::ReturnDataTooLarge(len, MAX_RETURN_DATA as u64).into());
@@ -1393,9 +1379,7 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        invoke_context
-            .get_compute_meter()
-            .consume(budget.syscall_base_cost)?;
+        consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
 
         let (program_id, return_data) = invoke_context.transaction_context.get_return_data();
         length = length.min(return_data.len() as u64);
@@ -1413,7 +1397,7 @@ declare_syscall!(
                     (length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit
                 }
             };
-            invoke_context.get_compute_meter().consume(cost)?;
+            consume_compute_meter(invoke_context, cost)?;
 
             let return_data_result = translate_slice_mut::<u8>(
                 memory_mapping,
@@ -1472,9 +1456,7 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        invoke_context
-            .get_compute_meter()
-            .consume(budget.syscall_base_cost)?;
+        consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
         let stop_sibling_instruction_search_at_parent = invoke_context
             .feature_set
             .is_active(&stop_sibling_instruction_search_at_parent::id());
@@ -1626,9 +1608,7 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        invoke_context
-            .get_compute_meter()
-            .consume(budget.syscall_base_cost)?;
+        consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
 
         Ok(invoke_context.get_stack_height() as u64)
     }
@@ -1657,7 +1637,7 @@ mod tests {
             sysvar::{clock::Clock, epoch_schedule::EpochSchedule, rent::Rent},
             transaction_context::TransactionContext,
         },
-        std::{borrow::Cow, str::FromStr},
+        std::{borrow::Cow, cell::RefCell, rc::Rc, str::FromStr},
     };
 
     macro_rules! assert_access_violation {
