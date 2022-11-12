@@ -1419,6 +1419,18 @@ mod tests {
         ));
     }
 
+    macro_rules! borrow_instruction_account {
+        ($invoke_context:expr, $index:expr) => {{
+            let instruction_context = $invoke_context
+                .transaction_context
+                .get_current_instruction_context()
+                .unwrap();
+            instruction_context
+                .try_borrow_instruction_account($invoke_context.transaction_context, $index)
+                .unwrap()
+        }};
+    }
+
     #[test]
     fn test_update_callee_account_lamports_owner() {
         let transaction_accounts = transaction_with_one_instruction_account(vec![]);
@@ -1433,29 +1445,19 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account =
             MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
 
         let caller_account = mock_caller_account.caller_account();
 
-        let get_callee = || {
-            instruction_context
-                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-                .unwrap()
-        };
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         *caller_account.lamports = 42;
         *caller_account.owner = Pubkey::new_unique();
 
         update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
 
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.get_lamports(), 42);
         assert_eq!(caller_account.owner, callee_account.get_owner());
     }
@@ -1474,29 +1476,19 @@ mod tests {
             &[1]
         );
 
-        let instruction_context = invoke_context
-            .transaction_context
-            .get_current_instruction_context()
-            .unwrap();
-
         let mut mock_caller_account =
             MockCallerAccount::new(1234, *account.owner(), 0xFFFFFFFF00000000, account.data());
 
         let mut caller_account = mock_caller_account.caller_account();
 
-        let get_callee = || {
-            instruction_context
-                .try_borrow_instruction_account(invoke_context.transaction_context, 0)
-                .unwrap()
-        };
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         let mut data = b"foo".to_vec();
         caller_account.data = &mut data;
 
         update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
 
-        let callee_account = get_callee();
+        let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.get_data(), caller_account.data);
     }
 
