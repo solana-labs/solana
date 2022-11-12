@@ -152,10 +152,10 @@ macro_rules! register_feature_gated_syscall {
     };
 }
 
-pub fn register_syscalls(
+pub fn register_syscalls<'a>(
     feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
-) -> Result<SyscallRegistry, EbpfError> {
+) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -3606,7 +3606,7 @@ mod tests {
         seeds: &[&[u8]],
         program_id: &Pubkey,
         overlap_outputs: bool,
-        syscall: SyscallFunction<&'a mut InvokeContext<'b>>,
+        syscall: SyscallFunction<InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;
