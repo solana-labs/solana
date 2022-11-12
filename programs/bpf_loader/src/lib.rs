@@ -327,9 +327,8 @@ pub fn create_vm<'a, 'b>(
             .saturating_sub(1)
             .saturating_mul(compute_budget.heap_cost),
     );
-    let mut heap =
+    let heap =
         AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
-
     let check_aligned = bpf_loader_deprecated::id()
         != invoke_context
             .transaction_context
@@ -343,18 +342,22 @@ pub fn create_vm<'a, 'b>(
     let check_size = invoke_context
         .feature_set
         .is_active(&check_slice_translation_size::id());
-    let heap_slice =
-        unsafe { std::slice::from_raw_parts_mut(heap.as_slice_mut().as_mut_ptr(), heap.len()) };
+    let allocator = Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START)));
     invoke_context
         .set_syscall_context(
             check_aligned,
             check_size,
             orig_account_lengths,
-            Rc::new(RefCell::new(BpfAllocator::new(heap, MM_HEAP_START))),
+            allocator.clone(),
         )
         .map_err(SyscallError::InstructionError)?;
-    let vm = EbpfVm::new(program, invoke_context, heap_slice, regions)?;
-    Ok(vm)
+    let result = EbpfVm::new(
+        program,
+        invoke_context,
+        allocator.borrow_mut().get_heap(),
+        regions,
+    );
+    result
 }
 
 pub fn process_instruction(
