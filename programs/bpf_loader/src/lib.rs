@@ -35,7 +35,7 @@ use {
         memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -322,7 +322,7 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>, EbpfError> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    let _ = invoke_context.get_compute_meter().borrow_mut().consume(
+    let _ = invoke_context.consume_checked(
         ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
             .saturating_sub(1)
             .saturating_mul(compute_budget.heap_cost),
@@ -1386,7 +1386,6 @@ impl Debug for BpfExecutor {
 impl Executor for BpfExecutor {
     fn execute(&self, invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
-        let compute_meter = invoke_context.get_compute_meter();
         let stack_height = invoke_context.get_stack_height();
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -1405,6 +1404,7 @@ impl Executor for BpfExecutor {
         let mut create_vm_time = Measure::start("create_vm");
         let mut execute_time;
         let execution_result = {
+            let compute_meter_prev = invoke_context.get_remaining();
             let mut vm = match create_vm(
                 // We dropped the lifetime tracking in the Executor by setting it to 'static,
                 // thus we need to reintroduce the correct lifetime of InvokeContext here again.
@@ -1423,20 +1423,11 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let before = compute_meter.borrow().get_remaining();
             let result = if self.use_jit {
                 vm.execute_program_jit()
             } else {
                 vm.execute_program_interpreted()
             };
-            let after = compute_meter.borrow().get_remaining();
-            ic_logger_msg!(
-                log_collector,
-                "Program {} consumed {} of {} compute units",
-                &program_id,
-                before.saturating_sub(after),
-                before
-            );
             if log_enabled!(Trace) {
                 let mut trace_buffer = Vec::<u8>::new();
                 let analysis =
@@ -1446,6 +1437,14 @@ impl Executor for BpfExecutor {
                 trace!("SBF Program Instruction Trace:\n{}", trace_string);
             }
             drop(vm);
+            let compute_meter_post = invoke_context.get_remaining();
+            ic_logger_msg!(
+                log_collector,
+                "Program {} consumed {} of {} compute units",
+                &program_id,
+                compute_meter_prev.saturating_sub(compute_meter_post),
+                compute_meter_prev
+            );
             let (_returned_from_program_id, return_data) =
                 invoke_context.transaction_context.get_return_data();
             if !return_data.is_empty() {
@@ -1862,10 +1861,7 @@ mod tests {
             None,
             Err(InstructionError::ProgramFailedToComplete),
             |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
-                invoke_context
-                    .get_compute_meter()
-                    .borrow_mut()
-                    .mock_set_remaining(0);
+                invoke_context.mock_set_remaining(0);
                 super::process_instruction(first_instruction_account, invoke_context)
             },
         );

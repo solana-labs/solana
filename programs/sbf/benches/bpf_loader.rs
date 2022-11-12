@@ -102,7 +102,6 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
-        invoke_context.mock_set_remaining(std::i64::MAX as u64);
         let executable = Executable::<InvokeContext>::from_elf(
             &elf,
             Config::default(),
@@ -124,6 +123,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
 
         println!("Interpreted:");
+        invoke_context.mock_set_remaining(std::i64::MAX as u64);
         assert_eq!(SUCCESS, vm.execute_program_interpreted().unwrap());
         assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
         assert_eq!(
@@ -132,6 +132,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         );
 
         bencher.iter(|| {
+            vm.context_object.mock_set_remaining(std::i64::MAX as u64);
             vm.execute_program_interpreted().unwrap();
         });
         let instructions = vm.get_total_instruction_count();

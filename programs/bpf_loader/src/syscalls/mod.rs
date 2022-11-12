@@ -126,10 +126,7 @@ impl From<SyscallError> for EbpfError {
 
 fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<(), EbpfError> {
     invoke_context
-        .get_compute_meter()
-        .try_borrow_mut()
-        .map_err(|_| SyscallError::InvokeContextBorrowFailed)?
-        .consume(amount)
+        .consume_checked(amount)
         .map_err(SyscallError::InstructionError)?;
     Ok(())
 }
@@ -1959,10 +1956,7 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(string.len() as u64 - 1);
+        invoke_context.mock_set_remaining(string.len() as u64 - 1);
         let mut result = ProgramResult::Ok(0);
         SyscallPanic::call(
             &mut invoke_context,
@@ -1981,10 +1975,7 @@ mod tests {
             ),
         ));
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(string.len() as u64);
+        invoke_context.mock_set_remaining(string.len() as u64);
         let mut result = ProgramResult::Ok(0);
         SyscallPanic::call(
             &mut invoke_context,
@@ -2023,10 +2014,7 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(400 - 1);
+        invoke_context.mock_set_remaining(400 - 1);
         let mut result = ProgramResult::Ok(0);
         SyscallLog::call(
             &mut invoke_context,
@@ -2102,10 +2090,7 @@ mod tests {
         );
         let cost = invoke_context.get_compute_budget().log_64_units;
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost);
+        invoke_context.mock_set_remaining(cost);
         let config = Config::default();
         let mut memory_mapping = MemoryMapping::new(vec![], &config).unwrap();
         let mut result = ProgramResult::Ok(0);
@@ -2169,10 +2154,7 @@ mod tests {
         );
         assert_access_violation!(result, 0x100000001, 32);
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(1);
+        invoke_context.mock_set_remaining(1);
         let mut result = ProgramResult::Ok(0);
         SyscallLogPubkey::call(
             &mut invoke_context,
@@ -2191,10 +2173,7 @@ mod tests {
             ),
         ));
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost);
+        invoke_context.mock_set_remaining(cost);
         let mut result = ProgramResult::Ok(0);
         SyscallLogPubkey::call(
             &mut invoke_context,
@@ -2512,19 +2491,16 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                (invoke_context.get_compute_budget().sha256_base_cost
-                    + invoke_context.get_compute_budget().mem_op_base_cost.max(
-                        invoke_context
-                            .get_compute_budget()
-                            .sha256_byte_cost
-                            .saturating_mul((bytes1.len() + bytes2.len()) as u64 / 2),
-                    ))
-                    * 4,
-            );
+        invoke_context.mock_set_remaining(
+            (invoke_context.get_compute_budget().sha256_base_cost
+                + invoke_context.get_compute_budget().mem_op_base_cost.max(
+                    invoke_context
+                        .get_compute_budget()
+                        .sha256_byte_cost
+                        .saturating_mul((bytes1.len() + bytes2.len()) as u64 / 2),
+                ))
+                * 4,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallSha256::call(
@@ -2641,15 +2617,12 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                (invoke_context
-                    .get_compute_budget()
-                    .curve25519_edwards_validate_point_cost)
-                    * 2,
-            );
+        invoke_context.mock_set_remaining(
+            (invoke_context
+                .get_compute_budget()
+                .curve25519_edwards_validate_point_cost)
+                * 2,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallCurvePointValidation::call(
@@ -2741,15 +2714,12 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                (invoke_context
-                    .get_compute_budget()
-                    .curve25519_ristretto_validate_point_cost)
-                    * 2,
-            );
+        invoke_context.mock_set_remaining(
+            (invoke_context
+                .get_compute_budget()
+                .curve25519_ristretto_validate_point_cost)
+                * 2,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallCurvePointValidation::call(
@@ -2875,21 +2845,18 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                (invoke_context
+        invoke_context.mock_set_remaining(
+            (invoke_context
+                .get_compute_budget()
+                .curve25519_edwards_add_cost
+                + invoke_context
                     .get_compute_budget()
-                    .curve25519_edwards_add_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_edwards_subtract_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_edwards_multiply_cost)
-                    * 2,
-            );
+                    .curve25519_edwards_subtract_cost
+                + invoke_context
+                    .get_compute_budget()
+                    .curve25519_edwards_multiply_cost)
+                * 2,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallCurveGroupOps::call(
@@ -3085,21 +3052,18 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                (invoke_context
+        invoke_context.mock_set_remaining(
+            (invoke_context
+                .get_compute_budget()
+                .curve25519_ristretto_add_cost
+                + invoke_context
                     .get_compute_budget()
-                    .curve25519_ristretto_add_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_ristretto_subtract_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_ristretto_multiply_cost)
-                    * 2,
-            );
+                    .curve25519_ristretto_subtract_cost
+                + invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_multiply_cost)
+                * 2,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallCurveGroupOps::call(
@@ -3304,23 +3268,20 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(
-                invoke_context
+        invoke_context.mock_set_remaining(
+            invoke_context
+                .get_compute_budget()
+                .curve25519_edwards_msm_base_cost
+                + invoke_context
                     .get_compute_budget()
-                    .curve25519_edwards_msm_base_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_edwards_msm_incremental_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_ristretto_msm_base_cost
-                    + invoke_context
-                        .get_compute_budget()
-                        .curve25519_ristretto_msm_incremental_cost,
-            );
+                    .curve25519_edwards_msm_incremental_cost
+                + invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_msm_base_cost
+                + invoke_context
+                    .get_compute_budget()
+                    .curve25519_ristretto_msm_incremental_cost,
+        );
 
         let mut result = ProgramResult::Ok(0);
         SyscallCurveMultiscalarMultiplication::call(
@@ -3854,10 +3815,7 @@ mod tests {
         )
         .unwrap();
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(syscall_base_cost);
+        invoke_context.mock_set_remaining(syscall_base_cost);
         let mut result = ProgramResult::Ok(0);
         SyscallGetProcessedSiblingInstruction::call(
             &mut invoke_context,
@@ -3889,10 +3847,7 @@ mod tests {
             );
         }
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(syscall_base_cost);
+        invoke_context.mock_set_remaining(syscall_base_cost);
         let mut result = ProgramResult::Ok(0);
         SyscallGetProcessedSiblingInstruction::call(
             &mut invoke_context,
@@ -3906,10 +3861,7 @@ mod tests {
         );
         assert_eq!(result.unwrap(), 0);
 
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(syscall_base_cost);
+        invoke_context.mock_set_remaining(syscall_base_cost);
         let mut result = ProgramResult::Ok(0);
         SyscallGetProcessedSiblingInstruction::call(
             &mut invoke_context,
@@ -4036,10 +3988,7 @@ mod tests {
                 .unwrap(),
             create_program_address(&mut invoke_context, &[b"Talking"], &address).unwrap(),
         );
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(0);
+        invoke_context.mock_set_remaining(0);
         assert!(matches!(
             create_program_address(&mut invoke_context, &[b"", &[1]], &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
@@ -4064,10 +4013,7 @@ mod tests {
 
         for _ in 0..1_000 {
             let address = Pubkey::new_unique();
-            invoke_context
-                .get_compute_meter()
-                .borrow_mut()
-                .mock_set_remaining(cost * max_tries);
+            invoke_context.mock_set_remaining(cost * max_tries);
             let (found_address, bump_seed) =
                 try_find_program_address(&mut invoke_context, &[b"Lil'", b"Bits"], &address)
                     .unwrap();
@@ -4083,21 +4029,12 @@ mod tests {
         }
 
         let seeds: &[&[u8]] = &[b""];
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost * max_tries);
+        invoke_context.mock_set_remaining(cost * max_tries);
         let (_, bump_seed) =
             try_find_program_address(&mut invoke_context, seeds, &address).unwrap();
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost * (max_tries - bump_seed as u64));
+        invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64));
         try_find_program_address(&mut invoke_context, seeds, &address).unwrap();
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
+        invoke_context.mock_set_remaining(cost * (max_tries - bump_seed as u64 - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, seeds, &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
@@ -4106,10 +4043,7 @@ mod tests {
         ));
 
         let exceeded_seed = &[127; MAX_SEED_LEN + 1];
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost * (max_tries - 1));
+        invoke_context.mock_set_remaining(cost * (max_tries - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, &[exceeded_seed], &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(
@@ -4135,10 +4069,7 @@ mod tests {
             &[16],
             &[17],
         ];
-        invoke_context
-            .get_compute_meter()
-            .borrow_mut()
-            .mock_set_remaining(cost * (max_tries - 1));
+        invoke_context.mock_set_remaining(cost * (max_tries - 1));
         assert!(matches!(
             try_find_program_address(&mut invoke_context, exceeded_seeds, &address),
             Err(EbpfError::UserError(error)) if error.downcast_ref::<BpfError>().unwrap() == &BpfError::SyscallError(

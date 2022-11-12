@@ -1,4 +1,4 @@
-use {super::*, crate::declare_syscall};
+use {super::*, crate::declare_syscall, solana_rbpf::vm::ContextObject};
 
 declare_syscall!(
     /// Log a user's info message
@@ -77,7 +77,7 @@ declare_syscall!(
         ic_logger_msg!(
             invoke_context.get_log_collector(),
             "Program consumption: {} units remaining",
-            invoke_context.get_compute_meter().borrow().get_remaining()
+            invoke_context.get_remaining(),
         );
         Ok(0)
     }
