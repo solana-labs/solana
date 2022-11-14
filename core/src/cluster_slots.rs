@@ -194,7 +194,7 @@ impl ClusterSlots {
         let slot_peers = slot_peers.read().unwrap();
         repair_peers
             .iter()
-            .map(|peer| slot_peers.get(&peer.id).is_some())
+            .map(|peer| slot_peers.contains_key(&peer.id))
             .zip(stakes)
             .map(|(did_complete_slot, peer_stake)| {
                 if did_complete_slot {
