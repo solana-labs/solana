@@ -292,7 +292,7 @@ impl CostTracker {
         }
     }
 
-    /// Substract extra execution units from cost_tracker
+    /// Subtract extra execution units from cost_tracker
     fn sub_transaction_execution_cost(&mut self, tx_cost: &TransactionCost, adjustment: u64) {
         for account_key in tx_cost.writable_accounts.iter() {
             let account_cost = self
