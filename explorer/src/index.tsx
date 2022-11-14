@@ -13,6 +13,7 @@ import { EpochProvider } from "./providers/epoch";
 import { ScrollAnchorProvider } from "providers/scroll-anchor";
 import { StatsProvider } from "providers/stats";
 import { MintsProvider } from "providers/mints";
+import { VoteAccountsProvider } from "providers/accounts/vote-accounts";
 import { LeaderScheduleProvider } from "providers/accounts/leader-schedule";
 
 if (process.env.NODE_ENV === "production") {
@@ -31,15 +32,17 @@ root.render(
             <RichListProvider>
               <LeaderScheduleProvider>
                 <AccountsProvider>
-                  <BlockProvider>
-                    <EpochProvider>
-                      <MintsProvider>
-                        <TransactionsProvider>
-                          <App />
-                        </TransactionsProvider>
-                      </MintsProvider>
-                    </EpochProvider>
-                  </BlockProvider>
+                  <VoteAccountsProvider>
+                    <BlockProvider>
+                      <EpochProvider>
+                        <MintsProvider>
+                          <TransactionsProvider>
+                            <App />
+                          </TransactionsProvider>
+                        </MintsProvider>
+                      </EpochProvider>
+                    </BlockProvider>
+                  </VoteAccountsProvider>
                 </AccountsProvider>
               </LeaderScheduleProvider>
             </RichListProvider>

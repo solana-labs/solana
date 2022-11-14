@@ -1,10 +1,14 @@
 import React, { useEffect } from "react";
 
-import { useVoteAccounts } from "providers/accounts/vote-accounts";
+import {
+  useVoteAccounts,
+  Status,
+  useFetchVoteAccounts,
+} from "providers/accounts/vote-accounts";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
-import { LeaderSchedule, PublicKey } from "@solana/web3.js";
+import { LeaderSchedule, PublicKey, VoteAccountStatus } from "@solana/web3.js";
 
 import {
   useFetchLeaderSchedule,
@@ -12,56 +16,54 @@ import {
 } from "providers/accounts/leader-schedule";
 import MapChart from "components/WorldMap";
 import { ErrorCard } from "components/common/ErrorCard";
-import { Status } from "providers/supply";
 
 const PAGINATION_COUNT: number = 7;
 
 export function StakeDelegationsPage() {
-  const leaderSchedule = useLeaderSchedule();
-  const fetchLeaderSchedule = useFetchLeaderSchedule();
+  return (
+    <>
+      <div>
+        <MapChart />
+        <RenderVoteAccount />
+        <RenderLeaderSchedule />
+      </div>
+    </>
+  );
+}
 
-  const { voteAccounts, fetchVoteAccounts } = useVoteAccounts();
+function RenderVoteAccount() {
+  const voteAccounts = useVoteAccounts();
+  const fetchVoteAccounts = useFetchVoteAccounts();
 
   React.useEffect(() => {
-    if (leaderSchedule === Status.Idle) fetchLeaderSchedule();
-    fetchVoteAccounts();
+    if (voteAccounts === Status.Idle) fetchVoteAccounts();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (leaderSchedule === Status.Disconnected) {
+  if (voteAccounts === Status.Disconnected) {
     return <ErrorCard text="Not connected to the cluster" />;
   }
 
-  if (leaderSchedule === Status.Idle || leaderSchedule === Status.Connecting)
+  if (voteAccounts === Status.Idle || voteAccounts === Status.Connecting)
     return <LoadingCard />;
 
-  if (typeof leaderSchedule === "string") {
-    return <ErrorCard text={leaderSchedule} retry={fetchLeaderSchedule} />;
+  if (typeof voteAccounts === "string") {
+    return <ErrorCard text={voteAccounts} retry={fetchVoteAccounts} />;
   }
 
-  if (voteAccounts && leaderSchedule)
-    return (
-      <>
-        <div>
-          <MapChart />
-          <RenderCardSection
-            title="Current Validators Data"
-            cardData={voteAccounts.current}
-          />
-          <RenderCardSection
-            title="Deliquent Validators Data"
-            cardData={voteAccounts.delinquent}
-          />
-          <RenderLeaderSchedule leaderSchedule={leaderSchedule} />
-        </div>
-      </>
-    );
-  else
-    return (
-      <div className="container">
-        <LoadingCard message="Loading validators data" />
-      </div>
-    );
+  return (
+    <React.Fragment>
+      <RenderCardSection
+        title="Current Validators Data"
+        cardData={voteAccounts.current}
+      />
+      <RenderCardSection
+        title="Deliquent Validators Data"
+        cardData={voteAccounts.delinquent}
+      />
+    </React.Fragment>
+  );
 }
+
 interface rowData {
   activatedStake: number;
   commission: number;
@@ -69,6 +71,7 @@ interface rowData {
   nodePubkey: string;
   votePubkey: string;
 }
+//will need to modify card data
 function RenderCardSection({
   title,
   cardData,
@@ -78,6 +81,7 @@ function RenderCardSection({
 }): JSX.Element {
   const [displayedCount, setDisplayedCount] =
     React.useState<number>(PAGINATION_COUNT);
+
   return (
     <>
       <div className="container card mt-n3 mb-6">
@@ -129,13 +133,28 @@ function RenderCardSection({
   );
 }
 
-function RenderLeaderSchedule({
-  leaderSchedule,
-}: {
-  leaderSchedule: LeaderSchedule;
-}): JSX.Element {
+function RenderLeaderSchedule(): JSX.Element {
+  const leaderSchedule = useLeaderSchedule();
+  const fetchLeaderSchedule = useFetchLeaderSchedule();
+
   const [displayedCount, setDisplayedCount] =
     React.useState<number>(PAGINATION_COUNT);
+
+  React.useEffect(() => {
+    if (leaderSchedule === Status.Idle) fetchLeaderSchedule();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (leaderSchedule === Status.Disconnected) {
+    return <ErrorCard text="Not connected to the cluster" />;
+  }
+
+  if (leaderSchedule === Status.Idle || leaderSchedule === Status.Connecting)
+    return <LoadingCard />;
+
+  if (typeof leaderSchedule === "string") {
+    return <ErrorCard text={leaderSchedule} retry={fetchLeaderSchedule} />;
+  }
+
   return (
     <>
       <div className="container card mt-n3">

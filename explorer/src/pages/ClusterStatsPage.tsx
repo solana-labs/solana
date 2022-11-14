@@ -14,7 +14,10 @@ import { displayTimestampWithoutDate } from "utils/date";
 import { Status, useFetchSupply, useSupply } from "providers/supply";
 import { ErrorCard } from "components/common/ErrorCard";
 import { LoadingCard } from "components/common/LoadingCard";
-import { useVoteAccounts } from "providers/accounts/vote-accounts";
+import {
+  useFetchVoteAccounts,
+  useVoteAccounts,
+} from "providers/accounts/vote-accounts";
 import { CoingeckoStatus, useCoinGecko } from "utils/coingecko";
 import { Epoch } from "components/common/Epoch";
 import { TimestampToggle } from "components/common/TimestampToggle";
@@ -45,7 +48,8 @@ function StakingComponent() {
   const supply = useSupply();
   const fetchSupply = useFetchSupply();
   const coinInfo = useCoinGecko("solana");
-  const { fetchVoteAccounts, voteAccounts } = useVoteAccounts();
+  const voteAccounts = useVoteAccounts();
+  const fetchVoteAccounts = useFetchVoteAccounts();
 
   function fetchData() {
     fetchSupply();
@@ -59,7 +63,7 @@ function StakingComponent() {
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const delinquentStake = React.useMemo(() => {
-    if (voteAccounts) {
+    if (typeof voteAccounts === "object") {
       return voteAccounts.delinquent.reduce(
         (prev, current) => prev + current.activatedStake,
         0
@@ -68,7 +72,7 @@ function StakingComponent() {
   }, [voteAccounts]);
 
   const activeStake = React.useMemo(() => {
-    if (voteAccounts && delinquentStake) {
+    if (typeof voteAccounts === "object" && delinquentStake) {
       return (
         voteAccounts.current.reduce(
           (prev, current) => prev + current.activatedStake,
