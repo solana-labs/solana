@@ -1,41 +1,37 @@
 import React, { useEffect } from "react";
 
-import { useVoteAccounts } from "providers/accounts/vote-accounts";
+import {
+  useVoteAccounts,
+  Status,
+  useFetchVoteAccounts,
+} from "providers/accounts/vote-accounts";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
-import { LeaderSchedule, PublicKey } from "@solana/web3.js";
+import { LeaderSchedule, PublicKey, VoteAccountStatus } from "@solana/web3.js";
 
 import { useLeaderSchedule } from "providers/accounts/leader-schedule";
 import MapChart from "components/WorldMap";
+import { ErrorCard } from "components/common/ErrorCard";
 
 const PAGINATION_COUNT: number = 7;
 
 export function StakeDelegationsPage() {
   const { status } = useCluster();
 
-  const { voteAccounts, fetchVoteAccounts } = useVoteAccounts();
   const { leaderSchedule, fetchLeaderSchedule } = useLeaderSchedule();
   useEffect(() => {
     if (status === ClusterStatus.Connected) {
-      fetchVoteAccounts();
       fetchLeaderSchedule();
     }
   }, [status]);
 
-  if (voteAccounts && leaderSchedule)
+  if (leaderSchedule)
     return (
       <>
         <div>
           <MapChart />
-          <RenderCardSection
-            title="Current Validators Data"
-            cardData={voteAccounts.current}
-          />
-          <RenderCardSection
-            title="Deliquent Validators Data"
-            cardData={voteAccounts.delinquent}
-          />
+          <RenderVoteAccount />
           <RenderLeaderSchedule leaderSchedule={leaderSchedule} />
         </div>
       </>
@@ -47,6 +43,40 @@ export function StakeDelegationsPage() {
       </div>
     );
 }
+
+function RenderVoteAccount() {
+  const voteAccounts = useVoteAccounts();
+  const fetchVoteAccounts = useFetchVoteAccounts();
+
+  React.useEffect(() => {
+    if (voteAccounts === Status.Idle) fetchVoteAccounts();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (voteAccounts === Status.Disconnected) {
+    return <ErrorCard text="Not connected to the cluster" />;
+  }
+
+  if (voteAccounts === Status.Idle || voteAccounts === Status.Connecting)
+    return <LoadingCard />;
+
+  if (typeof voteAccounts === "string") {
+    return <ErrorCard text={voteAccounts} retry={fetchVoteAccounts} />;
+  }
+
+  return (
+    <React.Fragment>
+      <RenderCardSection
+        title="Current Validators Data"
+        cardData={voteAccounts.current}
+      />
+      <RenderCardSection
+        title="Deliquent Validators Data"
+        cardData={voteAccounts.delinquent}
+      />
+    </React.Fragment>
+  );
+}
+
 interface rowData {
   activatedStake: number;
   commission: number;
@@ -54,6 +84,7 @@ interface rowData {
   nodePubkey: string;
   votePubkey: string;
 }
+//will need to modify card data
 function RenderCardSection({
   title,
   cardData,
@@ -63,6 +94,7 @@ function RenderCardSection({
 }): JSX.Element {
   const [displayedCount, setDisplayedCount] =
     React.useState<number>(PAGINATION_COUNT);
+
   return (
     <>
       <div className="container card mt-n3 mb-6">
