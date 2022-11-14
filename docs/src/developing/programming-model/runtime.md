@@ -45,6 +45,7 @@ The policy is as follows:
 
 ## Compute Budget
 
+<<<<<<< HEAD
 To prevent a program from abusing computation resources, each instruction in a
 transaction is given a compute budget. The budget consists of computation units
 that are consumed as the program performs various operations and bounds that the
@@ -54,6 +55,20 @@ a bound, the runtime halts the program and returns an error.
 Note: The compute budget currently applies per-instruction, but is moving toward
 a per-transaction model. For more information see [Transaction-wide Compute
 Budget](#transaction-wide-compute-budget).
+=======
+To prevent abuse of computational resources, each transaction is allocated a
+compute budget. The budget specifies a maximum number of compute units that a
+transaction can consume, the costs associated with different types of operations
+the transaction may perform, and operational bounds the transaction must adhere
+to.
+
+As the transaction is processed compute units are consumed by its
+instruction's programs performing operations such as executing SBF instructions,
+calling syscalls, etc... When the transaction consumes its entire budget, or
+exceeds a bound such as attempting a call stack that is too deep, or loaded
+account data exceeds limit, the runtime halts the transaction processing and
+returns an error.
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
 The following operations incur a compute cost:
 
@@ -144,6 +159,21 @@ number of `max_units` via [Compute Budget](#compute-budget) instructions.
 Clients should request only what they need; requesting the minimum amount of
 units required to process the transaction will reduce overall transaction cost,
 which may include a prioritization-fee charged for every compute unit.
+
+### Accounts data size limit
+
+A transaction should request the maximum bytes of accounts data it is
+allowed to load by including a `SetAccountsDataSizeLimit` instruction, requested
+limit is capped by `get_max_loaded_accounts_data_limit()`. If no
+`SetAccountsDataSizeLimit` is provided, the transaction is defaulted to
+have limit of `get_default_loaded_accounts_data_limit()`.
+
+The `ComputeBudgetInstruction::set_accounts_data_size_limit` function can be used
+to create this instruction:
+
+```rust
+let instruction = ComputeBudgetInstruction::set_accounts_data_size_limit(100_000);
+```
 
 ## New Features
 

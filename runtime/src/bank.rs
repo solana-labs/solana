@@ -104,9 +104,15 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
+<<<<<<< HEAD
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
             disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
             tx_wide_compute_cap, FeatureSet,
+=======
+            self, cap_transaction_accounts_data_size, disable_fee_calculator,
+            enable_early_verification_of_account_modifications, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -229,8 +235,13 @@ impl RentDebits {
     }
 }
 
+<<<<<<< HEAD
 type BankStatusCache = StatusCache<Result<()>>;
 #[frozen_abi(digest = "2YZk2K45HmmAafmxPJnYVXyQ7uA7WuBrRkpwrCawdK31")]
+=======
+pub type BankStatusCache = StatusCache<Result<()>>;
+#[frozen_abi(digest = "3qia1Zm8X66bzFaBuC8ahz3hADRRATyUPRV36ZzrSois")]
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3372,7 +3383,17 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
+<<<<<<< HEAD
                 .is_active(&add_set_compute_unit_price_ix::id()),
+=======
+                .is_active(&use_default_units_in_fee_calculation::id()),
+            !self
+                .feature_set
+                .is_active(&remove_deprecated_request_unit_ix::id()),
+            self.feature_set
+                .is_active(&cap_transaction_accounts_data_size::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         ))
     }
 
@@ -3387,7 +3408,17 @@ impl Bank {
             &self.fee_structure,
             self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
+<<<<<<< HEAD
                 .is_active(&add_set_compute_unit_price_ix::id()),
+=======
+                .is_active(&use_default_units_in_fee_calculation::id()),
+            !self
+                .feature_set
+                .is_active(&remove_deprecated_request_unit_ix::id()),
+            self.feature_set
+                .is_active(&cap_transaction_accounts_data_size::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         )
     }
 
@@ -4178,9 +4209,19 @@ impl Bank {
                                 Measure::start("compute_budget_process_transaction_time");
                             let process_transaction_result = compute_budget.process_instructions(
                                 tx.message().program_instructions_iter(),
+<<<<<<< HEAD
                                 feature_set.is_active(&requestable_heap_size::id()),
                                 feature_set.is_active(&default_units_per_instruction::id()),
                                 feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+=======
+                                true,
+                                !self
+                                    .feature_set
+                                    .is_active(&remove_deprecated_request_unit_ix::id()),
+                                self.feature_set
+                                    .is_active(&cap_transaction_accounts_data_size::id()),
+                                Self::get_loaded_accounts_data_limit_type(&self.feature_set),
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                             );
                             compute_budget_process_transaction_time.stop();
                             saturating_add_assign!(
@@ -4438,8 +4479,15 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
+<<<<<<< HEAD
         tx_wide_compute_cap: bool,
         support_set_compute_unit_price_ix: bool,
+=======
+        use_default_units_per_instruction: bool,
+        support_request_units_deprecated: bool,
+        cap_transaction_accounts_data_size: bool,
+        loaded_accounts_data_limit_type: compute_budget::LoadedAccountsDataLimitType,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
     ) -> u64 {
         if tx_wide_compute_cap {
             // Fee based on compute units and signatures
@@ -4451,6 +4499,7 @@ impl Bank {
                 BASE_CONGESTION / current_congestion
             };
 
+<<<<<<< HEAD
             let mut compute_budget = ComputeBudget::default();
             let prioritization_fee_details = compute_budget
                 .process_instructions(
@@ -4477,6 +4526,35 @@ impl Bank {
                         .map(|bin| bin.fee)
                         .unwrap_or_default()
                 });
+=======
+        let mut compute_budget = ComputeBudget::default();
+        let prioritization_fee_details = compute_budget
+            .process_instructions(
+                message.program_instructions_iter(),
+                use_default_units_per_instruction,
+                support_request_units_deprecated,
+                cap_transaction_accounts_data_size,
+                loaded_accounts_data_limit_type,
+            )
+            .unwrap_or_default();
+        let prioritization_fee = prioritization_fee_details.get_fee();
+        let signature_fee = Self::get_num_signatures_in_message(message)
+            .saturating_mul(fee_structure.lamports_per_signature);
+        let write_lock_fee = Self::get_num_write_locks_in_message(message)
+            .saturating_mul(fee_structure.lamports_per_write_lock);
+        let compute_fee = fee_structure
+            .compute_fee_bins
+            .iter()
+            .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
+            .map(|bin| bin.fee)
+            .unwrap_or_else(|| {
+                fee_structure
+                    .compute_fee_bins
+                    .last()
+                    .map(|bin| bin.fee)
+                    .unwrap_or_default()
+            });
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
             ((prioritization_fee
                 .saturating_add(signature_fee)
@@ -4527,7 +4605,17 @@ impl Bank {
                     &self.fee_structure,
                     self.feature_set.is_active(&tx_wide_compute_cap::id()),
                     self.feature_set
+<<<<<<< HEAD
                         .is_active(&add_set_compute_unit_price_ix::id()),
+=======
+                        .is_active(&use_default_units_in_fee_calculation::id()),
+                    !self
+                        .feature_set
+                        .is_active(&remove_deprecated_request_unit_ix::id()),
+                    self.feature_set
+                        .is_active(&cap_transaction_accounts_data_size::id()),
+                    Self::get_loaded_accounts_data_limit_type(&self.feature_set),
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                 );
 
                 // In case of instruction error, even though no accounts
@@ -6909,9 +6997,110 @@ impl Bank {
         let rent_collector = self.rent_collector();
         let mut total_accounts_stats = TotalAccountsStats::default();
         accounts.for_each(|(pubkey, account)| {
+<<<<<<< HEAD
             let data_len = account.data().len();
             total_accounts_stats.num_accounts += 1;
             total_accounts_stats.data_len += data_len;
+=======
+            total_accounts_stats.accumulate_account(pubkey, account, rent_collector);
+        });
+
+        total_accounts_stats
+    }
+
+    /// if we were to serialize THIS bank, what value should be saved for the prior accounts hash?
+    /// This depends on the proximity to the time to take the snapshot and the time to use the snapshot.
+    pub(crate) fn get_epoch_accounts_hash_to_serialize(&self) -> Option<Hash> {
+        self.epoch_accounts_hash().map(|hash| *hash.as_ref())
+    }
+
+    /// Convenience fn to get the Epoch Accounts Hash
+    pub fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+        self.rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .try_get_epoch_accounts_hash()
+    }
+
+    /// Checks a batch of sanitized transactions again bank for age and status
+    pub fn check_transactions_with_forwarding_delay(
+        &self,
+        transactions: &[SanitizedTransaction],
+        filter: &[transaction::Result<()>],
+        forward_transactions_to_leader_at_slot_offset: u64,
+    ) -> Vec<TransactionCheckResult> {
+        let mut error_counters = TransactionErrorMetrics::default();
+        // The following code also checks if the blockhash for a transaction is too old
+        // The check accounts for
+        //  1. Transaction forwarding delay
+        //  2. The slot at which the next leader will actually process the transaction
+        // Drop the transaction if it will expire by the time the next node receives and processes it
+        let api = perf_libs::api();
+        let max_tx_fwd_delay = if api.is_none() {
+            MAX_TRANSACTION_FORWARDING_DELAY
+        } else {
+            MAX_TRANSACTION_FORWARDING_DELAY_GPU
+        };
+
+        self.check_transactions(
+            transactions,
+            filter,
+            (MAX_PROCESSING_AGE)
+                .saturating_sub(max_tx_fwd_delay)
+                .saturating_sub(forward_transactions_to_leader_at_slot_offset as usize),
+            &mut error_counters,
+        )
+    }
+
+    /// if the `default` and/or `max` value for ComputeBudget:::Accounts_data_size_limit changes,
+    /// the change needs to be gated by feature gate with corresponding new enum value.
+    /// should use this function to get correct loaded_accounts_data_limit_type based on
+    /// feature_set.
+    pub fn get_loaded_accounts_data_limit_type(
+        _feature_set: &FeatureSet,
+    ) -> compute_budget::LoadedAccountsDataLimitType {
+        compute_budget::LoadedAccountsDataLimitType::V0
+        // In the future, use feature_set to determine correct LoadedAccountsDataLimitType here.
+    }
+}
+
+/// Compute how much an account has changed size.  This function is useful when the data size delta
+/// needs to be computed and passed to an `update_accounts_data_size_delta` function.
+fn calculate_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 {
+    assert!(old_data_size <= i64::MAX as usize);
+    assert!(new_data_size <= i64::MAX as usize);
+    let old_data_size = old_data_size as i64;
+    let new_data_size = new_data_size as i64;
+
+    new_data_size.saturating_sub(old_data_size)
+}
+
+/// Since `apply_feature_activations()` has different behavior depending on its caller, enumerate
+/// those callers explicitly.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ApplyFeatureActivationsCaller {
+    FinishInit,
+    NewFromParent,
+    WarpFromParent,
+}
+
+/// Return the computed values from `collect_rent_from_accounts()`
+///
+/// Since `collect_rent_from_accounts()` is running in parallel, instead of updating the
+/// atomics/shared data inside this function, return those values in this struct for the caller to
+/// process later.
+#[derive(Debug, Default)]
+struct CollectRentFromAccountsInfo {
+    rent_collected_info: CollectedInfo,
+    rent_rewards: Vec<(Pubkey, RewardInfo)>,
+    rewrites_skipped: Vec<(Pubkey, Hash)>,
+    time_collecting_rent_us: u64,
+    time_hashing_skipped_rewrites_us: u64,
+    time_storing_accounts_us: u64,
+    num_accounts: usize,
+}
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
             if account.executable() {
                 total_accounts_stats.num_executable_accounts += 1;
@@ -9786,7 +9975,13 @@ pub(crate) mod tests {
                 .lamports_per_signature,
             &FeeStructure::default(),
             true,
+<<<<<<< HEAD
             true,
+=======
+            false,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -9969,7 +10164,13 @@ pub(crate) mod tests {
             cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
+<<<<<<< HEAD
             true,
+=======
+            false,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -9987,7 +10188,13 @@ pub(crate) mod tests {
             expensive_lamports_per_signature,
             &FeeStructure::default(),
             true,
+<<<<<<< HEAD
             true,
+=======
+            false,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10104,7 +10311,13 @@ pub(crate) mod tests {
                                 .lamports_per_signature,
                             &FeeStructure::default(),
                             true,
+<<<<<<< HEAD
                             true,
+=======
+                            false,
+                            true,
+                            compute_budget::LoadedAccountsDataLimitType::V0,
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                         ) * 2
                     )
                     .0
@@ -16619,6 +16832,7 @@ pub(crate) mod tests {
         // Default: no fee.
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 0, &FeeStructure::default(), false, true),
             0
@@ -16629,6 +16843,44 @@ pub(crate) mod tests {
             Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             1
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    0,
+                    &FeeStructure {
+                        lamports_per_signature: 0,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                0
+            );
+        }
+
+        // One signature, a fee.
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &FeeStructure {
+                        lamports_per_signature: 1,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                1
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
         // Two signatures, double the fee.
         let key0 = Pubkey::new_unique();
@@ -16636,10 +16888,30 @@ pub(crate) mod tests {
         let ix0 = system_instruction::transfer(&key0, &key1, 1);
         let ix1 = system_instruction::transfer(&key1, &key0, 1);
         let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 2, &FeeStructure::default(), false, true),
             4
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    2,
+                    &FeeStructure {
+                        lamports_per_signature: 2,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                4
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
     }
 
     #[test]
@@ -16652,10 +16924,27 @@ pub(crate) mod tests {
 
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 1, &fee_structure, true, true),
             max_fee + lamports_per_signature
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                max_fee + lamports_per_signature
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
         // Three signatures, two instructions, no unit request
 
@@ -16664,10 +16953,27 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 1, &fee_structure, true, true),
             max_fee + 3 * lamports_per_signature
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                max_fee + 3 * lamports_per_signature
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
         // Explicit fee schedule
 
@@ -16698,11 +17004,29 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
+<<<<<<< HEAD
             let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
             );
+=======
+            for cap_transaction_accounts_data_size in &[true, false] {
+                let fee = Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                );
+                assert_eq!(
+                    fee,
+                    lamports_per_signature + prioritization_fee_details.get_fee()
+                );
+            }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         }
     }
 
@@ -16732,10 +17056,27 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             2
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                2
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -16744,10 +17085,27 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
+<<<<<<< HEAD
         assert_eq!(
             Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
             11
         );
+=======
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    false,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                11
+            );
+        }
+>>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
     }
 
     #[test]
