@@ -6,22 +6,37 @@ import { LoadingCard } from "components/common/LoadingCard";
 import { Address } from "components/common/Address";
 import { LeaderSchedule, PublicKey } from "@solana/web3.js";
 
-import { useLeaderSchedule } from "providers/accounts/leader-schedule";
+import {
+  useFetchLeaderSchedule,
+  useLeaderSchedule,
+} from "providers/accounts/leader-schedule";
 import MapChart from "components/WorldMap";
+import { ErrorCard } from "components/common/ErrorCard";
+import { Status } from "providers/supply";
 
 const PAGINATION_COUNT: number = 7;
 
 export function StakeDelegationsPage() {
-  const { status } = useCluster();
+  const leaderSchedule = useLeaderSchedule();
+  const fetchLeaderSchedule = useFetchLeaderSchedule();
 
   const { voteAccounts, fetchVoteAccounts } = useVoteAccounts();
-  const { leaderSchedule, fetchLeaderSchedule } = useLeaderSchedule();
-  useEffect(() => {
-    if (status === ClusterStatus.Connected) {
-      fetchVoteAccounts();
-      fetchLeaderSchedule();
-    }
-  }, [status]);
+
+  React.useEffect(() => {
+    if (leaderSchedule === Status.Idle) fetchLeaderSchedule();
+    fetchVoteAccounts();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (leaderSchedule === Status.Disconnected) {
+    return <ErrorCard text="Not connected to the cluster" />;
+  }
+
+  if (leaderSchedule === Status.Idle || leaderSchedule === Status.Connecting)
+    return <LoadingCard />;
+
+  if (typeof leaderSchedule === "string") {
+    return <ErrorCard text={leaderSchedule} retry={fetchLeaderSchedule} />;
+  }
 
   if (voteAccounts && leaderSchedule)
     return (
@@ -144,15 +159,17 @@ function RenderLeaderSchedule({
                 <th className="text-muted">IDENTITY</th>
               </tr>
             </thead>
-            {Object.keys(leaderSchedule)
-              .slice(0, displayedCount)
-              .map((leaderPubKey: string, index: number): JSX.Element => {
-                const data = {
-                  leaderKey: leaderPubKey,
-                  data: leaderSchedule[leaderPubKey],
-                };
-                return renderLeaderSchedule(index, data);
-              })}
+            <tbody className="list">
+              {Object.keys(leaderSchedule)
+                .slice(0, displayedCount)
+                .map((leaderPubKey: string, index: number): JSX.Element => {
+                  const data = {
+                    leaderKey: leaderPubKey,
+                    data: leaderSchedule[leaderPubKey],
+                  };
+                  return renderLeaderSchedule(index, data);
+                })}
+            </tbody>
           </table>
           {Object.keys(leaderSchedule).length > PAGINATION_COUNT && (
             <div className="card-footer">
