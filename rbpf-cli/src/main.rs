@@ -305,14 +305,11 @@ native machine code before execting it in the virtual machine.",
     if matches.is_present("trace") {
         eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
-        vm.program_environment
-            .tracer
-            .write(&mut file, analysis.analyze())
-            .unwrap();
+        vm.tracer.write(&mut file, analysis.analyze()).unwrap();
     }
     if matches.is_present("profile") {
         eprintln!("Profile is saved in profile.dot");
-        let tracer = &vm.program_environment.tracer;
+        let tracer = &vm.tracer;
         let analysis = analysis.analyze();
         let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
         let mut file = File::create("profile.dot").unwrap();

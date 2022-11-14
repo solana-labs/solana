@@ -12,6 +12,7 @@ use {
     solana_ledger::token_balances::collect_token_balances,
     solana_program_runtime::{
         compute_budget::{self, ComputeBudget},
+        invoke_context::InvokeContext,
         timings::ExecuteTimings,
     },
     solana_runtime::{
@@ -300,10 +301,7 @@ fn run_program(name: &str) -> u64 {
                 instruction_count = vm.get_total_instruction_count();
                 if config.enable_instruction_tracing {
                     if i == 1 {
-                        if !Tracer::compare(
-                            tracer.as_ref().unwrap(),
-                            &vm.program_environment.tracer,
-                        ) {
+                        if !Tracer::compare(tracer.as_ref().unwrap(), &vm.tracer) {
                             let analysis =
                                 Analysis::from_executable(verified_executable.get_executable())
                                     .unwrap();
@@ -315,10 +313,7 @@ fn run_program(name: &str) -> u64 {
                                 .write(&mut stdout.lock(), &analysis)
                                 .unwrap();
                             println!("TRACE (jit):");
-                            vm.program_environment
-                                .tracer
-                                .write(&mut stdout.lock(), &analysis)
-                                .unwrap();
+                            vm.tracer.write(&mut stdout.lock(), &analysis).unwrap();
                             assert!(false);
                         } else if log_enabled!(Trace) {
                             let analysis =
@@ -334,7 +329,7 @@ fn run_program(name: &str) -> u64 {
                             trace!("SBF Program Instruction Trace:\n{}", trace_string);
                         }
                     }
-                    tracer = Some(vm.program_environment.tracer.clone());
+                    tracer = Some(vm.tracer.clone());
                 }
             }
             assert!(match deserialize_parameters(
