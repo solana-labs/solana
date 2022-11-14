@@ -15,7 +15,6 @@ use {
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
-    log::{log_enabled, trace, Level::Trace},
     solana_measure::measure::Measure,
     solana_program_runtime::{
         compute_budget::ComputeBudget,
@@ -33,7 +32,6 @@ use {
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
-        static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
         vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
@@ -148,7 +146,7 @@ fn create_executor_from_bytes(
         enable_stack_frame_gaps: true,
         instruction_meter_checkpoint_distance: 10000,
         enable_instruction_meter: true,
-        enable_instruction_tracing: log_enabled!(Trace),
+        enable_instruction_tracing: false,
         enable_symbol_and_section_labels: false,
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
@@ -1428,14 +1426,6 @@ impl Executor for BpfExecutor {
             } else {
                 vm.execute_program_interpreted()
             };
-            if log_enabled!(Trace) {
-                let mut trace_buffer = Vec::<u8>::new();
-                let analysis =
-                    Analysis::from_executable(self.verified_executable.get_executable()).unwrap();
-                vm.tracer.write(&mut trace_buffer, &analysis).unwrap();
-                let trace_string = String::from_utf8(trace_buffer).unwrap();
-                trace!("SBF Program Instruction Trace:\n{}", trace_string);
-            }
             drop(vm);
             let compute_meter_post = invoke_context.get_remaining();
             ic_logger_msg!(
@@ -1563,6 +1553,7 @@ mod tests {
         remaining: u64,
     }
     impl ContextObject for TestContextObject {
+        fn trace(&mut self, _state: [u64; 12]) {}
         fn consume(&mut self, amount: u64) {
             self.remaining = self.remaining.saturating_sub(amount);
         }

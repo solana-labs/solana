@@ -53,7 +53,6 @@ use {
     std::{collections::HashMap, str::FromStr},
 };
 use {
-    log::{log_enabled, trace, Level::Trace},
     solana_bpf_loader_program::{
         create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
@@ -62,9 +61,8 @@ use {
     solana_program_runtime::invoke_context::with_mock_invoke_context,
     solana_rbpf::{
         elf::Executable,
-        static_analysis::Analysis,
         verifier::RequisiteVerifier,
-        vm::{Config, Tracer, VerifiedExecutable},
+        vm::{Config, VerifiedExecutable},
     },
     solana_runtime::{
         bank::Bank,
@@ -258,7 +256,7 @@ fn run_program(name: &str) -> u64 {
         };
 
         let mut instruction_count = 0;
-        let mut tracer = None;
+        let mut trace_log = None;
         for i in 0..run_program_iterations {
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context
@@ -300,36 +298,17 @@ fn run_program(name: &str) -> u64 {
                 }
                 instruction_count = vm.get_total_instruction_count();
                 if config.enable_instruction_tracing {
-                    if i == 1 {
-                        if !Tracer::compare(tracer.as_ref().unwrap(), &vm.tracer) {
-                            let analysis =
-                                Analysis::from_executable(verified_executable.get_executable())
-                                    .unwrap();
-                            let stdout = std::io::stdout();
-                            println!("TRACE (interpreted):");
-                            tracer
-                                .as_ref()
-                                .unwrap()
-                                .write(&mut stdout.lock(), &analysis)
-                                .unwrap();
-                            println!("TRACE (jit):");
-                            vm.tracer.write(&mut stdout.lock(), &analysis).unwrap();
-                            assert!(false);
-                        } else if log_enabled!(Trace) {
-                            let analysis =
-                                Analysis::from_executable(verified_executable.get_executable())
-                                    .unwrap();
-                            let mut trace_buffer = Vec::<u8>::new();
-                            tracer
-                                .as_ref()
-                                .unwrap()
-                                .write(&mut trace_buffer, &analysis)
-                                .unwrap();
-                            let trace_string = String::from_utf8(trace_buffer).unwrap();
-                            trace!("SBF Program Instruction Trace:\n{}", trace_string);
+                    if i == 0 {
+                        trace_log = Some(vm.context_object.trace_log.clone());
+                    } else {
+                        let interpreter = trace_log.as_ref().unwrap().as_slice();
+                        let mut jit = vm.context_object.trace_log.as_slice();
+                        if jit.len() > interpreter.len() {
+                            jit = &jit[0..interpreter.len()];
                         }
+                        assert_eq!(interpreter, jit);
+                        trace_log = None;
                     }
-                    tracer = Some(vm.tracer.clone());
                 }
             }
             assert!(match deserialize_parameters(

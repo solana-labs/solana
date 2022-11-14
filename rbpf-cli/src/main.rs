@@ -8,10 +8,12 @@ use {
     solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
     solana_rbpf::{
         assembler::assemble,
+        debugger,
         elf::Executable,
+        interpreter::Interpreter,
         static_analysis::Analysis,
         verifier::RequisiteVerifier,
-        vm::{Config, DynamicAnalysis, VerifiedExecutable},
+        vm::{Config, VerifiedExecutable},
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
@@ -120,14 +122,15 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
                 .help(
                     "Method of execution to use, where 'cfg' generates Control Flow Graph \
 of the program, 'disassembler' dumps disassembled code of the program, 'interpreter' runs \
-the program in the virtual machine's interpreter, and 'jit' precompiles the program to \
-native machine code before execting it in the virtual machine.",
+the program in the virtual machine's interpreter, 'debugger' is the same as 'interpreter' \
+but hosts a GDB interface, and 'jit' precompiles the program to native machine code \
+before execting it in the virtual machine.",
                 )
                 .short('u')
                 .long("use")
                 .takes_value(true)
                 .value_name("VALUE")
-                .possible_values(["cfg", "disassembler", "interpreter", "jit"])
+                .possible_values(["cfg", "disassembler", "interpreter", "debugger", "jit"])
                 .default_value("jit"),
         )
         .arg(
@@ -140,16 +143,12 @@ native machine code before execting it in the virtual machine.",
                 .default_value(&std::i64::MAX.to_string()),
         )
         .arg(
-            Arg::new("trace")
-                .help("Output trace to 'trace.out' file using tracing instrumentation")
-                .short('t')
-                .long("trace"),
-        )
-        .arg(
-            Arg::new("profile")
-                .help("Output profile to 'profile.dot' file using tracing instrumentation")
-                .short('p')
-                .long("profile"),
+            Arg::new("port")
+                .help("Port to use for the connection with a remote debugger")
+                .long("port")
+                .takes_value(true)
+                .value_name("PORT")
+                .default_value("9001"),
         )
         .arg(
             Arg::new("output_format")
@@ -163,7 +162,6 @@ native machine code before execting it in the virtual machine.",
         .get_matches();
 
     let config = Config {
-        enable_instruction_tracing: matches.is_present("trace") || matches.is_present("profile"),
         enable_symbol_and_section_labels: true,
         ..Config::default()
     };
@@ -295,28 +293,16 @@ native machine code before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
-    let result = if matches.value_of("use").unwrap() == "interpreter" {
+    let result = if matches.value_of("use").unwrap() == "debugger" {
+        let mut interpreter = Interpreter::new(&mut vm).unwrap();
+        let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
+        debugger::execute(&mut interpreter, port)
+    } else if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted()
     } else {
         vm.execute_program_jit()
     };
     let duration = Instant::now() - start_time;
-
-    if matches.is_present("trace") {
-        eprintln!("Trace is saved in trace.out");
-        let mut file = File::create("trace.out").unwrap();
-        vm.tracer.write(&mut file, analysis.analyze()).unwrap();
-    }
-    if matches.is_present("profile") {
-        eprintln!("Profile is saved in profile.dot");
-        let tracer = &vm.tracer;
-        let analysis = analysis.analyze();
-        let dynamic_analysis = DynamicAnalysis::new(tracer, analysis);
-        let mut file = File::create("profile.dot").unwrap();
-        analysis
-            .visualize_graphically(&mut file, Some(&dynamic_analysis))
-            .unwrap();
-    }
 
     let instruction_count = vm.get_total_instruction_count();
     drop(vm);
