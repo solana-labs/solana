@@ -7715,10 +7715,28 @@ impl Bank {
         total_accounts_stats
     }
 
-    /// if we were to serialize THIS bank, what value should be saved for the prior accounts hash?
-    /// This depends on the proximity to the time to take the snapshot and the time to use the snapshot.
-    pub(crate) fn get_epoch_accounts_hash_to_serialize(&self) -> Option<Hash> {
-        self.epoch_accounts_hash().map(|hash| *hash.as_ref())
+    /// Get the EAH that will be used by snapshots
+    ///
+    /// Since snapshots are taken on roots, if the bank is in the EAH calculation window then an
+    /// EAH *must* be included.  This means if an EAH calculation is currently in-flight we will
+    /// wait for it to complete.
+    pub fn get_epoch_accounts_hash_to_serialize(&self) -> Option<EpochAccountsHash> {
+        let (epoch_accounts_hash, measure) = measure!(
+            epoch_accounts_hash::is_in_calculation_window(self).then(|| {
+                self.rc
+                    .accounts
+                    .accounts_db
+                    .epoch_accounts_hash_manager
+                    .wait_get_epoch_accounts_hash()
+            })
+        );
+
+        datapoint_info!(
+            "bank-get_epoch_accounts_hash_to_serialize",
+            ("slot", self.slot(), i64),
+            ("waiting-time-us", measure.as_us(), i64),
+        );
+        epoch_accounts_hash
     }
 
     /// Convenience fn to get the Epoch Accounts Hash

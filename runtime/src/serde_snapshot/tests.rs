@@ -7,6 +7,7 @@ use {
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
+        epoch_accounts_hash,
         genesis_utils::{activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
         status_cache::StatusCache,
@@ -224,6 +225,7 @@ fn test_bank_serialize_style(
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank0.squash();
 
@@ -231,7 +233,15 @@ fn test_bank_serialize_style(
     let key1 = Keypair::new();
     bank1.deposit(&key1.pubkey(), 5).unwrap();
 
-    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+    // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
+    // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
+    // and the later-deserialized bank's EAH will not match the expected EAH.
+    let bank2_slot = if initial_epoch_accounts_hash {
+        eah_start_slot
+    } else {
+        0
+    } + 2;
+    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
 
     // Test new account
     let key2 = Keypair::new();
@@ -260,7 +270,7 @@ fn test_bank_serialize_style(
             .epoch_accounts_hash_manager
             .set_valid(
                 EpochAccountsHash::new(expected_epoch_accounts_hash.unwrap()),
-                0,
+                eah_start_slot,
             );
     }
 
@@ -397,7 +407,7 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
-    assert_eq!(dbank.get_epoch_accounts_hash_to_serialize(), expected_epoch_accounts_hash,
+    assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
         "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
         (
             reserialize_accounts_hash,

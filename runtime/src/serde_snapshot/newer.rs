@@ -214,7 +214,8 @@ impl<'a> TypeContext<'a> for Context {
             None::<BankIncrementalSnapshotPersistence>,
             serializable_bank
                 .bank
-                .get_epoch_accounts_hash_to_serialize(),
+                .get_epoch_accounts_hash_to_serialize()
+                .map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()),
         )
             .serialize(serializer)
     }

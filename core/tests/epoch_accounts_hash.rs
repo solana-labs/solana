@@ -466,7 +466,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
             assert_eq!(&deserialized_bank, bank.as_ref());
             assert_eq!(
                 deserialized_bank.epoch_accounts_hash(),
-                bank.epoch_accounts_hash(),
+                bank.get_epoch_accounts_hash_to_serialize(),
             );
         }
 
