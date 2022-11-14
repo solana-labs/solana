@@ -194,10 +194,17 @@ pub fn create_genesis_config_with_leader(
     }
 }
 
+/// Activate all features at genesis in development mode
 pub fn activate_all_features(genesis_config: &mut GenesisConfig) {
-    // Activate all features at genesis in development mode
+    activate_all_features_except(genesis_config, &[])
+}
+
+/// Activate all features at genesis in development mode except those in 'except'
+pub fn activate_all_features_except(genesis_config: &mut GenesisConfig, except: &[Pubkey]) {
     for feature_id in FeatureSet::default().inactive {
-        activate_feature(genesis_config, feature_id);
+        if !except.contains(&feature_id) {
+            activate_feature(genesis_config, feature_id);
+        }
     }
 }
 
