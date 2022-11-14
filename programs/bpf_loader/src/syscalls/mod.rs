@@ -1659,7 +1659,7 @@ declare_syscall!(
                 1,
                 invoke_context.get_check_aligned(),
                 invoke_context.get_check_size(),
-        )?[0];
+        )?.get(0).ok_or(SyscallError::InvalidLength)?;
 
         let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
@@ -1707,7 +1707,7 @@ declare_syscall!(
         else{
             let res = base.modpow(&exponent, &modulus);
             let res = res.to_bytes_be();
-            let mut value = vec![0_u8; params.modulus_len as usize - res.len()];
+            let mut value = vec![0_u8; (params.modulus_len as usize).saturating_sub(res.len())];
             value.extend(res);
             value
         };
