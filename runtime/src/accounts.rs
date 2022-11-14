@@ -29,14 +29,15 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_address_lookup_table_program::{error::AddressLookupError, state::AddressLookupTable},
+    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot},
         feature_set::{
-            self, remove_deprecated_request_unit_ix, use_default_units_in_fee_calculation,
-            FeatureSet,
+            self, cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -61,6 +62,7 @@ use {
     std::{
         cmp::Reverse,
         collections::{hash_map, BinaryHeap, HashMap, HashSet},
+        num::NonZeroUsize,
         ops::RangeBounds,
         path::PathBuf,
         sync::{
@@ -272,17 +274,31 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
+            let requested_loaded_accounts_data_size_limit =
+                if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+                    let requested_loaded_accounts_data_size =
+                        Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+                    Some(requested_loaded_accounts_data_size)
+                } else {
+                    None
+                };
+            let mut accumulated_accounts_data_size: usize = 0;
+
             for (i, key) in account_keys.iter().enumerate() {
-                let account = if !message.is_non_loader_key(i) {
+                let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
-                    AccountSharedData::default()
+                    (AccountSharedData::default(), 0)
                 } else {
                     #[allow(clippy::collapsible_else_if)]
                     if solana_sdk::sysvar::instructions::check_id(key) {
-                        Self::construct_instructions_account(
-                            message,
-                            feature_set
-                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                        (
+                            Self::construct_instructions_account(
+                                message,
+                                feature_set.is_active(
+                                    &feature_set::instructions_sysvar_owned_by_sysvar::id(),
+                                ),
+                            ),
+                            0,
                         )
                     } else {
                         let (mut account, rent) = if let Some(account_override) =
@@ -327,6 +343,7 @@ impl Accounts {
                             validated_fee_payer = true;
                         }
 
+                        let mut loaded_programdata_account_size: usize = 0;
                         if bpf_loader_upgradeable::check_id(account.owner()) {
                             if message.is_writable(i) && !message.is_upgradeable_loader_present() {
                                 error_counters.invalid_writable_account += 1;
@@ -343,6 +360,8 @@ impl Accounts {
                                         .accounts_db
                                         .load_with_fixed_root(ancestors, &programdata_address)
                                     {
+                                        loaded_programdata_account_size =
+                                            programdata_account.data().len();
                                         account_deps
                                             .push((programdata_address, programdata_account));
                                     } else {
@@ -362,9 +381,19 @@ impl Accounts {
                         tx_rent += rent;
                         rent_debits.insert(key, rent, account.lamports());
 
-                        account
+                        (account, loaded_programdata_account_size)
                     }
                 };
+                Self::accumulate_and_check_loaded_account_data_size(
+                    &mut accumulated_accounts_data_size,
+                    account
+                        .data()
+                        .len()
+                        .saturating_add(loaded_programdata_account_size),
+                    requested_loaded_accounts_data_size_limit,
+                    error_counters,
+                )?;
+
                 accounts.push((*key, account));
             }
             debug_assert_eq!(accounts.len(), account_keys.len());
@@ -385,6 +414,8 @@ impl Accounts {
                             &mut accounts,
                             instruction.program_id_index as IndexOfAccount,
                             error_counters,
+                            &mut accumulated_accounts_data_size,
+                            requested_loaded_accounts_data_size_limit,
                         )
                     })
                     .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
@@ -400,6 +431,22 @@ impl Accounts {
                 Err(TransactionError::AccountNotFound)
             }
         }
+    }
+
+    fn get_requested_loaded_accounts_data_size_limit(
+        tx: &SanitizedTransaction,
+        feature_set: &FeatureSet,
+    ) -> Result<NonZeroUsize> {
+        let mut compute_budget = ComputeBudget::default();
+        let _prioritization_fee_details = compute_budget.process_instructions(
+            tx.message().program_instructions_iter(),
+            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+            Bank::get_loaded_accounts_data_limit_type(feature_set),
+        )?;
+        NonZeroUsize::new(compute_budget.accounts_data_size_limit as usize)
+            .ok_or(TransactionError::InvalidLoadedAccountsDataSizeLimit)
     }
 
     fn validate_fee_payer(
@@ -456,15 +503,22 @@ impl Accounts {
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
+        accumulated_accounts_data_size: &mut usize,
+        requested_loaded_accounts_data_size_limit: Option<NonZeroUsize>,
     ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
-        let mut program_id = match accounts.get(program_account_index as usize) {
-            Some(program_account) => program_account.0,
-            None => {
-                error_counters.account_not_found += 1;
-                return Err(TransactionError::ProgramAccountNotFound);
-            }
-        };
+        let (mut program_id, already_loaded_as_non_loader) =
+            match accounts.get(program_account_index as usize) {
+                Some(program_account) => (
+                    program_account.0,
+                    // program account is already loaded if it's not empty in `accounts`
+                    program_account.1 != AccountSharedData::default(),
+                ),
+                None => {
+                    error_counters.account_not_found += 1;
+                    return Err(TransactionError::ProgramAccountNotFound);
+                }
+            };
         let mut depth = 0;
         while !native_loader::check_id(&program_id) {
             if depth >= 5 {
@@ -472,6 +526,7 @@ impl Accounts {
                 return Err(TransactionError::CallChainTooDeep);
             }
             depth += 1;
+            let mut loaded_account_total_size: usize = 0;
 
             program_account_index = match self
                 .accounts_db
@@ -479,6 +534,13 @@ impl Accounts {
             {
                 Some((program_account, _)) => {
                     let account_index = accounts.len() as IndexOfAccount;
+                    // do not double count account size for program account on top of call chain
+                    // that has already been loaded during load_transaction as non-loader account.
+                    // Other accounts data size in the call chain are counted.
+                    if !(depth == 1 && already_loaded_as_non_loader) {
+                        loaded_account_total_size =
+                            loaded_account_total_size.saturating_add(program_account.data().len());
+                    }
                     accounts.push((program_id, program_account));
                     account_index
                 }
@@ -496,6 +558,7 @@ impl Accounts {
             // Add loader to chain
             let program_owner = *program.owner();
             account_indices.insert(0, program_account_index);
+
             if bpf_loader_upgradeable::check_id(&program_owner) {
                 // The upgradeable loader requires the derived ProgramData account
                 if let Ok(UpgradeableLoaderState::Program {
@@ -508,6 +571,10 @@ impl Accounts {
                     {
                         Some((programdata_account, _)) => {
                             let account_index = accounts.len() as IndexOfAccount;
+                            if !(depth == 1 && already_loaded_as_non_loader) {
+                                loaded_account_total_size = loaded_account_total_size
+                                    .saturating_add(programdata_account.data().len());
+                            }
                             accounts.push((programdata_address, programdata_account));
                             account_index
                         }
@@ -522,10 +589,41 @@ impl Accounts {
                     return Err(TransactionError::InvalidProgramForExecution);
                 }
             }
+            Self::accumulate_and_check_loaded_account_data_size(
+                accumulated_accounts_data_size,
+                loaded_account_total_size,
+                requested_loaded_accounts_data_size_limit,
+                error_counters,
+            )?;
 
             program_id = program_owner;
         }
         Ok(account_indices)
+    }
+
+    /// Accumulate loaded account data size into `accumulated_accounts_data_size`.
+    /// Returns TransactionErr::MaxLoadedAccountsDataSizeExceeded if
+    /// `requested_loaded_accounts_data_size_limit` is specified and
+    /// `accumulated_accounts_data_size` exceeds it.
+    fn accumulate_and_check_loaded_account_data_size(
+        accumulated_loaded_accounts_data_size: &mut usize,
+        account_data_size: usize,
+        requested_loaded_accounts_data_size_limit: Option<NonZeroUsize>,
+        error_counters: &mut TransactionErrorMetrics,
+    ) -> Result<()> {
+        if let Some(requested_loaded_accounts_data_size) = requested_loaded_accounts_data_size_limit
+        {
+            *accumulated_loaded_accounts_data_size =
+                accumulated_loaded_accounts_data_size.saturating_add(account_data_size);
+            if *accumulated_loaded_accounts_data_size > requested_loaded_accounts_data_size.get() {
+                error_counters.max_loaded_accounts_data_size_exceeded += 1;
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -558,6 +656,8 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                             !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+                            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+                            Bank::get_loaded_accounts_data_limit_type(feature_set),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1401,7 +1501,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-        solana_program_runtime::executor_cache::TransactionExecutorCache,
+        solana_program_runtime::{compute_budget, executor_cache::TransactionExecutorCache},
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1659,6 +1759,8 @@ mod tests {
             &FeeStructure::default(),
             true,
             false,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2472,6 +2574,8 @@ mod tests {
                 &mut vec![(keypair.pubkey(), account)],
                 0,
                 &mut error_counters,
+                &mut 0,
+                None,
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
@@ -3898,6 +4002,232 @@ mod tests {
             assert!(!Accounts::accumulate_and_check_scan_result_size(
                 &sum, &account, &None
             ));
+        }
+    }
+
+    #[test]
+    fn test_accumulate_and_check_loaded_account_data_size() {
+        let mut error_counter = TransactionErrorMetrics::default();
+
+        // assert check is OK if data limit is not enabled
+        {
+            let mut accumulated_data_size: usize = 0;
+            let data_size = usize::MAX;
+            let requested_data_size_limit = None;
+
+            assert!(Accounts::accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_data_size,
+                data_size,
+                requested_data_size_limit,
+                &mut error_counter
+            )
+            .is_ok());
+        }
+
+        // assert accounts are accumulated and check properly
+        {
+            let mut accumulated_data_size: usize = 0;
+            let data_size: usize = 123;
+            let requested_data_size_limit = NonZeroUsize::new(data_size);
+
+            // OK
+            assert!(Accounts::accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_data_size,
+                data_size,
+                requested_data_size_limit,
+                &mut error_counter
+            )
+            .is_ok());
+            assert_eq!(data_size, accumulated_data_size);
+
+            // exceeds
+            let another_byte: usize = 1;
+            assert_eq!(
+                Accounts::accumulate_and_check_loaded_account_data_size(
+                    &mut accumulated_data_size,
+                    another_byte,
+                    requested_data_size_limit,
+                    &mut error_counter
+                ),
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_executable_accounts() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let mut error_counters = TransactionErrorMetrics::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+
+        let space: usize = 9;
+        let keypair = Keypair::new();
+        let mut account = AccountSharedData::new(1, space, &native_loader::id());
+        account.set_executable(true);
+        accounts.store_slow_uncached(0, &keypair.pubkey(), &account);
+
+        let mut accumulated_accounts_data_size: usize = 0;
+        let mut expect_accumulated_accounts_data_size: usize;
+
+        // test: program account has been loaded as non-loader, load_executable_accounts
+        //       will not double count its data size
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), account)];
+            accumulated_accounts_data_size += space;
+            expect_accumulated_accounts_data_size = accumulated_accounts_data_size;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: program account has not been loaded cause it's loader, load_executable_accounts
+        //       will accumulate its data size
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), AccountSharedData::default())];
+            expect_accumulated_accounts_data_size = accumulated_accounts_data_size + space;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: try to load one more account will accumulate additional `space` bytes, therefore
+        //       exceed limit of `expect_accumulated_accounts_data_size` set above.
+        {
+            let mut loaded_accounts = vec![(keypair.pubkey(), AccountSharedData::default())];
+            assert_eq!(
+                accounts.load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                ),
+                Err(TransactionError::MaxLoadedAccountsDataSizeExceeded)
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_executable_accounts_with_upgradeable_program() {
+        solana_logger::setup();
+        let accounts = Accounts::new_with_config_for_tests(
+            Vec::new(),
+            &ClusterType::Development,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        );
+        let mut error_counters = TransactionErrorMetrics::default();
+        let ancestors = vec![(0, 0)].into_iter().collect();
+
+        // call chain: native_loader -> key0 -> upgradeable bpf loader -> program_key (that has programdata_key)
+        let programdata_key = Pubkey::new(&[3u8; 32]);
+        let program_data = UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: None,
+        };
+        let mut program_data_account =
+            AccountSharedData::new_data(1, &program_data, &Pubkey::default()).unwrap();
+        let program_data_account_size = program_data_account.data().len();
+        program_data_account.set_executable(true);
+        program_data_account.set_rent_epoch(0);
+        accounts.store_slow_uncached(0, &programdata_key, &program_data_account);
+
+        let program_key = Pubkey::new(&[2u8; 32]);
+        let program = UpgradeableLoaderState::Program {
+            programdata_address: programdata_key,
+        };
+        let mut program_account =
+            AccountSharedData::new_data(1, &program, &bpf_loader_upgradeable::id()).unwrap();
+        let program_account_size = program_account.data().len();
+        program_account.set_executable(true);
+        program_account.set_rent_epoch(0);
+        accounts.store_slow_uncached(0, &program_key, &program_account);
+
+        let key0 = Pubkey::new(&[1u8; 32]);
+        let mut bpf_loader_account = AccountSharedData::new(1, 0, &key0);
+        bpf_loader_account.set_executable(true);
+        accounts.store_slow_uncached(0, &bpf_loader_upgradeable::id(), &bpf_loader_account);
+
+        let space: usize = 9;
+        let mut account = AccountSharedData::new(1, space, &native_loader::id());
+        account.set_executable(true);
+        accounts.store_slow_uncached(0, &key0, &account);
+
+        // test:  program_key account has been loaded as non-loader, load_executable_accounts
+        //       will not double count its data size, but still accumulate data size from
+        //       callchain
+        {
+            let expect_accumulated_accounts_data_size: usize = space;
+            let mut accumulated_accounts_data_size: usize = 0;
+            let mut loaded_accounts = vec![(program_key, program_account)];
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
+        }
+
+        // test: program account has not been loaded cause it's loader, load_executable_accounts
+        //       will accumulate entire callchain data size.
+        {
+            let mut loaded_accounts = vec![(program_key, AccountSharedData::default())];
+            let mut accumulated_accounts_data_size: usize = 0;
+            let expect_accumulated_accounts_data_size =
+                program_account_size + program_data_account_size + space;
+            assert!(accounts
+                .load_executable_accounts(
+                    &ancestors,
+                    &mut loaded_accounts,
+                    0,
+                    &mut error_counters,
+                    &mut accumulated_accounts_data_size,
+                    NonZeroUsize::new(expect_accumulated_accounts_data_size),
+                )
+                .is_ok());
+            assert_eq!(
+                expect_accumulated_accounts_data_size,
+                accumulated_accounts_data_size
+            );
         }
     }
 }
