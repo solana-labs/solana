@@ -1,5 +1,11 @@
 //! Helper types and functions for handling and dealing with snapshot hashes.
-use solana_sdk::{clock::Slot, hash::Hash};
+use {
+    crate::epoch_accounts_hash::EpochAccountsHash,
+    solana_sdk::{
+        clock::Slot,
+        hash::{Hash, Hasher},
+    },
+};
 
 /// At startup, when loading from snapshots, the starting snapshot hashes need to be passed to
 /// SnapshotPackagerService, which is in charge of pushing the hashes to CRDS.  This struct wraps
@@ -48,11 +54,19 @@ pub struct IncrementalSnapshotHashes {
 pub struct SnapshotHash(pub Hash);
 
 impl SnapshotHash {
-    /// Make a snapshot hash from an accounts hash
-    ///
-    /// Will soon also incorporate the epoch accounts hash
+    /// Make a snapshot hash from an accounts hash and epoch accounts hash
     #[must_use]
-    pub fn new(accounts_hash: &Hash) -> Self {
-        Self(*accounts_hash)
+    pub fn new(accounts_hash: &Hash, epoch_accounts_hash: Option<&EpochAccountsHash>) -> Self {
+        let snapshot_hash = match epoch_accounts_hash {
+            None => *accounts_hash,
+            Some(epoch_accounts_hash) => {
+                let mut hasher = Hasher::default();
+                hasher.hash(accounts_hash.as_ref());
+                hasher.hash(epoch_accounts_hash.as_ref().as_ref());
+                hasher.result()
+            }
+        };
+
+        Self(snapshot_hash)
     }
 }

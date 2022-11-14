@@ -149,6 +149,30 @@ contain the EAH.
 Same as (4).
 
 
+#### Snapshot Verification
+
+If a snapshot archive includes an EAH, we want to verify the EAH is correct at
+load time (instead of waiting until `stop slot`, which could be far in the
+future).
+
+If the snapshot archive is for a slot within the `calculation window`†¹, then it
+*must* include an EAH.  The snapshot hash itself will now also incorporate the
+EAH.  In pseudo code:
+```pseudo
+if slot is in calculation window
+    let snapshot hash = hash(accounts hash, epoch accounts hash)
+else
+    let snapshot hash = accounts hash
+endif
+```
+Since loading from a snapshot archive already verifies the snapshot archive's
+hash against the deserialized bank, the EAH will be implicitly verified as
+well.
+
+†¹: The `calculation window` is `[start slot, stop slot)`, based on the epoch
+    of the referenced `Bank`.
+
+
 #### Corner Cases
 
 #### Minimum Slots per Epoch

@@ -3,6 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::SnapshotStorages,
         bank::{Bank, BankSlotDelta},
+        epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
         snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter},
         snapshot_hash::SnapshotHash,
@@ -107,6 +108,7 @@ impl AccountsPackage {
             incremental_snapshot_archives_dir: incremental_snapshot_archives_dir
                 .as_ref()
                 .to_path_buf(),
+            epoch_accounts_hash: bank.get_epoch_accounts_hash_to_serialize(),
         };
         Ok(Self::_new(
             package_type,
@@ -177,6 +179,7 @@ impl AccountsPackage {
                 snapshot_version: SnapshotVersion::default(),
                 full_snapshot_archives_dir: PathBuf::default(),
                 incremental_snapshot_archives_dir: PathBuf::default(),
+                epoch_accounts_hash: Option::default(),
             }),
             enqueued: Instant::now(),
         }
@@ -217,6 +220,7 @@ pub struct SupplementalSnapshotInfo {
     pub snapshot_version: SnapshotVersion,
     pub full_snapshot_archives_dir: PathBuf,
     pub incremental_snapshot_archives_dir: PathBuf,
+    pub epoch_accounts_hash: Option<EpochAccountsHash>,
 }
 
 /// Accounts packages are sent to the Accounts Hash Verifier for processing.  There are multiple
@@ -247,7 +251,8 @@ impl SnapshotPackage {
         let Some(snapshot_info) = accounts_package.snapshot_info else {
             panic!("The AccountsPackage must have snapshot info in order to make a SnapshotPackage!");
         };
-        let snapshot_hash = SnapshotHash::new(&accounts_hash);
+        let snapshot_hash =
+            SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());
         let mut snapshot_storages = accounts_package.snapshot_storages;
         let snapshot_archive_path = match snapshot_type {
             SnapshotType::FullSnapshot => snapshot_utils::build_full_snapshot_archive_path(
