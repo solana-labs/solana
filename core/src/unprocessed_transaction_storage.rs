@@ -1,12 +1,14 @@
 use {
     crate::{
-        banking_stage::{FilterForwardingResults, ForwardOption},
+        banking_stage::{BankingStageStats, FilterForwardingResults, ForwardOption},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
             LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
             VoteSource,
         },
+        leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
         unprocessed_packet_batches::{
             DeserializedPacket, PacketBatchInsertionMetrics, UnprocessedPacketBatches,
         },
@@ -16,13 +18,19 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, saturating_add_assign,
-        transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, pubkey::Pubkey,
+        saturating_add_assign, transaction::SanitizedTransaction,
     },
-    std::sync::Arc,
+    std::{
+        collections::HashSet,
+        sync::{atomic::Ordering, Arc},
+    },
 };
 
-pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
+// Step-size set to be 64, equal to the maximum batch/entry size. With the
+// multi-iterator change, there's no point in getting larger batches of
+// non-conflicting transactions.
+pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 64;
 /// Maximum numer of votes a single receive call will accept
 const MAX_NUM_VOTES_RECEIVE: usize = 10_000;
 
@@ -117,6 +125,112 @@ fn filter_processed_packets<'a, F>(
             f(start, end)
         }
     }
+}
+
+/// Convenient wrapper for shared-state between banking stage processing and the
+/// multi-iterator checking function.
+pub struct ConsumeScannerPayload<'a> {
+    pub reached_end_of_slot: bool,
+    pub write_accounts: HashSet<Pubkey>,
+    pub sanitized_transactions: Vec<SanitizedTransaction>,
+    pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+}
+
+fn consume_scan_should_process_packet(
+    bank: &Bank,
+    banking_stage_stats: &BankingStageStats,
+    packet: &ImmutableDeserializedPacket,
+    payload: &mut ConsumeScannerPayload,
+) -> ProcessingDecision {
+    // If end of the slot, return should process (quick loop after reached end of slot)
+    if payload.reached_end_of_slot {
+        return ProcessingDecision::Now;
+    }
+
+    // Before sanitization, let's quickly check the static keys (performance optimization)
+    let message = &packet.transaction().get_message().message;
+    let static_keys = message.static_account_keys();
+    for key in static_keys.iter().enumerate().filter_map(|(idx, key)| {
+        if message.is_maybe_writable(idx) {
+            Some(key)
+        } else {
+            None
+        }
+    }) {
+        if payload.write_accounts.contains(key) {
+            return ProcessingDecision::Later;
+        }
+    }
+
+    // Try to deserialize the packet
+    let (maybe_sanitized_transaction, sanitization_time) = measure!(
+        packet.build_sanitized_transaction(&bank.feature_set, bank.vote_only_bank(), bank)
+    );
+
+    let sanitization_time_us = sanitization_time.as_us();
+    payload
+        .slot_metrics_tracker
+        .increment_transactions_from_packets_us(sanitization_time_us);
+    banking_stage_stats
+        .packet_conversion_elapsed
+        .fetch_add(sanitization_time_us, Ordering::Relaxed);
+
+    if let Some(sanitized_transaction) = maybe_sanitized_transaction {
+        let message = sanitized_transaction.message();
+
+        let conflicts_with_batch = message.account_keys().iter().enumerate().any(|(idx, key)| {
+            if message.is_writable(idx) {
+                payload.write_accounts.contains(key)
+            } else {
+                false
+            }
+        });
+
+        if conflicts_with_batch {
+            ProcessingDecision::Later
+        } else {
+            message
+                .account_keys()
+                .iter()
+                .enumerate()
+                .for_each(|(idx, key)| {
+                    if message.is_writable(idx) {
+                        payload.write_accounts.insert(*key);
+                    }
+                });
+
+            payload.sanitized_transactions.push(sanitized_transaction);
+            ProcessingDecision::Now
+        }
+    } else {
+        ProcessingDecision::Never
+    }
+}
+
+fn create_consume_multi_iterator<'a, 'b, F>(
+    packets: &'a [Arc<ImmutableDeserializedPacket>],
+    slot_metrics_tracker: &'b mut LeaderSlotMetricsTracker,
+    should_process_packet: F,
+) -> MultiIteratorScanner<'a, Arc<ImmutableDeserializedPacket>, ConsumeScannerPayload<'b>, F>
+where
+    F: FnMut(
+        &Arc<ImmutableDeserializedPacket>,
+        &mut ConsumeScannerPayload<'b>,
+    ) -> ProcessingDecision,
+    'b: 'a,
+{
+    let payload = ConsumeScannerPayload {
+        reached_end_of_slot: false,
+        write_accounts: HashSet::new(),
+        sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
+        slot_metrics_tracker,
+    };
+    MultiIteratorScanner::new(
+        packets,
+        UNPROCESSED_BUFFER_STEP_SIZE,
+        payload,
+        should_process_packet,
+    )
 }
 
 impl UnprocessedTransactionStorage {
@@ -233,22 +347,34 @@ impl UnprocessedTransactionStorage {
     /// The processing function takes a stream of packets ready to process, and returns the indices
     /// of the unprocessed packets that are eligible for retry. A return value of None means that
     /// all packets are unprocessed and eligible for retry.
-    pub fn process_packets<F>(
+    #[must_use]
+    pub fn process_packets<'a, F>(
         &mut self,
-        bank: Option<Arc<Bank>>,
-        batch_size: usize,
+        bank: Arc<Bank>,
+        banking_stage_stats: &BankingStageStats,
+        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         processing_function: F,
-    ) where
-        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+    ) -> ConsumeScannerPayload<'a>
+    where
+        F: FnMut(
+            &Vec<Arc<ImmutableDeserializedPacket>>,
+            &mut ConsumeScannerPayload,
+        ) -> Option<Vec<usize>>,
     {
-        match (self, bank) {
-            (Self::LocalTransactionStorage(transaction_storage), _) => {
-                transaction_storage.process_packets(batch_size, processing_function)
-            }
-            (Self::VoteStorage(vote_storage), Some(bank)) => {
-                vote_storage.process_packets(bank, batch_size, processing_function)
-            }
-            _ => {}
+        match self {
+            Self::LocalTransactionStorage(transaction_storage) => transaction_storage
+                .process_packets(
+                    &bank,
+                    banking_stage_stats,
+                    slot_metrics_tracker,
+                    processing_function,
+                ),
+            Self::VoteStorage(vote_storage) => vote_storage.process_packets(
+                bank,
+                banking_stage_stats,
+                slot_metrics_tracker,
+                processing_function,
+            ),
         }
     }
 }
@@ -312,39 +438,62 @@ impl VoteStorage {
         FilterForwardingResults::default()
     }
 
-    fn process_packets<F>(&mut self, bank: Arc<Bank>, batch_size: usize, mut processing_function: F)
+    fn process_packets<'a, F>(
+        &mut self,
+        bank: Arc<Bank>,
+        banking_stage_stats: &BankingStageStats,
+        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        mut processing_function: F,
+    ) -> ConsumeScannerPayload<'a>
     where
-        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(
+            &Vec<Arc<ImmutableDeserializedPacket>>,
+            &mut ConsumeScannerPayload,
+        ) -> Option<Vec<usize>>,
     {
         if matches!(self.vote_source, VoteSource::Gossip) {
             panic!("Gossip vote thread should not be processing transactions");
         }
 
-        // Insert the retryable votes back in
-        self.latest_unprocessed_votes.insert_batch(
-            // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
-            // from each validator using a weighted random ordering. Votes from validators with
-            // 0 stake are ignored.
-            self.latest_unprocessed_votes
-                .drain_unprocessed(bank)
-                .into_iter()
-                .chunks(batch_size)
-                .into_iter()
-                .flat_map(|vote_packets| {
-                    let vote_packets = vote_packets.into_iter().collect_vec();
-                    if let Some(retryable_vote_indices) = processing_function(&vote_packets) {
-                        retryable_vote_indices
-                            .iter()
-                            .map(|i| vote_packets[*i].clone())
-                            .collect_vec()
-                    } else {
-                        vote_packets
-                    }
-                })
-                .filter_map(|packet| {
-                    LatestValidatorVotePacket::new_from_immutable(packet, self.vote_source).ok()
-                }),
+        let should_process_packet =
+            |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
+                consume_scan_should_process_packet(&bank, banking_stage_stats, packet, payload)
+            };
+
+        // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
+        // from each validator using a weighted random ordering. Votes from validators with
+        // 0 stake are ignored.
+        let all_vote_packets = self
+            .latest_unprocessed_votes
+            .drain_unprocessed(bank.clone());
+        let mut scanner = create_consume_multi_iterator(
+            &all_vote_packets,
+            slot_metrics_tracker,
+            should_process_packet,
         );
+
+        while let Some((packets, payload)) = scanner.iterate() {
+            let vote_packets = packets.iter().map(|p| (*p).clone()).collect_vec();
+
+            if let Some(retryable_vote_indices) = processing_function(&vote_packets, payload) {
+                self.latest_unprocessed_votes.insert_batch(
+                    retryable_vote_indices.iter().filter_map(|i| {
+                        LatestValidatorVotePacket::new_from_immutable(
+                            vote_packets[*i].clone(),
+                            self.vote_source,
+                        )
+                        .ok()
+                    }),
+                );
+            } else {
+                self.latest_unprocessed_votes
+                    .insert_batch(vote_packets.into_iter().filter_map(|packet| {
+                        LatestValidatorVotePacket::new_from_immutable(packet, self.vote_source).ok()
+                    }));
+            }
+        }
+
+        scanner.finalize()
     }
 }
 
@@ -711,35 +860,53 @@ impl ThreadLocalUnprocessedPackets {
         )
     }
 
-    fn process_packets<F>(&mut self, batch_size: usize, mut processing_function: F)
+    fn process_packets<'a, F>(
+        &mut self,
+        bank: &Bank,
+        banking_stage_stats: &BankingStageStats,
+        slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        mut processing_function: F,
+    ) -> ConsumeScannerPayload<'a>
     where
-        F: FnMut(&Vec<Arc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
+        F: FnMut(
+            &Vec<Arc<ImmutableDeserializedPacket>>,
+            &mut ConsumeScannerPayload,
+        ) -> Option<Vec<usize>>,
     {
         let mut retryable_packets = self.take_priority_queue();
         let original_capacity = retryable_packets.capacity();
         let mut new_retryable_packets = MinMaxHeap::with_capacity(original_capacity);
-        new_retryable_packets.extend(
-            retryable_packets
-                .drain_desc()
-                .chunks(batch_size)
-                .into_iter()
-                .flat_map(|packets_to_process| {
-                    let packets_to_process = packets_to_process.into_iter().collect_vec();
-                    if let Some(retryable_transaction_indexes) =
-                        processing_function(&packets_to_process)
-                    {
-                        self.collect_retained_packets(
-                            &packets_to_process,
-                            &retryable_transaction_indexes,
-                        )
-                    } else {
-                        packets_to_process
-                    }
-                }),
+        let all_packets_to_process = retryable_packets.drain_desc().collect_vec();
+
+        let should_process_packet =
+            |packet: &Arc<ImmutableDeserializedPacket>, payload: &mut ConsumeScannerPayload| {
+                consume_scan_should_process_packet(bank, banking_stage_stats, packet, payload)
+            };
+        let mut scanner = create_consume_multi_iterator(
+            &all_packets_to_process,
+            slot_metrics_tracker,
+            should_process_packet,
         );
+
+        while let Some((packets_to_process, payload)) = scanner.iterate() {
+            let packets_to_process = packets_to_process
+                .iter()
+                .map(|p| (*p).clone())
+                .collect_vec();
+            let retryable_packets = if let Some(retryable_transaction_indexes) =
+                processing_function(&packets_to_process, payload)
+            {
+                self.collect_retained_packets(&packets_to_process, &retryable_transaction_indexes)
+            } else {
+                packets_to_process
+            };
+
+            new_retryable_packets.extend(retryable_packets);
+        }
 
         self.unprocessed_packet_batches.packet_priority_queue = new_retryable_packets;
         self.verify_priority_queue(original_capacity);
+        scanner.finalize()
     }
 
     /// Prepare a chunk of packets for forwarding, filter out already forwarded packets while
