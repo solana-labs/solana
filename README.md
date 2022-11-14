@@ -54,7 +54,7 @@ $ cd solana
 ## **3. Build.**
 
 ```bash
-$ cargo build
+$ ./cargo build
 ```
 
 # Testing
@@ -62,7 +62,7 @@ $ cargo build
 **Run the test suite:**
 
 ```bash
-$ cargo test
+$ ./cargo test
 ```
 
 ### Starting a local testnet
