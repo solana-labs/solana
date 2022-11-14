@@ -406,7 +406,7 @@ impl Validator {
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {:?}", err));
+                        return Err(format!("Failed to load plugin: {:?}", err));
                     }
                 }
             } else {
