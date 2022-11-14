@@ -123,8 +123,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
 
         println!("Interpreted:");
-        invoke_context.mock_set_remaining(std::i64::MAX as u64);
-        assert_eq!(SUCCESS, vm.execute_program_interpreted().unwrap());
+        vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+        let (instructions, result) = vm.execute_program_interpreted();
+        assert_eq!(SUCCESS, result.unwrap());
         assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
         assert_eq!(
             ARMSTRONG_EXPECTED,
@@ -133,9 +134,8 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
         bencher.iter(|| {
             vm.context_object.mock_set_remaining(std::i64::MAX as u64);
-            vm.execute_program_interpreted().unwrap();
+            vm.execute_program_interpreted().1.unwrap();
         });
-        let instructions = vm.get_total_instruction_count();
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
         println!("  {:?} instructions", instructions);
         println!("  {:?} ns/iter median", summary.median as u64);
@@ -145,7 +145,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
         println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_interpreted_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 
         println!("JIT to native:");
-        assert_eq!(SUCCESS, vm.execute_program_jit().unwrap());
+        assert_eq!(SUCCESS, vm.execute_program_jit().1.unwrap());
         assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
         assert_eq!(
             ARMSTRONG_EXPECTED,
@@ -154,7 +154,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
         bencher.iter(|| {
             vm.context_object.mock_set_remaining(std::i64::MAX as u64);
-            vm.execute_program_jit().unwrap();
+            vm.execute_program_jit().1.unwrap();
         });
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
         println!("  {:?} instructions", instructions);
@@ -282,7 +282,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         .unwrap();
 
         let mut measure = Measure::start("tune");
-        let _ = vm.execute_program_interpreted();
+        let (instructions, _result) = vm.execute_program_interpreted();
         measure.stop();
 
         assert_eq!(
@@ -294,7 +294,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             "{:?} compute units took {:?} us ({:?} instructions)",
             BUDGET - vm.context_object.get_remaining(),
             measure.as_us(),
-            vm.get_total_instruction_count(),
+            instructions,
         );
     });
 }

@@ -287,16 +287,16 @@ fn run_program(name: &str) -> u64 {
                     invoke_context,
                 )
                 .unwrap();
-                let result = if i == 0 {
+                let (compute_units_consumed, result) = if i == 0 {
                     vm.execute_program_interpreted()
                 } else {
                     vm.execute_program_jit()
                 };
                 assert_eq!(SUCCESS, result.unwrap());
                 if i == 1 {
-                    assert_eq!(instruction_count, vm.get_total_instruction_count());
+                    assert_eq!(instruction_count, compute_units_consumed);
                 }
-                instruction_count = vm.get_total_instruction_count();
+                instruction_count = compute_units_consumed;
                 if config.enable_instruction_tracing {
                     if i == 0 {
                         trace_log = Some(vm.context_object.trace_log.clone());

@@ -1421,18 +1421,17 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let result = if self.use_jit {
+            let (compute_units_consumed, result) = if self.use_jit {
                 vm.execute_program_jit()
             } else {
                 vm.execute_program_interpreted()
             };
             drop(vm);
-            let compute_meter_post = invoke_context.get_remaining();
             ic_logger_msg!(
                 log_collector,
                 "Program {} consumed {} of {} compute units",
                 &program_id,
-                compute_meter_prev.saturating_sub(compute_meter_post),
+                compute_units_consumed,
                 compute_meter_prev
             );
             let (_returned_from_program_id, return_data) =
@@ -1638,7 +1637,7 @@ mod tests {
             vec![input_region],
         )
         .unwrap();
-        vm.execute_program_interpreted().unwrap();
+        vm.execute_program_interpreted().1.unwrap();
     }
 
     #[test]

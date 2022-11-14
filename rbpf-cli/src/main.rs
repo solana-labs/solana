@@ -293,7 +293,7 @@ before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
-    let result = if matches.value_of("use").unwrap() == "debugger" {
+    let (instruction_count, result) = if matches.value_of("use").unwrap() == "debugger" {
         let mut interpreter = Interpreter::new(&mut vm).unwrap();
         let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
         debugger::execute(&mut interpreter, port)
@@ -303,8 +303,6 @@ before execting it in the virtual machine.",
         vm.execute_program_jit()
     };
     let duration = Instant::now() - start_time;
-
-    let instruction_count = vm.get_total_instruction_count();
     drop(vm);
 
     let output = Output {
