@@ -822,12 +822,12 @@ mod test {
     #[test]
     fn test_get_next_snapshot_request() {
         // These constants were picked to ensure the desired snapshot requests were sent to the
-        // channel.  With 100 slots per Epoch, the EAH start will be at slot 25.  Ensure there are
+        // channel.  With 400 slots per Epoch, the EAH start will be at slot 100.  Ensure there are
         // other requests before this slot, and then 2+ requests of each type afterwards (to
         // further test the prioritization logic).
-        const SLOTS_PER_EPOCH: Slot = 100;
-        const FULL_SNAPSHOT_INTERVAL: Slot = 20;
-        const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 6;
+        const SLOTS_PER_EPOCH: Slot = 400;
+        const FULL_SNAPSHOT_INTERVAL: Slot = 80;
+        const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 30;
 
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots: FULL_SNAPSHOT_INTERVAL,
@@ -863,28 +863,27 @@ mod test {
         // Create new banks and send snapshot requests so that the following requests will be in
         // the channel before handling the requests:
         //
-        // fss 20
-        // iss 24
-        // eah 25 <-- handled 1st
-        // iss 30
-        // iss 36
-        // fss 40
-        // iss 42
-        // iss 48
-        // iss 54
-        // fss 60 <-- handled 2nd
-        // iss 66
-        // iss 72 <-- handled 3rd
-        // ahv 73
-        // ahv 74
-        // ahv 75 <-- handled 4th
+        // fss  80
+        // iss  90
+        // eah 100 <-- handled 1st
+        // iss 120
+        // iss 150
+        // fss 160
+        // iss 180
+        // iss 210
+        // fss 240 <-- handled 2nd
+        // iss 270
+        // iss 300 <-- handled 3rd
+        // ahv 301
+        // ahv 302
+        // ahv 303 <-- handled 4th
         //
         // (slots not called out will all be AHV)
-        // Also, incremental snapshots before slot 60 (the first full snapshot handled), will
+        // Also, incremental snapshots before slot 240 (the first full snapshot handled), will
         // actually be AHV since the last full snapshot slot will be `None`.  This is expected and
         // fine; but maybe unexpected for a reader/debugger without this additional context.
         let mut parent = Arc::clone(&bank);
-        for _ in 0..75 {
+        for _ in 0..303 {
             let bank = Arc::new(Bank::new_from_parent(
                 &parent,
                 &Pubkey::new_unique(),
@@ -908,9 +907,9 @@ mod test {
             accounts_package_type,
             AccountsPackageType::EpochAccountsHash
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 25);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 100);
 
-        // Ensure the full snapshot from slot 60 is handled 2nd
+        // Ensure the full snapshot from slot 240 is handled 2nd
         // (the older full snapshots are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
             .get_next_snapshot_request(None)
@@ -919,33 +918,33 @@ mod test {
             accounts_package_type,
             AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 60);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 240);
 
-        // Ensure the incremental snapshot from slot 72 is handled 3rd
+        // Ensure the incremental snapshot from slot 300 is handled 3rd
         // (the older incremental snapshots are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(60))
+            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(240))
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 72);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 300);
 
-        // Ensure the accounts hash verifier from slot 75 is handled 4th
+        // Ensure the accounts hash verifier from slot 303 is handled 4th
         // (the older accounts hash verifiers are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .unwrap();
         assert_eq!(
             accounts_package_type,
             AccountsPackageType::AccountsHashVerifier
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 75);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 303);
 
         // And now ensure the snapshot request channel is empty!
         assert!(snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .is_none());
     }
 }
