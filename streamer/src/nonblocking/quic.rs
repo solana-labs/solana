@@ -207,8 +207,10 @@ pub fn compute_max_allowed_uni_streams(
 
                     (((peer_stake as f64 / total_stake as f64) * delta) as usize
                         + QUIC_MIN_STAKED_CONCURRENT_STREAMS)
-                        .max(QUIC_MIN_STAKED_CONCURRENT_STREAMS)
-                        .min(QUIC_MAX_STAKED_CONCURRENT_STREAMS)
+                        .clamp(
+                            QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+                            QUIC_MAX_STAKED_CONCURRENT_STREAMS,
+                        )
                 }
             }
             _ => QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
