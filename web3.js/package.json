@@ -69,7 +69,7 @@
     "buffer": "6.0.1",
     "fast-stable-stringify": "^1.0.0",
     "jayson": "^3.4.4",
-    "node-fetch": "2",
+    "node-fetch": "3",
     "rpc-websockets": "^7.5.0",
     "superstruct": "^0.14.2"
   },
