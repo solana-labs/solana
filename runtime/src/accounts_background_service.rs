@@ -781,7 +781,10 @@ fn cmp_requests_by_priority(
 mod test {
     use {
         super::*,
-        crate::{epoch_accounts_hash, genesis_utils::create_genesis_config},
+        crate::{
+            epoch_accounts_hash::{self, EpochAccountsHash},
+            genesis_utils::create_genesis_config,
+        },
         crossbeam_channel::unbounded,
         solana_sdk::{account::AccountSharedData, epoch_schedule::EpochSchedule, pubkey::Pubkey},
     };
@@ -859,6 +862,13 @@ mod test {
             EpochSchedule::custom(SLOTS_PER_EPOCH, SLOTS_PER_EPOCH, false);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank.set_startup_verification_complete();
+        // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
+        // freeze when parent is in the EAH calculation window.
+        bank.rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);
 
         // Create new banks and send snapshot requests so that the following requests will be in
         // the channel before handling the requests:
