@@ -4,11 +4,8 @@
 
 use {
     crate::{
-        account_info::AccountInfo,
-        entrypoint::ProgramResult,
-        instruction::{AccountPropertyUpdate, Instruction},
-        program_error::UNSUPPORTED_SYSVAR,
-        pubkey::Pubkey,
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
     itertools::Itertools,
     std::sync::{Arc, RwLock},
@@ -60,11 +57,11 @@ pub trait SyscallStubs: Sync + Send {
             is_nonoverlapping(src as usize, n, dst as usize, n),
             "memcpy does not support overlapping regions"
         );
-        std::ptr::copy_nonoverlapping(src, dst, n as usize);
+        std::ptr::copy_nonoverlapping(src, dst, n);
     }
     /// # Safety
     unsafe fn sol_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
-        std::ptr::copy(src, dst, n as usize);
+        std::ptr::copy(src, dst, n);
     }
     /// # Safety
     unsafe fn sol_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
@@ -100,7 +97,6 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_stack_height(&self) -> u64 {
         0
     }
-    fn sol_set_account_properties(&self, _updates: &[AccountPropertyUpdate]) {}
 }
 
 struct DefaultSyscallStubs {}
@@ -196,13 +192,6 @@ pub(crate) fn sol_get_processed_sibling_instruction(index: usize) -> Option<Inst
 
 pub(crate) fn sol_get_stack_height() -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
-}
-
-pub(crate) fn sol_set_account_properties(updates: &[AccountPropertyUpdate]) {
-    SYSCALL_STUBS
-        .read()
-        .unwrap()
-        .sol_set_account_properties(updates)
 }
 
 /// Check that two regions do not overlap.

@@ -283,7 +283,7 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type: _,
+            request_type,
             enqueued: _,
         } = snapshot_request;
 
@@ -374,37 +374,52 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        let result = snapshot_utils::snapshot_bank(
-            &snapshot_root_bank,
-            status_cache_slot_deltas,
-            &self.accounts_package_sender,
-            &self.snapshot_config.bank_snapshots_dir,
-            &self.snapshot_config.full_snapshot_archives_dir,
-            &self.snapshot_config.incremental_snapshot_archives_dir,
-            self.snapshot_config.snapshot_version,
-            self.snapshot_config.archive_format,
-            hash_for_testing,
-            accounts_package_type,
-        );
-        if let Err(e) = result {
-            warn!(
-                "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
-                snapshot_root_bank.slot(),
-                accounts_package_type,
-                e,
-            );
-
-            if Self::is_snapshot_error_fatal(&e) {
-                return Err(e);
+        let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
+        let accounts_package = match request_type {
+            SnapshotRequestType::Snapshot => {
+                let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
+                    &self.snapshot_config.bank_snapshots_dir,
+                    &snapshot_root_bank,
+                    &snapshot_storages,
+                    self.snapshot_config.snapshot_version,
+                )
+                .expect("snapshot bank");
+                AccountsPackage::new_for_snapshot(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    &bank_snapshot_info,
+                    &self.snapshot_config.bank_snapshots_dir,
+                    status_cache_slot_deltas,
+                    &self.snapshot_config.full_snapshot_archives_dir,
+                    &self.snapshot_config.incremental_snapshot_archives_dir,
+                    snapshot_storages,
+                    self.snapshot_config.archive_format,
+                    self.snapshot_config.snapshot_version,
+                    hash_for_testing,
+                )
+                .expect("new accounts package for snapshot")
             }
-        }
+            SnapshotRequestType::EpochAccountsHash => {
+                // skip the bank snapshot, just make an accounts package to send to AHV
+                AccountsPackage::new_for_epoch_accounts_hash(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    snapshot_storages,
+                    hash_for_testing,
+                )
+            }
+        };
+        self.accounts_package_sender
+            .send(accounts_package)
+            .expect("send accounts package");
         snapshot_time.stop();
-        info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-              accounts_package_type,
-              snapshot_root_bank.slot(),
-              snapshot_root_bank.get_accounts_hash(),
-              snapshot_root_bank.hash(),
-              );
+        info!(
+            "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+            accounts_package_type,
+            snapshot_root_bank.slot(),
+            snapshot_root_bank.get_accounts_hash(),
+            snapshot_root_bank.hash(),
+          );
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -431,31 +446,6 @@ impl SnapshotRequestHandler {
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
         Ok(snapshot_root_bank.block_height())
-    }
-
-    /// Check if a SnapshotError should be treated as 'fatal' by SnapshotRequestHandler, and
-    /// `handle_snapshot_requests()` in particular.  Fatal errors will cause the node to shutdown.
-    /// Non-fatal errors are logged and then swallowed.
-    ///
-    /// All `SnapshotError`s are enumerated, and there is **NO** default case.  This way, if
-    /// a new error is added to SnapshotError, a conscious decision must be made on how it should
-    /// be handled.
-    fn is_snapshot_error_fatal(err: &SnapshotError) -> bool {
-        match err {
-            SnapshotError::Io(..) => true,
-            SnapshotError::Serialize(..) => true,
-            SnapshotError::ArchiveGenerationFailure(..) => true,
-            SnapshotError::StoragePathSymlinkInvalid => true,
-            SnapshotError::UnpackError(..) => true,
-            SnapshotError::IoWithSource(..) => true,
-            SnapshotError::PathToFileNameError(..) => true,
-            SnapshotError::FileNameToStrError(..) => true,
-            SnapshotError::ParseSnapshotArchiveFileNameError(..) => true,
-            SnapshotError::MismatchedBaseSlot(..) => true,
-            SnapshotError::NoSnapshotArchives => true,
-            SnapshotError::MismatchedSlotHash(..) => true,
-            SnapshotError::VerifySlotDeltas(..) => true,
-        }
     }
 }
 

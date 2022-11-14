@@ -348,7 +348,7 @@ mod tests {
             1,
             Hash::new_unique(),
         );
-        let packet = Packet::from_data(None, &tx).unwrap();
+        let packet = Packet::from_data(None, tx).unwrap();
         DeserializedPacket::new(packet).unwrap()
     }
 
@@ -359,7 +359,7 @@ mod tests {
             1,
             Hash::new_unique(),
         );
-        let packet = Packet::from_data(None, &tx).unwrap();
+        let packet = Packet::from_data(None, tx).unwrap();
         DeserializedPacket::new_with_priority_details(
             packet,
             TransactionPriorityDetails {

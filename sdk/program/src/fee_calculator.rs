@@ -120,8 +120,7 @@ impl FeeRateGovernor {
                     .min(me.min_lamports_per_signature.max(
                         me.target_lamports_per_signature
                             * std::cmp::min(latest_signatures_per_slot, std::u32::MAX as u64)
-                                as u64
-                            / me.target_signatures_per_slot as u64,
+                            / me.target_signatures_per_slot,
                     ));
 
             trace!(

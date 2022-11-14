@@ -20,10 +20,7 @@
 //!
 //! [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
 
-use {
-    crate::{clone_zeroed, copy_field},
-    std::mem::MaybeUninit,
-};
+use solana_sdk_macro::CloneZeroed;
 
 /// The default tick rate that the cluster attempts to achieve (160 per second).
 ///
@@ -147,7 +144,7 @@ pub type UnixTimestamp = i64;
 ///
 /// All members of `Clock` start from 0 upon network boot.
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, CloneZeroed, Default, PartialEq, Eq)]
 pub struct Clock {
     /// The current `Slot`.
     pub slot: Slot,
@@ -168,21 +165,6 @@ pub struct Clock {
     /// [tsc]: https://docs.solana.com/implemented-proposals/bank-timestamp-correction
     /// [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
     pub unix_timestamp: UnixTimestamp,
-}
-
-impl Clone for Clock {
-    fn clone(&self) -> Self {
-        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
-            let ptr = cloned.as_mut_ptr();
-            unsafe {
-                copy_field!(ptr, self, slot);
-                copy_field!(ptr, self, epoch_start_timestamp);
-                copy_field!(ptr, self, epoch);
-                copy_field!(ptr, self, leader_schedule_epoch);
-                copy_field!(ptr, self, unix_timestamp);
-            }
-        })
-    }
 }
 
 #[cfg(test)]

@@ -333,7 +333,7 @@ mod tests {
     }
 
     fn run_thread_race() {
-        let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
+        let slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH;
         let epoch_schedule = EpochSchedule::custom(slots_per_epoch, slots_per_epoch / 2, true);
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(2);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));

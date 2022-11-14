@@ -38,6 +38,15 @@ pub fn calculation_stop(bank: &Bank) -> Slot {
     calculation_info(bank).calculation_stop
 }
 
+/// Is this bank in the calculation window?
+#[must_use]
+#[inline]
+pub fn is_in_calculation_window(bank: &Bank) -> bool {
+    let bank_slot = bank.slot();
+    let info = calculation_info(bank);
+    bank_slot >= info.calculation_start && bank_slot < info.calculation_stop
+}
+
 /// For the epoch that `bank` is in, get all the EAH calculation information
 pub fn calculation_info(bank: &Bank) -> CalculationInfo {
     let epoch = bank.epoch();

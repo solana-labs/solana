@@ -805,7 +805,7 @@ impl JsonRpcRequestProcessor {
 
     fn get_transaction_count(&self, config: RpcContextConfig) -> Result<u64> {
         let bank = self.get_bank_with_config(config)?;
-        Ok(bank.transaction_count() as u64)
+        Ok(bank.transaction_count())
     }
 
     fn get_total_supply(&self, commitment: Option<CommitmentConfig>) -> Result<u64> {
@@ -975,9 +975,8 @@ impl JsonRpcRequestProcessor {
                 })
             })
             .partition(|vote_account_info| {
-                if bank.slot() >= delinquent_validator_slot_distance as u64 {
-                    vote_account_info.last_vote
-                        > bank.slot() - delinquent_validator_slot_distance as u64
+                if bank.slot() >= delinquent_validator_slot_distance {
+                    vote_account_info.last_vote > bank.slot() - delinquent_validator_slot_distance
                 } else {
                     vote_account_info.last_vote > 0
                 }
@@ -2651,11 +2650,11 @@ pub mod rpc_minimal {
                 .unwrap();
 
             let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
+                snapshot_utils::get_highest_full_snapshot_archive_slot(full_snapshot_archives_dir)
                     .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &incremental_snapshot_archives_dir,
+                    incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 
@@ -4105,7 +4104,7 @@ pub mod rpc_deprecated_v1_9 {
             meta.snapshot_config
                 .and_then(|snapshot_config| {
                     snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.full_snapshot_archives_dir,
+                        snapshot_config.full_snapshot_archives_dir,
                     )
                 })
                 .ok_or_else(|| RpcCustomError::NoSnapshot.into())
@@ -8561,7 +8560,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&legacy_msg).unwrap())])),
+                Some(json!([base64::encode(serialize(&legacy_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);
@@ -8580,7 +8579,7 @@ pub mod tests {
 
             let request = create_test_request(
                 "getFeeForMessage",
-                Some(json!([base64::encode(&serialize(&v0_msg).unwrap())])),
+                Some(json!([base64::encode(serialize(&v0_msg).unwrap())])),
             );
             let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
             assert_eq!(response.value, TEST_SIGNATURE_FEE);

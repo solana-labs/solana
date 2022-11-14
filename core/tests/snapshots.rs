@@ -37,6 +37,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        epoch_schedule::EpochSchedule,
         genesis_config::{
             ClusterType::{self, Development, Devnet, MainnetBeta, Testnet},
             GenesisConfig,
@@ -94,6 +95,8 @@ impl SnapshotTestConfig {
             &solana_sdk::pubkey::new_rand(), // validator_pubkey
             1,                               // validator_stake_lamports
         );
+        // NOTE: Must set `warmup == false` until EAH can handle short epochs
+        genesis_config_info.genesis_config.epoch_schedule = EpochSchedule::without_warmup();
         genesis_config_info.genesis_config.cluster_type = cluster_type;
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
@@ -262,7 +265,7 @@ fn run_bank_forks_snapshot_n<F>(
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
     let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
-    let accounts_package = AccountsPackage::new(
+    let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
@@ -277,7 +280,7 @@ fn run_bank_forks_snapshot_n<F>(
     )
     .unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-        accounts_package.snapshot_links.path(),
+        accounts_package.snapshot_links_dir(),
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
         None,
@@ -398,7 +401,7 @@ fn test_concurrent_snapshot_packaging(
         bank.squash();
 
         let accounts_package_sender = {
-            if slot == saved_slot as u64 {
+            if slot == saved_slot {
                 // Only send one package on the real accounts package channel so that the
                 // packaging service doesn't take forever to run the packaging logic on all
                 // MAX_CACHE_ENTRIES later
@@ -408,22 +411,32 @@ fn test_concurrent_snapshot_packaging(
             }
         };
 
-        snapshot_utils::snapshot_bank(
-            &bank,
-            vec![],
-            accounts_package_sender,
+        let snapshot_storages = bank.get_snapshot_storages(None);
+        let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
             bank_snapshots_dir,
-            full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
+            &bank,
+            &snapshot_storages,
             snapshot_config.snapshot_version,
-            snapshot_config.archive_format,
-            None,
-            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         )
         .unwrap();
+        let accounts_package = AccountsPackage::new_for_snapshot(
+            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+            &bank,
+            &bank_snapshot_info,
+            bank_snapshots_dir,
+            vec![],
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+            snapshot_storages,
+            snapshot_config.archive_format,
+            snapshot_config.snapshot_version,
+            None,
+        )
+        .unwrap();
+        accounts_package_sender.send(accounts_package).unwrap();
 
         bank_forks.insert(bank);
-        if slot == saved_slot as u64 {
+        if slot == saved_slot {
             // Find the relevant snapshot storages
             let snapshot_storage_files: HashSet<_> = bank_forks[slot]
                 .get_snapshot_storages(None)
@@ -441,7 +454,7 @@ fn test_concurrent_snapshot_packaging(
             for file in snapshot_storage_files {
                 fs::copy(
                     &file,
-                    &saved_accounts_dir.path().join(file.file_name().unwrap()),
+                    saved_accounts_dir.path().join(file.file_name().unwrap()),
                 )
                 .unwrap();
             }
@@ -461,7 +474,7 @@ fn test_concurrent_snapshot_packaging(
                 .unwrap();
             // only save off the snapshot of this slot, we don't need the others.
             let options = CopyOptions::new();
-            fs_extra::dir::copy(&last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
+            fs_extra::dir::copy(last_snapshot_path, &saved_snapshots_dir, &options).unwrap();
 
             saved_archive_path = Some(snapshot_utils::build_full_snapshot_archive_path(
                 full_snapshot_archives_dir,
@@ -514,7 +527,7 @@ fn test_concurrent_snapshot_packaging(
         .spawn(move || {
             let accounts_package = real_accounts_package_receiver.try_recv().unwrap();
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-                accounts_package.snapshot_links.path(),
+                accounts_package.snapshot_links_dir(),
                 accounts_package.slot,
                 &Hash::default(),
                 None,
