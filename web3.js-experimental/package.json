@@ -1,0 +1,34 @@
+{
+  "name": "@solana/web3.js-experimental",
+  "version": "0.0.0-development",
+  "description": "Solana Javascript API",
+  "main": "index.js",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "blockchain",
+    "solana",
+    "web3"
+  ],
+  "scripts": {
+    "lint": "eslint 'src/**'"
+  },
+  "author": "Solana Maintainers <maintainers@solana.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solana-labs/solana-web3.js"
+  },
+  "bugs": {
+    "url": "http://github.com/solana-labs/solana-web3.js/issues"
+  },
+  "browserslist": [
+    "supports bigint and not dead",
+    "maintained node versions"
+  ],
+  "devDependencies": {
+    "@solana/eslint-config-solana": "link:../../eslint-config-solana",
+    "eslint": "^8.27.0",
+    "eslint-plugin-sort-keys-fix": "^1.1.2"
+  }
+}
