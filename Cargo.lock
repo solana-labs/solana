@@ -1716,6 +1716,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdbstub"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32c95766e0414f8bfc1d07055574c621b67739466d6ba516c4fef8e99d30d2e6"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "log",
+ "managed",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
 name = "gen-headers"
 version = "1.15.0"
 dependencies = [
@@ -2577,6 +2591,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "managed"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3115,6 +3135,12 @@ dependencies = [
  "smallvec",
  "windows-sys 0.32.0",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 
 [[package]]
 name = "pbkdf2"
@@ -4747,7 +4773,6 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "solana-measure",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-zk-token-sdk 1.15.0",
@@ -5877,6 +5902,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-sdk 1.15.0",
+ "solana_rbpf",
  "thiserror",
 ]
 
@@ -6822,12 +6848,13 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.35"
+version = "0.2.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bcad04ab8dff83d39e5b039e419d03e83dafc6643401700b61acf0cc1589ff8"
+checksum = "94fe0b05d69875dc1da1e646aec8284c680b9b3f5f521c8d8f958b2cbc108d0b"
 dependencies = [
  "byteorder",
  "combine",
+ "gdbstub",
  "goblin",
  "hash32",
  "libc",
