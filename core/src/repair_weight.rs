@@ -369,7 +369,6 @@ impl RepairWeight {
                 continue;
             }
             // Ignore trees that were merged in a previous iteration
-            // TODO: why would this ever be false
             if self.trees.contains_key(&heaviest_tree_root) {
                 let new_orphan_root = self.update_orphan_ancestors(
                     blockstore,
