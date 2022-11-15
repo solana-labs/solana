@@ -22,7 +22,7 @@ use {
         message::{Message, SanitizedMessage},
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, SanitizedTransaction, Transaction, VersionedTransaction},
+        transaction::{self, MessageHash, SanitizedTransaction, VersionedTransaction},
     },
     solana_send_transaction_service::{
         send_transaction_service::{SendTransactionService, TransactionInfo},
@@ -151,7 +151,7 @@ impl BanksServer {
 }
 
 fn verify_transaction(
-    transaction: &Transaction,
+    transaction: &SanitizedTransaction,
     feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
     transaction.verify()?;
@@ -161,10 +161,15 @@ fn verify_transaction(
 
 fn simulate_transaction(
     bank: &Bank,
-    transaction: Transaction,
+    transaction: VersionedTransaction,
 ) -> BanksTransactionResultWithSimulation {
-    let sanitized_transaction = match SanitizedTransaction::try_from_legacy_transaction(transaction)
-    {
+    let sanitized_transaction = match SanitizedTransaction::try_create(
+        transaction,
+        MessageHash::Compute,
+        Some(false), // is_simple_vote_tx
+        bank,
+        true, // require_static_program_ids
+    ) {
         Err(err) => {
             return BanksTransactionResultWithSimulation {
                 result: Some(Err(err)),
@@ -193,8 +198,8 @@ fn simulate_transaction(
 
 #[tarpc::server]
 impl Banks for BanksServer {
-    async fn send_transaction_with_context(self, _: Context, transaction: Transaction) {
-        let blockhash = &transaction.message.recent_blockhash;
+    async fn send_transaction_with_context(self, _: Context, transaction: VersionedTransaction) {
+        let blockhash = transaction.message.recent_blockhash();
         let last_valid_block_height = self
             .bank_forks
             .read()
@@ -279,7 +284,7 @@ impl Banks for BanksServer {
     async fn process_transaction_with_preflight_and_commitment_and_context(
         self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation {
         let mut simulation_result =
@@ -297,7 +302,7 @@ impl Banks for BanksServer {
     async fn simulate_transaction_with_commitment_and_context(
         self,
         _: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithSimulation {
         simulate_transaction(&self.bank(commitment), transaction)
@@ -306,21 +311,33 @@ impl Banks for BanksServer {
     async fn process_transaction_with_commitment_and_context(
         self,
         _: Context,
-        transaction: Transaction,
+        transaction: VersionedTransaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>> {
-        if let Err(err) = verify_transaction(&transaction, &self.bank(commitment).feature_set) {
+        let bank = self.bank(commitment);
+        let sanitized_transaction = match SanitizedTransaction::try_create(
+            transaction.clone(),
+            MessageHash::Compute,
+            Some(false), // is_simple_vote_tx
+            bank.as_ref(),
+            true, // require_static_program_ids
+        ) {
+            Ok(tx) => tx,
+            Err(err) => return Some(Err(err)),
+        };
+
+        if let Err(err) = verify_transaction(&sanitized_transaction, &bank.feature_set) {
             return Some(Err(err));
         }
 
-        let blockhash = &transaction.message.recent_blockhash;
+        let blockhash = transaction.message.recent_blockhash();
         let last_valid_block_height = self
             .bank(commitment)
             .get_blockhash_last_valid_block_height(blockhash)
             .unwrap();
-        let signature = transaction.signatures.get(0).cloned().unwrap_or_default();
+        let signature = sanitized_transaction.signature();
         let info = TransactionInfo::new(
-            signature,
+            *signature,
             serialize(&transaction).unwrap(),
             last_valid_block_height,
             None,
@@ -328,7 +345,7 @@ impl Banks for BanksServer {
             None,
         );
         self.transaction_sender.send(info).unwrap();
-        self.poll_signature_status(&signature, blockhash, last_valid_block_height, commitment)
+        self.poll_signature_status(signature, blockhash, last_valid_block_height, commitment)
             .await
     }
 

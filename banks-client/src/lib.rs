@@ -62,10 +62,10 @@ impl BanksClient {
     pub fn send_transaction_with_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.inner
-            .send_transaction_with_context(ctx, transaction)
+            .send_transaction_with_context(ctx, transaction.into())
             .map_err(Into::into)
     }
 
@@ -117,25 +117,25 @@ impl BanksClient {
     pub fn process_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<Option<transaction::Result<()>>, BanksClientError>> + '_ {
         self.inner
-            .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .process_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
             .map_err(Into::into)
     }
 
     pub fn process_transaction_with_preflight_and_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
     {
         self.inner
             .process_transaction_with_preflight_and_commitment_and_context(
                 ctx,
-                transaction,
+                transaction.into(),
                 commitment,
             )
             .map_err(Into::into)
@@ -155,12 +155,12 @@ impl BanksClient {
     pub fn simulate_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
     {
         self.inner
-            .simulate_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .simulate_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
             .map_err(Into::into)
     }
 
@@ -180,9 +180,9 @@ impl BanksClient {
     /// blockhash expires.
     pub fn send_transaction(
         &mut self,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
-        self.send_transaction_with_context(context::current(), transaction)
+        self.send_transaction_with_context(context::current(), transaction.into())
     }
 
     /// Return the fee parameters associated with a recent, rooted blockhash. The cluster
