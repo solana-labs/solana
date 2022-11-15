@@ -275,6 +275,8 @@ impl Accounts {
             };
         let mut accumulated_accounts_data_size: usize = 0;
 
+        let set_exempt_rent_epoch_max =
+            feature_set.is_active(&solana_sdk::feature_set::set_exempt_rent_epoch_max::id());
         let mut accounts = account_keys
             .iter()
             .enumerate()
@@ -309,6 +311,7 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
+                                                set_exempt_rent_epoch_max,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -1838,7 +1841,9 @@ mod tests {
             lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &all_features_except(None),
+            &all_features_except(Some(&[
+                solana_sdk::feature_set::set_exempt_rent_epoch_max::id(),
+            ])),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1905,8 +1910,12 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2094,8 +2103,12 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2321,8 +2334,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2335,8 +2352,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2410,8 +2431,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2423,8 +2448,12 @@ mod tests {
         // Solution 1: include bpf_loader_upgradeable account
         message.account_keys = vec![key0, key1, bpf_loader_upgradeable::id()];
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2439,8 +2468,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // mark both executables as readonly
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2498,8 +2531,12 @@ mod tests {
             instructions,
         );
         let tx = Transaction::new(&[&keypair], message.clone(), Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -2523,7 +2560,7 @@ mod tests {
             tx,
             &accounts_with_upgradeable_loader,
             &mut error_counters,
-            None,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
         );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
@@ -2539,8 +2576,12 @@ mod tests {
         message.account_keys = vec![key0, key1, key2]; // revert key change
         message.header.num_readonly_unsigned_accounts = 2; // extend readonly set to include programdata
         let tx = Transaction::new(&[&keypair], message, Hash::default());
-        let loaded_accounts =
-            load_accounts_with_excluded_features(tx, &accounts, &mut error_counters, None);
+        let loaded_accounts = load_accounts_with_excluded_features(
+            tx,
+            &accounts,
+            &mut error_counters,
+            Some(&[solana_sdk::feature_set::set_exempt_rent_epoch_max::id()]),
+        );
 
         assert_eq!(error_counters.invalid_writable_account, 1);
         assert_eq!(loaded_accounts.len(), 1);
