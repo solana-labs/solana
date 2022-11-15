@@ -80,7 +80,7 @@ pub trait Banks {
         transaction: Transaction,
         commitment: CommitmentLevel,
     ) -> Option<transaction::Result<()>>;
-    async fn process_versioned_transaction_with_context(
+    async fn process_transaction_with_metadata_and_context(
         transaction: VersionedTransaction,
     ) -> BanksTransactionResultWithMetadata;
     async fn simulate_transaction_with_commitment_and_context(

@@ -7,15 +7,14 @@ use {
         BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
         TransactionSimulationDetails, TransactionStatus,
     },
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
-        bank::{Bank, TransactionExecutionResult, TransactionResults, TransactionSimulationResult},
+        bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
     },
     solana_sdk::{
         account::Account,
-        clock::{Slot, MAX_PROCESSING_AGE},
+        clock::Slot,
         commitment_config::CommitmentLevel,
         feature_set::FeatureSet,
         fee_calculator::FeeCalculator,
@@ -333,41 +332,13 @@ impl Banks for BanksServer {
             .await
     }
 
-    async fn process_versioned_transaction_with_context(
+    async fn process_transaction_with_metadata_and_context(
         self,
         _: Context,
         transaction: VersionedTransaction,
     ) -> BanksTransactionResultWithMetadata {
         let bank = self.bank_forks.read().unwrap().working_bank();
-        let batch = match bank.prepare_entry_batch(vec![transaction]) {
-            Ok(batch) => batch,
-            Err(err) => {
-                return BanksTransactionResultWithMetadata {
-                    result: Err(err),
-                    metadata: None,
-                }
-            }
-        };
-
-        let (
-            TransactionResults {
-                mut execution_results,
-                ..
-            },
-            ..,
-        ) = bank.load_execute_and_commit_transactions(
-            &batch,
-            MAX_PROCESSING_AGE,
-            false, // collect balances
-            false, // enable cpi recording
-            true,  // enable log recording
-            false, // enable return data recording
-            &mut ExecuteTimings::default(),
-            Some(1000 * 1000),
-        );
-
-        let execution_result = execution_results.remove(0);
-        match execution_result {
+        match bank.process_transaction_with_metadata(transaction) {
             TransactionExecutionResult::NotExecuted(error) => BanksTransactionResultWithMetadata {
                 result: Err(error),
                 metadata: None,
