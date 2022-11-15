@@ -14613,7 +14613,8 @@ pub(crate) mod tests {
         let sizes = bank0
             .rc
             .accounts
-            .scan_slot(0, |stored_account| Some(stored_account.stored_size()));
+            .accounts_db
+            .sizes_of_accounts_in_storage_for_tests(0);
 
         // Create an account such that it takes DEFAULT_ACCOUNTS_SHRINK_RATIO of the total account space for
         // the slot, so when it gets pruned, the storage entry will become a shrink candidate.

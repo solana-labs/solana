@@ -768,13 +768,6 @@ impl<'a> LoadedAccount<'a> {
         }
     }
 
-    pub fn stored_size(&self) -> usize {
-        match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.stored_size,
-            LoadedAccount::Cached(_) => CACHE_VIRTUAL_STORED_SIZE as usize,
-        }
-    }
-
     pub fn take_account(self) -> AccountSharedData {
         match self {
             LoadedAccount::Stored(stored_account_meta) => stored_account_meta.clone_account(),
@@ -4324,6 +4317,23 @@ impl AccountsDb {
             new_ancient_storage.append_vec_id(),
         );
         new_ancient_storage
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sizes_of_accounts_in_storage_for_tests(&self, slot: Slot) -> Vec<usize> {
+        self.get_storages_for_slot(slot)
+            .map(|storages| {
+                storages
+                    .iter()
+                    .flat_map(|storage| {
+                        storage
+                            .accounts
+                            .account_iter()
+                            .map(|account| account.stored_size)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
     }
 
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
