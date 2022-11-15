@@ -4443,8 +4443,9 @@ impl AccountsDb {
             // randomly shrink ancient slots
             // this exercises the ancient shrink code more often
             let written_bytes = storage.written_bytes();
+            let mut alive_ratio = 0;
             let is_candidate = if written_bytes > 0 {
-                let alive_ratio = (storage.alive_bytes() as u64) * 100 / written_bytes;
+                alive_ratio = (storage.alive_bytes() as u64) * 100 / written_bytes;
                 alive_ratio < 90
             } else {
                 false
@@ -4452,7 +4453,10 @@ impl AccountsDb {
             if is_candidate || (can_randomly_shrink && thread_rng().gen_range(0, 100) == 0) {
                 // we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate the dead accounts
-                info!("ancient_append_vec: shrinking full ancient: {}", slot);
+                info!(
+                    "ancient_append_vec: shrinking full ancient: {}, random: {}, alive_ratio: {}",
+                    slot, !is_candidate, alive_ratio
+                );
                 if !is_candidate {
                     self.shrink_ancient_stats
                         .random_shrink
@@ -7298,8 +7302,22 @@ impl AccountsDb {
 
                 for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
                     scanner.set_slot(slot);
-                    if let Some(sub_storages) = sub_storages {
+
+                    let mut ancient = false;
+                    let (_, scan) = measure!(if let Some(sub_storages) = sub_storages {
+                        if let Some(storage) = sub_storages.first() {
+                            ancient = is_ancient(&storage.accounts);
+                        }
                         Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
+                    });
+                    if ancient {
+                        stats
+                            .sum_ancient_scans_us
+                            .fetch_add(scan.as_us(), Ordering::Relaxed);
+                        stats.count_ancient_scans.fetch_add(1, Ordering::Relaxed);
+                        stats
+                            .longest_ancient_scan_us
+                            .fetch_max(scan.as_us(), Ordering::Relaxed);
                     }
                 }
                 let r = scanner.scanning_complete();
