@@ -32,15 +32,22 @@ impl Default for RentCollector {
     }
 }
 
+/// When rent is collected from an exempt account, rent_epoch is set to this
+/// value. The idea is to have a fixed, consistent value for rent_epoch for all accounts that do not collect rent.
+/// This enables us to get rid of the field completely.
+const RENT_EXEMPT_RENT_EPOCH: Epoch = Epoch::MAX;
+
+pub const TEST_SET_EXEMPT_RENT_EPOCH_MAX: bool = false;
+
 /// when rent is collected for this account, this is the action to apply to the account
 #[derive(Debug)]
 enum RentResult {
-    /// maybe collect rent later, leave account alone
-    LeaveAloneNoRent,
+    /// this account will never have rent collected from it
+    Exempt,
     /// collect rent
     CollectRent {
         new_rent_epoch: Epoch,
-        rent_due: u64, // lamports
+        rent_due: u64, // lamports, could be 0
     },
 }
 
@@ -125,9 +132,20 @@ impl RentCollector {
         address: &Pubkey,
         account: &mut AccountSharedData,
         filler_account_suffix: Option<&Pubkey>,
+        set_exempt_rent_epoch_max: bool,
     ) -> CollectedInfo {
-        match self.calculate_rent_result(address, account, filler_account_suffix) {
-            RentResult::LeaveAloneNoRent => CollectedInfo::default(),
+        match self.calculate_rent_result(
+            address,
+            account,
+            filler_account_suffix,
+            set_exempt_rent_epoch_max,
+        ) {
+            RentResult::Exempt => {
+                if set_exempt_rent_epoch_max {
+                    account.set_rent_epoch(RENT_EXEMPT_RENT_EPOCH);
+                }
+                CollectedInfo::default()
+            }
             RentResult::CollectRent {
                 new_rent_epoch,
                 rent_due,
@@ -158,16 +176,27 @@ impl RentCollector {
         address: &Pubkey,
         account: &impl ReadableAccount,
         filler_account_suffix: Option<&Pubkey>,
+        set_exempt_rent_epoch_max: bool,
     ) -> RentResult {
         if self.can_skip_rent_collection(address, account, filler_account_suffix) {
-            return RentResult::LeaveAloneNoRent;
+            return RentResult::Exempt;
         }
         match self.get_rent_due(account) {
             // Rent isn't collected for the next epoch.
             // Make sure to check exempt status again later in current epoch.
-            RentDue::Exempt => RentResult::LeaveAloneNoRent,
+            RentDue::Exempt => RentResult::Exempt,
             // Maybe collect rent later, leave account alone.
-            RentDue::Paying(0) => RentResult::LeaveAloneNoRent,
+            RentDue::Paying(0) => {
+                if set_exempt_rent_epoch_max {
+                    RentResult::CollectRent {
+                        new_rent_epoch: account.rent_epoch(),
+                        rent_due: 0,
+                    }
+                } else {
+                    RentResult::Exempt
+                }
+            }
+
             // Rent is collected for next epoch.
             RentDue::Paying(rent_due) => RentResult::CollectRent {
                 new_rent_epoch: self.epoch + 1,
@@ -239,7 +268,10 @@ mod tests {
             // initialize rent_epoch as created at this epoch
             account.set_rent_epoch(self.epoch);
             self.collect_from_existing_account(
-                address, account, /*filler_account_suffix:*/ None,
+                address,
+                account,
+                /*filler_account_suffix:*/ None,
+                TEST_SET_EXEMPT_RENT_EPOCH_MAX,
             )
         }
     }
@@ -278,6 +310,7 @@ mod tests {
             &solana_sdk::pubkey::new_rand(),
             &mut existing_account,
             None, // filler_account_suffix
+            TEST_SET_EXEMPT_RENT_EPOCH_MAX,
         );
         assert!(existing_account.lamports() < old_lamports);
         assert_eq!(
@@ -311,6 +344,7 @@ mod tests {
             &pubkey,
             &mut account,
             None, // filler_account_suffix
+            TEST_SET_EXEMPT_RENT_EPOCH_MAX,
         );
         assert_eq!(account.lamports(), huge_lamports);
         assert_eq!(collected, CollectedInfo::default());
@@ -323,6 +357,7 @@ mod tests {
             &pubkey,
             &mut account,
             None, // filler_account_suffix
+            TEST_SET_EXEMPT_RENT_EPOCH_MAX,
         );
         assert_eq!(account.lamports(), tiny_lamports - collected.rent_amount);
         assert_ne!(collected, CollectedInfo::default());
@@ -346,6 +381,7 @@ mod tests {
             &pubkey,
             &mut account,
             None, // filler_account_suffix
+            TEST_SET_EXEMPT_RENT_EPOCH_MAX,
         );
         assert_eq!(account.lamports(), 0);
         assert_eq!(collected.rent_amount, 1);
@@ -370,6 +406,7 @@ mod tests {
             &Pubkey::new_unique(),
             &mut account,
             None, // filler_account_suffix
+            TEST_SET_EXEMPT_RENT_EPOCH_MAX,
         );
 
         assert_eq!(collected.rent_amount, account_lamports);

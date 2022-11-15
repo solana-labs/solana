@@ -5344,6 +5344,8 @@ impl Bank {
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                    self.feature_set
+                        .is_active(&solana_sdk::feature_set::remove_native_loader::id()),
                 ));
             time_collecting_rent_us += measure.as_us();
 
@@ -7991,6 +7993,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            rent_collector::TEST_SET_EXEMPT_RENT_EPOCH_MAX,
             rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
@@ -8448,6 +8451,7 @@ pub(crate) mod tests {
                 &keypairs[4].pubkey(),
                 &mut account_copy,
                 None,
+                TEST_SET_EXEMPT_RENT_EPOCH_MAX,
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
@@ -9895,8 +9899,9 @@ pub(crate) mod tests {
         let zero_lamport_pubkey = solana_sdk::pubkey::new_rand();
         let rent_due_pubkey = solana_sdk::pubkey::new_rand();
         let rent_exempt_pubkey = solana_sdk::pubkey::new_rand();
-
-        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(&solana_sdk::feature_set::a_sdk::feature_set::remove_native_loader::id());
+        let mut bank = Arc::new(bank);
         let zero_lamports = 0;
         let little_lamports = 1234;
         let large_lamports = 123_456_789;
@@ -19959,6 +19964,7 @@ pub(crate) mod tests {
                 &keypair.pubkey(),
                 &mut account,
                 None,
+                TEST_SET_EXEMPT_RENT_EPOCH_MAX,
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
