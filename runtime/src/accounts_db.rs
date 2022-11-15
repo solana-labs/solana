@@ -17651,35 +17651,64 @@ pub mod tests {
 
     #[test]
     fn test_combine_ancient_slots_append() {
-        // ancient_slot: contains ancient append vec
-        // ancient_slot + 1: contains normal append vec with 1 alive account
-        let (db, _tf, ancient_slot) = get_one_ancient_append_vec_and_others(true, 1);
-        let slot_offset = 1;
+        // combine 2-4 slots into a single ancient append vec
+        for num_normal_slots in 1..3 {
+            let mut originals = Vec::default();
+            // ancient_slot: contains ancient append vec
+            // ancient_slot + 1: contains normal append vec with 1 alive account
+            let (db, _tf, ancient_slot) =
+                get_one_ancient_append_vec_and_others(true, num_normal_slots);
 
-        // combine normal append vec into existing ancient append vec
-        db.combine_ancient_slots(
-            vec![ancient_slot, ancient_slot + slot_offset],
-            CAN_RANDOMLY_SHRINK_FALSE,
-        );
+            let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
 
-        // normal slot should have been appended to the ancient append vec in the previous slot
-        assert_eq!(1, db.get_storages_for_slot(ancient_slot).unwrap().len());
-        let ancient = Arc::clone(
-            db.get_storages_for_slot(ancient_slot)
-                .unwrap()
-                .first()
-                .unwrap(),
-        );
-        assert!(is_ancient(&ancient.accounts));
-        assert!(db
-            .get_storages_for_slot(ancient_slot + slot_offset)
-            .is_none());
+            for slot in ancient_slot..=max_slot_inclusive {
+                originals.push(db.get_storages_for_slot(slot).unwrap());
+            }
 
-        let GetUniqueAccountsResult {
-            stored_accounts: after_stored_accounts,
-            ..
-        } = db.get_unique_accounts_from_storages(std::iter::once(&ancient));
-        assert_eq!(after_stored_accounts.len(), 2);
+            // combine normal append vec(s) into existing ancient append vec
+            db.combine_ancient_slots(
+                (ancient_slot..=max_slot_inclusive).collect(),
+                CAN_RANDOMLY_SHRINK_FALSE,
+            );
+
+            // normal slots should have been appended to the ancient append vec in the first slot
+            assert_eq!(1, db.get_storages_for_slot(ancient_slot).unwrap().len());
+            let ancient = Arc::clone(
+                db.get_storages_for_slot(ancient_slot)
+                    .unwrap()
+                    .first()
+                    .unwrap(),
+            );
+            assert!(is_ancient(&ancient.accounts));
+            for slot in (ancient_slot + 1)..=max_slot_inclusive {
+                assert!(db.get_storages_for_slot(slot).is_none());
+            }
+
+            let GetUniqueAccountsResult {
+                stored_accounts: mut after_stored_accounts,
+                ..
+            } = db.get_unique_accounts_from_storages(std::iter::once(&ancient));
+            assert_eq!(after_stored_accounts.len(), num_normal_slots + 1);
+            for original in &originals {
+                let original = original.first().unwrap();
+                let original = original.accounts.account_iter().next().unwrap();
+                for i in 0..=after_stored_accounts.len() {
+                    assert_ne!(after_stored_accounts.len(), i, "did not find account");
+                    let stored_ancient = &after_stored_accounts[i];
+                    if stored_ancient.pubkey() == original.pubkey() {
+                        assert!(accounts_equal(&stored_ancient.account, &original));
+                        after_stored_accounts.remove(i);
+                        break;
+                    }
+                }
+            }
+            assert!(
+                after_stored_accounts.is_empty(),
+                "originals: {}, num_normal_slots: {}",
+                originals.len(),
+                num_normal_slots
+            );
+        }
     }
 
     fn get_one_ancient_append_vec_and_others(
