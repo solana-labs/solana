@@ -13957,9 +13957,9 @@ pub(crate) mod tests {
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let keypair0_account = AccountSharedData::new(8_000, 0, &Pubkey::default());
-        let keypair1_account = AccountSharedData::new(9_000, 0, &Pubkey::default());
-        let account0 = AccountSharedData::new(11_000, 0, &Pubkey::default());
+        let keypair0_account = AccountSharedData::new(908_000, 0, &Pubkey::default());
+        let keypair1_account = AccountSharedData::new(909_000, 0, &Pubkey::default());
+        let account0 = AccountSharedData::new(911_000, 0, &Pubkey::default());
         bank0.store_account(&keypair0.pubkey(), &keypair0_account);
         bank0.store_account(&keypair1.pubkey(), &keypair1_account);
         bank0.store_account(&pubkey0, &account0);
@@ -13968,7 +13968,7 @@ pub(crate) mod tests {
 
         let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 2_000, blockhash);
         let tx1 = system_transaction::transfer(&Keypair::new(), &pubkey1, 2_000, blockhash);
-        let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12_000, blockhash);
+        let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 912_000, blockhash);
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch_for_tests(txs);
@@ -13990,11 +13990,11 @@ pub(crate) mod tests {
         assert!(transaction_results.execution_results[0].was_executed_successfully());
         assert_eq!(
             transaction_balances_set.pre_balances[0],
-            vec![8_000, 11_000, 1]
+            vec![908_000, 911_000, 1]
         );
         assert_eq!(
             transaction_balances_set.post_balances[0],
-            vec![1_000, 13_000, 1]
+            vec![901_000, 913_000, 1]
         );
 
         // Failed transactions still produce balance sets
@@ -14021,8 +14021,14 @@ pub(crate) mod tests {
                 ..
             },
         ));
-        assert_eq!(transaction_balances_set.pre_balances[2], vec![9_000, 0, 1]);
-        assert_eq!(transaction_balances_set.post_balances[2], vec![4_000, 0, 1]);
+        assert_eq!(
+            transaction_balances_set.pre_balances[2],
+            vec![909_000, 0, 1]
+        );
+        assert_eq!(
+            transaction_balances_set.post_balances[2],
+            vec![904_000, 0, 1]
+        );
     }
 
     #[test]

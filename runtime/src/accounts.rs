@@ -492,8 +492,6 @@ impl Accounts {
             feature_set
                 .is_active(&feature_set::include_account_index_in_rent_error::ID)
                 .then_some(payer_index),
-            feature_set
-                .is_active(&feature_set::prevent_crediting_accounts_that_end_rent_paying::id()),
         )
     }
 
