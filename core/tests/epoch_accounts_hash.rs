@@ -139,6 +139,7 @@ impl TestEnvironment {
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
+        assert!(epoch_accounts_hash::is_enabled_this_epoch(&bank));
 
         bank.set_startup_verification_complete();
 

@@ -6202,6 +6202,7 @@ dependencies = [
  "symlink",
  "tar",
  "tempfile",
+ "test-case",
  "thiserror",
  "zstd",
 ]

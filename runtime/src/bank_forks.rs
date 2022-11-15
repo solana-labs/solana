@@ -618,6 +618,10 @@ impl BankForks {
             return false;
         }
 
+        if !epoch_accounts_hash::is_enabled_this_epoch(bank) {
+            return false;
+        }
+
         let start_slot = epoch_accounts_hash::calculation_start(bank);
         bank.slot() > self.last_accounts_hash_slot
             && bank.parent_slot() < start_slot
