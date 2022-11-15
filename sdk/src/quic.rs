@@ -7,6 +7,9 @@ pub const QUIC_MIN_STAKED_CONCURRENT_STREAMS: usize = 128;
 
 pub const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: usize = 100_000;
 
+// Set the maximum concurrent stream numbers to avoid excessive streams
+pub const QUIC_MAX_STAKED_CONCURRENT_STREAMS: usize = 2048;
+
 pub const QUIC_MAX_TIMEOUT_MS: u32 = 2_000;
 pub const QUIC_KEEP_ALIVE_MS: u64 = 1_000;
 
