@@ -250,7 +250,7 @@ impl Accounts {
         })
     }
 
-    fn load_transaction(
+    fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
@@ -260,176 +260,173 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
-        // Copy all the accounts
-        let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
-            Err(TransactionError::MissingSignatureForFee)
-        } else {
-            // There is no way to predict what program will execute without an error
-            // If a fee can pay for execution then the program will be scheduled
-            let mut validated_fee_payer = false;
-            let mut tx_rent: TransactionRent = 0;
-            let account_keys = message.account_keys();
-            let mut accounts = Vec::with_capacity(account_keys.len());
-            let mut account_deps = Vec::with_capacity(account_keys.len());
-            let mut rent_debits = RentDebits::default();
-            let requested_loaded_accounts_data_size_limit =
-                if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-                    let requested_loaded_accounts_data_size =
-                        Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
-                    Some(requested_loaded_accounts_data_size)
-                } else {
-                    None
-                };
-            let mut accumulated_accounts_data_size: usize = 0;
+            return Err(TransactionError::MissingSignatureForFee);
+        }
 
-            for (i, key) in account_keys.iter().enumerate() {
-                let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
-                    // Fill in an empty account for the program slots.
-                    (AccountSharedData::default(), 0)
+        // There is no way to predict what program will execute without an error
+        // If a fee can pay for execution then the program will be scheduled
+        let mut validated_fee_payer = false;
+        let mut tx_rent: TransactionRent = 0;
+        let message = tx.message();
+        let account_keys = message.account_keys();
+        let mut accounts = Vec::with_capacity(account_keys.len());
+        let mut account_deps = Vec::with_capacity(account_keys.len());
+        let mut rent_debits = RentDebits::default();
+        let requested_loaded_accounts_data_size_limit =
+            if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+                let requested_loaded_accounts_data_size =
+                    Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+                Some(requested_loaded_accounts_data_size)
+            } else {
+                None
+            };
+        let mut accumulated_accounts_data_size: usize = 0;
+
+        for (i, key) in account_keys.iter().enumerate() {
+            let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
+                // Fill in an empty account for the program slots.
+                (AccountSharedData::default(), 0)
+            } else {
+                #[allow(clippy::collapsible_else_if)]
+                if solana_sdk::sysvar::instructions::check_id(key) {
+                    (
+                        Self::construct_instructions_account(
+                            message,
+                            feature_set
+                                .is_active(&feature_set::instructions_sysvar_owned_by_sysvar::id()),
+                        ),
+                        0,
+                    )
                 } else {
-                    #[allow(clippy::collapsible_else_if)]
-                    if solana_sdk::sysvar::instructions::check_id(key) {
-                        (
-                            Self::construct_instructions_account(
-                                message,
-                                feature_set.is_active(
-                                    &feature_set::instructions_sysvar_owned_by_sysvar::id(),
-                                ),
-                            ),
-                            0,
-                        )
+                    let (mut account, rent) = if let Some(account_override) =
+                        account_overrides.and_then(|overrides| overrides.get(key))
+                    {
+                        (account_override.clone(), 0)
                     } else {
-                        let (mut account, rent) = if let Some(account_override) =
-                            account_overrides.and_then(|overrides| overrides.get(key))
-                        {
-                            (account_override.clone(), 0)
-                        } else {
-                            self.accounts_db
-                                .load_with_fixed_root(ancestors, key)
-                                .map(|(mut account, _)| {
-                                    if message.is_writable(i) {
-                                        let rent_due = rent_collector
-                                            .collect_from_existing_account(
-                                                key,
-                                                &mut account,
-                                                self.accounts_db.filler_account_suffix.as_ref(),
-                                            )
-                                            .rent_amount;
-                                        (account, rent_due)
-                                    } else {
-                                        (account, 0)
-                                    }
-                                })
-                                .unwrap_or_default()
-                        };
+                        self.accounts_db
+                            .load_with_fixed_root(ancestors, key)
+                            .map(|(mut account, _)| {
+                                if message.is_writable(i) {
+                                    let rent_due = rent_collector
+                                        .collect_from_existing_account(
+                                            key,
+                                            &mut account,
+                                            self.accounts_db.filler_account_suffix.as_ref(),
+                                        )
+                                        .rent_amount;
+                                    (account, rent_due)
+                                } else {
+                                    (account, 0)
+                                }
+                            })
+                            .unwrap_or_default()
+                    };
 
-                        if !validated_fee_payer {
-                            if i != 0 {
-                                warn!("Payer index should be 0! {:?}", tx);
-                            }
-
-                            Self::validate_fee_payer(
-                                key,
-                                &mut account,
-                                i as IndexOfAccount,
-                                error_counters,
-                                rent_collector,
-                                feature_set,
-                                fee,
-                            )?;
-
-                            validated_fee_payer = true;
+                    if !validated_fee_payer {
+                        if i != 0 {
+                            warn!("Payer index should be 0! {:?}", tx);
                         }
 
-                        let mut loaded_programdata_account_size: usize = 0;
-                        if bpf_loader_upgradeable::check_id(account.owner()) {
-                            if message.is_writable(i) && !message.is_upgradeable_loader_present() {
-                                error_counters.invalid_writable_account += 1;
-                                return Err(TransactionError::InvalidWritableAccount);
-                            }
+                        Self::validate_fee_payer(
+                            key,
+                            &mut account,
+                            i as IndexOfAccount,
+                            error_counters,
+                            rent_collector,
+                            feature_set,
+                            fee,
+                        )?;
 
-                            if account.executable() {
-                                // The upgradeable loader requires the derived ProgramData account
-                                if let Ok(UpgradeableLoaderState::Program {
-                                    programdata_address,
-                                }) = account.state()
-                                {
-                                    if let Some((programdata_account, _)) = self
-                                        .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
-                                    {
-                                        loaded_programdata_account_size =
-                                            programdata_account.data().len();
-                                        account_deps
-                                            .push((programdata_address, programdata_account));
-                                    } else {
-                                        error_counters.account_not_found += 1;
-                                        return Err(TransactionError::ProgramAccountNotFound);
-                                    }
-                                } else {
-                                    error_counters.invalid_program_for_execution += 1;
-                                    return Err(TransactionError::InvalidProgramForExecution);
-                                }
-                            }
-                        } else if account.executable() && message.is_writable(i) {
+                        validated_fee_payer = true;
+                    }
+
+                    let mut loaded_programdata_account_size: usize = 0;
+                    if bpf_loader_upgradeable::check_id(account.owner()) {
+                        if message.is_writable(i) && !message.is_upgradeable_loader_present() {
                             error_counters.invalid_writable_account += 1;
                             return Err(TransactionError::InvalidWritableAccount);
                         }
 
-                        tx_rent += rent;
-                        rent_debits.insert(key, rent, account.lamports());
-
-                        (account, loaded_programdata_account_size)
+                        if account.executable() {
+                            // The upgradeable loader requires the derived ProgramData account
+                            if let Ok(UpgradeableLoaderState::Program {
+                                programdata_address,
+                            }) = account.state()
+                            {
+                                if let Some((programdata_account, _)) = self
+                                    .accounts_db
+                                    .load_with_fixed_root(ancestors, &programdata_address)
+                                {
+                                    loaded_programdata_account_size =
+                                        programdata_account.data().len();
+                                    account_deps.push((programdata_address, programdata_account));
+                                } else {
+                                    error_counters.account_not_found += 1;
+                                    return Err(TransactionError::ProgramAccountNotFound);
+                                }
+                            } else {
+                                error_counters.invalid_program_for_execution += 1;
+                                return Err(TransactionError::InvalidProgramForExecution);
+                            }
+                        }
+                    } else if account.executable() && message.is_writable(i) {
+                        error_counters.invalid_writable_account += 1;
+                        return Err(TransactionError::InvalidWritableAccount);
                     }
-                };
-                Self::accumulate_and_check_loaded_account_data_size(
-                    &mut accumulated_accounts_data_size,
-                    account
-                        .data()
-                        .len()
-                        .saturating_add(loaded_programdata_account_size),
-                    requested_loaded_accounts_data_size_limit,
-                    error_counters,
-                )?;
 
-                accounts.push((*key, account));
-            }
-            debug_assert_eq!(accounts.len(), account_keys.len());
-            // Appends the account_deps at the end of the accounts,
-            // this way they can be accessed in a uniform way.
-            // At places where only the accounts are needed,
-            // the account_deps are truncated using e.g:
-            // accounts.iter().take(message.account_keys.len())
-            accounts.append(&mut account_deps);
+                    tx_rent += rent;
+                    rent_debits.insert(key, rent, account.lamports());
 
-            if validated_fee_payer {
-                let program_indices = message
-                    .instructions()
-                    .iter()
-                    .map(|instruction| {
-                        self.load_executable_accounts(
-                            ancestors,
-                            &mut accounts,
-                            instruction.program_id_index as IndexOfAccount,
-                            error_counters,
-                            &mut accumulated_accounts_data_size,
-                            requested_loaded_accounts_data_size_limit,
-                        )
-                    })
-                    .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+                    (account, loaded_programdata_account_size)
+                }
+            };
+            Self::accumulate_and_check_loaded_account_data_size(
+                &mut accumulated_accounts_data_size,
+                account
+                    .data()
+                    .len()
+                    .saturating_add(loaded_programdata_account_size),
+                requested_loaded_accounts_data_size_limit,
+                error_counters,
+            )?;
 
-                Ok(LoadedTransaction {
-                    accounts,
-                    program_indices,
-                    rent: tx_rent,
-                    rent_debits,
+            accounts.push((*key, account));
+        }
+        debug_assert_eq!(accounts.len(), account_keys.len());
+        // Appends the account_deps at the end of the accounts,
+        // this way they can be accessed in a uniform way.
+        // At places where only the accounts are needed,
+        // the account_deps are truncated using e.g:
+        // accounts.iter().take(message.account_keys.len())
+        accounts.append(&mut account_deps);
+
+        if validated_fee_payer {
+            let program_indices = message
+                .instructions()
+                .iter()
+                .map(|instruction| {
+                    self.load_executable_accounts(
+                        ancestors,
+                        &mut accounts,
+                        instruction.program_id_index as IndexOfAccount,
+                        error_counters,
+                        &mut accumulated_accounts_data_size,
+                        requested_loaded_accounts_data_size_limit,
+                    )
                 })
-            } else {
-                error_counters.account_not_found += 1;
-                Err(TransactionError::AccountNotFound)
-            }
+                .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+
+            Ok(LoadedTransaction {
+                accounts,
+                program_indices,
+                rent: tx_rent,
+                rent_debits,
+            })
+        } else {
+            error_counters.account_not_found += 1;
+            Err(TransactionError::AccountNotFound)
         }
     }
 
@@ -663,7 +660,7 @@ impl Accounts {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
 
-                    let loaded_transaction = match self.load_transaction(
+                    let loaded_transaction = match self.load_transaction_accounts(
                         ancestors,
                         tx,
                         fee,
