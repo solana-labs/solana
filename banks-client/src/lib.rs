@@ -141,15 +141,14 @@ impl BanksClient {
             .map_err(Into::into)
     }
 
-    pub fn process_versioned_transaction_with_commitment_and_context(
+    pub fn process_versioned_transaction_with_context(
         &mut self,
         ctx: Context,
         transaction: VersionedTransaction,
-        commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
     {
         self.inner
-            .process_versioned_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .process_versioned_transaction_with_context(ctx, transaction)
             .map_err(Into::into)
     }
 
@@ -254,11 +253,7 @@ impl BanksClient {
     {
         let mut ctx = context::current();
         ctx.deadline += Duration::from_secs(50);
-        self.process_versioned_transaction_with_commitment_and_context(
-            ctx,
-            transaction,
-            CommitmentLevel::default(),
-        )
+        self.process_versioned_transaction_with_context(ctx, transaction)
     }
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return

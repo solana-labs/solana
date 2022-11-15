@@ -333,13 +333,12 @@ impl Banks for BanksServer {
             .await
     }
 
-    async fn process_versioned_transaction_with_commitment_and_context(
+    async fn process_versioned_transaction_with_context(
         self,
         _: Context,
         transaction: VersionedTransaction,
-        commitment: CommitmentLevel,
     ) -> BanksTransactionResultWithMetadata {
-        let bank = self.bank(commitment);
+        let bank = self.bank_forks.read().unwrap().working_bank();
         let batch = match bank.prepare_entry_batch(vec![transaction]) {
             Ok(batch) => batch,
             Err(err) => {
