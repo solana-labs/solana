@@ -17679,63 +17679,98 @@ pub mod tests {
 
     #[test]
     fn test_combine_ancient_slots_append() {
+        solana_logger::setup();
         // combine 2-4 slots into a single ancient append vec
         for num_normal_slots in 1..3 {
-            let mut originals = Vec::default();
-            // ancient_slot: contains ancient append vec
-            // ancient_slot + 1: contains normal append vec with 1 alive account
-            let (db, _tf, ancient_slot) =
-                get_one_ancient_append_vec_and_others(true, num_normal_slots);
+            // but some slots contain only dead accounts
+            for dead_accounts in 0..=num_normal_slots {
+                let mut originals = Vec::default();
+                // ancient_slot: contains ancient append vec
+                // ancient_slot + 1: contains normal append vec with 1 alive account
+                let (db, _tf, ancient_slot) =
+                    get_one_ancient_append_vec_and_others(true, num_normal_slots);
 
-            let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
+                let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
 
-            for slot in ancient_slot..=max_slot_inclusive {
-                originals.push(db.get_storages_for_slot(slot).unwrap());
-            }
+                for slot in ancient_slot..=max_slot_inclusive {
+                    originals.push(db.get_storages_for_slot(slot).unwrap());
+                }
 
-            // combine normal append vec(s) into existing ancient append vec
-            db.combine_ancient_slots(
-                (ancient_slot..=max_slot_inclusive).collect(),
-                CAN_RANDOMLY_SHRINK_FALSE,
-            );
-
-            // normal slots should have been appended to the ancient append vec in the first slot
-            assert_eq!(1, db.get_storages_for_slot(ancient_slot).unwrap().len());
-            let ancient = Arc::clone(
-                db.get_storages_for_slot(ancient_slot)
-                    .unwrap()
-                    .first()
-                    .unwrap(),
-            );
-            assert!(is_ancient(&ancient.accounts));
-            for slot in (ancient_slot + 1)..=max_slot_inclusive {
-                assert!(db.get_storages_for_slot(slot).is_none());
-            }
-
-            let GetUniqueAccountsResult {
-                stored_accounts: mut after_stored_accounts,
-                ..
-            } = db.get_unique_accounts_from_storages(std::iter::once(&ancient));
-            assert_eq!(after_stored_accounts.len(), num_normal_slots + 1);
-            for original in &originals {
-                let original = original.first().unwrap();
-                let original = original.accounts.account_iter().next().unwrap();
-                for i in 0..=after_stored_accounts.len() {
-                    assert_ne!(after_stored_accounts.len(), i, "did not find account");
-                    let stored_ancient = &after_stored_accounts[i];
-                    if stored_ancient.pubkey() == original.pubkey() {
-                        assert!(accounts_equal(&stored_ancient.account, &original));
-                        after_stored_accounts.remove(i);
-                        break;
+                {
+                    // remove the intended dead slots from the index so they look dead
+                    for (count_marked_dead, original) in originals.iter().skip(1).enumerate() {
+                        // skip the ancient one
+                        if count_marked_dead >= dead_accounts {
+                            break;
+                        }
+                        let original = original.first().unwrap();
+                        let original = original.accounts.account_iter().next().unwrap();
+                        let slot = ancient_slot + 1 + (count_marked_dead as Slot);
+                        _ = db.purge_keys_exact(
+                            [(
+                                *original.pubkey(),
+                                vec![slot].into_iter().collect::<HashSet<_>>(),
+                            )]
+                            .iter(),
+                        );
+                    }
+                    // the entries from these original append vecs should not expect to be in the final ancient append vec
+                    for _ in 0..dead_accounts {
+                        originals.remove(1); // remove the first non-ancient original entry each time
                     }
                 }
+
+                // combine normal append vec(s) into existing ancient append vec
+                db.combine_ancient_slots(
+                    (ancient_slot..=max_slot_inclusive).collect(),
+                    CAN_RANDOMLY_SHRINK_FALSE,
+                );
+
+                // normal slots should have been appended to the ancient append vec in the first slot
+                assert_eq!(1, db.get_storages_for_slot(ancient_slot).unwrap().len());
+                let ancient = Arc::clone(
+                    db.get_storages_for_slot(ancient_slot)
+                        .unwrap()
+                        .first()
+                        .unwrap(),
+                );
+                assert!(is_ancient(&ancient.accounts));
+                for slot in (ancient_slot + 1)..=max_slot_inclusive {
+                    assert!(db.get_storages_for_slot(slot).is_none());
+                }
+
+                let GetUniqueAccountsResult {
+                    stored_accounts: mut after_stored_accounts,
+                    ..
+                } = db.get_unique_accounts_from_storages(std::iter::once(&ancient));
+                assert_eq!(
+                    after_stored_accounts.len(),
+                    num_normal_slots + 1 - dead_accounts,
+                    "normal_slots: {num_normal_slots}, dead_accounts: {dead_accounts}"
+                );
+                for original in &originals {
+                    let original = original.first().unwrap();
+                    let original = original.accounts.account_iter().next().unwrap();
+
+                    let i = after_stored_accounts
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, stored_ancient)| {
+                            (stored_ancient.pubkey() == original.pubkey()).then_some({
+                                assert!(accounts_equal(&stored_ancient.account, &original));
+                                i
+                            })
+                        })
+                        .expect("did not find account");
+                    after_stored_accounts.remove(i);
+                }
+                assert!(
+                    after_stored_accounts.is_empty(),
+                    "originals: {}, num_normal_slots: {}",
+                    originals.len(),
+                    num_normal_slots
+                );
             }
-            assert!(
-                after_stored_accounts.is_empty(),
-                "originals: {}, num_normal_slots: {}",
-                originals.len(),
-                num_normal_slots
-            );
         }
     }
 
