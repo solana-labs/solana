@@ -17687,7 +17687,7 @@ pub mod tests {
                 let mut originals = Vec::default();
                 // ancient_slot: contains ancient append vec
                 // ancient_slot + 1: contains normal append vec with 1 alive account
-                let (db, _tf, ancient_slot) =
+                let (db, ancient_slot) =
                     get_one_ancient_append_vec_and_others(true, num_normal_slots);
 
                 let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
@@ -17774,11 +17774,45 @@ pub mod tests {
         }
     }
 
-    fn get_one_ancient_append_vec_and_others(
+    fn create_storages_and_update_index(
+        db: &AccountsDb,
+        tf: &TempFile,
+        starting_slot: usize,
+        num_slots: usize,
         alive: bool,
-        num_normal_slots: usize,
-    ) -> (AccountsDb, TempFile, Slot) {
+        genesis_config: &GenesisConfig,
+    ) {
+        let write_version1 = 0;
+        let starting_id = 999;
+        for i in 0..num_slots {
+            let id = starting_id + (i as AppendVecId);
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let storages = sample_storage_with_entries_id(
+                tf,
+                write_version1,
+                (starting_slot + i) as Slot,
+                &pubkey1,
+                id,
+            )
+            .pop()
+            .unwrap();
+            insert_store(db, Arc::clone(&storages[0]));
+        }
+
+        let starting_slot = starting_slot as Slot;
+        let storages = db.get_storages_for_slot(starting_slot).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storages(storages.iter());
+        assert_eq!(created_accounts.store_ids[0], starting_id);
+
+        if alive {
+            db.generate_index(None, false, genesis_config);
+        }
+    }
+
+    fn create_db_with_storages_and_index(alive: bool, num_slots: usize) -> (AccountsDb, Slot) {
         solana_logger::setup();
+
+        let db = AccountsDb::new_single_for_tests();
 
         // create a single append vec with a single account in a slot
         // add the pubkey to index if alive
@@ -17786,44 +17820,23 @@ pub mod tests {
         // verify we create an ancient appendvec that has alive accounts and does not have dead accounts
         let genesis_config = solana_sdk::genesis_config::create_genesis_config(100).0;
 
-        let db = AccountsDb::new_single_for_tests();
-
         let slot1 = 1;
-        let tf =
-            crate::append_vec::test_utils::get_append_vec_path("test_combine_ancient_slots_simple");
-        let write_version1 = 0;
-        let mut first_storages = vec![];
-        let id: AppendVecId = 999;
-        for i in 0..=num_normal_slots {
-            let id = id + (i as AppendVecId);
-            let pubkey1 = solana_sdk::pubkey::new_rand();
-            let storages = sample_storage_with_entries_id(
-                &tf,
-                write_version1,
-                (slot1 + i) as Slot,
-                &pubkey1,
-                id,
-            )
-            .pop()
-            .unwrap();
-            insert_store(&db, Arc::clone(&storages[0]));
-            if i == 0 {
-                first_storages.push(storages);
-            }
-        }
+        let tf = crate::append_vec::test_utils::get_append_vec_path(
+            "get_one_ancient_append_vec_and_others",
+        );
+        create_storages_and_update_index(&db, &tf, slot1, num_slots, alive, &genesis_config);
+
         let slot1 = slot1 as Slot;
+        (db, slot1)
+    }
 
-        let storages = first_storages.pop().unwrap();
-        let GetUniqueAccountsResult {
-            stored_accounts,
-            original_bytes,
-            store_ids,
-        } = db.get_unique_accounts_from_storages(storages.iter());
-        assert_eq!(store_ids[0], id);
-
-        if alive {
-            db.generate_index(None, false, &genesis_config);
-        }
+    fn get_one_ancient_append_vec_and_others(
+        alive: bool,
+        num_normal_slots: usize,
+    ) -> (AccountsDb, Slot) {
+        let (db, slot1) = create_db_with_storages_and_index(alive, num_normal_slots + 1);
+        let storages = db.get_storages_for_slot(slot1).unwrap();
+        let created_accounts = db.get_unique_accounts_from_storages(storages.iter());
 
         db.combine_ancient_slots(vec![slot1], CAN_RANDOMLY_SHRINK_FALSE);
         assert_eq!(1, db.get_storages_for_slot(slot1).unwrap().len());
@@ -17835,11 +17848,11 @@ pub mod tests {
             original_bytes: after_original_bytes,
             store_ids: after_store_ids,
         } = db.get_unique_accounts_from_storages(after_stores.iter());
-        assert_ne!(original_bytes, after_original_bytes);
-        assert_eq!(stored_accounts.len(), 1);
+        assert_ne!(created_accounts.original_bytes, after_original_bytes);
+        assert_eq!(created_accounts.stored_accounts.len(), 1);
         assert_eq!(after_stored_accounts.len(), usize::from(alive));
         assert_eq!(after_store_ids, vec![ancient.append_vec_id()]);
-        (db, tf, slot1)
+        (db, slot1)
     }
 
     #[test]
