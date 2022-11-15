@@ -64,9 +64,6 @@ impl Bank {
         let include_account_index_in_err = self
             .feature_set
             .is_active(&feature_set::include_account_index_in_rent_error::id());
-        let prevent_crediting_accounts_that_end_rent_paying = self
-            .feature_set
-            .is_active(&feature_set::prevent_crediting_accounts_that_end_rent_paying::id());
         for (i, (pre_state_info, post_state_info)) in
             pre_state_infos.iter().zip(post_state_infos).enumerate()
         {
@@ -76,7 +73,6 @@ impl Bank {
                 transaction_context,
                 i as IndexOfAccount,
                 include_account_index_in_err,
-                prevent_crediting_accounts_that_end_rent_paying,
             )?;
         }
         Ok(())
