@@ -26,7 +26,7 @@ pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
 
         let ret_int = base.modpow(&exponent, &modulus);
         let ret_int = ret_int.to_bytes_be();
-        let mut return_value = vec![0_u8; modulus_len - ret_int.len()];
+        let mut return_value = vec![0_u8; modulus_len.saturating_sub(ret_int.len())];
         return_value.extend(ret_int);
         return_value
     }
