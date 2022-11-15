@@ -101,7 +101,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             .feature_set
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
         {
-            invoke_context.get_compute_meter().consume(
+            consume_compute_meter(
+                invoke_context,
                 (ix_data_len)
                     .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
             )?;
@@ -175,7 +176,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
                     invoke_context.get_check_aligned(),
                 )?;
 
-                invoke_context.get_compute_meter().consume(
+                consume_compute_meter(
+                    invoke_context,
                     (data.len() as u64)
                         .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
                 )?;
@@ -392,7 +394,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             .feature_set
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
         {
-            invoke_context.get_compute_meter().consume(
+            consume_compute_meter(
+                invoke_context,
                 (ix_data_len)
                     .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
             )?;
@@ -471,7 +474,8 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             )?;
             let vm_data_addr = account_info.data_addr;
 
-            invoke_context.get_compute_meter().consume(
+            consume_compute_meter(
+                invoke_context,
                 account_info
                     .data_len
                     .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
@@ -630,7 +634,8 @@ where
             .map_err(SyscallError::InstructionError)?;
         if callee_account.is_executable() {
             // Use the known account
-            invoke_context.get_compute_meter().consume(
+            consume_compute_meter(
+                invoke_context,
                 (callee_account.get_data().len() as u64)
                     .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
             )?;
@@ -862,9 +867,10 @@ fn cpi_common<S: SyscallInvokeSigned>(
     signers_seeds_len: u64,
     memory_mapping: &mut MemoryMapping,
 ) -> Result<u64, EbpfError> {
-    invoke_context
-        .get_compute_meter()
-        .consume(invoke_context.get_compute_budget().invoke_units)?;
+    consume_compute_meter(
+        invoke_context,
+        invoke_context.get_compute_budget().invoke_units,
+    )?;
 
     // Translate and verify caller's data
     let instruction = S::translate_instruction(instruction_addr, memory_mapping, invoke_context)?;

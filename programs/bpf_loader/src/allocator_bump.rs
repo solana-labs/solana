@@ -25,6 +25,10 @@ impl BpfAllocator {
             pos: 0,
         }
     }
+
+    pub fn get_heap(&mut self) -> &mut [u8] {
+        self.heap.as_slice_mut()
+    }
 }
 
 impl Alloc for BpfAllocator {

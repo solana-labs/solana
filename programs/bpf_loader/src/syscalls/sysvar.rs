@@ -7,7 +7,8 @@ fn get_sysvar<T: std::fmt::Debug + Sysvar + SysvarId + Clone>(
     memory_mapping: &mut MemoryMapping,
     invoke_context: &mut InvokeContext,
 ) -> Result<u64, EbpfError> {
-    invoke_context.get_compute_meter().consume(
+    consume_compute_meter(
+        invoke_context,
         invoke_context
             .get_compute_budget()
             .sysvar_base_cost

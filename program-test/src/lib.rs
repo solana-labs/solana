@@ -35,7 +35,7 @@ use {
         instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
+        program_error::{ProgramError, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -197,11 +197,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
 ) -> u64 {
     let invoke_context = get_invoke_context();
     if invoke_context
-        .get_compute_meter()
-        .try_borrow_mut()
-        .map_err(|_| ACCOUNT_BORROW_FAILED)
-        .unwrap()
-        .consume(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .consume_checked(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
         .is_err()
     {
         panic!("Exceeded compute budget");
