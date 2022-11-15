@@ -297,10 +297,8 @@ before execting it in the virtual machine.",
         let mut interpreter = Interpreter::new(&mut vm).unwrap();
         let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
         debugger::execute(&mut interpreter, port)
-    } else if matches.value_of("use").unwrap() == "interpreter" {
-        vm.execute_program_interpreted()
     } else {
-        vm.execute_program_jit()
+        vm.execute_program(matches.value_of("use").unwrap() == "interpreter")
     };
     let duration = Instant::now() - start_time;
     drop(vm);

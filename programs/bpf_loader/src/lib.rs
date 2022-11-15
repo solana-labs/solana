@@ -1421,11 +1421,7 @@ impl Executor for BpfExecutor {
 
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
-            let (compute_units_consumed, result) = if self.use_jit {
-                vm.execute_program_jit()
-            } else {
-                vm.execute_program_interpreted()
-            };
+            let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
             drop(vm);
             ic_logger_msg!(
                 log_collector,
@@ -1637,7 +1633,7 @@ mod tests {
             vec![input_region],
         )
         .unwrap();
-        vm.execute_program_interpreted().1.unwrap();
+        vm.execute_program(true).1.unwrap();
     }
 
     #[test]

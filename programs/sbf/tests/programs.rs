@@ -287,11 +287,7 @@ fn run_program(name: &str) -> u64 {
                     invoke_context,
                 )
                 .unwrap();
-                let (compute_units_consumed, result) = if i == 0 {
-                    vm.execute_program_interpreted()
-                } else {
-                    vm.execute_program_jit()
-                };
+                let (compute_units_consumed, result) = vm.execute_program(i == 0);
                 assert_eq!(SUCCESS, result.unwrap());
                 if i == 1 {
                     assert_eq!(instruction_count, compute_units_consumed);
