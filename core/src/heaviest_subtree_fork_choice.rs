@@ -3685,6 +3685,39 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_dump_node_complicated() {
+        let mut heaviest_subtree_fork_choice = setup_complicated_forks();
+
+        let dump_and_check =
+            |tree: &mut HeaviestSubtreeForkChoice, node: Slot, nodes_to_check: Vec<Slot>| {
+                for &n in nodes_to_check.iter() {
+                    assert!(tree.contains_block(&(n, Hash::default())));
+                }
+                tree.dump_node(&(node, Hash::default()));
+                for &n in nodes_to_check.iter() {
+                    assert!(!tree.contains_block(&(n, Hash::default())));
+                }
+            };
+
+        dump_and_check(
+            &mut heaviest_subtree_fork_choice,
+            14,
+            vec![14, 15, 16, 22, 23, 17, 21, 18, 19, 20, 24, 25],
+        );
+        dump_and_check(&mut heaviest_subtree_fork_choice, 12, vec![12, 13]);
+        dump_and_check(
+            &mut heaviest_subtree_fork_choice,
+            2,
+            vec![2, 7, 8, 9, 33, 34, 10, 31, 32],
+        );
+        dump_and_check(
+            &mut heaviest_subtree_fork_choice,
+            0,
+            vec![0, 1, 5, 6, 3, 11, 26],
+        );
+    }
+
     fn setup_forks() -> HeaviestSubtreeForkChoice {
         /*
             Build fork structure:
@@ -3700,6 +3733,58 @@ mod test {
                     slot 6
         */
         let forks = tr(0) / (tr(1) / (tr(2) / (tr(4))) / (tr(3) / (tr(5) / (tr(6)))));
+        HeaviestSubtreeForkChoice::new_from_tree(forks)
+    }
+
+    fn setup_complicated_forks() -> HeaviestSubtreeForkChoice {
+        /*
+            Build a complicated fork structure:
+
+                slot 0
+                ├── slot 1
+                │   ├── slot 5
+                │   └── slot 6
+                ├── slot 2
+                │   ├── slot 7
+                │   ├── slot 8
+                │   ├── slot 9
+                │   │   └── slot 33
+                │   │       └── slot 34
+                │   ├── slot 10
+                │   └── slot 31
+                │       └── slot 32
+                └── slot 3
+                    ├── slot 11
+                    ├── slot 12
+                    │   └── slot 13
+                    │       └── slot 14
+                    │           ├── slot 15
+                    │           │   ├── slot 16
+                    │           │   │   └── slot 22
+                    │           │   │       └── slot 23
+                    │           │   ├── slot 17
+                    │           │   │   └── slot 21
+                    │           │   ├── slot 18
+                    │           │   │   ├── slot 19
+                    │           │   │   └── slot 20
+                    │           │   └── slot 24
+                    │           └── slot 25
+                    └── slot 26
+
+        */
+        let tree_12 = tr(12)
+            / (tr(13)
+                / (tr(14)
+                    / (tr(15)
+                        / (tr(16) / (tr(22) / tr(23)))
+                        / (tr(17) / tr(21))
+                        / (tr(18) / tr(19) / tr(20))
+                        / tr(24))
+                    / tr(25)));
+        let forks = tr(0)
+            / (tr(1) / tr(5) / tr(6))
+            / (tr(2) / tr(7) / tr(8) / (tr(9) / (tr(33) / tr(34))) / tr(10) / (tr(31) / tr(32)))
+            / (tr(3) / tr(11) / tree_12 / tr(26));
         HeaviestSubtreeForkChoice::new_from_tree(forks)
     }
 
