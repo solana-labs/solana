@@ -19806,8 +19806,16 @@ pub(crate) mod tests {
 
         // get builtin program account data size, will beused to request max data size for
         // transaction.
-        let mock_account_data_size = bank.get_account_with_fixed_root(&mock_program_id).unwrap().data().len();
-        let compute_budget_account_data_size = bank.get_account_with_fixed_root(&solana_sdk::compute_budget::id()).unwrap().data().len();
+        let mock_account_data_size = bank
+            .get_account_with_fixed_root(&mock_program_id)
+            .unwrap()
+            .data()
+            .len();
+        let compute_budget_account_data_size = bank
+            .get_account_with_fixed_root(&solana_sdk::compute_budget::id())
+            .unwrap()
+            .data()
+            .len();
 
         let recent_blockhash = bank.last_blockhash();
 
@@ -19856,7 +19864,7 @@ pub(crate) mod tests {
         {
             let account_pubkey = Pubkey::new_unique();
             let account_balance = LAMPORTS_PER_SOL;
-            let account_size = 
+            let account_size =
                 rng.gen_range(MAX_PERMITTED_DATA_LENGTH / 2, MAX_PERMITTED_DATA_LENGTH) as usize;
             let account_data =
                 AccountSharedData::new(account_balance, account_size, &mock_program_id);
