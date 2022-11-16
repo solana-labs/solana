@@ -1375,10 +1375,8 @@ mod tests {
 
     #[test]
     fn test_verify_signed_packet() {
-        let keypair = Keypair::new();
+        let my_keypair = Keypair::new();
         let other_keypair = Keypair::new();
-        let my_id = Pubkey::new_unique();
-        let other_id = Pubkey::new_unique();
 
         fn sign_packet(packet: &mut Packet, keypair: &Keypair) {
             let signable_data = [
@@ -1392,16 +1390,21 @@ mod tests {
 
         // well formed packet
         let packet = {
-            let header = RepairRequestHeader::new(keypair.pubkey(), my_id, timestamp(), 678);
+            let header = RepairRequestHeader::new(
+                my_keypair.pubkey(),
+                other_keypair.pubkey(),
+                timestamp(),
+                678,
+            );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
             let mut packet = Packet::from_data(None, &request).unwrap();
-            sign_packet(&mut packet, &keypair);
+            sign_packet(&mut packet, &my_keypair);
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
         assert!(ServeRepair::verify_signed_packet(
-            &my_id,
+            &other_keypair.pubkey(),
             &packet,
             &request,
             &mut ServeRepairStats::default(),
@@ -1409,17 +1412,25 @@ mod tests {
 
         // recipient mismatch
         let packet = {
-            let header = RepairRequestHeader::new(keypair.pubkey(), other_id, timestamp(), 678);
+            let header = RepairRequestHeader::new(
+                my_keypair.pubkey(),
+                other_keypair.pubkey(),
+                timestamp(),
+                678,
+            );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
             let mut packet = Packet::from_data(None, &request).unwrap();
-            sign_packet(&mut packet, &keypair);
+            sign_packet(&mut packet, &my_keypair);
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
         let mut stats = ServeRepairStats::default();
         assert!(!ServeRepair::verify_signed_packet(
-            &my_id, &packet, &request, &mut stats,
+            &my_keypair.pubkey(),
+            &packet,
+            &request,
+            &mut stats,
         ));
         assert_eq!(stats.err_id_mismatch, 1);
 
@@ -1427,23 +1438,36 @@ mod tests {
         let packet = {
             let time_diff_ms = u64::try_from(SIGNED_REPAIR_TIME_WINDOW.as_millis() * 2).unwrap();
             let old_timestamp = timestamp().saturating_sub(time_diff_ms);
-            let header = RepairRequestHeader::new(keypair.pubkey(), my_id, old_timestamp, 678);
+            let header = RepairRequestHeader::new(
+                my_keypair.pubkey(),
+                other_keypair.pubkey(),
+                old_timestamp,
+                678,
+            );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
             let mut packet = Packet::from_data(None, &request).unwrap();
-            sign_packet(&mut packet, &keypair);
+            sign_packet(&mut packet, &my_keypair);
             packet
         };
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
         let mut stats = ServeRepairStats::default();
         assert!(!ServeRepair::verify_signed_packet(
-            &my_id, &packet, &request, &mut stats,
+            &other_keypair.pubkey(),
+            &packet,
+            &request,
+            &mut stats,
         ));
         assert_eq!(stats.err_time_skew, 1);
 
         // bad signature
         let packet = {
-            let header = RepairRequestHeader::new(keypair.pubkey(), my_id, timestamp(), 678);
+            let header = RepairRequestHeader::new(
+                my_keypair.pubkey(),
+                other_keypair.pubkey(),
+                timestamp(),
+                678,
+            );
             let slot = 239847;
             let request = RepairProtocol::Orphan { header, slot };
             let mut packet = Packet::from_data(None, &request).unwrap();
@@ -1453,7 +1477,10 @@ mod tests {
         let request: RepairProtocol = packet.deserialize_slice(..).unwrap();
         let mut stats = ServeRepairStats::default();
         assert!(!ServeRepair::verify_signed_packet(
-            &my_id, &packet, &request, &mut stats,
+            &other_keypair.pubkey(),
+            &packet,
+            &request,
+            &mut stats,
         ));
         assert_eq!(stats.err_sig_verify, 1);
     }
