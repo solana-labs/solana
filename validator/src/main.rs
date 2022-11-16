@@ -259,7 +259,7 @@ fn wait_for_restart_window(
                 style("Node is unhealthy").red().to_string()
             } else {
                 // Wait until a hole in the leader schedule before restarting the node
-                let in_leader_schedule_hole = if epoch_info.slot_index + min_idle_slots as u64
+                let in_leader_schedule_hole = if epoch_info.slot_index + min_idle_slots
                     > epoch_info.slots_in_epoch
                 {
                     Err("Current epoch is almost complete".to_string())
@@ -1560,7 +1560,7 @@ pub fn main() {
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for BPF"),
+                .help("Disable the just-in-time compiler and instead use the interpreter for SBF"),
         )
         .arg(
             Arg::with_name("poh_pinned_cpu_core")
@@ -1647,8 +1647,11 @@ pub fn main() {
         .arg(
             Arg::with_name("accounts_db_ancient_append_vecs")
                 .long("accounts-db-ancient-append-vecs")
-                .help("AppendVecs that are older than an epoch are squashed together.")
-                      .hidden(true),
+                .value_name("SLOT-OFFSET")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.")
+                .hidden(true),
         )
         .arg(
             Arg::with_name("accounts_db_cache_limit_mb")
@@ -2495,7 +2498,7 @@ pub fn main() {
             .ok()
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
-        ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
+        ancient_append_vec_offset: value_t!(matches, "accounts_db_ancient_append_vecs", u64).ok(),
         exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         ..AccountsDbConfig::default()
     };

@@ -1,4 +1,4 @@
-use {super::*, crate::declare_syscall};
+use {super::*, crate::declare_syscall, solana_rbpf::vm::ContextObject};
 
 declare_syscall!(
     /// Log a user's info message
@@ -16,7 +16,7 @@ declare_syscall!(
             .get_compute_budget()
             .syscall_base_cost
             .max(len);
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         translate_string_and_do(
             memory_mapping,
@@ -46,7 +46,7 @@ declare_syscall!(
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         let cost = invoke_context.get_compute_budget().log_64_units;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         stable_log::program_log(
             &invoke_context.get_log_collector(),
@@ -72,12 +72,12 @@ declare_syscall!(
         _memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         let cost = invoke_context.get_compute_budget().syscall_base_cost;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         ic_logger_msg!(
             invoke_context.get_log_collector(),
             "Program consumption: {} units remaining",
-            invoke_context.get_compute_meter().borrow().get_remaining()
+            invoke_context.get_remaining(),
         );
         Ok(0)
     }
@@ -96,7 +96,7 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         let cost = invoke_context.get_compute_budget().log_pubkey_units;
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
         let pubkey = translate_type::<Pubkey>(
             memory_mapping,
@@ -122,9 +122,7 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        invoke_context
-            .get_compute_meter()
-            .consume(budget.syscall_base_cost)?;
+        consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
 
         let untranslated_fields = translate_slice::<&[u8]>(
             memory_mapping,
@@ -134,12 +132,14 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?;
 
-        invoke_context.get_compute_meter().consume(
+        consume_compute_meter(
+            invoke_context,
             budget
                 .syscall_base_cost
                 .saturating_mul(untranslated_fields.len() as u64),
         )?;
-        invoke_context.get_compute_meter().consume(
+        consume_compute_meter(
+            invoke_context,
             untranslated_fields
                 .iter()
                 .fold(0, |total, e| total.saturating_add(e.len() as u64)),

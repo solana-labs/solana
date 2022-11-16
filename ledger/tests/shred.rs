@@ -247,7 +247,7 @@ fn setup_different_sized_fec_blocks(
                 assert!(!shred.last_in_slot());
             }
         }
-        assert_eq!(data_shreds.len(), num_shreds_per_iter as usize);
+        assert_eq!(data_shreds.len(), num_shreds_per_iter);
         next_shred_index = data_shreds.last().unwrap().index() + 1;
         next_code_index = coding_shreds.last().unwrap().index() + 1;
         sort_data_coding_into_fec_sets(

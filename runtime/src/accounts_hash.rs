@@ -104,6 +104,9 @@ pub struct HashStats {
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
     /// # ancient append vecs encountered
     pub ancient_append_vecs: AtomicUsize,
+    pub longest_ancient_scan_us: AtomicU64,
+    pub sum_ancient_scans_us: AtomicU64,
+    pub count_ancient_scans: AtomicU64,
 }
 impl HashStats {
     pub fn calc_storage_size_quartiles(&mut self, storages: &SnapshotStorages) {
@@ -229,6 +232,21 @@ impl HashStats {
             (
                 "ancient_append_vecs",
                 self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "longest_ancient_scan_us",
+                self.longest_ancient_scan_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "sum_ancient_scans_us",
+                self.sum_ancient_scans_us.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "count_ancient_scans",
+                self.count_ancient_scans.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -1647,7 +1665,7 @@ pub mod tests {
                     let packaged_result: ExpectedType = (
                         human_readable,
                         is_last_slice,
-                        lamports2 as u64,
+                        lamports2,
                         hash_result_as_string,
                     );
                     assert_eq!(expected[expected_index], packaged_result);
@@ -1719,7 +1737,7 @@ pub mod tests {
         let vecs = vec![vec![account_maps.to_vec()]];
         let slice = convert_to_slice2(&vecs);
         let result = test_de_dup_accounts_in_parallel(&slice);
-        assert_eq!(result, (vec![&val.hash], val.lamports as u64, 1));
+        assert_eq!(result, (vec![&val.hash], val.lamports, 1));
 
         // zero original lamports, higher version
         let val = CalculateHashIntermediate::new(hash, 0, key);

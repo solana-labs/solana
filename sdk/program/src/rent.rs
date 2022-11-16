@@ -4,14 +4,11 @@
 
 #![allow(clippy::integer_arithmetic)]
 
-use {
-    crate::{clock::DEFAULT_SLOTS_PER_EPOCH, clone_zeroed, copy_field},
-    std::mem::MaybeUninit,
-};
+use {crate::clock::DEFAULT_SLOTS_PER_EPOCH, solana_sdk_macro::CloneZeroed};
 
 /// Configuration of network rent.
 #[repr(C)]
-#[derive(Serialize, Deserialize, PartialEq, Copy, Debug, AbiExample)]
+#[derive(Serialize, Deserialize, PartialEq, CloneZeroed, Copy, Debug, AbiExample)]
 pub struct Rent {
     /// Rental rate in lamports/byte-year.
     pub lamports_per_byte_year: u64,
@@ -59,19 +56,6 @@ impl Default for Rent {
             exemption_threshold: DEFAULT_EXEMPTION_THRESHOLD,
             burn_percent: DEFAULT_BURN_PERCENT,
         }
-    }
-}
-
-impl Clone for Rent {
-    fn clone(&self) -> Self {
-        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
-            let ptr = cloned.as_mut_ptr();
-            unsafe {
-                copy_field!(ptr, self, lamports_per_byte_year);
-                copy_field!(ptr, self, exemption_threshold);
-                copy_field!(ptr, self, burn_percent);
-            }
-        })
     }
 }
 
@@ -133,7 +117,7 @@ impl Rent {
     /// This is used for testing.
     pub fn with_slots_per_epoch(slots_per_epoch: u64) -> Self {
         let ratio = slots_per_epoch as f64 / DEFAULT_SLOTS_PER_EPOCH as f64;
-        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD as f64 * ratio;
+        let exemption_threshold = DEFAULT_EXEMPTION_THRESHOLD * ratio;
         let lamports_per_byte_year = (DEFAULT_LAMPORTS_PER_BYTE_YEAR as f64 / ratio) as u64;
         Self {
             lamports_per_byte_year,

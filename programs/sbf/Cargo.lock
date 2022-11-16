@@ -4178,7 +4178,6 @@ dependencies = [
  "libsecp256k1 0.6.0",
  "log",
  "solana-measure",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-zk-token-sdk 1.15.0",
@@ -4862,6 +4861,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-sdk 1.15.0",
+ "solana_rbpf",
  "thiserror",
 ]
 
@@ -5992,9 +5992,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.35"
+version = "0.2.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bcad04ab8dff83d39e5b039e419d03e83dafc6643401700b61acf0cc1589ff8"
+checksum = "94fe0b05d69875dc1da1e646aec8284c680b9b3f5f521c8d8f958b2cbc108d0b"
 dependencies = [
  "byteorder 1.4.3",
  "combine",

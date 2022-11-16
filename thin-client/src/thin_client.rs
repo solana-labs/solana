@@ -224,6 +224,7 @@ impl ThinClient {
                 if num_confirmed == 0 {
                     let conn = self.connection_cache.get_connection(self.tpu_addr());
                     // Send the transaction if there has been no confirmation (e.g. the first time)
+                    #[allow(clippy::needless_borrow)]
                     conn.send_wire_transaction(&wire_transaction)?;
                 }
 

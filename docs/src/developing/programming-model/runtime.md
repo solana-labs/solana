@@ -52,14 +52,15 @@ the transaction may perform, and operational bounds the transaction must adhere
 to.
 
 As the transaction is processed compute units are consumed by its
-instruction's programs performing operations such as executing BPF instructions,
+instruction's programs performing operations such as executing SBF instructions,
 calling syscalls, etc... When the transaction consumes its entire budget, or
-exceeds a bound such as attempting a call stack that is too deep, the runtime
-halts the transaction processing and returns an error.
+exceeds a bound such as attempting a call stack that is too deep, or loaded
+account data exceeds limit, the runtime halts the transaction processing and
+returns an error.
 
 The following operations incur a compute cost:
 
-- Executing BPF instructions
+- Executing SBF instructions
 - Passing data between programs
 - Calling system calls
   - logging
@@ -94,9 +95,9 @@ log_pubkey_units: 100,
 
 Then any transaction:
 
-- Could execute 1,400,000 BPF instructions, if it did nothing else.
+- Could execute 1,400,000 SBF instructions, if it did nothing else.
 - Cannot exceed 4k of stack usage.
-- Cannot exceed a BPF call depth of 64.
+- Cannot exceed a SBF call depth of 64.
 - Cannot exceed invoke stack height of 5 (4 levels of cross-program invocations).
 
 > **NOTE:** Since the compute budget is consumed incrementally as the transaction executes,
@@ -142,6 +143,21 @@ let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
 
 ```rust
 let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
+```
+
+### Accounts data size limit
+
+A transaction should request the maximum bytes of accounts data it is
+allowed to load by including a `SetAccountsDataSizeLimit` instruction, requested
+limit is capped by `get_max_loaded_accounts_data_limit()`. If no
+`SetAccountsDataSizeLimit` is provided, the transaction is defaulted to
+have limit of `get_default_loaded_accounts_data_limit()`.
+
+The `ComputeBudgetInstruction::set_accounts_data_size_limit` function can be used
+to create this instruction:
+
+```rust
+let instruction = ComputeBudgetInstruction::set_accounts_data_size_limit(100_000);
 ```
 
 ## New Features

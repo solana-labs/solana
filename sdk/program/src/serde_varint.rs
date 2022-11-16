@@ -1,3 +1,5 @@
+//! Integers that serialize to variable size.
+
 #![allow(clippy::integer_arithmetic)]
 use {
     serde::{

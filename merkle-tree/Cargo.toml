@@ -13,7 +13,7 @@ edition = "2021"
 fast-math = "0.1"
 solana-program = { path = "../sdk/program", version = "=1.15.0" }
 
-# This can go once the BPF toolchain target Rust 1.42.0+
+# This can go once the SBF toolchain target Rust 1.42.0+
 [target.bpfel-unknown-unknown.dependencies]
 matches = "0.1.9"
 

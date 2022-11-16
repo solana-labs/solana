@@ -37,7 +37,7 @@ fn build_packet_batch(
                     1,
                     recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
-                let mut packet = Packet::from_data(None, &tx).unwrap();
+                let mut packet = Packet::from_data(None, tx).unwrap();
                 packet.meta.sender_stake = sender_stake as u64;
                 packet
             })
@@ -64,7 +64,7 @@ fn build_randomized_packet_batch(
                     1,
                     recent_blockhash.unwrap_or_else(Hash::new_unique),
                 );
-                let mut packet = Packet::from_data(None, &tx).unwrap();
+                let mut packet = Packet::from_data(None, tx).unwrap();
                 let sender_stake = distribution.sample(&mut rng);
                 packet.meta.sender_stake = sender_stake as u64;
                 packet

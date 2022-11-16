@@ -856,7 +856,7 @@ pub fn process_catchup(
         let average_time_remaining = if slot_distance == 0 || total_sleep_interval == 0 {
             "".to_string()
         } else {
-            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+            let distance_delta = start_slot_distance - slot_distance;
             let average_catchup_slots_per_second =
                 distance_delta as f64 / f64::from(total_sleep_interval);
             let average_time_remaining =
@@ -874,7 +874,7 @@ pub fn process_catchup(
                 let average_node_slots_per_second =
                     total_node_slot_delta as f64 / f64::from(total_sleep_interval);
                 let expected_finish_slot = (node_slot as f64
-                    + average_time_remaining as f64 * average_node_slots_per_second as f64)
+                    + average_time_remaining * average_node_slots_per_second)
                     .round();
                 format!(
                     " (AVG: {:.1} slots/second, ETA: slot {} in {})",
@@ -2214,7 +2214,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner::new("", &default_keypair_file);
+        let default_signer = DefaultSigner::new("", default_keypair_file);
 
         let test_cluster_version = test_commands
             .clone()

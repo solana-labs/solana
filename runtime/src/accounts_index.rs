@@ -3002,27 +3002,27 @@ pub mod tests {
 
         run_test_range_indexes(&index, &pubkeys, Some(ITER_BATCH_SIZE), None);
 
-        run_test_range_indexes(&index, &pubkeys, None, Some(2 * ITER_BATCH_SIZE as usize));
+        run_test_range_indexes(&index, &pubkeys, None, Some(2 * ITER_BATCH_SIZE));
 
         run_test_range_indexes(
             &index,
             &pubkeys,
-            Some(ITER_BATCH_SIZE as usize),
-            Some(2 * ITER_BATCH_SIZE as usize),
+            Some(ITER_BATCH_SIZE),
+            Some(2 * ITER_BATCH_SIZE),
         );
 
         run_test_range_indexes(
             &index,
             &pubkeys,
-            Some(ITER_BATCH_SIZE as usize),
-            Some(2 * ITER_BATCH_SIZE as usize - 1),
+            Some(ITER_BATCH_SIZE),
+            Some(2 * ITER_BATCH_SIZE - 1),
         );
 
         run_test_range_indexes(
             &index,
             &pubkeys,
             Some(ITER_BATCH_SIZE - 1_usize),
-            Some(2 * ITER_BATCH_SIZE as usize + 1),
+            Some(2 * ITER_BATCH_SIZE + 1),
         );
     }
 

@@ -11,18 +11,21 @@ use {
             },
             tpu_connection::TpuConnection as NonblockingTpuConnection,
         },
-        tpu_connection::TpuConnection,
+        tpu_connection::{ClientStats, TpuConnection},
     },
     lazy_static::lazy_static,
-    solana_sdk::transport::Result as TransportResult,
+    log::*,
+    solana_sdk::transport::{Result as TransportResult, TransportError},
     std::{
         net::SocketAddr,
-        sync::{Arc, Condvar, Mutex, MutexGuard},
+        sync::{atomic::Ordering, Arc, Condvar, Mutex, MutexGuard},
+        time::Duration,
     },
-    tokio::runtime::Runtime,
+    tokio::{runtime::Runtime, time::timeout},
 };
 
 const MAX_OUTSTANDING_TASK: u64 = 2000;
+const SEND_TRANSACTION_TIMEOUT_MS: u64 = 10000;
 
 /// A semaphore used for limiting the number of asynchronous tasks spawn to the
 /// runtime. Before spawnning a task, use acquire. After the task is done (be it
@@ -108,18 +111,48 @@ async fn send_wire_transaction_async(
     connection: Arc<NonblockingQuicTpuConnection>,
     wire_transaction: Vec<u8>,
 ) -> TransportResult<()> {
-    let result = connection.send_wire_transaction(wire_transaction).await;
+    let result = timeout(
+        Duration::from_millis(SEND_TRANSACTION_TIMEOUT_MS),
+        connection.send_wire_transaction(wire_transaction),
+    )
+    .await;
     ASYNC_TASK_SEMAPHORE.release();
-    result
+    handle_send_result(result, connection)
 }
 
 async fn send_wire_transaction_batch_async(
     connection: Arc<NonblockingQuicTpuConnection>,
     buffers: Vec<Vec<u8>>,
 ) -> TransportResult<()> {
-    let result = connection.send_wire_transaction_batch(&buffers).await;
+    let time_out = SEND_TRANSACTION_TIMEOUT_MS * buffers.len() as u64;
+
+    let result = timeout(
+        Duration::from_millis(time_out),
+        connection.send_wire_transaction_batch(&buffers),
+    )
+    .await;
     ASYNC_TASK_SEMAPHORE.release();
-    result
+    handle_send_result(result, connection)
+}
+
+/// Check the send result and update stats if timedout. Returns the checked result.
+fn handle_send_result(
+    result: Result<Result<(), TransportError>, tokio::time::error::Elapsed>,
+    connection: Arc<NonblockingQuicTpuConnection>,
+) -> Result<(), TransportError> {
+    match result {
+        Ok(result) => result,
+        Err(_err) => {
+            let client_stats = ClientStats::default();
+            client_stats.send_timeout.fetch_add(1, Ordering::Relaxed);
+            let stats = connection.connection_stats();
+            stats.add_client_stats(&client_stats, 0, false);
+            info!("Timedout sending transaction {:?}", connection.tpu_addr());
+            Err(TransportError::Custom(
+                "Timedout sending transaction".to_string(),
+            ))
+        }
+    }
 }
 
 impl TpuConnection for QuicTpuConnection {

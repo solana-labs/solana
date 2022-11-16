@@ -210,7 +210,7 @@ impl<T: Clone + Copy> Bucket<T> {
         let mut m = Measure::start("bucket_create_key");
         let ix = Self::bucket_index_ix(index, key, random);
         for i in ix..ix + index.max_search() {
-            let ii = i as u64 % index.capacity();
+            let ii = i % index.capacity();
             if !index.is_free(ii) {
                 continue;
             }

@@ -7,6 +7,7 @@ use {
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
+        epoch_accounts_hash,
         genesis_utils::{activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
         status_cache::StatusCache,
@@ -43,8 +44,8 @@ fn copy_append_vecs<P: AsRef<Path>>(
         // Copy file to new directory
         let storage_path = storage_entry.get_path();
         let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
-        let output_path = output_dir.as_ref().join(&file_name);
-        std::fs::copy(&storage_path, &output_path)?;
+        let output_path = output_dir.as_ref().join(file_name);
+        std::fs::copy(storage_path, &output_path)?;
 
         // Read new file into append-vec and build new entry
         let (append_vec, num_accounts) =
@@ -219,12 +220,13 @@ fn test_bank_serialize_style(
     reserialize_accounts_hash: bool,
     update_accounts_hash: bool,
     incremental_snapshot_persistence: bool,
-    epoch_accounts_hash: bool,
     initial_epoch_accounts_hash: bool,
 ) {
     solana_logger::setup();
-    let (genesis_config, _) = create_genesis_config(500);
+    let (mut genesis_config, _) = create_genesis_config(500);
+    genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
     bank0.squash();
 
@@ -232,7 +234,15 @@ fn test_bank_serialize_style(
     let key1 = Keypair::new();
     bank1.deposit(&key1.pubkey(), 5).unwrap();
 
-    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), 2);
+    // If setting an initial EAH, then the bank being snapshotted must be in the EAH calculation
+    // window.  Otherwise `bank_to_stream()` below will *not* include the EAH in the bank snapshot,
+    // and the later-deserialized bank's EAH will not match the expected EAH.
+    let bank2_slot = if initial_epoch_accounts_hash {
+        eah_start_slot
+    } else {
+        0
+    } + 2;
+    let bank2 = Bank::new_from_parent(&bank0, &Pubkey::default(), bank2_slot);
 
     // Test new account
     let key2 = Keypair::new();
@@ -261,7 +271,7 @@ fn test_bank_serialize_style(
             .epoch_accounts_hash_manager
             .set_valid(
                 EpochAccountsHash::new(expected_epoch_accounts_hash.unwrap()),
-                0,
+                eah_start_slot,
             );
     }
 
@@ -294,7 +304,7 @@ fn test_bank_serialize_style(
             incremental_capitalization: 32,
         });
 
-    if reserialize_accounts_hash || incremental_snapshot_persistence || epoch_accounts_hash {
+    if reserialize_accounts_hash || incremental_snapshot_persistence {
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
@@ -306,19 +316,11 @@ fn test_bank_serialize_style(
             f.write_all(&buf).unwrap();
         }
 
-        let reserialized_epoch_accounts_hash = if epoch_accounts_hash {
-            expected_epoch_accounts_hash = Some(Hash::new(&[3; 32]));
-            expected_epoch_accounts_hash
-        } else {
-            None
-        };
-
         assert!(reserialize_bank_with_new_accounts_hash(
             temp_dir.path(),
             slot,
             &accounts_hash,
             incremental.as_ref(),
-            reserialized_epoch_accounts_hash.as_ref(),
         ));
         let mut buf_reserialized;
         {
@@ -333,15 +335,6 @@ fn test_bank_serialize_style(
                 } else {
                     // no change
                     0
-                }
-                + if epoch_accounts_hash && !initial_epoch_accounts_hash {
-                    // previously saved a none (size 1), now added a Some
-                    let sizeof_epoch_accounts_hash_persistence =
-                        std::mem::size_of::<Option<Hash>>();
-                    sizeof_epoch_accounts_hash_persistence - 1
-                } else {
-                    // no change
-                    0
                 };
 
             // +1: larger buffer than expected to make sure the file isn't larger than expected
@@ -352,11 +345,10 @@ fn test_bank_serialize_style(
             assert_eq!(
                 size,
                 expected,
-                "(reserialize_accounts_hash, incremental_snapshot_persistence, epoch_accounts_hash, update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: {previous_len}",
+                "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: {previous_len}",
                 (
                     reserialize_accounts_hash,
                     incremental_snapshot_persistence,
-                    epoch_accounts_hash,
                     update_accounts_hash,
                     initial_epoch_accounts_hash,
                 )
@@ -370,7 +362,7 @@ fn test_bank_serialize_style(
             // But, we can guarantee that the buffer is different if we change the hash!
             assert_ne!(buf, buf_reserialized);
         }
-        if update_accounts_hash || incremental_snapshot_persistence || epoch_accounts_hash {
+        if update_accounts_hash || incremental_snapshot_persistence {
             buf = buf_reserialized;
         }
     }
@@ -416,12 +408,11 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
-    assert_eq!(dbank.rc.accounts.accounts_db.epoch_accounts_hash_manager.try_get_epoch_accounts_hash().map(|hash| *hash.as_ref()), expected_epoch_accounts_hash,
-        "(reserialize_accounts_hash, incremental_snapshot_persistence, epoch_accounts_hash, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
+    assert_eq!(dbank.get_epoch_accounts_hash_to_serialize().map(|epoch_accounts_hash| *epoch_accounts_hash.as_ref()), expected_epoch_accounts_hash,
+        "(reserialize_accounts_hash, incremental_snapshot_persistence, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
         (
             reserialize_accounts_hash,
             incremental_snapshot_persistence,
-            epoch_accounts_hash,
             update_accounts_hash,
             initial_epoch_accounts_hash,
         )
@@ -485,17 +476,14 @@ fn test_bank_serialize_newer() {
             [false].to_vec()
         };
         for incremental_snapshot_persistence in parameters.clone() {
-            for epoch_accounts_hash in parameters.clone() {
-                for initial_epoch_accounts_hash in parameters.clone() {
-                    test_bank_serialize_style(
-                        SerdeStyle::Newer,
-                        reserialize_accounts_hash,
-                        update_accounts_hash,
-                        incremental_snapshot_persistence,
-                        epoch_accounts_hash,
-                        initial_epoch_accounts_hash,
-                    )
-                }
+            for initial_epoch_accounts_hash in [false, true] {
+                test_bank_serialize_style(
+                    SerdeStyle::Newer,
+                    reserialize_accounts_hash,
+                    update_accounts_hash,
+                    incremental_snapshot_persistence,
+                    initial_epoch_accounts_hash,
+                )
             }
         }
     }

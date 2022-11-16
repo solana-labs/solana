@@ -534,6 +534,14 @@ pub mod check_syscall_outputs_do_not_overlap {
     solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
 }
 
+pub mod enable_bpf_loader_set_authority_checked_ix {
+    solana_sdk::declare_id!("5x3825XS7M2A3Ekbn5VGGkvFoAg5qrRWkTrY4bARP1GL");
+}
+
+pub mod cap_transaction_accounts_data_size {
+    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -605,8 +613,8 @@ lazy_static! {
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
         (bank_tranaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
-        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* BPF instructions"),
-        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved BPF symbols at runtime"),
+        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* SBF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved SBF symbols at runtime"),
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
@@ -662,6 +670,8 @@ lazy_static! {
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (limit_max_instruction_trace_length::id(), "limit max instruction trace length #27939"),
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
+        (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
+        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -115,7 +115,7 @@ fn test_consistency_halt() {
     warn!("adding a validator");
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
-        validator_stake as u64,
+        validator_stake,
         Arc::new(Keypair::new()),
         None,
         SocketAddrSpace::Unspecified,

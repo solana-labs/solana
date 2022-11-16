@@ -227,9 +227,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     }
 
     info!("sleeping for 2 leader fortnights");
-    sleep(Duration::from_millis(
-        slot_millis * first_two_epoch_slots as u64,
-    ));
+    sleep(Duration::from_millis(slot_millis * first_two_epoch_slots));
     info!("done sleeping for first 2 warmup epochs");
     info!("killing entry point: {}", entry_point_info.id);
     entry_point_validator_exit.write().unwrap().exit();
