@@ -7,6 +7,7 @@ use {
     crate::banking_stage::{BatchedTransactionDetails, CommitTransactionDetails},
     crossbeam_channel::{unbounded, Receiver, Sender},
     solana_measure::measure::Measure,
+    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::Bank,
         cost_model::{CostModel, TransactionCost},
@@ -345,14 +346,21 @@ impl QosService {
             );
     }
 
-    pub fn accumulate_actual_execute_cu(&self, units: u64) {
+    /// Get the actual transaction costs and accumulate them
+    pub fn accumulate_actual_execution_cost_and_time(&self, execute_timings: &ExecuteTimings) {
+        let (units, micro_sec) = Self::accumulate_execute_units_and_time(execute_timings);
+        self.accumulate_actual_execute_cu(units);
+        self.accumulate_actual_execute_time(micro_sec);
+    }
+
+    fn accumulate_actual_execute_cu(&self, units: u64) {
         self.metrics
             .stats
             .actual_bpf_execute_cu
             .fetch_add(units, Ordering::Relaxed);
     }
 
-    pub fn accumulate_actual_execute_time(&self, micro_sec: u64) {
+    fn accumulate_actual_execute_time(&self, micro_sec: u64) {
         self.metrics
             .stats
             .actual_execute_time_us
@@ -438,6 +446,22 @@ impl QosService {
                 },
             });
         batched_transaction_details
+    }
+
+    /// Returns (actual_cu_units, actual_time_us)
+    fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
+        let (units, times): (Vec<_>, Vec<_>) = execute_timings
+            .details
+            .per_program_timings
+            .values()
+            .map(|program_timings| {
+                (
+                    program_timings.accumulated_units,
+                    program_timings.accumulated_us,
+                )
+            })
+            .unzip();
+        (units.iter().sum(), times.iter().sum())
     }
 
     fn reporting_loop(
@@ -660,9 +684,11 @@ mod tests {
     use {
         super::*,
         itertools::Itertools,
+        solana_program_runtime::timings::ProgramTiming,
         solana_runtime::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_sdk::{
             hash::Hash,
+            pubkey::Pubkey,
             signature::{Keypair, Signer},
             system_transaction,
         },
@@ -982,5 +1008,32 @@ mod tests {
             expected_bpf_execution_costs,
             batched_transaction_details.costs.batched_bpf_execute_cost
         );
+    }
+
+    #[test]
+    fn test_accumulate_execute_units_and_time() {
+        let mut execute_timings = ExecuteTimings::default();
+        let mut expected_units = 0;
+        let mut expected_us = 0;
+
+        for n in 0..10 {
+            execute_timings.details.per_program_timings.insert(
+                Pubkey::new_unique(),
+                ProgramTiming {
+                    accumulated_us: n * 100,
+                    accumulated_units: n * 1000,
+                    count: n as u32,
+                    errored_txs_compute_consumed: vec![],
+                    total_errored_units: 0,
+                },
+            );
+            expected_us += n * 100;
+            expected_units += n * 1000;
+        }
+
+        let (units, us) = QosService::accumulate_execute_units_and_time(&execute_timings);
+
+        assert_eq!(expected_units, units);
+        assert_eq!(expected_us, us);
     }
 }

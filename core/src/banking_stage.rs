@@ -38,7 +38,6 @@ use {
         packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
-    solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         accounts::TransactionLoadResult,
         bank::{
@@ -1547,11 +1546,8 @@ impl BankingStage {
             .iter_mut()
             .for_each(|x| *x += chunk_offset);
 
-        let (cu, us) =
-            Self::accumulate_execute_units_and_time(&execute_and_commit_timings.execute_timings);
-        qos_service.accumulate_actual_execute_cu(cu);
-        qos_service.accumulate_actual_execute_time(us);
-
+        qos_service
+            .accumulate_actual_execution_cost_and_time(&execute_and_commit_timings.execute_timings);
         // reports qos service stats for this batch
         qos_service.report_metrics(bank.clone());
 
@@ -1568,21 +1564,6 @@ impl BankingStage {
             cost_model_us: cost_model_time.as_us(),
             execute_and_commit_transactions_output,
         }
-    }
-
-    fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
-        let (units, times): (Vec<_>, Vec<_>) = execute_timings
-            .details
-            .per_program_timings
-            .values()
-            .map(|program_timings| {
-                (
-                    program_timings.accumulated_units,
-                    program_timings.accumulated_us,
-                )
-            })
-            .unzip();
-        (units.iter().sum(), times.iter().sum())
     }
 
     /// Sends transactions to the bank.
@@ -2014,7 +1995,6 @@ mod tests {
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
         },
-        solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
         solana_runtime::{bank_forks::BankForks, genesis_utils::activate_feature},
         solana_sdk::{
@@ -4024,33 +4004,6 @@ mod tests {
             poh_service.join().unwrap();
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
-    }
-
-    #[test]
-    fn test_accumulate_execute_units_and_time() {
-        let mut execute_timings = ExecuteTimings::default();
-        let mut expected_units = 0;
-        let mut expected_us = 0;
-
-        for n in 0..10 {
-            execute_timings.details.per_program_timings.insert(
-                Pubkey::new_unique(),
-                ProgramTiming {
-                    accumulated_us: n * 100,
-                    accumulated_units: n * 1000,
-                    count: n as u32,
-                    errored_txs_compute_consumed: vec![],
-                    total_errored_units: 0,
-                },
-            );
-            expected_us += n * 100;
-            expected_units += n * 1000;
-        }
-
-        let (units, us) = BankingStage::accumulate_execute_units_and_time(&execute_timings);
-
-        assert_eq!(expected_units, units);
-        assert_eq!(expected_us, us);
     }
 
     #[test]
