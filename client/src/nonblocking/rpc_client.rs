@@ -4496,6 +4496,7 @@ impl RpcClient {
             .commitment
             .unwrap_or_else(|| self.commitment());
         let commitment = self.maybe_map_commitment(commitment).await?;
+<<<<<<< HEAD:client/src/nonblocking/rpc_client.rs
         let account_config = RpcAccountInfoConfig {
             commitment: Some(commitment),
             ..config.account_config
@@ -4506,10 +4507,20 @@ impl RpcClient {
         };
         let accounts: Vec<RpcKeyedAccount> = self
             .send(
+=======
+        config.account_config.commitment = Some(commitment);
+        if let Some(filters) = config.filters {
+            config.filters = Some(self.maybe_map_filters(filters).await?);
+        }
+
+        let accounts = self
+            .send::<OptionalContext<Vec<RpcKeyedAccount>>>(
+>>>>>>> b18ef88c4 (Fix client get_program_accounts_with_config calls with context (#28772)):rpc-client/src/nonblocking/rpc_client.rs
                 RpcRequest::GetProgramAccounts,
                 json!([pubkey.to_string(), config]),
             )
-            .await?;
+            .await?
+            .parse_value();
         parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts)
     }
 
