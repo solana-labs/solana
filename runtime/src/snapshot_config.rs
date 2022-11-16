@@ -88,8 +88,9 @@ impl SnapshotConfig {
             bank_snapshots_dir,
             snapshot_from: SnapshotFrom::File,
             archive_format: ArchiveFormat::None,
-            // The archive related fields are not used.  The clean way is to make them optional, set to None.
-            // Not sure if it is worth the work.
+            // The archive related fields are not used.  The clean way is to make all the related
+            // fields optional, set them to None in the from_file case.  But that would require
+            // too many changes.
             ..Self::new_load_only()
         }
     }

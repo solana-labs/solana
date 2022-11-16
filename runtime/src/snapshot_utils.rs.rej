@@ -1,0 +1,9 @@
+diff a/runtime/src/snapshot_utils.rs b/runtime/src/snapshot_utils.rs	(rejected hunks)
+@@ -2882,7 +2849,6 @@ pub fn package_and_archive_incremental_snapshot(
+     maximum_full_snapshot_archives_to_retain: usize,
+     maximum_incremental_snapshot_archives_to_retain: usize,
+ ) -> Result<IncrementalSnapshotArchiveInfo> {
+-    //let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+     let accounts_package = AccountsPackage::new(
+         AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
+             incremental_snapshot_base_slot,

@@ -445,14 +445,14 @@ impl SnapshotStorageRebuilder {
 
 /// Used to determine if a filename is structured like a version file, bank file, or storage file
 #[derive(PartialEq, Debug)]
-enum SnapshotFileKind {
+pub enum SnapshotFileKind {
     Version,
     BankFields,
     Storage,
 }
 
 /// Determines `SnapshotFileKind` for `filename` if any
-fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
+pub fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
     lazy_static! {
         static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
         static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+(\.pre)?$").unwrap();

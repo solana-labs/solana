@@ -1,0 +1,10 @@
+diff a/runtime/src/snapshot_package.rs b/runtime/src/snapshot_package.rs	(rejected hunks)
+@@ -33,7 +33,7 @@ pub struct AccountsPackage {
+     pub package_type: AccountsPackageType,
+     pub slot: Slot,
+     pub block_height: Slot,
+-    pub slot_deltas: Option<Vec<BankSlotDelta>>, // TBD will remove this parameter?
++    pub slot_deltas: Option<Vec<BankSlotDelta>>,
+     pub snapshot_links: TempDir,
+     pub snapshot_storages: SnapshotStorages,
+     pub archive_format: ArchiveFormat,

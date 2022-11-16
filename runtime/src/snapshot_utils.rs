@@ -812,7 +812,7 @@ pub fn add_bank_snapshot(
     );
 
     let builtins = builtins::get();
-    assert!(bank.check_builtins_exist(&builtins)); // TBD return an error?
+    assert!(bank.check_builtins_exist(&builtins));
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -956,37 +956,29 @@ fn verify_and_unarchive_snapshots(
 fn build_storage_from_full_and_incremental_snapshot_files(
     bank_snapshots_dir: impl AsRef<Path>,
     full_snapshot_file_info: &FullSnapshotArchiveInfo,
-    _incremental_snapshot_file_info: Option<&IncrementalSnapshotArchiveInfo>,
+    incremental_snapshot_file_info: Option<&IncrementalSnapshotArchiveInfo>,
     account_paths: &[PathBuf],
 ) -> Result<(UnarchivedSnapshot, Option<UnarchivedSnapshot>, AtomicU32)> {
-    /* TBD
-    check_are_snapshots_compatible(
-        full_snapshot_archive_info,
-        incremental_snapshot_archive_info,
-    )?; */
+    check_are_snapshots_compatible(full_snapshot_file_info, incremental_snapshot_file_info)?;
 
     let version_path = bank_snapshots_dir.as_ref().join("version");
 
-    /* TBD will move this to proper place */
-    snapshot_write_version_file(version_path.clone(), SnapshotVersion::V1_2_0)?;
-
     let next_append_vec_id = Arc::new(AtomicU32::new(0));
-    let unarchived_full_snapshot = build_storage_from_snapshot_file(
+    let deserialized_full_snapshot = build_storage_from_snapshot_file(
         &bank_snapshots_dir.as_ref(),
         &full_snapshot_file_info.path().as_path(),
         &version_path.as_ref(),
-        "snapshot deserialize",
+        "full snapshot deserialize",
         &account_paths,
         next_append_vec_id.clone(),
     )?;
 
-    let unarchived_incremental_snapshot = None;
-    /*
     let deserialized_incremental_snapshot =
         if let Some(incremental_snapshot_file_info) = incremental_snapshot_file_info {
             let deserialized_incremental_snapshot = build_storage_from_snapshot_file(
-                &incremental_snapshot_file_info.inner.path,
-                version_path,
+                &bank_snapshots_dir.as_ref(),
+                &incremental_snapshot_file_info.path().as_path(),
+                &version_path.as_ref(),
                 "incremental snapshot deserialize",
                 account_paths,
                 next_append_vec_id.clone(),
@@ -995,11 +987,10 @@ fn build_storage_from_full_and_incremental_snapshot_files(
         } else {
             None
         };
-        */
 
     Ok((
-        unarchived_full_snapshot,
-        unarchived_incremental_snapshot,
+        deserialized_full_snapshot,
+        deserialized_incremental_snapshot,
         Arc::try_unwrap(next_append_vec_id).unwrap(),
     ))
 }
@@ -1246,7 +1237,7 @@ pub fn bank_from_latest_snapshot_archives(
 
 /// Rebuild bank from snapshot files.  Handles either just a full snapshot, or both a full
 /// snapshot and an incremental snapshot.
-/// TBD.  Note that incremental snaphot not tested yet.
+/// Note that incremental snaphot not tested yet.
 #[allow(clippy::too_many_arguments)]
 pub fn bank_from_snapshot_files(
     account_paths: &[PathBuf],
@@ -1424,20 +1415,6 @@ pub fn bank_from_latest_snapshot_files(
         ),
     );
 
-    /* TBD
-    verify_bank_against_expected_slot_hash(
-        &bank,
-        incremental_snapshot_file_info.as_ref().map_or(
-            full_snapshot_archive_info.slot(),
-            |incremental_snapshot_file_info| incremental_snapshot_file_info.slot,
-        ),
-        incremental_snapshot_archive_info.as_ref().map_or(
-            *full_snapshot_archive_info.hash(),
-            |incremental_snapshot_archive_info| *incremental_snapshot_archive_info.hash(),
-        ),
-    )?;
-    */
-
     Ok((
         bank,
         full_snapshot_file_info,
@@ -1606,7 +1583,6 @@ fn streaming_snapshot_and_account_files<P>(
     snapshot_file_path: P,
     snapshot_version_path: P,
     account_paths: Vec<PathBuf>,
-    //account_files: &mut HashMap<PathBuf>,
 ) where
     P: AsRef<Path>,
 {
@@ -1620,7 +1596,6 @@ fn streaming_snapshot_and_account_files<P>(
     for account_path in account_paths {
         for file in fs::read_dir(account_path).unwrap() {
             let file_path = file.unwrap().path().to_path_buf();
-            // account_files.inert(&file_path);
             file_sender.send(file_path).unwrap();
         }
     }
@@ -1656,7 +1631,6 @@ where
         &snapshot_file_path.as_ref(),
         &snapshot_version_path.as_ref(),
         account_paths.to_vec(),
-        // &account_files,
     );
 
     let num_rebuilder_threads = num_cpus::get_physical().saturating_sub(1).max(1);
@@ -1673,10 +1647,7 @@ where
     );
     info!("{}", measure_deserialize);
 
-    let mut set = snapshot_appendvecs.lock().unwrap();
-
-    // TBD tmp hack.
-    set.remove(&(0, 0));
+    let set = snapshot_appendvecs.lock().unwrap();
 
     if !set.is_empty() {
         // Not all snapshot appendvec entries have been matched with the accounts files.  So, the accounts/ files
@@ -1702,7 +1673,7 @@ where
         storage,
     } = version_and_storages;
     Ok(UnarchivedSnapshot {
-        unpack_dir: TempDir::new().unwrap(), // Not used, just to fit into UnarchivedSnapshot.  TBD
+        unpack_dir: TempDir::new().unwrap(), // Not used, just to fit into UnarchivedSnapshot.
         storage: storage,
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
@@ -1909,9 +1880,8 @@ pub(crate) fn parse_snapshot_filename(filename: &String) -> Option<(Slot, BankSn
         let snapshot_type = if type_str.unwrap() == "pre" {
             BankSnapshotType::Pre
         } else {
-            BankSnapshotType::Post //TBD
+            BankSnapshotType::Post
         };
-        //let snapshot_type: SnapshotType = type_str.unwrap().parse::<SnapshotType>().unwrap();
         Some((slot, snapshot_type))
     })
 }
@@ -2041,10 +2011,7 @@ pub fn get_highest_full_snapshot_slot_and_path(
         return Err(SnapshotError::UnknownSnapshotFile);
     }
 
-    // TBD regular expression to verify it is in the right format
-
     let snapshot_file = &snapshot_files_in_slot_dir[0];
-
     Ok((slot, snapshot_file.to_path_buf()))
 }
 
@@ -2093,7 +2060,7 @@ pub fn get_highest_incremental_snapshot_file_info(
     _snapshots_dir: impl AsRef<Path>,
     _full_snapshot_slot: Slot,
 ) -> Option<IncrementalSnapshotArchiveInfo> {
-    None // TBD  will handle the incremental case later
+    None // Will handle the incremental case later
 }
 
 pub fn purge_old_snapshot_archives(
@@ -2300,7 +2267,7 @@ fn verify_unpacked_snapshots_dir_and_version(
             }
         }
         SnapshotFrom::None => {
-            error!("Should never reach here.  Make an assert here? TBD");
+            error!("Should never reach here.");
             return Err(SnapshotError::InvalidOperation);
         }
     };

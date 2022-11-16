@@ -15,7 +15,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::{FullSnapshotHash, IncrementalSnapshotHash, StartingSnapshotHashes},
-        snapshot_utils::{self, SnapshotFrom},
+        snapshot_utils::{self, snapshot_write_version_file, SnapshotFrom, SnapshotVersion},
     },
     solana_sdk::genesis_config::GenesisConfig,
     std::{
@@ -103,6 +103,9 @@ pub fn load_bank_forks(
             let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
             fs::create_dir_all(&snapshot_config.bank_snapshots_dir)
                 .expect("Couldn't create snapshot directory");
+
+            let version_path = snapshot_config.bank_snapshots_dir.join("version");
+            snapshot_write_version_file(version_path, SnapshotVersion::V1_2_0).unwrap();
 
             if snapshot_utils::get_highest_full_snapshot_archive_info(
                 &snapshot_config.full_snapshot_archives_dir,
