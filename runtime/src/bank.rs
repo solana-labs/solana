@@ -1876,6 +1876,7 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
+        parent.force_flush_accounts_cache();
         let accounts_hash =
             parent.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, true);
         let epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
