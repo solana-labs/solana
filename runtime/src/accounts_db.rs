@@ -6202,10 +6202,9 @@ impl AccountsDb {
                 &accounts_and_meta_to_store[infos.len()..],
                 &hashes[infos.len()..],
             );
-            assert!(!rvs.is_empty());
             append_accounts.stop();
             total_append_accounts_us += append_accounts.as_us();
-            if rvs.len() == 1 {
+            if rvs.is_none() {
                 storage.set_status(AccountStorageStatus::Full);
 
                 // See if an account overflows the append vecs in the slot.
@@ -6223,6 +6222,7 @@ impl AccountsDb {
             }
 
             for (offsets, (_, account)) in rvs
+                .unwrap()
                 .windows(2)
                 .zip(&accounts_and_meta_to_store[infos.len()..])
             {
