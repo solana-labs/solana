@@ -510,14 +510,17 @@ impl AppendVec {
     }
 
     /// Copy each account metadata, account and hash to the internal buffer.
-    /// Return the starting offset of each account metadata.
+    /// If there is no room to write the first entry, None is returned.
+    /// Otherwise, returns the starting offset of each account metadata.
+    /// Plus, the final return value is the offset where the next entry would be appended.
+    /// So, return.len() is 1 + (number of accounts written)
     /// After each account is appended, the internal `current_len` is updated
     /// and will be available to other threads.
     pub fn append_accounts(
         &self,
         accounts: &[(StoredMeta, Option<&impl ReadableAccount>)],
         hashes: &[impl Borrow<Hash>],
-    ) -> Vec<usize> {
+    ) -> Option<Vec<usize>> {
         let _lock = self.append_lock.lock().unwrap();
         let mut offset = self.len();
         let mut rv = Vec::with_capacity(accounts.len());
@@ -544,11 +547,15 @@ impl AppendVec {
             }
         }
 
-        // The last entry in this offset needs to be the u64 aligned offset, because that's
-        // where the *next* entry will begin to be stored.
-        rv.push(u64_align!(offset));
+        if rv.is_empty() {
+            None
+        } else {
+            // The last entry in this offset needs to be the u64 aligned offset, because that's
+            // where the *next* entry will begin to be stored.
+            rv.push(u64_align!(offset));
 
-        rv
+            Some(rv)
+        }
     }
 
     /// Copy the account metadata, account and hash to the internal buffer.
@@ -561,11 +568,7 @@ impl AppendVec {
         hash: Hash,
     ) -> Option<usize> {
         let res = self.append_accounts(&[(storage_meta, Some(account))], &[&hash]);
-        if res.len() == 1 {
-            None
-        } else {
-            res.first().cloned()
-        }
+        res.and_then(|res| res.first().cloned())
     }
 }
 
