@@ -317,11 +317,11 @@ impl SnapshotStorageRebuilder {
                     return Ok(()); // not a snapshot appendvec, done.
                 }
             }
-        }
-        let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
-        if slot_complete {
-            self.process_complete_slot(slot)?;
-            self.processed_slot_count.fetch_add(1, Ordering::AcqRel);
+            let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
+            if slot_complete {
+                self.process_complete_slot(slot)?;
+                self.processed_slot_count.fetch_add(1, Ordering::AcqRel);
+            }
         }
 
         Ok(())
