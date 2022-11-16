@@ -7296,18 +7296,21 @@ impl AccountsDb {
                     file_name
                 };
 
+                let mut init_accum = true;
                 // load from cache failed, so create the cache file for this chunk
-                let range = bin_range.end - bin_range.start;
-                scanner.init_accum(range);
-
                 for (slot, sub_storages) in snapshot_storages.iter_range(&range_this_chunk) {
-                    scanner.set_slot(slot);
-
                     let mut ancient = false;
                     let (_, scan) = measure!(if let Some(sub_storages) = sub_storages {
                         if let Some(storage) = sub_storages.first() {
                             ancient = is_ancient(&storage.accounts);
                         }
+                        if init_accum {
+                            let range = bin_range.end - bin_range.start;
+                            scanner.init_accum(range);
+                            init_accum = false;
+                        }
+                        scanner.set_slot(slot);
+
                         Self::scan_multiple_account_storages_one_slot(sub_storages, &mut scanner);
                     });
                     if ancient {
@@ -7320,14 +7323,18 @@ impl AccountsDb {
                             .fetch_max(scan.as_us(), Ordering::Relaxed);
                     }
                 }
-                let r = scanner.scanning_complete();
-                assert!(!file_name.is_empty());
-                (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
-                    // error if we can't write this
-                    let file_name = Path::new(&file_name);
-                    cache_hash_data.save(Path::new(&file_name), &r).unwrap();
-                    cache_hash_data.load_map(&file_name).unwrap()
-                })
+                (!init_accum)
+                    .then(|| {
+                        let r = scanner.scanning_complete();
+                        assert!(!file_name.is_empty());
+                        (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
+                            // error if we can't write this
+                            let file_name = Path::new(&file_name);
+                            cache_hash_data.save(Path::new(&file_name), &r).unwrap();
+                            cache_hash_data.load_map(&file_name).unwrap()
+                        })
+                    })
+                    .flatten()
             })
             .filter_map(|x| x)
             .collect()
