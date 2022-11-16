@@ -9,7 +9,6 @@ use {
     crossbeam_channel::{unbounded, Receiver, Sender},
     jsonrpc_core::{futures::future, types::error, BoxFuture, Error, Metadata, Result},
     jsonrpc_derive::rpc,
-    serde::{Deserialize, Serialize},
     solana_account_decoder::{
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
@@ -126,6 +125,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     }
 }
 
+<<<<<<< HEAD
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
 /// Main purpose of this is to fix methods that lack context information in their return type,
 /// without breaking backwards compatibility.
@@ -136,6 +136,8 @@ pub enum OptionalContext<T> {
     NoContext(T),
 }
 
+=======
+>>>>>>> b18ef88c4 (Fix client get_program_accounts_with_config calls with context (#28772))
 fn is_finalized(
     block_commitment_cache: &BlockCommitmentCache,
     bank: &Bank,
