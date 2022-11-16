@@ -19479,7 +19479,6 @@ pub(crate) mod tests {
         new_balance: u64,
         mock_program_id: Pubkey,
         recent_blockhash: Hash,
-        tx_data_size_limit: u32,
     ) -> Transaction {
         let account_metas = vec![
             AccountMeta::new(funder.pubkey(), false),
@@ -19493,7 +19492,7 @@ pub(crate) mod tests {
         Transaction::new_signed_with_payer(
             &[
                 instruction,
-                ComputeBudgetInstruction::set_accounts_data_size_limit(tx_data_size_limit),
+                ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
             ],
             Some(&payer.pubkey()),
             &[payer],
@@ -19554,7 +19553,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_small - 1,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19580,7 +19578,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_large,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19598,7 +19595,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_small - 1,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19624,7 +19620,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_small,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19642,7 +19637,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_large - 1,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19668,7 +19662,6 @@ pub(crate) mod tests {
             rent_exempt_minimum_large,
             mock_program_id,
             recent_blockhash,
-            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19790,7 +19783,6 @@ pub(crate) mod tests {
     /// Ensure that accounts data size is updated correctly on resize transactions
     #[test]
     fn test_accounts_data_size_and_resize_transactions() {
-        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -19803,19 +19795,6 @@ pub(crate) mod tests {
             &mock_program_id,
             mock_realloc_process_instruction,
         );
-
-        // get builtin program account data size, will beused to request max data size for
-        // transaction.
-        let mock_account_data_size = bank
-            .get_account_with_fixed_root(&mock_program_id)
-            .unwrap()
-            .data()
-            .len();
-        let compute_budget_account_data_size = bank
-            .get_account_with_fixed_root(&solana_sdk::compute_budget::id())
-            .unwrap()
-            .data()
-            .len();
 
         let recent_blockhash = bank.last_blockhash();
 
@@ -19849,7 +19828,6 @@ pub(crate) mod tests {
                 account_balance,
                 mock_program_id,
                 recent_blockhash,
-                (account_size + mock_account_data_size + compute_budget_account_data_size) as u32,
             );
             let result = bank.process_transaction(&transaction);
             assert!(result.is_ok());
@@ -19880,7 +19858,6 @@ pub(crate) mod tests {
                 account_balance,
                 mock_program_id,
                 recent_blockhash,
-                (account_size + mock_account_data_size + compute_budget_account_data_size) as u32,
             );
             let result = bank.process_transaction(&transaction);
             assert!(result.is_ok());
