@@ -416,7 +416,7 @@ mod test {
     use {
         super::*,
         crate::{
-            packet::{Packet, PacketBatch, PACKET_DATA_SIZE},
+            packet::{Packet, PacketBatch},
             streamer::{receiver, responder},
         },
         crossbeam_channel::unbounded,
@@ -488,7 +488,7 @@ mod test {
                 let mut p = Packet::default();
                 {
                     p.buffer_mut()[0] = i as u8;
-                    p.meta_mut().size = PACKET_DATA_SIZE;
+                    p.meta_mut().size = Packet::DATA_SIZE;
                     p.meta_mut().set_socket_addr(&addr);
                 }
                 packet_batch.push(p);

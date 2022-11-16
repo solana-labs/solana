@@ -56,7 +56,7 @@ pub async fn recv_mmsg_exact(
 #[cfg(test)]
 mod tests {
     use {
-        crate::{nonblocking::recvmmsg::*, packet::PACKET_DATA_SIZE},
+        crate::nonblocking::recvmmsg::*,
         std::{net::SocketAddr, time::Instant},
         tokio::net::UdpSocket,
     };
@@ -76,7 +76,7 @@ mod tests {
     async fn test_one_iter((reader, addr, sender, saddr): TestConfig) {
         let sent = TEST_NUM_MSGS - 1;
         for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender.send_to(&data[..], &addr).await.unwrap();
         }
 
@@ -84,7 +84,7 @@ mod tests {
         let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(sent, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr);
         }
     }
@@ -102,7 +102,7 @@ mod tests {
     async fn test_multi_iter((reader, addr, sender, saddr): TestConfig) {
         let sent = TEST_NUM_MSGS + 10;
         for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender.send_to(&data[..], &addr).await.unwrap();
         }
 
@@ -110,7 +110,7 @@ mod tests {
         let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr);
         }
 
@@ -121,7 +121,7 @@ mod tests {
         let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(sent - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr);
         }
     }
@@ -144,7 +144,7 @@ mod tests {
         let saddr = sender.local_addr().unwrap();
         let sent = TEST_NUM_MSGS;
         for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender.send_to(&data[..], &addr).await.unwrap();
         }
 
@@ -153,7 +153,7 @@ mod tests {
         let recv = recv_mmsg_exact(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr);
         }
 
@@ -178,12 +178,12 @@ mod tests {
         let sent2 = TEST_NUM_MSGS + 1;
 
         for _ in 0..sent1 {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender1.send_to(&data[..], &addr).await.unwrap();
         }
 
         for _ in 0..sent2 {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender2.send_to(&data[..], &addr).await.unwrap();
         }
 
@@ -192,11 +192,11 @@ mod tests {
         let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(sent1) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr1);
         }
         for packet in packets.iter().skip(sent1).take(recv - sent1) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr2);
         }
 
@@ -206,7 +206,7 @@ mod tests {
         let recv = recv_mmsg(&reader, &mut packets[..]).await.unwrap();
         assert_eq!(sent1 + sent2 - TEST_NUM_MSGS, recv);
         for packet in packets.iter().take(recv) {
-            assert_eq!(packet.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(packet.meta().size, Packet::DATA_SIZE);
             assert_eq!(packet.meta().socket_addr(), saddr2);
         }
     }

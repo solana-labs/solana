@@ -2,7 +2,7 @@
 //!
 //! This module ties together Crds and the push and pull gossip overlays.  The interface is
 //! designed to run with a simulator or over a UDP network connection with messages up to a
-//! packet::PACKET_DATA_SIZE size.
+//! packet::Packet::DATA_SIZE size.
 
 use {
     crate::{

@@ -18,7 +18,7 @@ use {
         commitment_config::CommitmentConfig,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        packet::PACKET_DATA_SIZE,
+        packet::TransactionPacket,
         pubkey::Pubkey,
         rpc_port::DEFAULT_RPC_PORT,
         signature::{read_keypair_file, Keypair, Signer},
@@ -391,7 +391,11 @@ fn run_transactions_dos(
                         let tx = Transaction::new(&signers, message, blockhash);
                         if !tested_size.load(Ordering::Relaxed) {
                             let ser_size = bincode::serialized_size(&tx).unwrap();
-                            assert!(ser_size < PACKET_DATA_SIZE as u64, "{}", ser_size);
+                            assert!(
+                                ser_size < TransactionPacket::DATA_SIZE as u64,
+                                "{}",
+                                ser_size
+                            );
                             tested_size.store(true, Ordering::Relaxed);
                         }
                         tx
@@ -670,7 +674,7 @@ pub mod test {
         let tx = Transaction::new(&signers, message, blockhash);
         let size = bincode::serialized_size(&tx).unwrap();
         info!("size:{}", size);
-        assert!(size < PACKET_DATA_SIZE as u64);
+        assert!(size < TransactionPacket::DATA_SIZE as u64);
     }
 
     #[test]

@@ -39,7 +39,7 @@ use {
         loader_instruction,
         message::Message,
         native_token::Sol,
-        packet::PACKET_DATA_SIZE,
+        packet::Packet,
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
         system_instruction::{self, SystemError},
@@ -1751,7 +1751,7 @@ where
     })
     .unwrap() as usize;
     // add 1 byte buffer to account for shortvec encoding
-    PACKET_DATA_SIZE.saturating_sub(tx_size).saturating_sub(1)
+    Packet::DATA_SIZE.saturating_sub(tx_size).saturating_sub(1)
 }
 
 #[allow(clippy::too_many_arguments)]

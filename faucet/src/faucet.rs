@@ -16,7 +16,7 @@ use {
         instruction::Instruction,
         message::Message,
         native_token::lamports_to_sol,
-        packet::PACKET_DATA_SIZE,
+        packet::TransactionPacket,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,
@@ -306,7 +306,7 @@ pub fn request_airdrop_transaction(
         err
     })?;
     let transaction_length = LittleEndian::read_u16(&buffer) as usize;
-    if transaction_length > PACKET_DATA_SIZE {
+    if transaction_length > TransactionPacket::DATA_SIZE {
         return Err(FaucetError::TransactionDataTooLarge(transaction_length));
     } else if transaction_length == 0 {
         return Err(FaucetError::NoDataReceived);

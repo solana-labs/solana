@@ -54,14 +54,14 @@ impl TpuConnection for UdpTpuConnection {
 mod tests {
     use {
         super::*,
-        solana_sdk::packet::{Packet, PACKET_DATA_SIZE},
+        solana_sdk::packet::Packet,
         solana_streamer::nonblocking::recvmmsg::recv_mmsg,
         std::net::{IpAddr, Ipv4Addr},
         tokio::net::UdpSocket,
     };
 
     async fn check_send_one(connection: &UdpTpuConnection, reader: &UdpSocket) {
-        let packet = vec![111u8; PACKET_DATA_SIZE];
+        let packet = vec![111u8; Packet::DATA_SIZE];
         connection.send_wire_transaction(&packet).await.unwrap();
         let mut packets = vec![Packet::default(); 32];
         let recv = recv_mmsg(reader, &mut packets[..]).await.unwrap();
@@ -69,7 +69,7 @@ mod tests {
     }
 
     async fn check_send_batch(connection: &UdpTpuConnection, reader: &UdpSocket) {
-        let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packets: Vec<_> = (0..32).map(|_| vec![0u8; Packet::DATA_SIZE]).collect();
         connection
             .send_wire_transaction_batch(&packets)
             .await

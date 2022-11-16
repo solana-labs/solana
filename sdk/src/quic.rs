@@ -19,13 +19,13 @@ pub const QUIC_KEEP_ALIVE_MS: u64 = 1_000;
 pub const QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS: u64 = 60_000;
 
 /// The receive window for QUIC connection from unstaked nodes is
-/// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
+/// set to this ratio times [`solana_sdk::packet::TransactionPacket::DATA_SIZE`]
 pub const QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO: u64 = 1;
 
 /// The receive window for QUIC connection from minimum staked nodes is
-/// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
+/// set to this ratio times [`solana_sdk::packet::TransactionPacket::DATA_SIZE`]
 pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: u64 = 2;
 
 /// The receive window for QUIC connection from maximum staked nodes is
-/// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
+/// set to this ratio times [`solana_sdk::packet::TransactionPacket::DATA_SIZE`]
 pub const QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO: u64 = 10;

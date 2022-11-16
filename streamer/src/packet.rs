@@ -11,7 +11,7 @@ pub use {
     solana_perf::packet::{
         to_packet_batches, PacketBatch, PacketBatchRecycler, NUM_PACKETS, PACKETS_PER_BATCH,
     },
-    solana_sdk::packet::{Meta, Packet, PACKET_DATA_SIZE},
+    solana_sdk::packet::{Meta, Packet},
 };
 
 pub fn recv_from(batch: &mut PacketBatch, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
@@ -110,7 +110,7 @@ mod tests {
 
         for m in batch.iter_mut() {
             m.meta_mut().set_socket_addr(&addr);
-            m.meta_mut().size = PACKET_DATA_SIZE;
+            m.meta_mut().size = Packet::DATA_SIZE;
         }
         send_to(&batch, &send_socket, &SocketAddrSpace::Unspecified).unwrap();
 
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(recvd, batch.len());
 
         for m in batch.iter() {
-            assert_eq!(m.meta().size, PACKET_DATA_SIZE);
+            assert_eq!(m.meta().size, Packet::DATA_SIZE);
             assert_eq!(m.meta().socket_addr(), saddr);
         }
     }

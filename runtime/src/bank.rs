@@ -135,7 +135,7 @@ use {
         native_token::sol_to_lamports,
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
-        packet::PACKET_DATA_SIZE,
+        packet::TransactionPacket,
         precompiles::get_precompiles,
         pubkey::Pubkey,
         saturating_add_assign, secp256k1_program,
@@ -6912,7 +6912,7 @@ impl Bank {
         let sanitized_tx = {
             let size =
                 bincode::serialized_size(&tx).map_err(|_| TransactionError::SanitizeFailure)?;
-            if size > PACKET_DATA_SIZE as u64 {
+            if size > TransactionPacket::DATA_SIZE as u64 {
                 return Err(TransactionError::SanitizeFailure);
             }
             let message_hash = if verification_mode == TransactionVerificationMode::FullVerification
@@ -18259,7 +18259,7 @@ pub(crate) mod tests {
         // Small transaction.
         {
             let tx = make_transaction(5);
-            assert!(bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64);
+            assert!(bincode::serialized_size(&tx).unwrap() <= TransactionPacket::DATA_SIZE as u64);
             assert!(bank
                 .verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                 .is_ok(),);
@@ -18267,7 +18267,7 @@ pub(crate) mod tests {
         // Big transaction.
         {
             let tx = make_transaction(25);
-            assert!(bincode::serialized_size(&tx).unwrap() > PACKET_DATA_SIZE as u64);
+            assert!(bincode::serialized_size(&tx).unwrap() > TransactionPacket::DATA_SIZE as u64);
             assert_eq!(
                 bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                     .err(),
@@ -18279,7 +18279,7 @@ pub(crate) mod tests {
         for size in 1..30 {
             let tx = make_transaction(size);
             assert_eq!(
-                bincode::serialized_size(&tx).unwrap() <= PACKET_DATA_SIZE as u64,
+                bincode::serialized_size(&tx).unwrap() <= TransactionPacket::DATA_SIZE as u64,
                 bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
                     .is_ok(),
             );

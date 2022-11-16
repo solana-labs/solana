@@ -2,7 +2,7 @@
 
 use {
     solana_streamer::{
-        packet::{Meta, Packet, PACKET_DATA_SIZE},
+        packet::{Meta, Packet},
         recvmmsg::*,
     },
     std::{net::UdpSocket, time::Instant},
@@ -21,7 +21,7 @@ pub fn test_recv_mmsg_batch_size() {
     let mut num_max_batches = 0;
     (0..1000).for_each(|_| {
         for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender.send_to(&data[..], addr).unwrap();
         }
         let mut packets = vec![Packet::default(); TEST_BATCH_SIZE];
@@ -37,7 +37,7 @@ pub fn test_recv_mmsg_batch_size() {
     let mut elapsed_in_small_batch = 0;
     (0..1000).for_each(|_| {
         for _ in 0..sent {
-            let data = [0; PACKET_DATA_SIZE];
+            let data = [0; Packet::DATA_SIZE];
             sender.send_to(&data[..], addr).unwrap();
         }
         let mut packets = vec![Packet::default(); 4];
