@@ -17,7 +17,7 @@ impl<'a> GenericTraversal<'a> {
     pub fn new(tree: &'a HeaviestSubtreeForkChoice) -> Self {
         Self {
             tree,
-            pending: vec![tree.root().0],
+            pending: vec![tree.tree_root().0],
         }
     }
 }
