@@ -45,6 +45,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
+        cmp::Reverse,
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
         sync::{
@@ -472,57 +473,49 @@ impl ServeRepair {
 
         let decode_start = Instant::now();
         let mut decoded_reqs = Vec::default();
-        for batch in reqs_v {
-            for packet in &batch {
-                let request: RepairProtocol = match packet.deserialize_slice(..) {
-                    Ok(request) => request,
-                    Err(_) => {
-                        stats.err_malformed += 1;
-                        continue;
-                    }
-                };
-
-                let from_addr = packet.meta.socket_addr();
-                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
+        for packet in reqs_v.iter().flatten() {
+            let request: RepairProtocol = match packet.deserialize_slice(..) {
+                Ok(request) => request,
+                Err(_) => {
                     stats.err_malformed += 1;
                     continue;
                 }
+            };
 
-                if request.supports_signature() {
-                    // collect stats for signature verification
-                    Self::verify_signed_packet(&my_id, packet, &request, stats);
-                } else {
-                    stats.unsigned_requests += 1;
-                }
-
-                if request.sender() == &my_id {
-                    stats.self_repair += 1;
-                    continue;
-                }
-
-                let stake = match epoch_staked_nodes
-                    .as_ref()
-                    .map(|nodes| nodes.get(request.sender()))
-                    .unwrap_or_default()
-                {
-                    Some(stake) => {
-                        stats.handle_requests_staked += 1;
-                        *stake
-                    }
-                    None => {
-                        stats.handle_requests_unstaked += 1;
-                        0
-                    }
-                };
-
-                decoded_reqs.push((request, from_addr, stake));
+            let from_addr = packet.meta.socket_addr();
+            if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
+                stats.err_malformed += 1;
+                continue;
             }
+
+            if request.supports_signature() {
+                // collect stats for signature verification
+                Self::verify_signed_packet(&my_id, packet, &request, stats);
+            } else {
+                stats.unsigned_requests += 1;
+            }
+
+            if request.sender() == &my_id {
+                stats.self_repair += 1;
+                continue;
+            }
+
+            let stake = epoch_staked_nodes
+                .as_ref()
+                .and_then(|stakes| stakes.get(request.sender()))
+                .unwrap_or(&0);
+            if *stake == 0 {
+                stats.handle_requests_unstaked += 1;
+            } else {
+                stats.handle_requests_staked += 1;
+            }
+            decoded_reqs.push((request, from_addr, *stake));
         }
         stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
 
         if decoded_reqs.len() > MAX_REQUESTS_PER_ITERATION {
             stats.dropped_requests_low_stake += decoded_reqs.len() - MAX_REQUESTS_PER_ITERATION;
-            decoded_reqs.sort_by(|(_, _, s1), (_, _, s2)| s2.cmp(s1));
+            decoded_reqs.sort_unstable_by_key(|(_, _, stake)| Reverse(*stake));
             decoded_reqs.truncate(MAX_REQUESTS_PER_ITERATION);
         }
 
