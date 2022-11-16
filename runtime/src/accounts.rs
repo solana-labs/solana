@@ -36,12 +36,9 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
         feature_set::{
-<<<<<<< HEAD
-            self, add_set_compute_unit_price_ix, return_none_for_zero_lamport_accounts,
-=======
-            self, cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
-            use_default_units_in_fee_calculation, FeatureSet,
+            self, add_set_compute_unit_price_ix, cap_transaction_accounts_data_size,
+            return_none_for_zero_lamport_accounts, use_default_units_in_fee_calculation,
+            FeatureSet,
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
@@ -281,10 +278,8 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
-<<<<<<< HEAD
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
-=======
             let requested_loaded_accounts_data_size_limit =
                 if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
                     let requested_loaded_accounts_data_size =
@@ -295,7 +290,6 @@ impl Accounts {
                 };
             let mut accumulated_accounts_data_size: usize = 0;
 
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
             for (i, key) in account_keys.iter().enumerate() {
                 let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -430,12 +424,9 @@ impl Accounts {
                             &mut accounts,
                             instruction.program_id_index as usize,
                             error_counters,
-<<<<<<< HEAD
                             load_zero_lamports,
-=======
                             &mut accumulated_accounts_data_size,
                             requested_loaded_accounts_data_size_limit,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                         )
                     })
                     .collect::<Result<Vec<Vec<usize>>>>()?;
@@ -461,7 +452,7 @@ impl Accounts {
         let _prioritization_fee_details = compute_budget.process_instructions(
             tx.message().program_instructions_iter(),
             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
             feature_set.is_active(&cap_transaction_accounts_data_size::id()),
             Bank::get_loaded_accounts_data_limit_type(feature_set),
         )?;
@@ -523,24 +514,13 @@ impl Accounts {
         accounts: &mut Vec<TransactionAccount>,
         mut program_account_index: usize,
         error_counters: &mut TransactionErrorMetrics,
-<<<<<<< HEAD
         load_zero_lamports: LoadZeroLamports,
-    ) -> Result<Vec<usize>> {
-        let mut account_indices = Vec::new();
-        let mut program_id = match accounts.get(program_account_index) {
-            Some(program_account) => program_account.0,
-            None => {
-                error_counters.account_not_found += 1;
-                return Err(TransactionError::ProgramAccountNotFound);
-            }
-        };
-=======
         accumulated_accounts_data_size: &mut usize,
         requested_loaded_accounts_data_size_limit: Option<NonZeroUsize>,
-    ) -> Result<Vec<IndexOfAccount>> {
+    ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
         let (mut program_id, already_loaded_as_non_loader) =
-            match accounts.get(program_account_index as usize) {
+            match accounts.get(program_account_index) {
                 Some(program_account) => (
                     program_account.0,
                     // program account is already loaded if it's not empty in `accounts`
@@ -551,7 +531,6 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         let mut depth = 0;
         while !native_loader::check_id(&program_id) {
             if depth >= 5 {
@@ -567,10 +546,7 @@ impl Accounts {
                 load_zero_lamports,
             ) {
                 Some((program_account, _)) => {
-<<<<<<< HEAD
                     let account_index = accounts.len();
-=======
-                    let account_index = accounts.len() as IndexOfAccount;
                     // do not double count account size for program account on top of call chain
                     // that has already been loaded during load_transaction as non-loader account.
                     // Other accounts data size in the call chain are counted.
@@ -578,7 +554,6 @@ impl Accounts {
                         loaded_account_total_size =
                             loaded_account_total_size.saturating_add(program_account.data().len());
                     }
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                     accounts.push((program_id, program_account));
                     account_index
                 }
@@ -609,15 +584,11 @@ impl Accounts {
                         load_zero_lamports,
                     ) {
                         Some((programdata_account, _)) => {
-<<<<<<< HEAD
                             let account_index = accounts.len();
-=======
-                            let account_index = accounts.len() as IndexOfAccount;
                             if !(depth == 1 && already_loaded_as_non_loader) {
                                 loaded_account_total_size = loaded_account_total_size
                                     .saturating_add(programdata_account.data().len());
                             }
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                             accounts.push((programdata_address, programdata_account));
                             account_index
                         }
@@ -699,12 +670,8 @@ impl Accounts {
                             fee_structure,
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             feature_set.is_active(&use_default_units_in_fee_calculation::id()),
-<<<<<<< HEAD
-=======
-                            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
                             feature_set.is_active(&cap_transaction_accounts_data_size::id()),
                             Bank::get_loaded_accounts_data_limit_type(feature_set),
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1573,11 +1540,7 @@ mod tests {
         },
         assert_matches::assert_matches,
         solana_address_lookup_table_program::state::LookupTableMeta,
-<<<<<<< HEAD
-        solana_program_runtime::executor_cache::Executors,
-=======
-        solana_program_runtime::{compute_budget, executor_cache::TransactionExecutorCache},
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
+        solana_program_runtime::{compute_budget, executor_cache::Executors},
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
@@ -1834,13 +1797,9 @@ mod tests {
             lamports_per_signature,
             &FeeStructure::default(),
             true,
-<<<<<<< HEAD
             true,
-=======
-            false,
             true,
             compute_budget::LoadedAccountsDataLimitType::V0,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
         );
         assert_eq!(fee, lamports_per_signature);
 
@@ -2640,12 +2599,9 @@ mod tests {
                 &mut vec![(keypair.pubkey(), account)],
                 0,
                 &mut error_counters,
-<<<<<<< HEAD
                 LoadZeroLamports::SomeWithZeroLamportAccount,
-=======
                 &mut 0,
                 None,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
             ),
             Err(TransactionError::ProgramAccountNotFound)
         );
@@ -4162,6 +4118,7 @@ mod tests {
                     &mut loaded_accounts,
                     0,
                     &mut error_counters,
+                    LoadZeroLamports::SomeWithZeroLamportAccount,
                     &mut accumulated_accounts_data_size,
                     NonZeroUsize::new(expect_accumulated_accounts_data_size),
                 )
@@ -4183,6 +4140,7 @@ mod tests {
                     &mut loaded_accounts,
                     0,
                     &mut error_counters,
+                    LoadZeroLamports::SomeWithZeroLamportAccount,
                     &mut accumulated_accounts_data_size,
                     NonZeroUsize::new(expect_accumulated_accounts_data_size),
                 )
@@ -4203,6 +4161,7 @@ mod tests {
                     &mut loaded_accounts,
                     0,
                     &mut error_counters,
+                    LoadZeroLamports::SomeWithZeroLamportAccount,
                     &mut accumulated_accounts_data_size,
                     NonZeroUsize::new(expect_accumulated_accounts_data_size),
                 ),
@@ -4271,6 +4230,7 @@ mod tests {
                     &mut loaded_accounts,
                     0,
                     &mut error_counters,
+                    LoadZeroLamports::SomeWithZeroLamportAccount,
                     &mut accumulated_accounts_data_size,
                     NonZeroUsize::new(expect_accumulated_accounts_data_size),
                 )
@@ -4294,6 +4254,7 @@ mod tests {
                     &mut loaded_accounts,
                     0,
                     &mut error_counters,
+                    LoadZeroLamports::SomeWithZeroLamportAccount,
                     &mut accumulated_accounts_data_size,
                     NonZeroUsize::new(expect_accumulated_accounts_data_size),
                 )

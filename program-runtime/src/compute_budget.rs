@@ -157,13 +157,9 @@ impl ComputeBudget {
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
-<<<<<<< HEAD
         support_set_compute_unit_price_ix: bool,
-=======
-        support_request_units_deprecated: bool,
         cap_transaction_accounts_data_size: bool,
         loaded_accounts_data_limit_type: LoadedAccountsDataLimitType,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -215,6 +211,14 @@ impl ComputeBudget {
                             prioritization_fee =
                                 Some(PrioritizationFeeType::ComputeUnitPrice(micro_lamports));
                         }
+                        Ok(ComputeBudgetInstruction::SetAccountsDataSizeLimit(bytes))
+                            if cap_transaction_accounts_data_size =>
+                        {
+                            if updated_accounts_data_size_limit.is_some() {
+                                return Err(duplicate_instruction_error);
+                            }
+                            updated_accounts_data_size_limit = Some(bytes);
+                        }
                         _ => return Err(invalid_instruction_data_error),
                     }
                 } else if i < 3 {
@@ -237,18 +241,6 @@ impl ComputeBudget {
                             ))
                         }
                     }
-<<<<<<< HEAD
-=======
-                    Ok(ComputeBudgetInstruction::SetAccountsDataSizeLimit(bytes))
-                        if cap_transaction_accounts_data_size =>
-                    {
-                        if updated_accounts_data_size_limit.is_some() {
-                            return Err(duplicate_instruction_error);
-                        }
-                        updated_accounts_data_size_limit = Some(bytes);
-                    }
-                    _ => return Err(invalid_instruction_data_error),
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
                 }
             } else {
                 // only include non-request instructions in default max calc
@@ -335,13 +327,9 @@ mod tests {
             let result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 true,
-<<<<<<< HEAD
                 $type_change,
-=======
-                false, /*not support request_units_deprecated*/
-                true,  /*supports cap transaction accounts data size feature*/
+                true, /*supports cap transaction accounts data size feature*/
                 LoadedAccountsDataLimitType::V0,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840))
             );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);

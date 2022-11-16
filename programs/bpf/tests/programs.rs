@@ -20,8 +20,8 @@ use {
     solana_bpf_rust_realloc_invoke::instructions::*,
     solana_ledger::token_balances::collect_token_balances,
     solana_program_runtime::{
-<<<<<<< HEAD:programs/bpf/tests/programs.rs
-        compute_budget::ComputeBudget, invoke_context::with_mock_invoke_context,
+        compute_budget::{self, ComputeBudget},
+        invoke_context::with_mock_invoke_context,
         timings::ExecuteTimings,
     },
     solana_rbpf::{
@@ -30,11 +30,6 @@ use {
         verifier::RequisiteVerifier,
         vm::{Config, Tracer, VerifiedExecutable},
     },
-=======
-        compute_budget::{self, ComputeBudget},
-        timings::ExecuteTimings,
-    },
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840)):programs/sbf/tests/programs.rs
     solana_runtime::{
         bank::{
             Bank, DurableNonceFee, TransactionBalancesSet, TransactionExecutionDetails,
@@ -3822,13 +3817,9 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
-<<<<<<< HEAD:programs/bpf/tests/programs.rs
         true,
-=======
-        false,
         false,
         compute_budget::LoadedAccountsDataLimitType::V0,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840)):programs/sbf/tests/programs.rs
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3850,13 +3841,9 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
-<<<<<<< HEAD:programs/bpf/tests/programs.rs
         true,
-=======
-        false,
         false,
         compute_budget::LoadedAccountsDataLimitType::V0,
->>>>>>> 81dc2e56a (Cap accounts data a transaction can load by its requested limit (#27840)):programs/sbf/tests/programs.rs
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 
