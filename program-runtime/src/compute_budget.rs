@@ -25,7 +25,7 @@ pub enum LoadedAccountsDataLimitType {
 
 /// Get default value of `ComputeBudget::accounts_data_size_limit` if not set specifically. It
 /// sets to 10MB initially, may be changed with feature gate.
-const DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 10_000_000;
+const DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 10 * 1024 * 1024;
 pub fn get_default_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
     match limit_type {
         LoadedAccountsDataLimitType::V0 => DEFAULT_LOADED_ACCOUNTS_DATA_LIMIT,
@@ -34,7 +34,7 @@ pub fn get_default_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLim
 /// Get max value of `ComputeBudget::accounts_data_size_limit`, it caps value user
 /// sets via `ComputeBudgetInstruction::set_compute_unit_limit`. It is set to 100MB
 /// initially, can be changed with feature gate.
-const MAX_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 100_000_000;
+const MAX_LOADED_ACCOUNTS_DATA_LIMIT: u32 = 100 * 1024 * 1024;
 pub fn get_max_loaded_accounts_data_limit(limit_type: &LoadedAccountsDataLimitType) -> u32 {
     match limit_type {
         LoadedAccountsDataLimitType::V0 => MAX_LOADED_ACCOUNTS_DATA_LIMIT,
