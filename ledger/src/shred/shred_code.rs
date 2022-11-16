@@ -9,7 +9,7 @@ use {
         },
         shredder::ERASURE_BATCH_SIZE,
     },
-    solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
+    solana_sdk::{clock::Slot, packet::Packet, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
@@ -26,7 +26,7 @@ pub enum ShredCode {
 }
 
 impl ShredCode {
-    pub(super) const SIZE_OF_PAYLOAD: usize = PACKET_DATA_SIZE - SIZE_OF_NONCE;
+    pub(super) const SIZE_OF_PAYLOAD: usize = Packet::DATA_SIZE - SIZE_OF_NONCE;
 
     dispatch!(fn coding_header(&self) -> &CodingShredHeader);
 

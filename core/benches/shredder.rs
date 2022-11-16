@@ -12,7 +12,7 @@ use {
         Shred, ShredFlags, Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_perf::test_tx,
-    solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
+    solana_sdk::{hash::Hash, packet::Packet, signature::Keypair},
     test::Bencher,
 };
 
@@ -22,7 +22,7 @@ use {
 // size of nonce: 4
 // size of common shred header: 83
 // size of coding shred header: 6
-const VALID_SHRED_DATA_LEN: usize = PACKET_DATA_SIZE - 4 - 83 - 6;
+const VALID_SHRED_DATA_LEN: usize = Packet::DATA_SIZE - 4 - 83 - 6;
 
 fn make_test_entry(txs_per_entry: u64) -> Entry {
     Entry {

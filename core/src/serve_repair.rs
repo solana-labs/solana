@@ -27,14 +27,14 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PacketBatchRecycler},
+        packet::{PacketBatch, PacketBatchRecycler},
     },
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
         genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
-        packet::PACKET_DATA_SIZE,
+        packet::Packet,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
@@ -66,7 +66,7 @@ pub(crate) const REPAIR_PEERS_CACHE_CAPACITY: usize = 128;
 // Limit cache entries ttl in order to avoid re-using outdated data.
 const REPAIR_PEERS_CACHE_TTL: Duration = Duration::from_secs(10);
 pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
-    PACKET_DATA_SIZE -
+    Packet::DATA_SIZE -
     SIZE_OF_NONCE -
     4 /*(response version enum discriminator)*/ -
     4 /*slot_hash length*/;

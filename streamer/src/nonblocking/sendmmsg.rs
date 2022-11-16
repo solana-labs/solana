@@ -60,7 +60,6 @@ mod tests {
             packet::Packet,
             sendmmsg::SendPktsError,
         },
-        solana_sdk::packet::PACKET_DATA_SIZE,
         std::{
             io::ErrorKind,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -74,7 +73,7 @@ mod tests {
         let addr = reader.local_addr().unwrap();
         let sender = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
 
-        let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packets: Vec<_> = (0..32).map(|_| vec![0u8; Packet::DATA_SIZE]).collect();
         let packet_refs: Vec<_> = packets.iter().map(|p| (&p[..], &addr)).collect();
 
         let sent = batch_send(&sender, &packet_refs[..]).await.ok();
@@ -95,7 +94,7 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
 
-        let packets: Vec<_> = (0..32).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packets: Vec<_> = (0..32).map(|_| vec![0u8; Packet::DATA_SIZE]).collect();
         let packet_refs: Vec<_> = packets
             .iter()
             .enumerate()
@@ -166,7 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_intermediate_failures_mismatched_bind() {
-        let packets: Vec<_> = (0..3).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packets: Vec<_> = (0..3).map(|_| vec![0u8; Packet::DATA_SIZE]).collect();
         let ip4 = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
         let ip6 = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 8080);
         let packet_refs: Vec<_> = vec![
@@ -191,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_intermediate_failures_unreachable_address() {
-        let packets: Vec<_> = (0..5).map(|_| vec![0u8; PACKET_DATA_SIZE]).collect();
+        let packets: Vec<_> = (0..5).map(|_| vec![0u8; Packet::DATA_SIZE]).collect();
         let ipv4local = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
         let ipv4broadcast = SocketAddr::new(IpAddr::V4(Ipv4Addr::BROADCAST), 8080);
         let sender = UdpSocket::bind("0.0.0.0:0").await.expect("bind");

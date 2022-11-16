@@ -26,7 +26,6 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_metrics::inc_new_counter_info,
-    solana_perf::packet::PACKET_DATA_SIZE,
     solana_rpc_client_api::{
         config::*,
         custom_error::RpcCustomError,
@@ -66,6 +65,7 @@ use {
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::SanitizedMessage,
+        packet::TransactionPacket,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
@@ -4411,8 +4411,11 @@ pub mod rpc_obsolete_v1_7 {
     }
 }
 
-const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if PACKET_DATA_SIZE changes
-const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if PACKET_DATA_SIZE changes
+// These values need to be updated if TransactionPacket::DATA_SIZE changes. The
+// correct values can be found by hand or by simply encoding `TransactionPacket::DATA_SIZE`
+// bytes and checking length. `test_max_encoded_tx_goldens` ensures these values are correct.
+const MAX_BASE58_SIZE: usize = 1683; // Golden, bump if TransactionPacket::DATA_SIZE changes
+const MAX_BASE64_SIZE: usize = 1644; // Golden, bump if TransactionPacket::DATA_SIZE changes
 fn decode_and_deserialize<T>(
     encoded: String,
     encoding: TransactionBinaryEncoding,
@@ -4429,7 +4432,7 @@ where
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE58_SIZE,
-                    PACKET_DATA_SIZE,
+                    TransactionPacket::DATA_SIZE,
                 )));
             }
             bs58::decode(encoded)
@@ -4444,23 +4447,23 @@ where
                     type_name::<T>(),
                     encoded.len(),
                     MAX_BASE64_SIZE,
-                    PACKET_DATA_SIZE,
+                    TransactionPacket::DATA_SIZE,
                 )));
             }
             base64::decode(encoded)
                 .map_err(|e| Error::invalid_params(format!("invalid base64 encoding: {e:?}")))?
         }
     };
-    if wire_output.len() > PACKET_DATA_SIZE {
+    if wire_output.len() > TransactionPacket::DATA_SIZE {
         return Err(Error::invalid_params(format!(
             "decoded {} too large: {} bytes (max: {} bytes)",
             type_name::<T>(),
             wire_output.len(),
-            PACKET_DATA_SIZE
+            TransactionPacket::DATA_SIZE
         )));
     }
     bincode::options()
-        .with_limit(PACKET_DATA_SIZE as u64)
+        .with_limit(TransactionPacket::DATA_SIZE as u64)
         .with_fixint_encoding()
         .allow_trailing_bytes()
         .deserialize_from(&wire_output[..])
@@ -8369,8 +8372,8 @@ pub mod tests {
     }
 
     #[test]
-    fn test_worst_case_encoded_tx_goldens() {
-        let ff_tx = vec![0xffu8; PACKET_DATA_SIZE];
+    fn test_max_encoded_tx_goldens() {
+        let ff_tx = vec![0xffu8; TransactionPacket::DATA_SIZE];
         let tx58 = bs58::encode(&ff_tx).into_string();
         assert_eq!(tx58.len(), MAX_BASE58_SIZE);
         let tx64 = base64::encode(&ff_tx);
@@ -8379,8 +8382,12 @@ pub mod tests {
 
     #[test]
     fn test_decode_and_deserialize_too_large_payloads_fail() {
-        // +2 because +1 still fits in base64 encoded worst-case
-        let too_big = PACKET_DATA_SIZE + 2;
+        // 4 base64 digits are generated from groups of 3 bytes; however, those 4 digits
+        // are generated even if the group only has 1 or 2 bytes.
+        // So, we need 4 - (TransactionPacket::DATA_SIZE % 3) extra bytes to ensure we'll spill over
+        let extra_bytes = 4 - (TransactionPacket::DATA_SIZE % 3);
+        let too_big = TransactionPacket::DATA_SIZE + extra_bytes;
+
         let tx_ser = vec![0xffu8; too_big];
 
         let tx58 = bs58::encode(&tx_ser).into_string();
@@ -8389,7 +8396,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base58 encoded solana_sdk::transaction::Transaction too large: {tx58_len} bytes (max: encoded/raw {MAX_BASE58_SIZE}/{PACKET_DATA_SIZE})",
+                "base58 encoded solana_sdk::transaction::Transaction too large: {tx58_len} bytes (max: encoded/raw {MAX_BASE58_SIZE}/{TransactionPacket::DATA_SIZE})",
             )
         ));
 
@@ -8399,18 +8406,18 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base64 encoded solana_sdk::transaction::Transaction too large: {tx64_len} bytes (max: encoded/raw {MAX_BASE64_SIZE}/{PACKET_DATA_SIZE})",
+                "base64 encoded solana_sdk::transaction::Transaction too large: {tx64_len} bytes (max: encoded/raw {MAX_BASE64_SIZE}/{TransactionPacket::DATA_SIZE})",
             )
         ));
 
-        let too_big = PACKET_DATA_SIZE + 1;
+        let too_big = TransactionPacket::DATA_SIZE + 1;
         let tx_ser = vec![0x00u8; too_big];
         let tx58 = bs58::encode(&tx_ser).into_string();
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {PACKET_DATA_SIZE} bytes)"
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TransactionPacket::DATA_SIZE} bytes)"
             ))
         );
 
@@ -8419,11 +8426,11 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {PACKET_DATA_SIZE} bytes)"
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TransactionPacket::DATA_SIZE} bytes)"
             ))
         );
 
-        let tx_ser = vec![0xffu8; PACKET_DATA_SIZE - 2];
+        let tx_ser = vec![0xffu8; TransactionPacket::DATA_SIZE - 2];
         let mut tx64 = base64::encode(&tx_ser);
         assert_eq!(
             decode_and_deserialize::<Transaction>(tx64.clone(), TransactionBinaryEncoding::Base64)

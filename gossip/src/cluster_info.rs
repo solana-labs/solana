@@ -54,7 +54,7 @@ use {
     },
     solana_perf::{
         data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PACKET_DATA_SIZE},
+        packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
     solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank_forks::BankForks, vote_parser},
@@ -105,24 +105,24 @@ pub const MAX_BLOOM_SIZE: usize = MAX_CRDS_OBJECT_SIZE;
 pub const MAX_CRDS_OBJECT_SIZE: usize = 928;
 /// A hard limit on incoming gossip messages
 /// Chosen to be able to handle 1Gbps of pure gossip traffic
-/// 128MB/PACKET_DATA_SIZE
-const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / PACKET_DATA_SIZE;
+/// 128MB/Packet::DATA_SIZE
+const MAX_GOSSIP_TRAFFIC: usize = 128_000_000 / Packet::DATA_SIZE;
 /// Max size of serialized crds-values in a Protocol::PushMessage packet. This
-/// is equal to PACKET_DATA_SIZE minus serialized size of an empty push
+/// is equal to Packet::DATA_SIZE minus serialized size of an empty push
 /// message: Protocol::PushMessage(Pubkey::default(), Vec::default())
-const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 44;
-const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = PACKET_DATA_SIZE - 115;
+const PUSH_MESSAGE_MAX_PAYLOAD_SIZE: usize = Packet::DATA_SIZE - 44;
+const DUPLICATE_SHRED_MAX_PAYLOAD_SIZE: usize = Packet::DATA_SIZE - 115;
 /// Maximum number of hashes in SnapshotHashes/AccountsHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
-/// PACKET_DATA_SIZE.
+/// Packet::DATA_SIZE.
 // TODO: Update this to 26 once payload sizes are upgraded across fleet.
 pub const MAX_SNAPSHOT_HASHES: usize = 16;
 /// Maximum number of hashes in IncrementalSnapshotHashes a node publishes
 /// such that the serialized size of the push/pull message stays below
-/// PACKET_DATA_SIZE.
+/// Packet::DATA_SIZE.
 pub const MAX_INCREMENTAL_SNAPSHOT_HASHES: usize = 25;
 /// Maximum number of origin nodes that a PruneData may contain, such that the
-/// serialized size of the PruneMessage stays below PACKET_DATA_SIZE.
+/// serialized size of the PruneMessage stays below Packet::DATA_SIZE.
 const MAX_PRUNE_DATA_NODES: usize = 32;
 /// Number of bytes in the randomly generated token sent with ping messages.
 const GOSSIP_PING_TOKEN_SIZE: usize = 32;
@@ -3513,7 +3513,7 @@ RPC Enabled Nodes: 1"#;
         let header = Protocol::PushMessage(Pubkey::default(), Vec::default());
         assert_eq!(
             PUSH_MESSAGE_MAX_PAYLOAD_SIZE,
-            PACKET_DATA_SIZE - serialized_size(&header).unwrap() as usize
+            Packet::DATA_SIZE - serialized_size(&header).unwrap() as usize
         );
     }
 
@@ -3552,9 +3552,9 @@ RPC Enabled Nodes: 1"#;
             let data = CrdsData::DuplicateShred(MAX_DUPLICATE_SHREDS - 1, chunk);
             let value = CrdsValue::new_signed(data, &keypair);
             let pull_response = Protocol::PullResponse(keypair.pubkey(), vec![value.clone()]);
-            assert!(serialized_size(&pull_response).unwrap() < PACKET_DATA_SIZE as u64);
+            assert!(serialized_size(&pull_response).unwrap() < Packet::DATA_SIZE as u64);
             let push_message = Protocol::PushMessage(keypair.pubkey(), vec![value.clone()]);
-            assert!(serialized_size(&push_message).unwrap() < PACKET_DATA_SIZE as u64);
+            assert!(serialized_size(&push_message).unwrap() < Packet::DATA_SIZE as u64);
         }
     }
 
@@ -4121,7 +4121,7 @@ RPC Enabled Nodes: 1"#;
             Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
             rng.gen(),
         ));
-        let header_size = PACKET_DATA_SIZE - PUSH_MESSAGE_MAX_PAYLOAD_SIZE;
+        let header_size = Packet::DATA_SIZE - PUSH_MESSAGE_MAX_PAYLOAD_SIZE;
         for values in splits {
             // Assert that sum of parts equals the whole.
             let size: u64 = header_size as u64
@@ -4189,7 +4189,7 @@ RPC Enabled Nodes: 1"#;
     fn check_pull_request_size(filter: CrdsFilter) {
         let value = CrdsValue::new_unsigned(CrdsData::LegacyContactInfo(ContactInfo::default()));
         let protocol = Protocol::PullRequest(filter, value);
-        assert!(serialized_size(&protocol).unwrap() <= PACKET_DATA_SIZE as u64);
+        assert!(serialized_size(&protocol).unwrap() <= Packet::DATA_SIZE as u64);
     }
 
     #[test]
@@ -4358,7 +4358,7 @@ RPC Enabled Nodes: 1"#;
         );
         let protocol_size =
             serialized_size(&protocol).expect("unable to serialize gossip protocol") as usize;
-        PACKET_DATA_SIZE - (protocol_size - filter_size)
+        Packet::DATA_SIZE - (protocol_size - filter_size)
     }
 
     #[test]

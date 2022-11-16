@@ -4384,7 +4384,7 @@ pub mod tests {
             hash::{self, hash, Hash},
             instruction::CompiledInstruction,
             message::v0::LoadedAddresses,
-            packet::PACKET_DATA_SIZE,
+            packet::Packet,
             pubkey::Pubkey,
             signature::Signature,
             transaction::{Transaction, TransactionError},
@@ -4981,7 +4981,7 @@ pub mod tests {
         let shreds_per_slot = 5_u64;
         let entry_serialized_size =
             bincode::serialized_size(&create_ticks(1, 0, Hash::default())).unwrap();
-        let entries_per_slot = (shreds_per_slot * PACKET_DATA_SIZE as u64) / entry_serialized_size;
+        let entries_per_slot = (shreds_per_slot * Packet::DATA_SIZE as u64) / entry_serialized_size;
 
         // Write entries
         for slot in 0..num_slots {

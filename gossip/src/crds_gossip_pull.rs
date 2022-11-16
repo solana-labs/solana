@@ -672,7 +672,7 @@ pub(crate) mod tests {
         solana_perf::test_tx::new_test_vote_tx,
         solana_sdk::{
             hash::{hash, HASH_BYTES},
-            packet::PACKET_DATA_SIZE,
+            packet::Packet,
             timing::timestamp,
         },
     };
@@ -1024,7 +1024,7 @@ pub(crate) mod tests {
                 0,
                 None,
                 &HashMap::new(),
-                PACKET_DATA_SIZE,
+                Packet::DATA_SIZE,
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
@@ -1045,7 +1045,7 @@ pub(crate) mod tests {
                 0,
                 None,
                 &HashMap::new(),
-                PACKET_DATA_SIZE,
+                Packet::DATA_SIZE,
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
@@ -1071,7 +1071,7 @@ pub(crate) mod tests {
             now,
             None,
             &HashMap::new(),
-            PACKET_DATA_SIZE,
+            Packet::DATA_SIZE,
             &ping_cache,
             &mut pings,
             &SocketAddrSpace::Unspecified,
@@ -1094,7 +1094,7 @@ pub(crate) mod tests {
             now,
             None,
             &HashMap::new(),
-            PACKET_DATA_SIZE,
+            Packet::DATA_SIZE,
             &ping_cache,
             &mut pings,
             &SocketAddrSpace::Unspecified,
@@ -1150,9 +1150,9 @@ pub(crate) mod tests {
                     &node_keypair,
                     0, // self_shred_version
                     now,
-                    None,             // gossip_validators
-                    &HashMap::new(),  // stakes
-                    PACKET_DATA_SIZE, // bloom_size
+                    None,              // gossip_validators
+                    &HashMap::new(),   // stakes
+                    Packet::DATA_SIZE, // bloom_size
                     &ping_cache,
                     &mut pings,
                     &SocketAddrSpace::Unspecified,
@@ -1235,7 +1235,7 @@ pub(crate) mod tests {
             0,
             None,
             &HashMap::new(),
-            PACKET_DATA_SIZE,
+            Packet::DATA_SIZE,
             &Mutex::new(ping_cache),
             &mut pings,
             &SocketAddrSpace::Unspecified,
@@ -1338,7 +1338,7 @@ pub(crate) mod tests {
             0,
             None,
             &HashMap::new(),
-            PACKET_DATA_SIZE,
+            Packet::DATA_SIZE,
             &Mutex::new(ping_cache),
             &mut pings,
             &SocketAddrSpace::Unspecified,
@@ -1426,7 +1426,7 @@ pub(crate) mod tests {
                 0,
                 None,
                 &HashMap::new(),
-                PACKET_DATA_SIZE,
+                Packet::DATA_SIZE,
                 &ping_cache,
                 &mut pings,
                 &SocketAddrSpace::Unspecified,
@@ -1530,7 +1530,7 @@ pub(crate) mod tests {
             // there is a chance of a false positive with bloom filters
             // assert that purged value is still in the set
             // chance of 30 consecutive false positives is 0.1^30
-            let filters = node.build_crds_filters(&thread_pool, &node_crds, PACKET_DATA_SIZE);
+            let filters = node.build_crds_filters(&thread_pool, &node_crds, Packet::DATA_SIZE);
             assert!(filters.iter().any(|filter| filter.contains(&value_hash)));
         }
 

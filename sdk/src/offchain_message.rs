@@ -48,7 +48,7 @@ pub mod v0 {
         super::{is_printable_ascii, is_utf8, MessageFormat, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
-            packet::PACKET_DATA_SIZE,
+            packet::Packet,
             sanitize::SanitizeError,
         },
     };
@@ -67,7 +67,7 @@ pub mod v0 {
         // Max length of the OffchainMessage
         pub const MAX_LEN: usize = u16::MAX as usize - Base::HEADER_LEN - Self::HEADER_LEN;
         // Max Length of the OffchainMessage supported by the Ledger
-        pub const MAX_LEN_LEDGER: usize = PACKET_DATA_SIZE - Base::HEADER_LEN - Self::HEADER_LEN;
+        pub const MAX_LEN_LEDGER: usize = Packet::DATA_SIZE - Base::HEADER_LEN - Self::HEADER_LEN;
 
         /// Construct a new OffchainMessage object from the given message
         pub fn new(message: &[u8]) -> Result<Self, SanitizeError> {

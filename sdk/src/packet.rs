@@ -13,11 +13,15 @@ use {
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(PACKET_DATA_SIZE, 1232);
-/// Maximum over-the-wire size of a Transaction
+/// Maximum over-the-wire size of a packet
 ///   1280 is IPv6 minimum MTU
 ///   40 bytes is the size of the IPv6 header
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
+#[cfg(test)]
+static_assertions::const_assert_eq!(TRANSACTION_DATA_SIZE, 1232);
+/// Maximum over-the-wire size of a transaction, currently two packets
+pub const TRANSACTION_DATA_SIZE: usize = PACKET_DATA_SIZE;
 
 bitflags! {
     #[repr(C)]
@@ -40,121 +44,129 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
-#[derive(Clone, Eq)]
-#[repr(C)]
-pub struct Packet {
-    // Bytes past Packet.meta.size are not valid to read from.
-    // Use Packet.data(index) to read from the buffer.
-    buffer: [u8; PACKET_DATA_SIZE],
-    meta: Meta,
-}
-
-impl Packet {
-    pub fn new(buffer: [u8; PACKET_DATA_SIZE], meta: Meta) -> Self {
-        Self { buffer, meta }
-    }
-
-    /// Returns an immutable reference to the underlying buffer up to
-    /// packet.meta.size. The rest of the buffer is not valid to read from.
-    /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
-    /// Returns None if the index is invalid or if the packet is already marked
-    /// as discard.
-    #[inline]
-    pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
-    where
-        I: SliceIndex<[u8]>,
-    {
-        // If the packet is marked as discard, it is either invalid or
-        // otherwise should be ignored, and so the payload should not be read
-        // from.
-        if self.meta.discard() {
-            None
-        } else {
-            self.buffer.get(..self.meta.size)?.get(index)
+macro_rules! impl_packet {
+    ($P:ident, $S:ident) => {
+        #[derive(Clone, Eq)]
+        #[repr(C)]
+        pub struct $P {
+            // Bytes past Packet.meta.size are not valid to read from.
+            // Use Packet.data(index) to read from the buffer.
+            buffer: [u8; $S],
+            meta: Meta,
         }
-    }
 
-    /// Returns a mutable reference to the entirety of the underlying buffer to
-    /// write into. The caller is responsible for updating Packet.meta.size
-    /// after writing to the buffer.
-    #[inline]
-    pub fn buffer_mut(&mut self) -> &mut [u8] {
-        debug_assert!(!self.meta.discard());
-        &mut self.buffer[..]
-    }
+        impl $P {
+            pub const DATA_SIZE: usize = $S;
 
-    #[inline]
-    pub fn meta(&self) -> &Meta {
-        &self.meta
-    }
+            pub fn new(buffer: [u8; $S], meta: Meta) -> Self {
+                Self { buffer, meta }
+            }
 
-    #[inline]
-    pub fn meta_mut(&mut self) -> &mut Meta {
-        &mut self.meta
-    }
+            /// Returns an immutable reference to the underlying buffer up to
+            /// packet.meta.size. The rest of the buffer is not valid to read from.
+            /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
+            /// Returns None if the index is invalid or if the packet is already marked
+            /// as discard.
+            #[inline]
+            pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
+            where
+                I: SliceIndex<[u8]>,
+            {
+                // If the packet is marked as discard, it is either invalid or
+                // otherwise should be ignored, and so the payload should not be read
+                // from.
+                if self.meta.discard() {
+                    None
+                } else {
+                    self.buffer.get(..self.meta.size)?.get(index)
+                }
+            }
 
-    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-        let mut packet = Packet::default();
-        Self::populate_packet(&mut packet, dest, &data)?;
-        Ok(packet)
-    }
+            /// Returns a mutable reference to the entirety of the underlying buffer to
+            /// write into. The caller is responsible for updating Packet.meta.size
+            /// after writing to the buffer.
+            #[inline]
+            pub fn buffer_mut(&mut self) -> &mut [u8] {
+                debug_assert!(!self.meta.discard());
+                &mut self.buffer[..]
+            }
 
-    pub fn populate_packet<T: Serialize>(
-        &mut self,
-        dest: Option<&SocketAddr>,
-        data: &T,
-    ) -> Result<()> {
-        debug_assert!(!self.meta.discard());
-        let mut wr = io::Cursor::new(self.buffer_mut());
-        bincode::serialize_into(&mut wr, data)?;
-        self.meta.size = wr.position() as usize;
-        if let Some(dest) = dest {
-            self.meta.set_socket_addr(dest);
+            #[inline]
+            pub fn meta(&self) -> &Meta {
+                &self.meta
+            }
+
+            #[inline]
+            pub fn meta_mut(&mut self) -> &mut Meta {
+                &mut self.meta
+            }
+
+            pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+                let mut packet = Self::default();
+                Self::populate_packet(&mut packet, dest, &data)?;
+                Ok(packet)
+            }
+
+            pub fn populate_packet<T: Serialize>(
+                &mut self,
+                dest: Option<&SocketAddr>,
+                data: &T,
+            ) -> Result<()> {
+                debug_assert!(!self.meta.discard());
+                let mut wr = io::Cursor::new(self.buffer_mut());
+                bincode::serialize_into(&mut wr, data)?;
+                self.meta.size = wr.position() as usize;
+                if let Some(dest) = dest {
+                    self.meta.set_socket_addr(dest);
+                }
+                Ok(())
+            }
+
+            pub fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
+            where
+                T: serde::de::DeserializeOwned,
+                I: SliceIndex<[u8], Output = [u8]>,
+            {
+                let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
+                bincode::options()
+                    .with_limit(Self::DATA_SIZE as u64)
+                    .with_fixint_encoding()
+                    .reject_trailing_bytes()
+                    .deserialize(bytes)
+            }
         }
-        Ok(())
-    }
 
-    pub fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
-    where
-        T: serde::de::DeserializeOwned,
-        I: SliceIndex<[u8], Output = [u8]>,
-    {
-        let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
-        bincode::options()
-            .with_limit(PACKET_DATA_SIZE as u64)
-            .with_fixint_encoding()
-            .reject_trailing_bytes()
-            .deserialize(bytes)
-    }
-}
-
-impl fmt::Debug for Packet {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Packet {{ size: {:?}, addr: {:?} }}",
-            self.meta.size,
-            self.meta.socket_addr()
-        )
-    }
-}
-
-#[allow(clippy::uninit_assumed_init)]
-impl Default for Packet {
-    fn default() -> Packet {
-        let buffer = std::mem::MaybeUninit::<[u8; PACKET_DATA_SIZE]>::uninit();
-        Packet {
-            buffer: unsafe { buffer.assume_init() },
-            meta: Meta::default(),
+        impl fmt::Debug for $P {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(
+                    f,
+                    "Packet {{ size: {:?}, addr: {:?} }}",
+                    self.meta.size,
+                    self.meta.socket_addr()
+                )
+            }
         }
-    }
-}
 
-impl PartialEq for Packet {
-    fn eq(&self, other: &Packet) -> bool {
-        self.meta() == other.meta() && self.data(..) == other.data(..)
-    }
+        #[allow(clippy::uninit_assumed_init)]
+        impl Default for $P {
+            fn default() -> Self {
+                let buffer = std::mem::MaybeUninit::<[u8; Self::DATA_SIZE]>::uninit();
+                Self {
+                    buffer: unsafe { buffer.assume_init() },
+                    meta: Meta::default(),
+                }
+            }
+        }
+
+        impl PartialEq for $P {
+            fn eq(&self, other: &Self) -> bool {
+                self.meta == other.meta && self.data(..) == other.data(..)
+            }
+        }
+    };
 }
+impl_packet!(Packet, PACKET_DATA_SIZE);
+impl_packet!(TransactionPacket, TRANSACTION_DATA_SIZE);
 
 impl Meta {
     pub fn socket_addr(&self) -> SocketAddr {

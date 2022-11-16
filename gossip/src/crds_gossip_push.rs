@@ -26,7 +26,7 @@ use {
     itertools::Itertools,
     rand::Rng,
     solana_sdk::{
-        packet::PACKET_DATA_SIZE,
+        packet::Packet,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::timestamp,
@@ -79,7 +79,7 @@ impl Default for CrdsGossipPush {
     fn default() -> Self {
         Self {
             // Allow upto 64 Crds Values per PUSH
-            max_bytes: PACKET_DATA_SIZE * 64,
+            max_bytes: Packet::DATA_SIZE * 64,
             active_set: RwLock::default(),
             crds_cursor: Mutex::default(),
             received_cache: Mutex::new(ReceivedCache::new(2 * CRDS_UNIQUE_PUBKEY_CAPACITY)),
