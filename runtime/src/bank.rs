@@ -19479,6 +19479,7 @@ pub(crate) mod tests {
         new_balance: u64,
         mock_program_id: Pubkey,
         recent_blockhash: Hash,
+        tx_data_size_limit: u32,
     ) -> Transaction {
         let account_metas = vec![
             AccountMeta::new(funder.pubkey(), false),
@@ -19490,7 +19491,10 @@ pub(crate) mod tests {
             account_metas,
         );
         Transaction::new_signed_with_payer(
-            &[instruction],
+            &[
+                instruction,
+                ComputeBudgetInstruction::set_accounts_data_size_limit(tx_data_size_limit),
+            ],
             Some(&payer.pubkey()),
             &[payer],
             recent_blockhash,
@@ -19550,6 +19554,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_small - 1,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19575,6 +19580,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_large,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19592,6 +19598,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_small - 1,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19617,6 +19624,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_small,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19634,6 +19642,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_large - 1,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let expected_err = {
             let account_index = tx
@@ -19659,6 +19668,7 @@ pub(crate) mod tests {
             rent_exempt_minimum_large,
             mock_program_id,
             recent_blockhash,
+            u32::MAX,
         );
         let result = bank.process_transaction(&tx);
         assert!(result.is_ok());
@@ -19780,6 +19790,7 @@ pub(crate) mod tests {
     /// Ensure that accounts data size is updated correctly on resize transactions
     #[test]
     fn test_accounts_data_size_and_resize_transactions() {
+        solana_logger::setup();
         let GenesisConfigInfo {
             genesis_config,
             mint_keypair,
@@ -19792,6 +19803,12 @@ pub(crate) mod tests {
             &mock_program_id,
             mock_realloc_process_instruction,
         );
+
+        // get builtin program account data size, will beused to request max data size for
+        // transaction.
+        let mock_account_data_size = bank.get_account_with_fixed_root(&mock_program_id).unwrap().data().len();
+        let compute_budget_account_data_size = bank.get_account_with_fixed_root(&solana_sdk::compute_budget::id()).unwrap().data().len();
+
         let recent_blockhash = bank.last_blockhash();
 
         let funding_keypair = Keypair::new();
@@ -19808,7 +19825,7 @@ pub(crate) mod tests {
             let account_balance = LAMPORTS_PER_SOL;
             let account_size = rng.gen_range(
                 1,
-                (MAX_PERMITTED_DATA_LENGTH / 4) as usize - MAX_PERMITTED_DATA_INCREASE,
+                MAX_PERMITTED_DATA_LENGTH as usize - MAX_PERMITTED_DATA_INCREASE,
             );
             let account_data =
                 AccountSharedData::new(account_balance, account_size, &mock_program_id);
@@ -19824,6 +19841,7 @@ pub(crate) mod tests {
                 account_balance,
                 mock_program_id,
                 recent_blockhash,
+                (account_size + mock_account_data_size + compute_budget_account_data_size) as u32,
             );
             let result = bank.process_transaction(&transaction);
             assert!(result.is_ok());
@@ -19838,9 +19856,8 @@ pub(crate) mod tests {
         {
             let account_pubkey = Pubkey::new_unique();
             let account_balance = LAMPORTS_PER_SOL;
-            let account_size = rng
-                .gen_range(MAX_PERMITTED_DATA_LENGTH / 8, MAX_PERMITTED_DATA_LENGTH / 4)
-                as usize;
+            let account_size = 
+                rng.gen_range(MAX_PERMITTED_DATA_LENGTH / 2, MAX_PERMITTED_DATA_LENGTH) as usize;
             let account_data =
                 AccountSharedData::new(account_balance, account_size, &mock_program_id);
             bank.store_account(&account_pubkey, &account_data);
@@ -19855,6 +19872,7 @@ pub(crate) mod tests {
                 account_balance,
                 mock_program_id,
                 recent_blockhash,
+                (account_size + mock_account_data_size + compute_budget_account_data_size) as u32,
             );
             let result = bank.process_transaction(&transaction);
             assert!(result.is_ok());
