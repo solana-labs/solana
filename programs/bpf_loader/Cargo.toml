@@ -14,6 +14,8 @@ bincode = "1.3.3"
 byteorder = "1.4.3"
 libsecp256k1 = "0.6.0"
 log = "0.4.17"
+num-bigint = "0.4.3"
+num-traits = "0.2"
 solana-measure = { path = "../../measure", version = "=1.15.0" }
 solana-metrics = { path = "../../metrics", version = "=1.15.0" }
 solana-program-runtime = { path = "../../program-runtime", version = "=1.15.0" }
@@ -21,8 +23,6 @@ solana-sdk = { path = "../../sdk", version = "=1.15.0" }
 solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.15.0" }
 solana_rbpf = "=0.2.35"
 thiserror = "1.0"
-num-bigint = "0.4.3"
-num-traits = "0.2"
 
 [dev-dependencies]
 rand = "0.7.3"
