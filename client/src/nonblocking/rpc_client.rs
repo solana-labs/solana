@@ -4504,12 +4504,13 @@ impl RpcClient {
             account_config,
             ..config
         };
-        let accounts: Vec<RpcKeyedAccount> = self
-            .send(
+        let accounts = self
+            .send::<OptionalContext<Vec<RpcKeyedAccount>>>(
                 RpcRequest::GetProgramAccounts,
                 json!([pubkey.to_string(), config]),
             )
-            .await?;
+            .await?
+            .parse_value();
         parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts)
     }
 
