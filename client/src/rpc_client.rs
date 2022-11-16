@@ -4317,28 +4317,6 @@ mod tests {
         let is_err = rpc_client.get_latest_blockhash().is_err();
         assert!(is_err);
     }
-<<<<<<< HEAD:client/src/rpc_client.rs
-=======
-
-    #[test]
-    fn test_get_stake_minimum_delegation() {
-        let expected_minimum_delegation: u64 = 123_456_789;
-        let rpc_client = RpcClient::new_mock("succeeds".to_string());
-
-        // Test: without commitment
-        {
-            let actual_minimum_delegation = rpc_client.get_stake_minimum_delegation().unwrap();
-            assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
-        }
-
-        // Test: with commitment
-        {
-            let actual_minimum_delegation = rpc_client
-                .get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())
-                .unwrap();
-            assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
-        }
-    }
 
     #[test]
     fn test_get_program_accounts_with_config() {
@@ -4418,5 +4396,4 @@ mod tests {
             assert_eq!(expected_result, result);
         }
     }
->>>>>>> b18ef88c4 (Fix client get_program_accounts_with_config calls with context (#28772)):rpc-client/src/rpc_client.rs
 }
