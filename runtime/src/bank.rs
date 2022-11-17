@@ -106,8 +106,9 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, add_set_compute_unit_price_ix, default_units_per_instruction,
-            disable_fee_calculator, enable_early_verification_of_account_modifications,
+            self, add_set_compute_unit_price_ix, cap_transaction_accounts_data_size,
+            default_units_per_instruction, disable_fee_calculator,
+            enable_early_verification_of_account_modifications,
             use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
@@ -282,7 +283,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HEJXoycXvGT2pwMuKcUKzzbeemnqbfrUC4jHZx1ncaWv")]
+#[frozen_abi(digest = "8g9MqWWWrMpuqVHGbR9mYDizn2b91o7Yu7WGgvfveSxh")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -3440,6 +3441,9 @@ impl Bank {
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            self.feature_set
+                .is_active(&cap_transaction_accounts_data_size::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
         ))
     }
 
@@ -3483,6 +3487,9 @@ impl Bank {
                 .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
+            self.feature_set
+                .is_active(&cap_transaction_accounts_data_size::id()),
+            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
         )
     }
 
@@ -4323,6 +4330,8 @@ impl Bank {
                             tx.message().program_instructions_iter(),
                             feature_set.is_active(&default_units_per_instruction::id()),
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+                            Self::get_loaded_accounts_data_limit_type(&self.feature_set),
                         );
                         compute_budget_process_transaction_time.stop();
                         saturating_add_assign!(
@@ -4609,6 +4618,8 @@ impl Bank {
         fee_structure: &FeeStructure,
         support_set_compute_unit_price_ix: bool,
         use_default_units_per_instruction: bool,
+        cap_transaction_accounts_data_size: bool,
+        loaded_accounts_data_limit_type: compute_budget::LoadedAccountsDataLimitType,
     ) -> u64 {
         // Fee based on compute units and signatures
         const BASE_CONGESTION: f64 = 5_000.0;
@@ -4625,6 +4636,8 @@ impl Bank {
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
                 support_set_compute_unit_price_ix,
+                cap_transaction_accounts_data_size,
+                loaded_accounts_data_limit_type,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4692,6 +4705,9 @@ impl Bank {
                         .is_active(&add_set_compute_unit_price_ix::id()),
                     self.feature_set
                         .is_active(&use_default_units_in_fee_calculation::id()),
+                    self.feature_set
+                        .is_active(&cap_transaction_accounts_data_size::id()),
+                    Self::get_loaded_accounts_data_limit_type(&self.feature_set),
                 );
 
                 // In case of instruction error, even though no accounts
@@ -7621,6 +7637,17 @@ impl Bank {
         });
 
         total_accounts_stats
+    }
+
+    /// if the `default` and/or `max` value for ComputeBudget:::Accounts_data_size_limit changes,
+    /// the change needs to be gated by feature gate with corresponding new enum value.
+    /// should use this function to get correct loaded_accounts_data_limit_type based on
+    /// feature_set.
+    pub fn get_loaded_accounts_data_limit_type(
+        _feature_set: &FeatureSet,
+    ) -> compute_budget::LoadedAccountsDataLimitType {
+        compute_budget::LoadedAccountsDataLimitType::V0
+        // In the future, use feature_set to determine correct LoadedAccountsDataLimitType here.
     }
 }
 
@@ -10657,6 +10684,8 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10839,6 +10868,8 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10857,6 +10888,8 @@ pub(crate) mod tests {
             &FeeStructure::default(),
             true,
             true,
+            true,
+            compute_budget::LoadedAccountsDataLimitType::V0,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10973,6 +11006,8 @@ pub(crate) mod tests {
                             &FeeStructure::default(),
                             true,
                             true,
+                            true,
+                            compute_budget::LoadedAccountsDataLimitType::V0,
                         ) * 2
                     )
                     .0
@@ -17326,34 +17361,42 @@ pub(crate) mod tests {
         // Default: no fee.
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
-        assert_eq!(
-            Bank::calculate_fee(
-                &message,
-                0,
-                &FeeStructure {
-                    lamports_per_signature: 0,
-                    ..FeeStructure::default()
-                },
-                true,
-                true,
-            ),
-            0
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    0,
+                    &FeeStructure {
+                        lamports_per_signature: 0,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                0
+            );
+        }
 
         // One signature, a fee.
-        assert_eq!(
-            Bank::calculate_fee(
-                &message,
-                1,
-                &FeeStructure {
-                    lamports_per_signature: 1,
-                    ..FeeStructure::default()
-                },
-                true,
-                true,
-            ),
-            1
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &FeeStructure {
+                        lamports_per_signature: 1,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                1
+            );
+        }
 
         // Two signatures, double the fee.
         let key0 = Pubkey::new_unique();
@@ -17361,19 +17404,23 @@ pub(crate) mod tests {
         let ix0 = system_instruction::transfer(&key0, &key1, 1);
         let ix1 = system_instruction::transfer(&key1, &key0, 1);
         let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
-        assert_eq!(
-            Bank::calculate_fee(
-                &message,
-                2,
-                &FeeStructure {
-                    lamports_per_signature: 2,
-                    ..FeeStructure::default()
-                },
-                true,
-                true,
-            ),
-            4
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    2,
+                    &FeeStructure {
+                        lamports_per_signature: 2,
+                        ..FeeStructure::default()
+                    },
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                ),
+                4
+            );
+        }
     }
 
     #[test]
@@ -17389,10 +17436,20 @@ pub(crate) mod tests {
 
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            max_fee + lamports_per_signature
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                max_fee + lamports_per_signature
+            );
+        }
 
         // Three signatures, two instructions, no unit request
 
@@ -17401,10 +17458,20 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            max_fee + 3 * lamports_per_signature
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                max_fee + 3 * lamports_per_signature
+            );
+        }
 
         // Explicit fee schedule
 
@@ -17435,11 +17502,21 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
-            assert_eq!(
-                fee,
-                lamports_per_signature + prioritization_fee_details.get_fee()
-            );
+            for cap_transaction_accounts_data_size in &[true, false] {
+                let fee = Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0,
+                );
+                assert_eq!(
+                    fee,
+                    lamports_per_signature + prioritization_fee_details.get_fee()
+                );
+            }
         }
     }
 
@@ -17473,10 +17550,20 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            2
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                2
+            );
+        }
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -17485,10 +17572,20 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            11
-        );
+        for cap_transaction_accounts_data_size in &[true, false] {
+            assert_eq!(
+                Bank::calculate_fee(
+                    &message,
+                    1,
+                    &fee_structure,
+                    true,
+                    true,
+                    *cap_transaction_accounts_data_size,
+                    compute_budget::LoadedAccountsDataLimitType::V0
+                ),
+                11
+            );
+        }
     }
 
     #[test]

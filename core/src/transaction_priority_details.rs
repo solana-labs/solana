@@ -1,5 +1,5 @@
 use {
-    solana_program_runtime::compute_budget::ComputeBudget,
+    solana_program_runtime::compute_budget::{self, ComputeBudget},
     solana_sdk::{
         instruction::CompiledInstruction,
         pubkey::Pubkey,
@@ -23,8 +23,11 @@ pub trait GetTransactionPriorityDetails {
         let prioritization_fee_details = compute_budget
             .process_instructions(
                 instructions,
-                true, // use default units per instruction
-                true, // don't reject txs that use set compute unit price ix
+                true,  // use default units per instruction
+                true,  // don't reject txs that use set compute unit price ix
+                false, //transaction priority doesn't care about accounts data size limit,
+                compute_budget::LoadedAccountsDataLimitType::V0, // transaction priority doesn't
+                       // care about accounts data size limit.
             )
             .ok()?;
         Some(TransactionPriorityDetails {
