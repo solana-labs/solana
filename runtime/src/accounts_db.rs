@@ -4608,7 +4608,11 @@ impl AccountsDb {
             .total_us
             .fetch_add(total.as_us(), Ordering::Relaxed);
 
-        self.shrink_ancient_stats.report();
+        // only log when we moved some accounts to ancient append vecs or we've exceeded 100ms
+        // results will continue to accumulate otherwise
+        if guard.is_some() || self.shrink_ancient_stats.total_us.load(Ordering::Relaxed) > 100_000 {
+            self.shrink_ancient_stats.report();
+        }
     }
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
