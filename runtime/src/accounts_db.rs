@@ -4521,83 +4521,12 @@ impl AccountsDb {
                 );
             }
 
-            let mut stored_accounts = Vec::default();
-            let shrink_collect = self.shrink_collect(
-                old_storages.iter(),
-                &mut stored_accounts,
-                &self.shrink_ancient_stats.shrink_stats,
-            );
-
-            // could follow what shrink does more closely
-            if shrink_collect.total_starting_accounts == 0 {
-                continue; // skipping slot with no useful accounts to write
-            }
-
-            let (_, time) = measure!(current_ancient.create_if_necessary(slot, self));
-            let mut create_and_insert_store_elapsed_us = time.as_us();
-            let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
-            // split accounts in 'slot' into:
-            // 'Primary', which can fit in 'current_ancient'
-            // 'Overflow', which will have to go into a new ancient append vec at 'slot'
-            let (to_store, find_alive_elapsed) = measure!(AccountsToStore::new(
-                available_bytes,
-                &shrink_collect.alive_accounts,
-                slot
-            ));
-
-            ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
+            self.combine_one_store_into_ancient(
                 slot,
-                self,
-                &current_ancient,
-                &to_store,
-            );
-
-            let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
-            // write what we can to the current ancient storage
-            let mut store_accounts_timing =
-                current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Primary);
-
-            // handle accounts from 'slot' which did not fit into the current ancient append vec
-            if to_store.has_overflow() {
-                // We need a new ancient append vec at this slot.
-                // Assert: it cannot be the case that we already had an ancient append vec at this slot and
-                // yet that ancient append vec does not have room for the accounts stored at this slot currently
-                assert_ne!(slot, current_ancient.slot());
-                let (_, time) = measure!(current_ancient.create_ancient_append_vec(slot, self));
-                create_and_insert_store_elapsed_us += time.as_us();
-
-                // write the overflow accounts to the next ancient storage
-                let timing = current_ancient.store_ancient_accounts(
-                    self,
-                    &to_store,
-                    StorageSelector::Overflow,
-                );
-                store_accounts_timing.accumulate(&timing);
-            }
-            rewrite_elapsed.stop();
-
-            if slot != current_ancient.slot() {
-                // all append vecs in this slot have been combined into an ancient append vec
-                dropped_roots.push(slot);
-            }
-
-            let (_remaining_stores, remove_old_stores_shrink) = measure!(self
-                .remove_old_stores_shrink(
-                    &shrink_collect,
-                    slot,
-                    &self.shrink_ancient_stats.shrink_stats
-                ));
-
-            // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
-            self.shrink_candidate_slots.lock().unwrap().remove(&slot);
-
-            Self::update_shrink_stats(
-                &self.shrink_ancient_stats.shrink_stats,
-                find_alive_elapsed,
-                create_and_insert_store_elapsed_us,
-                store_accounts_timing,
-                rewrite_elapsed,
-                remove_old_stores_shrink.as_us(),
+                &old_storages,
+                &mut current_ancient,
+                &mut ancient_slot_pubkeys,
+                &mut dropped_roots,
             );
         }
 
@@ -4613,6 +4542,92 @@ impl AccountsDb {
         if guard.is_some() || self.shrink_ancient_stats.total_us.load(Ordering::Relaxed) > 100_000 {
             self.shrink_ancient_stats.report();
         }
+    }
+
+    /// put entire alive contents of 'old_storages' into the current ancient append vec or a newly created ancient append vec
+    fn combine_one_store_into_ancient(
+        &self,
+        slot: Slot,
+        old_storages: &[Arc<AccountStorageEntry>],
+        current_ancient: &mut CurrentAncientAppendVec,
+        ancient_slot_pubkeys: &mut AncientSlotPubkeys,
+        dropped_roots: &mut Vec<Slot>,
+    ) {
+        let mut stored_accounts = Vec::default();
+        let shrink_collect = self.shrink_collect(
+            old_storages.iter(),
+            &mut stored_accounts,
+            &self.shrink_ancient_stats.shrink_stats,
+        );
+
+        // could follow what shrink does more closely
+        if shrink_collect.total_starting_accounts == 0 {
+            return; // skipping slot with no useful accounts to write
+        }
+
+        let (_, time) = measure!(current_ancient.create_if_necessary(slot, self));
+        let mut create_and_insert_store_elapsed_us = time.as_us();
+        let available_bytes = current_ancient.append_vec().accounts.remaining_bytes();
+        // split accounts in 'slot' into:
+        // 'Primary', which can fit in 'current_ancient'
+        // 'Overflow', which will have to go into a new ancient append vec at 'slot'
+        let (to_store, find_alive_elapsed) = measure!(AccountsToStore::new(
+            available_bytes,
+            &shrink_collect.alive_accounts,
+            slot
+        ));
+
+        ancient_slot_pubkeys.maybe_unref_accounts_already_in_ancient(
+            slot,
+            self,
+            current_ancient,
+            &to_store,
+        );
+
+        let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
+        // write what we can to the current ancient storage
+        let mut store_accounts_timing =
+            current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Primary);
+
+        // handle accounts from 'slot' which did not fit into the current ancient append vec
+        if to_store.has_overflow() {
+            // We need a new ancient append vec at this slot.
+            // Assert: it cannot be the case that we already had an ancient append vec at this slot and
+            // yet that ancient append vec does not have room for the accounts stored at this slot currently
+            assert_ne!(slot, current_ancient.slot());
+            let (_, time) = measure!(current_ancient.create_ancient_append_vec(slot, self));
+            create_and_insert_store_elapsed_us += time.as_us();
+
+            // write the overflow accounts to the next ancient storage
+            let timing =
+                current_ancient.store_ancient_accounts(self, &to_store, StorageSelector::Overflow);
+            store_accounts_timing.accumulate(&timing);
+        }
+        rewrite_elapsed.stop();
+
+        if slot != current_ancient.slot() {
+            // all append vecs in this slot have been combined into an ancient append vec
+            dropped_roots.push(slot);
+        }
+
+        let (_remaining_stores, remove_old_stores_shrink) = measure!(self
+            .remove_old_stores_shrink(
+                &shrink_collect,
+                slot,
+                &self.shrink_ancient_stats.shrink_stats
+            ));
+
+        // we should not try to shrink any of the stores from this slot anymore. All shrinking for this slot is now handled by ancient append vec code.
+        self.shrink_candidate_slots.lock().unwrap().remove(&slot);
+
+        Self::update_shrink_stats(
+            &self.shrink_ancient_stats.shrink_stats,
+            find_alive_elapsed,
+            create_and_insert_store_elapsed_us,
+            store_accounts_timing,
+            rewrite_elapsed,
+            remove_old_stores_shrink.as_us(),
+        );
     }
 
     /// each slot in 'dropped_roots' has been combined into an ancient append vec.
