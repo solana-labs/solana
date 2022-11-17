@@ -36,8 +36,6 @@ pub struct AccountsPackage {
     pub package_type: AccountsPackageType,
     pub slot: Slot,
     pub block_height: Slot,
-    //pub slot_deltas: Option<Vec<BankSlotDelta>>, // TBD will remove this parameter?
-    //pub snapshot_links: TempDir,
     pub snapshot_storages: SnapshotStorages,
     pub expected_capitalization: u64,
     pub accounts_hash_for_testing: Option<AccountsHash>,
