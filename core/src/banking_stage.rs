@@ -48,7 +48,7 @@ use {
         },
         bank_forks::BankForks,
         bank_utils,
-        cost_model::{CostModel, TransactionCost},
+        cost_model::CostModel,
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_sender_types::ReplayVoteSender,
@@ -1499,22 +1499,10 @@ impl BankingStage {
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionBatchOutput {
-        let mut cost_model_time = Measure::start("cost_model");
-
-        let transaction_costs = qos_service.compute_transaction_costs(txs.iter());
-
-        let (transactions_qos_results, num_included) =
-            qos_service.select_transactions_per_cost(txs.iter(), transaction_costs.iter(), bank);
-
-        let cost_model_throttled_transactions_count = txs.len().saturating_sub(num_included);
-
-        qos_service.accumulate_estimated_transaction_costs(
-            &Self::accumulate_batched_transaction_costs(
-                transaction_costs.iter(),
-                transactions_qos_results.iter(),
-            ),
-        );
-        cost_model_time.stop();
+        let (
+            (transaction_costs, transactions_qos_results, cost_model_throttled_transactions_count),
+            cost_model_time,
+        ) = measure!(qos_service.select_and_accumulate_transaction_costs(bank, txs));
 
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -1580,87 +1568,6 @@ impl BankingStage {
             cost_model_us: cost_model_time.as_us(),
             execute_and_commit_transactions_output,
         }
-    }
-
-    // rollup transaction cost details, eg signature_cost, write_lock_cost, data_bytes_cost and
-    // execution_cost from the batch of transactions selected for block.
-    fn accumulate_batched_transaction_costs<'a>(
-        transactions_costs: impl Iterator<Item = &'a TransactionCost>,
-        transaction_results: impl Iterator<Item = &'a transaction::Result<()>>,
-    ) -> BatchedTransactionDetails {
-        let mut batched_transaction_details = BatchedTransactionDetails::default();
-        transactions_costs
-            .zip(transaction_results)
-            .for_each(|(cost, result)| match result {
-                Ok(_) => {
-                    saturating_add_assign!(
-                        batched_transaction_details.costs.batched_signature_cost,
-                        cost.signature_cost
-                    );
-                    saturating_add_assign!(
-                        batched_transaction_details.costs.batched_write_lock_cost,
-                        cost.write_lock_cost
-                    );
-                    saturating_add_assign!(
-                        batched_transaction_details.costs.batched_data_bytes_cost,
-                        cost.data_bytes_cost
-                    );
-                    saturating_add_assign!(
-                        batched_transaction_details
-                            .costs
-                            .batched_builtins_execute_cost,
-                        cost.builtins_execution_cost
-                    );
-                    saturating_add_assign!(
-                        batched_transaction_details.costs.batched_bpf_execute_cost,
-                        cost.bpf_execution_cost
-                    );
-                }
-                Err(transaction_error) => match transaction_error {
-                    TransactionError::WouldExceedMaxBlockCostLimit => {
-                        saturating_add_assign!(
-                            batched_transaction_details
-                                .errors
-                                .batched_retried_txs_per_block_limit_count,
-                            1
-                        );
-                    }
-                    TransactionError::WouldExceedMaxVoteCostLimit => {
-                        saturating_add_assign!(
-                            batched_transaction_details
-                                .errors
-                                .batched_retried_txs_per_vote_limit_count,
-                            1
-                        );
-                    }
-                    TransactionError::WouldExceedMaxAccountCostLimit => {
-                        saturating_add_assign!(
-                            batched_transaction_details
-                                .errors
-                                .batched_retried_txs_per_account_limit_count,
-                            1
-                        );
-                    }
-                    TransactionError::WouldExceedAccountDataBlockLimit => {
-                        saturating_add_assign!(
-                            batched_transaction_details
-                                .errors
-                                .batched_retried_txs_per_account_data_block_limit_count,
-                            1
-                        );
-                    }
-                    TransactionError::WouldExceedAccountDataTotalLimit => {
-                        saturating_add_assign!(
-                            batched_transaction_details
-                                .errors
-                                .batched_dropped_txs_per_account_data_total_limit_count,
-                            1
-                        );
-                    }
-                    _ => {}
-                },
-            });
-        batched_transaction_details
     }
 
     fn accumulate_execute_units_and_time(execute_timings: &ExecuteTimings) -> (u64, u64) {
@@ -4117,66 +4024,6 @@ mod tests {
             poh_service.join().unwrap();
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
-    }
-
-    #[test]
-    fn test_accumulate_batched_transaction_costs() {
-        let signature_cost = 1;
-        let write_lock_cost = 2;
-        let data_bytes_cost = 3;
-        let builtins_execution_cost = 4;
-        let bpf_execution_cost = 10;
-        let num_txs = 4;
-
-        let tx_costs: Vec<_> = (0..num_txs)
-            .map(|_| TransactionCost {
-                signature_cost,
-                write_lock_cost,
-                data_bytes_cost,
-                builtins_execution_cost,
-                bpf_execution_cost,
-                ..TransactionCost::default()
-            })
-            .collect();
-        let tx_results: Vec<_> = (0..num_txs)
-            .map(|n| {
-                if n % 2 == 0 {
-                    Ok(())
-                } else {
-                    Err(TransactionError::WouldExceedMaxBlockCostLimit)
-                }
-            })
-            .collect();
-        // should only accumulate half of the costs that are OK
-        let expected_signatures = signature_cost * (num_txs / 2);
-        let expected_write_locks = write_lock_cost * (num_txs / 2);
-        let expected_data_bytes = data_bytes_cost * (num_txs / 2);
-        let expected_builtins_execution_costs = builtins_execution_cost * (num_txs / 2);
-        let expected_bpf_execution_costs = bpf_execution_cost * (num_txs / 2);
-        let batched_transaction_details =
-            BankingStage::accumulate_batched_transaction_costs(tx_costs.iter(), tx_results.iter());
-        assert_eq!(
-            expected_signatures,
-            batched_transaction_details.costs.batched_signature_cost
-        );
-        assert_eq!(
-            expected_write_locks,
-            batched_transaction_details.costs.batched_write_lock_cost
-        );
-        assert_eq!(
-            expected_data_bytes,
-            batched_transaction_details.costs.batched_data_bytes_cost
-        );
-        assert_eq!(
-            expected_builtins_execution_costs,
-            batched_transaction_details
-                .costs
-                .batched_builtins_execute_cost
-        );
-        assert_eq!(
-            expected_bpf_execution_costs,
-            batched_transaction_details.costs.batched_bpf_execute_cost
-        );
     }
 
     #[test]
