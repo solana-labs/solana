@@ -4674,7 +4674,6 @@ pub mod tests {
         use {
             super::*,
             serde::{Deserialize, Serialize},
-            solana_sdk::compute_budget::ComputeBudgetInstruction,
         };
 
         #[derive(Debug, Serialize, Deserialize)]
@@ -4714,10 +4713,7 @@ pub mod tests {
                 account_metas,
             );
             Transaction::new_signed_with_payer(
-                &[
-                    instruction,
-                    ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
-                ],
+                &[instruction],
                 Some(&payer.pubkey()),
                 &[payer],
                 recent_blockhash,

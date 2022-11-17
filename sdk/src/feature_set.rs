@@ -512,10 +512,6 @@ pub mod check_syscall_outputs_do_not_overlap {
     solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
 }
 
-pub mod cap_transaction_accounts_data_size {
-    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
-}
-
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -638,7 +634,6 @@ lazy_static! {
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
-        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

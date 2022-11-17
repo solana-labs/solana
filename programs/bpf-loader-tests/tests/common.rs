@@ -21,7 +21,7 @@ pub async fn setup_test_context() -> ProgramTestContext {
 
 pub async fn assert_ix_error(
     context: &mut ProgramTestContext,
-    ixs: &[Instruction],
+    ix: Instruction,
     additional_payer_keypair: Option<&Keypair>,
     expected_err: InstructionError,
     assertion_failed_msg: &str,
@@ -36,7 +36,7 @@ pub async fn assert_ix_error(
     }
 
     let transaction = Transaction::new_signed_with_payer(
-        ixs,
+        &[ix],
         Some(&fee_payer.pubkey()),
         &signers,
         recent_blockhash,
