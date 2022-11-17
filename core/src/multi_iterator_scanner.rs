@@ -13,6 +13,8 @@
 //! also be skipped without being considered for future batches.
 //!
 
+use bitvec::prelude::*;
+
 /// Output from the element checker used in `MultiIteratorScanner::iterate`.
 pub enum ProcessingDecision {
     /// Should be processed by the scanner.
@@ -65,7 +67,7 @@ where
     /// for marking resources, such as locks, as used.
     should_process: F,
     /// Store whether an element has already been handled
-    already_handled: Vec<bool>,
+    already_handled: BitVec,
     /// Current indices inside `slice` for multiple iterators
     current_positions: Vec<usize>,
     /// Container to store items for iteration - Should only be used in `get_current_items()`
@@ -85,7 +87,7 @@ where
             slice,
             payload,
             should_process,
-            already_handled: vec![false; slice.len()],
+            already_handled: bitvec![0; slice.len()],
             current_positions: Vec::with_capacity(max_iterators),
             current_items: Vec::with_capacity(max_iterators),
             initialized: false,
@@ -162,10 +164,10 @@ where
     fn march_iterator(&mut self, starting_index: usize) -> Option<usize> {
         let mut found = None;
         for index in starting_index..self.slice.len() {
-            if !self.already_handled[index] {
+            if !self.already_handled.get(index).unwrap() {
                 match (self.should_process)(&self.slice[index], &mut self.payload) {
                     ProcessingDecision::Now => {
-                        self.already_handled[index] = true;
+                        self.already_handled.set(index, true);
                         found = Some(index);
                         break;
                     }
@@ -173,7 +175,7 @@ where
                         // Do nothing - iterator will try this element in a future batch
                     }
                     ProcessingDecision::Never => {
-                        self.already_handled[index] = true;
+                        self.already_handled.set(index, true);
                     }
                 }
             }
