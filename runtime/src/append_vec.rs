@@ -557,19 +557,6 @@ impl AppendVec {
             Some(rv)
         }
     }
-
-    /// Copy the account metadata, account and hash to the internal buffer.
-    /// Return the starting offset of the account metadata.
-    /// After the account is appended, the internal `current_len` is updated.
-    pub fn append_account(
-        &self,
-        storage_meta: StoredMeta,
-        account: &AccountSharedData,
-        hash: Hash,
-    ) -> Option<usize> {
-        let res = self.append_accounts(&[(storage_meta, Some(account))], &[&hash]);
-        res.and_then(|res| res.first().cloned())
-    }
 }
 
 #[cfg(test)]
@@ -584,7 +571,11 @@ pub mod tests {
 
     impl AppendVec {
         fn append_account_test(&self, data: &(StoredMeta, AccountSharedData)) -> Option<usize> {
-            self.append_account(data.0.clone(), &data.1, Hash::default())
+            self.append_accounts(
+                &[(data.0.clone(), Some(&data.1.clone()))],
+                &[Hash::default()],
+            )
+            .map(|res| res[0])
         }
     }
 
