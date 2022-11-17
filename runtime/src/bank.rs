@@ -1147,6 +1147,11 @@ pub struct NewBankOptions {
     pub vote_only_bank: bool,
 }
 
+#[derive(Debug, Default)]
+pub struct BankTestConfig {
+    pub secondary_indexes: AccountSecondaryIndexes,
+}
+
 #[derive(Debug)]
 struct PrevEpochInflationRewards {
     validator_rewards: u64,
@@ -1209,9 +1214,16 @@ impl Bank {
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
+        Self::new_for_tests_with_config(genesis_config, BankTestConfig::default())
+    }
+
+    pub fn new_for_tests_with_config(
+        genesis_config: &GenesisConfig,
+        test_config: BankTestConfig,
+    ) -> Self {
         Self::new_with_config_for_tests(
             genesis_config,
-            AccountSecondaryIndexes::default(),
+            test_config.secondary_indexes,
             false,
             AccountShrinkThreshold::default(),
         )

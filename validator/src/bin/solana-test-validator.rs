@@ -16,6 +16,7 @@ use {
         rpc_pubsub_service::PubSubConfig,
     },
     solana_rpc_client::rpc_client::RpcClient,
+    solana_runtime::accounts_index::{AccountIndex, AccountSecondaryIndexes},
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -139,6 +140,15 @@ fn main() {
                 .takes_value(false)
                 .conflicts_with("quiet")
                 .help("Log mode: stream the validator log"),
+        )
+        .arg(
+            Arg::with_name("account_indexes")
+                .long("account-index")
+                .takes_value(true)
+                .multiple(true)
+                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
+                .value_name("INDEX")
+                .help("Enable an accounts index, indexed by the selected account field"),
         )
         .arg(
             Arg::with_name("faucet_port")
@@ -440,6 +450,22 @@ fn main() {
 
     let ledger_path = value_t_or_exit!(matches, "ledger_path", PathBuf);
     let reset_ledger = matches.is_present("reset");
+
+    let indexes: HashSet<AccountIndex> = matches
+        .values_of("account_indexes")
+        .unwrap_or_default()
+        .map(|value| match value {
+            "program-id" => AccountIndex::ProgramId,
+            "spl-token-mint" => AccountIndex::SplTokenMint,
+            "spl-token-owner" => AccountIndex::SplTokenOwner,
+            _ => unreachable!(),
+        })
+        .collect();
+
+    let account_indexes = AccountSecondaryIndexes {
+        keys: None,
+        indexes,
+    };
 
     if !ledger_path.exists() {
         fs::create_dir(&ledger_path).unwrap_or_else(|err| {
@@ -752,13 +778,6 @@ fn main() {
             faucet_pubkey,
             AccountSharedData::new(faucet_lamports, 0, &system_program::id()),
         )
-        .rpc_config(JsonRpcConfig {
-            enable_rpc_transaction_history: true,
-            enable_extended_tx_metadata_storage: true,
-            rpc_bigtable_config,
-            faucet_addr,
-            ..JsonRpcConfig::default_for_test()
-        })
         .pubsub_config(PubSubConfig {
             enable_vote_subscription,
             ..PubSubConfig::default()
@@ -777,6 +796,15 @@ fn main() {
             exit(1);
         })
         .deactivate_features(&features_to_deactivate);
+
+    genesis.rpc_config(JsonRpcConfig {
+        enable_rpc_transaction_history: true,
+        enable_extended_tx_metadata_storage: true,
+        rpc_bigtable_config,
+        faucet_addr,
+        account_indexes,
+        ..JsonRpcConfig::default_for_test()
+    });
 
     if !accounts_to_clone.is_empty() {
         if let Err(e) = genesis.clone_accounts(
