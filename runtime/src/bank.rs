@@ -3187,7 +3187,9 @@ impl Bank {
     pub fn freeze(&self) {
         debug!("freeze slot {}", self.slot);
         let builtins = builtins::get();
-        assert!(self.check_builtins_exist(&builtins));
+        if !self.check_builtins_exist(&builtins) {
+            warn!("builtins missing when freezing the bank");
+        }
 
         // This lock prevents any new commits from BankingStage
         // `process_and_record_transactions_locked()` from coming
