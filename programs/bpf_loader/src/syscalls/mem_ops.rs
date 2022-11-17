@@ -5,7 +5,7 @@ fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Ebpf
     let cost = compute_budget
         .mem_op_base_cost
         .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
-    invoke_context.get_compute_meter().consume(cost)
+    consume_compute_meter(invoke_context, cost)
 }
 
 declare_syscall!(
