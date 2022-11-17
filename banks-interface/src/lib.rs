@@ -44,6 +44,7 @@ pub struct TransactionSimulationDetails {
 pub struct TransactionMetadata {
     pub log_messages: Vec<String>,
     pub compute_units_consumed: u64,
+    pub return_data: Option<TransactionReturnData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -4142,7 +4142,6 @@ dependencies = [
  "futures 0.3.24",
  "solana-banks-interface",
  "solana-client",
- "solana-program-runtime",
  "solana-runtime",
  "solana-sdk 1.15.0",
  "solana-send-transaction-service",

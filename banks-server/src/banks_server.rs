@@ -366,6 +366,7 @@ impl Banks for BanksServer {
                     metadata: Some(TransactionMetadata {
                         compute_units_consumed: details.executed_units,
                         log_messages: details.log_messages.unwrap_or_default(),
+                        return_data: details.return_data,
                     }),
                 }
             }
