@@ -13,7 +13,9 @@ on:
       - v[0-9]+.[0-9]+
 
 jobs:
-  docs-build:
+  check:
+    outputs:
+      continue: ${{ steps.check.outputs.need_to_build }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -63,14 +65,22 @@ jobs:
             fi
           )" >> $GITHUB_OUTPUT
 
+  build_and_deploy:
+    needs:
+      - check
+    if: ${{ needs.check.outputs.continue == 1 }}
+    name: build & deploy
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
       - name: Setup Node
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         uses: actions/setup-node@v3
         with:
           node-version: 16
 
       - name: Build
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         working-directory: docs
         run: |
           npm install
@@ -78,8 +88,14 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
+  notification:
+    if: failure()
+    runs-on: ubuntu-20.04
+    needs:
+      - check
+      - build_and_deploy
+    steps:
       - name: Send Slack notifiaction
-        if: failure()
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
         uses: voxmedia/github-action-slack-notify-build@v1
