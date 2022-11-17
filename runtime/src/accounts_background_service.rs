@@ -365,7 +365,7 @@ impl SnapshotRequestHandler {
                     &snapshot_root_bank,
                     &bank_snapshot_info,
                     &self.snapshot_config.bank_snapshots_dir,
-                    status_cache_slot_deltas,
+                    Some(status_cache_slot_deltas),
                     &self.snapshot_config.full_snapshot_archives_dir,
                     &self.snapshot_config.incremental_snapshot_archives_dir,
                     snapshot_storages,

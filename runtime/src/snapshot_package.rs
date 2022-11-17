@@ -184,7 +184,7 @@ impl AccountsPackage {
             epoch_schedule: EpochSchedule::default(),
             rent_collector: RentCollector::default(),
             snapshot_info: Some(SupplementalSnapshotInfo {
-                slot_deltas: Vec::default(),
+                slot_deltas: None,
                 snapshot_links: TempDir::new().unwrap(),
                 archive_format: ArchiveFormat::Tar,
                 snapshot_version: SnapshotVersion::default(),
@@ -225,7 +225,7 @@ impl std::fmt::Debug for AccountsPackage {
 
 /// Supplemental information needed for snapshots
 pub struct SupplementalSnapshotInfo {
-    pub slot_deltas: Vec<BankSlotDelta>,
+    pub slot_deltas: Option<Vec<BankSlotDelta>>,
     pub snapshot_links: TempDir,
     pub archive_format: ArchiveFormat,
     pub snapshot_version: SnapshotVersion,
@@ -303,8 +303,8 @@ impl SnapshotPackage {
             },
             block_height: accounts_package.block_height,
             //slot_deltas: snapshot_info.slot_deltas,
-            //snapshot_links: snapshot_info.snapshot_links,
-            snapshot_links: accounts_package.snapshot_links,
+            snapshot_links: snapshot_info.snapshot_links,
+            //snapshot_links: accounts_package.snapshot_links,
             snapshot_storages,
             snapshot_version: snapshot_info.snapshot_version,
             snapshot_type,

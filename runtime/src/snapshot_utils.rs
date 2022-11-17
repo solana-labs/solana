@@ -2615,8 +2615,7 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
     do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
 }
 
-<<<<<<< HEAD
-=======
+/*
 /// Gather the necessary elements for a snapshot of the given `root_bank`.
 ///
 /// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
@@ -2670,8 +2669,8 @@ pub fn snapshot_bank(
 
     Ok(())
 }
+*/
 
->>>>>>> Construct the initial bank state from the snapshot/ and accounts files, instead
 /// Get the snapshot storages for this bank
 pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
@@ -2799,17 +2798,12 @@ pub fn package_and_archive_full_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
-<<<<<<< HEAD
-    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
-=======
-    let accounts_package = AccountsPackage::new(
->>>>>>> Construct the initial bank state from the snapshot/ and accounts files, instead
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        None,
+        None, // status_cache is in the file
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -2855,20 +2849,15 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-<<<<<<< HEAD
-    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
+    // let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
-=======
-    //let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-    let accounts_package = AccountsPackage::new(
->>>>>>> Construct the initial bank state from the snapshot/ and accounts files, instead
         AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
             incremental_snapshot_base_slot,
         )),
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        None,
+        None, // status_cache is in the file
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
