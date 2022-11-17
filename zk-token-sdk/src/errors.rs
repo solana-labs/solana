@@ -32,6 +32,8 @@ pub enum ProofError {
     PubkeyDeserialization,
     #[error("ciphertext does not exist in proof data")]
     MissingCiphertext,
+    #[error("transfer amount split failed")]
+    TransferSplit,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]

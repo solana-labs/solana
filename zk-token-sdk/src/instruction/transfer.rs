@@ -68,11 +68,7 @@ impl TransferData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(
-            transfer_amount,
-            TRANSFER_AMOUNT_LO_BITS,
-            TRANSFER_AMOUNT_HI_BITS,
-        )?;
+        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -584,26 +580,7 @@ mod test {
 
         assert!(transfer_data.verify().is_ok());
 
-        // Case 4: transfer amount too big
-
-        // create source account spendable ciphertext
-        let spendable_balance: u64 = u64::max_value();
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
-
-        // transfer amount
-        let transfer_amount: u64 = 1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS);
-
-        // create transfer data
-        let transfer_data = TransferData::new(
-            transfer_amount,
-            (spendable_balance, &spendable_ciphertext),
-            &source_keypair,
-            (&dest_pk, &auditor_pk),
-        );
-
-        assert!(transfer_data.is_err());
-
-        // Case 5: invalid destination or auditor pubkey
+        // Case 4: invalid destination or auditor pubkey
         let spendable_balance: u64 = 0;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 

@@ -97,11 +97,7 @@ impl TransferWithFeeData {
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(
-            transfer_amount,
-            TRANSFER_AMOUNT_LO_BITS,
-            TRANSFER_AMOUNT_HI_BITS,
-        )?;
+        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -150,8 +146,7 @@ impl TransferWithFeeData {
             u64::conditional_select(&fee_parameters.maximum_fee, &fee_amount, below_max);
 
         // split and encrypt fee
-        let (fee_to_encrypt_lo, fee_to_encrypt_hi) =
-            split_u64(fee_to_encrypt, FEE_AMOUNT_LO_BITS, FEE_AMOUNT_HI_BITS)?;
+        let (fee_to_encrypt_lo, fee_to_encrypt_hi) = split_u64(fee_to_encrypt, FEE_AMOUNT_LO_BITS);
 
         let (fee_ciphertext_lo, opening_fee_lo) = FeeEncryption::new(
             fee_to_encrypt_lo,
@@ -940,29 +935,7 @@ mod test {
 
         assert!(fee_data.verify().is_ok());
 
-        // Case 4: transfer amount too big
-        let spendable_balance: u64 = u64::max_value();
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
-
-        let transfer_amount: u64 = 1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS);
-
-        let fee_parameters = FeeParameters {
-            fee_rate_basis_points: 400,
-            maximum_fee: 3,
-        };
-
-        let fee_data = TransferWithFeeData::new(
-            transfer_amount,
-            (spendable_balance, &spendable_ciphertext),
-            &source_keypair,
-            (&destination_pubkey, &auditor_pubkey),
-            fee_parameters,
-            &withdraw_withheld_authority_pubkey,
-        );
-
-        assert!(fee_data.is_err());
-
-        // Case 5: invalid destination, auditor, or withdraw authority pubkeys
+        // Case 4: invalid destination, auditor, or withdraw authority pubkeys
         let spendable_balance: u64 = 120;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
