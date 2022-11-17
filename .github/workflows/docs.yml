@@ -41,28 +41,27 @@ jobs:
 
       - name: Check
         id: check
+        shell: bash
         run: |
           source ci/env.sh
-          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"
-          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          TAG=$CI_TAG
 
-      - name: Pre Build
-        id: prebuild
-        run: |
-          echo "tag: ${{ steps.check.outputs.tag }}"
-          echo "channel: ${{ steps.check.outputs.channel }}"
-          echo "FILE_CHANGED: $FILE_CHANGED
-          echo "need_to_build=${{
-            steps.check.outputs.tag != ''
-            ||
-            (
-              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
-              &&
-              env.FILE_CHANGED == 1
-            )
-          }}" >> $GITHUB_OUTPUT
-        shell: bash
+          echo "TAG: $TAG"
+          echo "CHANNEL: $CHANNEL"
+          echo "FILE_CHANGED: $FILE_CHANGED"
+
+          echo need_to_build="$(
+            if [ "$TAG" != '' ]
+            then
+              echo 1
+            elif [ $FILE_CHANGED = 0 ] || ( [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "edge" ] )
+            then
+              echo 1
+            else
+              echo 0
+            fi
+          )" >> $GITHUB_OUTPUT
 
       - name: Setup Node
         if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
