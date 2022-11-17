@@ -2615,62 +2615,6 @@ pub fn purge_old_bank_snapshots(bank_snapshots_dir: impl AsRef<Path>) {
     do_purge(get_bank_snapshots_post(&bank_snapshots_dir));
 }
 
-/*
-/// Gather the necessary elements for a snapshot of the given `root_bank`.
-///
-/// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
-/// function is called from AccountsBackgroundService to handle snapshot requests.  Since taking a
-/// snapshot is not permitted to fail, any errors returned here will trigger the node to shutdown.
-/// So, be careful whenever adding new code that may return errors.
-#[allow(clippy::too_many_arguments)]
-pub fn snapshot_bank(
-    root_bank: &Bank,
-    status_cache_slot_deltas: Option<Vec<BankSlotDelta>>,
-    accounts_package_sender: &Sender<AccountsPackage>,
-    bank_snapshots_dir: impl AsRef<Path>,
-    full_snapshot_archives_dir: impl AsRef<Path>,
-    incremental_snapshot_archives_dir: impl AsRef<Path>,
-    snapshot_version: SnapshotVersion,
-    archive_format: ArchiveFormat,
-    hash_for_testing: Option<Hash>,
-    accounts_package_type: AccountsPackageType,
-) -> Result<()> {
-    let snapshot_storages = get_snapshot_storages(root_bank);
-
-    let mut add_snapshot_time = Measure::start("add-snapshot-ms");
-    let bank_snapshot_info = add_bank_snapshot(
-        &bank_snapshots_dir,
-        root_bank,
-        &snapshot_storages,
-        snapshot_version,
-    )?;
-    add_snapshot_time.stop();
-    inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
-
-    let accounts_package = AccountsPackage::new(
-        accounts_package_type,
-        root_bank,
-        &bank_snapshot_info,
-        bank_snapshots_dir,
-        status_cache_slot_deltas,
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-        snapshot_storages,
-        archive_format,
-        snapshot_version,
-        hash_for_testing,
-    )
-    .expect("failed to hard link bank snapshot into a tmpdir");
-
-    // Submit the accounts package
-    accounts_package_sender
-        .send(accounts_package)
-        .expect("send accounts package");
-
-    Ok(())
-}
-*/
-
 /// Get the snapshot storages for this bank
 pub fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
     let mut measure_snapshot_storages = Measure::start("snapshot-storages");
