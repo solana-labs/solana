@@ -20,6 +20,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
@@ -616,13 +617,21 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
 
             // Since the accounts background services are not runnning, EpochAccountsHash
             // calculation requests will not be handled. To prevent banks from hanging during
-            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Invalid.
-            current_bank
+            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Valid.
+            let epoch_accounts_hash_manager = &current_bank
                 .rc
                 .accounts
                 .accounts_db
-                .epoch_accounts_hash_manager
-                .set_invalid_for_tests();
+                .epoch_accounts_hash_manager;
+            if epoch_accounts_hash_manager
+                .try_get_epoch_accounts_hash()
+                .is_none()
+            {
+                epoch_accounts_hash_manager.set_valid(
+                    EpochAccountsHash::new(Hash::new_unique()),
+                    current_bank.slot(),
+                )
+            }
         }
 
         let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
