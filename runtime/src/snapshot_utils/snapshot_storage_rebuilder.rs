@@ -11,6 +11,7 @@ use {
         serde_snapshot::{
             self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
             snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
+            SlotAppendVecIdSet,
         },
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
@@ -23,7 +24,7 @@ use {
     regex::Regex,
     solana_sdk::clock::Slot,
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         fs::File,
         io::BufReader,
         path::PathBuf,
@@ -65,7 +66,7 @@ pub(crate) struct SnapshotStorageRebuilder {
     /// The accounts/ files, unused files for deletion in SnapshotFrom::File
     unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
     /// The appendvecs in snapshot/, used for comparison with account_files in SnapshotFrom::File
-    snapshot_appendvecs: Option<Arc<Mutex<HashSet<(Slot, AppendVecId)>>>>,
+    snapshot_appendvecs: Option<SlotAppendVecIdSet>,
 }
 
 impl SnapshotStorageRebuilder {
@@ -76,7 +77,7 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_from: SnapshotFrom,
         unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
-        snapshot_appendvecs: Option<Arc<Mutex<HashSet<(Slot, AppendVecId)>>>>,
+        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         if snapshot_from == SnapshotFrom::File {
             assert!(unused_account_files.is_some());
@@ -124,7 +125,7 @@ impl SnapshotStorageRebuilder {
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         snapshot_from: SnapshotFrom,
         unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
-        snapshot_appendvecs: Option<Arc<Mutex<HashSet<(Slot, AppendVecId)>>>>,
+        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Self {
         let storage = DashMap::with_capacity(snapshot_storage_lengths.len());
         let storage_paths: DashMap<_, _> = snapshot_storage_lengths
@@ -197,7 +198,7 @@ impl SnapshotStorageRebuilder {
     fn process_snapshot_file(
         snapshot_version: SnapshotVersion,
         snapshot_file_path: PathBuf,
-        snapshot_appendvecs: Option<Arc<Mutex<HashSet<(Slot, AppendVecId)>>>>,
+        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Result<HashMap<Slot, HashMap<usize, usize>>, bincode::Error> {
         let snapshot_file = File::open(snapshot_file_path).unwrap();
         let mut snapshot_stream = BufReader::new(snapshot_file);
@@ -373,7 +374,7 @@ impl SnapshotStorageRebuilder {
                         slot,
                         old_append_vec_id,
                         current_len,
-                        &path.as_path(),
+                        path.as_path(),
                         &self.next_append_vec_id,
                         &self.num_collisions,
                     )?,
@@ -385,9 +386,7 @@ impl SnapshotStorageRebuilder {
                     )?,
                     SnapshotFrom::None => {return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
-                        format!(
-                            "Error does not support none type in this function.  should not be here",
-                        ),
+                            "Error does not support none type in this function.  should not be here".to_string(),
                     ));}
                 };
 

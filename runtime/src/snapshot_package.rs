@@ -96,13 +96,13 @@ impl AccountsPackage {
                 snapshot_utils::path_to_file_name_str(&bank_snapshot_info.snapshot_path)?;
             fs::hard_link(
                 &bank_snapshot_info.snapshot_path,
-                &snapshot_hardlink_dir.join(snapshot_file_name),
+                snapshot_hardlink_dir.join(snapshot_file_name),
             )?;
             let status_cache_file_name =
                 snapshot_utils::path_to_file_name_str(&bank_snapshot_info.status_cache_path)?;
             fs::hard_link(
                 &bank_snapshot_info.status_cache_path,
-                &snapshot_links.path().join(status_cache_file_name),
+                snapshot_links.path().join(status_cache_file_name),
             )?;
         }
 

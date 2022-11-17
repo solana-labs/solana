@@ -852,7 +852,7 @@ pub fn add_bank_snapshot(
         slot,
         snapshot_path: bank_snapshot_path,
         snapshot_type: BankSnapshotType::Pre,
-        status_cache_path: status_cache_path,
+        status_cache_path,
     })
 }
 
@@ -969,7 +969,7 @@ fn build_storage_from_full_and_incremental_snapshot_files(
         &full_snapshot_file_info.path().as_path(),
         &version_path.as_ref(),
         "full snapshot deserialize",
-        &account_paths,
+        account_paths,
         next_append_vec_id.clone(),
     )?;
 
@@ -1674,7 +1674,7 @@ where
     } = version_and_storages;
     Ok(UnarchivedSnapshot {
         unpack_dir: TempDir::new().unwrap(), // Not used, just to fit into UnarchivedSnapshot.
-        storage: storage,
+        storage,
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
             snapshot_version,
@@ -1852,28 +1852,28 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
     })
 }
 
-pub(crate) fn parse_appendvec_filename(filename: &String) -> Option<(Slot, AppendVecId)> {
+pub(crate) fn parse_appendvec_filename(filename: &str) -> Option<(Slot, AppendVecId)> {
     lazy_static! {
         static ref STORAGE_FILE_REGEX: Regex =
             Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
     };
 
-    STORAGE_FILE_REGEX.captures(filename).and_then(|cap| {
+    STORAGE_FILE_REGEX.captures(filename).map(|cap| {
         let slot_str = cap.name("slot").map(|m| m.as_str());
         let id_str = cap.name("id").map(|m| m.as_str());
         let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
         let id: AppendVecId = id_str.unwrap().parse::<u32>().unwrap();
-        Some((slot, id))
+        (slot, id)
     })
 }
 
-pub(crate) fn parse_snapshot_filename(filename: &String) -> Option<(Slot, BankSnapshotType)> {
+pub(crate) fn parse_snapshot_filename(filename: &str) -> Option<(Slot, BankSnapshotType)> {
     lazy_static! {
         static ref SNAPSHOT_FILE_REGEX: Regex =
             Regex::new(r"^(?P<slot>[0-9]+)\.(?P<type>(pre|post))$").unwrap();
     };
 
-    SNAPSHOT_FILE_REGEX.captures(filename).and_then(|cap| {
+    SNAPSHOT_FILE_REGEX.captures(filename).map(|cap| {
         let slot_str = cap.name("slot").map(|m| m.as_str());
         let type_str = cap.name("type").map(|m| m.as_str());
         let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
@@ -1882,7 +1882,7 @@ pub(crate) fn parse_snapshot_filename(filename: &String) -> Option<(Slot, BankSn
         } else {
             BankSnapshotType::Post
         };
-        Some((slot, snapshot_type))
+        (slot, snapshot_type)
     })
 }
 
@@ -1995,7 +1995,7 @@ pub fn get_highest_full_snapshot_slot_and_path(
     let highest_dir_path = snapshot_dir.as_ref().join(highest_dir_name);
 
     // Get the snapshot file.  Could be 600/600 or 600/600.pre
-    let snapshot_files_in_slot_dir: Vec<_> = std::fs::read_dir(&highest_dir_path)?
+    let snapshot_files_in_slot_dir: Vec<_> = std::fs::read_dir(highest_dir_path)?
         .into_iter()
         .filter(|r| r.is_ok())
         .map(|f| f.unwrap().path())
@@ -2049,8 +2049,8 @@ pub fn get_highest_full_snapshot_file_info(
 ) -> Result<FullSnapshotArchiveInfo> {
     let (slot, path) = get_highest_full_snapshot_slot_and_path(snapshots_dir.as_ref())?;
     Ok(FullSnapshotArchiveInfo::new(SnapshotArchiveInfo {
-        path: path,
-        slot: slot,
+        path,
+        slot,
         archive_format: ArchiveFormat::None,
         hash: SnapshotHash(Hash::default()), // not used
     }))
@@ -2241,21 +2241,15 @@ fn verify_unpacked_snapshots_dir_and_version(
         }
         SnapshotFrom::File => {
             let snapshot_file_path = &unpacked_snapshots_dir_and_version.snapshot_file_path;
-            let (slot, _) = parse_snapshot_filename(
-                &snapshot_file_path
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_owned(),
-            )
-            .ok_or_else(|| {
-                info!("Invalid snapshot filename {}", snapshot_file_path.display());
-                SnapshotError::InvalidAccountAppendvecFile
-            })
-            .unwrap();
+            let (slot, _) =
+                parse_snapshot_filename(snapshot_file_path.file_name().unwrap().to_str().unwrap())
+                    .ok_or_else(|| {
+                        info!("Invalid snapshot filename {}", snapshot_file_path.display());
+                        SnapshotError::InvalidAccountAppendvecFile
+                    })
+                    .unwrap();
             BankSnapshotInfo {
-                slot: slot,
+                slot,
                 snapshot_path: unpacked_snapshots_dir_and_version
                     .snapshot_file_path
                     .clone(),
@@ -2406,7 +2400,7 @@ fn rebuild_bank_from_snapshots(
         return Err(SnapshotError::MissingStatusCacheFile);
     }
 
-    let slot_deltas = deserialize_snapshot_data_file(&status_cache_path, |stream| {
+    let slot_deltas = deserialize_snapshot_data_file(status_cache_path, |stream| {
         info!(
             "Rebuilding status cache from {}",
             status_cache_path.display()

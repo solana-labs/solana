@@ -54,6 +54,8 @@ mod storage;
 mod tests;
 mod utils;
 
+pub type SlotAppendVecIdSet = Arc<Mutex<HashSet<(Slot, AppendVecId)>>>;
+
 pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
@@ -233,7 +235,7 @@ pub(crate) fn compare_two_serialized_banks(
 /// Get snapshot storage lengths from accounts_db_fields
 pub(crate) fn snapshot_storage_lengths_from_fields(
     accounts_db_fields: &AccountsDbFields<SerializableAccountStorageEntry>,
-    snapshot_appendvecs: Option<Arc<Mutex<HashSet<(Slot, AppendVecId)>>>>,
+    snapshot_appendvecs: Option<SlotAppendVecIdSet>,
 ) -> HashMap<Slot, HashMap<SerializedAppendVecId, usize>> {
     let AccountsDbFields(snapshot_storage, ..) = &accounts_db_fields;
     snapshot_storage
