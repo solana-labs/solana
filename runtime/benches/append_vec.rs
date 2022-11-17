@@ -5,9 +5,12 @@ use {
     rand::{thread_rng, Rng},
     solana_runtime::append_vec::{
         test_utils::{create_test_account, get_append_vec_path},
-        AppendVec,
+        AppendVec, StoredMeta,
     },
-    solana_sdk::{account::ReadableAccount, hash::Hash},
+    solana_sdk::{
+        account::{AccountSharedData, ReadableAccount},
+        hash::Hash,
+    },
     std::{
         sync::{Arc, Mutex},
         thread::{sleep, spawn},
@@ -16,16 +19,26 @@ use {
     test::Bencher,
 };
 
+/// Copy the account metadata, account and hash to the internal buffer.
+/// Return the starting offset of the account metadata.
+/// After the account is appended, the internal `current_len` is updated.
+fn append_account(
+    vec: &AppendVec,
+    storage_meta: StoredMeta,
+    account: &AccountSharedData,
+    hash: Hash,
+) -> Option<usize> {
+    let res = vec.append_accounts(&[(storage_meta, Some(account))], &[&hash]);
+    res.and_then(|res| res.first().cloned())
+}
+
 #[bench]
 fn append_vec_append(bencher: &mut Bencher) {
     let path = get_append_vec_path("bench_append");
     let vec = AppendVec::new(&path.path, true, 64 * 1024);
     bencher.iter(|| {
         let (meta, account) = create_test_account(0);
-        if vec
-            .append_account(meta, &account, Hash::default())
-            .is_none()
-        {
+        if append_account(&vec, meta, &account, Hash::default()).is_none() {
             vec.reset();
         }
     });
@@ -35,8 +48,7 @@ fn add_test_accounts(vec: &AppendVec, size: usize) -> Vec<(usize, usize)> {
     (0..size)
         .filter_map(|sample| {
             let (meta, account) = create_test_account(sample);
-            vec.append_account(meta, &account, Hash::default())
-                .map(|pos| (sample, pos))
+            append_account(vec, meta, &account, Hash::default()).map(|pos| (sample, pos))
         })
         .collect()
 }
@@ -81,7 +93,7 @@ fn append_vec_concurrent_append_read(bencher: &mut Bencher) {
     spawn(move || loop {
         let sample = indexes1.lock().unwrap().len();
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = vec1.append_account(meta, &account, Hash::default()) {
+        if let Some(pos) = append_account(&vec1, meta, &account, Hash::default()) {
             indexes1.lock().unwrap().push((sample, pos))
         } else {
             break;
@@ -121,7 +133,7 @@ fn append_vec_concurrent_read_append(bencher: &mut Bencher) {
     bencher.iter(|| {
         let sample: usize = thread_rng().gen_range(0, 256);
         let (meta, account) = create_test_account(sample);
-        if let Some(pos) = vec.append_account(meta, &account, Hash::default()) {
+        if let Some(pos) = append_account(&vec, meta, &account, Hash::default()) {
             indexes.lock().unwrap().push((sample, pos))
         }
     });
