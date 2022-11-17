@@ -21,6 +21,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get commit range (push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "COMMIT_RANGE=$GIHTUB_SHA" >> $GITHUB_ENV
+
+      - name: Get commit range (pull_request)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "COMMIT_RANGE=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+
+      - name: Get file status
+        run: |
+          set +e
+          git diff --name-only $COMMIT_RANGE | grep \
+            -e '.github/workflows/docs.yml' \
+            -e 'docs/**'
+          echo "FILE_CHANGED=$?" >> $GITHUB_ENV
+
       - name: Check
         id: check
         run: |
@@ -29,27 +47,19 @@ jobs:
           eval "$(ci/channel-info.sh)"
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
 
-      - name: Get specific changed files
-        id: changed-files-specific
-        uses: tj-actions/changed-files@v34
-        with:
-          files: |
-            .github/workflows/docs.yml
-            docs/**
-
       - name: Pre Build
         id: prebuild
         run: |
           echo "tag: ${{ steps.check.outputs.tag }}"
           echo "channel: ${{ steps.check.outputs.channel }}"
-          echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
+          echo "FILE_CHANGED: $FILE_CHANGED
           echo "need_to_build=${{
             steps.check.outputs.tag != ''
             ||
             (
               (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
               &&
-              steps.changed-files-specific.outputs.any_changed != ''
+              env.FILE_CHANGED == 1
             )
           }}" >> $GITHUB_OUTPUT
         shell: bash
