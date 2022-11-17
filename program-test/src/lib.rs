@@ -20,6 +20,7 @@ use {
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -1138,8 +1139,8 @@ impl ProgramTestContext {
         bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
 
         // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
-        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not
-        // hang in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
@@ -1152,7 +1153,10 @@ impl ProgramTestContext {
                     .accounts
                     .accounts_db
                     .epoch_accounts_hash_manager
-                    .set_invalid_for_tests();
+                    .set_valid(
+                        EpochAccountsHash::new(Hash::new_unique()),
+                        snapshot_request.snapshot_root_bank.slot(),
+                    )
             });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
