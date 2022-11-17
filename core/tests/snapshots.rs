@@ -261,13 +261,12 @@ fn run_bank_forks_snapshot_n<F>(
     let bank_snapshots_dir = &snapshot_config.bank_snapshots_dir;
     let last_bank_snapshot_info = snapshot_utils::get_highest_bank_snapshot_pre(bank_snapshots_dir)
         .expect("no bank snapshots found in path");
-    let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
-        slot_deltas,
+        None,
         &snapshot_config.full_snapshot_archives_dir,
         &snapshot_config.incremental_snapshot_archives_dir,
         last_bank.get_snapshot_storages(None),
@@ -423,7 +422,7 @@ fn test_concurrent_snapshot_packaging(
             &bank,
             &bank_snapshot_info,
             bank_snapshots_dir,
-            vec![],
+            None,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             snapshot_storages,
