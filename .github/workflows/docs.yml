@@ -57,7 +57,7 @@ jobs:
             if [ "$TAG" != '' ]
             then
               echo 1
-            elif [ $FILE_CHANGED = 0 ] || ( [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "edge" ] )
+            elif [ $FILE_CHANGED = 0 ] && ( [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "edge" ] )
             then
               echo 1
             else
