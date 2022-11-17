@@ -1642,12 +1642,11 @@ declare_syscall!(
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
 
         let budget = invoke_context.get_compute_budget();
-        invoke_context.get_compute_meter().consume(
-                budget.syscall_base_cost.saturating_add(
-                    budget
-                .big_modular_exponentiation_cost
-                .saturating_mul(input_len)
-                )
+        consume_compute_meter(
+            invoke_context,
+            budget.syscall_base_cost.saturating_add(
+                budget.big_modular_exponentiation_cost.saturating_mul(input_len)
+            )
         )?;
 
         let base = translate_slice::<u8>(
