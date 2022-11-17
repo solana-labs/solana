@@ -57,20 +57,20 @@ use {
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        time::Duration,
+        time::{Duration, Instant},
     },
     tempfile::TempDir,
     test_case::test_case,
 };
 
 struct SnapshotTestConfig {
-    accounts_dir: TempDir,
-    bank_snapshots_dir: TempDir,
-    full_snapshot_archives_dir: TempDir,
-    incremental_snapshot_archives_dir: TempDir,
-    snapshot_config: SnapshotConfig,
     bank_forks: BankForks,
     genesis_config_info: GenesisConfigInfo,
+    snapshot_config: SnapshotConfig,
+    incremental_snapshot_archives_dir: TempDir,
+    full_snapshot_archives_dir: TempDir,
+    bank_snapshots_dir: TempDir,
+    accounts_dir: TempDir,
 }
 
 impl SnapshotTestConfig {
@@ -121,13 +121,13 @@ impl SnapshotTestConfig {
         };
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         SnapshotTestConfig {
-            accounts_dir,
-            bank_snapshots_dir,
-            full_snapshot_archives_dir,
-            incremental_snapshot_archives_dir,
-            snapshot_config,
             bank_forks,
             genesis_config_info,
+            snapshot_config,
+            incremental_snapshot_archives_dir,
+            full_snapshot_archives_dir,
+            bank_snapshots_dir,
+            accounts_dir,
         }
     }
 }
@@ -939,6 +939,10 @@ fn test_snapshots_with_background_services(
     const LAST_SLOT: Slot =
         FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 3 + INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS * 2;
 
+    // Maximum amount of time to wait for each snapshot archive to be created.
+    // This should be enough time, but if it times-out in CI, try increasing it.
+    const MAX_WAIT_DURATION: Duration = Duration::from_secs(10);
+
     info!("Running snapshots with background services test...");
     trace!(
         "Test configuration parameters:\
@@ -1009,7 +1013,7 @@ fn test_snapshots_with_background_services(
         &exit,
         &cluster_info,
         snapshot_test_config.snapshot_config.clone(),
-        true,
+        false,
     );
 
     let accounts_hash_verifier = AccountsHashVerifier::new(
@@ -1029,14 +1033,16 @@ fn test_snapshots_with_background_services(
         &exit,
         abs_request_handler,
         false,
-        true,
+        false,
         None,
     );
 
+    let mut last_full_snapshot_slot = None;
+    let mut last_incremental_snapshot_slot = None;
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
     for slot in 1..=LAST_SLOT {
-        // Make a new bank and perform some transactions
-        let bank = {
+        // Make a new bank and process some transactions
+        {
             let bank = Bank::new_from_parent(
                 &bank_forks.read().unwrap().get(slot - 1).unwrap(),
                 &Pubkey::default(),
@@ -1055,35 +1061,59 @@ fn test_snapshots_with_background_services(
                 bank.register_tick(&Hash::new_unique());
             }
 
-            bank_forks.write().unwrap().insert(bank)
-        };
+            bank_forks.write().unwrap().insert(bank);
+        }
 
-        // Call `BankForks::set_root()` to cause bank snapshots to be taken
+        // Call `BankForks::set_root()` to cause snapshots to be taken
         if slot % SET_ROOT_INTERVAL_SLOTS == 0 {
             bank_forks
                 .write()
                 .unwrap()
                 .set_root(slot, &abs_request_sender, None);
-            bank.update_accounts_hash_for_tests();
         }
 
-        // Sleep for a second when making a snapshot archive so the background services get a
-        // chance to run (and since FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS is a multiple of
-        // INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS, we only need to check the one here).
-        if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
-            std::thread::sleep(Duration::from_secs(1));
+        // If a snapshot should be taken this slot, wait for it to complete
+        if slot % FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0 {
+            let timer = Instant::now();
+            while snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &snapshot_test_config
+                    .snapshot_config
+                    .full_snapshot_archives_dir,
+            ) != Some(slot)
+            {
+                assert!(
+                    timer.elapsed() < MAX_WAIT_DURATION,
+                    "Waiting for full snapshot {} exceeded the {:?} maximum wait duration!",
+                    slot,
+                    MAX_WAIT_DURATION,
+                );
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            last_full_snapshot_slot = Some(slot);
+        } else if slot % INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS == 0
+            && last_full_snapshot_slot.is_some()
+        {
+            let timer = Instant::now();
+            while snapshot_utils::get_highest_incremental_snapshot_archive_slot(
+                &snapshot_test_config
+                    .snapshot_config
+                    .incremental_snapshot_archives_dir,
+                last_full_snapshot_slot.unwrap(),
+            ) != Some(slot)
+            {
+                assert!(
+                    timer.elapsed() < MAX_WAIT_DURATION,
+                    "Waiting for incremental snapshot {} exceeded the {:?} maximum wait duration!",
+                    slot,
+                    MAX_WAIT_DURATION,
+                );
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            last_incremental_snapshot_slot = Some(slot);
         }
     }
 
-    // NOTE: The 5 seconds of sleeping is arbitrary.  This should be plenty of time since the
-    // snapshots should be quite small.  If this test fails at `unwrap()` or because the bank
-    // slots do not match, increase this sleep duration.
-    info!(
-        "Sleeping for 5 seconds to give background services time to process snapshot archives..."
-    );
-    std::thread::sleep(Duration::from_secs(5));
-    info!("Awake! Rebuilding bank from latest snapshot archives...");
-
+    // Load the snapshot and ensure it matches what's in BankForks
     let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
         &snapshot_test_config.snapshot_config.bank_snapshots_dir,
         &snapshot_test_config
@@ -1106,11 +1136,14 @@ fn test_snapshots_with_background_services(
         false,
         Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        &Arc::default(),
+        &exit,
     )
     .unwrap();
 
-    assert_eq!(deserialized_bank.slot(), LAST_SLOT);
+    assert_eq!(
+        deserialized_bank.slot(),
+        last_incremental_snapshot_slot.unwrap()
+    );
     assert_eq!(
         &deserialized_bank,
         bank_forks
