@@ -347,7 +347,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_write_write_non_conflict() {
+    pub fn test_write_write_different_keys() {
         let mut account_locks = ReadWriteAccountSet::default();
         let account1 = Pubkey::new_unique();
         let account2 = Pubkey::new_unique();
