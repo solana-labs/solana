@@ -20,6 +20,7 @@ import {
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { OPEN_BOOK_PROGRAM_ID } from "components/instruction/serum/types";
 
 export enum PROGRAM_NAMES {
   // native built-ins
@@ -416,7 +417,7 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.STEPN_DEX,
     deployments: [Cluster.MainnetBeta],
   },
-  srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX: {
+  [OPEN_BOOK_PROGRAM_ID]: {
     name: PROGRAM_NAMES.OPENBOOK_DEX,
     deployments: [Cluster.MainnetBeta],
   },
