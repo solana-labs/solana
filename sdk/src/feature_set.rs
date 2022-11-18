@@ -543,7 +543,7 @@ pub mod cap_transaction_accounts_data_size {
 }
 
 pub mod alt_bn128_syscall_enabled {
-    solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128")
+    solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128");
 }
 
 lazy_static! {
