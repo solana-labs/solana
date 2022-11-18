@@ -4145,7 +4145,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.15.0",
  "solana-send-transaction-service",
- "solana-tpu-client",
  "tarpc",
  "tokio",
  "tokio-serde",
@@ -4257,15 +4256,31 @@ dependencies = [
 name = "solana-client"
 version = "1.15.0"
 dependencies = [
+ "async-trait",
+ "bincode",
+ "enum_dispatch",
+ "futures 0.3.24",
+ "futures-util",
+ "indexmap",
+ "indicatif",
  "log",
+ "rand 0.7.3",
+ "rayon",
  "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
  "solana-pubsub-client",
+ "solana-quic-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-rpc-client-nonce-utils",
  "solana-sdk 1.15.0",
+ "solana-streamer",
  "solana-thin-client",
  "solana-tpu-client",
+ "solana-udp-client",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -4317,6 +4332,7 @@ dependencies = [
  "serde_derive",
  "solana-address-lookup-table-program",
  "solana-bloom",
+ "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -4554,6 +4570,7 @@ dependencies = [
  "serde_derive",
  "solana-bloom",
  "solana-clap-utils",
+ "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -4914,6 +4931,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-quic-client"
+version = "1.15.0"
+dependencies = [
+ "async-mutex",
+ "async-trait",
+ "futures 0.3.24",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rustls 0.20.6",
+ "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-rpc-client-api",
+ "solana-sdk 1.15.0",
+ "solana-streamer",
+ "solana-tpu-client",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "solana-rayon-threadlimit"
 version = "1.15.0"
 dependencies = [
@@ -4962,6 +5004,7 @@ dependencies = [
  "serde_json",
  "soketto",
  "solana-account-decoder",
+ "solana-client",
  "solana-entry",
  "solana-faucet",
  "solana-gossip",
@@ -5623,6 +5666,7 @@ version = "1.15.0"
 dependencies = [
  "crossbeam-channel",
  "log",
+ "solana-client",
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
@@ -5776,23 +5820,14 @@ dependencies = [
 name = "solana-tpu-client"
 version = "1.15.0"
 dependencies = [
- "async-mutex",
  "async-trait",
  "bincode",
- "enum_dispatch",
- "futures 0.3.24",
  "futures-util",
  "indexmap",
  "indicatif",
- "itertools",
- "lazy_static",
  "log",
- "quinn",
- "quinn-proto",
- "quinn-udp",
  "rand 0.7.3",
  "rayon",
- "rustls 0.20.6",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
@@ -5800,7 +5835,6 @@ dependencies = [
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk 1.15.0",
- "solana-streamer",
  "thiserror",
  "tokio",
 ]
@@ -5827,6 +5861,19 @@ dependencies = [
  "spl-token",
  "spl-token-2022",
  "thiserror",
+]
+
+[[package]]
+name = "solana-udp-client"
+version = "1.15.0"
+dependencies = [
+ "async-trait",
+ "solana-net-utils",
+ "solana-sdk 1.15.0",
+ "solana-streamer",
+ "solana-tpu-client",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

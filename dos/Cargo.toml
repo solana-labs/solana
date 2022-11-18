@@ -18,6 +18,7 @@ log = "0.4.17"
 rand = "0.7.0"
 serde = "1.0.144"
 solana-bench-tps = { path = "../bench-tps", version = "=1.15.0" }
+solana-client = { path = "../client", version = "=1.15.0" }
 solana-core = { path = "../core", version = "=1.15.0" }
 solana-faucet = { path = "../faucet", version = "=1.15.0" }
 solana-gossip = { path = "../gossip", version = "=1.15.0" }

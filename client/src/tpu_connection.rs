@@ -1,27 +1,20 @@
+pub use solana_tpu_client::tpu_connection::ClientStats;
 use {
+    enum_dispatch::enum_dispatch,
     rayon::iter::{IntoParallelIterator, ParallelIterator},
-    solana_metrics::MovingStat,
+    solana_quic_client::quic_client::QuicTpuConnection,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
-    std::{net::SocketAddr, sync::atomic::AtomicU64},
+    solana_udp_client::udp_client::UdpTpuConnection,
+    std::net::SocketAddr,
 };
 
-#[derive(Default)]
-pub struct ClientStats {
-    pub total_connections: AtomicU64,
-    pub connection_reuse: AtomicU64,
-    pub connection_errors: AtomicU64,
-    pub zero_rtt_accepts: AtomicU64,
-    pub zero_rtt_rejects: AtomicU64,
-
-    // these will be the last values of these stats
-    pub congestion_events: MovingStat,
-    pub tx_streams_blocked_uni: MovingStat,
-    pub tx_data_blocked: MovingStat,
-    pub tx_acks: MovingStat,
-    pub make_connection_ms: AtomicU64,
-    pub send_timeout: AtomicU64,
+#[enum_dispatch]
+pub enum BlockingConnection {
+    UdpTpuConnection,
+    QuicTpuConnection,
 }
 
+#[enum_dispatch(BlockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 
