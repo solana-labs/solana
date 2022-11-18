@@ -6322,7 +6322,7 @@ impl Bank {
         ))
     }
 
-    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport>(
+    pub fn store_accounts<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
     ) {
