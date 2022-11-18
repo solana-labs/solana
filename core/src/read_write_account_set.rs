@@ -203,41 +203,46 @@ mod tests {
         Arc::new(Bank::new_no_wallclock_throttle_for_tests(&genesis_config))
     }
 
-    #[test]
-    fn test_check_static_account_locks_write_write_conflict() {
-        let account = Pubkey::new_unique();
-        let message = create_test_versioned_message(&[account], &[], vec![]);
+    // Helper function (could potentially use test_case in future).
+    // conflict_index = 0 means write lock conflict
+    // conflict_index = 1 means read lock conflict
+    fn test_check_static_account_locks(conflict_index: usize, add_write: bool, expectation: bool) {
+        let message =
+            create_test_versioned_message(&[Pubkey::new_unique()], &[Pubkey::new_unique()], vec![]);
 
         let mut account_locks = ReadWriteAccountSet::default();
         assert!(account_locks.check_static_account_locks(&message));
 
-        account_locks.add_write(&account);
-        assert!(!account_locks.check_static_account_locks(&message));
+        let conflict_key = message.static_account_keys()[conflict_index];
+        if add_write {
+            account_locks.add_write(&conflict_key);
+        } else {
+            account_locks.add_read(&conflict_key);
+        }
+        assert_eq!(
+            expectation,
+            account_locks.check_static_account_locks(&message)
+        );
+    }
+
+    #[test]
+    fn test_check_static_account_locks_write_write_conflict() {
+        test_check_static_account_locks(0, true, false);
     }
 
     #[test]
     fn test_check_static_account_locks_read_write_conflict() {
-        let account = Pubkey::new_unique();
-        let message = create_test_versioned_message(&[account], &[], vec![]);
-
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_static_account_locks(&message));
-
-        account_locks.add_read(&account);
-        assert!(!account_locks.check_static_account_locks(&message));
+        test_check_static_account_locks(0, false, false);
     }
 
     #[test]
     fn test_check_static_account_locks_write_read_conflict() {
-        let account1 = Pubkey::new_unique();
-        let account2 = Pubkey::new_unique();
-        let message = create_test_versioned_message(&[account1], &[account2], vec![]);
+        test_check_static_account_locks(1, true, false);
+    }
 
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_static_account_locks(&message));
-
-        account_locks.add_write(&account2);
-        assert!(!account_locks.check_static_account_locks(&message));
+    #[test]
+    fn test_check_static_account_locks_read_read_non_conflict() {
+        test_check_static_account_locks(1, false, true);
     }
 
     #[test]
