@@ -213,11 +213,11 @@ mod tests {
         let mut account_locks = ReadWriteAccountSet::default();
         assert!(account_locks.check_static_account_locks(&message));
 
-        let conflict_key = message.static_account_keys()[conflict_index];
+        let conflict_key = message.static_account_keys().get(conflict_index).unwrap();
         if add_write {
-            account_locks.add_write(&conflict_key);
+            account_locks.add_write(conflict_key);
         } else {
-            account_locks.add_read(&conflict_key);
+            account_locks.add_read(conflict_key);
         }
         assert_eq!(
             expectation,
@@ -245,144 +245,67 @@ mod tests {
         test_check_static_account_locks(1, false, true);
     }
 
-    #[test]
-    fn test_try_locking_write_write_conflict() {
+    // Helper function (could potentially use test_case in future).
+    // conflict_index = 0 means write lock conflict with static key
+    // conflict_index = 1 means read lock conflict with static key
+    // conflict_index = 2 means write lock conflict with address table key
+    // conflict_index = 3 means read lock conflict with address table key
+    fn test_check_sanitized_message_account_locks(
+        conflict_index: usize,
+        add_write: bool,
+        expectation: bool,
+    ) {
         let bank = create_test_bank();
-        let (bank, table_address) = create_test_address_lookup_table(bank, 1);
-        let account1 = Keypair::new();
-        let account2 = Keypair::new();
-        let tx1 = create_test_sanitized_transaction(
-            &account1,
-            &[],
+        let (bank, table_address) = create_test_address_lookup_table(bank, 2);
+        let tx = create_test_sanitized_transaction(
+            &Keypair::new(),
+            &[Pubkey::new_unique()],
             vec![MessageAddressTableLookup {
                 account_key: table_address,
                 writable_indexes: vec![0],
-                readonly_indexes: vec![],
+                readonly_indexes: vec![1],
             }],
             &bank,
         );
-
-        let tx2 = create_test_sanitized_transaction(
-            &account2,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![0],
-                readonly_indexes: vec![],
-            }],
-            &bank,
-        );
+        let message = tx.message();
 
         let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_sanitized_message_account_locks(&tx1.message()));
-        assert!(account_locks.check_sanitized_message_account_locks(&tx2.message()));
-        assert!(account_locks.try_locking(&tx1.message()));
-        assert!(!account_locks.check_sanitized_message_account_locks(&tx2.message()));
+        assert!(account_locks.check_sanitized_message_account_locks(message));
+
+        let conflict_key = message.account_keys().get(conflict_index).unwrap();
+        if add_write {
+            account_locks.add_write(conflict_key);
+        } else {
+            account_locks.add_read(conflict_key);
+        }
+        assert_eq!(
+            expectation,
+            account_locks.check_sanitized_message_account_locks(message)
+        );
     }
 
     #[test]
-    fn test_try_locking_read_write_conflict() {
-        let bank = create_test_bank();
-        let (bank, table_address) = create_test_address_lookup_table(bank, 1);
-        let account1 = Keypair::new();
-        let account2 = Keypair::new();
-        let tx1 = create_test_sanitized_transaction(
-            &account1,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![],
-                readonly_indexes: vec![0],
-            }],
-            &bank,
-        );
-
-        let tx2 = create_test_sanitized_transaction(
-            &account2,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![0],
-                readonly_indexes: vec![],
-            }],
-            &bank,
-        );
-
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_sanitized_message_account_locks(&tx1.message()));
-        assert!(account_locks.check_sanitized_message_account_locks(&tx2.message()));
-        assert!(account_locks.try_locking(&tx1.message()));
-        assert!(!account_locks.check_sanitized_message_account_locks(&tx2.message()));
+    fn test_check_sanitized_message_account_locks_write_write_conflict() {
+        test_check_sanitized_message_account_locks(0, true, false); // static key conflict
+        test_check_sanitized_message_account_locks(2, true, false); // lookup key conflict
     }
 
     #[test]
-    fn test_try_locking_write_read_conflict() {
-        let bank = create_test_bank();
-        let (bank, table_address) = create_test_address_lookup_table(bank, 1);
-        let account1 = Keypair::new();
-        let account2 = Keypair::new();
-        let tx1 = create_test_sanitized_transaction(
-            &account1,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![0],
-                readonly_indexes: vec![],
-            }],
-            &bank,
-        );
-
-        let tx2 = create_test_sanitized_transaction(
-            &account2,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![],
-                readonly_indexes: vec![0],
-            }],
-            &bank,
-        );
-
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_sanitized_message_account_locks(&tx1.message()));
-        assert!(account_locks.check_sanitized_message_account_locks(&tx2.message()));
-        assert!(account_locks.try_locking(&tx1.message()));
-        assert!(!account_locks.check_sanitized_message_account_locks(&tx2.message()));
+    fn test_check_sanitized_message_account_locks_read_write_conflict() {
+        test_check_sanitized_message_account_locks(0, false, false); // static key conflict
+        test_check_sanitized_message_account_locks(2, false, false); // lookup key conflict
     }
 
     #[test]
-    fn test_try_locking_read_read_non_conflict() {
-        let bank = create_test_bank();
-        let (bank, table_address) = create_test_address_lookup_table(bank, 1);
-        let account1 = Keypair::new();
-        let account2 = Keypair::new();
-        let tx1 = create_test_sanitized_transaction(
-            &account1,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![],
-                readonly_indexes: vec![0],
-            }],
-            &bank,
-        );
+    fn test_check_sanitized_message_account_locks_write_read_conflict() {
+        test_check_sanitized_message_account_locks(1, true, false); // static key conflict
+        test_check_sanitized_message_account_locks(3, true, false); // lookup key conflict
+    }
 
-        let tx2 = create_test_sanitized_transaction(
-            &account2,
-            &[],
-            vec![MessageAddressTableLookup {
-                account_key: table_address,
-                writable_indexes: vec![],
-                readonly_indexes: vec![0],
-            }],
-            &bank,
-        );
-
-        let mut account_locks = ReadWriteAccountSet::default();
-        assert!(account_locks.check_sanitized_message_account_locks(&tx1.message()));
-        assert!(account_locks.check_sanitized_message_account_locks(&tx2.message()));
-        assert!(account_locks.try_locking(&tx1.message()));
-        assert!(account_locks.check_sanitized_message_account_locks(&tx2.message()));
+    #[test]
+    fn test_check_sanitized_message_account_locks_read_read_non_conflict() {
+        test_check_sanitized_message_account_locks(1, false, true); // static key conflict
+        test_check_sanitized_message_account_locks(3, false, true); // lookup key conflict
     }
 
     #[test]
