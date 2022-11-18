@@ -24,7 +24,7 @@ use {
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
-            AccountsHash, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
+            AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
             PreviousPass,
         },
         accounts_index::{
@@ -6921,11 +6921,11 @@ impl AccountsDb {
 
     pub fn checked_iterative_sum_for_capitalization(total_cap: u64, new_cap: u64) -> u64 {
         let new_total = total_cap as u128 + new_cap as u128;
-        AccountsHash::checked_cast_for_capitalization(new_total)
+        AccountsHasher::checked_cast_for_capitalization(new_total)
     }
 
     pub fn checked_sum_for_capitalization<T: Iterator<Item = u64>>(balances: T) -> u64 {
-        AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
+        AccountsHasher::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
     pub fn calculate_accounts_hash_from_index(
@@ -7014,7 +7014,7 @@ impl AccountsDb {
                         .collect();
                     let mut total = total_lamports.lock().unwrap();
                     *total =
-                        AccountsHash::checked_cast_for_capitalization(*total as u128 + sum);
+                        AccountsHasher::checked_cast_for_capitalization(*total as u128 + sum);
                     result
                 }).collect()
         };
@@ -7036,7 +7036,7 @@ impl AccountsDb {
         let total_lamports = *total_lamports.lock().unwrap();
 
         let mut hash_time = Measure::start("hash");
-        let (accumulated_hash, hash_total) = AccountsHash::calculate_hash(hashes);
+        let (accumulated_hash, hash_total) = AccountsHasher::calculate_hash(hashes);
         hash_time.stop();
         datapoint_info!(
             "calculate_accounts_hash_from_index",
@@ -7576,7 +7576,7 @@ impl AccountsDb {
                     let mut sort_time = Measure::start("sort");
                     {
                         // sort_by vs unstable because slot and write_version are already in order
-                        items.sort_by(AccountsHash::compare_two_hash_entries);
+                        items.sort_by(AccountsHasher::compare_two_hash_entries);
                     }
                     sort_time.stop();
                     time.fetch_add(sort_time.as_us(), Ordering::Relaxed);
@@ -7646,7 +7646,7 @@ impl AccountsDb {
                     end: (pass + 1) * bins_per_pass,
                 };
 
-                let hash = AccountsHash {
+                let hash = AccountsHasher {
                     filler_account_suffix: if self.filler_accounts_config.count > 0 {
                         self.filler_account_suffix
                     } else {
@@ -7672,7 +7672,7 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
 
                 // rework slices of data into bins for parallel processing and to match data shape expected by 'rest_of_hash_calculation'
-                let result = AccountsHash::get_binned_data(
+                let result = AccountsHasher::get_binned_data(
                     &slices,
                     PUBKEY_BINS_FOR_CALCULATING_HASHES,
                     &bounds,
@@ -7885,7 +7885,7 @@ impl AccountsDb {
 
         self.extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
 
-        let ret = AccountsHash::accumulate_account_hashes(hashes);
+        let ret = AccountsHasher::accumulate_account_hashes(hashes);
         accumulate.stop();
         let mut uncleaned_time = Measure::start("uncleaned_index");
         self.uncleaned_pubkeys.insert(slot, dirty_keys);
@@ -7922,7 +7922,7 @@ impl AccountsDb {
         if self.filler_accounts_enabled() {
             // simulate the time we would normally spend hashing the filler accounts
             // this is an over approximation but at least takes a stab at simulating what the validator would spend time doing
-            let _ = AccountsHash::accumulate_account_hashes(
+            let _ = AccountsHasher::accumulate_account_hashes(
                 skipped_rewrites
                     .iter()
                     .map(|(k, v)| (*k, *v))
@@ -10620,7 +10620,7 @@ pub mod tests {
 
         let (storages, raw_expected) = sample_storages_and_accounts();
         let expected_hash =
-            AccountsHash::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
+            AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
