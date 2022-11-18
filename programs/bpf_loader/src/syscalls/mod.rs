@@ -12,6 +12,8 @@ pub use self::{
 #[allow(deprecated)]
 use {
     crate::BpfError,
+    num_bigint::BigUint,
+    num_traits::{One, Zero},
     solana_program_runtime::{
         ic_logger_msg, ic_msg, invoke_context::InvokeContext, stable_log, timings::ExecuteTimings,
     },
@@ -23,6 +25,7 @@ use {
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
+        big_mod_exp::BigModExpParams,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
@@ -49,7 +52,6 @@ use {
         },
         sysvar::{Sysvar, SysvarId},
         transaction_context::{IndexOfAccount, InstructionAccount},
-        big_mod_exp::BigModExpParams,
     },
     std::{
         alloc::Layout,
@@ -59,8 +61,6 @@ use {
         sync::Arc,
     },
     thiserror::Error as ThisError,
-    num_bigint::BigUint,
-    num_traits::{One, Zero},
 };
 
 mod cpi;
@@ -1629,14 +1629,15 @@ declare_syscall!(
         _arg5: u64,
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
-
         let params = &translate_slice::<BigModExpParams>(
-                memory_mapping,
-                params,
-                1,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
-        )?.get(0).ok_or(SyscallError::InvalidLength)?;
+            memory_mapping,
+            params,
+            1,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?
+        .get(0)
+        .ok_or(SyscallError::InvalidLength)?;
 
         let input_len: u64 = std::cmp::max(params.base_len, params.exponent_len);
         let input_len: u64 = std::cmp::max(input_len, params.modulus_len);
@@ -1645,32 +1646,34 @@ declare_syscall!(
         consume_compute_meter(
             invoke_context,
             budget.syscall_base_cost.saturating_add(
-                budget.big_modular_exponentiation_cost.saturating_mul(input_len)
-            )
+                budget
+                    .big_modular_exponentiation_cost
+                    .saturating_mul(input_len),
+            ),
         )?;
 
         let base = translate_slice::<u8>(
-                memory_mapping,
-                params.base as *const _ as * const u8 as u64,
-                params.base_len,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
+            memory_mapping,
+            params.base as *const _ as *const u8 as u64,
+            params.base_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
 
         let exponent = translate_slice::<u8>(
-                memory_mapping,
-                params.exponent as *const _ as * const u8 as u64,
-                params.exponent_len,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
+            memory_mapping,
+            params.exponent as *const _ as *const u8 as u64,
+            params.exponent_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
 
         let modulus = translate_slice::<u8>(
-                memory_mapping,
-                params.modulus as *const _ as * const u8 as u64,
-                params.modulus_len,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size(),
+            memory_mapping,
+            params.modulus as *const _ as *const u8 as u64,
+            params.modulus_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
 
         let base = BigUint::from_bytes_be(base);
@@ -1679,8 +1682,7 @@ declare_syscall!(
 
         let value = if modulus.is_zero() || modulus.is_one() {
             vec![0_u8; params.modulus_len as usize]
-        }
-        else{
+        } else {
             let res = base.modpow(&exponent, &modulus);
             let res = res.to_bytes_be();
             let mut value = vec![0_u8; (params.modulus_len as usize).saturating_sub(res.len())];
@@ -1689,11 +1691,11 @@ declare_syscall!(
         };
 
         let return_value = translate_slice_mut::<u8>(
-                memory_mapping,
-                return_value,
-                params.modulus_len,
-                invoke_context.get_check_aligned(),
-                invoke_context.get_check_size()
+            memory_mapping,
+            return_value,
+            params.modulus_len,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
         )?;
         return_value.copy_from_slice(value.as_slice());
 

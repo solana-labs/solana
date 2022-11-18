@@ -1,15 +1,12 @@
 //! Big_mod_exp Syscall tests
 
 extern crate solana_program;
-use solana_program::{
-    custom_panic_default, msg, big_mod_exp::big_mod_exp,
-};
+use solana_program::{big_mod_exp::big_mod_exp, custom_panic_default, msg};
 
-fn big_mod_exp_test(){
-
+fn big_mod_exp_test() {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "PascalCase")]
-    struct TestCase{
+    struct TestCase {
         base: String,
         exponent: String,
         modulus: String,
@@ -62,7 +59,7 @@ fn big_mod_exp_test(){
     ]"#;
 
     let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
-    test_cases.iter().for_each(|test|{
+    test_cases.iter().for_each(|test| {
         let base = array_bytes::hex2bytes_unchecked(&test.base);
         let exponent = array_bytes::hex2bytes_unchecked(&test.exponent);
         let modulus = array_bytes::hex2bytes_unchecked(&test.modulus);
@@ -70,9 +67,7 @@ fn big_mod_exp_test(){
         let result = big_mod_exp(base.as_slice(), exponent.as_slice(), modulus.as_slice());
         assert_eq!(result, expected);
     });
-
 }
-
 
 #[no_mangle]
 pub extern "C" fn entrypoint(_input: *mut u8) -> u64 {

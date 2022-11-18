@@ -1,5 +1,5 @@
 #[repr(C)]
-pub struct BigModExpParams{
+pub struct BigModExpParams {
     pub base: *const u8,
     pub base_len: u64,
     pub exponent: *const u8,
@@ -9,11 +9,13 @@ pub struct BigModExpParams{
 }
 
 /// Big integer modular exponentiation
-pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
+pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8> {
     #[cfg(not(target_os = "solana"))]
     {
-        use num_bigint::BigUint;
-        use num_traits::{One, Zero};
+        use {
+            num_bigint::BigUint,
+            num_traits::{One, Zero},
+        };
 
         let modulus_len = modulus.len();
         let base = BigUint::from_bytes_be(base);
@@ -35,7 +37,7 @@ pub fn big_mod_exp(base: &[u8], exponent: &[u8], modulus: &[u8]) -> Vec<u8>{
     {
         let mut return_value = vec![0_u8; modulus.len()];
 
-        let param = BigModExpParams{
+        let param = BigModExpParams {
             base: base as *const _ as *const u8,
             base_len: base.len() as u64,
             exponent: exponent as *const _ as *const u8,
@@ -59,11 +61,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn big_mod_exp_test(){
-
+    fn big_mod_exp_test() {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "PascalCase")]
-        struct TestCase{
+        struct TestCase {
             base: String,
             exponent: String,
             modulus: String,
@@ -115,9 +116,8 @@ mod tests {
         }
         ]"#;
 
-
         let test_cases: Vec<TestCase> = serde_json::from_str(test_data).unwrap();
-        test_cases.iter().for_each(|test|{
+        test_cases.iter().for_each(|test| {
             let base = array_bytes::hex2bytes_unchecked(&test.base);
             let exponent = array_bytes::hex2bytes_unchecked(&test.exponent);
             let modulus = array_bytes::hex2bytes_unchecked(&test.modulus);
