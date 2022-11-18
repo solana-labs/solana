@@ -4,14 +4,19 @@ import { decodeInstruction, MARKETS } from "@project-serum/serum";
 import {
   AccountMeta,
   PublicKey,
+  SignatureResult,
   TransactionInstruction,
 } from "@solana/web3.js";
 import { enums, number, type, Infer, create } from "superstruct";
 import { BigIntFromString } from "validators/number";
 
+export const OPEN_BOOK_PROGRAM_ID =
+  "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX";
+
 const SERUM_PROGRAM_IDS = [
   "4ckmDgGdxQoPDLUkDT3vHgSAkzA3QRdNq5ywwY4sUSJn",
   "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+  OPEN_BOOK_PROGRAM_ID,
 ];
 
 export const SERUM_DECODED_MAX = 6;
@@ -631,3 +636,13 @@ export function parseSerumInstructionTitle(
 
   return SERUM_CODE_LOOKUP[code];
 }
+
+export type SerumIxDetailsProps<T> = {
+  ix: TransactionInstruction;
+  index: number;
+  result: SignatureResult;
+  info: T;
+  programName: string;
+  innerCards?: JSX.Element[];
+  childIndex?: number;
+};
