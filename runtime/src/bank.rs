@@ -1150,6 +1150,14 @@ pub struct NewBankOptions {
 #[derive(Debug, Default)]
 pub struct BankTestConfig {
     pub secondary_indexes: AccountSecondaryIndexes,
+    pub accounts_db_caching_enabled: bool,
+}
+
+pub fn bank_test_config_caching_enabled() -> BankTestConfig {
+    BankTestConfig {
+        accounts_db_caching_enabled: true,
+        ..BankTestConfig::default()
+    }
 }
 
 #[derive(Debug)]
@@ -1224,7 +1232,7 @@ impl Bank {
         Self::new_with_config_for_tests(
             genesis_config,
             test_config.secondary_indexes,
-            false,
+            test_config.accounts_db_caching_enabled,
             AccountShrinkThreshold::default(),
         )
     }

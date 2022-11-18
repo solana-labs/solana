@@ -63,6 +63,7 @@ fn test_bench_tps_local_cluster(config: Config) {
             cluster_lamports: 200_000_000,
             validator_configs: make_identical_validator_configs(
                 &ValidatorConfig {
+                    accounts_db_caching_enabled: true,
                     rpc_config: JsonRpcConfig {
                         faucet_addr: Some(faucet_addr),
                         ..JsonRpcConfig::default_for_test()
