@@ -1,19 +1,16 @@
-pub use crate::tpu_connection_cache::{
+pub use solana_tpu_client::tpu_connection_cache::{
     DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
 };
 use {
     crate::{
-        connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
-        nonblocking::{
-            quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
-            tpu_connection::NonblockingConnection,
-        },
-        tpu_connection::BlockingConnection,
-        tpu_connection_cache::MAX_CONNECTIONS,
+        nonblocking::tpu_connection::NonblockingConnection, tpu_connection::BlockingConnection,
     },
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
+    solana_quic_client::nonblocking::quic_client::{
+        QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint,
+    },
     solana_sdk::{
         pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
     },
@@ -21,6 +18,10 @@ use {
         nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
         streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate_chain,
+    },
+    solana_tpu_client::{
+        connection_cache_stats::{ConnectionCacheStats, CONNECTION_STAT_SUBMISSION_INTERVAL},
+        tpu_connection_cache::MAX_CONNECTIONS,
     },
     std::{
         error::Error,

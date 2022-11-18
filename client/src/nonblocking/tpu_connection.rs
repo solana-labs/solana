@@ -2,11 +2,24 @@
 
 use {
     async_trait::async_trait,
+    enum_dispatch::enum_dispatch,
+    solana_quic_client::nonblocking::quic_client::QuicTpuConnection,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
+    solana_udp_client::nonblocking::udp_client::UdpTpuConnection,
     std::net::SocketAddr,
 };
 
+// Due to the existence of `crate::connection_cache::Connection`, if this is named
+// `Connection`, enum_dispatch gets confused between the two and throws errors when
+// trying to convert later.
+#[enum_dispatch]
+pub enum NonblockingConnection {
+    QuicTpuConnection,
+    UdpTpuConnection,
+}
+
 #[async_trait]
+#[enum_dispatch(NonblockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 

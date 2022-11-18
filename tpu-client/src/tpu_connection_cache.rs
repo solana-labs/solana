@@ -16,7 +16,7 @@ use {
 };
 
 // Should be non-zero
-pub(crate) static MAX_CONNECTIONS: usize = 1024;
+pub static MAX_CONNECTIONS: usize = 1024;
 
 /// Used to decide whether the TPU and underlying connection cache should use
 /// QUIC connections.
@@ -262,7 +262,7 @@ pub enum ConnectionPoolError {
 }
 
 pub trait NewTpuConfig {
-    type ClientError;
+    type ClientError: std::fmt::Debug;
     fn new() -> Result<Self, Self::ClientError>
     where
         Self: Sized;

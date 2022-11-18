@@ -7,6 +7,7 @@ use {
         BanksTransactionResultWithSimulation, TransactionConfirmationStatus, TransactionMetadata,
         TransactionSimulationDetails, TransactionStatus,
     },
+    solana_client::connection_cache::ConnectionCache,
     solana_runtime::{
         bank::{Bank, TransactionExecutionResult, TransactionSimulationResult},
         bank_forks::BankForks,
@@ -28,7 +29,6 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
-    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         convert::TryFrom,
         io,
