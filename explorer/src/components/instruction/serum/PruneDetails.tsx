@@ -1,25 +1,18 @@
 import React from "react";
-import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { Prune } from "./types";
+import { Prune, SerumIxDetailsProps } from "./types";
 
-export function PruneDetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  info: Prune;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
-  const { ix, index, result, info, innerCards, childIndex } = props;
+export function PruneDetailsCard(props: SerumIxDetailsProps<Prune>) {
+  const { ix, index, result, programName, info, innerCards, childIndex } =
+    props;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Prune"
+      title={`${programName} Program: Prune`}
       innerCards={innerCards}
       childIndex={childIndex}
     >

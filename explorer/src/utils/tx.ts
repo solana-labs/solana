@@ -20,6 +20,7 @@ import {
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { OPEN_BOOK_PROGRAM_ID } from "components/instruction/serum/types";
 
 export enum PROGRAM_NAMES {
   // native built-ins
@@ -99,6 +100,7 @@ export enum PROGRAM_NAMES {
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
+  OPENBOOK_DEX = "OpenBook Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -413,6 +415,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
+    deployments: [Cluster.MainnetBeta],
+  },
+  [OPEN_BOOK_PROGRAM_ID]: {
+    name: PROGRAM_NAMES.OPENBOOK_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };
