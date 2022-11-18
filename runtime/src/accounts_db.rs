@@ -9934,7 +9934,14 @@ pub mod tests {
             self.1.len()
         }
         fn contains_multiple_slots(&self) -> bool {
-            false
+            let len = self.len();
+            if len > 0 {
+                let slot = self.slot(0);
+                // true if any item has a different slot than the first item
+                (1..len).any(|i| slot != self.slot(i))
+            } else {
+                false
+            }
         }
         fn include_slot_in_hash(&self) -> IncludeSlotInHash {
             INCLUDE_SLOT_IN_HASH_TESTS

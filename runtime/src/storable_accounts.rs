@@ -128,7 +128,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
 }
 
-/// this tuple contains slot info PER account
+/// this tuple contains a single different source slot that applies to all accounts
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
@@ -144,7 +144,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1[index]
     }
     fn slot(&self, _index: usize) -> Slot {
-        // note that this could be different than 'target_slot()' PER account
+        // same other slot for all accounts
         self.3
     }
     fn target_slot(&self) -> Slot {
@@ -154,14 +154,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1.len()
     }
     fn contains_multiple_slots(&self) -> bool {
-        let len = self.len();
-        if len > 0 {
-            let slot = self.slot(0);
-            // true if any item has a different slot than the first item
-            (1..len).any(|i| slot != self.slot(i))
-        } else {
-            false
-        }
+        false
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
