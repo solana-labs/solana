@@ -10705,14 +10705,7 @@ pub mod tests {
         let storages = vec![vec![arc]];
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let sm = StoredMeta {
-            data_len: 1,
-            pubkey,
-            write_version: 1,
-        };
-        storages[0][0]
-            .accounts
-            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        append_single_account_with_default_hash(&storages[0][0].accounts, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
         let temp_dir = TempDir::new().unwrap();
@@ -10759,6 +10752,20 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
+    fn append_single_account_with_default_hash(
+        vec: &AppendVec,
+        pubkey: &Pubkey,
+        account: &AccountSharedData,
+        write_version: StoredMetaWriteVersion,
+    ) {
+        let sm = StoredMeta {
+            data_len: 1,
+            pubkey: *pubkey,
+            write_version,
+        };
+        vec.append_accounts(&[(sm, Some(account))], &[&Hash::default()]);
+    }
+
     #[test]
     fn test_accountsdb_scan_account_storage_no_bank_one_slot() {
         solana_logger::setup();
@@ -10778,14 +10785,7 @@ pub mod tests {
         let storages = vec![vec![arc]];
         let pubkey = solana_sdk::pubkey::new_rand();
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let sm = StoredMeta {
-            data_len: 1,
-            pubkey,
-            write_version: 1,
-        };
-        storages[0][0]
-            .accounts
-            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        append_single_account_with_default_hash(&storages[0][0].accounts, &pubkey, &acc, 1);
 
         let calls = Arc::new(AtomicU64::new(0));
 
@@ -10817,14 +10817,12 @@ pub mod tests {
         write_version: StoredMetaWriteVersion,
     ) {
         let acc = AccountSharedData::new(1, 48, AccountSharedData::default().owner());
-        let sm = StoredMeta {
-            data_len: 1,
-            pubkey: *pubkey,
+        append_single_account_with_default_hash(
+            &storages[0][0].accounts,
+            pubkey,
+            &acc,
             write_version,
-        };
-        storages[0][0]
-            .accounts
-            .append_accounts(&[(sm, Some(&acc))], &[&Hash::default()]);
+        );
     }
 
     fn sample_storage_with_entries(
