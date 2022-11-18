@@ -4791,6 +4791,7 @@ pub mod tests {
             let (bank_forks, mint_keypair, leader_vote_keypair) =
                 new_bank_forks_with_config(BankTestConfig {
                     secondary_indexes: config.account_indexes.clone(),
+                    accounts_db_caching_enabled: true,
                 });
 
             let ledger_path = get_tmp_ledger_path!();

@@ -14,7 +14,7 @@ use {
         accounts_db::AccountShrinkThreshold,
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
-        bank::Bank,
+        bank::{bank_test_config_caching_enabled, Bank},
         bank_forks::BankForks,
         epoch_accounts_hash::{self, EpochAccountsHash},
         genesis_utils::{self, GenesisConfigInfo},
@@ -107,8 +107,10 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let mut bank_forks =
-            BankForks::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+        let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
+            &genesis_config_info.genesis_config,
+            bank_test_config_caching_enabled(),
+        ));
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
@@ -219,7 +221,7 @@ impl BackgroundServices {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            false,
+            true,
             false,
             None,
         );
@@ -581,6 +583,14 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_stop_offset = epoch_accounts_hash::calculation_offset_stop(&bank);
     let eah_stop_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
+    // have to set root here so that we can flush the write cache
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
