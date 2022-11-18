@@ -226,16 +226,17 @@ impl CurrentAncientAppendVec {
     fn store_ancient_accounts(
         &self,
         db: &AccountsDb,
-        accounts: &AccountsToStore,
+        accounts_to_store: &AccountsToStore,
         storage_selector: StorageSelector,
     ) -> StoreAccountsTiming {
-        let (accounts, hashes) = accounts.get(storage_selector);
+        let (accounts, hashes) = accounts_to_store.get(storage_selector);
 
         db.store_accounts_frozen(
             (
                 self.slot(),
                 accounts,
                 INCLUDE_SLOT_IN_HASH_IRRELEVANT_APPEND_VEC_OPERATION,
+                accounts_to_store.slot,
             ),
             Some(hashes),
             Some(self.append_vec()),
@@ -4360,14 +4361,14 @@ impl AccountsDb {
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
     /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
-        accounts: &'a [(&StoredAccountMeta<'_>, Slot)],
+        accounts: &'a [&StoredAccountMeta<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) -> HashSet<&'a Pubkey> {
         let mut unref = HashSet::<&Pubkey>::default();
         // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
         // Now it is being put into an ancient storage again, but it is already there, so maintain max of 1 ref per storage in the accounts index.
         // The slot that currently references the account is going away, so unref to maintain # slots that reference the pubkey = refcount.
-        accounts.iter().for_each(|(account, _)| {
+        accounts.iter().for_each(|account| {
             let key = account.pubkey();
             if !existing_ancient_pubkeys.insert(*key) {
                 // this key exists BOTH in 'accounts' and already in the ancient append vec, so we need to unref it
@@ -4382,7 +4383,7 @@ impl AccountsDb {
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
-        accounts: &[(&StoredAccountMeta<'_>, Slot)],
+        accounts: &[&StoredAccountMeta<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
@@ -10106,9 +10107,8 @@ pub mod tests {
             stored_size,
             hash: &hash,
         };
-        let slot0 = 0;
         let mut existing_ancient_pubkeys = HashSet::default();
-        let accounts = [(&stored_account, slot0)];
+        let accounts = [&stored_account];
         // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
@@ -10126,7 +10126,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey]);
         // pubkey2 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [(&stored_account2, slot0)];
+        let accounts = [&stored_account2];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
@@ -10149,7 +10149,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey2]);
         // pubkey3/4 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [(&stored_account3, slot0), (&stored_account4, slot0)];
+        let accounts = [&stored_account3, &stored_account4];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
