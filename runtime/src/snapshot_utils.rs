@@ -1119,6 +1119,7 @@ pub fn bank_from_snapshot_archives(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
         full_snapshot_archive_info.slot(),
+        false, // Do not ignore mismatch
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -1310,6 +1311,7 @@ pub fn bank_from_snapshot_files(
         test_hash_calculation,
         accounts_db_skip_shrink,
         full_snapshot_file_info.slot(),
+        true, // When constructing from the files, ignore the hash mismatch.
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());

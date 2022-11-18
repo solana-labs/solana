@@ -7101,6 +7101,7 @@ impl Bank {
         test_hash_calculation: bool,
         accounts_db_skip_shrink: bool,
         last_full_snapshot_slot: Slot,
+        ignore_mismatch: bool,
     ) -> bool {
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
@@ -7127,7 +7128,7 @@ impl Bank {
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
                 test_hash_calculation,
-                ignore_mismatch: false,
+                ignore_mismatch: ignore_mismatch,
                 require_rooted_bank: false,
                 run_in_background: true,
                 store_hash_raw_data_for_debug: false,
@@ -11687,11 +11688,11 @@ pub(crate) mod tests {
         bank.freeze();
         add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
-        assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
+        assert!(bank.verify_snapshot_bank(true, false, bank.slot(), false));
 
         // tamper the bank after freeze!
         bank.increment_signature_count(1);
-        assert!(!bank.verify_snapshot_bank(true, false, bank.slot()));
+        assert!(!bank.verify_snapshot_bank(true, false, bank.slot(), false));
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
