@@ -1052,6 +1052,43 @@ impl BankingStage {
         }
     }
 
+    fn do_packet_receiving_and_buffering(
+        packet_deserializer: &mut PacketDeserializer,
+        recv_start: &mut Instant,
+        id: u32,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
+        banking_stage_stats: &mut BankingStageStats,
+        tracer_packet_stats: &mut TracerPacketStats,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+    ) -> Result<(), RecvTimeoutError> {
+        // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
+        let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
+            // If there are buffered packets, run the equivalent of try_recv to try reading more
+            // packets. This prevents starving BankingStage::consume_buffered_packets due to
+            // buffered_packet_batches containing transactions that exceed the cost model for
+            // the current bank.
+            Duration::from_millis(0)
+        } else {
+            // Default wait time
+            Duration::from_millis(100)
+        };
+
+        let (res, receive_and_buffer_packets_time) = measure!(Self::receive_and_buffer_packets(
+            packet_deserializer,
+            recv_start,
+            recv_timeout,
+            id,
+            unprocessed_transaction_storage,
+            banking_stage_stats,
+            tracer_packet_stats,
+            slot_metrics_tracker,
+        ));
+        slot_metrics_tracker
+            .increment_receive_and_buffer_packets_us(receive_and_buffer_packets_time.as_us());
+
+        res
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
@@ -1110,35 +1147,15 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-            let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
-                // If there are buffered packets, run the equivalent of try_recv to try reading more
-                // packets. This prevents starving BankingStage::consume_buffered_packets due to
-                // buffered_packet_batches containing transactions that exceed the cost model for
-                // the current bank.
-                Duration::from_millis(0)
-            } else {
-                // Default wait time
-                Duration::from_millis(100)
-            };
-
-            let (res, receive_and_buffer_packets_time) = measure!(
-                Self::receive_and_buffer_packets(
-                    packet_deserializer,
-                    recv_start,
-                    recv_timeout,
-                    id,
-                    &mut unprocessed_transaction_storage,
-                    &mut banking_stage_stats,
-                    &mut tracer_packet_stats,
-                    &mut slot_metrics_tracker,
-                ),
-                "receive_and_buffer_packets",
-            );
-            slot_metrics_tracker
-                .increment_receive_and_buffer_packets_us(receive_and_buffer_packets_time.as_us());
-
-            match res {
+            match Self::do_packet_receiving_and_buffering(
+                packet_deserializer,
+                recv_start,
+                id,
+                &mut unprocessed_transaction_storage,
+                &mut banking_stage_stats,
+                &mut tracer_packet_stats,
+                &mut slot_metrics_tracker,
+            ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
