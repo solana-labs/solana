@@ -53,7 +53,7 @@ solana-poh = { path = "../poh", version = "=1.15.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.15.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
 solana-rpc = { path = "../rpc", version = "=1.15.0" }
-solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }
+solana-rpc-client-api = { path = "../client/rpc-client-api", version = "=1.15.0" }
 solana-runtime = { path = "../runtime", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.15.0" }
