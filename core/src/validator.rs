@@ -116,6 +116,7 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
+const SUPERMAJORITY_OBSERVATION_THRESHOLD_DURATION: Duration = Duration::from_secs(15);
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -1893,6 +1894,7 @@ fn wait_for_supermajority(
                 }
             }
 
+            let mut supermajority_first_observed: Option<Instant> = None;
             for i in 1.. {
                 if i % 10 == 1 {
                     info!(
@@ -1912,11 +1914,32 @@ fn wait_for_supermajority(
                     };
 
                 if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
-                    info!(
-                        "Supermajority reached, {}% active stake detected, starting up now.",
-                        gossip_stake_percent,
+                    let msg_prefix = format!(
+                        "Supermajority reached, {}% active stake detected",
+                        gossip_stake_percent
                     );
-                    break;
+
+                    let now = Instant::now();
+                    if let Some(ref supermajority_first_observed) = supermajority_first_observed {
+                        if supermajority_first_observed.duration_since(now)
+                            > SUPERMAJORITY_OBSERVATION_THRESHOLD_DURATION
+                        {
+                            info!("{}. Starting up now.", msg_prefix);
+                            break;
+                        }
+                    } else {
+                        supermajority_first_observed = Some(now);
+                        info!(
+                            "{}. Waiting {} seconds for gossip to stabilize",
+                            msg_prefix,
+                            SUPERMAJORITY_OBSERVATION_THRESHOLD_DURATION.as_secs()
+                        );
+                    }
+                } else {
+                    if supermajority_first_observed.is_some() {
+                        info!("Supermajority lost");
+                    }
+                    supermajority_first_observed = None;
                 }
                 // The normal RPC health checks don't apply as the node is waiting, so feign health to
                 // prevent load balancers from removing the node from their list of candidates during a
