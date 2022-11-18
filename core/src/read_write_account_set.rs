@@ -135,11 +135,7 @@ mod tests {
                 num_readonly_unsigned_accounts: read_keys.len() as u8,
             },
             recent_blockhash: Hash::default(),
-            account_keys: write_keys
-                .into_iter()
-                .chain(read_keys.into_iter())
-                .map(|k| *k)
-                .collect(),
+            account_keys: write_keys.iter().chain(read_keys.iter()).copied().collect(),
             address_table_lookups,
             instructions: vec![],
         })
@@ -156,9 +152,8 @@ mod tests {
             read_keys,
             address_table_lookups,
         );
-        let tx = VersionedTransaction::try_new(message, &[write_keypair]).unwrap();
         SanitizedTransaction::try_create(
-            tx.clone(),
+            VersionedTransaction::try_new(message, &[write_keypair]).unwrap(),
             MessageHash::Compute,
             Some(false),
             bank,
