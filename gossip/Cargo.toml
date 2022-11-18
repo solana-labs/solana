@@ -43,7 +43,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" 
 solana-runtime = { path = "../runtime", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
 solana-streamer = { path = "../streamer", version = "=1.15.0" }
-solana-thin-client = { path = "../thin-client", version = "=1.15.0" }
+solana-thin-client = { path = "../client/thin-client", version = "=1.15.0" }
 solana-tpu-client = { path = "../tpu-client", version = "=1.15.0", default-features = false }
 solana-version = { path = "../version", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
