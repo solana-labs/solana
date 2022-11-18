@@ -5963,6 +5963,7 @@ dependencies = [
  "solana-sdk 1.15.0",
  "solana-streamer",
  "solana-tpu-client",
+ "thiserror",
 ]
 
 [[package]]
@@ -6654,6 +6655,7 @@ version = "1.15.0"
 dependencies = [
  "solana-net-utils",
  "solana-tpu-client",
+ "thiserror",
 ]
 
 [[package]]

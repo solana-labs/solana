@@ -19,14 +19,23 @@ use {
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats,
-        tpu_connection_cache::{BaseTpuConnection, ConnectionPool, ConnectionPoolError},
+        tpu_connection_cache::{
+            BaseTpuConnection, ConnectionPool, ConnectionPoolError, NewTpuConfig,
+        },
     },
     std::{
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::{Arc, RwLock},
     },
+    thiserror::Error,
 };
+
+#[derive(Error, Debug)]
+pub enum QuicClientError {
+    #[error("Certificate error: {0}")]
+    CertificateError(String),
+}
 
 pub struct QuicPool {
     connections: Vec<Arc<Quic>>,
@@ -81,21 +90,23 @@ pub struct QuicConfig {
     maybe_client_pubkey: Option<Pubkey>,
 }
 
-impl Default for QuicConfig {
-    fn default() -> Self {
+impl NewTpuConfig for QuicConfig {
+    type ClientError = QuicClientError;
+
+    fn new() -> Result<Self, QuicClientError> {
         let (certs, priv_key) = new_self_signed_tls_certificate_chain(
             &Keypair::new(),
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         )
-        .expect("Failed to initialize QUIC client certificates");
-        Self {
+        .map_err(|err| QuicClientError::CertificateError(err.to_string()))?;
+        Ok(Self {
             client_certificate: Arc::new(QuicClientCertificate {
                 certificates: certs,
                 key: priv_key,
             }),
             maybe_staked_nodes: None,
             maybe_client_pubkey: None,
-        }
+        })
     }
 }
 
@@ -177,13 +188,16 @@ mod tests {
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
             QUIC_TOTAL_STAKED_CONCURRENT_STREAMS,
         },
-        solana_tpu_client::tpu_connection_cache::TpuConnectionCache,
+        solana_tpu_client::tpu_connection_cache::{
+            TpuConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        },
     };
 
     #[test]
     fn test_connection_cache_max_parallel_chunks() {
         solana_logger::setup();
-        let connection_cache = TpuConnectionCache::<QuicPool>::default();
+        let connection_cache =
+            TpuConnectionCache::<QuicPool>::new(DEFAULT_TPU_CONNECTION_POOL_SIZE).unwrap();
         let mut tpu_config = connection_cache.tpu_config;
         assert_eq!(
             tpu_config.compute_max_parallel_streams(),
