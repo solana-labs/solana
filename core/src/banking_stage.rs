@@ -3,6 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 
 use {
+    self::packet_receiver::PacketReceiver,
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
@@ -13,7 +14,6 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -63,7 +63,7 @@ use {
         feature_set::allow_votes_to_directly_update_vote_state,
         pubkey::Pubkey,
         saturating_add_assign,
-        timing::{duration_as_ms, timestamp, AtomicInterval},
+        timing::{timestamp, AtomicInterval},
         transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
         transport::TransportError,
     },
@@ -84,6 +84,8 @@ use {
         time::{Duration, Instant},
     },
 };
+
+mod packet_receiver;
 
 // Fixed thread size seems to be fastest on GCP setup
 pub const NUM_THREADS: u32 = 6;
@@ -480,10 +482,9 @@ impl BankingStage {
                         ),
                     };
 
-                let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
+                let packet_receiver = PacketReceiver::new(i, verified_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
-                let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let data_budget = data_budget.clone();
@@ -493,10 +494,9 @@ impl BankingStage {
                     .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
-                            &mut packet_deserializer,
+                            packet_receiver,
                             &poh_recorder,
                             &cluster_info,
-                            &mut recv_start,
                             i,
                             transaction_status_sender,
                             gossip_vote_sender,
@@ -1015,10 +1015,9 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        packet_deserializer: &mut PacketDeserializer,
+        mut packet_receiver: PacketReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        recv_start: &mut Instant,
         id: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -1070,35 +1069,12 @@ impl BankingStage {
 
             tracer_packet_stats.report(1000);
 
-            // Gossip thread will almost always not wait because the transaction storage will most likely not be empty
-            let recv_timeout = if !unprocessed_transaction_storage.is_empty() {
-                // If there are buffered packets, run the equivalent of try_recv to try reading more
-                // packets. This prevents starving BankingStage::consume_buffered_packets due to
-                // buffered_packet_batches containing transactions that exceed the cost model for
-                // the current bank.
-                Duration::from_millis(0)
-            } else {
-                // Default wait time
-                Duration::from_millis(100)
-            };
-
-            let (res, receive_and_buffer_packets_time) = measure!(
-                Self::receive_and_buffer_packets(
-                    packet_deserializer,
-                    recv_start,
-                    recv_timeout,
-                    id,
-                    &mut unprocessed_transaction_storage,
-                    &mut banking_stage_stats,
-                    &mut tracer_packet_stats,
-                    &mut slot_metrics_tracker,
-                ),
-                "receive_and_buffer_packets",
-            );
-            slot_metrics_tracker
-                .increment_receive_and_buffer_packets_us(receive_and_buffer_packets_time.as_us());
-
-            match res {
+            match packet_receiver.do_packet_receiving_and_buffering(
+                &mut unprocessed_transaction_storage,
+                &mut banking_stage_stats,
+                &mut tracer_packet_stats,
+                &mut slot_metrics_tracker,
+            ) {
                 Ok(()) | Err(RecvTimeoutError::Timeout) => (),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
@@ -1801,109 +1777,6 @@ impl BankingStage {
         process_transactions_summary.retryable_transaction_indexes =
             filtered_retryable_transaction_indexes;
         process_transactions_summary
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    /// Receive incoming packets, push into unprocessed buffer with packet indexes
-    fn receive_and_buffer_packets(
-        packet_deserializer: &mut PacketDeserializer,
-        recv_start: &mut Instant,
-        recv_timeout: Duration,
-        id: u32,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
-        banking_stage_stats: &mut BankingStageStats,
-        tracer_packet_stats: &mut TracerPacketStats,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-    ) -> Result<(), RecvTimeoutError> {
-        let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let ReceivePacketResults {
-            deserialized_packets,
-            new_tracer_stats_option,
-            passed_sigverify_count,
-            failed_sigverify_count,
-        } = packet_deserializer.handle_received_packets(
-            recv_timeout,
-            unprocessed_transaction_storage.max_receive_size(),
-        )?;
-        let packet_count = deserialized_packets.len();
-        debug!(
-            "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
-            timestamp(),
-            duration_as_ms(&recv_start.elapsed()),
-            packet_count,
-            id,
-        );
-
-        if let Some(new_sigverify_stats) = &new_tracer_stats_option {
-            tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
-        }
-
-        // Track all the packets incoming from sigverify, both valid and invalid
-        slot_metrics_tracker.increment_total_new_valid_packets(passed_sigverify_count);
-        slot_metrics_tracker.increment_newly_failed_sigverify_count(failed_sigverify_count);
-
-        let mut dropped_packets_count = 0;
-        let mut newly_buffered_packets_count = 0;
-        Self::push_unprocessed(
-            unprocessed_transaction_storage,
-            deserialized_packets,
-            &mut dropped_packets_count,
-            &mut newly_buffered_packets_count,
-            banking_stage_stats,
-            slot_metrics_tracker,
-            tracer_packet_stats,
-        );
-        recv_time.stop();
-
-        banking_stage_stats
-            .receive_and_buffer_packets_elapsed
-            .fetch_add(recv_time.as_us(), Ordering::Relaxed);
-        banking_stage_stats
-            .receive_and_buffer_packets_count
-            .fetch_add(packet_count, Ordering::Relaxed);
-        banking_stage_stats
-            .dropped_packets_count
-            .fetch_add(dropped_packets_count, Ordering::Relaxed);
-        banking_stage_stats
-            .newly_buffered_packets_count
-            .fetch_add(newly_buffered_packets_count, Ordering::Relaxed);
-        banking_stage_stats
-            .current_buffered_packets_count
-            .swap(unprocessed_transaction_storage.len(), Ordering::Relaxed);
-        *recv_start = Instant::now();
-        Ok(())
-    }
-
-    fn push_unprocessed(
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
-        deserialized_packets: Vec<ImmutableDeserializedPacket>,
-        dropped_packets_count: &mut usize,
-        newly_buffered_packets_count: &mut usize,
-        banking_stage_stats: &mut BankingStageStats,
-        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        tracer_packet_stats: &mut TracerPacketStats,
-    ) {
-        if !deserialized_packets.is_empty() {
-            let _ = banking_stage_stats
-                .batch_packet_indexes_len
-                .increment(deserialized_packets.len() as u64);
-
-            *newly_buffered_packets_count += deserialized_packets.len();
-            slot_metrics_tracker
-                .increment_newly_buffered_packets_count(deserialized_packets.len() as u64);
-
-            let insert_packet_batches_summary =
-                unprocessed_transaction_storage.insert_batch(deserialized_packets);
-            slot_metrics_tracker
-                .accumulate_insert_packet_batches_summary(&insert_packet_batches_summary);
-            saturating_add_assign!(
-                *dropped_packets_count,
-                insert_packet_batches_summary.total_dropped_packets()
-            );
-            tracer_packet_stats.increment_total_exceeded_banking_stage_buffer(
-                insert_packet_batches_summary.dropped_tracer_packets(),
-            );
-        }
     }
 
     pub fn join(self) -> thread::Result<()> {
