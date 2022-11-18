@@ -24,8 +24,8 @@ use {
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
-            AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate, HashStats,
-            PreviousPass,
+            AccountsHash, AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate,
+            HashStats, PreviousPass,
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
@@ -1155,7 +1155,7 @@ impl BankHashStats {
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
     pub accounts_delta_hash: Hash,
-    pub accounts_hash: Hash,
+    pub accounts_hash: AccountsHash,
     pub stats: BankHashStats,
 }
 
@@ -4987,11 +4987,7 @@ impl AccountsDb {
             return;
         }
 
-        let new_hash_info = BankHashInfo {
-            accounts_delta_hash: Hash::default(),
-            accounts_hash: Hash::default(),
-            stats: BankHashStats::default(),
-        };
+        let new_hash_info = BankHashInfo::default();
         bank_hashes.insert(slot, new_hash_info);
     }
 
@@ -6931,7 +6927,7 @@ impl AccountsDb {
         &self,
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Result<(Hash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
         use BankHashVerificationError::*;
         let mut collect = Measure::start("collect");
         let keys: Vec<_> = self
@@ -7056,10 +7052,11 @@ impl AccountsDb {
         );
         self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
 
-        Ok((accumulated_hash, total_lamports))
+        let accounts_hash = AccountsHash(accumulated_hash);
+        Ok((accounts_hash, total_lamports))
     }
 
-    pub fn get_accounts_hash(&self, slot: Slot) -> Hash {
+    pub fn get_accounts_hash(&self, slot: Slot) -> AccountsHash {
         let bank_hashes = self.bank_hashes.read().unwrap();
         let bank_hash_info = bank_hashes.get(&slot).unwrap();
         bank_hash_info.accounts_hash
@@ -7071,7 +7068,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         debug_verify: bool,
         is_startup: bool,
-    ) -> (Hash, u64) {
+    ) -> (AccountsHash, u64) {
         self.update_accounts_hash(
             CalcAccountsHashDataSource::IndexForTests,
             debug_verify,
@@ -7403,7 +7400,7 @@ impl AccountsDb {
         data_source: CalcAccountsHashDataSource,
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
-    ) -> Result<(Hash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
         match data_source {
             CalcAccountsHashDataSource::Storages => {
                 if self.accounts_cache.contains_any_slots(slot) {
@@ -7448,23 +7445,24 @@ impl AccountsDb {
         slot: Slot,
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
-    ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let (hash, total_lamports) = self.calculate_accounts_hash(data_source, slot, &config)?;
+    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+        let (accounts_hash, total_lamports) =
+            self.calculate_accounts_hash(data_source, slot, &config)?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
             let data_source_other = match data_source {
                 CalcAccountsHashDataSource::IndexForTests => CalcAccountsHashDataSource::Storages,
                 CalcAccountsHashDataSource::Storages => CalcAccountsHashDataSource::IndexForTests,
             };
-            let (hash_other, total_lamports_other) =
+            let (accounts_hash_other, total_lamports_other) =
                 self.calculate_accounts_hash(data_source_other, slot, &config)?;
 
-            let success = hash == hash_other
+            let success = accounts_hash == accounts_hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
+            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", accounts_hash.0, accounts_hash_other.0, total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
         }
-        Ok((hash, total_lamports))
+        Ok((accounts_hash, total_lamports))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -7478,9 +7476,9 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         is_startup: bool,
-    ) -> (Hash, u64) {
+    ) -> (AccountsHash, u64) {
         let check_hash = false;
-        let (hash, total_lamports) = self
+        let (accounts_hash, total_lamports) = self
             .calculate_accounts_hash_with_verify(
                 data_source,
                 debug_verify,
@@ -7497,15 +7495,15 @@ impl AccountsDb {
                 expected_capitalization,
             )
             .unwrap(); // unwrap here will never fail since check_hash = false
-        self.set_accounts_hash(slot, hash);
-        (hash, total_lamports)
+        self.set_accounts_hash(slot, accounts_hash);
+        (accounts_hash, total_lamports)
     }
 
     /// update hash for this slot in the 'bank_hashes' map
-    pub(crate) fn set_accounts_hash(&self, slot: Slot, hash: Hash) {
+    pub(crate) fn set_accounts_hash(&self, slot: Slot, accounts_hash: AccountsHash) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         let mut bank_hash_info = bank_hashes.get_mut(&slot).unwrap();
-        bank_hash_info.accounts_hash = hash;
+        bank_hash_info.accounts_hash = accounts_hash;
     }
 
     /// scan 'storage', return a vec of 'CacheHashDataFile', one per pass
@@ -7625,7 +7623,7 @@ impl AccountsDb {
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
-    ) -> Result<(Hash, u64), BankHashVerificationError> {
+    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7694,6 +7692,7 @@ impl AccountsDb {
                 storages.max_slot_inclusive(),
                 final_result
             );
+            let final_result = (AccountsHash(final_result.0), final_result.1);
             Ok(final_result)
         };
 
@@ -7777,21 +7776,22 @@ impl AccountsDb {
         use BankHashVerificationError::*;
 
         let check_hash = false; // this will not be supported anymore
-        let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_with_verify(
-            CalcAccountsHashDataSource::Storages,
-            test_hash_calculation,
-            slot,
-            CalcAccountsHashConfig {
-                use_bg_thread_pool,
-                check_hash,
-                ancestors: Some(ancestors),
-                epoch_schedule,
-                rent_collector,
-                store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
-                full_snapshot: None,
-            },
-            None,
-        )?;
+        let (calculated_accounts_hash, calculated_lamports) = self
+            .calculate_accounts_hash_with_verify(
+                CalcAccountsHashDataSource::Storages,
+                test_hash_calculation,
+                slot,
+                CalcAccountsHashConfig {
+                    use_bg_thread_pool,
+                    check_hash,
+                    ancestors: Some(ancestors),
+                    epoch_schedule,
+                    rent_collector,
+                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
+                    full_snapshot: None,
+                },
+                None,
+            )?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -7806,12 +7806,12 @@ impl AccountsDb {
         } else {
             let bank_hashes = self.bank_hashes.read().unwrap();
             if let Some(found_hash_info) = bank_hashes.get(&slot) {
-                if calculated_hash == found_hash_info.accounts_hash {
+                if calculated_accounts_hash == found_hash_info.accounts_hash {
                     Ok(())
                 } else {
                     warn!(
-                        "mismatched bank hash for slot {}: {} (calculated) != {} (expected)",
-                        slot, calculated_hash, found_hash_info.accounts_hash
+                        "mismatched bank hash for slot {}: {:?} (calculated) != {:?} (expected)",
+                        slot, calculated_accounts_hash, found_hash_info.accounts_hash,
                     );
                     Err(MismatchedBankHash)
                 }
@@ -10624,7 +10624,8 @@ pub mod tests {
             )
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        assert_eq!(result, (expected_hash, 0));
+        let expected_accounts_hash = AccountsHash(expected_hash);
+        assert_eq!(result, (expected_accounts_hash, 0));
     }
 
     #[test]
@@ -10646,7 +10647,8 @@ pub mod tests {
             )
             .unwrap();
 
-        assert_eq!(result, (expected_hash, sum));
+        let expected_accounts_hash = AccountsHash(expected_hash);
+        assert_eq!(result, (expected_accounts_hash, sum));
     }
 
     fn sample_storage() -> (SnapshotStorages, usize, Slot) {
@@ -12934,7 +12936,7 @@ pub mod tests {
         let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
             accounts_delta_hash: some_bank_hash,
-            accounts_hash: Hash::new(&[0xca; HASH_BYTES]),
+            accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
             stats: BankHashStats::default(),
         };
         db.bank_hashes

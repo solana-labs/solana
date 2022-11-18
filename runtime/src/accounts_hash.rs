@@ -1079,6 +1079,10 @@ impl AccountsHasher {
     }
 }
 
+/// Hash of all the accounts
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+pub struct AccountsHash(pub Hash);
+
 #[cfg(test)]
 pub mod tests {
     use {super::*, std::str::FromStr};
