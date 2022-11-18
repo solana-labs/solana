@@ -250,7 +250,7 @@ impl Accounts {
         })
     }
 
-    fn load_transaction(
+    fn load_transaction_accounts(
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
@@ -260,31 +260,33 @@ impl Accounts {
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
     ) -> Result<LoadedTransaction> {
-        // Copy all the accounts
-        let message = tx.message();
         // NOTE: this check will never fail because `tx` is sanitized
         if tx.signatures().is_empty() && fee != 0 {
-            Err(TransactionError::MissingSignatureForFee)
-        } else {
-            // There is no way to predict what program will execute without an error
-            // If a fee can pay for execution then the program will be scheduled
-            let mut validated_fee_payer = false;
-            let mut tx_rent: TransactionRent = 0;
-            let account_keys = message.account_keys();
-            let mut accounts = Vec::with_capacity(account_keys.len());
-            let mut account_deps = Vec::with_capacity(account_keys.len());
-            let mut rent_debits = RentDebits::default();
-            let requested_loaded_accounts_data_size_limit =
-                if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
-                    let requested_loaded_accounts_data_size =
-                        Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
-                    Some(requested_loaded_accounts_data_size)
-                } else {
-                    None
-                };
-            let mut accumulated_accounts_data_size: usize = 0;
+            return Err(TransactionError::MissingSignatureForFee);
+        }
 
-            for (i, key) in account_keys.iter().enumerate() {
+        // There is no way to predict what program will execute without an error
+        // If a fee can pay for execution then the program will be scheduled
+        let mut validated_fee_payer = false;
+        let mut tx_rent: TransactionRent = 0;
+        let message = tx.message();
+        let account_keys = message.account_keys();
+        let mut account_deps = Vec::with_capacity(account_keys.len());
+        let mut rent_debits = RentDebits::default();
+        let requested_loaded_accounts_data_size_limit =
+            if feature_set.is_active(&feature_set::cap_transaction_accounts_data_size::id()) {
+                let requested_loaded_accounts_data_size =
+                    Self::get_requested_loaded_accounts_data_size_limit(tx, feature_set)?;
+                Some(requested_loaded_accounts_data_size)
+            } else {
+                None
+            };
+        let mut accumulated_accounts_data_size: usize = 0;
+
+        let mut accounts = account_keys
+            .iter()
+            .enumerate()
+            .map(|(i, key)| {
                 let (account, loaded_programdata_account_size) = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
                     (AccountSharedData::default(), 0)
@@ -394,42 +396,42 @@ impl Accounts {
                     error_counters,
                 )?;
 
-                accounts.push((*key, account));
-            }
-            debug_assert_eq!(accounts.len(), account_keys.len());
-            // Appends the account_deps at the end of the accounts,
-            // this way they can be accessed in a uniform way.
-            // At places where only the accounts are needed,
-            // the account_deps are truncated using e.g:
-            // accounts.iter().take(message.account_keys.len())
-            accounts.append(&mut account_deps);
+                Ok((*key, account))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-            if validated_fee_payer {
-                let program_indices = message
-                    .instructions()
-                    .iter()
-                    .map(|instruction| {
-                        self.load_executable_accounts(
-                            ancestors,
-                            &mut accounts,
-                            instruction.program_id_index as IndexOfAccount,
-                            error_counters,
-                            &mut accumulated_accounts_data_size,
-                            requested_loaded_accounts_data_size_limit,
-                        )
-                    })
-                    .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+        // Appends the account_deps at the end of the accounts,
+        // this way they can be accessed in a uniform way.
+        // At places where only the accounts are needed,
+        // the account_deps are truncated using e.g:
+        // accounts.iter().take(message.account_keys.len())
+        accounts.append(&mut account_deps);
 
-                Ok(LoadedTransaction {
-                    accounts,
-                    program_indices,
-                    rent: tx_rent,
-                    rent_debits,
+        if validated_fee_payer {
+            let program_indices = message
+                .instructions()
+                .iter()
+                .map(|instruction| {
+                    self.load_executable_accounts(
+                        ancestors,
+                        &mut accounts,
+                        instruction.program_id_index as IndexOfAccount,
+                        error_counters,
+                        &mut accumulated_accounts_data_size,
+                        requested_loaded_accounts_data_size_limit,
+                    )
                 })
-            } else {
-                error_counters.account_not_found += 1;
-                Err(TransactionError::AccountNotFound)
-            }
+                .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
+
+            Ok(LoadedTransaction {
+                accounts,
+                program_indices,
+                rent: tx_rent,
+                rent_debits,
+            })
+        } else {
+            error_counters.account_not_found += 1;
+            Err(TransactionError::AccountNotFound)
         }
     }
 
@@ -661,7 +663,7 @@ impl Accounts {
                         return (Err(TransactionError::BlockhashNotFound), None);
                     };
 
-                    let loaded_transaction = match self.load_transaction(
+                    let loaded_transaction = match self.load_transaction_accounts(
                         ancestors,
                         tx,
                         fee,
