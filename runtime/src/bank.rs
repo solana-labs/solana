@@ -6731,7 +6731,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self
+        let bank_hash_info = self
             .rc
             .accounts
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
@@ -6740,7 +6740,7 @@ impl Bank {
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            accounts_delta_hash.hash.as_ref(),
+            bank_hash_info.accounts_delta_hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6772,7 +6772,7 @@ impl Bank {
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
-            accounts_delta_hash.hash,
+            bank_hash_info.accounts_delta_hash,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
@@ -6786,7 +6786,7 @@ impl Bank {
         info!(
             "accounts hash slot: {} stats: {:?}",
             self.slot(),
-            accounts_delta_hash.stats,
+            bank_hash_info.stats,
         );
         hash
     }
