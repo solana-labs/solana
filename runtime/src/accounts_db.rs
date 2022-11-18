@@ -1151,7 +1151,7 @@ impl BankHashStats {
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
-    pub hash: Hash,
+    pub accounts_delta_hash: Hash,
     pub accounts_hash: Hash,
     pub stats: BankHashStats,
 }
@@ -4979,7 +4979,7 @@ impl AccountsDb {
         }
 
         let new_hash_info = BankHashInfo {
-            hash: Hash::default(),
+            accounts_delta_hash: Hash::default(),
             accounts_hash: Hash::default(),
             stats: BankHashStats::default(),
         };
@@ -12914,7 +12914,7 @@ pub mod tests {
 
         let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
-            hash: some_bank_hash,
+            accounts_delta_hash: some_bank_hash,
             accounts_hash: Hash::new(&[0xca; HASH_BYTES]),
             stats: BankHashStats::default(),
         };
