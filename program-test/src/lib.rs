@@ -63,6 +63,7 @@ use {
 // Export types so test clients can limit their solana crate dependencies
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
+    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::transaction_context::IndexOfAccount,
 };

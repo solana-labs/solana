@@ -4878,6 +4878,7 @@ dependencies = [
  "log",
  "serde",
  "solana-banks-client",
+ "solana-banks-interface",
  "solana-banks-server",
  "solana-bpf-loader-program",
  "solana-logger 1.15.0",

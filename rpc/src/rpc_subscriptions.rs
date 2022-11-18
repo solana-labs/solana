@@ -2951,13 +2951,13 @@ pub(crate) mod tests {
             &system_program::id(),
         );
 
-        bank_forks
+        assert!(bank_forks
             .read()
             .unwrap()
             .get(0)
             .unwrap()
-            .process_transaction_with_logs(&tx)
-            .unwrap();
+            .process_transaction_with_metadata(tx.clone())
+            .was_executed());
 
         subscriptions.notify_subscribers(CommitmentSlots::new_from_slot(0));
 
