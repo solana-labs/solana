@@ -80,12 +80,12 @@ spl() {
   )
 }
 
-serum_dex() {
+openbook_dex() {
   (
     set -x
-    rm -rf serum-dex
-    git clone https://github.com/project-serum/serum-dex.git
-    cd serum-dex
+    rm -rf openbook-dex
+    git clone https://github.com/openbook-dex/program.git openbook-dex
+    cd openbook-dex
 
     update_solana_dependencies . "$solana_ver"
     patch_crates_io_solana Cargo.toml "$solana_dir"
@@ -109,4 +109,4 @@ EOF
 
 _ example_helloworld
 _ spl
-_ serum_dex
+_ openbook_dex
