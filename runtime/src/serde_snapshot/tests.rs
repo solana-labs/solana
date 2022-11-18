@@ -284,7 +284,7 @@ fn test_bank_serialize_style(
     .unwrap();
 
     let accounts_hash = if update_accounts_hash {
-        let accounts_hash = AccountsHash(Hash::new(&[1; 32]));
+        let accounts_hash = AccountsHash::Full(Hash::new(&[1; 32]));
         bank2
             .accounts()
             .accounts_db

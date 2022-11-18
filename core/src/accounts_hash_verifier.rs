@@ -314,7 +314,8 @@ impl AccountsHashVerifier {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
             info!(
                 "saving epoch accounts hash, slot: {}, hash: {}",
-                accounts_package.slot, accounts_hash.0,
+                accounts_package.slot,
+                accounts_hash.as_hash(),
             );
             let epoch_accounts_hash = EpochAccountsHash::from(accounts_hash);
             accounts_package
@@ -349,11 +350,11 @@ impl AccountsHashVerifier {
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(&accounts_hash.0);
+            let fault_hash = Self::generate_fault_hash(accounts_hash.as_hash());
             warn!("inserting fault at slot: {}", accounts_package.slot);
             hashes.push((accounts_package.slot, fault_hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_hash.0));
+            hashes.push((accounts_package.slot, accounts_hash.to_hash()));
         }
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);

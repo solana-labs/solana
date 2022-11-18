@@ -35,6 +35,9 @@ impl EpochAccountsHash {
 
 impl From<AccountsHash> for EpochAccountsHash {
     fn from(accounts_hash: AccountsHash) -> EpochAccountsHash {
-        Self::new(accounts_hash.0)
+        match accounts_hash {
+            AccountsHash::Full(hash) => Self::new(hash),
+            _ => panic!("an epoch accounts hash *must* come from a full accounts hash"),
+        }
     }
 }

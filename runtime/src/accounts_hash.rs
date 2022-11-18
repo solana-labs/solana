@@ -1117,8 +1117,24 @@ pub enum ZeroLamportAccounts {
 }
 
 /// Hash of accounts
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
-pub struct AccountsHash(pub Hash);
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, AbiExample)]
+pub enum AccountsHash {
+    Full(Hash),
+    Incremental(Hash),
+}
+
+impl AccountsHash {
+    pub const fn as_hash(&self) -> &Hash {
+        match self {
+            AccountsHash::Full(hash) | AccountsHash::Incremental(hash) => hash,
+        }
+    }
+    pub const fn to_hash(self) -> Hash {
+        match self {
+            AccountsHash::Full(hash) | AccountsHash::Incremental(hash) => hash,
+        }
+    }
+}
 
 #[cfg(test)]
 pub mod tests {

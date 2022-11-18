@@ -1078,11 +1078,21 @@ impl BankHashStats {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, AbiExample)]
 pub struct BankHashInfo {
     pub accounts_delta_hash: Hash,
     pub accounts_hash: AccountsHash,
     pub stats: BankHashStats,
+}
+
+impl Default for BankHashInfo {
+    fn default() -> Self {
+        Self {
+            accounts_delta_hash: Hash::default(),
+            accounts_hash: AccountsHash::Full(Hash::default()),
+            stats: BankHashStats::default(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -6705,7 +6715,7 @@ impl AccountsDb {
         );
         self.assert_safe_squashing_accounts_hash(max_slot, config.epoch_schedule);
 
-        let accounts_hash = AccountsHash(accumulated_hash);
+        let accounts_hash = AccountsHash::Full(accumulated_hash);
         Ok((accounts_hash, total_lamports))
     }
 
@@ -7044,7 +7054,7 @@ impl AccountsDb {
             let success = accounts_hash == accounts_hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", accounts_hash.0, accounts_hash_other.0, total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
+            assert!(success, "calculate_accounts_hash_with_verify mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, data source: {:?}, slot: {}", accounts_hash.as_hash(), accounts_hash_other.as_hash(), total_lamports, total_lamports_other, expected_capitalization, data_source, slot);
         }
         Ok((accounts_hash, total_lamports))
     }
@@ -7211,6 +7221,7 @@ impl AccountsDb {
             CalcAccountsHashFlavor::Full,
             self.full_accounts_hash_cache_path.clone(),
         )
+        .map(|(hash, capitalization)| (AccountsHash::Full(hash), capitalization))
     }
 
     /// Calculate the incremental accounts hash
@@ -7237,6 +7248,7 @@ impl AccountsDb {
             CalcAccountsHashFlavor::Incremental,
             self.incremental_accounts_hash_cache_path.clone(),
         )
+        .map(|(hash, capitalization)| (AccountsHash::Incremental(hash), capitalization))
     }
 
     fn _calculate_accounts_hash_from_storages(
@@ -7246,7 +7258,7 @@ impl AccountsDb {
         mut stats: HashStats,
         flavor: CalcAccountsHashFlavor,
         accounts_hash_cache_path: PathBuf,
-    ) -> Result<(AccountsHash, u64), BankHashVerificationError> {
+    ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         stats.oldest_root = storages.range().start;
 
@@ -7305,7 +7317,6 @@ impl AccountsDb {
                 storages.max_slot_inclusive(),
                 final_result
             );
-            let final_result = (AccountsHash(final_result.0), final_result.1);
             Ok(final_result)
         };
 
@@ -9943,7 +9954,7 @@ pub mod tests {
             )
             .unwrap();
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
-        let expected_accounts_hash = AccountsHash(expected_hash);
+        let expected_accounts_hash = AccountsHash::Full(expected_hash);
         assert_eq!(result, (expected_accounts_hash, 0));
     }
 
@@ -9966,7 +9977,7 @@ pub mod tests {
             )
             .unwrap();
 
-        let expected_accounts_hash = AccountsHash(expected_hash);
+        let expected_accounts_hash = AccountsHash::Full(expected_hash);
         assert_eq!(result, (expected_accounts_hash, sum));
     }
 
@@ -12203,7 +12214,7 @@ pub mod tests {
         let some_bank_hash = Hash::new(&[0xca; HASH_BYTES]);
         let bank_hash_info = BankHashInfo {
             accounts_delta_hash: some_bank_hash,
-            accounts_hash: AccountsHash(Hash::new(&[0xca; HASH_BYTES])),
+            accounts_hash: AccountsHash::Full(Hash::new(&[0xca; HASH_BYTES])),
             stats: BankHashStats::default(),
         };
         db.bank_hashes
@@ -17490,7 +17501,7 @@ pub mod tests {
             let (pubkey, account) = &accounts[index];
             AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS)
         });
-        let expected_accounts_hash = AccountsHash(compute_merkle_root(full_account_hashes));
+        let expected_accounts_hash = AccountsHash::Full(compute_merkle_root(full_account_hashes));
         assert_eq!(full_accounts_hash.0, expected_accounts_hash);
 
         // store accounts into slot 2
@@ -17568,7 +17579,8 @@ pub mod tests {
                         AccountsDb::hash_account(slot, account, pubkey, INCLUDE_SLOT_IN_HASH_TESTS)
                     }
                 });
-        let expected_accounts_hash = AccountsHash(compute_merkle_root(incremental_account_hashes));
+        let expected_accounts_hash =
+            AccountsHash::Incremental(compute_merkle_root(incremental_account_hashes));
         assert_eq!(incremental_accounts_hash.0, expected_accounts_hash);
     }
 

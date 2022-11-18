@@ -140,7 +140,7 @@ fn main() {
             }
             println!(
                 "hash,{},{},{},{}%",
-                results.0 .0,
+                results.0.as_hash(),
                 time,
                 time_store,
                 (time_store.as_us() as f64 / time.as_us() as f64 * 100.0f64) as u32

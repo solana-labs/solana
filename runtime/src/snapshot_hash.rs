@@ -61,10 +61,10 @@ impl SnapshotHash {
         epoch_accounts_hash: Option<&EpochAccountsHash>,
     ) -> Self {
         let snapshot_hash = match epoch_accounts_hash {
-            None => accounts_hash.0,
+            None => *accounts_hash.as_hash(),
             Some(epoch_accounts_hash) => {
                 let mut hasher = Hasher::default();
-                hasher.hash(accounts_hash.0.as_ref());
+                hasher.hash(accounts_hash.as_hash().as_ref());
                 hasher.hash(epoch_accounts_hash.as_ref().as_ref());
                 hasher.result()
             }
