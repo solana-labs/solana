@@ -21,7 +21,7 @@ serde = "1.0.144"
 serde_json = "1.0.83"
 solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
 solana-client = { path = "../client", version = "=1.15.0" }
-solana-pubsub-client = { path = "../pubsub-client", version = "=1.15.0" }
+solana-pubsub-client = { path = "../client/pubsub-client", version = "=1.15.0" }
 solana-rpc = { path = "../rpc", version = "=1.15.0" }
 solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
 solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.15.0" }

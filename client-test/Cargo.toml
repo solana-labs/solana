@@ -19,7 +19,7 @@ solana-measure = { path = "../measure", version = "=1.15.0" }
 solana-merkle-tree = { path = "../merkle-tree", version = "=1.15.0" }
 solana-metrics = { path = "../metrics", version = "=1.15.0" }
 solana-perf = { path = "../perf", version = "=1.15.0" }
-solana-pubsub-client = { path = "../pubsub-client", version = "=1.15.0" }
+solana-pubsub-client = { path = "../client/pubsub-client", version = "=1.15.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.15.0" }
 solana-rpc = { path = "../rpc", version = "=1.15.0" }
 solana-rpc-client = { path = "../rpc-client", version = "=1.15.0", default-features = false }
