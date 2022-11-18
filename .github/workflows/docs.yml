@@ -46,37 +46,13 @@ jobs:
         shell: bash
         run: |
           source ci/env.sh
-<<<<<<< HEAD
-          echo "::set-output name=tag::$CI_TAG"
-          eval "$(ci/channel-info.sh)"
-          echo "::set-output name=channel::$CHANNEL"
-=======
           eval "$(ci/channel-info.sh)"
           TAG=$CI_TAG
->>>>>>> cbf224ad5 (ci: refactor docs pipeline (#28852))
 
           echo "TAG: $TAG"
           echo "CHANNEL: $CHANNEL"
           echo "FILE_CHANGED: $FILE_CHANGED"
 
-<<<<<<< HEAD
-      - name: Pre Build
-        id: prebuild
-        run: |
-          echo "tag: ${{ steps.check.outputs.tag }}"
-          echo "channel: ${{ steps.check.outputs.channel }}"
-          echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
-          echo "::set-output name=need_to_build::${{
-            steps.check.outputs.tag != ''
-            ||
-            (
-              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
-              &&
-              steps.changed-files-specific.outputs.any_changed != ''
-            )
-          }}"
-        shell: bash
-=======
           echo need_to_build="$(
             if [ "$TAG" != '' ]
             then
@@ -98,12 +74,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
->>>>>>> cbf224ad5 (ci: refactor docs pipeline (#28852))
 
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: 14
+          node-version: 16
 
       - name: Build
         working-directory: docs
