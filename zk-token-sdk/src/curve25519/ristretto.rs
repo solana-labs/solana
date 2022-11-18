@@ -101,7 +101,7 @@ mod target_arch {
 
         #[cfg(not(target_os = "solana"))]
         fn multiply(scalar: &PodScalar, point: &Self) -> Option<Self> {
-            let scalar: Scalar = scalar.into();
+            let scalar: Scalar = scalar.try_into().ok()?;
             let point: RistrettoPoint = point.try_into().ok()?;
 
             let result = &scalar * &point;
@@ -114,8 +114,13 @@ mod target_arch {
         type Point = Self;
 
         fn multiscalar_multiply(scalars: &[PodScalar], points: &[Self]) -> Option<Self> {
+            let scalars = scalars
+                .iter()
+                .map(|scalar| Scalar::try_from(scalar).ok())
+                .collect::<Option<Vec<_>>>()?;
+
             RistrettoPoint::optional_multiscalar_mul(
-                scalars.iter().map(Scalar::from),
+                scalars,
                 points
                     .iter()
                     .map(|point| RistrettoPoint::try_from(point).ok()),
