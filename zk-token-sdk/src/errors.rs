@@ -28,6 +28,8 @@ pub enum ProofError {
     Decryption,
     #[error("invalid ciphertext data")]
     CiphertextDeserialization,
+    #[error("invalid scalar data")]
+    ScalarDeserialization,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
