@@ -1997,6 +1997,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake has the wrong shred version in gossip",
                 (wrong_shred_stake as f64 / total_activated_stake as f64) * 100.,
             );
+            wrong_shred_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in wrong_shred_nodes {
                 info!(
                     "    {:.3}% - {}",
@@ -2011,6 +2012,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake is not visible in gossip",
                 (offline_stake as f64 / total_activated_stake as f64) * 100.
             );
+            offline_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in offline_nodes {
                 info!(
                     "    {:.3}% - {}",
