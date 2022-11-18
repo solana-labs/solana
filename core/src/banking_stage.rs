@@ -1507,9 +1507,9 @@ impl BankingStage {
         // Only lock accounts for those transactions are selected for the block;
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
-        let mut lock_time = Measure::start("lock_time");
-        let batch = bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter());
-        lock_time.stop();
+        let (batch, lock_time) = measure!(
+            bank.prepare_sanitized_batch_with_results(txs, transactions_qos_results.iter())
+        );
 
         // retryable_txs includes AccountInUse, WouldExceedMaxBlockCostLimit
         // WouldExceedMaxAccountCostLimit, WouldExceedMaxVoteCostLimit
@@ -1524,10 +1524,8 @@ impl BankingStage {
                 log_messages_bytes_limit,
             );
 
-        let mut unlock_time = Measure::start("unlock_time");
         // Once the accounts are new transactions can enter the pipeline to process them
-        drop(batch);
-        unlock_time.stop();
+        let (_, unlock_time) = measure!(drop(batch));
 
         let ExecuteAndCommitTransactionsOutput {
             ref mut retryable_transaction_indexes,
