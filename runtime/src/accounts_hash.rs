@@ -398,11 +398,11 @@ impl CumulativeOffsets {
 }
 
 #[derive(Debug, Default)]
-pub struct AccountsHash {
+pub struct AccountsHasher {
     pub filler_account_suffix: Option<Pubkey>,
 }
 
-impl AccountsHash {
+impl AccountsHasher {
     /// true if it is possible that there are filler accounts present
     pub fn filler_accounts_enabled(&self) -> bool {
         self.filler_account_suffix.is_some()
@@ -412,7 +412,7 @@ impl AccountsHash {
         let cumulative_offsets = CumulativeOffsets::from_raw(&hashes);
 
         let hash_total = cumulative_offsets.total_count;
-        let result = AccountsHash::compute_merkle_root_from_slices(
+        let result = AccountsHasher::compute_merkle_root_from_slices(
             hash_total,
             MERKLE_FANOUT,
             None,
@@ -1081,17 +1081,17 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_div_ceil() {
-        assert_eq!(AccountsHash::div_ceil(10, 3), 4);
-        assert_eq!(AccountsHash::div_ceil(0, 1), 0);
-        assert_eq!(AccountsHash::div_ceil(0, 5), 0);
-        assert_eq!(AccountsHash::div_ceil(9, 3), 3);
-        assert_eq!(AccountsHash::div_ceil(9, 9), 1);
+        assert_eq!(AccountsHasher::div_ceil(10, 3), 4);
+        assert_eq!(AccountsHasher::div_ceil(0, 1), 0);
+        assert_eq!(AccountsHasher::div_ceil(0, 5), 0);
+        assert_eq!(AccountsHasher::div_ceil(9, 3), 3);
+        assert_eq!(AccountsHasher::div_ceil(9, 9), 1);
     }
 
     #[test]
     #[should_panic(expected = "attempt to divide by zero")]
     fn test_accountsdb_div_ceil_fail() {
-        assert_eq!(AccountsHash::div_ceil(10, 0), 0);
+        assert_eq!(AccountsHasher::div_ceil(10, 0), 0);
     }
 
     fn for_rest(original: &[CalculateHashIntermediate]) -> Vec<SortedDataByPubkey<'_>> {
@@ -1115,7 +1115,7 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val);
 
-        let accounts_hash = AccountsHash::default();
+        let accounts_hash = AccountsHasher::default();
         let result = accounts_hash.rest_of_hash_calculation(
             for_rest(&account_maps),
             &mut HashStats::default(),
@@ -1197,7 +1197,7 @@ pub mod tests {
 
             let mut previous_pass = PreviousPass::default();
 
-            let accounts_index = AccountsHash::default();
+            let accounts_index = AccountsHasher::default();
             if pass == 0 {
                 // first pass that is not last and is empty
                 let result = accounts_index.rest_of_hash_calculation(
@@ -1232,7 +1232,7 @@ pub mod tests {
 
             let expected_hash =
                 Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
-            let accounts_index = AccountsHash::default();
+            let accounts_index = AccountsHasher::default();
             if pass == 2 {
                 let result = accounts_index.rest_of_hash_calculation(
                     empty_data(),
@@ -1280,7 +1280,7 @@ pub mod tests {
         let hash = Hash::new(&[2u8; 32]);
         let val = CalculateHashIntermediate::new(hash, 20, key);
         account_maps.push(val);
-        let accounts_hash = AccountsHash::default();
+        let accounts_hash = AccountsHasher::default();
         let result = accounts_hash.rest_of_hash_calculation(
             for_rest(&[account_maps[0].clone()]),
             &mut HashStats::default(),
@@ -1328,7 +1328,7 @@ pub mod tests {
         assert_eq!(previous_pass.reduced_hashes.len(), 0);
         assert_eq!(previous_pass.lamports, 0);
 
-        let expected_hash = AccountsHash::compute_merkle_root(
+        let expected_hash = AccountsHasher::compute_merkle_root(
             account_maps
                 .iter()
                 .map(|a| (a.pubkey, a.hash))
@@ -1347,7 +1347,7 @@ pub mod tests {
         solana_logger::setup();
 
         let mut account_maps = Vec::new();
-        let accounts_hash = AccountsHash::default();
+        let accounts_hash = AccountsHasher::default();
 
         const TARGET_FANOUT_LEVEL: usize = 3;
         let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
@@ -1363,7 +1363,7 @@ pub mod tests {
         }
 
         let mut chunk = account_maps[0..plus1].to_vec();
-        chunk.sort_by(AccountsHash::compare_two_hash_entries);
+        chunk.sort_by(AccountsHasher::compare_two_hash_entries);
         let sorted = chunk.clone();
 
         // first 4097 hashes (1 left over)
@@ -1381,7 +1381,7 @@ pub mod tests {
         let left_over_1 = sorted[plus1 - 1].hash;
         assert_eq!(previous_pass.remaining_unhashed, vec![left_over_1]);
         assert_eq!(previous_pass.reduced_hashes.len(), 1);
-        let expected_hash = AccountsHash::compute_merkle_root(
+        let expected_hash = AccountsHasher::compute_merkle_root(
             sorted[0..target_fanout]
                 .iter()
                 .map(|a| (a.pubkey, a.hash))
@@ -1398,12 +1398,12 @@ pub mod tests {
         );
 
         let mut chunk = account_maps[plus1..plus1 * 2].to_vec();
-        chunk.sort_by(AccountsHash::compare_two_hash_entries);
+        chunk.sort_by(AccountsHasher::compare_two_hash_entries);
         let sorted2 = chunk.clone();
 
         let mut with_left_over = vec![left_over_1];
         with_left_over.extend(sorted2[0..plus1 - 2].iter().cloned().map(|i| i.hash));
-        let expected_hash2 = AccountsHash::compute_merkle_root(
+        let expected_hash2 = AccountsHasher::compute_merkle_root(
             with_left_over[0..target_fanout]
                 .iter()
                 .map(|a| (Pubkey::default(), *a))
@@ -1455,7 +1455,7 @@ pub mod tests {
 
         let mut combined = sorted;
         combined.extend(sorted2);
-        let expected_hash = AccountsHash::compute_merkle_root(
+        let expected_hash = AccountsHasher::compute_merkle_root(
             combined
                 .iter()
                 .map(|a| (a.pubkey, a.hash))
@@ -1477,7 +1477,8 @@ pub mod tests {
         }]]];
         let temp_vec = vec.to_vec();
         let slice = convert_to_slice2(&temp_vec);
-        let (hashes, lamports, _) = AccountsHash::default().de_dup_accounts_in_parallel(&slice, 0);
+        let (hashes, lamports, _) =
+            AccountsHasher::default().de_dup_accounts_in_parallel(&slice, 0);
         assert_eq!(vec![&Hash::default()], hashes);
         assert_eq!(lamports, 1);
     }
@@ -1485,7 +1486,7 @@ pub mod tests {
     #[test]
     fn test_accountsdb_de_dup_accounts_empty() {
         solana_logger::setup();
-        let accounts_hash = AccountsHash::default();
+        let accounts_hash = AccountsHasher::default();
 
         let vec = vec![vec![], vec![]];
         let (hashes, lamports) =
@@ -1577,7 +1578,7 @@ pub mod tests {
                 result
             }).collect();
 
-        let hash = AccountsHash::default();
+        let hash = AccountsHasher::default();
         let mut expected_index = 0;
         for last_slice in 0..2 {
             for start in 0..COUNT {
@@ -1690,7 +1691,7 @@ pub mod tests {
         let val2 = CalculateHashIntermediate::new(hash2, 4, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
-            AccountsHash::compare_two_hash_entries(&val, &val2)
+            AccountsHasher::compare_two_hash_entries(&val, &val2)
         );
 
         // slot same, vers =
@@ -1698,7 +1699,7 @@ pub mod tests {
         let val3 = CalculateHashIntermediate::new(hash3, 2, key);
         assert_eq!(
             std::cmp::Ordering::Equal,
-            AccountsHash::compare_two_hash_entries(&val, &val3)
+            AccountsHasher::compare_two_hash_entries(&val, &val3)
         );
 
         // slot same, vers >
@@ -1706,7 +1707,7 @@ pub mod tests {
         let val4 = CalculateHashIntermediate::new(hash4, 6, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
-            AccountsHash::compare_two_hash_entries(&val, &val4)
+            AccountsHasher::compare_two_hash_entries(&val, &val4)
         );
 
         // slot >, version <
@@ -1714,14 +1715,14 @@ pub mod tests {
         let val5 = CalculateHashIntermediate::new(hash5, 8, key);
         assert_eq!(
             std::cmp::Ordering::Equal, // no longer comparing slots or versions
-            AccountsHash::compare_two_hash_entries(&val, &val5)
+            AccountsHasher::compare_two_hash_entries(&val, &val5)
         );
     }
 
     fn test_de_dup_accounts_in_parallel<'a>(
         account_maps: &'a [SortedDataByPubkey<'a>],
     ) -> (Vec<&'a Hash>, u64, usize) {
-        AccountsHash::default().de_dup_accounts_in_parallel(account_maps, 0)
+        AccountsHasher::default().de_dup_accounts_in_parallel(account_maps, 0)
     }
 
     #[test]
@@ -1946,7 +1947,7 @@ pub mod tests {
     }
 
     fn test_hashing_larger(hashes: Vec<(Pubkey, Hash)>, fanout: usize) -> Hash {
-        let result = AccountsHash::compute_merkle_root(hashes.clone(), fanout);
+        let result = AccountsHasher::compute_merkle_root(hashes.clone(), fanout);
         let reduced: Vec<_> = hashes.iter().map(|x| x.1).collect();
         let result2 = test_hashing(reduced, fanout);
         assert_eq!(result, result2, "len: {}", hashes.len());
@@ -1955,9 +1956,9 @@ pub mod tests {
 
     fn test_hashing(hashes: Vec<Hash>, fanout: usize) -> Hash {
         let temp: Vec<_> = hashes.iter().map(|h| (Pubkey::default(), *h)).collect();
-        let result = AccountsHash::compute_merkle_root(temp, fanout);
+        let result = AccountsHasher::compute_merkle_root(temp, fanout);
         let reduced: Vec<_> = hashes.clone();
-        let result2 = AccountsHash::compute_merkle_root_from_slices(
+        let result2 = AccountsHasher::compute_merkle_root_from_slices(
             hashes.len(),
             fanout,
             None,
@@ -1966,7 +1967,7 @@ pub mod tests {
         );
         assert_eq!(result, result2.0, "len: {}", hashes.len());
 
-        let result2 = AccountsHash::compute_merkle_root_from_slices(
+        let result2 = AccountsHasher::compute_merkle_root_from_slices(
             hashes.len(),
             fanout,
             Some(1),
@@ -1985,7 +1986,7 @@ pub mod tests {
                 let offsets = CumulativeOffsets::from_raw_2d(&src);
 
                 let get_slice = |start: usize| -> &[Hash] { offsets.get_slice(&src, start) };
-                let result2 = AccountsHash::compute_merkle_root_from_slices(
+                let result2 = AccountsHasher::compute_merkle_root_from_slices(
                     offsets.total_count,
                     fanout,
                     None,
@@ -2078,11 +2079,11 @@ pub mod tests {
                     test_hashing_larger(input.clone(), fanout)
                 } else {
                     // this sorts inside
-                    let early_result = AccountsHash::accumulate_account_hashes(
+                    let early_result = AccountsHasher::accumulate_account_hashes(
                         input.iter().map(|i| (i.0, i.1)).collect::<Vec<_>>(),
                     );
-                    AccountsHash::sort_hashes_by_pubkey(&mut input);
-                    let result = AccountsHash::compute_merkle_root(input.clone(), fanout);
+                    AccountsHasher::sort_hashes_by_pubkey(&mut input);
+                    let result = AccountsHasher::compute_merkle_root(input.clone(), fanout);
                     assert_eq!(early_result, result);
                     result
                 };
@@ -2115,7 +2116,7 @@ pub mod tests {
             ),
             CalculateHashIntermediate::new(Hash::new(&[2u8; 32]), offset + 1, Pubkey::new_unique()),
         ];
-        AccountsHash::default().de_dup_accounts_in_parallel(&[convert_to_slice(&[input])], 0);
+        AccountsHasher::default().de_dup_accounts_in_parallel(&[convert_to_slice(&[input])], 0);
     }
 
     fn convert_to_slice(
@@ -2151,7 +2152,7 @@ pub mod tests {
                 Pubkey::new_unique(),
             )],
         ];
-        AccountsHash::default().de_dup_and_eliminate_zeros(
+        AccountsHasher::default().de_dup_and_eliminate_zeros(
             &[convert_to_slice(&input)],
             &mut HashStats::default(),
             2, // accounts above are in 2 groups
@@ -2167,10 +2168,10 @@ pub mod tests {
         )];
         let data2 = vec![&data[..]];
         let bins = 1;
-        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
         assert_eq!(result, vec![vec![&data[..]]]);
         let bins = 2;
-        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
         assert_eq!(result, vec![vec![&data[..], &data[0..0]]]);
         let data = [CalculateHashIntermediate::new(
             Hash::default(),
@@ -2178,21 +2179,21 @@ pub mod tests {
             Pubkey::new(&[255u8; 32]),
         )];
         let data2 = vec![&data[..]];
-        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
         assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
         let data = [
             CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[254u8; 32])),
             CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[255u8; 32])),
         ];
         let data2 = vec![&data[..]];
-        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
         assert_eq!(result, vec![vec![&data[0..0], &data[..]]]);
         let data = [
             CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[1u8; 32])),
             CalculateHashIntermediate::new(Hash::default(), 1, Pubkey::new(&[255u8; 32])),
         ];
         let data2 = vec![&data[..]];
-        let result = AccountsHash::get_binned_data(&data2, bins, &(0..bins));
+        let result = AccountsHasher::get_binned_data(&data2, bins, &(0..bins));
         assert_eq!(result, vec![vec![&data[0..1], &data[1..2]]]);
     }
 }
