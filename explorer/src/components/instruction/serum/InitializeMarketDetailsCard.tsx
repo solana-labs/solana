@@ -1,25 +1,20 @@
 import React from "react";
-import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { InitializeMarket } from "./types";
+import { InitializeMarket, SerumIxDetailsProps } from "./types";
 
-export function InitializeMarketDetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  info: InitializeMarket;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
-  const { ix, index, result, info, innerCards, childIndex } = props;
+export function InitializeMarketDetailsCard(
+  props: SerumIxDetailsProps<InitializeMarket>
+) {
+  const { ix, index, result, programName, info, innerCards, childIndex } =
+    props;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Initialize Market"
+      title={`${programName} Program: Initialize Market`}
       innerCards={innerCards}
       childIndex={childIndex}
     >

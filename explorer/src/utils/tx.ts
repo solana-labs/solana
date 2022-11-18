@@ -99,6 +99,7 @@ export enum PROGRAM_NAMES {
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
+  OPENBOOK_DEX = "OpenBook Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -413,6 +414,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
+    deployments: [Cluster.MainnetBeta],
+  },
+  srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX: {
+    name: PROGRAM_NAMES.OPENBOOK_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };
