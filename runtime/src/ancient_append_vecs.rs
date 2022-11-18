@@ -26,10 +26,11 @@ pub enum StorageSelector {
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
     hashes: Vec<&'a Hash>,
-    accounts: Vec<(&'a StoredAccountMeta<'a>, Slot)>,
+    accounts: Vec<&'a StoredAccountMeta<'a>>,
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
+    pub slot: Slot,
 }
 
 impl<'a> AccountsToStore<'a> {
@@ -57,12 +58,13 @@ impl<'a> AccountsToStore<'a> {
             hashes.push(account.account.hash);
             // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
             // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
-            accounts.push((&account.account, slot));
+            accounts.push(&account.account);
         });
         Self {
             hashes,
             accounts,
             index_first_item_overflow,
+            slot,
         }
     }
 
@@ -72,10 +74,7 @@ impl<'a> AccountsToStore<'a> {
     }
 
     /// get the accounts and hashes to store in the given 'storage'
-    pub fn get(
-        &self,
-        storage: StorageSelector,
-    ) -> (&[(&'a StoredAccountMeta<'a>, Slot)], &[&'a Hash]) {
+    pub fn get(&self, storage: StorageSelector) -> (&[&'a StoredAccountMeta<'a>], &[&'a Hash]) {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
@@ -168,7 +167,7 @@ pub mod tests {
             let (accounts, hashes) = accounts_to_store.get(selector);
             assert_eq!(
                 accounts,
-                map.iter().map(|b| (&b.account, slot)).collect::<Vec<_>>(),
+                map.iter().map(|b| &b.account).collect::<Vec<_>>(),
                 "mismatch"
             );
             assert_eq!(hashes, vec![&hash]);
