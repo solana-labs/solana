@@ -17727,9 +17727,10 @@ pub mod tests {
             .collect::<Vec<_>>()
     }
 
-    fn compare_all_accounts(accounts: [&Vec<(Pubkey, AccountSharedData)>; 2]) {
-        let one = accounts[0];
-        let two = accounts[1];
+    fn compare_all_accounts(
+        one: &[(Pubkey, AccountSharedData)],
+        two: &[(Pubkey, AccountSharedData)],
+    ) {
         let mut two_indexes = (0..two.len()).collect::<Vec<_>>();
         one.iter().for_each(|(pubkey, account)| {
             for i in 0..two_indexes.len() {
@@ -17757,10 +17758,10 @@ pub mod tests {
 
         let max_slot_inclusive = ancient_slot + (num_normal_slots as Slot);
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
-        compare_all_accounts([
+        compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        ]);
+        );
 
         // combine normal append vec(s) into existing ancient append vec
         db.combine_ancient_slots(
@@ -17768,10 +17769,10 @@ pub mod tests {
             CAN_RANDOMLY_SHRINK_FALSE,
         );
 
-        compare_all_accounts([
+        compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        ]);
+        );
 
         // create a 2nd ancient append vec at 'next_slot'
         let tf = crate::append_vec::test_utils::get_append_vec_path("test_shrink_ancient");
@@ -17780,20 +17781,20 @@ pub mod tests {
         let max_slot_inclusive = next_slot + (num_normal_slots as Slot);
 
         let initial_accounts = get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1));
-        compare_all_accounts([
+        compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        ]);
+        );
 
         db.combine_ancient_slots(
             (next_slot..=max_slot_inclusive).collect(),
             CAN_RANDOMLY_SHRINK_FALSE,
         );
 
-        compare_all_accounts([
+        compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        ]);
+        );
 
         // now, shrink the second ancient append vec into the first one
         let mut current_ancient = CurrentAncientAppendVec::new(
@@ -17817,11 +17818,29 @@ pub mod tests {
         // this removes the storages entry completely from the hashmap for 'next_slot'.
         // Otherwise, we have a zero length vec in that hashmap
         db.handle_dropped_roots_for_ancient(dropped_roots);
+        assert!(db.get_storages_for_slot(next_slot).is_none());
 
-        compare_all_accounts([
+        // include all the slots we put into the ancient append vec - they should contain nothing
+        compare_all_accounts(
             &initial_accounts,
             &get_all_accounts(&db, ancient_slot..(max_slot_inclusive + 1)),
-        ]);
+        );
+        // look at just the ancient append vec
+        compare_all_accounts(
+            &initial_accounts,
+            &get_all_accounts(&db, ancient_slot..(ancient_slot + 1)),
+        );
+        // make sure there is only 1 ancient append vec at the ancient slot
+        assert_eq!(db.get_storages_for_slot(ancient_slot).unwrap().len(), 1);
+        assert!(is_ancient(
+            &db.get_storages_for_slot(ancient_slot)
+                .unwrap()
+                .first()
+                .unwrap()
+                .accounts
+        ));
+        ((ancient_slot + 1)..=max_slot_inclusive)
+            .for_each(|slot| assert!(db.get_storages_for_slot(slot).is_none()));
     }
 
     #[test]
