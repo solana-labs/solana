@@ -13,7 +13,9 @@ on:
       - v[0-9]+.[0-9]+
 
 jobs:
-  docs-build:
+  check:
+    outputs:
+      continue: ${{ steps.check.outputs.need_to_build }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -21,47 +23,64 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get commit range (push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "COMMIT_RANGE=$GIHTUB_SHA" >> $GITHUB_ENV
+
+      - name: Get commit range (pull_request)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "COMMIT_RANGE=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+
+      - name: Get file status
+        run: |
+          set +e
+          git diff --name-only $COMMIT_RANGE | grep \
+            -e '.github/workflows/docs.yml' \
+            -e 'docs/**'
+          echo "FILE_CHANGED=$?" >> $GITHUB_ENV
+
       - name: Check
         id: check
+        shell: bash
         run: |
           source ci/env.sh
-          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"
-          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          TAG=$CI_TAG
 
-      - name: Get specific changed files
-        id: changed-files-specific
-        uses: tj-actions/changed-files@v34
-        with:
-          files: |
-            .github/workflows/docs.yml
-            docs/**
+          echo "TAG: $TAG"
+          echo "CHANNEL: $CHANNEL"
+          echo "FILE_CHANGED: $FILE_CHANGED"
 
-      - name: Pre Build
-        id: prebuild
-        run: |
-          echo "tag: ${{ steps.check.outputs.tag }}"
-          echo "channel: ${{ steps.check.outputs.channel }}"
-          echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
-          echo "need_to_build=${{
-            steps.check.outputs.tag != ''
-            ||
-            (
-              (steps.check.outputs.channel == 'edge' || steps.check.outputs.channel == 'beta')
-              &&
-              steps.changed-files-specific.outputs.any_changed != ''
-            )
-          }}" >> $GITHUB_OUTPUT
-        shell: bash
+          echo need_to_build="$(
+            if [ "$TAG" != '' ]
+            then
+              echo 1
+            elif [ $FILE_CHANGED = 0 ] && ( [ "$CHANNEL" = "beta" ] || [ "$CHANNEL" = "edge" ] )
+            then
+              echo 1
+            else
+              echo 0
+            fi
+          )" >> $GITHUB_OUTPUT
+
+  build_and_deploy:
+    needs:
+      - check
+    if: ${{ needs.check.outputs.continue == 1 }}
+    name: build & deploy
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Setup Node
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         uses: actions/setup-node@v3
         with:
           node-version: 16
 
       - name: Build
-        if: ${{ steps.prebuild.outputs.need_to_build == 'true' }}
         working-directory: docs
         run: |
           npm install
@@ -69,8 +88,14 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
+  notification:
+    if: failure()
+    runs-on: ubuntu-20.04
+    needs:
+      - check
+      - build_and_deploy
+    steps:
       - name: Send Slack notifiaction
-        if: failure()
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
         uses: voxmedia/github-action-slack-notify-build@v1
