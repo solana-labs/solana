@@ -9587,8 +9587,8 @@ impl AccountsDb {
 
 /// Specify the source of the accounts data when calculating the accounts hash
 ///
-/// Using the Index is meant for tests and debugging; not intended during normal validator
-/// operation.
+/// Using the Index is meant for testing the hash calculation itself and debugging;
+/// not intended during normal validator operation.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum CalcAccountsHashDataSource {
     IndexForTests,
