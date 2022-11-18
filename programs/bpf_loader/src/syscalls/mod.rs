@@ -1638,9 +1638,7 @@ declare_syscall!(
         memory_mapping: &mut MemoryMapping,
     ) -> Result<u64, EbpfError> {
         use solana_sdk::alt_bn128::prelude::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING};
-
         let budget = invoke_context.get_compute_budget();
-
         let (cost, output): (u64, usize) = match group_op {
             ALT_BN128_ADD => (
                 budget.alt_bn128_addition_cost,
@@ -1669,15 +1667,15 @@ declare_syscall!(
             }
         };
 
-        invoke_context.get_compute_meter().consume(cost)?;
+        consume_compute_meter(invoke_context, cost)?;
 
-                let call_result = translate_slice_mut::<u8>(
-                    memory_mapping,
-                    result_addr,
-                    ALT_BN128_MULTIPLICATION_OUTPUT_LEN as u64,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+        let input = translate_slice::<u8>(
+            memory_mapping,
+            input_addr,
+            input_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
 
         let call_result = translate_slice_mut::<u8>(
             memory_mapping,
