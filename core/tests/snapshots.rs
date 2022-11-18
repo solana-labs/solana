@@ -101,7 +101,7 @@ impl SnapshotTestConfig {
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
-            false,
+            true,
             accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
@@ -252,7 +252,7 @@ fn run_bank_forks_snapshot_n<F>(
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
-            snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(true, false, 0, &mut None);
         }
     }
 
@@ -784,7 +784,7 @@ fn test_bank_forks_incremental_snapshot(
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
-                false,
+                true,
                 false,
                 0,
                 &mut last_full_snapshot_slot,
@@ -1041,7 +1041,7 @@ fn test_snapshots_with_background_services(
         bank_forks.clone(),
         &exit,
         abs_request_handler,
-        false,
+        true,
         false,
         None,
     );
