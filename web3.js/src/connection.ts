@@ -2574,8 +2574,7 @@ export type SignatureResult = {
 /**
  * Signature result with signature trying to confirm
  */
- export type SignatureResultWithContext = {
-  err: TransactionError | null;
+ export type SignatureResultWithContext = SignatureResult & {
   signature?: string;
 };
 
