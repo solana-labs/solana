@@ -4,8 +4,6 @@ use {
     console::style,
     fd_lock::{RwLock, RwLockWriteGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
-    solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
-    solana_sdk::quic::QUIC_PORT_OFFSET,
     std::{
         borrow::Cow,
         env,
@@ -20,6 +18,7 @@ use {
 
 pub mod admin_rpc_service;
 pub mod bootstrap;
+pub mod cli;
 pub mod dashboard;
 
 #[cfg(unix)]
@@ -88,30 +87,6 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
                 None
             }
         }
-    }
-}
-
-pub fn port_validator(port: String) -> Result<(), String> {
-    port.parse::<u16>()
-        .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
-}
-
-pub fn port_range_validator(port_range: String) -> Result<(), String> {
-    if let Some((start, end)) = solana_net_utils::parse_port_range(&port_range) {
-        if end - start < MINIMUM_VALIDATOR_PORT_RANGE_WIDTH {
-            Err(format!(
-                "Port range is too small.  Try --dynamic-port-range {}-{}",
-                start,
-                start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
-            ))
-        } else if end.checked_add(QUIC_PORT_OFFSET).is_none() {
-            Err("Invalid dynamic_port_range.".to_string())
-        } else {
-            Ok(())
-        }
-    } else {
-        Err("Invalid port range".to_string())
     }
 }
 
