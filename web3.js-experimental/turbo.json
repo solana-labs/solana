@@ -1,0 +1,27 @@
+{
+    "$schema": "https://turbo.build/schema.json",
+    "pipeline": {
+        "build": {
+            "outputs": ["dist/**"]
+        },
+        "build:typedefs": {
+            "dependsOn": ["build"],
+            "outputs": ["dist/**"]
+        },
+        "lint": {
+            "outputs": []
+        },
+        "verifyTreeShakability:browser": {
+            "dependsOn": ["build"],
+            "outputs": []
+        },
+        "verifyTreeShakability:native": {
+            "dependsOn": ["build"],
+            "outputs": []
+        },
+        "verifyTreeShakability:node": {
+            "dependsOn": ["build"],
+            "outputs": []
+        }
+    }
+}
