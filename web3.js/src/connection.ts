@@ -2572,6 +2572,14 @@ export type SignatureResult = {
 };
 
 /**
+ * Signature result with signature trying to confirm
+ */
+ export type SignatureResultWithContext = {
+  err: TransactionError | null;
+  signature?: string;
+};
+
+/**
  * Transaction error
  */
 export type TransactionError = {} | string;
@@ -5015,6 +5023,69 @@ export class Connection {
       options,
     );
     return result;
+  }
+
+  /**
+ * Send a transaction that has already been signed and serialized into the
+ * wire format and confirm with retry via blockheight strategy. 
+ */
+  async sendAndConfirmRawTransactionWithRetry(
+    rawTransaction: Buffer | Uint8Array | Array<number>,
+    options?: SendOptions,
+    commitment?: Commitment,
+  ): Promise<RpcResponseAndContext<SignatureResultWithContext>> {
+    const blockhashResponse = await this.getLatestBlockhashAndContext();
+    const lastValidBlockHeight = blockhashResponse.context.slot + 150;
+    let blockheight = await this.getBlockHeight();
+    let finalResult: RpcResponseAndContext<SignatureResultWithContext> = {
+      context: {
+        slot: 0,
+      },
+      value: {
+        err: null,
+      }
+    };
+    let signature = "";
+    let logs: string[] = [];
+    while (blockheight < lastValidBlockHeight) {
+      const signatureResult = await this
+        .sendRawTransaction(rawTransaction, options)
+        .then(async (sendSignature: string) => {
+          signature = sendSignature;
+          return await this.confirmTransaction({
+            signature: sendSignature,
+            blockhash: blockhashResponse.value.blockhash,
+            lastValidBlockHeight,
+          }, commitment);
+        })
+        .catch((e) => {
+          logs.push(e?.message)
+          console.error("Error with txn", e);
+        });
+      if (signatureResult && !signatureResult.value.err) {
+        finalResult = {
+          context: signatureResult.context,
+          value: {
+            err: signatureResult.value.err,
+            signature
+          }
+        };
+        break;
+      }
+      await sleep(500);
+      blockheight = await this.getBlockHeight();
+    }
+    if (!finalResult.value.signature) {
+      finalResult = {
+        context: {
+          slot: blockhashResponse.context.slot,
+        },
+        value: {
+          err: new SendTransactionError("Transaction failed", logs),
+        }
+      }
+    }
+    return finalResult;
   }
 
   /**
