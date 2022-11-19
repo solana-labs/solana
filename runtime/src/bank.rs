@@ -7128,7 +7128,7 @@ impl Bank {
             let mut verify_time = Measure::start("verify_bank_hash");
             let verify = self.verify_bank_hash(VerifyBankHash {
                 test_hash_calculation,
-                ignore_mismatch: ignore_mismatch,
+                ignore_mismatch,
                 require_rooted_bank: false,
                 run_in_background: true,
                 store_hash_raw_data_for_debug: false,
