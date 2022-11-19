@@ -1,7 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    bincode::serialize_into,
     crossbeam_channel::unbounded,
     fs_extra::dir::CopyOptions,
     itertools::Itertools,
@@ -19,7 +18,7 @@ use {
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
-        bank::{Bank, BankSlotDelta},
+        bank::Bank,
         bank_forks::BankForks,
         epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
@@ -552,20 +551,6 @@ fn test_concurrent_snapshot_packaging(
         .expect("SnapshotPackagerService exited with error");
 
     // Check the archive we cached the state for earlier was generated correctly
-
-    // before we compare, stick an empty status_cache in this dir so that the package comparison works
-    // This is needed since the status_cache is added by the packager and is not collected from
-    // the source dir for snapshots
-    snapshot_utils::serialize_snapshot_data_file(
-        &saved_snapshots_dir
-            .path()
-            .join(snapshot_utils::SNAPSHOT_STATUS_CACHE_FILENAME),
-        |stream| {
-            serialize_into(stream, &[] as &[BankSlotDelta])?;
-            Ok(())
-        },
-    )
-    .unwrap();
 
     // files were saved off before we reserialized the bank in the hacked up accounts_hash_verifier stand-in.
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(

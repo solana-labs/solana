@@ -2579,6 +2579,22 @@ pub fn verify_snapshot_archive<P, Q, R>(
         assert!(crate::serde_snapshot::compare_two_serialized_banks(&p1, &p2).unwrap());
         std::fs::remove_file(p1).unwrap();
         std::fs::remove_file(p2).unwrap();
+
+        // The new the status_cache file is inside the slot directory together with the snapshot file.
+        // When unpacking an archive, the status_cache file from the archive is one-level up outside of
+        //  the slot direcotry.
+        // The unpacked status_cache file need to be put back into the slot directory for the directory
+        // comparison to pass.
+        let existing_unpacked_status_cache_file =
+            unpacked_snapshots.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        let new_unpacked_status_cache_file = unpacked_snapshots
+            .join(&slot)
+            .join(SNAPSHOT_STATUS_CACHE_FILENAME);
+        fs::rename(
+            existing_unpacked_status_cache_file,
+            new_unpacked_status_cache_file,
+        )
+        .unwrap();
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
