@@ -1,12 +1,33 @@
 ---
 title: Fork Generation
+description: "A fork is created when validators do not agree on a newly produced block. Using a consensus algorithm validators vote on which will be finalized."
 ---
 
-This section describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
+The Solana protocol doesn’t wait for all validators to agree on a newly produced block before the next block is produced. Because of that, it’s quite common for two different blocks to be chained to the same parent block. In those situations, we call each conflicting chain a [“fork.”](./fork-generation.md)
+
+Solana validators need to vote on one of these forks and reach agreement on which one to use through a consensus algorithm (that is beyond the scope of this article). The main point you need to remember is that when there are competing forks, only one fork will be finalized by the cluster and the abandoned blocks in competing forks are all discarded.
+
+This section describes how forks naturally occur as a consequence of [leader rotation](./leader-rotation.md).
 
 ## Overview
 
-Nodes take turns being leader and generating the PoH that encodes state changes. The cluster can tolerate loss of connection to any leader by synthesizing what the leader _**would**_ have generated had it been connected but not ingesting any state changes. The possible number of forks is thereby limited to a "there/not-there" skip list of forks that may arise on leader rotation slot boundaries. At any given slot, only a single leader's transactions will be accepted.
+Nodes take turns being [leader](./../terminology.md#leader) and generating the PoH that encodes state changes. The cluster can tolerate loss of connection to any leader by synthesizing what the leader _**would**_ have generated had it been connected but not ingesting any state changes.
+
+The possible number of forks is thereby limited to a "there/not-there" skip list of forks that may arise on leader rotation slot boundaries. At any given slot, only a single leader's transactions will be accepted.
+
+### Forking example
+
+The table below illustrates what competing forks could look like. Time progresses from left to right and each slot is assigned to a validator that temporarily becomes the cluster “leader” and may produce a block for that slot.
+
+In this example, the leader for slot 3 chose to chain its “Block 3” directly to “Block 1” and in doing so skipped “Block 2”. Similarly, the leader for slot 5 chose to chain “Block 5” directly to “Block 3” and skipped “Block 4”.
+
+> Note that across different forks, the block produced for a given slot is _always_ the same because producing two different blocks for the same slot is a slashable offense. So the conflicting forks above can be distinguished from each other by which slots they have _skipped_.
+
+|        | Slot 1  | Slot 2  | Slot 3  | Slot 4  | Slot 5  |
+| ------ | ------- | ------- | ------- | ------- | ------- |
+| Fork 1 | Block 1 |         | Block 3 |         | Block 5 |
+| Fork 2 | Block 1 |         | Block 3 | Block 4 |         |
+| Fork 3 | Block 1 | Block 2 |         |         |         |
 
 ## Message Flow
 
