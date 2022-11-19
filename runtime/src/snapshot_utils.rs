@@ -3279,6 +3279,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
 
@@ -3392,6 +3393,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
 
@@ -3525,6 +3527,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
 
@@ -3648,6 +3651,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
 
@@ -3789,6 +3793,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -3854,6 +3859,7 @@ mod tests {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
         .unwrap();
         assert_eq!(

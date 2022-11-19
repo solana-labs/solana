@@ -133,7 +133,11 @@ impl GeyserPluginManager {
 }
 
 impl BpfTracerPluginManager for GeyserPluginManager {
-    fn bpf_tracer_plugins(&mut self) -> &mut [Box<dyn BpfTracerPlugin>] {
+    fn bpf_tracer_plugins(&self) -> &[Box<dyn BpfTracerPlugin>] {
+        &self.bpf_tracer_plugins
+    }
+
+    fn bpf_tracer_plugins_mut(&mut self) -> &mut [Box<dyn BpfTracerPlugin>] {
         &mut self.bpf_tracer_plugins
     }
 }

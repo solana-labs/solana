@@ -10,5 +10,5 @@ homepage = "https://solana.com/"
 
 [dependencies]
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
-solana_rbpf = "0.2.35"
+solana_rbpf = "=0.2.36"
 thiserror = "1.0.31"

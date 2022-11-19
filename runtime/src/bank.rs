@@ -1281,7 +1281,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
-            incremental_snapshot_persistence: None,
+            incremental_snapshot_persistence: Option::default(),
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1299,7 +1299,7 @@ impl Bank {
             signature_count: AtomicU64::default(),
             capitalization: AtomicU64::default(),
             max_tick_height: u64::default(),
-            hashes_per_tick: Option::<u64>::default(),
+            hashes_per_tick: Option::default(),
             ticks_per_slot: u64::default(),
             ns_per_slot: u128::default(),
             genesis_creation_time: UnixTimestamp::default(),
@@ -1323,11 +1323,11 @@ impl Bank {
             runtime_config: Arc::<RuntimeConfig>::default(),
             builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
-            cluster_type: Option::<ClusterType>::default(),
+            cluster_type: Option::default(),
             lazy_rent_collection: AtomicBool::default(),
             rewards_pool_pubkeys: Arc::<HashSet<Pubkey>>::default(),
             executor_cache: RwLock::<BankExecutorCache>::default(),
-            transaction_debug_keys: Option::<Arc<HashSet<Pubkey>>>::default(),
+            transaction_debug_keys: Option::default(),
             transaction_log_collector_config: Arc::<RwLock<TransactionLogCollectorConfig>>::default(
             ),
             transaction_log_collector: Arc::<RwLock<TransactionLogCollector>>::default(),
@@ -1338,10 +1338,10 @@ impl Bank {
             cost_tracker: RwLock::<CostTracker>::default(),
             sysvar_cache: RwLock::<SysvarCache>::default(),
             accounts_data_size_initial: 0,
-            accounts_data_size_delta_on_chain: AtomicI64::new(0),
-            accounts_data_size_delta_off_chain: AtomicI64::new(0),
+            accounts_data_size_delta_on_chain: AtomicI64::default(),
+            accounts_data_size_delta_off_chain: AtomicI64::default(),
             fee_structure: FeeStructure::default(),
-            bpf_tracer_plugin_manager: None,
+            bpf_tracer_plugin_manager: Option::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1371,6 +1371,7 @@ impl Bank {
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
             &Arc::default(),
+            None,
         )
     }
 
@@ -1388,6 +1389,7 @@ impl Bank {
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
             &Arc::default(),
+            None,
         )
     }
 
@@ -1405,6 +1407,7 @@ impl Bank {
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
         exit: &Arc<AtomicBool>,
+        bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1421,6 +1424,7 @@ impl Bank {
         bank.transaction_debug_keys = debug_keys;
         bank.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
+        bank.bpf_tracer_plugin_manager = bpf_tracer_plugin_manager;
 
         bank.process_genesis_config(genesis_config);
         bank.finish_init(
@@ -4123,7 +4127,11 @@ impl Bank {
     }
 
     #[allow(dead_code)] // Preparation for BankExecutorCache rework
-    fn create_executor(&self, pubkey: &Pubkey) -> Result<Arc<dyn Executor>> {
+    fn create_executor(
+        &self,
+        pubkey: &Pubkey,
+        enable_instruction_tracing: bool,
+    ) -> Result<Arc<dyn Executor>> {
         let program = if let Some(program) = self.get_account_with_fixed_root(pubkey) {
             program
         } else {
@@ -4184,6 +4192,7 @@ impl Bank {
             &program,
             programdata.as_ref().unwrap_or(&program),
             self.runtime_config.bpf_jit,
+            enable_instruction_tracing,
         )
         .map(|(executor, _create_executor_metrics)| executor)
         .map_err(|err| TransactionError::InstructionError(0, err))
@@ -15622,7 +15631,7 @@ pub(crate) mod tests {
         programdata_account.set_rent_epoch(1);
         bank.store_account_and_update_capitalization(&key1, &program_account);
         bank.store_account_and_update_capitalization(&programdata_key, &programdata_account);
-        bank.create_executor(&key1).unwrap();
+        bank.create_executor(&key1, false).unwrap();
 
         // Remove all
         bank.remove_executor(&key1);

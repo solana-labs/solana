@@ -726,7 +726,6 @@ pub fn test_process_blockstore(
     blockstore: &Blockstore,
     opts: &ProcessOptions,
     exit: &Arc<AtomicBool>,
-    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
     // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle all
     // EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze() waiting for
@@ -770,7 +769,7 @@ pub fn test_process_blockstore(
         None,
         None,
         exit,
-        bpf_tracer_plugin_manager,
+        None,
     );
 
     process_blockstore_from_root(
@@ -798,6 +797,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     exit: &Arc<AtomicBool>,
+    bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
 ) -> Arc<RwLock<BankForks>> {
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
@@ -813,6 +813,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
         exit,
+        bpf_tracer_plugin_manager,
     );
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 

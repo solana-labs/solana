@@ -1,5 +1,5 @@
 use {
-    solana_rbpf::vm::TraceRecord,
+    solana_rbpf::vm::{TraceAnalyzer, TraceItem},
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{
         any::Any,
@@ -57,10 +57,11 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
     ///
     /// Note: This associated function is expected to return as soon as possible in order to
     /// not affect validator's performance.
-    fn trace_bpf<'a>(
+    fn trace_bpf(
         &mut self,
         program_id: &Pubkey,
         blockhash: &Hash,
-        trace: &[TraceRecord<'a>],
+        trace_analyzer: &TraceAnalyzer,
+        trace: &[TraceItem],
     ) -> Result<()>;
 }

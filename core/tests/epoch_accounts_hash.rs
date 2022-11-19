@@ -462,6 +462,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 None,
                 None,
                 &Arc::new(AtomicBool::new(false)),
+                None,
             )
             .unwrap()
             .0;

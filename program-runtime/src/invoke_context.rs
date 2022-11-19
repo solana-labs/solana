@@ -867,6 +867,13 @@ impl<'a> InvokeContext<'a> {
             .map(|context| context.allocator.clone())
             .ok_or(InstructionError::CallDepth)
     }
+
+    pub fn has_bpf_tracing_plugins(&self) -> bool {
+        self.bpf_tracer_plugin_manager
+            .as_ref()
+            .map(|plugins| !plugins.read().unwrap().bpf_tracer_plugins().is_empty())
+            .unwrap_or(false)
+    }
 }
 
 pub struct MockInvokeContextPreparation {

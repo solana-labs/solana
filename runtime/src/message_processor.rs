@@ -328,6 +328,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -378,6 +379,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert_eq!(
             result,
@@ -418,6 +420,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert_eq!(
             result,
@@ -555,6 +558,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert_eq!(
             result,
@@ -589,6 +593,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert!(result.is_ok());
 
@@ -620,6 +625,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
         assert!(result.is_ok());
         assert_eq!(
@@ -700,6 +706,7 @@ mod tests {
             0,
             0,
             &mut 0,
+            None,
         );
 
         assert_eq!(

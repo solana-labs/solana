@@ -153,6 +153,7 @@ pub fn load_bank_forks(
             cache_block_meta_sender,
             accounts_update_notifier,
             exit,
+            bpf_tracer_plugin_manager,
         );
         bank_forks
             .read()

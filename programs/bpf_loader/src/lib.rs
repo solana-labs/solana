@@ -15,7 +15,7 @@ use {
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::SyscallError,
     },
-    log::{error, log_enabled, trace, Level::Trace},
+    log::error,
     solana_bpf_tracer_plugin_interface::BpfTracerPluginManager,
     solana_measure::measure::Measure,
     solana_program_runtime::{
@@ -34,8 +34,9 @@ use {
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
+        static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, EbpfVm, InstructionMeter, ProgramResult, TraceRecord, VerifiedExecutable},
+        vm::{Config, ContextObject, EbpfVm, ProgramResult, TraceAnalyzer, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -131,6 +132,7 @@ fn create_executor_from_bytes(
     programdata: &[u8],
     use_jit: bool,
     reject_deployment_of_broken_elfs: bool,
+    enable_instruction_tracing: bool,
 ) -> Result<Arc<BpfExecutor>, InstructionError> {
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
@@ -149,7 +151,7 @@ fn create_executor_from_bytes(
         enable_stack_frame_gaps: true,
         instruction_meter_checkpoint_distance: 10000,
         enable_instruction_meter: true,
-        enable_instruction_tracing: false,
+        enable_instruction_tracing,
         enable_symbol_and_section_labels: false,
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
@@ -210,6 +212,7 @@ pub fn create_executor_from_account(
     program: &BorrowedAccount,
     programdata: &BorrowedAccount,
     use_jit: bool,
+    enable_instruction_tracing: bool,
 ) -> Result<(Arc<dyn Executor>, Option<CreateMetrics>), InstructionError> {
     if !check_loader_id(program.get_owner()) {
         ic_logger_msg!(
@@ -271,6 +274,7 @@ pub fn create_executor_from_account(
             .ok_or(InstructionError::AccountDataTooSmall)?,
         use_jit,
         false, /* reject_deployment_of_broken_elfs */
+        enable_instruction_tracing,
     )?;
     if let Some(mut tx_executor_cache) = tx_executor_cache {
         tx_executor_cache.set(*program.get_key(), executor.clone(), false);
@@ -446,6 +450,7 @@ fn process_instruction_common(
             &program,
             programdata.as_ref().unwrap_or(&program),
             use_jit,
+            invoke_context.has_bpf_tracing_plugins(),
         )?;
         drop(program);
         drop(programdata);
@@ -683,6 +688,7 @@ fn process_loader_upgradeable_instruction(
                     .ok_or(InstructionError::AccountDataTooSmall)?,
                 use_jit,
                 true,
+                invoke_context.has_bpf_tracing_plugins(),
             )?;
             drop(buffer);
             create_executor_metrics.program_id = new_program_id.to_string();
@@ -862,6 +868,7 @@ fn process_loader_upgradeable_instruction(
                     .ok_or(InstructionError::AccountDataTooSmall)?,
                 use_jit,
                 true,
+                invoke_context.has_bpf_tracing_plugins(),
             )?;
             drop(buffer);
             create_executor_metrics.program_id = new_program_id.to_string();
@@ -1356,6 +1363,7 @@ fn process_loader_instruction(
                 program.get_data(),
                 use_jit,
                 true,
+                invoke_context.has_bpf_tracing_plugins(),
             )?;
             create_executor_metrics.program_id = program.get_key().to_string();
             create_executor_metrics.submit_datapoint(&mut invoke_context.timings);
@@ -1371,9 +1379,9 @@ fn process_loader_instruction(
     Ok(())
 }
 
-fn trace_bpf(
-    vm: &mut EbpfVm<RequisiteVerifier, ThisInstructionMeter>,
-    executable: &Executable<ThisInstructionMeter>,
+fn trace_bpf<'a, 'b>(
+    vm: &mut EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>,
+    executable: &Executable<InvokeContext<'static>>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     blockhash: &Hash,
     program_id: &Pubkey,
@@ -1385,65 +1393,33 @@ fn trace_bpf(
     let bpf_tracing_plugins = match bpf_tracer_plugins_guard_opt {
         None => vec![],
         Some(ref mut guard) => guard
-            .bpf_tracer_plugins()
+            .bpf_tracer_plugins_mut()
             .iter_mut()
             .filter(|plugin| plugin.bpf_tracing_enabled())
             .collect(),
     };
 
-    if bpf_tracing_plugins.is_empty() && !log_enabled!(Trace) {
+    if bpf_tracing_plugins.is_empty() {
         return;
     }
 
     let analysis = Analysis::from_executable(executable).unwrap();
+    let trace_analyzer = TraceAnalyzer::new(&analysis);
 
-    if !bpf_tracing_plugins.is_empty() {
-        let trace: Vec<TraceRecord> = vm
-            .get_program_environment()
-            .tracer
-            .iter(&analysis)
-            .collect();
-
-        for plugin in bpf_tracing_plugins.into_iter() {
-            if let Err(err) = plugin.trace_bpf(program_id, blockhash, &trace) {
-                error!(
-                    "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
-                    plugin.name(),
-                    program_id,
-                    err
-                );
-            }
+    for plugin in bpf_tracing_plugins.into_iter() {
+        if let Err(err) = plugin.trace_bpf(
+            program_id,
+            blockhash,
+            &trace_analyzer,
+            &vm.context_object.trace_log,
+        ) {
+            error!(
+                "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
+                plugin.name(),
+                program_id,
+                err
+            );
         }
-    }
-
-    if log_enabled!(Trace) {
-        let mut trace_buffer = Vec::<u8>::new();
-        vm.get_program_environment()
-            .tracer
-            .write(&mut trace_buffer, &analysis)
-            .unwrap();
-        let trace_string = String::from_utf8(trace_buffer).unwrap();
-        trace!("SBF Program Instruction Trace:\n{}", trace_string);
-    }
-}
-
-/// Passed to the VM to enforce the compute budget
-pub struct ThisInstructionMeter {
-    pub compute_meter: Rc<RefCell<ComputeMeter>>,
-}
-impl ThisInstructionMeter {
-    fn new(compute_meter: Rc<RefCell<ComputeMeter>>) -> Self {
-        Self { compute_meter }
-    }
-}
-impl InstructionMeter for ThisInstructionMeter {
-    fn consume(&mut self, amount: u64) {
-        // 1 to 1 instruction to compute unit mapping
-        // ignore error, Ebpf will bail if exceeded
-        let _ = self.compute_meter.borrow_mut().consume(amount);
-    }
-    fn get_remaining(&self) -> u64 {
-        self.compute_meter.borrow().get_remaining()
     }
 }
 
@@ -1503,7 +1479,7 @@ impl Executor for BpfExecutor {
             execute_time = Measure::start("execute");
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
-            drop(vm);
+
             ic_logger_msg!(
                 log_collector,
                 "Program {} consumed {} of {} compute units",
