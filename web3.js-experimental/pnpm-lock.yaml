@@ -2,19 +2,23 @@ lockfileVersion: 5.4
 
 specifiers:
   '@solana/eslint-config-solana': 0.0.1
+  '@solana/prettier-config-solana': 0.0.1
   '@typescript-eslint/eslint-plugin': ^5.43.0
   '@typescript-eslint/parser': ^5.43.0
   eslint: ^8.27.0
   eslint-plugin-react-hooks: ^4.6.0
   eslint-plugin-sort-keys-fix: ^1.1.2
+  prettier: ^2.7.1
 
 devDependencies:
   '@solana/eslint-config-solana': 0.0.1_ztnh6fhyc5hpr65au4n6lh5k7i
+  '@solana/prettier-config-solana': 0.0.1_prettier@2.7.1
   '@typescript-eslint/eslint-plugin': 5.43.0_wze2rj5tow7zwqpgbdx2buoy3m
   '@typescript-eslint/parser': 5.43.0_e3uo4sehh4zr4i6m57mkkxxv7y
   eslint: 8.27.0
   eslint-plugin-react-hooks: 4.6.0_eslint@8.27.0
   eslint-plugin-sort-keys-fix: 1.1.2
+  prettier: 2.7.1
 
 packages:
 
@@ -90,6 +94,14 @@ packages:
       eslint: 8.27.0
       eslint-plugin-react-hooks: 4.6.0_eslint@8.27.0
       eslint-plugin-sort-keys-fix: 1.1.2
+    dev: true
+
+  /@solana/prettier-config-solana/0.0.1_prettier@2.7.1:
+    resolution: {integrity: sha512-tg3KZJ5JbI8gCN0r3TCve0yr3w3QhJoHZG8oxLCYKBwQ9EK3oZTai80j2YXu5kaixpWKTznXuyLsy9+5hz0scw==}
+    peerDependencies:
+      prettier: ^2.7.1
+    dependencies:
+      prettier: 2.7.1
     dev: true
 
   /@types/json-schema/7.0.11:
@@ -850,6 +862,12 @@ packages:
   /prelude-ls/1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
+    dev: true
+
+  /prettier/2.7.1:
+    resolution: {integrity: sha512-ujppO+MkdPqoVINuDFDRLClm7D78qbDt0/NR+wp5FqEZOoTNAjPHWj17QRhu7geIHJfcNhRk1XVQmF8Bp3ye+g==}
+    engines: {node: '>=10.13.0'}
+    hasBin: true
     dev: true
 
   /punycode/2.1.1:
