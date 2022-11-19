@@ -5027,6 +5027,7 @@ export class Connection {
   /**
  * Send a transaction that has already been signed and serialized into the
  * wire format and confirm with retry via blockheight strategy. 
+ *  If no sendoptions are passed skipPreflight defaults to true
  */
   async sendAndConfirmRawTransactionWithRetry(
     rawTransaction: Buffer | Uint8Array | Array<number>,
@@ -5048,7 +5049,9 @@ export class Connection {
     let logs: string[] = [];
     while (blockheight < lastValidBlockHeight) {
       const signatureResult = await this
-        .sendRawTransaction(rawTransaction, options)
+        .sendRawTransaction(rawTransaction, options ? options : {
+          skipPreflight: true
+        })
         .then(async (sendSignature: string) => {
           signature = sendSignature;
           return await this.confirmTransaction({
@@ -5085,6 +5088,42 @@ export class Connection {
       }
     }
     return finalResult;
+  }
+
+   /**
+ * Send a transaction that has already been signed and serialized into the
+ * wire format with retry via blockheight strategy. 
+ * If no sendoptions are passed skipPreflight defaults to true
+ */
+  async sendRawTransactionWithRetry(
+    rawTransaction: Buffer | Uint8Array | Array<number>,
+    options?: SendOptions,
+  ): Promise<TransactionSignature> {
+    const blockhashResponse = await this.getLatestBlockhashAndContext();
+    const lastValidBlockHeight = blockhashResponse.context.slot + 150;
+    let blockheight = await this.getBlockHeight();
+    let signature = undefined
+    let logs: string[] = [];
+    while (blockheight < lastValidBlockHeight) {
+      const signatureResult = await this
+        .sendRawTransaction(rawTransaction, options ? options : { skipPreflight: true})
+        .catch((e) => {
+          logs.push(e?.message)
+          console.error("Error with txn", e);
+        });
+      if (signatureResult) {
+        signature = signatureResult;
+        break;
+      }
+      
+      await sleep(500);
+      blockheight = await this.getBlockHeight();
+    }
+
+    if(!signature) {
+      throw new SendTransactionError('Error sending txn', logs);
+    }
+    return signature;
   }
 
   /**
