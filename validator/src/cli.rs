@@ -11,8 +11,7 @@ use {
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     solana_faucet::faucet::FAUCET_PORT,
-    solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
-    solana_net_utils::VALIDATOR_PORT_RANGE,
+    solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
     solana_rpc_client_api::request::MAX_MULTIPLE_ACCOUNTS,
     solana_runtime::{
@@ -28,16 +27,15 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
-    solana_sdk::clock::Slot,
-    solana_sdk::hash::Hash,
-    solana_sdk::quic::QUIC_PORT_OFFSET,
-    solana_sdk::{epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, rpc_port},
+    solana_sdk::{
+        clock::Slot, epoch_schedule::MINIMUM_SLOTS_PER_EPOCH, hash::Hash, quic::QUIC_PORT_OFFSET,
+        rpc_port,
+    },
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
-    std::path::PathBuf,
-    std::str::FromStr,
+    std::{path::PathBuf, str::FromStr},
 };
 
 const EXCLUDE_KEY: &str = "account-index-exclude-key";
