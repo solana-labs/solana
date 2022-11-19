@@ -1,1 +1,1 @@
-export default {};
+export { default as rpc } from './rpc.js';

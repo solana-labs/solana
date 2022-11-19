@@ -2,7 +2,14 @@
     "name": "@solana/web3.js-experimental",
     "version": "0.0.0-development",
     "description": "Solana Javascript API",
-    "main": "./index.js",
+    "browser": {
+        "./dist/index.node.cjs.js": "./dist/index.browser.cjs.js",
+        "./dist/index.node.esm.js": "./dist/index.browser.esm.js"
+    },
+    "react-native": "./dist/index.native.esm.js",
+    "main": "./dist/index.node.cjs.js",
+    "module": "./dist/index.node.esm.js",
+    "types": "./dist/index.d.ts",
     "type": "module",
     "sideEffects": false,
     "keywords": [
@@ -11,6 +18,9 @@
         "web3"
     ],
     "scripts": {
+        "build": "tsup",
+        "build:typedefs": "tsc -p ./tsconfig.declarations.json",
+        "dev": "pnpm run build --watch",
         "lint": "eslint 'src/**'"
     },
     "author": "Solana Maintainers <maintainers@solana.com>",
@@ -29,12 +39,16 @@
     "devDependencies": {
         "@solana/eslint-config-solana": "0.0.1",
         "@solana/prettier-config-solana": "0.0.1",
+        "@swc/core": "^1",
         "@typescript-eslint/eslint-plugin": "^5.43.0",
         "@typescript-eslint/parser": "^5.43.0",
         "eslint": "^8.27.0",
         "eslint-plugin-react-hooks": "^4.6.0",
         "eslint-plugin-sort-keys-fix": "^1.1.2",
-        "prettier": "^2.7.1"
+        "postcss": "^8.4.12",
+        "prettier": "^2.7.1",
+        "tsup": "6.5.0",
+        "typescript": "^4.1.0"
     },
     "prettier": "@solana/prettier-config-solana"
 }
