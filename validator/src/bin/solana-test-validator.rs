@@ -1,16 +1,13 @@
 use {
-    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
+    clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit},
     crossbeam_channel::unbounded,
     log::*,
     solana_clap_utils::{
         input_parsers::{pubkey_of, pubkeys_of, value_of},
-        input_validators::{
-            is_parsable, is_pubkey, is_pubkey_or_keypair, is_slot, is_url_or_moniker,
-            normalize_to_url_if_moniker,
-        },
+        input_validators::normalize_to_url_if_moniker,
     },
     solana_core::tower_storage::FileTowerStorage,
-    solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
+    solana_faucet::faucet::run_local_faucet_with_port,
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
@@ -20,19 +17,18 @@ use {
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
-        epoch_schedule::{EpochSchedule, MINIMUM_SLOTS_PER_EPOCH},
+        epoch_schedule::EpochSchedule,
         native_token::sol_to_lamports,
         pubkey::Pubkey,
         rent::Rent,
-        rpc_port,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::*,
     solana_validator::{
-        admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger, println_name_value,
-        redirect_stderr_to_file,
+        admin_rpc_service, cli, dashboard::Dashboard, ledger_lockfile, lock_ledger,
+        println_name_value, redirect_stderr_to_file,
     },
     std::{
         collections::HashSet,
@@ -45,14 +41,6 @@ use {
     },
 };
 
-/* 10,000 was derived empirically by watching the size
- * of the rocksdb/ directory self-limit itself to the
- * 40MB-150MB range when running `solana-test-validator`
- */
-const DEFAULT_MAX_LEDGER_SHREDS: u64 = 10_000;
-
-const DEFAULT_FAUCET_SOL: f64 = 1_000_000.;
-
 #[derive(PartialEq, Eq)]
 enum Output {
     None,
@@ -61,384 +49,9 @@ enum Output {
 }
 
 fn main() {
-    let default_rpc_port = rpc_port::DEFAULT_RPC_PORT.to_string();
-    let default_faucet_port = FAUCET_PORT.to_string();
-    let default_limit_ledger_size = DEFAULT_MAX_LEDGER_SHREDS.to_string();
-    let default_faucet_sol = DEFAULT_FAUCET_SOL.to_string();
-
-    let matches = App::new("solana-test-validator")
-        .about("Test Validator")
-        .version(solana_version::version!())
-        .arg({
-            let arg = Arg::with_name("config_file")
-                .short("C")
-                .long("config")
-                .value_name("PATH")
-                .takes_value(true)
-                .help("Configuration file to use");
-            if let Some(ref config_file) = *solana_cli_config::CONFIG_FILE {
-                arg.default_value(config_file)
-            } else {
-                arg
-            }
-        })
-        .arg(
-            Arg::with_name("json_rpc_url")
-                .short("u")
-                .long("url")
-                .value_name("URL_OR_MONIKER")
-                .takes_value(true)
-                .validator(is_url_or_moniker)
-                .help(
-                    "URL for Solana's JSON RPC or moniker (or their first letter): \
-                   [mainnet-beta, testnet, devnet, localhost]",
-                ),
-        )
-        .arg(
-            Arg::with_name("mint_address")
-                .long("mint")
-                .value_name("PUBKEY")
-                .validator(is_pubkey)
-                .takes_value(true)
-                .help(
-                    "Address of the mint account that will receive tokens \
-                       created at genesis.  If the ledger already exists then \
-                       this parameter is silently ignored [default: client keypair]",
-                ),
-        )
-        .arg(
-            Arg::with_name("ledger_path")
-                .short("l")
-                .long("ledger")
-                .value_name("DIR")
-                .takes_value(true)
-                .required(true)
-                .default_value("test-ledger")
-                .help("Use DIR as ledger location"),
-        )
-        .arg(
-            Arg::with_name("reset")
-                .short("r")
-                .long("reset")
-                .takes_value(false)
-                .help(
-                    "Reset the ledger to genesis if it exists. \
-                       By default the validator will resume an existing ledger (if present)",
-                ),
-        )
-        .arg(
-            Arg::with_name("quiet")
-                .short("q")
-                .long("quiet")
-                .takes_value(false)
-                .conflicts_with("log")
-                .help("Quiet mode: suppress normal output"),
-        )
-        .arg(
-            Arg::with_name("log")
-                .long("log")
-                .takes_value(false)
-                .conflicts_with("quiet")
-                .help("Log mode: stream the validator log"),
-        )
-        .arg(
-            Arg::with_name("account_indexes")
-                .long("account-index")
-                .takes_value(true)
-                .multiple(true)
-                .possible_values(&["program-id", "spl-token-owner", "spl-token-mint"])
-                .value_name("INDEX")
-                .help("Enable an accounts index, indexed by the selected account field"),
-        )
-        .arg(
-            Arg::with_name("faucet_port")
-                .long("faucet-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .default_value(&default_faucet_port)
-                .validator(solana_validator::port_validator)
-                .help("Enable the faucet on this port"),
-        )
-        .arg(
-            Arg::with_name("rpc_port")
-                .long("rpc-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .default_value(&default_rpc_port)
-                .validator(solana_validator::port_validator)
-                .help("Enable JSON RPC on this port, and the next port for the RPC websocket"),
-        )
-        .arg(
-            Arg::with_name("enable_rpc_bigtable_ledger_storage")
-                .long("enable-rpc-bigtable-ledger-storage")
-                .takes_value(false)
-                .hidden(true)
-                .help("Fetch historical transaction info from a BigTable instance \
-                       as a fallback to local ledger data"),
-        )
-        .arg(
-            Arg::with_name("rpc_bigtable_instance")
-                .long("rpc-bigtable-instance")
-                .value_name("INSTANCE_NAME")
-                .takes_value(true)
-                .hidden(true)
-                .default_value("solana-ledger")
-                .help("Name of BigTable instance to target"),
-        )
-        .arg(
-            Arg::with_name("rpc_bigtable_app_profile_id")
-                .long("rpc-bigtable-app-profile-id")
-                .value_name("APP_PROFILE_ID")
-                .takes_value(true)
-                .hidden(true)
-                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
-                .help("Application profile id to use in Bigtable requests")
-        )
-        .arg(
-            Arg::with_name("rpc_pubsub_enable_vote_subscription")
-                .long("rpc-pubsub-enable-vote-subscription")
-                .takes_value(false)
-                .help("Enable the unstable RPC PubSub `voteSubscribe` subscription"),
-        )
-        .arg(
-            Arg::with_name("bpf_program")
-                .long("bpf-program")
-                .value_names(&["ADDRESS_OR_KEYPAIR", "SBF_PROGRAM.SO"])
-                .takes_value(true)
-                .number_of_values(2)
-                .multiple(true)
-                .help(
-                    "Add a SBF program to the genesis configuration. \
-                       If the ledger already exists then this parameter is silently ignored. \
-                       First argument can be a pubkey string or path to a keypair",
-                ),
-        )
-        .arg(
-            Arg::with_name("account")
-                .long("account")
-                .value_names(&["ADDRESS", "DUMP.JSON"])
-                .takes_value(true)
-                .number_of_values(2)
-                .allow_hyphen_values(true)
-                .multiple(true)
-                .help(
-                    "Load an account from the provided JSON file (see `solana account --help` on how to dump \
-                        an account to file). Files are searched for relatively to CWD and tests/fixtures. \
-                        If ADDRESS is omitted via the `-` placeholder, the one in the file will be used. \
-                        If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("account_dir")
-                .long("account-dir")
-                .value_name("DIRECTORY")
-                .validator(|value| {
-                    value
-                        .parse::<PathBuf>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
-                        .and_then(|path| {
-                            if path.exists() && path.is_dir() {
-                                Ok(())
-                            } else {
-                                Err(format!("path does not exist or is not a directory: {}", value))
-                            }
-                        })
-                })
-                .takes_value(true)
-                .multiple(true)
-                .help(
-                    "Load all the accounts from the JSON files found in the specified DIRECTORY \
-                        (see also the `--account` flag). \
-                        If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("no_bpf_jit")
-                .long("no-bpf-jit")
-                .takes_value(false)
-                .help("Disable the just-in-time compiler and instead use the interpreter for SBF. Windows always disables JIT."),
-        )
-        .arg(
-            Arg::with_name("ticks_per_slot")
-                .long("ticks-per-slot")
-                .value_name("TICKS")
-                .validator(is_parsable::<u64>)
-                .takes_value(true)
-                .help("The number of ticks in a slot"),
-        )
-        .arg(
-            Arg::with_name("slots_per_epoch")
-                .long("slots-per-epoch")
-                .value_name("SLOTS")
-                .validator(|value| {
-                    value
-                        .parse::<Slot>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
-                        .and_then(|slot| {
-                            if slot < MINIMUM_SLOTS_PER_EPOCH {
-                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
-                            } else {
-                                Ok(())
-                            }
-                        })
-                })
-                .takes_value(true)
-                .help(
-                    "Override the number of slots in an epoch. \
-                       If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("gossip_port")
-                .long("gossip-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .help("Gossip port number for the validator"),
-        )
-        .arg(
-            Arg::with_name("gossip_host")
-                .long("gossip-host")
-                .value_name("HOST")
-                .takes_value(true)
-                .validator(solana_net_utils::is_host)
-                .help(
-                    "Gossip DNS name or IP address for the validator to advertise in gossip \
-                       [default: 127.0.0.1]",
-                ),
-        )
-        .arg(
-            Arg::with_name("dynamic_port_range")
-                .long("dynamic-port-range")
-                .value_name("MIN_PORT-MAX_PORT")
-                .takes_value(true)
-                .validator(solana_validator::port_range_validator)
-                .help(
-                    "Range to use for dynamically assigned ports \
-                    [default: 1024-65535]",
-                ),
-        )
-        .arg(
-            Arg::with_name("bind_address")
-                .long("bind-address")
-                .value_name("HOST")
-                .takes_value(true)
-                .validator(solana_net_utils::is_host)
-                .default_value("0.0.0.0")
-                .help("IP address to bind the validator ports [default: 0.0.0.0]"),
-        )
-        .arg(
-            Arg::with_name("clone_account")
-                .long("clone")
-                .short("c")
-                .value_name("ADDRESS")
-                .takes_value(true)
-                .validator(is_pubkey_or_keypair)
-                .multiple(true)
-                .requires("json_rpc_url")
-                .help(
-                    "Copy an account from the cluster referenced by the --url argument the \
-                     genesis configuration. \
-                     If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("maybe_clone_account")
-                .long("maybe-clone")
-                .value_name("ADDRESS")
-                .takes_value(true)
-                .validator(is_pubkey_or_keypair)
-                .multiple(true)
-                .requires("json_rpc_url")
-                .help(
-                    "Copy an account from the cluster referenced by the --url argument, \
-                     skipping it if it doesn't exist. \
-                     If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("warp_slot")
-                .required(false)
-                .long("warp-slot")
-                .short("w")
-                .takes_value(true)
-                .value_name("WARP_SLOT")
-                .validator(is_slot)
-                .min_values(0)
-                .max_values(1)
-                .help(
-                    "Warp the ledger to WARP_SLOT after starting the validator. \
-                        If no slot is provided then the current slot of the cluster \
-                        referenced by the --url argument will be used",
-                ),
-        )
-        .arg(
-            Arg::with_name("limit_ledger_size")
-                .long("limit-ledger-size")
-                .value_name("SHRED_COUNT")
-                .takes_value(true)
-                .default_value(default_limit_ledger_size.as_str())
-                .help("Keep this amount of shreds in root slots."),
-        )
-        .arg(
-            Arg::with_name("faucet_sol")
-                .long("faucet-sol")
-                .takes_value(true)
-                .value_name("SOL")
-                .default_value(default_faucet_sol.as_str())
-                .help(
-                    "Give the faucet address this much SOL in genesis. \
-                     If the ledger already exists then this parameter is silently ignored",
-                ),
-        )
-        .arg(
-            Arg::with_name("geyser_plugin_config")
-                .long("geyser-plugin-config")
-                .alias("accountsdb-plugin-config")
-                .value_name("FILE")
-                .takes_value(true)
-                .multiple(true)
-                .help("Specify the configuration file for the Geyser plugin."),
-        )
-        .arg(
-            Arg::with_name("no_accounts_db_caching")
-                .long("no-accounts-db-caching")
-                .help("Disables accounts caching"),
-        )
-        .arg(
-            Arg::with_name("deactivate_feature")
-                .long("deactivate-feature")
-                .takes_value(true)
-                .value_name("FEATURE_PUBKEY")
-                .validator(is_pubkey)
-                .multiple(true)
-                .help("deactivate this feature in genesis.")
-        )
-        .arg(
-            Arg::with_name("compute_unit_limit")
-                .long("compute-unit-limit")
-                .alias("max-compute-units")
-                .value_name("COMPUTE_UNITS")
-                .validator(is_parsable::<u64>)
-                .takes_value(true)
-                .help("Override the runtime's compute unit limit per transaction")
-        )
-        .arg(
-            Arg::with_name("log_messages_bytes_limit")
-                .long("log-messages-bytes-limit")
-                .value_name("BYTES")
-                .validator(is_parsable::<usize>)
-                .takes_value(true)
-                .help("Maximum number of bytes written to the program log before truncation")
-        )
-        .arg(
-            Arg::with_name("transaction_account_lock_limit")
-                .long("transaction-account-lock-limit")
-                .value_name("NUM_ACCOUNTS")
-                .validator(is_parsable::<u64>)
-                .takes_value(true)
-                .help("Override the runtime's account lock limit per transaction")
-        )
-        .get_matches();
+    let default_args = cli::DefaultTestArgs::new();
+    let version = solana_version::version!();
+    let matches = cli::test_app(version, &default_args).get_matches();
 
     let output = if matches.is_present("quiet") {
         Output::None
