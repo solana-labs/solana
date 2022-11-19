@@ -21,7 +21,10 @@
         "build": "tsup",
         "build:typedefs": "tsc -p ./tsconfig.declarations.json",
         "dev": "pnpm run build --watch",
-        "lint": "eslint 'src/**'"
+        "lint": "eslint 'src/**'",
+        "verifyTreeShakability:browser": "agadoo dist/index.browser.esm.js",
+        "verifyTreeShakability:native": "agadoo dist/index.node.esm.js",
+        "verifyTreeShakability:node": "agadoo dist/index.native.esm.js"
     },
     "author": "Solana Maintainers <maintainers@solana.com>",
     "license": "MIT",
@@ -42,6 +45,7 @@
         "@swc/core": "^1",
         "@typescript-eslint/eslint-plugin": "^5.43.0",
         "@typescript-eslint/parser": "^5.43.0",
+        "agadoo": "^2.0.0",
         "eslint": "^8.27.0",
         "eslint-plugin-react-hooks": "^4.6.0",
         "eslint-plugin-sort-keys-fix": "^1.1.2",
