@@ -22,6 +22,7 @@
         "build:typedefs": "tsc -p ./tsconfig.declarations.json",
         "dev": "pnpm run build --watch",
         "lint": "eslint 'src/**'",
+        "package": "turbo build build:typedefs lint verifyTreeShakability:browser verifyTreeShakability:native verifyTreeShakability:node",
         "verifyTreeShakability:browser": "agadoo dist/index.browser.esm.js",
         "verifyTreeShakability:native": "agadoo dist/index.node.esm.js",
         "verifyTreeShakability:node": "agadoo dist/index.native.esm.js"
@@ -52,6 +53,7 @@
         "postcss": "^8.4.12",
         "prettier": "^2.7.1",
         "tsup": "6.5.0",
+        "turbo": "^1.6.3",
         "typescript": "^4.1.0"
     },
     "prettier": "@solana/prettier-config-solana"
