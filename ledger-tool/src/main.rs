@@ -2980,16 +2980,32 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                assert!(
-                    blockstore.meta(snapshot_slot).unwrap().is_some(),
-                    "snapshot slot doesn't exist"
-                );
+                if blockstore.meta(snapshot_slot).unwrap().is_none() {
+                    // Find the highest full slot that is less than or equal to the snapshot slot, if it exists
+                    let most_recent_slot_before_snapshot_slot = blockstore
+                        .slot_meta_iterator(0)
+                        .ok()
+                        .map(|r| {
+                            r.filter_map(|meta| {
+                                (meta.0 <= snapshot_slot && meta.1.is_full()).then_some(meta.0)
+                            })
+                            .last()
+                        })
+                        .unwrap_or_default();
+
+                    eprintln!(
+                        "Error: snapshot slot {} does not exist in blockstore or is not full. Nearest earlier full slot in blockstore is {:?}",
+                        snapshot_slot,
+                        most_recent_slot_before_snapshot_slot,
+                    );
+                    exit(1);
+                }
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
-                            "ending_slot ({}) must be greater than snapshot_slot ({})",
+                            "Error: ending_slot ({}) must be greater than snapshot_slot ({})",
                             ending_slot, snapshot_slot
                         );
                         exit(1);
