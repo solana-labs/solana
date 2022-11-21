@@ -2229,6 +2229,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
     let validator_config = ValidatorConfig {
         snapshot_config: Some(LocalCluster::create_dummy_load_only_snapshot_config()),
+        accounts_db_caching_enabled: true,
         ..ValidatorConfig::default()
     };
     let mut config = ClusterConfig {
