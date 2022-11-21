@@ -75,7 +75,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         Self {
             accounts,
             hashes_and_write_versions: None,
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
     /// used when accounts does NOT contains hash or write version
@@ -91,7 +91,7 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
         Self {
             accounts,
             hashes_and_write_versions: Some((hashes, write_versions)),
-            _phantom: PhantomData::default(),
+            _phantom: PhantomData,
         }
     }
 
