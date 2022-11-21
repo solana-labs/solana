@@ -5,12 +5,12 @@
 //! The main function is `calculate_cost` which returns &TransactionCost.
 //!
 
-use solana_program_runtime::compute_budget::{
-    ComputeBudget, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
-};
 use {
     crate::block_cost_limits::*,
     log::*,
+    solana_program_runtime::compute_budget::{
+        ComputeBudget, LoadedAccountsDataLimitType, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
+    },
     solana_sdk::{
         compute_budget, instruction::CompiledInstruction, program_utils::limited_deserialize,
         pubkey::Pubkey, system_instruction::SystemInstruction, system_program,
@@ -146,6 +146,8 @@ impl CostModel {
             transaction.message().program_instructions_iter(),
             true,
             false, /*not support request_units_deprecated*/
+            false,
+            LoadedAccountsDataLimitType::V0,
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
@@ -214,18 +216,16 @@ impl CostModel {
 
 #[cfg(test)]
 mod tests {
-    use solana_sdk::compute_budget::{self, ComputeBudgetInstruction};
-
-    use crate::inline_spl_token;
-
     use {
         super::*,
         crate::{
             bank::Bank,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            inline_spl_token,
         },
         solana_sdk::{
             bpf_loader,
+            compute_budget::{self, ComputeBudgetInstruction},
             hash::Hash,
             instruction::CompiledInstruction,
             message::Message,
