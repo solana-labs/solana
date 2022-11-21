@@ -41,7 +41,6 @@ use {
         },
         fee::FeeStructure,
         genesis_config::ClusterType,
-        hash::Hash,
         message::{
             v0::{LoadedAddresses, MessageAddressTableLookup},
             SanitizedMessage,
@@ -1208,10 +1207,6 @@ impl Accounts {
         for k in readonly_keys {
             account_locks.unlock_readonly(k);
         }
-    }
-
-    pub fn bank_hash_at(&self, slot: Slot, rewrites: &Rewrites) -> Hash {
-        self.bank_hash_info_at(slot, rewrites).accounts_delta_hash
     }
 
     pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
@@ -2605,7 +2600,7 @@ mod tests {
             false,
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_at(1, &Rewrites::default());
+        accounts.bank_hash_info_at(1, &Rewrites::default());
     }
 
     #[test]

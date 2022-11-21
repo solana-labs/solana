@@ -210,8 +210,12 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     );
     check_accounts(&daccounts, &pubkeys, 100);
     assert_eq!(
-        accounts.bank_hash_at(0, &Rewrites::default()),
-        daccounts.bank_hash_at(0, &Rewrites::default())
+        accounts
+            .bank_hash_info_at(0, &Rewrites::default())
+            .accounts_delta_hash,
+        daccounts
+            .bank_hash_info_at(0, &Rewrites::default())
+            .accounts_delta_hash
     );
 }
 
