@@ -3478,6 +3478,7 @@ pub mod rpc_full {
                             gossip: Some(contact_info.gossip),
                             tpu: valid_address_or_none(&contact_info.tpu),
                             rpc: valid_address_or_none(&contact_info.rpc),
+                            pubsub: valid_address_or_none(&contact_info.rpc_pubsub),
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
