@@ -474,7 +474,6 @@ impl VoteStorage {
 
         while let Some((packets, payload)) = scanner.iterate() {
             let vote_packets = packets.iter().map(|p| (*p).clone()).collect_vec();
-
             if let Some(retryable_vote_indices) = processing_function(&vote_packets, payload) {
                 self.latest_unprocessed_votes.insert_batch(
                     retryable_vote_indices.iter().filter_map(|i| {

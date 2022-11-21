@@ -72,6 +72,8 @@ where
     current_items: Vec<&'a T>,
     /// Initialized
     initialized: bool,
+    /// Can do a partial iterator reset
+    can_do_partial_reset: bool,
 }
 
 impl<'a, T, U, F> MultiIteratorScanner<'a, T, U, F>
@@ -89,6 +91,7 @@ where
             current_positions: Vec::with_capacity(max_iterators),
             current_items: Vec::with_capacity(max_iterators),
             initialized: false,
+            can_do_partial_reset: true,
         }
     }
 
@@ -101,8 +104,18 @@ where
             self.initialized = true;
             self.initialize_current_positions();
         } else {
+            if self.can_do_partial_reset && self.all_but_first_at_end() {
+                self.try_readd_secondary_iterators();
+                self.can_do_partial_reset = false;
+            }
             self.advance_current_positions();
         }
+
+        // Re-allow partial reset if we've gotten another batch that's not size 1
+        if !self.can_do_partial_reset && !self.all_but_first_at_end() {
+            self.can_do_partial_reset = true;
+        }
+
         self.get_current_items()
     }
 
@@ -112,8 +125,8 @@ where
     }
 
     /// Re-add secondary iterators from the 0th position if there is only one iterator.
-    pub fn try_readd_secondary_iterators(&mut self) {
-        if self.current_positions.len() == 1 && self.max_iterators > 1 {
+    fn try_readd_secondary_iterators(&mut self) {
+        if self.all_but_first_at_end() {
             self.spawn_additional_iterators();
         }
     }
@@ -196,6 +209,11 @@ where
         }
 
         found
+    }
+
+    /// Checks if all positions, except the first, have reached the end of the slice.
+    fn all_but_first_at_end(&self) -> bool {
+        self.current_positions.len() == 1 && self.max_iterators > 1
     }
 }
 
