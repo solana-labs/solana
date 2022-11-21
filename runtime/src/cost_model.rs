@@ -83,10 +83,6 @@ impl TransactionCost {
 pub struct CostModel {}
 
 impl CostModel {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
