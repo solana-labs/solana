@@ -111,10 +111,26 @@ where
         self.payload
     }
 
+    /// Re-add secondary iterators from the 0th position if there is only one iterator.
+    pub fn try_readd_secondary_iterators(&mut self) {
+        if self.current_positions.len() == 1 && self.max_iterators > 1 {
+            self.spawn_additional_iterators();
+        }
+    }
+
     /// Initialize the `current_positions` vector for the first batch.
     fn initialize_current_positions(&mut self) {
-        let mut last_index = 0;
-        for _iterator_index in 0..self.max_iterators {
+        if let Some(index) = self.march_iterator(0) {
+            self.current_positions.push(index);
+            self.spawn_additional_iterators();
+        }
+    }
+
+    /// Spawn and advance iterators from the 0th position.
+    fn spawn_additional_iterators(&mut self) {
+        assert_eq!(self.current_positions.len(), 1);
+        let mut last_index = *self.current_positions.first().unwrap();
+        for _iterator_index in 1..self.max_iterators {
             match self.march_iterator(last_index) {
                 Some(index) => {
                     self.current_positions.push(index);
