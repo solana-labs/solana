@@ -2595,8 +2595,6 @@ impl ReplayStage {
                     bank_complete_time.as_us(),
                 );
                 execute_timings.accumulate(&r_replay_stats.execute_timings);
-
-                bank.read_cost_tracker().unwrap().report_stats(bank.slot());
             } else {
                 trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
@@ -2607,14 +2605,6 @@ impl ReplayStage {
             }
         }
 
-        // Send accumulated execute-timings to cost_update_service.
-        if !execute_timings.details.per_program_timings.is_empty() {
-            cost_update_sender
-                .send(CostUpdate::ExecuteTiming {
-                    execute_timings: Box::new(execute_timings),
-                })
-                .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
-        }
         inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
         did_complete_bank
     }
