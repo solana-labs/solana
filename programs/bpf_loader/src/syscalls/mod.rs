@@ -23,11 +23,16 @@ use {
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
+        alt_bn128::prelude::{
+            alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, AltBn128Error,
+            ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
+            ALT_BN128_PAIRING_ELEMENT_LEN, ALT_BN128_PAIRING_OUTPUT_LEN,
+        },
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
         feature_set::{
-            self, blake3_syscall_enabled, check_physical_overlapping,
+            self, alt_bn128_syscall_enabled, blake3_syscall_enabled, check_physical_overlapping,
             check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
             enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
@@ -145,6 +150,7 @@ pub fn register_syscalls<'a>(
     feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
+    let alt_bn128_syscall_enabled = feature_set.is_active(&alt_bn128_syscall_enabled::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -264,6 +270,14 @@ pub fn register_syscalls<'a>(
             !disable_deploy_of_alloc_free_syscall,
             b"sol_alloc_free_",
             SyscallAllocFree::call,
+        )?;
+
+        // Alt_bn128
+        register_feature_gated_syscall!(
+            syscall_registry,
+            alt_bn128_syscall_enabled,
+            b"sol_alt_bn128_group_op",
+            SyscallAltBn128::call,
         )?;
     }
 
@@ -1608,6 +1622,91 @@ declare_syscall!(
         consume_compute_meter(invoke_context, budget.syscall_base_cost)?;
 
         Ok(invoke_context.get_stack_height() as u64)
+    }
+);
+
+declare_syscall!(
+    /// alt_bn128 group operations
+    SyscallAltBn128,
+    fn inner_call(
+        invoke_context: &mut InvokeContext,
+        group_op: u64,
+        input_addr: u64,
+        input_size: u64,
+        result_addr: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+    ) -> Result<u64, EbpfError> {
+        use solana_sdk::alt_bn128::prelude::{ALT_BN128_ADD, ALT_BN128_MUL, ALT_BN128_PAIRING};
+        let budget = invoke_context.get_compute_budget();
+        let (cost, output): (u64, usize) = match group_op {
+            ALT_BN128_ADD => (
+                budget.alt_bn128_addition_cost,
+                ALT_BN128_ADDITION_OUTPUT_LEN,
+            ),
+            ALT_BN128_MUL => (
+                budget.alt_bn128_multiplication_cost,
+                ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
+            ),
+            ALT_BN128_PAIRING => {
+                let ele_len = input_size.saturating_div(ALT_BN128_PAIRING_ELEMENT_LEN as u64);
+                let cost = budget
+                    .alt_bn128_pairing_one_pair_cost_first
+                    .saturating_add(
+                        budget
+                            .alt_bn128_pairing_one_pair_cost_other
+                            .saturating_mul(ele_len.saturating_sub(1)),
+                    )
+                    .saturating_add(budget.sha256_base_cost)
+                    .saturating_add(input_size)
+                    .saturating_add(ALT_BN128_PAIRING_OUTPUT_LEN as u64);
+                (cost, ALT_BN128_PAIRING_OUTPUT_LEN)
+            }
+            _ => {
+                return Err(SyscallError::InvalidAttribute.into());
+            }
+        };
+
+        consume_compute_meter(invoke_context, cost)?;
+
+        let input = translate_slice::<u8>(
+            memory_mapping,
+            input_addr,
+            input_size,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let call_result = translate_slice_mut::<u8>(
+            memory_mapping,
+            result_addr,
+            output as u64,
+            invoke_context.get_check_aligned(),
+            invoke_context.get_check_size(),
+        )?;
+
+        let calculation = match group_op {
+            ALT_BN128_ADD => alt_bn128_addition,
+            ALT_BN128_MUL => alt_bn128_multiplication,
+            ALT_BN128_PAIRING => alt_bn128_pairing,
+            _ => {
+                return Err(SyscallError::InvalidAttribute.into());
+            }
+        };
+
+        let result_point = match calculation(input) {
+            Ok(result_point) => result_point,
+            Err(e) => {
+                return Ok(e.into());
+            }
+        };
+
+        if result_point.len() != output {
+            return Ok(AltBn128Error::SliceOutOfBounds.into());
+        }
+
+        call_result.copy_from_slice(&result_point);
+        Ok(SUCCESS)
     }
 );
 

@@ -542,6 +542,10 @@ pub mod cap_transaction_accounts_data_size {
     solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
 }
 
+pub mod alt_bn128_syscall_enabled {
+    solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -672,6 +676,7 @@ lazy_static! {
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
+        (alt_bn128_syscall_enabled::id(), "add alt_bn128 syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
