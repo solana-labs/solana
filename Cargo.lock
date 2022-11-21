@@ -1716,6 +1716,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gdbstub"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32c95766e0414f8bfc1d07055574c621b67739466d6ba516c4fef8e99d30d2e6"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "log",
+ "managed",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
 name = "gen-headers"
 version = "1.15.0"
 dependencies = [
@@ -2577,6 +2591,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "managed"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3115,6 +3135,12 @@ dependencies = [
  "smallvec",
  "windows-sys 0.32.0",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 
 [[package]]
 name = "pbkdf2"
@@ -4611,6 +4637,7 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "rayon",
+ "solana-client",
  "solana-core",
  "solana-gossip",
  "solana-ledger",
@@ -4663,7 +4690,6 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.15.0",
  "solana-send-transaction-service",
- "solana-tpu-client",
  "tarpc",
  "tokio",
  "tokio-serde",
@@ -4747,7 +4773,6 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "solana-measure",
- "solana-metrics",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-zk-token-sdk 1.15.0",
@@ -4825,6 +4850,8 @@ version = "1.15.0"
 dependencies = [
  "cargo_metadata",
  "clap 3.1.8",
+ "log",
+ "solana-logger 1.15.0",
 ]
 
 [[package]]
@@ -4888,6 +4915,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-cli-output",
+ "solana-client",
  "solana-config-program",
  "solana-faucet",
  "solana-logger 1.15.0",
@@ -4956,15 +4984,33 @@ dependencies = [
 name = "solana-client"
 version = "1.15.0"
 dependencies = [
+ "async-trait",
+ "bincode",
+ "enum_dispatch",
+ "futures 0.3.24",
+ "futures-util",
+ "indexmap",
+ "indicatif",
  "log",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "solana-logger 1.15.0",
  "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
  "solana-pubsub-client",
+ "solana-quic-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-rpc-client-nonce-utils",
  "solana-sdk 1.15.0",
+ "solana-streamer",
  "solana-thin-client",
  "solana-tpu-client",
+ "solana-udp-client",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -5049,6 +5095,7 @@ dependencies = [
  "serial_test",
  "solana-address-lookup-table-program",
  "solana-bloom",
+ "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -5098,6 +5145,7 @@ dependencies = [
  "serde",
  "serial_test",
  "solana-bench-tps",
+ "solana-client",
  "solana-core",
  "solana-faucet",
  "solana-gossip",
@@ -5360,6 +5408,7 @@ dependencies = [
  "serial_test",
  "solana-bloom",
  "solana-clap-utils",
+ "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -5544,6 +5593,7 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "serial_test",
+ "solana-client",
  "solana-config-program",
  "solana-core",
  "solana-download-utils",
@@ -5875,6 +5925,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-sdk 1.15.0",
+ "solana_rbpf",
  "thiserror",
 ]
 
@@ -5891,6 +5942,7 @@ dependencies = [
  "log",
  "serde",
  "solana-banks-client",
+ "solana-banks-interface",
  "solana-banks-server",
  "solana-bpf-loader-program",
  "solana-logger 1.15.0",
@@ -5930,11 +5982,28 @@ dependencies = [
 name = "solana-quic-client"
 version = "1.15.0"
 dependencies = [
+ "async-mutex",
+ "async-trait",
+ "crossbeam-channel",
+ "futures 0.3.24",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rustls 0.20.6",
  "solana-logger 1.15.0",
+ "solana-measure",
  "solana-metrics",
+ "solana-net-utils",
+ "solana-perf",
+ "solana-rpc-client-api",
  "solana-sdk 1.15.0",
  "solana-streamer",
  "solana-tpu-client",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -5989,6 +6058,7 @@ dependencies = [
  "soketto",
  "solana-account-decoder",
  "solana-address-lookup-table-program",
+ "solana-client",
  "solana-entry",
  "solana-faucet",
  "solana-gossip",
@@ -6098,6 +6168,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-account-decoder",
+ "solana-client",
  "solana-logger 1.15.0",
  "solana-pubsub-client",
  "solana-rpc",
@@ -6174,6 +6245,7 @@ dependencies = [
  "symlink",
  "tar",
  "tempfile",
+ "test-case",
  "thiserror",
  "zstd",
 ]
@@ -6314,6 +6386,7 @@ version = "1.15.0"
 dependencies = [
  "crossbeam-channel",
  "log",
+ "solana-client",
  "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
@@ -6535,35 +6608,23 @@ dependencies = [
 name = "solana-tpu-client"
 version = "1.15.0"
 dependencies = [
- "async-mutex",
  "async-trait",
  "bincode",
- "crossbeam-channel",
- "enum_dispatch",
- "futures 0.3.24",
  "futures-util",
  "indexmap",
  "indicatif",
- "itertools",
- "lazy_static",
  "log",
- "quinn",
- "quinn-proto",
- "quinn-udp",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
- "rustls 0.20.6",
  "solana-logger 1.15.0",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
- "solana-perf",
  "solana-pubsub-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
  "solana-sdk 1.15.0",
- "solana-streamer",
  "thiserror",
  "tokio",
 ]
@@ -6623,8 +6684,13 @@ dependencies = [
 name = "solana-udp-client"
 version = "1.15.0"
 dependencies = [
+ "async-trait",
  "solana-net-utils",
+ "solana-sdk 1.15.0",
+ "solana-streamer",
  "solana-tpu-client",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -6820,12 +6886,13 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.35"
+version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bcad04ab8dff83d39e5b039e419d03e83dafc6643401700b61acf0cc1589ff8"
+checksum = "0669f9f5c355899600732451c65cc717d0ef0c53717749f03520337c824fd8a1"
 dependencies = [
  "byteorder",
  "combine",
+ "gdbstub",
  "goblin",
  "hash32",
  "libc",

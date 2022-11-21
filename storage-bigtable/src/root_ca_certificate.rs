@@ -18,5 +18,5 @@ pub fn load() -> Result<Certificate, String> {
             include_bytes!("pki-goog-roots.pem").to_vec()
         }
     };
-    Ok(Certificate::from_pem(&pem))
+    Ok(Certificate::from_pem(pem))
 }

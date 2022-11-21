@@ -418,7 +418,7 @@ mod test {
         {
             let mut shred = shred.clone();
             let index = shred.common_header.index - shred.common_header.fec_set_index - 1;
-            shred.set_index(index as u32);
+            shred.set_index(index);
             assert_matches!(
                 shred.sanitize(),
                 Err(Error::InvalidErasureShardIndex { .. })

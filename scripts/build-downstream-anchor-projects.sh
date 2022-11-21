@@ -43,7 +43,7 @@ EOF
 anchor() {
   set -x
   rm -rf anchor
-  git clone https://github.com/project-serum/anchor.git
+  git clone https://github.com/coral-xyz/anchor.git
   cd anchor
 
   update_solana_dependencies . "$solana_ver"

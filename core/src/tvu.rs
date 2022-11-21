@@ -27,6 +27,7 @@ use {
         window_service::WindowService,
     },
     crossbeam_channel::{unbounded, Receiver},
+    solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -44,7 +45,6 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
-    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         collections::HashSet,
         net::UdpSocket,

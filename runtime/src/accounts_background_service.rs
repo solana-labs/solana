@@ -283,7 +283,7 @@ impl SnapshotRequestHandler {
         let SnapshotRequest {
             snapshot_root_bank,
             status_cache_slot_deltas,
-            request_type: _,
+            request_type,
             enqueued: _,
         } = snapshot_request;
 
@@ -297,7 +297,6 @@ impl SnapshotRequestHandler {
         let previous_hash = if test_hash_calculation {
             // We have to use the index version here.
             // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
-            // This comment is out of date and can be re-evaluated.
             snapshot_root_bank.update_accounts_hash(
                 CalcAccountsHashDataSource::IndexForTests,
                 false,
@@ -374,37 +373,52 @@ impl SnapshotRequestHandler {
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
-        let result = snapshot_utils::snapshot_bank(
-            &snapshot_root_bank,
-            status_cache_slot_deltas,
-            &self.accounts_package_sender,
-            &self.snapshot_config.bank_snapshots_dir,
-            &self.snapshot_config.full_snapshot_archives_dir,
-            &self.snapshot_config.incremental_snapshot_archives_dir,
-            self.snapshot_config.snapshot_version,
-            self.snapshot_config.archive_format,
-            hash_for_testing,
-            accounts_package_type,
-        );
-        if let Err(e) = result {
-            warn!(
-                "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
-                snapshot_root_bank.slot(),
-                accounts_package_type,
-                e,
-            );
-
-            if Self::is_snapshot_error_fatal(&e) {
-                return Err(e);
+        let snapshot_storages = snapshot_utils::get_snapshot_storages(&snapshot_root_bank);
+        let accounts_package = match request_type {
+            SnapshotRequestType::Snapshot => {
+                let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
+                    &self.snapshot_config.bank_snapshots_dir,
+                    &snapshot_root_bank,
+                    &snapshot_storages,
+                    self.snapshot_config.snapshot_version,
+                )
+                .expect("snapshot bank");
+                AccountsPackage::new_for_snapshot(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    &bank_snapshot_info,
+                    &self.snapshot_config.bank_snapshots_dir,
+                    status_cache_slot_deltas,
+                    &self.snapshot_config.full_snapshot_archives_dir,
+                    &self.snapshot_config.incremental_snapshot_archives_dir,
+                    snapshot_storages,
+                    self.snapshot_config.archive_format,
+                    self.snapshot_config.snapshot_version,
+                    hash_for_testing,
+                )
+                .expect("new accounts package for snapshot")
             }
-        }
+            SnapshotRequestType::EpochAccountsHash => {
+                // skip the bank snapshot, just make an accounts package to send to AHV
+                AccountsPackage::new_for_epoch_accounts_hash(
+                    accounts_package_type,
+                    &snapshot_root_bank,
+                    snapshot_storages,
+                    hash_for_testing,
+                )
+            }
+        };
+        self.accounts_package_sender
+            .send(accounts_package)
+            .expect("send accounts package");
         snapshot_time.stop();
-        info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-              accounts_package_type,
-              snapshot_root_bank.slot(),
-              snapshot_root_bank.get_accounts_hash(),
-              snapshot_root_bank.hash(),
-              );
+        info!(
+            "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+            accounts_package_type,
+            snapshot_root_bank.slot(),
+            snapshot_root_bank.get_accounts_hash(),
+            snapshot_root_bank.hash(),
+          );
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -431,31 +445,6 @@ impl SnapshotRequestHandler {
             ("non_snapshot_time_us", non_snapshot_time_us, i64),
         );
         Ok(snapshot_root_bank.block_height())
-    }
-
-    /// Check if a SnapshotError should be treated as 'fatal' by SnapshotRequestHandler, and
-    /// `handle_snapshot_requests()` in particular.  Fatal errors will cause the node to shutdown.
-    /// Non-fatal errors are logged and then swallowed.
-    ///
-    /// All `SnapshotError`s are enumerated, and there is **NO** default case.  This way, if
-    /// a new error is added to SnapshotError, a conscious decision must be made on how it should
-    /// be handled.
-    fn is_snapshot_error_fatal(err: &SnapshotError) -> bool {
-        match err {
-            SnapshotError::Io(..) => true,
-            SnapshotError::Serialize(..) => true,
-            SnapshotError::ArchiveGenerationFailure(..) => true,
-            SnapshotError::StoragePathSymlinkInvalid => true,
-            SnapshotError::UnpackError(..) => true,
-            SnapshotError::IoWithSource(..) => true,
-            SnapshotError::PathToFileNameError(..) => true,
-            SnapshotError::FileNameToStrError(..) => true,
-            SnapshotError::ParseSnapshotArchiveFileNameError(..) => true,
-            SnapshotError::MismatchedBaseSlot(..) => true,
-            SnapshotError::NoSnapshotArchives => true,
-            SnapshotError::MismatchedSlotHash(..) => true,
-            SnapshotError::VerifySlotDeltas(..) => true,
-        }
     }
 }
 
@@ -791,7 +780,10 @@ fn cmp_requests_by_priority(
 mod test {
     use {
         super::*,
-        crate::{epoch_accounts_hash, genesis_utils::create_genesis_config},
+        crate::{
+            epoch_accounts_hash::{self, EpochAccountsHash},
+            genesis_utils::create_genesis_config,
+        },
         crossbeam_channel::unbounded,
         solana_sdk::{account::AccountSharedData, epoch_schedule::EpochSchedule, pubkey::Pubkey},
     };
@@ -832,12 +824,12 @@ mod test {
     #[test]
     fn test_get_next_snapshot_request() {
         // These constants were picked to ensure the desired snapshot requests were sent to the
-        // channel.  With 100 slots per Epoch, the EAH start will be at slot 25.  Ensure there are
+        // channel.  With 400 slots per Epoch, the EAH start will be at slot 100.  Ensure there are
         // other requests before this slot, and then 2+ requests of each type afterwards (to
         // further test the prioritization logic).
-        const SLOTS_PER_EPOCH: Slot = 100;
-        const FULL_SNAPSHOT_INTERVAL: Slot = 20;
-        const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 6;
+        const SLOTS_PER_EPOCH: Slot = 400;
+        const FULL_SNAPSHOT_INTERVAL: Slot = 80;
+        const INCREMENTAL_SNAPSHOT_INTERVAL: Slot = 30;
 
         let snapshot_config = SnapshotConfig {
             full_snapshot_archive_interval_slots: FULL_SNAPSHOT_INTERVAL,
@@ -869,32 +861,38 @@ mod test {
             EpochSchedule::custom(SLOTS_PER_EPOCH, SLOTS_PER_EPOCH, false);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
         bank.set_startup_verification_complete();
+        // Need to set the EAH to Valid so that `Bank::new_from_parent()` doesn't panic during
+        // freeze when parent is in the EAH calculation window.
+        bank.rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .set_valid(EpochAccountsHash::new(Hash::new_unique()), 0);
 
         // Create new banks and send snapshot requests so that the following requests will be in
         // the channel before handling the requests:
         //
-        // fss 20
-        // iss 24
-        // eah 25 <-- handled 1st
-        // iss 30
-        // iss 36
-        // fss 40
-        // iss 42
-        // iss 48
-        // iss 54
-        // fss 60 <-- handled 2nd
-        // iss 66
-        // iss 72 <-- handled 3rd
-        // ahv 73
-        // ahv 74
-        // ahv 75 <-- handled 4th
+        // fss  80
+        // iss  90
+        // eah 100 <-- handled 1st
+        // iss 120
+        // iss 150
+        // fss 160
+        // iss 180
+        // iss 210
+        // fss 240 <-- handled 2nd
+        // iss 270
+        // iss 300 <-- handled 3rd
+        // ahv 301
+        // ahv 302
+        // ahv 303 <-- handled 4th
         //
         // (slots not called out will all be AHV)
-        // Also, incremental snapshots before slot 60 (the first full snapshot handled), will
+        // Also, incremental snapshots before slot 240 (the first full snapshot handled), will
         // actually be AHV since the last full snapshot slot will be `None`.  This is expected and
         // fine; but maybe unexpected for a reader/debugger without this additional context.
         let mut parent = Arc::clone(&bank);
-        for _ in 0..75 {
+        for _ in 0..303 {
             let bank = Arc::new(Bank::new_from_parent(
                 &parent,
                 &Pubkey::new_unique(),
@@ -918,9 +916,9 @@ mod test {
             accounts_package_type,
             AccountsPackageType::EpochAccountsHash
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 25);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 100);
 
-        // Ensure the full snapshot from slot 60 is handled 2nd
+        // Ensure the full snapshot from slot 240 is handled 2nd
         // (the older full snapshots are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
             .get_next_snapshot_request(None)
@@ -929,33 +927,33 @@ mod test {
             accounts_package_type,
             AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 60);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 240);
 
-        // Ensure the incremental snapshot from slot 72 is handled 3rd
+        // Ensure the incremental snapshot from slot 300 is handled 3rd
         // (the older incremental snapshots are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .unwrap();
         assert_eq!(
             accounts_package_type,
-            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(60))
+            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(240))
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 72);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 300);
 
-        // Ensure the accounts hash verifier from slot 75 is handled 4th
+        // Ensure the accounts hash verifier from slot 303 is handled 4th
         // (the older accounts hash verifiers are skipped and dropped)
         let (snapshot_request, accounts_package_type, ..) = snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .unwrap();
         assert_eq!(
             accounts_package_type,
             AccountsPackageType::AccountsHashVerifier
         );
-        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 75);
+        assert_eq!(snapshot_request.snapshot_root_bank.slot(), 303);
 
         // And now ensure the snapshot request channel is empty!
         assert!(snapshot_request_handler
-            .get_next_snapshot_request(Some(60))
+            .get_next_snapshot_request(Some(240))
             .is_none());
     }
 }

@@ -827,7 +827,7 @@ impl RpcSubscriptions {
                                 .get(&SubscriptionParams::SlotsUpdates)
                             {
                                 inc_new_counter_info!("rpc-subscription-notify-slots-updates", 1);
-                                notifier.notify(&slot_update, sub, false);
+                                notifier.notify(slot_update, sub, false);
                             }
                         }
                         // These notifications are only triggered by votes observed on gossip,
@@ -2951,13 +2951,13 @@ pub(crate) mod tests {
             &system_program::id(),
         );
 
-        bank_forks
+        assert!(bank_forks
             .read()
             .unwrap()
             .get(0)
             .unwrap()
-            .process_transaction_with_logs(&tx)
-            .unwrap();
+            .process_transaction_with_metadata(tx.clone())
+            .was_executed());
 
         subscriptions.notify_subscribers(CommitmentSlots::new_from_slot(0));
 

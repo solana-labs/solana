@@ -20,6 +20,7 @@ use {
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -35,7 +36,7 @@ use {
         instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
+        program_error::{ProgramError, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -62,6 +63,7 @@ use {
 // Export types so test clients can limit their solana crate dependencies
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
+    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::transaction_context::IndexOfAccount,
 };
@@ -197,11 +199,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
 ) -> u64 {
     let invoke_context = get_invoke_context();
     if invoke_context
-        .get_compute_meter()
-        .try_borrow_mut()
-        .map_err(|_| ACCOUNT_BORROW_FAILED)
-        .unwrap()
-        .consume(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .consume_checked(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
         .is_err()
     {
         panic!("Exceeded compute budget");
@@ -1142,8 +1140,8 @@ impl ProgramTestContext {
         bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
 
         // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
-        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not
-        // hang in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
         snapshot_request_receiver
             .try_iter()
             .filter(|snapshot_request| {
@@ -1156,7 +1154,10 @@ impl ProgramTestContext {
                     .accounts
                     .accounts_db
                     .epoch_accounts_hash_manager
-                    .set_invalid_for_tests();
+                    .set_valid(
+                        EpochAccountsHash::new(Hash::new_unique()),
+                        snapshot_request.snapshot_root_bank.slot(),
+                    )
             });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot

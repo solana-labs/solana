@@ -12,7 +12,10 @@ pub use {
 use {
     borsh::BorshDeserialize,
     futures::{future::join_all, Future, FutureExt, TryFutureExt},
-    solana_banks_interface::{BanksRequest, BanksResponse, BanksTransactionResultWithSimulation},
+    solana_banks_interface::{
+        BanksRequest, BanksResponse, BanksTransactionResultWithMetadata,
+        BanksTransactionResultWithSimulation,
+    },
     solana_program::{
         clock::Slot, fee_calculator::FeeCalculator, hash::Hash, program_pack::Pack, pubkey::Pubkey,
         rent::Rent, sysvar::Sysvar,
@@ -22,7 +25,7 @@ use {
         commitment_config::CommitmentLevel,
         message::Message,
         signature::Signature,
-        transaction::{self, Transaction},
+        transaction::{self, Transaction, VersionedTransaction},
     },
     tarpc::{
         client::{self, NewClient, RequestDispatch},
@@ -59,10 +62,10 @@ impl BanksClient {
     pub fn send_transaction_with_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
         self.inner
-            .send_transaction_with_context(ctx, transaction)
+            .send_transaction_with_context(ctx, transaction.into())
             .map_err(Into::into)
     }
 
@@ -114,39 +117,50 @@ impl BanksClient {
     pub fn process_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<Option<transaction::Result<()>>, BanksClientError>> + '_ {
         self.inner
-            .process_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .process_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
             .map_err(Into::into)
     }
 
     pub fn process_transaction_with_preflight_and_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
     {
         self.inner
             .process_transaction_with_preflight_and_commitment_and_context(
                 ctx,
-                transaction,
+                transaction.into(),
                 commitment,
             )
+            .map_err(Into::into)
+    }
+
+    pub fn process_transaction_with_metadata_and_context(
+        &mut self,
+        ctx: Context,
+        transaction: impl Into<VersionedTransaction>,
+    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
+    {
+        self.inner
+            .process_transaction_with_metadata_and_context(ctx, transaction.into())
             .map_err(Into::into)
     }
 
     pub fn simulate_transaction_with_commitment_and_context(
         &mut self,
         ctx: Context,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
         commitment: CommitmentLevel,
     ) -> impl Future<Output = Result<BanksTransactionResultWithSimulation, BanksClientError>> + '_
     {
         self.inner
-            .simulate_transaction_with_commitment_and_context(ctx, transaction, commitment)
+            .simulate_transaction_with_commitment_and_context(ctx, transaction.into(), commitment)
             .map_err(Into::into)
     }
 
@@ -166,9 +180,9 @@ impl BanksClient {
     /// blockhash expires.
     pub fn send_transaction(
         &mut self,
-        transaction: Transaction,
+        transaction: impl Into<VersionedTransaction>,
     ) -> impl Future<Output = Result<(), BanksClientError>> + '_ {
-        self.send_transaction_with_context(context::current(), transaction)
+        self.send_transaction_with_context(context::current(), transaction.into())
     }
 
     /// Return the fee parameters associated with a recent, rooted blockhash. The cluster
@@ -229,6 +243,17 @@ impl BanksClient {
                 )),
                 Some(transaction_result) => Ok(transaction_result?),
             })
+    }
+
+    /// Process a transaction and return the result with metadata.
+    pub fn process_transaction_with_metadata(
+        &mut self,
+        transaction: impl Into<VersionedTransaction>,
+    ) -> impl Future<Output = Result<BanksTransactionResultWithMetadata, BanksClientError>> + '_
+    {
+        let mut ctx = context::current();
+        ctx.deadline += Duration::from_secs(50);
+        self.process_transaction_with_metadata_and_context(ctx, transaction.into())
     }
 
     /// Send a transaction and return any preflight (sanitization or simulation) errors, or return

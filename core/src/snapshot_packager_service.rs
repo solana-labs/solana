@@ -305,7 +305,7 @@ mod tests {
             let link_snapshots_dir = link_snapshots_dir.path().join(snapshot_file_name);
             fs::create_dir_all(&link_snapshots_dir).unwrap();
             let link_path = link_snapshots_dir.join(snapshot_file_name);
-            fs::hard_link(&snapshots_path, &link_path).unwrap();
+            fs::hard_link(&snapshots_path, link_path).unwrap();
         }
 
         // Create a packageable snapshot

@@ -14,7 +14,7 @@ use {
         accounts_db::AccountShrinkThreshold,
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
-        bank::Bank,
+        bank::{bank_test_config_caching_enabled, Bank},
         bank_forks::BankForks,
         epoch_accounts_hash::{self, EpochAccountsHash},
         genesis_utils::{self, GenesisConfigInfo},
@@ -63,10 +63,10 @@ struct TestEnvironment {
 
 impl TestEnvironment {
     /// A small, round number to make the tests run quickly, and easy to debug
-    const SLOTS_PER_EPOCH: u64 = 100;
+    const SLOTS_PER_EPOCH: u64 = 400;
 
     /// A small, round number to ensure accounts packages are sent to the background services
-    const ACCOUNTS_HASH_INTERVAL: u64 = 10;
+    const ACCOUNTS_HASH_INTERVAL: u64 = 40;
 
     #[must_use]
     fn new() -> TestEnvironment {
@@ -107,8 +107,10 @@ impl TestEnvironment {
             ..snapshot_config
         };
 
-        let mut bank_forks =
-            BankForks::new(Bank::new_for_tests(&genesis_config_info.genesis_config));
+        let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
+            &genesis_config_info.genesis_config,
+            bank_test_config_caching_enabled(),
+        ));
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
@@ -139,6 +141,7 @@ impl TestEnvironment {
         assert!(bank
             .feature_set
             .is_active(&feature_set::epoch_accounts_hash::id()));
+        assert!(epoch_accounts_hash::is_enabled_this_epoch(&bank));
 
         bank.set_startup_verification_complete();
 
@@ -218,7 +221,7 @@ impl BackgroundServices {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            false,
+            true,
             false,
             None,
         );
@@ -252,7 +255,7 @@ impl Drop for BackgroundServices {
 /// Ensure that EAHs are requested, calculated, and awaited correctly.
 /// Test both with and without snapshots to make sure they don't interfere with EAH.
 #[test_case(TestEnvironment::new()                      ; "without snapshots")]
-#[test_case(TestEnvironment::new_with_snapshots(20, 10) ; "with snapshots")]
+#[test_case(TestEnvironment::new_with_snapshots(80, 40) ; "with snapshots")]
 fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
     solana_logger::setup();
 
@@ -366,10 +369,10 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;
 
-    // Since slots-per-epoch is 100, EAH start will be slots 25 and 125, and EAH stop will be slots
-    // 75 and 175.  Pick a full snapshot interval that triggers in the three scenarios outlined in
+    // Since slots-per-epoch is 400, EAH start will be slots 100 and 500, and EAH stop will be slots
+    // 300 and 700.  Pick a full snapshot interval that triggers in the three scenarios outlined in
     // the test's description.
-    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 80;
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
@@ -466,7 +469,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
             assert_eq!(&deserialized_bank, bank.as_ref());
             assert_eq!(
                 deserialized_bank.epoch_accounts_hash(),
-                bank.epoch_accounts_hash(),
+                bank.get_epoch_accounts_hash_to_serialize(),
             );
         }
 
@@ -484,7 +487,7 @@ fn test_background_services_request_handling() {
     solana_logger::setup();
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;
-    const FULL_SNAPSHOT_INTERVAL: Slot = 20;
+    const FULL_SNAPSHOT_INTERVAL: Slot = 80;
 
     let test_environment =
         TestEnvironment::new_with_snapshots(FULL_SNAPSHOT_INTERVAL, FULL_SNAPSHOT_INTERVAL);
@@ -580,6 +583,14 @@ fn test_epoch_accounts_hash_and_warping() {
     let eah_stop_offset = epoch_accounts_hash::calculation_offset_stop(&bank);
     let eah_stop_slot_in_next_epoch =
         epoch_schedule.get_first_slot_in_epoch(bank.epoch() + 1) + eah_stop_offset;
+    // have to set root here so that we can flush the write cache
+    bank_forks.write().unwrap().set_root(
+        bank.slot(),
+        &test_environment
+            .background_services
+            .accounts_background_request_sender,
+        None,
+    );
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),

@@ -618,6 +618,10 @@ impl BankForks {
             return false;
         }
 
+        if !epoch_accounts_hash::is_enabled_this_epoch(bank) {
+            return false;
+        }
+
         let start_slot = epoch_accounts_hash::calculation_start(bank);
         bank.slot() > self.last_accounts_hash_slot
             && bank.parent_slot() < start_slot
@@ -631,6 +635,7 @@ mod tests {
         super::*,
         crate::{
             bank::tests::update_vote_account_timestamp,
+            epoch_accounts_hash::EpochAccountsHash,
             genesis_utils::{
                 create_genesis_config, create_genesis_config_with_leader, GenesisConfigInfo,
             },
@@ -742,8 +747,8 @@ mod tests {
         genesis_config.epoch_schedule = EpochSchedule::new(slots_in_epoch);
 
         // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle
-        // (i.e. skip/make invalid) all EpochAccountsHash requests so future rooted banks do not hang
-        // in Bank::freeze() waiting for an in-flight EAH calculation to complete.
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
         let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
         let bg_exit = Arc::new(AtomicBool::new(false));
@@ -763,7 +768,10 @@ mod tests {
                                 .accounts
                                 .accounts_db
                                 .epoch_accounts_hash_manager
-                                .set_invalid_for_tests();
+                                .set_valid(
+                                    EpochAccountsHash::new(Hash::new_unique()),
+                                    snapshot_request.snapshot_root_bank.slot(),
+                                )
                         });
                     std::thread::sleep(Duration::from_millis(100));
                 }

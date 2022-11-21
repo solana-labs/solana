@@ -597,7 +597,7 @@ fn remap_append_vec_file(
     let (remapped_append_vec_id, remapped_append_vec_path) = loop {
         let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
         let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
-        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(&remapped_file_name);
+        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(remapped_file_name);
 
         // Break out of the loop in the following situations:
         // 1. The new ID is the same as the original ID.  This means we do not need to

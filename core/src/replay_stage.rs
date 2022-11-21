@@ -3365,7 +3365,7 @@ impl ReplayStage {
             }
         }
         progress.handle_new_root(&r_bank_forks);
-        heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
+        heaviest_subtree_fork_choice.set_tree_root((new_root, r_bank_forks.root_bank().hash()));
         *duplicate_slots_tracker = duplicate_slots_tracker.split_off(&new_root);
         // duplicate_slots_tracker now only contains entries >= `new_root`
 
@@ -4279,7 +4279,7 @@ pub(crate) mod tests {
             assert!(blockstore.is_dead(bank1.slot()));
             res.map(|_| ())
         };
-        let _ignored = remove_dir_all(&ledger_path);
+        let _ignored = remove_dir_all(ledger_path);
         res
     }
 

@@ -775,7 +775,10 @@ mod test {
         },
         solana_ledger::{blockstore::make_many_slot_entries, get_tmp_ledger_path},
         solana_runtime::{accounts_background_service::AbsRequestSender, bank_forks::BankForks},
-        solana_sdk::{hash::Hash, signature::Keypair},
+        solana_sdk::{
+            hash::Hash,
+            signature::{Keypair, Signer},
+        },
         solana_streamer::socket::SocketAddrSpace,
         std::collections::HashMap,
         trees::tr,
@@ -959,10 +962,11 @@ mod test {
         fn new(slot_to_query: Slot) -> Self {
             assert!(slot_to_query >= MAX_ANCESTOR_RESPONSES as Slot);
             let vote_simulator = VoteSimulator::new(3);
-            let responder_node = Node::new_localhost();
+            let keypair = Keypair::new();
+            let responder_node = Node::new_localhost_with_pubkey(&keypair.pubkey());
             let cluster_info = ClusterInfo::new(
                 responder_node.info.clone(),
-                Arc::new(Keypair::new()),
+                Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             );
             let responder_serve_repair =
@@ -1044,9 +1048,10 @@ mod test {
             let ancestor_hashes_request_statuses = Arc::new(DashMap::new());
             let ancestor_hashes_request_socket = Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap());
             let epoch_schedule = *bank_forks.read().unwrap().root_bank().epoch_schedule();
+            let keypair = Keypair::new();
             let requester_cluster_info = Arc::new(ClusterInfo::new(
-                Node::new_localhost().info,
-                Arc::new(Keypair::new()),
+                Node::new_localhost_with_pubkey(&keypair.pubkey()).info,
+                Arc::new(keypair),
                 SocketAddrSpace::Unspecified,
             ));
             let requester_serve_repair =

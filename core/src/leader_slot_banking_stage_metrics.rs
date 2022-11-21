@@ -522,7 +522,7 @@ impl LeaderSlotMetricsTracker {
                     .timing_metrics
                     .process_packets_timings
                     .cost_model_us,
-                *cost_model_us as u64
+                *cost_model_us
             );
 
             leader_slot_metrics
