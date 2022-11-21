@@ -71,7 +71,7 @@ use {
         account_utils::StateMut,
         clock::{Epoch, Slot},
         feature::{self, Feature},
-        feature_set,
+        feature_set::{self, FeatureSet},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         inflation::Inflation,
@@ -1216,7 +1216,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
+                let tx_cost = cost_model.calculate_cost(&transaction, &FeatureSet::all_enabled());
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(
