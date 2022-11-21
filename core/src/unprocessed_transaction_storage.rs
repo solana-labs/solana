@@ -168,10 +168,12 @@ fn consume_scan_should_process_packet(
         let message = sanitized_transaction.message();
 
         // Check the number of locks and whether there are duplicates
-        if !SanitizedTransaction::validate_account_locks(
+        if SanitizedTransaction::validate_account_locks(
             message,
             bank.get_transaction_account_lock_limit(),
-        ) {
+        )
+        .is_err()
+        {
             ProcessingDecision::Never
         } else if payload.account_locks.try_locking(message) {
             payload.sanitized_transactions.push(sanitized_transaction);
