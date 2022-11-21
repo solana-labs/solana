@@ -2981,22 +2981,9 @@ fn main() {
                 };
 
                 if blockstore.meta(snapshot_slot).unwrap().is_none() {
-                    // Find the highest full slot that is less than or equal to the snapshot slot, if it exists
-                    let most_recent_slot_before_snapshot_slot = blockstore
-                        .slot_meta_iterator(0)
-                        .ok()
-                        .map(|r| {
-                            r.filter_map(|meta| {
-                                (meta.0 <= snapshot_slot && meta.1.is_full()).then_some(meta.0)
-                            })
-                            .last()
-                        })
-                        .unwrap_or_default();
-
                     eprintln!(
-                        "Error: snapshot slot {} does not exist in blockstore or is not full. Nearest earlier full slot in blockstore is {:?}",
+                        "Error: snapshot slot {} does not exist in blockstore or is not full.",
                         snapshot_slot,
-                        most_recent_slot_before_snapshot_slot,
                     );
                     exit(1);
                 }
