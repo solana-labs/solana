@@ -416,7 +416,7 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
+            let tx_cost = cost_model.calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
             let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
