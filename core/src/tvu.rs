@@ -12,6 +12,7 @@ use {
         cluster_slots::ClusterSlots,
         cluster_slots_service::ClusterSlotsService,
         completed_data_sets_service::CompletedDataSetsSender,
+        cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
         repair_service::RepairInfo,
@@ -41,8 +42,8 @@ use {
     },
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
-        commitment::BlockCommitmentCache, prioritization_fee_cache::PrioritizationFeeCache,
-        vote_sender_types::ReplayVoteSender,
+        commitment::BlockCommitmentCache, cost_model::CostModel,
+        prioritization_fee_cache::PrioritizationFeeCache, vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
@@ -61,6 +62,7 @@ pub struct Tvu {
     cluster_slots_service: ClusterSlotsService,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
+    cost_update_service: CostUpdateService,
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
@@ -120,6 +122,7 @@ impl Tvu {
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
+        cost_model: &Arc<RwLock<CostModel>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
@@ -256,6 +259,9 @@ impl Tvu {
         } else {
             None
         };
+        let (cost_update_sender, cost_update_receiver) = unbounded();
+        let cost_update_service =
+            CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
@@ -278,6 +284,7 @@ impl Tvu {
             gossip_confirmed_slots_receiver,
             gossip_verified_vote_hash_receiver,
             cluster_slots_update_sender,
+            cost_update_sender,
             voting_sender,
             drop_bank_sender,
             block_metadata_notifier,
@@ -302,6 +309,7 @@ impl Tvu {
             cluster_slots_service,
             replay_stage,
             ledger_cleanup_service,
+            cost_update_service,
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
@@ -318,6 +326,7 @@ impl Tvu {
             self.ledger_cleanup_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
+        self.cost_update_service.join()?;
         self.voting_service.join()?;
         if let Some(warmup_service) = self.warm_quic_cache_service {
             warmup_service.join()?;
@@ -436,6 +445,7 @@ pub mod tests {
             gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
+            &Arc::new(RwLock::new(CostModel::default())),
             None,
             None,
             AbsRequestSender::default(),
