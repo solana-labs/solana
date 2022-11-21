@@ -860,7 +860,7 @@ impl AccountsHasher {
         pubkey_bin: usize,
     ) -> (Vec<&'a Hash>, u64, usize) {
         let len = pubkey_division.len();
-        let mut item_len = 0;
+        let mut unreduced_count = 0;
         let mut indexes = vec![0; len];
         let mut first_items = Vec::with_capacity(len);
         // map from index of an item in first_items[] to index of the corresponding item in pubkey_division[]
@@ -873,14 +873,14 @@ impl AccountsHasher {
             if bins.len() > pubkey_bin {
                 let sub = bins[pubkey_bin];
                 if !sub.is_empty() {
-                    item_len += bins[pubkey_bin].len(); // sum for metrics
+                    unreduced_count += bins[pubkey_bin].len(); // sum for metrics
                     first_items.push(bins[pubkey_bin][0].pubkey);
                     first_item_to_pubkey_division.push(i);
                 }
             }
         });
         let mut overall_sum = 0;
-        let mut hashes: Vec<&Hash> = Vec::with_capacity(item_len);
+        let mut hashes: Vec<&Hash> = Vec::with_capacity(unreduced_count);
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
 
@@ -949,7 +949,7 @@ impl AccountsHasher {
                 duplicate_pubkey_indexes.clear();
             }
         }
-        (hashes, overall_sum, item_len)
+        (hashes, overall_sum, unreduced_count)
     }
 
     fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
