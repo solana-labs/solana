@@ -9627,6 +9627,14 @@ impl AccountsDb {
         }
     }
 
+    pub fn new_sized_caching(paths: Vec<PathBuf>, file_size: u64) -> Self {
+        AccountsDb {
+            file_size,
+            caching_enabled: true,
+            ..AccountsDb::new(paths, &ClusterType::Development)
+        }
+    }
+
     pub fn new_sized_no_extra_stores(paths: Vec<PathBuf>, file_size: u64) -> Self {
         AccountsDb {
             file_size,
@@ -14278,7 +14286,7 @@ pub mod tests {
     #[test]
     fn test_store_reuse() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_sized(vec![], 4096);
+        let accounts = AccountsDb::new_sized_caching(vec![], 4096);
 
         let size = 100;
         let num_accounts: usize = 100;
@@ -14286,7 +14294,7 @@ pub mod tests {
         for i in 0..num_accounts {
             let account = AccountSharedData::new((i + 1) as u64, size, &Pubkey::default());
             let pubkey = solana_sdk::pubkey::new_rand();
-            accounts.store_uncached(0, &[(&pubkey, &account)]);
+            accounts.store_cached((0 as Slot, &[(&pubkey, &account)][..]), None);
             keys.push(pubkey);
         }
         accounts.add_root(0);
@@ -14294,9 +14302,10 @@ pub mod tests {
         for (i, key) in keys[1..].iter().enumerate() {
             let account =
                 AccountSharedData::new((1 + i + num_accounts) as u64, size, &Pubkey::default());
-            accounts.store_uncached(1, &[(key, &account)]);
+            accounts.store_cached((1 as Slot, &[(key, &account)][..]), None);
         }
         accounts.add_root(1);
+        accounts.flush_accounts_cache(true, None);
         accounts.clean_accounts_for_tests();
         accounts.shrink_all_slots(false, None);
 
