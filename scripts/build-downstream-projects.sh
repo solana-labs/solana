@@ -94,6 +94,7 @@ anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", branch = "maste
 EOF
     patch_crates_io_solana dex/Cargo.toml "$solana_dir"
     cat >> dex/Cargo.toml <<EOF
+anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", branch = "master" }
 [workspace]
 exclude = [
     "crank",
