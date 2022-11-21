@@ -2980,7 +2980,12 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                if blockstore.meta(snapshot_slot).unwrap().is_none() {
+                if blockstore
+                    .meta(snapshot_slot)
+                    .unwrap()
+                    .filter(|m| m.is_full())
+                    .is_none()
+                {
                     eprintln!(
                         "Error: snapshot slot {} does not exist in blockstore or is not full.",
                         snapshot_slot,
