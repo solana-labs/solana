@@ -89,6 +89,9 @@ openbook_dex() {
 
     update_solana_dependencies . "$solana_ver"
     patch_crates_io_solana Cargo.toml "$solana_dir"
+    cat >> Cargo.toml <<EOF
+anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", branch = "master" }
+EOF
     patch_crates_io_solana dex/Cargo.toml "$solana_dir"
     cat >> dex/Cargo.toml <<EOF
 [workspace]
