@@ -557,7 +557,7 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
-    let cost_model = CostModel::new();
+    let cost_model = CostModel {};
 
     for ReplayEntry {
         entry,
