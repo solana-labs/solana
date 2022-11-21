@@ -166,7 +166,14 @@ fn consume_scan_should_process_packet(
 
     if let Some(sanitized_transaction) = maybe_sanitized_transaction {
         let message = sanitized_transaction.message();
-        if payload.account_locks.try_locking(message) {
+
+        // Check the number of locks and whether there are duplicates
+        if !SanitizedTransaction::validate_account_locks(
+            message,
+            bank.get_transaction_account_lock_limit(),
+        ) {
+            ProcessingDecision::Never
+        } else if payload.account_locks.try_locking(message) {
             payload.sanitized_transactions.push(sanitized_transaction);
             ProcessingDecision::Now
         } else {
