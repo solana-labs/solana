@@ -32,11 +32,12 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
         feature_set::{
-            self, alt_bn128_syscall_enabled, blake3_syscall_enabled, check_physical_overlapping,
+            self, blake3_syscall_enabled, check_physical_overlapping,
             check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
-            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
+            enable_alt_bn128_syscall, enable_early_verification_of_account_modifications,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            stop_sibling_instruction_search_at_parent,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -149,7 +150,7 @@ pub fn register_syscalls<'a>(
     feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
-    let alt_bn128_syscall_enabled = feature_set.is_active(&alt_bn128_syscall_enabled::id());
+    let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -274,7 +275,7 @@ pub fn register_syscalls<'a>(
         // Alt_bn128
         register_feature_gated_syscall!(
             syscall_registry,
-            alt_bn128_syscall_enabled,
+            enable_alt_bn128_syscall,
             b"sol_alt_bn128_group_op",
             SyscallAltBn128::call,
         )?;
