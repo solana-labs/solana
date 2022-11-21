@@ -34,13 +34,7 @@ use {
         },
         runtime_config::RuntimeConfig,
         snapshot_config::{SnapshotConfig, SnapshotUsage},
-        snapshot_utils::{
-            self, ArchiveFormat, SnapshotFrom, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
-            DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
-        },
+        snapshot_utils::{self, ArchiveFormat, SnapshotFrom, SnapshotVersion},
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_S_PER_SLOT},
