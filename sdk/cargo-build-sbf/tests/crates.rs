@@ -80,7 +80,7 @@ fn test_out_dir() {
 
 #[test]
 #[serial]
-fn test_generate_child_script_on_failre() {
+fn test_generate_child_script_on_failure() {
     run_cargo_build("fail", &["--generate-child-script-on-failure"], true);
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let scr = cwd
