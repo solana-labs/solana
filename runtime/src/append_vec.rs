@@ -782,28 +782,72 @@ pub mod tests {
 
     #[test]
     fn test_new_from_file_crafted_zero_lamport_account() {
-        let file = get_append_vec_path("test_append");
+        // This test verifies that when we sanitize on load, that we fail sanitizing if we load an account with zero lamports that does not have all default value fields.
+        // This test writes an account with zero lamports, but with 3 bytes of data. On load, it asserts that load fails.
+        // It used to be possible to use the append vec api to write an account to an append vec with zero lamports, but with non-default values for other account fields.
+        // This will no longer be possible. Thus, to implement the write portion of this test would require additional test-only parameters to public apis or otherwise duplicating code paths.
+        // So, the sanitizing on load behavior can be tested by capturing [u8] that would be created if such a write was possible (as it used to be).
+        // The contents of [u8] written by an append vec cannot easily or reasonably change frequently since it has released a long time.
+        /*
+            solana_logger::setup();
+            // uncomment this code to generate the invalid append vec that will fail on load
+            let file = get_append_vec_path("test_append");
+            let path = &file.path;
+            let mut av = AppendVec::new(path, true, 256);
+            av.set_no_remove_on_drop();
+
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let owner = Pubkey::default();
+            let data_len = 3_u64;
+            let mut account = AccountSharedData::new(0, data_len as usize, &owner);
+            account.set_data(b"abc".to_vec());
+            let stored_meta = StoredMeta {
+                write_version: 0,
+                pubkey,
+                data_len,
+            };
+            let account_with_meta = (stored_meta, account);
+            let index = av.append_account_test(&account_with_meta).unwrap();
+            assert_eq!(av.get_account_test(index).unwrap(), account_with_meta);
+
+            av.flush().unwrap();
+            let accounts_len = av.len();
+            drop(av);
+            // read file and log out as [u8]
+            use std::fs::File;
+            use std::io::BufReader;
+            use std::io::Read;
+            let f = File::open(path).unwrap();
+            let mut reader = BufReader::new(f);
+            let mut buffer = Vec::new();
+            reader.read_to_end(&mut buffer).unwrap();
+            error!("{:?}", buffer);
+        */
+
+        // create an invalid append vec file using known bytes
+        let file = get_append_vec_path("test_append_bytes");
         let path = &file.path;
-        let mut av = AppendVec::new(path, true, 1024 * 1024);
-        av.set_no_remove_on_drop();
 
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let owner = Pubkey::default();
-        let data_len = 3_u64;
-        let mut account = AccountSharedData::new(0, data_len as usize, &owner);
-        account.set_data(b"abc".to_vec());
-        let stored_meta = StoredMeta {
-            write_version: 0,
-            pubkey,
-            data_len,
-        };
-        let account_with_meta = (stored_meta, account);
-        let index = av.append_account_test(&account_with_meta).unwrap();
-        assert_eq!(av.get_account_test(index).unwrap(), account_with_meta);
+        let accounts_len = 139;
+        {
+            let append_vec_data = [
+                0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 192, 118, 150, 1, 185, 209, 118,
+                82, 154, 222, 172, 202, 110, 26, 218, 140, 143, 96, 61, 43, 212, 73, 203, 7, 190,
+                88, 80, 222, 110, 114, 67, 254, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 98, 99, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ];
 
-        av.flush().unwrap();
-        let accounts_len = av.len();
-        drop(av);
+            let f = std::fs::File::create(path).unwrap();
+            let mut writer = std::io::BufWriter::new(f);
+            writer.write_all(append_vec_data.as_slice()).unwrap();
+        }
+
         let result = AppendVec::new_from_file(path, accounts_len);
         assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
     }
