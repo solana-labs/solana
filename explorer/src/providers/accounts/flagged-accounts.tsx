@@ -1,5 +1,4 @@
 import React from "react";
-import { fetch } from "cross-fetch";
 import { Link } from "react-router-dom";
 
 type FlaggedMap = Record<string, IncidentDescription>;
