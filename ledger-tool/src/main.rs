@@ -113,6 +113,15 @@ enum LedgerOutputMethod {
     Json,
 }
 
+fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
+    match matches.value_of("encoding") {
+        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+        Some("base64") => UiAccountEncoding::Base64,
+        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+        _ => UiAccountEncoding::Base64,
+    }
+}
+
 fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
     // Note: rewards are not output in JSON yet
     if *method == LedgerOutputMethod::Print {
@@ -1311,10 +1320,6 @@ fn main() {
         .long("no-bpf-jit")
         .takes_value(false)
         .help("Disable the just-in-time compiler and instead use the interpreter for BP");
-    let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
-        .long("no-accounts-db-caching")
-        .takes_value(false)
-        .help("Disables accounts-db caching");
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
@@ -1789,7 +1794,6 @@ fn main() {
             .arg(&ancient_append_vecs)
             .arg(&halt_at_slot_store_hash_raw_data)
             .arg(&hard_forks_arg)
-            .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_os_memory_stats_reporting_arg)
             .arg(&no_bpf_jit_arg)
@@ -2342,12 +2346,7 @@ fn main() {
                 let print_accounts = arg_matches.is_present("accounts");
                 if print_accounts {
                     let print_account_data = !arg_matches.is_present("no_account_data");
-                    let print_encoding_format = match arg_matches.value_of("encoding") {
-                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
-                        Some("base64") => UiAccountEncoding::Base64,
-                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base64,
-                    };
+                    let print_encoding_format = parse_encoding_format(arg_matches);
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
                             &pubkey,
@@ -2775,7 +2774,7 @@ fn main() {
                     run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
-                    accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                    accounts_db_caching_enabled: true,
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
                         "limit_load_slot_count_from_snapshot",
@@ -3392,12 +3391,7 @@ fn main() {
                 let rent_collector = bank.rent_collector();
                 let print_account_contents = !arg_matches.is_present("no_account_contents");
                 let print_account_data = !arg_matches.is_present("no_account_data");
-                let data_encoding = match arg_matches.value_of("encoding") {
-                    Some("jsonParsed") => UiAccountEncoding::JsonParsed,
-                    Some("base64") => UiAccountEncoding::Base64,
-                    Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                    _ => UiAccountEncoding::Base64,
-                };
+                let data_encoding = parse_encoding_format(arg_matches);
                 let cli_account_new_config = CliAccountNewConfig {
                     data_encoding,
                     ..CliAccountNewConfig::default()
