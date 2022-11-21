@@ -159,7 +159,7 @@ mod tests {
         // Ensure that the measurement side actually works
         {
             let (_result, measure) = measure_us!(sleep(Duration::from_secs(1)));
-            assert!(measure >= 999_000 && measure <= 1_010_000);
+            assert!((999_000..=1_010_000).contains(&measure));
         }
 
         // Ensure that the macro can be called with functions
