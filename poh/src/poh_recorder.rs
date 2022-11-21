@@ -69,14 +69,18 @@ pub struct BankStart {
 
 impl BankStart {
     fn get_working_bank_if_not_expired(&self) -> Option<&Arc<Bank>> {
-        if Bank::should_bank_still_be_processing_txs(
-            &self.bank_creation_time,
-            self.working_bank.ns_per_slot,
-        ) {
+        if self.should_working_bank_still_be_processing_txs() {
             Some(&self.working_bank)
         } else {
             None
         }
+    }
+
+    fn should_working_bank_still_be_processing_txs(&self) -> bool {
+        Bank::should_bank_still_be_processing_txs(
+            &self.bank_creation_time,
+            self.working_bank.ns_per_slot,
+        )
     }
 }
 
