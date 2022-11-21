@@ -101,7 +101,7 @@ impl QosService {
         transactions: &[SanitizedTransaction],
     ) -> (Vec<TransactionCost>, Vec<transaction::Result<()>>, usize) {
         let transaction_costs =
-            self.compute_transaction_costs(bank.feature_set.as_ref(), transactions.iter());
+            self.compute_transaction_costs(&bank.feature_set, transactions.iter());
         let (transactions_qos_results, num_included) =
             self.select_transactions_per_cost(transactions.iter(), transaction_costs.iter(), bank);
         self.accumulate_estimated_transaction_costs(&Self::accumulate_batched_transaction_costs(
@@ -696,7 +696,8 @@ mod tests {
 
         let cost_model = Arc::new(RwLock::new(CostModel::default()));
         let qos_service = QosService::new(cost_model.clone(), 1);
-        let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+        let txs_costs =
+            qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
 
         // verify the size of txs_costs and its contents
         assert_eq!(txs_costs.len(), txs.len());
@@ -706,7 +707,11 @@ mod tests {
             .map(|(index, cost)| {
                 assert_eq!(
                     cost.sum(),
-                    cost_model.read().unwrap().calculate_cost(&txs[index]).sum()
+                    cost_model
+                        .read()
+                        .unwrap()
+                        .calculate_cost(&txs[index], &FeatureSet::all_enabled())
+                        .sum()
                 );
             })
             .collect_vec();
@@ -737,15 +742,20 @@ mod tests {
         let transfer_tx_cost = cost_model
             .read()
             .unwrap()
-            .calculate_cost(&transfer_tx)
+            .calculate_cost(&transfer_tx, &FeatureSet::all_enabled())
             .sum();
-        let vote_tx_cost = cost_model.read().unwrap().calculate_cost(&vote_tx).sum();
+        let vote_tx_cost = cost_model
+            .read()
+            .unwrap()
+            .calculate_cost(&vote_tx, &FeatureSet::all_enabled())
+            .sum();
 
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
         let qos_service = QosService::new(cost_model, 1);
-        let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+        let txs_costs =
+            qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
 
         // set cost tracker limit to fit 1 transfer tx and 1 vote tx
         let cost_limit = transfer_tx_cost + vote_tx_cost;
@@ -785,7 +795,8 @@ mod tests {
         // assert all tx_costs should be applied to cost_tracker if all execution_results are all committed
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
-            let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+            let txs_costs =
+                qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
@@ -838,7 +849,8 @@ mod tests {
         // assert all tx_costs should be removed from cost_tracker if all execution_results are all Not Committed
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
-            let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+            let txs_costs =
+                qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
@@ -878,7 +890,8 @@ mod tests {
         // assert only commited tx_costs are applied cost_tracker
         {
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
-            let txs_costs = qos_service.compute_transaction_costs(txs.iter());
+            let txs_costs =
+                qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
             let (qos_results, _num_included) =
                 qos_service.select_transactions_per_cost(txs.iter(), txs_costs.iter(), &bank);
