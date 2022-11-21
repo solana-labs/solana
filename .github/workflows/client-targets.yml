@@ -41,16 +41,6 @@ jobs:
       - name: Stable build
         run: ./cargo stable ndk --target ${{ matrix.target }} build -p solana-client
 
-      - name: Send Slack notifiaction
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1
-        with:
-          channel: ${{ secrets.SLACK_CHANNEL }}
-          status: FAILED
-          color: danger
-
   ios:
     strategy:
       matrix:
@@ -73,12 +63,23 @@ jobs:
       - name: Stable build
         run: ./cargo stable build --target ${{ matrix.target }} -p solana-client
 
-      - name: Send Slack notifiaction
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1
-        with:
-          channel: ${{ secrets.SLACK_CHANNEL }}
-          status: FAILED
-          color: danger
+  error_reporting:
+    needs:
+      - android
+      - ios
+    if: failure() && github.event_name == 'push'
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Slack
+        run: |
+          curl -H "Content-Type: application/json" \
+            -X POST ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }} \
+            -d '{
+              "attachments": [
+                {
+                  "color": "#AC514C",
+                  "text":
+                    "*${{ github.repository }} (${{ github.workflow }})*\n${{ github.event.head_commit.message }} - _${{ github.event.head_commit.author.name }}_\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Build>",
+                }
+              ]
+            }'
