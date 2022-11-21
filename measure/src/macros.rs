@@ -153,4 +153,35 @@ mod tests {
             assert_eq!(result, 5 * 5)
         }
     }
+
+    #[test]
+    fn test_measure_us_macro() {
+        // Ensure that the measurement side actually works
+        {
+            let (_result, measure) = measure_us!(sleep(Duration::from_secs(1)));
+            assert!(measure >= 999_000 && measure <= 1_010_000);
+        }
+
+        // Ensure that the macro can be called with functions
+        {
+            let (result, _measure) = measure_us!(my_multiply(3, 4));
+            assert_eq!(result, 3 * 4);
+
+            let (result, _measure) = measure_us!(square(5));
+            assert_eq!(result, 5 * 5)
+        }
+
+        // Ensure that the macro can be called with methods
+        {
+            let some_struct = SomeStruct { x: 42 };
+            let (result, _measure) = measure_us!(some_struct.add_to(4));
+            assert_eq!(result, 42 + 4);
+        }
+
+        // Ensure that the macro can be called with blocks
+        {
+            let (result, _measure) = measure_us!({ 1 + 2 });
+            assert_eq!(result, 3);
+        }
+    }
 }
