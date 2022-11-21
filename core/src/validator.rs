@@ -77,7 +77,6 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
@@ -921,8 +920,6 @@ impl Validator {
         );
 
         let vote_tracker = Arc::<VoteTracker>::default();
-        let cost_model = CostModel::default();
-        let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
@@ -1013,7 +1010,6 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
-            &cost_model,
             &connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,

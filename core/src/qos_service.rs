@@ -21,7 +21,7 @@ use {
     std::{
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, RwLock,
+            Arc,
         },
         thread::{self, Builder, JoinHandle},
         time::Duration,
@@ -40,11 +40,6 @@ pub enum QosMetrics {
 // reported if new bank slot has changed.
 //
 pub struct QosService {
-    // cost_model instance is owned by validator, shared between replay_stage and
-    // banking_stage. replay_stage writes the latest on-chain program timings to
-    // it; banking_stage's qos_service reads that information to calculate
-    // transaction cost, hence RwLock wrapped.
-    cost_model: Arc<RwLock<CostModel>>,
     // QosService hosts metrics object and a private reporting thread, as well as sender to
     // communicate with thread.
     report_sender: Sender<QosMetrics>,
@@ -66,7 +61,7 @@ impl Drop for QosService {
 }
 
 impl QosService {
-    pub fn new(cost_model: Arc<RwLock<CostModel>>, id: u32) -> Self {
+    pub fn new(id: u32) -> Self {
         let (report_sender, report_receiver) = unbounded();
         let running_flag = Arc::new(AtomicBool::new(true));
         let metrics = Arc::new(QosServiceMetrics::new(id));
@@ -83,7 +78,6 @@ impl QosService {
         );
 
         Self {
-            cost_model,
             metrics,
             reporting_thread,
             running_flag,
@@ -125,10 +119,9 @@ impl QosService {
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
     ) -> Vec<TransactionCost> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
-        let cost_model = self.cost_model.read().unwrap();
         let txs_costs: Vec<_> = transactions
             .map(|tx| {
-                let cost = cost_model.calculate_cost(tx, feature_set);
+                let cost = CostModel::calculate_cost(tx, feature_set);
                 debug!(
                     "transaction {:?}, cost {:?}, cost sum {}",
                     tx,
@@ -694,8 +687,7 @@ mod tests {
         );
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), vote_tx, transfer_tx];
 
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
-        let qos_service = QosService::new(cost_model.clone(), 1);
+        let qos_service = QosService::new(1);
         let txs_costs =
             qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
 
@@ -707,11 +699,7 @@ mod tests {
             .map(|(index, cost)| {
                 assert_eq!(
                     cost.sum(),
-                    cost_model
-                        .read()
-                        .unwrap()
-                        .calculate_cost(&txs[index], &FeatureSet::all_enabled())
-                        .sum()
+                    CostModel::calculate_cost(&txs[index], &FeatureSet::all_enabled()).sum()
                 );
             })
             .collect_vec();
@@ -722,7 +710,6 @@ mod tests {
         solana_logger::setup();
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let cost_model = Arc::new(RwLock::new(CostModel::default()));
 
         let keypair = Keypair::new();
         let transfer_tx = SanitizedTransaction::from_transaction_for_tests(
@@ -739,21 +726,14 @@ mod tests {
                 None,
             ),
         );
-        let transfer_tx_cost = cost_model
-            .read()
-            .unwrap()
-            .calculate_cost(&transfer_tx, &FeatureSet::all_enabled())
-            .sum();
-        let vote_tx_cost = cost_model
-            .read()
-            .unwrap()
-            .calculate_cost(&vote_tx, &FeatureSet::all_enabled())
-            .sum();
+        let transfer_tx_cost =
+            CostModel::calculate_cost(&transfer_tx, &FeatureSet::all_enabled()).sum();
+        let vote_tx_cost = CostModel::calculate_cost(&vote_tx, &FeatureSet::all_enabled()).sum();
 
         // make a vec of txs
         let txs = vec![transfer_tx.clone(), vote_tx.clone(), transfer_tx, vote_tx];
 
-        let qos_service = QosService::new(cost_model, 1);
+        let qos_service = QosService::new(1);
         let txs_costs =
             qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
 
@@ -794,7 +774,7 @@ mod tests {
 
         // assert all tx_costs should be applied to cost_tracker if all execution_results are all committed
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(1);
             let txs_costs =
                 qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
@@ -848,7 +828,7 @@ mod tests {
 
         // assert all tx_costs should be removed from cost_tracker if all execution_results are all Not Committed
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(1);
             let txs_costs =
                 qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
@@ -889,7 +869,7 @@ mod tests {
 
         // assert only commited tx_costs are applied cost_tracker
         {
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(1);
             let txs_costs =
                 qos_service.compute_transaction_costs(&FeatureSet::all_enabled(), txs.iter());
             let total_txs_cost: u64 = txs_costs.iter().map(|cost| cost.sum()).sum();
