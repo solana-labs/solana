@@ -105,10 +105,17 @@ where
             self.initialize_current_positions();
         } else {
             if self.can_do_partial_reset && self.all_but_first_at_end() {
-                self.try_readd_secondary_iterators();
-                self.can_do_partial_reset = false;
+                // Move the 0th iterator to the next position and re-initialize the rest
+                if self
+                    .advance_current_position_index(0, *self.current_positions.first().unwrap())
+                    .is_some()
+                {
+                    self.try_readd_secondary_iterators();
+                    self.can_do_partial_reset = false;
+                }
+            } else {
+                self.advance_current_positions();
             }
-            self.advance_current_positions();
         }
 
         // Re-allow partial reset if we've gotten another batch that's not size 1
@@ -156,23 +163,39 @@ where
 
     /// March iterators forward to find the next batch of items.
     fn advance_current_positions(&mut self) {
-        if let Some(mut prev_index) = self.current_positions.first().copied() {
+        if let Some(mut prev_position) = self.current_positions.first().copied() {
             for iterator_index in 0..self.current_positions.len() {
-                // If the previous iterator has passed this iterator, we should start
-                // at it's position + 1 to avoid duplicate re-traversal.
-                let start_index = (self.current_positions[iterator_index].saturating_add(1))
-                    .max(prev_index.saturating_add(1));
-                match self.march_iterator(start_index) {
-                    Some(index) => {
-                        self.current_positions[iterator_index] = index;
-                        prev_index = index;
-                    }
-                    None => {
-                        // Drop current positions that go past the end of the slice
-                        self.current_positions.truncate(iterator_index);
-                        break;
-                    }
+                if let Some(new_position) =
+                    self.advance_current_position_index(iterator_index, prev_position)
+                {
+                    prev_position = new_position;
+                } else {
+                    break;
                 }
+            }
+        }
+    }
+
+    /// March a single position forward until we find an item that should be processed.
+    /// Returns the new position if one was found.
+    fn advance_current_position_index(
+        &mut self,
+        iterator_index: usize,
+        prev_position: usize,
+    ) -> Option<usize> {
+        // If the previous iterator has passed this iterator, we should start
+        // at it's position + 1 to avoid duplicate re-traversal.
+        let start_position = (self.current_positions[iterator_index].saturating_add(1))
+            .max(prev_position.saturating_add(1));
+        match self.march_iterator(start_position) {
+            Some(position) => {
+                self.current_positions[iterator_index] = position;
+                Some(position)
+            }
+            None => {
+                // Drop current positions that go past the end of the slice
+                self.current_positions.truncate(iterator_index);
+                None
             }
         }
     }
@@ -219,13 +242,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use {super::MultiIteratorScanner, crate::multi_iterator_scanner::ProcessingDecision};
+    use {
+        super::MultiIteratorScanner, crate::multi_iterator_scanner::ProcessingDecision,
+        std::collections::HashSet,
+    };
 
     struct TestScannerPayload {
         locks: Vec<bool>,
     }
 
-    fn test_scanner_locking_should_process(
+    fn slice_to_hashset(slice: &[i32]) -> HashSet<i32> {
+        slice.iter().copied().collect()
+    }
+
+    fn test_scanner_index_locking_should_process(
         item: &i32,
         payload: &mut TestScannerPayload,
     ) -> ProcessingDecision {
@@ -235,6 +265,22 @@ mod tests {
             payload.locks[*item as usize] = true;
             ProcessingDecision::Now
         }
+    }
+
+    fn test_scanner_account_locking_should_process(
+        item: &HashSet<i32>,
+        payload: &mut TestScannerPayload,
+    ) -> ProcessingDecision {
+        for account in item {
+            if payload.locks[*account as usize] {
+                return ProcessingDecision::Later;
+            }
+        }
+
+        for account in item {
+            payload.locks[*account as usize] = true;
+        }
+        ProcessingDecision::Now
     }
 
     #[test]
@@ -286,8 +332,12 @@ mod tests {
             locks: vec![false; 4],
         };
 
-        let mut scanner =
-            MultiIteratorScanner::new(&slice, 2, payload, test_scanner_locking_should_process);
+        let mut scanner = MultiIteratorScanner::new(
+            &slice,
+            2,
+            payload,
+            test_scanner_index_locking_should_process,
+        );
         let mut actual_batches = vec![];
         while let Some((batch, payload)) = scanner.iterate() {
             // free the resources
@@ -321,8 +371,12 @@ mod tests {
             locks: vec![false; 4],
         };
 
-        let mut scanner =
-            MultiIteratorScanner::new(&slice, 2, payload, test_scanner_locking_should_process);
+        let mut scanner = MultiIteratorScanner::new(
+            &slice,
+            2,
+            payload,
+            test_scanner_index_locking_should_process,
+        );
         let mut actual_batches = vec![];
         while let Some((batch, payload)) = scanner.iterate() {
             // free the resources
@@ -376,5 +430,167 @@ mod tests {
         //                    ^
         let expected_batches = vec![vec![&0, &1], vec![&2]];
         assert_eq!(actual_batches, expected_batches);
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_with_dependency_fork() {
+        let slice = [
+            slice_to_hashset(&[0, 1]),
+            slice_to_hashset(&[0]),
+            slice_to_hashset(&[1]),
+        ];
+        let payload = TestScannerPayload {
+            locks: vec![false; 2],
+        };
+
+        let mut scanner = MultiIteratorScanner::new(
+            &slice,
+            2,
+            payload,
+            test_scanner_account_locking_should_process,
+        );
+        let mut actual_batches = vec![];
+        while let Some((batch, payload)) = scanner.iterate() {
+            // free the resources
+            for item in batch {
+                for account in item.iter() {
+                    payload.locks[*account as usize] = false;
+                }
+            }
+
+            actual_batches.push(batch.to_vec());
+        }
+
+        // Txs:
+        // 0: {0, 1}
+        // 1: {0}
+        // 2: {1}
+
+        // Batch 1: [0, 1, 2] // both accounts 0 and 1 are locked
+        //           ^
+        // Batch 2: [0, 1, 2]  // iterators should have done a partial reset
+        //              ^
+        let expected_batches = vec![vec![&slice[0]], vec![&slice[1], &slice[2]]];
+        assert_eq!(actual_batches, expected_batches);
+
+        let TestScannerPayload { locks } = scanner.finalize();
+        assert_eq!(locks, vec![false; 2]);
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_with_repeated_dependency_fork() {
+        let slice = [
+            slice_to_hashset(&[0, 1]),
+            slice_to_hashset(&[0, 1]),
+            slice_to_hashset(&[0]),
+            slice_to_hashset(&[1]),
+        ];
+        let payload = TestScannerPayload {
+            locks: vec![false; 2],
+        };
+
+        let mut scanner = MultiIteratorScanner::new(
+            &slice,
+            2,
+            payload,
+            test_scanner_account_locking_should_process,
+        );
+        let mut actual_batches = vec![];
+        while let Some((batch, payload)) = scanner.iterate() {
+            // free the resources
+            for item in batch {
+                for account in item.iter() {
+                    payload.locks[*account as usize] = false;
+                }
+            }
+
+            actual_batches.push(batch.to_vec());
+        }
+
+        // Txs:
+        // 0: {0, 1}
+        // 1: {0, 1}
+        // 2: {0}
+        // 3: {1}
+
+        // Batch 1: [0, 1, 2, 3]
+        //           ^
+        // Batch 2: [0, 1, 2, 3]
+        //              ^
+        // Batch 3: [0, 1, 2, 3]  // iterators don't reset because of multiple {0, 1}s
+        //                 ^
+        // Batch 3: [0, 1, 2, 3]  // iterators don't reset because of multiple {0, 1}s
+        //                    ^
+        let expected_batches = vec![
+            vec![&slice[0]],
+            vec![&slice[1]],
+            vec![&slice[2]],
+            vec![&slice[3]],
+        ];
+        assert_eq!(actual_batches, expected_batches);
+
+        let TestScannerPayload { locks } = scanner.finalize();
+        assert_eq!(locks, vec![false; 2]);
+    }
+
+    #[test]
+    fn test_multi_iterator_scanner_iterate_worst_case_dependency_fork() {
+        let slice = [
+            slice_to_hashset(&[0, 1]),
+            slice_to_hashset(&[0]),
+            slice_to_hashset(&[1]),
+            slice_to_hashset(&[0, 1]),
+            slice_to_hashset(&[0]),
+            slice_to_hashset(&[1]),
+        ];
+        let payload = TestScannerPayload {
+            locks: vec![false; 2],
+        };
+
+        let mut scanner = MultiIteratorScanner::new(
+            &slice,
+            2,
+            payload,
+            test_scanner_account_locking_should_process,
+        );
+        let mut actual_batches = vec![];
+        while let Some((batch, payload)) = scanner.iterate() {
+            // free the resources
+            for item in batch {
+                for account in item.iter() {
+                    payload.locks[*account as usize] = false;
+                }
+            }
+
+            actual_batches.push(batch.to_vec());
+        }
+
+        // Txs:
+        // 0: {0, 1}
+        // 1: {0}
+        // 2: {1}
+        // 3: {0, 1}
+        // 4: {0}
+        // 5: {}
+
+        // Note: the resets make this O(n^2) in the worst case of interleaved dependency forks.
+        // Batch 1: [0, 1, 2, 3, 4, 5]
+        //           ^
+        // Batch 2: [0, 1, 2, 3, 4, 5]
+        //              ^  ^
+        // Batch 3: [0, 1, 2, 3, 4, 5]
+        //                    ^
+        // Batch 3: [0, 1, 2, 3, 4, 5]
+        //                       ^  ^
+        let expected_batches = vec![
+            vec![&slice[0]],
+            vec![&slice[1], &slice[2]],
+            vec![&slice[3]],
+            vec![&slice[4], &slice[5]],
+        ];
+        assert_eq!(actual_batches, expected_batches);
+
+        let TestScannerPayload { locks } = scanner.finalize();
+        assert_eq!(locks, vec![false; 2]);
     }
 }
