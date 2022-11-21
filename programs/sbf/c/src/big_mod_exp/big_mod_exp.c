@@ -33,12 +33,12 @@ extern uint64_t entrypoint(const uint8_t *input) {
     };
     uint8_t result[32];
 
-    params.base = base;
+    params.base = (char*) base;
     params.base_len = sizeof(base);
-    params.exponent = exponent;
+    params.exponent = (char*) exponent;
     params.exponent_len = sizeof(exponent);
-    params.modulus = modulus;
-    params.modulus_len = sizeof(modulus_len);
+    params.modulus = (char*) modulus;
+    params.modulus_len = sizeof(modulus);
 
     uint64_t result_code = sol_big_mod_exp((uint8_t *) &params, result);
 
