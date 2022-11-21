@@ -759,6 +759,10 @@ impl AccountsHasher {
             .collect::<Vec<_>>()
     }
 
+    /// returns:
+    /// Vec, with one entry per bin
+    ///  for each entry, Vec<Hash> in pubkey order
+    /// If return Vec<Vec<Hash>> was flattened, it would be all hashes, in pubkey order.
     fn de_dup_and_eliminate_zeros<'a>(
         &self,
         sorted_data_by_pubkey: &'a [SortedDataByPubkey<'a>],
