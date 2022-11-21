@@ -2,9 +2,6 @@ import React from "react";
 import { fetch } from "cross-fetch";
 import { Link } from "react-router-dom";
 
-const FLAGGED_REGISTRY =
-  "https://solana-labs.github.io/solana-flagged-accounts/flagged.txt";
-
 type FlaggedMap = Record<string, IncidentDescription>;
 type ProviderProps = { children: React.ReactNode };
 
@@ -23,6 +20,7 @@ const FLAGGED_ACCOUNTS: Record<string, IncidentId> = {
   // Serum Dex V1
   BJ3jrUzddfuSrZHXSCxMUUQsjKEyLmuuyZebkcaFp2fg: "ftx-hack-november-2022",
 };
+
 const INCIDENTS: Record<IncidentId, IncidentDescription> = {
   "known-scam": (
     <>
