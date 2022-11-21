@@ -1158,11 +1158,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_caching")
-                .long("no-accounts-db-caching")
-                .help("Disables accounts caching"),
-        )
-        .arg(
             Arg::with_name("accounts_db_verify_refcounts")
                 .long("accounts-db-verify-refcounts")
                 .help("Debug option to scan all append vecs and verify account index refcounts prior to clean")
@@ -1503,7 +1498,6 @@ fn get_deprecated_arguments() -> Vec<Arg<'static, 'static>> {
     vec![
         Arg::with_name("accounts_db_caching_enabled")
             .long("accounts-db-caching-enabled")
-            .conflicts_with("no_accounts_db_caching")
             .hidden(true),
         Arg::with_name("accounts_db_index_hashing")
             .long("accounts-db-index-hashing")
@@ -2148,11 +2142,6 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .takes_value(true)
                 .multiple(true)
                 .help("Specify the configuration file for the Geyser plugin."),
-        )
-        .arg(
-            Arg::with_name("no_accounts_db_caching")
-                .long("no-accounts-db-caching")
-                .help("Disables accounts caching"),
         )
         .arg(
             Arg::with_name("deactivate_feature")
