@@ -3881,6 +3881,8 @@ impl AccountsDb {
             .bytes_written
             .fetch_add(aligned_total, Ordering::Relaxed);
 
+        assert_eq!(store_ids.len(), 1);
+
         ShrinkCollect {
             store_ids,
             original_bytes,
