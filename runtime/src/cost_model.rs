@@ -6,14 +6,22 @@
 //!
 
 use {
-    crate::block_cost_limits::*,
+    crate::{bank::Bank, block_cost_limits::*},
     log::*,
     solana_program_runtime::compute_budget::{
         ComputeBudget, LoadedAccountsDataLimitType, DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT,
     },
     solana_sdk::{
-        compute_budget, instruction::CompiledInstruction, program_utils::limited_deserialize,
-        pubkey::Pubkey, system_instruction::SystemInstruction, system_program,
+        compute_budget,
+        feature_set::{
+            cap_transaction_accounts_data_size, remove_deprecated_request_unit_ix,
+            use_default_units_in_fee_calculation, FeatureSet,
+        },
+        instruction::CompiledInstruction,
+        program_utils::limited_deserialize,
+        pubkey::Pubkey,
+        system_instruction::SystemInstruction,
+        system_program,
         transaction::SanitizedTransaction,
     },
 };
@@ -83,12 +91,16 @@ impl TransactionCost {
 pub struct CostModel {}
 
 impl CostModel {
-    pub fn calculate_cost(&self, transaction: &SanitizedTransaction) -> TransactionCost {
+    pub fn calculate_cost(
+        &self,
+        transaction: &SanitizedTransaction,
+        feature_set: &FeatureSet,
+    ) -> TransactionCost {
         let mut tx_cost = TransactionCost::new_with_capacity(MAX_WRITABLE_ACCOUNTS);
 
         tx_cost.signature_cost = self.get_signature_cost(transaction);
         self.get_write_lock_cost(&mut tx_cost, transaction);
-        self.get_transaction_cost(&mut tx_cost, transaction);
+        self.get_transaction_cost(&mut tx_cost, transaction, feature_set);
         tx_cost.account_data_size = self.calculate_account_data_size(transaction);
         tx_cost.is_simple_vote = transaction.is_simple_vote_transaction();
 
@@ -124,6 +136,7 @@ impl CostModel {
         &self,
         tx_cost: &mut TransactionCost,
         transaction: &SanitizedTransaction,
+        feature_set: &FeatureSet,
     ) {
         let mut builtin_costs = 0u64;
         let mut bpf_costs = 0u64;
@@ -144,10 +157,10 @@ impl CostModel {
         let mut budget = ComputeBudget::default();
         let result = budget.process_instructions(
             transaction.message().program_instructions_iter(),
-            true,
-            false, /*not support request_units_deprecated*/
-            false,
-            LoadedAccountsDataLimitType::V0,
+            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
+            !feature_set.is_active(&remove_deprecated_request_unit_ix::id()),
+            feature_set.is_active(&cap_transaction_accounts_data_size::id()),
+            Bank::get_loaded_accounts_data_limit_type(feature_set),
         );
 
         // if tx contained user-space instructions and a more accurate estimate available correct it
@@ -320,7 +333,11 @@ mod tests {
 
         let testee = CostModel::default();
         let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &simple_transaction);
+        testee.get_transaction_cost(
+            &mut tx_cost,
+            &simple_transaction,
+            &FeatureSet::all_enabled(),
+        );
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
         assert_eq!(3, tx_cost.data_bytes_cost);
@@ -346,7 +363,7 @@ mod tests {
 
         let testee = CostModel::default();
         let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &token_transaction);
+        testee.get_transaction_cost(&mut tx_cost, &token_transaction, &FeatureSet::all_enabled());
         assert_eq!(0, tx_cost.builtins_execution_cost);
         assert_eq!(200_000, tx_cost.bpf_execution_cost);
         assert_eq!(0, tx_cost.data_bytes_cost);
@@ -380,7 +397,7 @@ mod tests {
 
         let testee = CostModel::default();
         let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &token_transaction);
+        testee.get_transaction_cost(&mut tx_cost, &token_transaction, &FeatureSet::all_enabled());
         assert_eq!(0, tx_cost.builtins_execution_cost);
         assert_eq!(12_345, tx_cost.bpf_execution_cost);
         assert_eq!(1, tx_cost.data_bytes_cost);
@@ -410,7 +427,7 @@ mod tests {
 
         let testee = CostModel::default();
         let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &tx);
+        testee.get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(expected_cost, tx_cost.builtins_execution_cost);
         assert_eq!(0, tx_cost.bpf_execution_cost);
         assert_eq!(6, tx_cost.data_bytes_cost);
@@ -443,7 +460,7 @@ mod tests {
         let testee = CostModel::default();
         let expected_cost = DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64 * 2;
         let mut tx_cost = TransactionCost::default();
-        testee.get_transaction_cost(&mut tx_cost, &tx);
+        testee.get_transaction_cost(&mut tx_cost, &tx, &FeatureSet::all_enabled());
         assert_eq!(0, tx_cost.builtins_execution_cost);
         assert_eq!(expected_cost, tx_cost.bpf_execution_cost);
         assert_eq!(0, tx_cost.data_bytes_cost);
@@ -473,7 +490,7 @@ mod tests {
         );
 
         let cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx);
+        let tx_cost = cost_model.calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(2 + 2, tx_cost.writable_accounts.len());
         assert_eq!(signer1.pubkey(), tx_cost.writable_accounts[0]);
         assert_eq!(signer2.pubkey(), tx_cost.writable_accounts[1]);
@@ -497,7 +514,7 @@ mod tests {
             .unwrap();
 
         let cost_model = CostModel::default();
-        let tx_cost = cost_model.calculate_cost(&tx);
+        let tx_cost = cost_model.calculate_cost(&tx, &FeatureSet::all_enabled());
         assert_eq!(expected_account_cost, tx_cost.write_lock_cost);
         assert_eq!(*expected_execution_cost, tx_cost.builtins_execution_cost);
         assert_eq!(2, tx_cost.writable_accounts.len());

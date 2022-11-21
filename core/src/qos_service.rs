@@ -14,6 +14,7 @@ use {
     },
     solana_sdk::{
         clock::Slot,
+        feature_set::FeatureSet,
         saturating_add_assign,
         transaction::{self, SanitizedTransaction, TransactionError},
     },
@@ -99,7 +100,8 @@ impl QosService {
         bank: &Bank,
         transactions: &[SanitizedTransaction],
     ) -> (Vec<TransactionCost>, Vec<transaction::Result<()>>, usize) {
-        let transaction_costs = self.compute_transaction_costs(transactions.iter());
+        let transaction_costs =
+            self.compute_transaction_costs(bank.feature_set.as_ref(), transactions.iter());
         let (transactions_qos_results, num_included) =
             self.select_transactions_per_cost(transactions.iter(), transaction_costs.iter(), bank);
         self.accumulate_estimated_transaction_costs(&Self::accumulate_batched_transaction_costs(
@@ -119,13 +121,14 @@ impl QosService {
     // invoke cost_model to calculate cost for the given list of transactions
     fn compute_transaction_costs<'a>(
         &self,
+        feature_set: &FeatureSet,
         transactions: impl Iterator<Item = &'a SanitizedTransaction>,
     ) -> Vec<TransactionCost> {
         let mut compute_cost_time = Measure::start("compute_cost_time");
         let cost_model = self.cost_model.read().unwrap();
         let txs_costs: Vec<_> = transactions
             .map(|tx| {
-                let cost = cost_model.calculate_cost(tx);
+                let cost = cost_model.calculate_cost(tx, feature_set);
                 debug!(
                     "transaction {:?}, cost {:?}, cost sum {}",
                     tx,
