@@ -8396,7 +8396,13 @@ impl AccountsDb {
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
-        self.store_accounts_unfrozen(accounts, None, is_cached_store, txn_signatures, reclaim);
+        self.store_accounts_unfrozen(
+            accounts,
+            None::<Vec<Hash>>,
+            is_cached_store,
+            txn_signatures,
+            reclaim,
+        );
         self.report_store_timings();
     }
 
@@ -8526,7 +8532,7 @@ impl AccountsDb {
     fn store_accounts_unfrozen<'a, T: ReadableAccount + Sync + ZeroLamport + 'a>(
         &self,
         accounts: impl StorableAccounts<'a, T>,
-        hashes: Option<Vec<&'a Hash>>,
+        hashes: Option<Vec<impl Borrow<Hash>>>,
         is_cached_store: bool,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
         reclaim: StoreReclaims,

@@ -39,14 +39,24 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     /// true iff hashing these accounts should include the slot
     fn include_slot_in_hash(&self) -> IncludeSlotInHash;
 
+    /// true iff the impl can provide hash and write_version
+    /// Otherwise, hash and write_version have to be provided separately to store functions.
     fn has_hash_and_write_version(&self) -> bool {
         false
     }
+
+    /// return hash for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
     fn hash(&self, _index: usize) -> &Hash {
-        &EMPTY_HASH
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
     }
+
+    /// return write_version for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
     fn write_version(&self, _index: usize) -> u64 {
-        0
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
     }
 }
 
