@@ -16,10 +16,6 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
 
-    defaults:
-      run:
-        working-directory: web3.js-experimental
-
     env:
       # Configuration for Bundlewatch
       BUNDLEWATCH_GITHUB_TOKEN: ${{ secrets.BUNDLEWATCH_GITHUB_TOKEN }}
