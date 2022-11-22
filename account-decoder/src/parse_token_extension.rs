@@ -2,7 +2,7 @@ use {
     crate::parse_token::UiAccountState,
     solana_sdk::clock::UnixTimestamp,
     spl_token_2022::{
-        extension::{self, BaseState, ExtensionType, StateWithExtensions},
+        extension::{self, BaseState, BaseStateWithExtensions, ExtensionType, StateWithExtensions},
         solana_program::pubkey::Pubkey,
     },
 };
@@ -21,6 +21,8 @@ pub enum UiExtension {
     MemoTransfer(UiMemoTransfer),
     NonTransferable,
     InterestBearingConfig(UiInterestBearingConfig),
+    CpiGuard(UiCpiGuard),
+    PermanentDelegate(UiPermanentDelegate),
     UnparseableExtension,
 }
 
@@ -63,6 +65,14 @@ pub fn parse_extension<S: BaseState>(
         ExtensionType::InterestBearingConfig => account
             .get_extension::<extension::interest_bearing_mint::InterestBearingConfig>()
             .map(|&extension| UiExtension::InterestBearingConfig(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::CpiGuard => account
+            .get_extension::<extension::cpi_guard::CpiGuard>()
+            .map(|&extension| UiExtension::CpiGuard(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::PermanentDelegate => account
+            .get_extension::<extension::permanent_delegate::PermanentDelegate>()
+            .map(|&extension| UiExtension::PermanentDelegate(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
     }
 }
@@ -206,6 +216,35 @@ impl From<extension::interest_bearing_mint::InterestBearingConfig> for UiInteres
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct UiCpiGuard {
+    pub lock_cpi: bool,
+}
+
+impl From<extension::cpi_guard::CpiGuard> for UiCpiGuard {
+    fn from(cpi_guard: extension::cpi_guard::CpiGuard) -> Self {
+        Self {
+            lock_cpi: cpi_guard.lock_cpi.into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiPermanentDelegate {
+    pub delegate: Option<String>,
+}
+
+impl From<extension::permanent_delegate::PermanentDelegate> for UiPermanentDelegate {
+    fn from(permanent_delegate: extension::permanent_delegate::PermanentDelegate) -> Self {
+        let delegate: Option<Pubkey> = permanent_delegate.delegate.into();
+        Self {
+            delegate: delegate.map(|pubkey| pubkey.to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct UiConfidentialTransferMint {
     pub authority: String,
     pub auto_approve_new_accounts: bool,
@@ -245,7 +284,8 @@ pub struct UiConfidentialTransferAccount {
     pub pending_balance_hi: String,
     pub available_balance: String,
     pub decryptable_available_balance: String,
-    pub allow_balance_credits: bool,
+    pub allow_confidential_credits: bool,
+    pub allow_non_confidential_credits: bool,
     pub pending_balance_credit_counter: u64,
     pub maximum_pending_balance_credit_counter: u64,
     pub expected_pending_balance_credit_counter: u64,
@@ -269,7 +309,12 @@ impl From<extension::confidential_transfer::ConfidentialTransferAccount>
                 "{}",
                 confidential_transfer_account.decryptable_available_balance
             ),
-            allow_balance_credits: confidential_transfer_account.allow_balance_credits.into(),
+            allow_confidential_credits: confidential_transfer_account
+                .allow_confidential_credits
+                .into(),
+            allow_non_confidential_credits: confidential_transfer_account
+                .allow_non_confidential_credits
+                .into(),
             pending_balance_credit_counter: confidential_transfer_account
                 .pending_balance_credit_counter
                 .into(),
