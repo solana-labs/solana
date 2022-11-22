@@ -105,7 +105,7 @@ struct ForkInfo {
     // Set to true if this slot or a child node was duplicate confirmed.
     is_duplicate_confirmed: bool,
     // Set to true if this slot is dumped. This indicates to not aggregate stake to parents, and to
-    // not chose this path for best slot.
+    // not choose this path for best slot.
     is_dumped: bool,
 }
 
