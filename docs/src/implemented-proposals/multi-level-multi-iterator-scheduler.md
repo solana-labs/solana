@@ -28,14 +28,14 @@ The first batch would be `[A, B]`. Marching the positions forward, we get:
     ^        ^
 ```
 
-and the second batch is `[C, D]`. Marching the positions forward again, we get:
+and the second batch is `[A, C]`. Marching the positions forward again, we get:
 
 ```text
 [A, A, A, B, C, A, B, C, D]
        ^           ^
 ```
 
-giving a batch of `[A, B]`. Note that the second iterator skipped over an `A` transaction, as that transaction would conflict with the `A` our first position is pointing to. Following this the remaining batches would be `[[A, C], [D]]`.
+giving a batch of `[A, B]`. Note that the second iterator skipped over an `A` transaction, as that transaction would conflict with the `A` our first position is pointing to. Following this, the remaining batches would be `[[A, C], [D]]`.
 
 ## Multi-Level Multi-Iterator
 
