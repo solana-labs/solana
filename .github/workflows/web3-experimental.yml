@@ -47,3 +47,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: |
+            ./web3.js-experimental/dist/
+            ./web3.js-experimental/package.json
