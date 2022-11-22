@@ -2979,16 +2979,24 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                assert!(
-                    blockstore.meta(snapshot_slot).unwrap().is_some(),
-                    "snapshot slot doesn't exist"
-                );
+                if blockstore
+                    .meta(snapshot_slot)
+                    .unwrap()
+                    .filter(|m| m.is_full())
+                    .is_none()
+                {
+                    eprintln!(
+                        "Error: snapshot slot {} does not exist in blockstore or is not full.",
+                        snapshot_slot,
+                    );
+                    exit(1);
+                }
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
-                            "ending_slot ({}) must be greater than snapshot_slot ({})",
+                            "Error: ending_slot ({}) must be greater than snapshot_slot ({})",
                             ending_slot, snapshot_slot
                         );
                         exit(1);
