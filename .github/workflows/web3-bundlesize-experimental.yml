@@ -22,7 +22,7 @@ jobs:
       CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
-      - uses: pnpm/action-setup@v2.0.1
+      - uses: pnpm/action-setup@v2.2.4
         with:
           version: 7
           run_install: false
