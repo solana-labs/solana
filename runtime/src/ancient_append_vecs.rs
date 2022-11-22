@@ -69,7 +69,7 @@ impl<'a> AccountsToStore<'a> {
         self.index_first_item_overflow < self.accounts.len()
     }
 
-    /// get the accounts and hashes to store in the given 'storage'
+    /// get the accounts to store in the given 'storage'
     pub fn get(&self, storage: StorageSelector) -> &[&'a StoredAccountMeta<'a>] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
