@@ -1,7 +1,7 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
     crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
-    solana_sdk::{account::ReadableAccount, clock::Slot, pubkey::Pubkey},
+    solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
 /// abstract access to pubkey, account, slot, target_slot of either:
@@ -14,6 +14,11 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn pubkey(&self, index: usize) -> &Pubkey;
     /// account at 'index'
     fn account(&self, index: usize) -> &T;
+    /// None if account is zero lamports
+    fn account_default_if_zero_lamport(&self, index: usize) -> Option<&T> {
+        let account = self.account(index);
+        (account.lamports() != 0).then_some(account)
+    }
     // current slot for account at 'index'
     fn slot(&self, index: usize) -> Slot;
     /// slot that all accounts are to be written to
@@ -29,6 +34,26 @@ pub trait StorableAccounts<'a, T: ReadableAccount + Sync>: Sync {
     fn contains_multiple_slots(&self) -> bool;
     /// true iff hashing these accounts should include the slot
     fn include_slot_in_hash(&self) -> IncludeSlotInHash;
+
+    /// true iff the impl can provide hash and write_version
+    /// Otherwise, hash and write_version have to be provided separately to store functions.
+    fn has_hash_and_write_version(&self) -> bool {
+        false
+    }
+
+    /// return hash for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
+    fn hash(&self, _index: usize) -> &Hash {
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
+    }
+
+    /// return write_version for account at 'index'
+    /// Should only be called if 'has_hash_and_write_version' = true
+    fn write_version(&self, _index: usize) -> u64 {
+        // this should never be called if has_hash_and_write_version returns false
+        unimplemented!();
+    }
 }
 
 /// accounts that are moving from 'old_slot' to 'target_slot'
@@ -158,6 +183,15 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].meta.write_version
     }
 }
 #[cfg(test)]

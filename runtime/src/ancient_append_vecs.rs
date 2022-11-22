@@ -8,7 +8,7 @@ use {
         accounts_db::FoundStoredAccount,
         append_vec::{AppendVec, StoredAccountMeta},
     },
-    solana_sdk::{clock::Slot, hash::Hash},
+    solana_sdk::clock::Slot,
 };
 
 /// a set of accounts need to be stored.
@@ -25,7 +25,6 @@ pub enum StorageSelector {
 /// We need 1-2 of these slices constructed based on available bytes and individual account sizes.
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
-    hashes: Vec<&'a Hash>,
     accounts: Vec<&'a StoredAccountMeta<'a>>,
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
@@ -42,7 +41,6 @@ impl<'a> AccountsToStore<'a> {
         slot: Slot,
     ) -> Self {
         let num_accounts = stored_accounts.len();
-        let mut hashes = Vec::with_capacity(num_accounts);
         let mut accounts = Vec::with_capacity(num_accounts);
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
@@ -53,15 +51,13 @@ impl<'a> AccountsToStore<'a> {
             } else if index_first_item_overflow == num_accounts {
                 available_bytes = 0;
                 // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
-                index_first_item_overflow = hashes.len();
+                index_first_item_overflow = accounts.len();
             }
-            hashes.push(account.account.hash);
             // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
             // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
             accounts.push(&account.account);
         });
         Self {
-            hashes,
             accounts,
             index_first_item_overflow,
             slot,
@@ -73,13 +69,13 @@ impl<'a> AccountsToStore<'a> {
         self.index_first_item_overflow < self.accounts.len()
     }
 
-    /// get the accounts and hashes to store in the given 'storage'
-    pub fn get(&self, storage: StorageSelector) -> (&[&'a StoredAccountMeta<'a>], &[&'a Hash]) {
+    /// get the accounts to store in the given 'storage'
+    pub fn get(&self, storage: StorageSelector) -> &[&'a StoredAccountMeta<'a>] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
         };
-        (&self.accounts[range.clone()], &self.hashes[range])
+        &self.accounts[range]
     }
 }
 
@@ -107,6 +103,7 @@ pub mod tests {
         },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
+            hash::Hash,
             pubkey::Pubkey,
         },
     };
@@ -117,9 +114,8 @@ pub mod tests {
         let slot = 1;
         let accounts_to_store = AccountsToStore::new(0, &map, slot);
         for selector in [StorageSelector::Primary, StorageSelector::Overflow] {
-            let (accounts, hash) = accounts_to_store.get(selector);
+            let accounts = accounts_to_store.get(selector);
             assert!(accounts.is_empty());
-            assert!(hash.is_empty());
         }
         assert!(!accounts_to_store.has_overflow());
     }
@@ -164,20 +160,18 @@ pub mod tests {
         ] {
             let slot = 1;
             let accounts_to_store = AccountsToStore::new(available_bytes as u64, &map, slot);
-            let (accounts, hashes) = accounts_to_store.get(selector);
+            let accounts = accounts_to_store.get(selector);
             assert_eq!(
                 accounts,
                 map.iter().map(|b| &b.account).collect::<Vec<_>>(),
                 "mismatch"
             );
-            assert_eq!(hashes, vec![&hash]);
-            let (accounts, hash) = accounts_to_store.get(get_opposite(&selector));
+            let accounts = accounts_to_store.get(get_opposite(&selector));
             assert_eq!(
                 selector == StorageSelector::Overflow,
                 accounts_to_store.has_overflow()
             );
             assert!(accounts.is_empty());
-            assert!(hash.is_empty());
         }
     }
     fn get_opposite(selector: &StorageSelector) -> StorageSelector {
