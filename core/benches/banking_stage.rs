@@ -26,7 +26,7 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -100,7 +100,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
@@ -283,7 +283,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,
