@@ -695,7 +695,6 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     pub fn consume_buffered_packets(
-        _my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
@@ -889,7 +888,6 @@ impl BankingStage {
                 slot_metrics_tracker.apply_action(metrics_action);
                 let (_, consume_buffered_packets_time) = measure!(
                     Self::consume_buffered_packets(
-                        my_pubkey,
                         max_tx_ingestion_ns,
                         poh_recorder,
                         unprocessed_transaction_storage,
@@ -3695,7 +3693,6 @@ mod tests {
             assert!(!poh_recorder.read().unwrap().has_bank());
             let max_tx_processing_ns = std::u128::MAX;
             BankingStage::consume_buffered_packets(
-                &Pubkey::default(),
                 max_tx_processing_ns,
                 &poh_recorder,
                 &mut buffered_packet_batches,
@@ -3713,7 +3710,6 @@ mod tests {
             // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
             poh_recorder.write().unwrap().set_bank(&bank, false);
             BankingStage::consume_buffered_packets(
-                &Pubkey::default(),
                 max_tx_processing_ns,
                 &poh_recorder,
                 &mut buffered_packet_batches,
@@ -3776,7 +3772,6 @@ mod tests {
                             ThreadType::Transactions,
                         );
                     BankingStage::consume_buffered_packets(
-                        &Pubkey::default(),
                         std::u128::MAX,
                         &poh_recorder_,
                         &mut buffered_packet_batches,

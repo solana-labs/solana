@@ -70,7 +70,6 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank = Arc::new(Bank::new_for_benches(&genesis_config));
     let ledger_path = get_tmp_ledger_path!();
-    let my_pubkey = pubkey::new_rand();
     {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
@@ -93,7 +92,6 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
-                &my_pubkey,
                 std::u128::MAX,
                 &poh_recorder,
                 &mut transaction_buffer,
