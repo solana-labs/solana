@@ -5,6 +5,7 @@ import doThingNode from './doThing.js';
 export default function rpc() {
     if (__DEV__) {
         console.debug('We are in development mode.');
+        console.debug('Here is some more code.');
     }
     if (__BROWSER__) {
         console.log(doThingBrowser());
