@@ -5,10 +5,12 @@ on:
     branches: ["master"]
     paths:
       - "web3.js-experimental/**"
+      - ".github/workflows/web3-experimental.yml"
   pull_request:
     types: [opened, synchronize]
     paths:
       - "web3.js-experimental/**"
+      - ".github/workflows/web3-experimental.yml"
 
 jobs:
   build:
