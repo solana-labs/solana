@@ -128,23 +128,24 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
 }
 
-/// this tuple contains slot info PER account
+/// this tuple contains a single different source slot that applies to all accounts
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
-        &'a [(&'a StoredAccountMeta<'a>, Slot)],
+        &'a [&'a StoredAccountMeta<'a>],
         IncludeSlotInHash,
+        Slot,
     )
 {
     fn pubkey(&self, index: usize) -> &Pubkey {
-        self.1[index].0.pubkey()
+        self.1[index].pubkey()
     }
     fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
-        self.1[index].0
+        self.1[index]
     }
-    fn slot(&self, index: usize) -> Slot {
-        // note that this could be different than 'target_slot()' PER account
-        self.1[index].1
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.3
     }
     fn target_slot(&self) -> Slot {
         self.0
@@ -153,14 +154,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
         self.1.len()
     }
     fn contains_multiple_slots(&self) -> bool {
-        let len = self.len();
-        if len > 0 {
-            let slot = self.slot(0);
-            // true if any item has a different slot than the first item
-            (1..len).any(|i| slot != self.slot(i))
-        } else {
-            false
-        }
+        false
     }
     fn include_slot_in_hash(&self) -> IncludeSlotInHash {
         self.2
@@ -231,16 +225,11 @@ pub mod tests {
 
         let test3 = (
             slot,
-            &vec![(&stored_account, slot), (&stored_account, slot)][..],
+            &vec![&stored_account, &stored_account][..],
             INCLUDE_SLOT_IN_HASH_TESTS,
+            slot,
         );
         assert!(!test3.contains_multiple_slots());
-        let test3 = (
-            slot,
-            &vec![(&stored_account, slot), (&stored_account, slot + 1)][..],
-            INCLUDE_SLOT_IN_HASH_TESTS,
-        );
-        assert!(test3.contains_multiple_slots());
     }
 
     #[test]
@@ -297,11 +286,17 @@ pub mod tests {
                     let mut three = Vec::new();
                     raw.iter().zip(raw2.iter()).for_each(|(raw, raw2)| {
                         two.push((&raw.0, &raw.1)); // 2 item tuple
-                        three.push((raw2, raw.2)); // 2 item tuple, including slot
+                        three.push(raw2);
                     });
                     let test2 = (target_slot, &two[..], INCLUDE_SLOT_IN_HASH_TESTS);
 
-                    let test3 = (target_slot, &three[..], INCLUDE_SLOT_IN_HASH_TESTS);
+                    let source_slot = starting_slot % max_slots;
+                    let test3 = (
+                        target_slot,
+                        &three[..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                        source_slot,
+                    );
                     let old_slot = starting_slot;
                     let test_moving_slots = StorableAccountsMovingSlots {
                         accounts: &two[..],

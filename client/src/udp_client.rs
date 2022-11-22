@@ -1,38 +1,12 @@
 //! Simple TPU client that communicates with the given UDP port with UDP and provides
 //! an interface for sending transactions
 
+pub use solana_udp_client::udp_client::UdpTpuConnection;
 use {
-    crate::{connection_cache_stats::ConnectionCacheStats, tpu_connection::TpuConnection},
-    core::iter::repeat,
-    solana_sdk::transport::Result as TransportResult,
-    solana_streamer::sendmmsg::batch_send,
-    std::{
-        net::{SocketAddr, UdpSocket},
-        sync::Arc,
-    },
+    crate::tpu_connection::TpuConnection, core::iter::repeat,
+    solana_sdk::transport::Result as TransportResult, solana_streamer::sendmmsg::batch_send,
+    std::net::SocketAddr,
 };
-
-pub struct UdpTpuConnection {
-    socket: Arc<UdpSocket>,
-    addr: SocketAddr,
-}
-
-impl UdpTpuConnection {
-    pub fn new_from_addr(local_socket: Arc<UdpSocket>, tpu_addr: SocketAddr) -> Self {
-        Self {
-            socket: local_socket,
-            addr: tpu_addr,
-        }
-    }
-
-    pub fn new(
-        local_socket: Arc<UdpSocket>,
-        tpu_addr: SocketAddr,
-        _connection_stats: Arc<ConnectionCacheStats>,
-    ) -> Self {
-        Self::new_from_addr(local_socket, tpu_addr)
-    }
-}
 
 impl TpuConnection for UdpTpuConnection {
     fn tpu_addr(&self) -> &SocketAddr {

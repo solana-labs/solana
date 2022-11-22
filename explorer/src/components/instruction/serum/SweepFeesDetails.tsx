@@ -1,25 +1,18 @@
 import React from "react";
-import { SignatureResult, TransactionInstruction } from "@solana/web3.js";
 import { InstructionCard } from "../InstructionCard";
 import { Address } from "components/common/Address";
-import { SweepFees } from "./types";
+import { SweepFees, SerumIxDetailsProps } from "./types";
 
-export function SweepFeesDetailsCard(props: {
-  ix: TransactionInstruction;
-  index: number;
-  result: SignatureResult;
-  info: SweepFees;
-  innerCards?: JSX.Element[];
-  childIndex?: number;
-}) {
-  const { ix, index, result, info, innerCards, childIndex } = props;
+export function SweepFeesDetailsCard(props: SerumIxDetailsProps<SweepFees>) {
+  const { ix, index, result, programName, info, innerCards, childIndex } =
+    props;
 
   return (
     <InstructionCard
       ix={ix}
       index={index}
       result={result}
-      title="Serum Program: Sweep Fees"
+      title={`${programName} Program: Sweep Fees`}
       innerCards={innerCards}
       childIndex={childIndex}
     >

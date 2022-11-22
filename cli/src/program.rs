@@ -17,6 +17,10 @@ use {
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
     },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
         elf::Executable,
@@ -47,10 +51,6 @@ use {
         sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
-    },
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
     },
     std::{
         fs::File,

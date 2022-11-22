@@ -25,6 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -99,7 +100,6 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -244,6 +244,7 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
+            accounts_db_caching_enabled: true,
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
@@ -1997,6 +1998,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake has the wrong shred version in gossip",
                 (wrong_shred_stake as f64 / total_activated_stake as f64) * 100.,
             );
+            wrong_shred_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in wrong_shred_nodes {
                 info!(
                     "    {:.3}% - {}",
@@ -2011,6 +2013,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake is not visible in gossip",
                 (offline_stake as f64 / total_activated_stake as f64) * 100.
             );
+            offline_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in offline_nodes {
                 info!(
                     "    {:.3}% - {}",
@@ -2153,7 +2156,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        solana_tpu_client::connection_cache::{
+        solana_tpu_client::tpu_connection_cache::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
         std::{fs::remove_dir_all, thread, time::Duration},

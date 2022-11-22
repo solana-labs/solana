@@ -210,8 +210,12 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     );
     check_accounts(&daccounts, &pubkeys, 100);
     assert_eq!(
-        accounts.bank_hash_at(0, &Rewrites::default()),
-        daccounts.bank_hash_at(0, &Rewrites::default())
+        accounts
+            .bank_hash_info_at(0, &Rewrites::default())
+            .accounts_delta_hash,
+        daccounts
+            .bank_hash_info_at(0, &Rewrites::default())
+            .accounts_delta_hash
     );
 }
 
@@ -680,7 +684,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "C4asU4c7Qbd31QQDScqRPnT3iLCYc4qaGqeUQEGP7cTw")]
+    #[frozen_abi(digest = "B9ui5cFeJ5NGtXAVFXRCSX4GJ77yLc3izv1E8QE34TdQ")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

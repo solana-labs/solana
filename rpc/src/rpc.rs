@@ -13,6 +13,7 @@ use {
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
     },
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -81,7 +82,6 @@ use {
     solana_stake_program,
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::ConnectionCache,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
         ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
@@ -4791,6 +4791,7 @@ pub mod tests {
             let (bank_forks, mint_keypair, leader_vote_keypair) =
                 new_bank_forks_with_config(BankTestConfig {
                     secondary_indexes: config.account_indexes.clone(),
+                    accounts_db_caching_enabled: true,
                 });
 
             let ledger_path = get_tmp_ledger_path!();

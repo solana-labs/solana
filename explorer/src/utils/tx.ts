@@ -20,6 +20,7 @@ import {
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { OPEN_BOOK_PROGRAM_ID } from "components/instruction/serum/types";
 
 export enum PROGRAM_NAMES {
   // native built-ins
@@ -49,7 +50,6 @@ export enum PROGRAM_NAMES {
 
   // other
   ACUMEN = "Acumen Program",
-  BONFIDA_POOL = "Bonfida Pool Program",
   BREAK_SOLANA = "Break Solana Program",
   CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
   CHAINLINK_STORE = "Chainlink Store Program",
@@ -87,6 +87,7 @@ export enum PROGRAM_NAMES {
   SERUM_2 = "Serum Dex Program v2",
   SERUM_3 = "Serum Dex Program v3",
   SERUM_SWAP = "Serum Swap Program",
+  SERUM_POOL = "Serum Pool",
   SOLEND = "Solend Program",
   SOLIDO = "Lido for Solana Program",
   STEP_SWAP = "Step Finance Swap Program",
@@ -99,6 +100,7 @@ export enum PROGRAM_NAMES {
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
+  OPENBOOK_DEX = "OpenBook Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -204,7 +206,7 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     deployments: [Cluster.MainnetBeta],
   },
   WvmTNLpGMVbwJVYztYL4Hnsy82cJhQorxjnnXcRm3b6: {
-    name: PROGRAM_NAMES.BONFIDA_POOL,
+    name: PROGRAM_NAMES.SERUM_POOL,
     deployments: [Cluster.MainnetBeta],
   },
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: {
@@ -413,6 +415,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
+    deployments: [Cluster.MainnetBeta],
+  },
+  [OPEN_BOOK_PROGRAM_ID]: {
+    name: PROGRAM_NAMES.OPENBOOK_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };

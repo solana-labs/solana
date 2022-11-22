@@ -44,7 +44,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{
+    solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     std::{
@@ -152,7 +152,7 @@ impl Default for TestValidatorGenesis {
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
-            accounts_db_caching_enabled: bool::default(),
+            accounts_db_caching_enabled: true,
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),

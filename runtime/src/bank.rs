@@ -1150,6 +1150,14 @@ pub struct NewBankOptions {
 #[derive(Debug, Default)]
 pub struct BankTestConfig {
     pub secondary_indexes: AccountSecondaryIndexes,
+    pub accounts_db_caching_enabled: bool,
+}
+
+pub fn bank_test_config_caching_enabled() -> BankTestConfig {
+    BankTestConfig {
+        accounts_db_caching_enabled: true,
+        ..BankTestConfig::default()
+    }
 }
 
 #[derive(Debug)]
@@ -1224,7 +1232,7 @@ impl Bank {
         Self::new_with_config_for_tests(
             genesis_config,
             test_config.secondary_indexes,
-            false,
+            test_config.accounts_db_caching_enabled,
             AccountShrinkThreshold::default(),
         )
     }
@@ -6170,24 +6178,37 @@ impl Bank {
             .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
-    /// Process a Transaction and store program log data. This is used for unit tests, and simply
-    /// replicates the vector Bank::process_transactions method with `enable_cpi_recording: true`
-    pub fn process_transaction_with_logs(&self, tx: &Transaction) -> Result<()> {
-        let txs = vec![VersionedTransaction::from(tx.clone())];
-        let batch = self.prepare_entry_batch(txs)?;
-        let _results = self.load_execute_and_commit_transactions(
+    /// Process a Transaction and store metadata. This is used for tests and the banks services. It
+    /// replicates the vector Bank::process_transaction method with metadata recording enabled.
+    #[must_use]
+    pub fn process_transaction_with_metadata(
+        &self,
+        tx: impl Into<VersionedTransaction>,
+    ) -> TransactionExecutionResult {
+        let txs = vec![tx.into()];
+        let batch = match self.prepare_entry_batch(txs) {
+            Ok(batch) => batch,
+            Err(err) => return TransactionExecutionResult::NotExecuted(err),
+        };
+
+        let (
+            TransactionResults {
+                mut execution_results,
+                ..
+            },
+            ..,
+        ) = self.load_execute_and_commit_transactions(
             &batch,
             MAX_PROCESSING_AGE,
-            false,
-            false,
-            true,
-            false,
+            false, // collect_balances
+            false, // enable_cpi_recording
+            true,  // enable_log_recording
+            true,  // enable_return_data_recording
             &mut ExecuteTimings::default(),
-            None,
+            Some(1000 * 1000),
         );
-        tx.signatures
-            .get(0)
-            .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
+
+        execution_results.remove(0)
     }
 
     /// Process multiple transaction in a single batch. This is used for benches and unit tests.
@@ -6589,6 +6610,15 @@ impl Bank {
         self.rc.accounts.load_all(&self.ancestors, self.bank_id)
     }
 
+    pub fn scan_all_accounts_with_modified_slots<F>(&self, scan_func: F) -> ScanResult<()>
+    where
+        F: FnMut(Option<(&Pubkey, AccountSharedData, Slot)>),
+    {
+        self.rc
+            .accounts
+            .scan_all(&self.ancestors, self.bank_id, scan_func)
+    }
+
     pub fn get_program_accounts_modified_since_parent(
         &self,
         program_id: &Pubkey,
@@ -6709,7 +6739,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let accounts_delta_hash = self
+        let bank_hash_info = self
             .rc
             .accounts
             .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
@@ -6718,7 +6748,7 @@ impl Bank {
 
         let mut hash = hashv(&[
             self.parent_hash.as_ref(),
-            accounts_delta_hash.hash.as_ref(),
+            bank_hash_info.accounts_delta_hash.as_ref(),
             &signature_count_buf,
             self.last_blockhash().as_ref(),
         ]);
@@ -6750,7 +6780,7 @@ impl Bank {
             "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
-            accounts_delta_hash.hash,
+            bank_hash_info.accounts_delta_hash,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
@@ -6764,7 +6794,7 @@ impl Bank {
         info!(
             "accounts hash slot: {} stats: {:?}",
             self.slot(),
-            accounts_delta_hash.stats,
+            bank_hash_info.stats,
         );
         hash
     }

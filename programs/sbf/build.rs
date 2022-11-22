@@ -60,7 +60,8 @@ fn main() {
         let rust_programs = [
             "128bit",
             "alloc",
-            "big_mod_exp",
+            "alt_bn128",
+	    "big_mod_exp",
             "call_depth",
             "caller_access",
             "curve25519",

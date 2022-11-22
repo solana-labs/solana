@@ -16,6 +16,7 @@ itertools = "0.10.5"
 log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.3"
+solana-client = { path = "../client", version = "=1.15.0" }
 solana-config-program = { path = "../programs/config", version = "=1.15.0" }
 solana-core = { path = "../core", version = "=1.15.0" }
 solana-entry = { path = "../entry", version = "=1.15.0" }

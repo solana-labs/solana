@@ -20,6 +20,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
@@ -100,7 +101,7 @@ impl SnapshotTestConfig {
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
-            false,
+            true,
             accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
@@ -251,7 +252,7 @@ fn run_bank_forks_snapshot_n<F>(
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
-            snapshot_request_handler.handle_snapshot_requests(false, false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(true, false, 0, &mut None);
         }
     }
 
@@ -616,13 +617,21 @@ fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: Clust
 
             // Since the accounts background services are not runnning, EpochAccountsHash
             // calculation requests will not be handled. To prevent banks from hanging during
-            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Invalid.
-            current_bank
+            // Bank::freeze() due to waiting for EAH to complete, just set the EAH to Valid.
+            let epoch_accounts_hash_manager = &current_bank
                 .rc
                 .accounts
                 .accounts_db
-                .epoch_accounts_hash_manager
-                .set_invalid_for_tests();
+                .epoch_accounts_hash_manager;
+            if epoch_accounts_hash_manager
+                .try_get_epoch_accounts_hash()
+                .is_none()
+            {
+                epoch_accounts_hash_manager.set_valid(
+                    EpochAccountsHash::new(Hash::new_unique()),
+                    current_bank.slot(),
+                )
+            }
         }
 
         let num_old_slots = num_set_roots * *add_root_interval - MAX_CACHE_ENTRIES + 1;
@@ -775,7 +784,7 @@ fn test_bank_forks_incremental_snapshot(
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
-                false,
+                true,
                 false,
                 0,
                 &mut last_full_snapshot_slot,
@@ -1032,7 +1041,7 @@ fn test_snapshots_with_background_services(
         bank_forks.clone(),
         &exit,
         abs_request_handler,
-        false,
+        true,
         false,
         None,
     );
