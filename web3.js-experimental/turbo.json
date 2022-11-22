@@ -1,27 +1,30 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "pipeline": {
-        "build": {
+        "compile:js": {
             "outputs": ["dist/**"]
         },
-        "build:typedefs": {
-            "dependsOn": ["build"],
+        "compile:typedefs": {
+            "dependsOn": ["compile:js"],
             "outputs": ["dist/**"]
         },
         "lint": {
             "outputs": []
         },
         "verifyTreeShakability:browser": {
-            "dependsOn": ["build"],
+            "dependsOn": ["compile:js"],
             "outputs": []
         },
         "verifyTreeShakability:native": {
-            "dependsOn": ["build"],
+            "dependsOn": ["compile:js"],
             "outputs": []
         },
         "verifyTreeShakability:node": {
-            "dependsOn": ["build"],
+            "dependsOn": ["compile:js"],
             "outputs": []
         }
+    },
+    "remoteCache": {
+        "signature": true
     }
 }

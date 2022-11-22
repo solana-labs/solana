@@ -18,11 +18,11 @@
         "web3"
     ],
     "scripts": {
-        "build": "tsup",
-        "build:typedefs": "tsc -p ./tsconfig.declarations.json",
-        "dev": "pnpm run build --watch",
+        "build": "turbo run compile:js compile:typedefs lint verifyTreeShakability:browser verifyTreeShakability:native verifyTreeShakability:node",
+        "compile:js": "tsup",
+        "compile:typedefs": "tsc -p ./tsconfig.declarations.json",
+        "dev": "pnpm run compile:js --watch",
         "lint": "eslint 'src/**'",
-        "package": "turbo build build:typedefs lint verifyTreeShakability:browser verifyTreeShakability:native verifyTreeShakability:node",
         "verifyTreeShakability:browser": "agadoo dist/index.browser.esm.js",
         "verifyTreeShakability:native": "agadoo dist/index.node.esm.js",
         "verifyTreeShakability:node": "agadoo dist/index.native.esm.js"
