@@ -85,7 +85,7 @@ impl ReadWriteAccountSet {
 
     /// Check if an account can be write-locked
     fn can_write(&self, pubkey: &Pubkey) -> bool {
-        !self.read_set.contains(pubkey) && !self.write_set.contains(pubkey)
+        !self.write_set.contains(pubkey) && !self.read_set.contains(pubkey)
     }
 
     /// Add an account to the read-set.
@@ -97,7 +97,7 @@ impl ReadWriteAccountSet {
     /// Add an account to the write-set.
     /// Should only be called after `can_write()` returns true
     fn add_write(&mut self, pubkey: &Pubkey) {
-        assert!(self.write_set.insert(*pubkey), "Write lock already held");
+        self.write_set.insert(*pubkey);
     }
 }
 
