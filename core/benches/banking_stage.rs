@@ -26,7 +26,7 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
