@@ -32,8 +32,10 @@ jobs:
           run_install: false
 
       - name: Download built bundles
-        uses: actions/download-artifact@v3
+        uses: dawidd6/action-download-artifact@v2
         with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          run_id: ${{github.event.workflow_run.id}}
           name: dist
 
       - name: Run Bundlewatch
