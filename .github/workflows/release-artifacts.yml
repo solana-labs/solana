@@ -28,9 +28,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+        shell: bash
+        run: |
+          source ci/rust-version.sh stable
 
       # copy the newest version env.sh before switching version.
       - name: Copy Env Script
