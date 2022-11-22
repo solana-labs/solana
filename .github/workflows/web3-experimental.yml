@@ -20,8 +20,11 @@ jobs:
       run:
         working-directory: web3.js-experimental
 
-    # To use Turborepo Remote Caching, set the following environment variables for the job.
     env:
+      # Configuration for Bundlewatch
+      BUNDLEWATCH_GITHUB_TOKEN: ${{ secrets.BUNDLEWATCH_GITHUB_TOKEN }}
+      CI_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+      # To use Turborepo Remote Caching, set the following environment variables for the job.
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 

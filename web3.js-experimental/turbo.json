@@ -1,6 +1,10 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "pipeline": {
+        "analyzeBundleSize": {
+            "dependsOn": ["compile:js"],
+            "outputs": []
+        },
         "compile:js": {
             "outputs": ["dist/**"]
         },
