@@ -4,10 +4,6 @@ use {
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
-lazy_static! {
-    static ref EMPTY_HASH: Hash = Hash::default();
-}
-
 /// abstract access to pubkey, account, slot, target_slot of either:
 /// a. (slot, &[&Pubkey, &ReadableAccount])
 /// b. (slot, &[&Pubkey, &ReadableAccount, Slot]) (we will use this later)
