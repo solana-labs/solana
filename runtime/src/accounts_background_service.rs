@@ -17,10 +17,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{
-        clock::{BankId, Slot},
-        hash::Hash,
-    },
+    solana_sdk::clock::{BankId, Slot},
     stats::StatsManager,
     std::{
         boxed::Box,
@@ -294,7 +291,7 @@ impl SnapshotRequestHandler {
             *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
         }
 
-        let previous_hash = if test_hash_calculation {
+        let previous_accounts_hash = test_hash_calculation.then(|| {
             // We have to use the index version here.
             // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality.
             snapshot_root_bank.update_accounts_hash(
@@ -302,9 +299,7 @@ impl SnapshotRequestHandler {
                 false,
                 false,
             )
-        } else {
-            Hash::default()
-        };
+        });
 
         let mut shrink_time = Measure::start("shrink_time");
         if !accounts_db_caching_enabled {
@@ -334,10 +329,10 @@ impl SnapshotRequestHandler {
         }
         flush_accounts_cache_time.stop();
 
-        let hash_for_testing = if test_hash_calculation {
+        let accounts_hash_for_testing = previous_accounts_hash.map(|previous_accounts_hash| {
             let check_hash = false;
 
-            let (this_hash, capitalization) = snapshot_root_bank
+            let (this_accounts_hash, capitalization) = snapshot_root_bank
                 .accounts()
                 .accounts_db
                 .calculate_accounts_hash(
@@ -354,12 +349,10 @@ impl SnapshotRequestHandler {
                     },
                 )
                 .unwrap();
-            assert_eq!(previous_hash, this_hash);
+            assert_eq!(previous_accounts_hash, this_accounts_hash);
             assert_eq!(capitalization, snapshot_root_bank.capitalization());
-            Some(this_hash)
-        } else {
-            None
-        };
+            this_accounts_hash
+        });
 
         let mut clean_time = Measure::start("clean_time");
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
@@ -394,7 +387,7 @@ impl SnapshotRequestHandler {
                     snapshot_storages,
                     self.snapshot_config.archive_format,
                     self.snapshot_config.snapshot_version,
-                    hash_for_testing,
+                    accounts_hash_for_testing,
                 )
                 .expect("new accounts package for snapshot")
             }
@@ -404,7 +397,7 @@ impl SnapshotRequestHandler {
                     accounts_package_type,
                     &snapshot_root_bank,
                     snapshot_storages,
-                    hash_for_testing,
+                    accounts_hash_for_testing,
                 )
             }
         };
@@ -413,12 +406,11 @@ impl SnapshotRequestHandler {
             .expect("send accounts package");
         snapshot_time.stop();
         info!(
-            "Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+            "Took bank snapshot. accounts package type: {:?}, slot: {}, bank hash: {}",
             accounts_package_type,
             snapshot_root_bank.slot(),
-            snapshot_root_bank.get_accounts_hash(),
             snapshot_root_bank.hash(),
-          );
+        );
 
         // Cleanup outdated snapshots
         let mut purge_old_snapshots_time = Measure::start("purge_old_snapshots_time");
@@ -785,7 +777,9 @@ mod test {
             genesis_utils::create_genesis_config,
         },
         crossbeam_channel::unbounded,
-        solana_sdk::{account::AccountSharedData, epoch_schedule::EpochSchedule, pubkey::Pubkey},
+        solana_sdk::{
+            account::AccountSharedData, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
+        },
     };
 
     #[test]
