@@ -386,7 +386,6 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if batches.is_empty() {
@@ -416,7 +415,7 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
+            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
             let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
@@ -557,7 +556,6 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
-    let cost_model = CostModel::new();
 
     for ReplayEntry {
         entry,
@@ -579,7 +577,6 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         cost_capacity_meter.clone(),
-                        &cost_model,
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -648,7 +645,6 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             cost_capacity_meter.clone(),
-                            &cost_model,
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -665,7 +661,6 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         cost_capacity_meter,
-        &cost_model,
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {

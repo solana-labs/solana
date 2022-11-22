@@ -49,7 +49,6 @@ use {
         },
         bank_forks::BankForks,
         bank_utils,
-        cost_model::CostModel,
         transaction_batch::TransactionBatch,
         transaction_error_metrics::TransactionErrorMetrics,
         vote_sender_types::ReplayVoteSender,
@@ -387,7 +386,6 @@ impl BankingStage {
         verified_vote_receiver: BankingPacketReceiver,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_model: Arc<RwLock<CostModel>>,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -401,7 +399,6 @@ impl BankingStage {
             Self::num_threads(),
             transaction_status_sender,
             gossip_vote_sender,
-            cost_model,
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
@@ -418,7 +415,6 @@ impl BankingStage {
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
-        cost_model: Arc<RwLock<CostModel>>,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -489,7 +485,6 @@ impl BankingStage {
                 let transaction_status_sender = transaction_status_sender.clone();
                 let gossip_vote_sender = gossip_vote_sender.clone();
                 let data_budget = data_budget.clone();
-                let cost_model = cost_model.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 Builder::new()
@@ -504,7 +499,6 @@ impl BankingStage {
                             transaction_status_sender,
                             gossip_vote_sender,
                             &data_budget,
-                            cost_model,
                             log_messages_bytes_limit,
                             connection_cache,
                             &bank_forks,
@@ -1059,7 +1053,6 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         data_budget: &DataBudget,
-        cost_model: Arc<RwLock<CostModel>>,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -1069,7 +1062,7 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut banking_stage_stats = BankingStageStats::new(id);
         let mut tracer_packet_stats = TracerPacketStats::new(id);
-        let qos_service = QosService::new(cost_model, id);
+        let qos_service = QosService::new(id);
 
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
         let mut last_metrics_update = Instant::now();
@@ -2074,7 +2067,6 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostModel::default())),
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
@@ -2128,7 +2120,6 @@ mod tests {
                 verified_gossip_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostModel::default())),
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
@@ -2207,7 +2198,6 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostModel::default())),
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
@@ -2363,7 +2353,6 @@ mod tests {
                     3,
                     None,
                     gossip_vote_sender,
-                    Arc::new(RwLock::new(CostModel::default())),
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
@@ -2667,7 +2656,7 @@ mod tests {
                 0,
                 &None,
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -2720,7 +2709,7 @@ mod tests {
                 0,
                 &None,
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -2804,7 +2793,7 @@ mod tests {
                 0,
                 &None,
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -2871,7 +2860,7 @@ mod tests {
             poh_recorder.write().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
-            let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
+            let qos_service = QosService::new(1);
 
             let get_block_cost = || bank.read_cost_tracker().unwrap().block_cost();
             let get_tx_count = || bank.read_cost_tracker().unwrap().transaction_count();
@@ -3033,7 +3022,7 @@ mod tests {
                 0,
                 &None,
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -3111,7 +3100,7 @@ mod tests {
                 &recorder,
                 &None,
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -3178,7 +3167,7 @@ mod tests {
             &recorder,
             &None,
             &gossip_vote_sender,
-            &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+            &QosService::new(1),
             None,
         );
 
@@ -3408,7 +3397,7 @@ mod tests {
                     sender: transaction_status_sender,
                 }),
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -3577,7 +3566,7 @@ mod tests {
                     sender: transaction_status_sender,
                 }),
                 &gossip_vote_sender,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 None,
             );
 
@@ -3701,7 +3690,7 @@ mod tests {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
@@ -3718,7 +3707,7 @@ mod tests {
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
                 None,
             );
@@ -3780,7 +3769,7 @@ mod tests {
                         test_fn,
                         &BankingStageStats::default(),
                         &recorder,
-                        &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                        &QosService::new(1),
                         &mut LeaderSlotMetricsTracker::new(0),
                         None,
                     );
@@ -4089,7 +4078,6 @@ mod tests {
                 gossip_verified_vote_receiver,
                 None,
                 gossip_vote_sender,
-                Arc::new(RwLock::new(CostModel::default())),
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,

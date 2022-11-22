@@ -17,7 +17,7 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
@@ -430,7 +430,6 @@ fn main() {
             num_banking_threads,
             None,
             replay_vote_sender,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),

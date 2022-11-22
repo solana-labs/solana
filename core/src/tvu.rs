@@ -42,8 +42,8 @@ use {
     },
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
-        commitment::BlockCommitmentCache, cost_model::CostModel,
-        prioritization_fee_cache::PrioritizationFeeCache, vote_sender_types::ReplayVoteSender,
+        commitment::BlockCommitmentCache, prioritization_fee_cache::PrioritizationFeeCache,
+        vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
@@ -122,7 +122,6 @@ impl Tvu {
         gossip_confirmed_slots_receiver: GossipDuplicateConfirmedSlotsReceiver,
         tvu_config: TvuConfig,
         max_slots: &Arc<MaxSlots>,
-        cost_model: &Arc<RwLock<CostModel>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
@@ -260,8 +259,7 @@ impl Tvu {
             None
         };
         let (cost_update_sender, cost_update_receiver) = unbounded();
-        let cost_update_service =
-            CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
+        let cost_update_service = CostUpdateService::new(blockstore.clone(), cost_update_receiver);
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
@@ -445,7 +443,6 @@ pub mod tests {
             gossip_confirmed_slots_receiver,
             TvuConfig::default(),
             &Arc::new(MaxSlots::default()),
-            &Arc::new(RwLock::new(CostModel::default())),
             None,
             None,
             AbsRequestSender::default(),
