@@ -347,7 +347,6 @@ fn main() {
     .take(num_chunks)
     .collect();
 
-    // fund all the accounts
     let total_num_transactions: u64 = all_packets
         .iter()
         .map(|packets_for_single_iteration| packets_for_single_iteration.transactions.len() as u64)
@@ -357,6 +356,7 @@ fn main() {
         num_banking_threads, total_num_transactions
     );
 
+    // fund all the accounts
     all_packets.iter().for_each(|packets_for_single_iteration| {
         packets_for_single_iteration
             .transactions
