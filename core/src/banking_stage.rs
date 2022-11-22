@@ -824,7 +824,7 @@ impl BankingStage {
         }
     }
 
-    fn make_decision(
+    fn make_consume_or_forward_decision(
         my_pubkey: &Pubkey,
         poh_recorder: &RwLock<PohRecorder>,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -882,11 +882,9 @@ impl BankingStage {
         if unprocessed_transaction_storage.should_not_process() {
             return;
         }
-        let ((metrics_action, decision), make_decision_time) = measure!(Self::make_decision(
-            my_pubkey,
-            poh_recorder,
-            slot_metrics_tracker
-        ));
+        let ((metrics_action, decision), make_decision_time) = measure!(
+            Self::make_consume_or_forward_decision(my_pubkey, poh_recorder, slot_metrics_tracker)
+        );
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
