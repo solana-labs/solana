@@ -1088,7 +1088,12 @@ mod tests {
             rent::Rent,
             transaction_context::{TransactionAccount, TransactionContext},
         },
-        std::{cell::Cell, mem, ptr, slice},
+        std::{
+            cell::{Cell, RefCell},
+            mem, ptr,
+            rc::Rc,
+            slice,
+        },
     };
 
     macro_rules! mock_invoke_context {
