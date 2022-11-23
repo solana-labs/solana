@@ -6,7 +6,7 @@ use {
     },
     solana_sdk::pubkey::Pubkey,
     spl_token_2022::{
-        extension::StateWithExtensions,
+        extension::{BaseStateWithExtensions, StateWithExtensions},
         generic_token_account::GenericTokenAccount,
         solana_program::{
             program_option::COption, program_pack::Pack, pubkey::Pubkey as SplTokenPubkey,
