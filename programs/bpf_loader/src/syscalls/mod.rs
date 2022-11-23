@@ -37,7 +37,6 @@ use {
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
             enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
-            syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1330,18 +1329,9 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        let cost = if invoke_context
-            .feature_set
-            .is_active(&syscall_saturated_math::id())
-        {
-            len.saturating_div(budget.cpi_bytes_per_unit)
-                .saturating_add(budget.syscall_base_cost)
-        } else {
-            #[allow(clippy::integer_arithmetic)]
-            {
-                len / budget.cpi_bytes_per_unit + budget.syscall_base_cost
-            }
-        };
+        let cost = len
+            .saturating_div(budget.cpi_bytes_per_unit)
+            .saturating_add(budget.syscall_base_cost);
         consume_compute_meter(invoke_context, cost)?;
 
         if len > MAX_RETURN_DATA as u64 {
@@ -1395,19 +1385,9 @@ declare_syscall!(
         let (program_id, return_data) = invoke_context.transaction_context.get_return_data();
         length = length.min(return_data.len() as u64);
         if length != 0 {
-            let cost = if invoke_context
-                .feature_set
-                .is_active(&syscall_saturated_math::id())
-            {
-                length
-                    .saturating_add(size_of::<Pubkey>() as u64)
-                    .saturating_div(budget.cpi_bytes_per_unit)
-            } else {
-                #[allow(clippy::integer_arithmetic)]
-                {
-                    (length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit
-                }
-            };
+            let cost = length
+                .saturating_add(size_of::<Pubkey>() as u64)
+                .saturating_div(budget.cpi_bytes_per_unit);
             consume_compute_meter(invoke_context, cost)?;
 
             let return_data_result = translate_slice_mut::<u8>(
