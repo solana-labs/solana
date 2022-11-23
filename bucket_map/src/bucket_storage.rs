@@ -1,6 +1,7 @@
 use {
     crate::{bucket_stats::BucketStats, MaxSearch},
     memmap2::MmapMut,
+    procfs::process::{Limit, Process},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     std::{
@@ -262,6 +263,14 @@ impl BucketStorage {
         }
     }
 
+    fn get_number_of_open_files_and_limit() -> Option<(usize, Limit)> {
+        let proc = Process::myself().ok()?;
+        let max_open_files_limit = proc.limits().unwrap().max_open_files;
+        let num_open_files = proc.fd_count().unwrap();
+
+        Some((num_open_files, max_open_files_limit))
+    }
+
     fn new_map(
         drives: &[PathBuf],
         cell_size: usize,
@@ -280,12 +289,24 @@ impl BucketStorage {
             .create(true)
             .open(file.clone())
             .map_err(|e| {
-                panic!(
-                    "Unable to create data file {} in current dir({:?}): {:?}",
-                    file.display(),
-                    std::env::current_dir(),
-                    e
-                );
+                if let Some((num_open_files, max_open_files_limit)) = Self::get_number_of_open_files_and_limit() {
+                    panic!(
+                        "Unable to create data file {} in current dir({:?}): {:?}, current number of open files: {}, max limit of open files: {:?}",
+                        file.display(),
+                        std::env::current_dir(),
+                        e,
+                        num_open_files,
+                        max_open_files_limit,
+                    );
+                }
+                else {
+                    panic!(
+                        "Unable to create data file {} in current dir({:?}): {:?}",
+                        file.display(),
+                        std::env::current_dir(),
+                        e,
+                    );
+                }
             })
             .unwrap();
 
@@ -381,7 +402,7 @@ impl BucketStorage {
 
 #[cfg(test)]
 mod test {
-    use {super::*, tempfile::tempdir};
+    use {super::*, procfs::process::LimitValue, tempfile::tempdir};
 
     #[test]
     fn test_bucket_storage() {
@@ -412,5 +433,24 @@ mod test {
         storage.free(ix, uid);
         assert!(storage.is_free(ix));
         assert_eq!(storage.uid(ix), None);
+
+        // test get_number_of_open_files_and_limit
+        if let Some((num_open_files, max_open_files_limit)) =
+            BucketStorage::get_number_of_open_files_and_limit()
+        {
+            assert!(num_open_files > 0);
+            match max_open_files_limit.soft_limit {
+                LimitValue::Unlimited => {}
+                LimitValue::Value(x) => assert!(x > 0),
+            }
+
+            match max_open_files_limit.hard_limit {
+                LimitValue::Unlimited => {}
+                LimitValue::Value(x) => assert!(x > 0),
+            }
+
+            println!("{:?}", num_open_files);
+            println!("{:?}", max_open_files_limit);
+        }
     }
 }
