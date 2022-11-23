@@ -8,7 +8,7 @@ use {
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
         epoch_accounts_hash,
-        genesis_utils::{activate_all_features, activate_feature},
+        genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
         status_cache::StatusCache,
     },
@@ -17,7 +17,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
-        feature_set::disable_fee_calculator,
+        feature_set::{self, disable_fee_calculator},
         genesis_config::{create_genesis_config, ClusterType},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -228,6 +228,7 @@ fn test_bank_serialize_style(
 ) {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
+    genesis_utils::activate_feature(&mut genesis_config, feature_set::epoch_accounts_hash::id());
     genesis_config.epoch_schedule = EpochSchedule::custom(400, 400, false);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let eah_start_slot = epoch_accounts_hash::calculation_start(&bank0);
