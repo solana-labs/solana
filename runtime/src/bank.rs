@@ -7787,22 +7787,28 @@ impl Bank {
     /// EAH *must* be included.  This means if an EAH calculation is currently in-flight we will
     /// wait for it to complete.
     pub fn get_epoch_accounts_hash_to_serialize(&self) -> Option<EpochAccountsHash> {
-        let should_get_epoch_accounts_hash = epoch_accounts_hash::is_enabled_this_epoch(self)
+        let should_get_epoch_accounts_hash = self
+            .feature_set
+            .is_active(&feature_set::epoch_accounts_hash::id())
+            && epoch_accounts_hash::is_enabled_this_epoch(self)
             && epoch_accounts_hash::is_in_calculation_window(self);
-        let (epoch_accounts_hash, measure) = measure!(should_get_epoch_accounts_hash.then(|| {
-            self.rc
-                .accounts
-                .accounts_db
-                .epoch_accounts_hash_manager
-                .wait_get_epoch_accounts_hash()
-        }));
+        if !should_get_epoch_accounts_hash {
+            return None;
+        }
+
+        let (epoch_accounts_hash, measure) = measure!(self
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash_manager
+            .wait_get_epoch_accounts_hash());
 
         datapoint_info!(
             "bank-get_epoch_accounts_hash_to_serialize",
             ("slot", self.slot(), i64),
             ("waiting-time-us", measure.as_us(), i64),
         );
-        epoch_accounts_hash
+        Some(epoch_accounts_hash)
     }
 
     /// Convenience fn to get the Epoch Accounts Hash
