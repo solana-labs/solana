@@ -7,6 +7,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
+    procfs::process::{LimitValue, Process},
     solana_sdk::timing::AtomicInterval,
     std::{
         collections::HashMap,
@@ -29,6 +30,7 @@ const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = 5 * MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
 const SAMPLE_INTERVAL_DISK_MS: u64 = 5 * MS_PER_S;
+const SAMPLE_INTERVAL_OPEN_FD_MS: u64 = 30 * MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -392,6 +394,7 @@ impl SystemMonitorService {
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
         report_os_disk_stats: bool,
+        report_os_open_fd_stats: bool,
     ) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
@@ -403,6 +406,7 @@ impl SystemMonitorService {
                     report_os_network_stats,
                     report_os_cpu_stats,
                     report_os_disk_stats,
+                    report_os_open_fd_stats,
                 );
             })
             .unwrap();
@@ -832,6 +836,40 @@ impl SystemMonitorService {
         Self::report_cpuid_values();
     }
 
+    fn get_open_fd_stats() -> Option<(usize, usize, usize)> {
+        let proc = Process::myself().ok()?;
+        let curr_num_open_fd = proc.fd_count().unwrap();
+        let max_open_fd_limit = proc.limits().unwrap().max_open_files;
+
+        let max_open_fd_soft_limit = match max_open_fd_limit.soft_limit {
+            LimitValue::Unlimited => usize::MAX,
+            LimitValue::Value(x) => x as usize,
+        };
+        let max_open_fd_hard_limit = match max_open_fd_limit.hard_limit {
+            LimitValue::Unlimited => usize::MAX,
+            LimitValue::Value(x) => x as usize,
+        };
+
+        Some((
+            curr_num_open_fd,
+            max_open_fd_soft_limit,
+            max_open_fd_hard_limit,
+        ))
+    }
+
+    fn report_open_fd_stats() {
+        if let Some((curr_num_open_fd, max_open_fd_soft_limit, max_open_fd_hard_limit)) =
+            Self::get_open_fd_stats()
+        {
+            datapoint_info!(
+                "open-fd-stats",
+                ("number_open_files", curr_num_open_fd, i64),
+                ("max_open_files_hard_limit", max_open_fd_hard_limit, i64),
+                ("max_open_files_soft_limit", max_open_fd_soft_limit, i64),
+            );
+        }
+    }
+
     #[cfg(target_os = "linux")]
     fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
         match read_disk_stats() {
@@ -973,6 +1011,7 @@ impl SystemMonitorService {
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
         report_os_disk_stats: bool,
+        report_os_open_fd_stats: bool,
     ) {
         let mut udp_stats = None;
         let mut disk_stats = None;
@@ -981,6 +1020,7 @@ impl SystemMonitorService {
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
         let disk_timer = AtomicInterval::default();
+        let open_fd_timer = AtomicInterval::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -1002,6 +1042,9 @@ impl SystemMonitorService {
             }
             if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
                 Self::process_disk_stats(&mut disk_stats);
+            }
+            if report_os_open_fd_stats && open_fd_timer.should_update(SAMPLE_INTERVAL_OPEN_FD_MS) {
+                Self::report_open_fd_stats();
             }
             sleep(SLEEP_INTERVAL);
         }
