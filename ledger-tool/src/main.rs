@@ -2711,6 +2711,7 @@ fn main() {
                     false,
                     false,
                     false,
+                    false,
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
