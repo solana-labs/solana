@@ -7,7 +7,9 @@ use {
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
-        leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
+        leader_slot_banking_stage_metrics::{
+            LeaderSlotMetricsTracker, MetricsTrackerAction, ProcessTransactionsSummary,
+        },
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
@@ -814,6 +816,42 @@ impl BankingStage {
         }
     }
 
+    fn make_consume_or_forward_decision(
+        my_pubkey: &Pubkey,
+        poh_recorder: &RwLock<PohRecorder>,
+        slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+    ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
+        let bank_start;
+        let (
+            leader_at_slot_offset,
+            bank_still_processing_txs,
+            would_be_leader,
+            would_be_leader_shortly,
+        ) = {
+            let poh = poh_recorder.read().unwrap();
+            bank_start = poh.bank_start();
+            (
+                poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
+                PohRecorder::get_working_bank_if_not_expired(&bank_start.as_ref()),
+                poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
+                poh.would_be_leader(
+                    (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1) * DEFAULT_TICKS_PER_SLOT,
+                ),
+            )
+        };
+
+        (
+            slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
+            Self::consume_or_forward_packets(
+                my_pubkey,
+                leader_at_slot_offset,
+                bank_still_processing_txs,
+                would_be_leader,
+                would_be_leader_shortly,
+            ),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
@@ -837,39 +875,7 @@ impl BankingStage {
             return;
         }
         let ((metrics_action, decision), make_decision_time) = measure!(
-            {
-                let bank_start;
-                let (
-                    leader_at_slot_offset,
-                    bank_still_processing_txs,
-                    would_be_leader,
-                    would_be_leader_shortly,
-                ) = {
-                    let poh = poh_recorder.read().unwrap();
-                    bank_start = poh.bank_start();
-                    (
-                        poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                        PohRecorder::get_working_bank_if_not_expired(&bank_start.as_ref()),
-                        poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
-                        poh.would_be_leader(
-                            (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1)
-                                * DEFAULT_TICKS_PER_SLOT,
-                        ),
-                    )
-                };
-
-                (
-                    slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
-                    Self::consume_or_forward_packets(
-                        my_pubkey,
-                        leader_at_slot_offset,
-                        bank_still_processing_txs,
-                        would_be_leader,
-                        would_be_leader_shortly,
-                    ),
-                )
-            },
-            "make_decision",
+            Self::make_consume_or_forward_decision(my_pubkey, poh_recorder, slot_metrics_tracker)
         );
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
