@@ -244,7 +244,6 @@ impl SnapshotRequestHandler {
                             rent_collector: snapshot_root_bank.rent_collector(),
                             store_detailed_debug_info_on_failure: false,
                             full_snapshot: None,
-                            disable_rehash_for_rent_epoch: snapshot_root_bank.feature_set.is_active(&solana_sdk::feature_set::disable_rehash_for_rent_epoch::id()),
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);

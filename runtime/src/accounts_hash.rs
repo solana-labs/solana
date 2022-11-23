@@ -57,8 +57,6 @@ pub struct CalcAccountsHashConfig<'a> {
     pub store_detailed_debug_info_on_failure: bool,
     /// `Some` if this is an incremental snapshot which only hashes slots since the base full snapshot
     pub full_snapshot: Option<FullSnapshotAccountsHashInfo>,
-    /// temporarily here for feature activation #28934
-    pub disable_rehash_for_rent_epoch: bool,
 }
 
 impl<'a> CalcAccountsHashConfig<'a> {
