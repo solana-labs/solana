@@ -6640,6 +6640,9 @@ impl Bank {
         let cap = self.capitalization();
         let epoch_schedule = self.epoch_schedule();
         let rent_collector = self.rent_collector();
+        let disable_rehash_for_rent_epoch = self
+            .feature_set
+            .is_active(&solana_sdk::feature_set::disable_rehash_for_rent_epoch::id());
         if config.run_in_background {
             let ancestors = ancestors.clone();
             let accounts = Arc::clone(accounts);
@@ -6665,6 +6668,7 @@ impl Bank {
                             config.store_hash_raw_data_for_debug,
                             // true to run using bg thread pool
                             true,
+                            disable_rehash_for_rent_epoch,
                         );
                         accounts_
                             .accounts_db
@@ -6688,6 +6692,7 @@ impl Bank {
                 config.store_hash_raw_data_for_debug,
                 // fg is waiting for this to run, so we can use the fg thread pool
                 false,
+                disable_rehash_for_rent_epoch,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
@@ -6790,6 +6795,8 @@ impl Bank {
             debug_verify,
             self.epoch_schedule(),
             &self.rent_collector,
+            self.feature_set
+                .is_active(&solana_sdk::feature_set::disable_rehash_for_rent_epoch::id()),
         )
     }
 
@@ -6853,6 +6860,8 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
+                self.feature_set
+                    .is_active(&solana_sdk::feature_set::disable_rehash_for_rent_epoch::id()),
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -6879,6 +6888,9 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
+                        self.feature_set.is_active(
+                            &solana_sdk::feature_set::disable_rehash_for_rent_epoch::id(),
+                        ),
                     );
             }
 

@@ -45,6 +45,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
+        expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
@@ -112,6 +113,8 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
 pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
+
+pub const TEST_DISABLE_REHASH_FOR_RENT_EPOCH: bool = true;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -1792,22 +1795,26 @@ trait AppendVecScan: Send + Sync + Clone {
 /// These would have been captured in a fn from within the scan function.
 /// Some of these are constant across all pubkeys, some are constant across a slot.
 /// Some could be unique per pubkey.
-struct ScanState<'a> {
+struct ScanState<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> {
     /// slot we're currently scanning
     current_slot: Slot,
     /// accumulated results
     accum: BinnedHashData,
+    /// max slot (inclusive) that we're calculating accounts hash on
+    max_slot_info: SlotInfoInEpoch,
     bin_calculator: &'a PubkeyBinCalculator24,
     bin_range: &'a Range<usize>,
     config: &'a CalcAccountsHashConfig<'a>,
     mismatch_found: Arc<AtomicU64>,
+    stats: &'a crate::accounts_hash::HashStats,
+    find_unskipped_slot: &'a T,
     filler_account_suffix: Option<&'a Pubkey>,
     range: usize,
     sort_time: Arc<AtomicU64>,
     pubkey_to_bin_index: usize,
 }
 
-impl<'a> AppendVecScan for ScanState<'a> {
+impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for ScanState<'a, T> {
     fn set_slot(&mut self, slot: Slot) {
         self.current_slot = slot;
     }
@@ -1836,6 +1843,24 @@ impl<'a> AppendVecScan for ScanState<'a> {
         };
 
         let loaded_hash = loaded_account.loaded_hash();
+        let new_hash = (!self.config.disable_rehash_for_rent_epoch)
+            .then(|| {
+                ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                    loaded_account,
+                    &loaded_hash,
+                    pubkey,
+                    self.current_slot,
+                    self.config.epoch_schedule,
+                    self.config.rent_collector,
+                    self.stats,
+                    &self.max_slot_info,
+                    self.find_unskipped_slot,
+                    self.filler_account_suffix,
+                )
+            })
+            .flatten();
+        let loaded_hash = new_hash.unwrap_or(loaded_hash);
+
         let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
 
         if self.config.check_hash
@@ -6236,6 +6261,8 @@ impl AccountsDb {
         let total_lamports = Mutex::<u64>::new(0);
         let stats = HashStats::default();
 
+        let max_slot_info = SlotInfoInEpoch::new(max_slot, config.epoch_schedule);
+
         let get_hashes = || {
             keys.par_chunks(chunks)
                 .map(|pubkeys| {
@@ -6268,7 +6295,23 @@ impl AccountsDb {
                                     .get_loaded_account()
                                     .and_then(
                                         |loaded_account| {
+                                            let find_unskipped_slot = |slot: Slot| {
+                                                self.find_unskipped_slot(slot, config.ancestors)
+                                            };
                                             let loaded_hash = loaded_account.loaded_hash();
+                                            let new_hash = (!config.disable_rehash_for_rent_epoch).then(||ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                                                &loaded_account,
+                                                &loaded_hash,
+                                                pubkey,
+                                                *slot,
+                                                config.epoch_schedule,
+                                                config.rent_collector,
+                                                &stats,
+                                                &max_slot_info,
+                                                find_unskipped_slot,
+                                                self.filler_account_suffix.as_ref(),
+                                            )).flatten();
+                                            let loaded_hash = new_hash.unwrap_or(loaded_hash);
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
                                                 let computed_hash =
@@ -6353,6 +6396,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        disable_rehash_for_rent_epoch: bool,
     ) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true,
@@ -6364,6 +6408,7 @@ impl AccountsDb {
             epoch_schedule,
             rent_collector,
             false,
+            disable_rehash_for_rent_epoch,
         )
     }
 
@@ -6379,6 +6424,7 @@ impl AccountsDb {
             &EpochSchedule::default(),
             &RentCollector::default(),
             false,
+            TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
         )
     }
 
@@ -6803,6 +6849,7 @@ impl AccountsDb {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
         is_startup: bool,
+        disable_rehash_for_rent_epoch: bool,
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
@@ -6819,6 +6866,7 @@ impl AccountsDb {
                     rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
+                    disable_rehash_for_rent_epoch,
                 },
                 expected_capitalization,
             )
@@ -6853,15 +6901,22 @@ impl AccountsDb {
         let range = bin_range.end - bin_range.start;
         let sort_time = Arc::new(AtomicU64::new(0));
 
+        let find_unskipped_slot = |slot: Slot| self.find_unskipped_slot(slot, config.ancestors);
+
+        let max_slot_info =
+            SlotInfoInEpoch::new(storage.max_slot_inclusive(), config.epoch_schedule);
         let scanner = ScanState {
             current_slot: Slot::default(),
             accum: BinnedHashData::default(),
             bin_calculator: &bin_calculator,
             config,
             mismatch_found: mismatch_found.clone(),
+            max_slot_info,
+            find_unskipped_slot: &find_unskipped_slot,
             filler_account_suffix,
             range,
             bin_range,
+            stats,
             sort_time: sort_time.clone(),
             pubkey_to_bin_index: 0,
         };
@@ -7042,6 +7097,7 @@ impl AccountsDb {
     }
 
     /// Only called from startup or test code.
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
@@ -7052,6 +7108,7 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
         use_bg_thread_pool: bool,
+        disable_rehash_for_rent_epoch: bool,
     ) -> Result<(), BankHashVerificationError> {
         self.verify_bank_hash_and_lamports_new(
             slot,
@@ -7064,6 +7121,7 @@ impl AccountsDb {
             false,
             false,
             use_bg_thread_pool,
+            disable_rehash_for_rent_epoch,
         )
     }
 
@@ -7081,6 +7139,7 @@ impl AccountsDb {
         ignore_mismatch: bool,
         store_hash_raw_data_for_debug: bool,
         use_bg_thread_pool: bool,
+        disable_rehash_for_rent_epoch: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -7100,6 +7159,7 @@ impl AccountsDb {
                     rent_collector,
                     store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
                     full_snapshot: None,
+                    disable_rehash_for_rent_epoch,
                 },
                 None,
             )?;
@@ -11083,13 +11143,15 @@ pub mod tests {
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             accounts.update_accounts_hash(
                 latest_slot,
                 &ancestors,
                 &EpochSchedule::default(),
-                &RentCollector::default()
+                &RentCollector::default(),
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             )
         );
     }
@@ -11373,6 +11435,7 @@ pub mod tests {
             &Ancestors::default(),
             &EpochSchedule::default(),
             &RentCollector::default(),
+            TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
         );
 
         let accounts = f(accounts, current_slot);
@@ -11394,6 +11457,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             )
             .unwrap();
     }
@@ -11729,6 +11793,7 @@ pub mod tests {
                 rent_collector: &RENT_COLLECTOR,
                 store_detailed_debug_info_on_failure: false,
                 full_snapshot: None,
+                disable_rehash_for_rent_epoch: TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             }
         }
     }
@@ -11799,6 +11864,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Ok(_)
         );
@@ -11814,6 +11880,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Err(MissingBankHash)
         );
@@ -11838,6 +11905,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Err(MismatchedBankHash)
         );
@@ -11868,6 +11936,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Ok(_)
         );
@@ -11891,12 +11960,13 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Ok(_)
         );
 
         assert_matches!(
-            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, false),
+            db.verify_bank_hash_and_lamports(some_slot, &ancestors, 10, true, &EpochSchedule::default(), &RentCollector::default(), false, false, TEST_DISABLE_REHASH_FOR_RENT_EPOCH),
             Err(MismatchedTotalLamports(expected, actual)) if expected == 2 && actual == 10
         );
     }
@@ -11925,6 +11995,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Ok(_)
         );
@@ -11970,6 +12041,7 @@ pub mod tests {
                 &RentCollector::default(),
                 false,
                 false,
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             ),
             Err(MismatchedBankHash)
         );
@@ -12579,6 +12651,7 @@ pub mod tests {
                 &no_ancestors,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             );
             accounts
                 .verify_bank_hash_and_lamports(
@@ -12590,6 +12663,7 @@ pub mod tests {
                     &RentCollector::default(),
                     false,
                     false,
+                    TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
                 )
                 .unwrap();
 
@@ -12604,6 +12678,7 @@ pub mod tests {
                     &RentCollector::default(),
                     false,
                     false,
+                    TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
                 )
                 .unwrap();
 
