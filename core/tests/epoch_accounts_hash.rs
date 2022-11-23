@@ -483,7 +483,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 /// Given the scenario where two banks are rooted back-to-back, where the first bank sends an
 /// EAH request and the second bank sends a snapshot request, both requests should be handled.
 #[test]
-fn test_background_services_request_handling() {
+fn test_background_services_request_handling_for_epoch_accounts_hash() {
     solana_logger::setup();
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;
