@@ -4971,7 +4971,11 @@ impl AccountsDb {
         }
     }
 
-    pub fn set_hash(&self, slot: Slot, parent_slot: Slot) {
+    /// Insert a new bank hash for `slot`
+    ///
+    /// The new bank hash is empty/default except for the slot.  This fn is called when creating a
+    /// new bank from parent.  The bank hash for this slot is updated with real values later.
+    pub fn insert_default_bank_hash(&self, slot: Slot, parent_slot: Slot) {
         let mut bank_hashes = self.bank_hashes.write().unwrap();
         if bank_hashes.get(&slot).is_some() {
             error!(
@@ -12323,12 +12327,12 @@ pub mod tests {
         accounts.add_root(0);
 
         let mut current_slot = 1;
-        accounts.set_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
         accounts.store_uncached(current_slot, &[(&pubkey, &account)]);
         accounts.add_root(current_slot);
 
         current_slot += 1;
-        accounts.set_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
         accounts.store_uncached(current_slot, &[(&pubkey, &zero_lamport_account)]);
         accounts.add_root(current_slot);
 
@@ -12336,7 +12340,7 @@ pub mod tests {
 
         // Otherwise slot 2 will not be removed
         current_slot += 1;
-        accounts.set_hash(current_slot, current_slot - 1);
+        accounts.insert_default_bank_hash(current_slot, current_slot - 1);
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_purge");
