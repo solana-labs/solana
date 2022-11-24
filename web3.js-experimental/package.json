@@ -26,6 +26,9 @@
     "react-native": "./dist/index.native.js",
     "types": "./dist/types/index.d.ts",
     "type": "module",
+    "files": [
+        "./dist/"
+    ],
     "sideEffects": false,
     "keywords": [
         "blockchain",
