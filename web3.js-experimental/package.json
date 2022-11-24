@@ -94,5 +94,8 @@
             }
         ]
     },
-    "prettier": "@solana/prettier-config-solana"
+    "prettier": "@solana/prettier-config-solana",
+    "dependencies": {
+        "@noble/hashes": "^1.1.3"
+    }
 }
