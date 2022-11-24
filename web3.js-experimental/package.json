@@ -36,12 +36,13 @@
         "web3"
     ],
     "scripts": {
-        "build": "turbo run compile:js compile:typedefs test:lint test:prettier test:unit:browser test:unit:node test:treeshakability:browser test:treeshakability:native test:treeshakability:node",
+        "build": "turbo run compile:js compile:typedefs test:lint test:prettier test:typecheck test:unit:browser test:unit:node test:treeshakability:browser test:treeshakability:native test:treeshakability:node",
         "compile:js": "tsup",
         "compile:typedefs": "tsc -p ./tsconfig.declarations.json",
         "dev": "jest -c ./internal/jest/jest-dev.config.ts --watch",
         "test:lint": "jest -c ./internal/jest/jest-lint.config.ts --silent",
         "test:prettier": "jest -c ./internal/jest/jest-prettier.config.ts --silent",
+        "test:typecheck": "tsc --noEmit",
         "test:unit:browser": "jest -c ./internal/jest/jest-unit.config.browser.ts --silent",
         "test:unit:node": "jest -c ./internal/jest/jest-unit.config.node.ts --silent",
         "test:treeshakability:browser": "agadoo dist/index.browser.js",

@@ -18,6 +18,10 @@
             "inputs": ["./internal/**", "./src/**"],
             "outputs": []
         },
+        "test:typecheck": {
+            "inputs": ["./internal/**", "./src/**"],
+            "outputs": []
+        },
         "test:unit:browser": {
             "inputs": ["./src/**"],
             "outputs": []
