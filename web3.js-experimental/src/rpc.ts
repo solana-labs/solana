@@ -1,6 +1,6 @@
-import doThingBrowser from './doThing.browser.js';
-import doThingNative from './doThing.native.js';
-import doThingNode from './doThing.js';
+import doThingBrowser from './doThing.browser';
+import doThingNative from './doThing.native';
+import doThingNode from './doThing';
 
 export default function rpc() {
     if (__DEV__) {

@@ -1,29 +1,44 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "pipeline": {
-        "analyzeBundleSize": {
-            "dependsOn": ["compile:js"],
-            "outputs": []
-        },
         "compile:js": {
+            "inputs": ["./src/**"],
             "outputs": ["dist/**"]
         },
         "compile:typedefs": {
             "dependsOn": ["compile:js"],
+            "inputs": ["./src/**"],
             "outputs": ["dist/**"]
         },
-        "lint": {
+        "test:lint": {
+            "inputs": ["./internal/**", "./src/**"],
             "outputs": []
         },
-        "verifyTreeShakability:browser": {
+        "test:prettier": {
+            "inputs": ["./internal/**", "./src/**"],
+            "outputs": []
+        },
+        "test:typecheck": {
+            "inputs": ["./internal/**", "./src/**"],
+            "outputs": []
+        },
+        "test:unit:browser": {
+            "inputs": ["./src/**"],
+            "outputs": []
+        },
+        "test:unit:node": {
+            "inputs": ["./src/**"],
+            "outputs": []
+        },
+        "test:treeshakability:browser": {
             "dependsOn": ["compile:js"],
             "outputs": []
         },
-        "verifyTreeShakability:native": {
+        "test:treeshakability:native": {
             "dependsOn": ["compile:js"],
             "outputs": []
         },
-        "verifyTreeShakability:node": {
+        "test:treeshakability:node": {
             "dependsOn": ["compile:js"],
             "outputs": []
         }
