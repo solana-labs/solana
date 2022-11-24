@@ -36,7 +36,6 @@
         "web3"
     ],
     "scripts": {
-        "analyzeBundleSize": "bundlewatch",
         "build": "turbo run compile:js compile:typedefs lint verifyTreeShakability:browser verifyTreeShakability:native verifyTreeShakability:node",
         "compile:js": "tsup",
         "compile:typedefs": "tsc -p ./tsconfig.declarations.json",
@@ -66,7 +65,6 @@
         "@typescript-eslint/eslint-plugin": "^5.43.0",
         "@typescript-eslint/parser": "^5.43.0",
         "agadoo": "^2.0.0",
-        "bundlewatch": "^0.3.3",
         "eslint": "^8.27.0",
         "eslint-plugin-react-hooks": "^4.6.0",
         "eslint-plugin-sort-keys-fix": "^1.1.2",
