@@ -30,16 +30,14 @@ function getBaseConfig(platform: Platform, format: Format[], options: Options): 
         name: platform,
         onSuccess: options.watch ? 'tsc -p ./tsconfig.declarations.json' : undefined,
         outExtension({ format }) {
-            const parts: string[] = [];
-            if (format !== 'iife') {
-                parts.push(platform);
-            }
-            parts.push(format);
+            let extension;
             if (format === 'iife') {
-                parts.push(isDebugBuild ? 'development' : 'production');
+                extension = `.${isDebugBuild ? 'development' : 'production.min'}.js`;
+            } else {
+                extension = `.${platform}.${format === 'cjs' ? 'cjs' : 'js'}`;
             }
             return {
-                js: `.${parts.join('.')}.js`,
+                js: extension,
             };
         },
         platform: platform === 'node' ? 'node' : 'browser',

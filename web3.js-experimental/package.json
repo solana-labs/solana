@@ -2,15 +2,33 @@
     "name": "@solana/web3.js-experimental",
     "version": "0.0.0-development",
     "description": "Solana Javascript API",
-    "browser": {
-        "./dist/index.node.cjs.js": "./dist/index.browser.cjs.js",
-        "./dist/index.node.esm.js": "./dist/index.browser.esm.js"
+    "exports": {
+        "browser": {
+            "import": "./dist/index.browser.js",
+            "require": "./dist/index.browser.cjs"
+        },
+        "node": {
+            "import": "./dist/index.node.js",
+            "require": "./dist/index.node.cjs"
+        },
+        "react-native": "./dist/index.native.js",
+        "types": "./dist/types/index.d.ts"
     },
-    "react-native": "./dist/index.native.esm.js",
-    "main": "./dist/index.node.cjs.js",
-    "module": "./dist/index.node.esm.js",
-    "types": "./dist/index.d.ts",
+    "browser": {
+        "./dist/index.node.cjs": "./dist/index.browser.cjs",
+        "./dist/index.node.js": "./dist/index.browser.js"
+    },
+    "jsdelivr": "./dist/index.production.min.js",
+    "umd": "./dist/index.production.min.js",
+    "unpkg": "./dist/index.production.min.js",
+    "main": "./dist/index.node.cjs",
+    "module": "./dist/index.node.js",
+    "react-native": "./dist/index.native.js",
+    "types": "./dist/types/index.d.ts",
     "type": "module",
+    "files": [
+        "./dist/"
+    ],
     "sideEffects": false,
     "keywords": [
         "blockchain",
@@ -24,9 +42,9 @@
         "compile:typedefs": "tsc -p ./tsconfig.declarations.json",
         "dev": "pnpm run compile:js --watch",
         "lint": "eslint 'src/**'",
-        "verifyTreeShakability:browser": "agadoo dist/index.browser.esm.js",
-        "verifyTreeShakability:native": "agadoo dist/index.node.esm.js",
-        "verifyTreeShakability:node": "agadoo dist/index.native.esm.js"
+        "verifyTreeShakability:browser": "agadoo dist/index.browser.js",
+        "verifyTreeShakability:native": "agadoo dist/index.node.js",
+        "verifyTreeShakability:node": "agadoo dist/index.native.js"
     },
     "author": "Solana Maintainers <maintainers@solana.com>",
     "license": "MIT",
