@@ -23,7 +23,8 @@ use {
         transport::Result as TransportResult,
     },
     solana_streamer::{
-        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, tls_certificates::new_self_signed_tls_certificate,
+        nonblocking::quic::{SolanaQuicCryptoConfig, ALPN_TPU_PROTOCOL_ID},
+        tls_certificates::new_self_signed_tls_certificate,
     },
     solana_tpu_client::{
         connection_cache_stats::ConnectionCacheStats, nonblocking::tpu_connection::TpuConnection,
@@ -116,7 +117,7 @@ impl QuicLazyInitializedEndpoint {
         };
 
         let mut crypto = rustls::ClientConfig::builder()
-            .with_safe_defaults()
+            .with_solana_quic_crypto_config()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_single_cert(
                 vec![self.client_certificate.certificate.clone()],

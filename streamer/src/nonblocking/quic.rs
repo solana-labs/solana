@@ -10,6 +10,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
+    rustls::{cipher_suite::*, version::TLS13, WantsCipherSuites, WantsVerifier, ALL_KX_GROUPS},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
@@ -924,6 +925,26 @@ impl ConnectionTable {
     }
 }
 
+pub trait SolanaQuicCryptoConfig<Side: rustls::ConfigSide> {
+    fn with_solana_quic_crypto_config(self) -> rustls::ConfigBuilder<Side, WantsVerifier>;
+}
+
+impl<Side> SolanaQuicCryptoConfig<Side> for rustls::ConfigBuilder<Side, WantsCipherSuites>
+where
+    Side: rustls::ConfigSide,
+{
+    fn with_solana_quic_crypto_config(self) -> rustls::ConfigBuilder<Side, WantsVerifier> {
+        self.with_cipher_suites(&[
+            TLS13_AES_128_GCM_SHA256,
+            TLS13_CHACHA20_POLY1305_SHA256,
+            TLS13_AES_256_GCM_SHA384,
+        ])
+        .with_kx_groups(&ALL_KX_GROUPS)
+        .with_protocol_versions(&[&TLS13])
+        .expect("Failed to create TLS 1.3 client")
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use {
@@ -940,7 +961,10 @@ pub mod test {
             signature::Keypair,
             signer::Signer,
         },
-        std::net::Ipv4Addr,
+        std::{
+            io::{Read, Write},
+            net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
+        },
         tokio::time::sleep,
     };
 
@@ -972,7 +996,7 @@ pub mod test {
             .expect("Failed to generate client certificate");
 
         let mut crypto = rustls::ClientConfig::builder()
-            .with_safe_defaults()
+            .with_solana_quic_crypto_config()
             .with_custom_certificate_verifier(SkipServerVerification::new())
             .with_single_cert(vec![cert], key)
             .expect("Failed to use client certificate");
@@ -1693,5 +1717,86 @@ pub mod test {
         let ratio =
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake + 10);
         assert_eq!(ratio, max_ratio);
+    }
+
+    /// Creates a TCP server and client over localhost,
+    /// then establishes a TLS connection over it with the given server and client TLS configs.
+    fn test_tls_handshake(
+        client_config_builder: rustls::ConfigBuilder<rustls::ClientConfig, WantsVerifier>,
+        server_config_builder: rustls::ConfigBuilder<rustls::ServerConfig, WantsVerifier>,
+    ) {
+        let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+        let key = rustls::PrivateKey(cert.serialize_private_key_der());
+        let tls_cert = rustls::Certificate(cert.serialize_der().unwrap());
+
+        let server_config = server_config_builder
+            .with_no_client_auth()
+            .with_single_cert(vec![tls_cert], key)
+            .unwrap();
+        let server = rustls::ServerConnection::new(Arc::new(server_config)).unwrap();
+
+        let listener =
+            TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0)).unwrap();
+        let listen_addr = listener.local_addr().unwrap();
+
+        let server_thread = std::thread::spawn(move || {
+            let (conn, _) = listener.accept().unwrap();
+            let mut stream = rustls::StreamOwned::new(server, conn);
+            let mut buf = [0u8; 13];
+            stream.read_exact(&mut buf).unwrap();
+            assert_eq!(&buf, b"Hello World!\n");
+        });
+
+        let client_config = client_config_builder
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_no_client_auth();
+
+        let client = rustls::ClientConnection::new(
+            Arc::new(client_config),
+            rustls::ServerName::IpAddress(listen_addr.ip()),
+        )
+        .unwrap();
+
+        let socket = TcpStream::connect(listen_addr).unwrap();
+        let mut stream = rustls::StreamOwned::new(client, socket);
+        stream.write_all(b"Hello World!\n").unwrap();
+
+        server_thread.join().unwrap();
+
+        assert_eq!(
+            stream.conn.protocol_version().unwrap(),
+            rustls::ProtocolVersion::TLSv1_3
+        );
+        assert_eq!(
+            stream.conn.negotiated_cipher_suite().unwrap(),
+            TLS13_AES_128_GCM_SHA256
+        );
+    }
+
+    #[test]
+    fn test_tls_solana_to_default() {
+        // Handshake: SolanaQuicCryptoConfig client --> safe_defaults server
+        test_tls_handshake(
+            rustls::ClientConfig::builder().with_solana_quic_crypto_config(),
+            rustls::ServerConfig::builder().with_safe_defaults(),
+        );
+    }
+
+    #[test]
+    fn test_tls_default_to_solana() {
+        // Handshake: safe_defaults client --> SolanaQuicCryptoConfig server
+        test_tls_handshake(
+            rustls::ClientConfig::builder().with_safe_defaults(),
+            rustls::ServerConfig::builder().with_solana_quic_crypto_config(),
+        );
+    }
+
+    #[test]
+    fn test_tls_solana_to_solana() {
+        // Handshake: SolanaQuicCryptoConfig client --> SolanaQuicCryptoConfig server
+        test_tls_handshake(
+            rustls::ClientConfig::builder().with_solana_quic_crypto_config(),
+            rustls::ServerConfig::builder().with_solana_quic_crypto_config(),
+        );
     }
 }

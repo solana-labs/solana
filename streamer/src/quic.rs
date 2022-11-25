@@ -1,6 +1,7 @@
 use {
     crate::{
-        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
+        nonblocking::quic::{SolanaQuicCryptoConfig, ALPN_TPU_PROTOCOL_ID},
+        streamer::StakedNodes,
         tls_certificates::new_self_signed_tls_certificate,
     },
     crossbeam_channel::Sender,
@@ -67,7 +68,7 @@ pub(crate) fn configure_server(
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
     let mut server_tls_config = rustls::ServerConfig::builder()
-        .with_safe_defaults()
+        .with_solana_quic_crypto_config()
         .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(vec![cert], priv_key)
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
