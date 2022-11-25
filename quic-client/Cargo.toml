@@ -19,7 +19,7 @@ log = "0.4.17"
 quinn = "0.9.3"
 quinn-proto = "0.9.2"
 quinn-udp = "0.3.2"
-rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
+rustls = { version = "0.20.6", default-features = false, features = ["dangerous_configuration", "logging"] }
 solana-measure = { path = "../measure", version = "=1.15.0" }
 solana-metrics = { path = "../metrics", version = "=1.15.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.15.0" }
