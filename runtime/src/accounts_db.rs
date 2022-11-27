@@ -42,7 +42,7 @@ use {
         },
         append_vec::{
             AppendVec, StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMeta,
-            StoredMetaWriteVersion,
+            StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
         },
         bank::Rewrites,
         cache_hash_data::{CacheHashData, CacheHashDataFile},
@@ -1805,6 +1805,11 @@ impl LatestAccountsIndexRootsStats {
                 self.clean_dead_slot_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "append_vecs_open",
+                APPEND_VEC_MMAPPED_FILES_OPEN.load(Ordering::Relaxed) as i64,
+                i64
+            )
         );
 
         // Don't need to reset since this tracks the latest updates, not a cumulative total
