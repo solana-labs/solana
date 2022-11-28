@@ -8,6 +8,7 @@ use {
         account::{Account, AccountSharedData},
         bpf_loader, bpf_loader_deprecated,
         pubkey::Pubkey,
+        signature::Signature,
         sysvar::rent::Rent,
         transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
@@ -108,8 +109,13 @@ fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionC
         });
     }
 
-    let mut transaction_context =
-        TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+    let mut transaction_context = TransactionContext::new(
+        Signature::default(),
+        transaction_accounts,
+        Some(Rent::default()),
+        1,
+        1,
+    );
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     transaction_context
         .get_next_instruction_context()

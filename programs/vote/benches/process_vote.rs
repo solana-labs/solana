@@ -9,6 +9,7 @@ use {
         clock::{Clock, Slot},
         hash::Hash,
         pubkey::Pubkey,
+        signature::Signature,
         slot_hashes::{SlotHashes, MAX_ENTRIES},
         sysvar,
         transaction_context::{
@@ -110,6 +111,7 @@ fn bench_process_vote_instruction(
 ) {
     bencher.iter(|| {
         let mut transaction_context = TransactionContext::new(
+            Signature::default(),
             transaction_accounts.clone(),
             Some(sysvar::rent::Rent::default()),
             1,

@@ -1383,7 +1383,8 @@ fn trace_bpf<'a, 'b>(
     vm: &mut EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>,
     executable: &Executable<InvokeContext<'static>>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
-    blockhash: &Hash,
+    block_hash: &Hash,
+    transaction_id: &[u8],
     program_id: &Pubkey,
 ) {
     let mut bpf_tracer_plugins_guard_opt = bpf_tracer_plugin_manager
@@ -1409,7 +1410,8 @@ fn trace_bpf<'a, 'b>(
     for plugin in bpf_tracing_plugins.into_iter() {
         if let Err(err) = plugin.trace_bpf(
             program_id,
-            blockhash,
+            block_hash,
+            transaction_id,
             &trace_analyzer,
             &vm.context_object.trace_log,
         ) {
@@ -1459,6 +1461,7 @@ impl Executor for BpfExecutor {
         let execution_result = {
             let bpf_tracer_plugin_manager = invoke_context.bpf_tracer_plugin_manager.clone();
             let blockhash = invoke_context.blockhash;
+            let transaction_id = *transaction_context.id();
             let compute_meter_prev = invoke_context.get_remaining();
             let mut vm = match create_vm(
                 // We dropped the lifetime tracking in the Executor by setting it to 'static,
@@ -1493,6 +1496,7 @@ impl Executor for BpfExecutor {
                 self.verified_executable.get_executable(),
                 bpf_tracer_plugin_manager,
                 &blockhash,
+                transaction_id.as_ref(),
                 &program_id,
             );
 

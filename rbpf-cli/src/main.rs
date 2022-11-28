@@ -17,7 +17,7 @@ use {
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
-        sysvar::rent::Rent, transaction_context::TransactionContext,
+        signature::Signature, sysvar::rent::Rent, transaction_context::TransactionContext,
     },
     std::{
         fmt::{Debug, Formatter},
@@ -214,6 +214,7 @@ before execting it in the virtual machine.",
     let preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
     let mut transaction_context = TransactionContext::new(
+        Signature::default(),
         preparation.transaction_accounts,
         Some(Rent::default()),
         1,

@@ -5,6 +5,7 @@
 use crate::{
     account::WritableAccount,
     rent::Rent,
+    signature::Signature,
     system_instruction::{
         MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
     },
@@ -54,6 +55,7 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 /// This context is valid for the entire duration of a transaction being processed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
+    id: Signature,
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
     #[cfg(not(target_os = "solana"))]
@@ -74,6 +76,7 @@ impl TransactionContext {
     /// Constructs a new TransactionContext
     #[cfg(not(target_os = "solana"))]
     pub fn new(
+        id: Signature,
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
         instruction_stack_capacity: usize,
@@ -86,6 +89,7 @@ impl TransactionContext {
                 .unzip();
         let account_touched_flags = vec![false; accounts.len()];
         Self {
+            id,
             account_keys: Pin::new(account_keys.into_boxed_slice()),
             accounts: Pin::new(accounts.into_boxed_slice()),
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
@@ -110,6 +114,11 @@ impl TransactionContext {
             .into_iter()
             .map(|account| account.into_inner())
             .collect())
+    }
+
+    /// Returns transaction ID (first signature of transaction's message)
+    pub fn id(&self) -> &Signature {
+        &self.id
     }
 
     /// Returns true if `enable_early_verification_of_account_modifications` is active

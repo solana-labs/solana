@@ -603,7 +603,7 @@ mod tests {
             },
         },
         nonce_account, recent_blockhashes_account,
-        signature::{Keypair, Signer},
+        signature::{Keypair, Signature, Signer},
         system_instruction, system_program,
         sysvar::{self, recent_blockhashes::IterItem, rent::Rent},
         transaction::TransactionError,
@@ -788,8 +788,13 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context =
-            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
+        let mut transaction_context = TransactionContext::new(
+            Signature::default(),
+            Vec::new(),
+            Some(Rent::default()),
+            1,
+            1,
+        );
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";

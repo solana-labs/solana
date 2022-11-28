@@ -60,7 +60,8 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
     fn trace_bpf(
         &mut self,
         program_id: &Pubkey,
-        blockhash: &Hash,
+        block_hash: &Hash,
+        transaction_id: &[u8],
         trace_analyzer: &TraceAnalyzer,
         trace: &[TraceItem],
     ) -> Result<()>;
