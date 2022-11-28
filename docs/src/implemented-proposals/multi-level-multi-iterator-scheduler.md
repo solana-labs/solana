@@ -51,7 +51,7 @@ The multi-iterator works well for a single thread, but we should not use it dire
 
 The multi-level multi-iterator uses multiple multi-iterators to construct the batches for our threads, while maintaining that all transactions can be executed in parallel, and that the hottest events would get scheduled to separate threads.
 
-If we have 4 threads and a batch-size of 64, the multi-level multi-iterator would have 64 multi-iterators each with 4 iterators. Batches for the for the first thread would be constructed by taking the transactions pointed to by the first-iterator of each multi-iterator, the second thread would take the second-iterator of each multi-iterator, and so on. At each step, the first multi-iterator marches all its' positions forward, then the second multi-iterator marches its' positions forward, and so on.
+If we have 4 threads and a batch-size of 64, the multi-level multi-iterator would have 64 multi-iterators each with 4 iterators. Batches for the first thread would be constructed by taking the transactions pointed to by the first-iterator of each multi-iterator, the second thread would take the second-iterator of each multi-iterator, and so on. At each step, the first multi-iterator marches all its' positions forward, then the second multi-iterator marches its' positions forward, and so on.
 
 An alternative approach, which I believe is equivalent, is to have 4 multi-iterators of 64 iterators each, and march the first position of each multi-iterator forward, then the second position of each multi-iterator forward, and so on; with batches being constructed by taking the transactions pointed to by the first multi-iterator, the second multi-iterator, and so on.
 
