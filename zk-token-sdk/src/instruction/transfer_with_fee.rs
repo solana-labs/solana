@@ -529,8 +529,8 @@ impl TransferWithFeeProof {
         let range_proof = RangeProof::new(
             vec![
                 source_new_balance,
-                transfer_amount_lo as u64,
-                transfer_amount_hi as u64,
+                transfer_amount_lo,
+                transfer_amount_hi,
                 delta_fee,
                 MAX_FEE_BASIS_POINTS - delta_fee,
                 fee_amount_lo,
