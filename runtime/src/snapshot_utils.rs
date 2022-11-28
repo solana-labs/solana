@@ -2221,14 +2221,15 @@ pub fn package_and_archive_full_snapshot(
         None,
     )?;
 
+    let accounts_hash = bank.get_accounts_hash();
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
-        &bank.get_accounts_hash(),
+        &accounts_hash,
         None,
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,
@@ -2274,14 +2275,15 @@ pub fn package_and_archive_incremental_snapshot(
         None,
     )?;
 
+    let accounts_hash = bank.get_accounts_hash();
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
-        &bank.get_accounts_hash(),
+        &accounts_hash,
         None,
     );
 
-    let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     archive_snapshot_package(
         &snapshot_package,
         full_snapshot_archives_dir,

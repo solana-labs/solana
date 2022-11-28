@@ -1,6 +1,6 @@
 //! Helper types and functions for handling and dealing with snapshot hashes.
 use {
-    crate::epoch_accounts_hash::EpochAccountsHash,
+    crate::{accounts_hash::AccountsHash, epoch_accounts_hash::EpochAccountsHash},
     solana_sdk::{
         clock::Slot,
         hash::{Hash, Hasher},
@@ -56,12 +56,15 @@ pub struct SnapshotHash(pub Hash);
 impl SnapshotHash {
     /// Make a snapshot hash from an accounts hash and epoch accounts hash
     #[must_use]
-    pub fn new(accounts_hash: &Hash, epoch_accounts_hash: Option<&EpochAccountsHash>) -> Self {
+    pub fn new(
+        accounts_hash: &AccountsHash,
+        epoch_accounts_hash: Option<&EpochAccountsHash>,
+    ) -> Self {
         let snapshot_hash = match epoch_accounts_hash {
-            None => *accounts_hash,
+            None => accounts_hash.0,
             Some(epoch_accounts_hash) => {
                 let mut hasher = Hasher::default();
-                hasher.hash(accounts_hash.as_ref());
+                hasher.hash(accounts_hash.0.as_ref());
                 hasher.hash(epoch_accounts_hash.as_ref().as_ref());
                 hasher.result()
             }

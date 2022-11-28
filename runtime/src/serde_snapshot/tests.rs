@@ -5,6 +5,7 @@ use {
     crate::{
         accounts::{test_utils::create_test_accounts, Accounts},
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
+        accounts_hash::AccountsHash,
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
         epoch_accounts_hash,
@@ -289,12 +290,12 @@ fn test_bank_serialize_style(
     .unwrap();
 
     let accounts_hash = if update_accounts_hash {
-        let hash = Hash::new(&[1; 32]);
+        let accounts_hash = AccountsHash(Hash::new(&[1; 32]));
         bank2
             .accounts()
             .accounts_db
-            .set_accounts_hash(bank2.slot(), hash);
-        hash
+            .set_accounts_hash(bank2.slot(), accounts_hash);
+        accounts_hash
     } else {
         bank2.get_accounts_hash()
     };
@@ -685,7 +686,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "B9ui5cFeJ5NGtXAVFXRCSX4GJ77yLc3izv1E8QE34TdQ")]
+    #[frozen_abi(digest = "464v92sAyLDZWCXjH6cuQfgrSNuB3PY8cmoVu2dciXvV")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

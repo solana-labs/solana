@@ -5,6 +5,7 @@ use {
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
             AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
         },
+        accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::{AppendVec, StoredMetaWriteVersion},
@@ -65,7 +66,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
 pub struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -192,7 +193,7 @@ trait TypeContext<'a>: PartialEq {
     fn reserialize_bank_fields_with_hash<R, W>(
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
-        accounts_hash: &Hash,
+        accounts_hash: &AccountsHash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
@@ -391,7 +392,7 @@ where
 fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_reader: &mut BufReader<R>,
     stream_writer: &mut BufWriter<W>,
-    accounts_hash: &Hash,
+    accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(), Error>
 where
@@ -414,7 +415,7 @@ where
 pub fn reserialize_bank_with_new_accounts_hash(
     bank_snapshots_dir: impl AsRef<Path>,
     slot: Slot,
-    accounts_hash: &Hash,
+    accounts_hash: &AccountsHash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);

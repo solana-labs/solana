@@ -48,6 +48,7 @@ use {
             IncludeSlotInHash, SnapshotStorages, ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS,
             ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
+        accounts_hash::AccountsHash,
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::{Ancestors, AncestorsForSerialization},
@@ -1899,7 +1900,7 @@ impl Bank {
         parent.force_flush_accounts_cache();
         let accounts_hash =
             parent.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, true);
-        let epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
+        let epoch_accounts_hash = accounts_hash.into();
         parent
             .rc
             .accounts
@@ -7043,7 +7044,7 @@ impl Bank {
         old
     }
 
-    pub fn get_accounts_hash(&self) -> Hash {
+    pub fn get_accounts_hash(&self) -> AccountsHash {
         self.rc.accounts.accounts_db.get_accounts_hash(self.slot)
     }
 
@@ -7069,8 +7070,8 @@ impl Bank {
         data_source: CalcAccountsHashDataSource,
         mut debug_verify: bool,
         is_startup: bool,
-    ) -> Hash {
-        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+    ) -> AccountsHash {
+        let (accounts_hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
             data_source,
             debug_verify,
             self.slot(),
@@ -7111,10 +7112,10 @@ impl Bank {
                 self.capitalization()
             );
         }
-        hash
+        accounts_hash
     }
 
-    pub fn update_accounts_hash_for_tests(&self) -> Hash {
+    pub fn update_accounts_hash_for_tests(&self) -> AccountsHash {
         self.update_accounts_hash(CalcAccountsHashDataSource::IndexForTests, false, false)
     }
 

@@ -7,7 +7,7 @@
 //!
 //! This results in all nodes effectively voting on the accounts state (at least) once per epoch.
 
-use solana_sdk::hash::Hash;
+use {crate::accounts_hash::AccountsHash, solana_sdk::hash::Hash};
 
 mod utils;
 pub use utils::*;
@@ -30,5 +30,11 @@ impl EpochAccountsHash {
     #[must_use]
     pub const fn new(accounts_hash: Hash) -> Self {
         Self(accounts_hash)
+    }
+}
+
+impl From<AccountsHash> for EpochAccountsHash {
+    fn from(accounts_hash: AccountsHash) -> EpochAccountsHash {
+        Self::new(accounts_hash.0)
     }
 }
