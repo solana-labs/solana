@@ -522,6 +522,10 @@ pub mod remove_deprecated_request_unit_ix {
     solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
 }
 
+pub mod disable_rehash_for_rent_epoch {
+    solana_sdk::declare_id!("DTVTkmw3JSofd8CJVJte8PXEbxNQ2yZijvVr3pe2APPj");
+}
+
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
@@ -656,6 +660,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (disable_rehash_for_rent_epoch::id(), "on accounts hash calculation, do not try to rehash accounts #28934"),
         (account_hash_ignore_slot::id(), "ignore slot when calculating an account hash #28420"),
         (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
