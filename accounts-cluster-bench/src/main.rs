@@ -294,7 +294,7 @@ fn run_accounts_bench(
                 last_balance = Instant::now();
                 if *balance < lamports * 2 {
                     info!(
-                        "Balance {} is less than needed: {}, doing aidrop...",
+                        "Balance {} is less than needed: {}, doing airdrop...",
                         balance, lamports
                     );
                     if !airdrop_lamports(
