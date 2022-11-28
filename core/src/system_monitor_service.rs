@@ -839,6 +839,7 @@ impl SystemMonitorService {
     fn get_open_fd_stats() -> Option<(usize, usize, usize)> {
         let proc = Process::myself().ok()?;
         let curr_num_open_fd = proc.fd_count().unwrap();
+        let curr_mmap_count = proc.maps().unwrap().len();
         let max_open_fd_limit = proc.limits().unwrap().max_open_files;
 
         let max_open_fd_soft_limit = match max_open_fd_limit.soft_limit {
@@ -852,18 +853,24 @@ impl SystemMonitorService {
 
         Some((
             curr_num_open_fd,
+            curr_mmap_count,
             max_open_fd_soft_limit,
             max_open_fd_hard_limit,
         ))
     }
 
     fn report_open_fd_stats() {
-        if let Some((curr_num_open_fd, max_open_fd_soft_limit, max_open_fd_hard_limit)) =
-            Self::get_open_fd_stats()
+        if let Some((
+            curr_num_open_fd,
+            curr_mmap_count,
+            max_open_fd_soft_limit,
+            max_open_fd_hard_limit,
+        )) = Self::get_open_fd_stats()
         {
             datapoint_info!(
                 "open-fd-stats",
                 ("number_open_files", curr_num_open_fd, i64),
+                ("number_mmap_files", curr_mmap_count, i64),
                 ("max_open_files_hard_limit", max_open_fd_hard_limit, i64),
                 ("max_open_files_soft_limit", max_open_fd_soft_limit, i64),
             );
