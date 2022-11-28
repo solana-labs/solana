@@ -709,8 +709,6 @@ impl BankingStage {
         let reached_end_of_slot;
         let num_packets_to_process = unprocessed_transaction_storage.len();
 
-        // TODO: Right now we iterate through buffer and try the highest weighted transaction once
-        // but we should retry the highest weighted transactions more often.
         let (bank_start, poh_recorder_lock_time) = measure!(
             poh_recorder.read().unwrap().bank_start(),
             "poh_recorder.read",
