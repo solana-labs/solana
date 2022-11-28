@@ -88,6 +88,10 @@ type ClientSubscriptionId = number;
 /** @internal */ type ServerSubscriptionId = number;
 /** @internal */ type SubscriptionConfigHash = string;
 /** @internal */ type SubscriptionDisposeFn = () => Promise<void>;
+/** @internal */ type SubscriptionStateChangeCallback = (
+  nextState: StatefulSubscription['state'],
+) => void;
+/** @internal */ type SubscriptionStateChangeDisposeFn = () => void;
 /**
  * @internal
  * Every subscription contains the args used to open the subscription with
@@ -2715,6 +2719,16 @@ export class Connection {
       | SubscriptionDisposeFn
       | undefined;
   } = {};
+  /** @internal */ private _subscriptionHashByClientSubscriptionId: {
+    [clientSubscriptionId: ClientSubscriptionId]:
+      | SubscriptionConfigHash
+      | undefined;
+  } = {};
+  /** @internal */ private _subscriptionStateChangeCallbacksByHash: {
+    [hash: SubscriptionConfigHash]:
+      | Set<SubscriptionStateChangeCallback>
+      | undefined;
+  } = {};
   /** @internal */ private _subscriptionCallbacksByServerSubscriptionId: {
     [serverSubscriptionId: ServerSubscriptionId]:
       | Set<SubscriptionConfig['callback']>
@@ -3372,7 +3386,10 @@ export class Connection {
 
     const subscriptionCommitment = commitment || this.commitment;
     let timeoutId;
-    let subscriptionId;
+    let signatureSubscriptionId: number | undefined;
+    let disposeSignatureSubscriptionStateChangeObserver:
+      | SubscriptionStateChangeDisposeFn
+      | undefined;
     let done = false;
 
     const confirmationPromise = new Promise<{
@@ -3380,10 +3397,10 @@ export class Connection {
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
       try {
-        subscriptionId = this.onSignature(
+        signatureSubscriptionId = this.onSignature(
           rawSignature,
           (result: SignatureResult, context: Context) => {
-            subscriptionId = undefined;
+            signatureSubscriptionId = undefined;
             const response = {
               context,
               value: result,
@@ -3393,6 +3410,46 @@ export class Connection {
           },
           subscriptionCommitment,
         );
+        const subscriptionSetupPromise = new Promise<void>(
+          resolveSubscriptionSetup => {
+            if (signatureSubscriptionId == null) {
+              resolveSubscriptionSetup();
+            } else {
+              disposeSignatureSubscriptionStateChangeObserver =
+                this._onSubscriptionStateChange(
+                  signatureSubscriptionId,
+                  nextState => {
+                    if (nextState === 'subscribed') {
+                      resolveSubscriptionSetup();
+                    }
+                  },
+                );
+            }
+          },
+        );
+        (async () => {
+          await subscriptionSetupPromise;
+          if (done) return;
+          const response = await this.getSignatureStatus(rawSignature);
+          if (done) return;
+          if (response == null) {
+            return;
+          }
+          const {context, value} = response;
+          if (value?.err) {
+            reject(value.err);
+          }
+          if (value) {
+            done = true;
+            resolve({
+              __type: TransactionStatus.PROCESSED,
+              response: {
+                context,
+                value,
+              },
+            });
+          }
+        })();
       } catch (err) {
         reject(err);
       }
@@ -3465,8 +3522,11 @@ export class Connection {
       }
     } finally {
       clearTimeout(timeoutId);
-      if (subscriptionId) {
-        this.removeSignatureListener(subscriptionId);
+      if (disposeSignatureSubscriptionStateChangeObserver) {
+        disposeSignatureSubscriptionStateChangeObserver();
+      }
+      if (signatureSubscriptionId) {
+        this.removeSignatureListener(signatureSubscriptionId);
       }
     }
     return result;
@@ -5106,11 +5166,58 @@ export class Connection {
     Object.entries(
       this._subscriptionsByHash as Record<SubscriptionConfigHash, Subscription>,
     ).forEach(([hash, subscription]) => {
-      this._subscriptionsByHash[hash] = {
+      this._setSubscription(hash, {
         ...subscription,
         state: 'pending',
-      };
+      });
     });
+  }
+
+  /**
+   * @internal
+   */
+  private _setSubscription(
+    hash: SubscriptionConfigHash,
+    nextSubscription: Subscription,
+  ) {
+    const prevState = this._subscriptionsByHash[hash]?.state;
+    this._subscriptionsByHash[hash] = nextSubscription;
+    if (prevState !== nextSubscription.state) {
+      const stateChangeCallbacks =
+        this._subscriptionStateChangeCallbacksByHash[hash];
+      if (stateChangeCallbacks) {
+        stateChangeCallbacks.forEach(cb => {
+          try {
+            cb(nextSubscription.state);
+            // eslint-disable-next-line no-empty
+          } catch {}
+        });
+      }
+    }
+  }
+
+  /**
+   * @internal
+   */
+  private _onSubscriptionStateChange(
+    clientSubscriptionId: ClientSubscriptionId,
+    callback: SubscriptionStateChangeCallback,
+  ): SubscriptionStateChangeDisposeFn {
+    const hash =
+      this._subscriptionHashByClientSubscriptionId[clientSubscriptionId];
+    if (hash == null) {
+      return () => {};
+    }
+    const stateChangeCallbacks = (this._subscriptionStateChangeCallbacksByHash[
+      hash
+    ] ||= new Set());
+    stateChangeCallbacks.add(callback);
+    return () => {
+      stateChangeCallbacks.delete(callback);
+      if (stateChangeCallbacks.size === 0) {
+        delete this._subscriptionStateChangeCallbacksByHash[hash];
+      }
+    };
   }
 
   /**
@@ -5193,17 +5300,17 @@ export class Connection {
             await (async () => {
               const {args, method} = subscription;
               try {
-                this._subscriptionsByHash[hash] = {
+                this._setSubscription(hash, {
                   ...subscription,
                   state: 'subscribing',
-                };
+                });
                 const serverSubscriptionId: ServerSubscriptionId =
                   (await this._rpcWebSocket.call(method, args)) as number;
-                this._subscriptionsByHash[hash] = {
+                this._setSubscription(hash, {
                   ...subscription,
                   serverSubscriptionId,
                   state: 'subscribed',
-                };
+                });
                 this._subscriptionCallbacksByServerSubscriptionId[
                   serverSubscriptionId
                 ] = subscription.callbacks;
@@ -5220,10 +5327,10 @@ export class Connection {
                   return;
                 }
                 // TODO: Maybe add an 'errored' state or a retry limit?
-                this._subscriptionsByHash[hash] = {
+                this._setSubscription(hash, {
                   ...subscription,
                   state: 'pending',
-                };
+                });
                 await this._updateSubscriptions();
               }
             })();
@@ -5251,10 +5358,14 @@ export class Connection {
                     serverSubscriptionId,
                   );
                 } else {
-                  this._subscriptionsByHash[hash] = {
+                  this._setSubscription(hash, {
                     ...subscription,
                     state: 'unsubscribing',
-                  };
+                  });
+                  this._setSubscription(hash, {
+                    ...subscription,
+                    state: 'unsubscribing',
+                  });
                   try {
                     await this._rpcWebSocket.call(unsubscribeMethod, [
                       serverSubscriptionId,
@@ -5267,18 +5378,18 @@ export class Connection {
                       return;
                     }
                     // TODO: Maybe add an 'errored' state or a retry limit?
-                    this._subscriptionsByHash[hash] = {
+                    this._setSubscription(hash, {
                       ...subscription,
                       state: 'subscribed',
-                    };
+                    });
                     await this._updateSubscriptions();
                     return;
                   }
                 }
-                this._subscriptionsByHash[hash] = {
+                this._setSubscription(hash, {
                   ...subscription,
                   state: 'unsubscribed',
-                };
+                });
                 await this._updateSubscriptions();
               })();
             }
@@ -5381,12 +5492,14 @@ export class Connection {
     } else {
       existingSubscription.callbacks.add(subscriptionConfig.callback);
     }
+    this._subscriptionHashByClientSubscriptionId[clientSubscriptionId] = hash;
     this._subscriptionDisposeFunctionsByClientSubscriptionId[
       clientSubscriptionId
     ] = async () => {
       delete this._subscriptionDisposeFunctionsByClientSubscriptionId[
         clientSubscriptionId
       ];
+      delete this._subscriptionHashByClientSubscriptionId[clientSubscriptionId];
       const subscription = this._subscriptionsByHash[hash];
       assert(
         subscription !== undefined,
