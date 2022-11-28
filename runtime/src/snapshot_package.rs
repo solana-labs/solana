@@ -2,6 +2,7 @@ use {
     crate::{
         accounts::Accounts,
         accounts_db::SnapshotStorages,
+        accounts_hash::AccountsHash,
         bank::{Bank, BankSlotDelta},
         epoch_accounts_hash::EpochAccountsHash,
         rent_collector::RentCollector,
@@ -13,7 +14,7 @@ use {
         },
     },
     log::*,
-    solana_sdk::{clock::Slot, hash::Hash, sysvar::epoch_schedule::EpochSchedule},
+    solana_sdk::{clock::Slot, sysvar::epoch_schedule::EpochSchedule},
     std::{
         fs,
         path::{Path, PathBuf},
@@ -37,7 +38,7 @@ pub struct AccountsPackage {
     pub block_height: Slot,
     pub snapshot_storages: SnapshotStorages,
     pub expected_capitalization: u64,
-    pub accounts_hash_for_testing: Option<Hash>,
+    pub accounts_hash_for_testing: Option<AccountsHash>,
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
@@ -64,7 +65,7 @@ impl AccountsPackage {
         snapshot_storages: SnapshotStorages,
         archive_format: ArchiveFormat,
         snapshot_version: SnapshotVersion,
-        accounts_hash_for_testing: Option<Hash>,
+        accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Result<Self> {
         if let AccountsPackageType::Snapshot(snapshot_type) = package_type {
             info!(
@@ -125,7 +126,7 @@ impl AccountsPackage {
         package_type: AccountsPackageType,
         bank: &Bank,
         snapshot_storages: SnapshotStorages,
-        accounts_hash_for_testing: Option<Hash>,
+        accounts_hash_for_testing: Option<AccountsHash>,
     ) -> Self {
         assert_eq!(package_type, AccountsPackageType::EpochAccountsHash);
         Self::_new(
@@ -141,7 +142,7 @@ impl AccountsPackage {
         package_type: AccountsPackageType,
         bank: &Bank,
         snapshot_storages: SnapshotStorages,
-        accounts_hash_for_testing: Option<Hash>,
+        accounts_hash_for_testing: Option<AccountsHash>,
         snapshot_info: Option<SupplementalSnapshotInfo>,
     ) -> Self {
         Self {
@@ -244,7 +245,7 @@ pub struct SnapshotPackage {
 }
 
 impl SnapshotPackage {
-    pub fn new(accounts_package: AccountsPackage, accounts_hash: Hash) -> Self {
+    pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHash) -> Self {
         let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
             panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
         };

@@ -326,7 +326,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                     },
                 )
                 .unwrap();
-            expected_epoch_accounts_hash = Some(EpochAccountsHash::new(accounts_hash));
+            expected_epoch_accounts_hash = Some(EpochAccountsHash::from(accounts_hash));
             debug!(
                 "slot {}, expected epoch accounts hash: {:?}",
                 bank.slot(),
