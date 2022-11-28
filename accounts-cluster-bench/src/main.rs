@@ -381,7 +381,7 @@ fn run_accounts_bench(
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 || count >= iterations {
+        if last_log.elapsed().as_millis() > 3000 || (count >= iterations && iterations != 0) {
             info!(
                 "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances
