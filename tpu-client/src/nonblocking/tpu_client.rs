@@ -145,10 +145,10 @@ impl LeaderTpuCache {
     }
 
     // Get the TPU sockets for the current leader and upcoming leaders according to fanout size
-    pub fn get_leader_sockets(&self, current_slot: Slot, fanout_slots: u64) -> Vec<SocketAddr> {
+    fn get_leader_sockets(&self, fanout_slots: u64) -> Vec<SocketAddr> {
         let mut leader_set = HashSet::new();
         let mut leader_sockets = Vec::new();
-        for leader_slot in current_slot..current_slot + fanout_slots {
+        for leader_slot in self.first_slot..self.first_slot + fanout_slots {
             if let Some(leader) = self.get_slot_leader(leader_slot) {
                 if let Some(tpu_socket) = self.leader_tpu_map.get(leader) {
                     if leader_set.insert(*leader) {
@@ -628,11 +628,10 @@ impl LeaderTpuService {
     }
 
     pub fn leader_tpu_sockets(&self, fanout_slots: u64) -> Vec<SocketAddr> {
-        let current_slot = self.recent_slots.estimated_current_slot();
         self.leader_tpu_cache
             .read()
             .unwrap()
-            .get_leader_sockets(current_slot, fanout_slots)
+            .get_leader_sockets(fanout_slots)
     }
 
     async fn run(
