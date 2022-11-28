@@ -651,7 +651,7 @@ impl BankingStage {
 
         // Clear payload for next iteration
         payload.sanitized_transactions.clear();
-        payload.write_accounts.clear();
+        payload.account_locks.clear();
 
         let ProcessTransactionsSummary {
             reached_max_poh_height,
