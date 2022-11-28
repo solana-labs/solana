@@ -814,6 +814,7 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        disable_rehash_for_rent_epoch: bool,
     ) -> u64 {
         let use_index = false;
         let is_startup = true;
@@ -828,6 +829,7 @@ impl Accounts {
                 epoch_schedule,
                 rent_collector,
                 is_startup,
+                disable_rehash_for_rent_epoch,
             )
             .1
     }
@@ -847,6 +849,7 @@ impl Accounts {
         ignore_mismatch: bool,
         store_detailed_debug_info: bool,
         use_bg_thread_pool: bool,
+        disable_rehash_for_rent_epoch: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -859,6 +862,7 @@ impl Accounts {
             ignore_mismatch,
             store_detailed_debug_info,
             use_bg_thread_pool,
+            disable_rehash_for_rent_epoch,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
