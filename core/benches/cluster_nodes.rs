@@ -49,7 +49,7 @@ fn get_retransmit_peers_deterministic(
             0,
             0,
         );
-        let (_root_distance, _neighbors, _children) = cluster_nodes.get_retransmit_peers(
+        let _retransmit_peers = cluster_nodes.get_retransmit_peers(
             slot_leader,
             &shred.id(),
             root_bank,
