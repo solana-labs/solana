@@ -43,6 +43,19 @@ and the second batch is `[A, C]`. Marching the positions forward again, we get:
 
 giving a batch of `[A, B]`. Note that the second iterator skipped over an `A` transaction, as that transaction would conflict with the `A` our first position is pointing to. Following this, the remaining batches would be `[[A, C], [D]]`.
 
+The overall batches for this example are:
+
+```text
+    [
+        [A, B],
+        [A, C],
+        [A, B],
+        [A, C],
+        [D],
+```
+
+which shows all our transactions are processed. If, a transaction encounters a retryable error, it will be re-inserted to the priority-queue at the end of iteration and is retried the next time we try to consume the buffer.
+
 ### Multi-Iterator Intuition
 
 The intuition behind the multi-iterator is that in highly contentious events, such as a mint, many of the high-priority transactions at the top of the priority-queue will be conflicting. With a naive iterator that grabs the 64 highest-priority transactions, we would end up with a batch of 64 transactions that all conflict; only the first is actually executed and the remaining 63 are retried the next time we consume the buffer. This also would allow lower priority transactions, conflicting with the high-priority transactions, to be executed before those 63 retryable transactions, which is undesirable.
