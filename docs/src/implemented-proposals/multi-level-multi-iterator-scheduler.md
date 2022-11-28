@@ -37,6 +37,14 @@ and the second batch is `[A, C]`. Marching the positions forward again, we get:
 
 giving a batch of `[A, B]`. Note that the second iterator skipped over an `A` transaction, as that transaction would conflict with the `A` our first position is pointing to. Following this, the remaining batches would be `[[A, C], [D]]`.
 
+### Multi-Iterator Intuition
+
+The intuition behind the multi-iterator is that in highly contentious events, such as a mint, many of the high-priority transactions at the top of the priority-queue will be conflicting. With a naive iterator that grabs the 64 highest-priority transactions, we would end up with a batch of 64 transactions that all conflict; only the first is actually executed and the remaining 63 are retried the next time we consume the buffer. This also would allow lower priority transactions, conflicting with the high-priority transactions, to be executed before those 63 retryable transactions, which is undesirable.
+
+The multi-iterator, by contrast, keeps a single position to iterate over those highest-priority transactions while the other 63 positions march past the conflicts to find non-conflicting transactions. This allows us to execute a batch of 64 transactions that are all non-conflicting. This also means that priority-order is better respected, as in the first batch of transactions, the highest priority transaction for the mint event is processed, in the second batch, the second highest priority transaction is processed, and so on.
+
+In regular periods, where there is no contention, the multi-iterator will simply behave like the naive iterator where the 64 positions march forward in groups of 64.
+
 ## Multi-Level Multi-Iterator
 
 The multi-iterator works well for a single thread, but we should not use it directly in a centralized scheduler. If we have two independent hot events touching accounts `A` and `B`, the single-level multi-iterator would put them into the same batch, which would then be serialized. This is not ideal, as we would like to be able to execute these transactions in parallel.
