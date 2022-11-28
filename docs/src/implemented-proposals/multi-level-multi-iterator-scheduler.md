@@ -10,7 +10,7 @@ We have proposed graph-based scheduling in the past, however, as a hold-over unt
 
 The single-level multi-iterator has already been implemented in Solana's independent banking stage thread schedulers, this section serves to outline that concept in order to provide context for the multi-level multi-iterator.
 
-First, we take our priority-queue and collect the entire buffer into a vector. We initialize multiple, in this case 64, positions such that there are no write-conflicts between the transactions at the given positions. These, up to 64, transactions then make up a transaction batch to be executed. The multi-iterator marks these transactions as `already_processed`, and the positions are marched forward, again checking for conflicts as we set them.
+First, we take our priority-queue and collect the entire buffer into a vector. We initialize multiple, in this case 64, positions such that there are no write-conflicts between the transactions at the given positions. These, up to 64, transactions then make up a transaction batch to be executed. The multi-iterator marks these transactions as `already_handled`, and the positions are marched forward, again checking for conflicts as we set them.
 
 ### Example
 
