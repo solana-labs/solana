@@ -3,7 +3,8 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import {useFakeTimers, SinonFakeTimers} from 'sinon';
+import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
+import sinonChai from 'sinon-chai';
 
 import {
   Authorized,
@@ -67,6 +68,7 @@ import {MessageV0} from '../src/message/v0';
 import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
+use(sinonChai);
 
 const verifySignatureStatus = (
   status: SignatureStatus | null,
@@ -1133,6 +1135,85 @@ describe('Connection', function () {
           value: {err: null},
         });
       });
+
+      it('confirm transaction - does not check the signature status before the signature subscription comes alive', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: {err: null},
+          subscriptionEstablishmentPromise: new Promise(() => {}), // Never resolve.
+        });
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .never();
+        connection.confirmTransaction(mockSignature);
+        getSignatureStatusesExpectation.verify();
+      });
+
+      it('confirm transaction - checks the signature status once the signature subscription comes alive', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: {err: null},
+        });
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .once();
+
+        const confirmationPromise =
+          connection.confirmTransaction(mockSignature);
+        clock.runAllAsync();
+
+        await expect(confirmationPromise).to.eventually.deep.equal({
+          context: {slot: 11},
+          value: {err: null},
+        });
+        getSignatureStatusesExpectation.verify();
+      });
+
+      // FIXME: This test does not work.
+      // it('confirm transaction - confirms transaction when signature status check yields confirmation before signature subscription does', async () => {
+      //   const mockSignature =
+      //     'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+      //   // Keep the subscription from ever returning data.
+      //   await mockRpcMessage({
+      //     method: 'signatureSubscribe',
+      //     params: [mockSignature, {commitment: 'finalized'}],
+      //     result: new Promise(() => {}), // Never resolve.
+      //   });
+      //   clock.runAllAsync();
+
+      //   const confirmationPromise =
+      //     connection.confirmTransaction(mockSignature);
+      //   clock.runAllAsync();
+
+      //   // Return a signature status through the RPC API.
+      //   await mockRpcResponse({
+      //     method: 'getSignatureStatuses',
+      //     params: [[mockSignature]],
+      //     value: [
+      //       {
+      //         slot: 0,
+      //         confirmations: 11,
+      //         status: {Ok: null},
+      //         err: null,
+      //       },
+      //     ],
+      //   });
+      //   clock.runAllAsync();
+
+      //   await expect(confirmationPromise).to.eventually.deep.equal({
+      //     context: {slot: 11},
+      //     value: {err: null},
+      //   });
+      // });
     });
   }
 
