@@ -2,6 +2,12 @@
 title: Multi-Level Multi-Iterator Scheduler
 ---
 
+## Problem
+
+Transactions are currently selected for execution independently by each banking stage thread. When selected transactions conflict with one another, they are retried later. This has motivated a move to a central scheduling thread, which selects non-conflicting transactions that get sent to the banking stage threads for execution. Many ideas have been proposed for how the central scheduler algorithm should work, and this proposal is yet another one. This proposal aims to be effective, but a smaller change from the current in-thread scheduling algorithm than other proposed designs.
+
+The proposed algorithm dynamically identifies conflicting transactions queues, and schedules by selecting transactions from those queues in priority order.
+
 ## Background
 
 We have proposed graph-based scheduling in the past, however, as a hold-over until we implement those the current scheduler has been modified to use a multi-iterator approach. This approach significantly improves single-threaded throughput in situations with high-contention - and lends itself to a straight-forward stepping stone to graph-based scheduling, with a few modifications.
@@ -49,13 +55,45 @@ In regular periods, where there is no contention, the multi-iterator will simply
 
 The multi-iterator works well for a single thread, but we should not use it directly in a centralized scheduler. If we have two independent hot events touching accounts `A` and `B`, the single-level multi-iterator would put them into the same batch, which would then be serialized. This is not ideal, as we would like to be able to execute these transactions in parallel.
 
-The multi-level multi-iterator uses multiple multi-iterators to construct the batches for our threads, while maintaining that all transactions can be executed in parallel, and that the hottest events would get scheduled to separate threads.
+The multi-level multi-iterator can be thought of as using multiple multi-iterators to construct the batches for our threads, while maintaining that all transactions can be executed in parallel, and that the hottest events would get scheduled to separate threads.
 
-If we have 4 threads and a batch-size of 64, the multi-level multi-iterator would have 64 multi-iterators each with 4 iterators. Batches for the first thread would be constructed by taking the transactions pointed to by the first-iterator of each multi-iterator, the second thread would take the second-iterator of each multi-iterator, and so on. At each step, the first multi-iterator marches all its' positions forward, then the second multi-iterator marches its' positions forward, and so on.
+In practice, the idea can be implemented as a single multi-iterator with `batch_size * num_threads` iterators, and thread is assigned by the index of the iterator mod `num_threads`.
 
-An alternative approach, which I believe is equivalent, is to have 4 multi-iterators of 64 iterators each, and march the first position of each multi-iterator forward, then the second position of each multi-iterator forward, and so on; with batches being constructed by taking the transactions pointed to by the first multi-iterator, the second multi-iterator, and so on.
+A mental model is, if we have 4 threads and a batch-size of 64, the multi-level multi-iterator would have 64 multi-iterators each with 4 iterators. Batches for the first thread would be constructed by taking the transactions pointed to by the first-iterator of each multi-iterator, the second thread would take the second-iterator of each multi-iterator, and so on. At each step, the first multi-iterator marches all its' positions forward, then the second multi-iterator marches its' positions forward, and so on.
+
+An alternative mental model, is to have 4 multi-iterators of 64 iterators each, and march the first position of each multi-iterator forward, then the second position of each multi-iterator forward, and so on; with batches being constructed by taking the transactions pointed to by the first multi-iterator, the second multi-iterator, and so on.
 
 ### Multi-Level Example
+
+Let's assume we have 2 threads, and a batch-size of 4.
+
+```text
+Initialize:
+[A, A, A, B, C, B, B, D, C, D, E, E, F, G, H, J, K]
+ 0        1  0        1        0     1  0  1         // thread-index
+
+step:
+[A, A, A, B, C, B, B, D, C, D, E, E, F, G, H, J, K]
+    0           1        0        1           0  1   // thread-index
+
+step:
+[A, A, A, B, C, B, B, D, C, D, E, E, F, G, H, J, K]
+       0           1                                 // thread-index
+```
+
+This gives batches:
+
+```text
+[
+    ([A, C, E, G], [B, D, F, H]),
+    ([A, C, E, K], [B, D, J]),
+    ([A], [B]),
+]
+```
+
+Note that the hottest events, `A` and `B`, are scheduled to separate threads. Note that this iteration does not guarantee that all other transactions do not conflict between threads. Logic will need to be implemented around holding locks on accounts for more than a single iteration, and releasing them when the transaction is executed, with the scheduler checking for freed locks during iteration. Additionally, queuing logic will benefit this approach such that `A` and `B` txs can be sent to the threads they are already scheduled on.
+
+### Multi-Level Example (Mental Model)
 
 Let's assume we have 2 threads, and a batch-size of 4.
 
@@ -79,7 +117,7 @@ step:
        ^           ^
 ```
 
-This gives batches:
+This gives the same batches as above:
 
 ```text
 [
@@ -89,4 +127,7 @@ This gives batches:
 ]
 ```
 
-Note that the hottest events, `A` and `B`, are scheduled to separate threads. Note that this iteration does not guarantee that all other transactions do not conflict between threads. Logic will need to be implemented around holding locks on accounts for more than a single iteration, and releasing them when the transaction is executed, with the scheduler checking for freed locks during iteration. Additionally, queuing logic will benefit this approach such that `A` and `B` txs can be sent to the threads they are already scheduled on.
+### Multi-Level Multi-Iterator Intuition
+
+In the example above, we can think of the algorithm as separating the buffer into 10 account queues (A-K), and the scheduling is done by selecting the top-priority transaction from each of these queues at each step,and round-robining between the threads.
+The intuition on why we'd want to use the additional iterator levels, to identify the next hottest transaction queues, such that hot events are round-robined between threads.
