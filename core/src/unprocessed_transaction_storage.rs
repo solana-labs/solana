@@ -9,6 +9,7 @@ use {
         },
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         multi_iterator_scanner::{MultiIteratorScanner, ProcessingDecision},
+        read_write_account_set::ReadWriteAccountSet,
         unprocessed_packet_batches::{
             DeserializedPacket, PacketBatchInsertionMetrics, UnprocessedPacketBatches,
         },
@@ -18,13 +19,10 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, pubkey::Pubkey,
-        saturating_add_assign, transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, saturating_add_assign,
+        transaction::SanitizedTransaction,
     },
-    std::{
-        collections::HashSet,
-        sync::{atomic::Ordering, Arc},
-    },
+    std::sync::{atomic::Ordering, Arc},
 };
 
 // Step-size set to be 64, equal to the maximum batch/entry size. With the
@@ -131,7 +129,7 @@ fn filter_processed_packets<'a, F>(
 /// multi-iterator checking function.
 pub struct ConsumeScannerPayload<'a> {
     pub reached_end_of_slot: bool,
-    pub write_accounts: HashSet<Pubkey>,
+    pub account_locks: ReadWriteAccountSet,
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
 }
@@ -149,17 +147,8 @@ fn consume_scan_should_process_packet(
 
     // Before sanitization, let's quickly check the static keys (performance optimization)
     let message = &packet.transaction().get_message().message;
-    let static_keys = message.static_account_keys();
-    for key in static_keys.iter().enumerate().filter_map(|(idx, key)| {
-        if message.is_maybe_writable(idx) {
-            Some(key)
-        } else {
-            None
-        }
-    }) {
-        if payload.write_accounts.contains(key) {
-            return ProcessingDecision::Later;
-        }
+    if !payload.account_locks.check_static_account_locks(message) {
+        return ProcessingDecision::Later;
     }
 
     // Try to deserialize the packet
@@ -178,29 +167,19 @@ fn consume_scan_should_process_packet(
     if let Some(sanitized_transaction) = maybe_sanitized_transaction {
         let message = sanitized_transaction.message();
 
-        let conflicts_with_batch = message.account_keys().iter().enumerate().any(|(idx, key)| {
-            if message.is_writable(idx) {
-                payload.write_accounts.contains(key)
-            } else {
-                false
-            }
-        });
-
-        if conflicts_with_batch {
-            ProcessingDecision::Later
-        } else {
-            message
-                .account_keys()
-                .iter()
-                .enumerate()
-                .for_each(|(idx, key)| {
-                    if message.is_writable(idx) {
-                        payload.write_accounts.insert(*key);
-                    }
-                });
-
+        // Check the number of locks and whether there are duplicates
+        if SanitizedTransaction::validate_account_locks(
+            message,
+            bank.get_transaction_account_lock_limit(),
+        )
+        .is_err()
+        {
+            ProcessingDecision::Never
+        } else if payload.account_locks.try_locking(message) {
             payload.sanitized_transactions.push(sanitized_transaction);
             ProcessingDecision::Now
+        } else {
+            ProcessingDecision::Later
         }
     } else {
         ProcessingDecision::Never
@@ -221,7 +200,7 @@ where
 {
     let payload = ConsumeScannerPayload {
         reached_end_of_slot: false,
-        write_accounts: HashSet::new(),
+        account_locks: ReadWriteAccountSet::default(),
         sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
         slot_metrics_tracker,
     };

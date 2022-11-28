@@ -277,7 +277,7 @@ impl SanitizedTransaction {
     }
 
     /// Validate a transaction message against locked accounts
-    fn validate_account_locks(
+    pub fn validate_account_locks(
         message: &SanitizedMessage,
         tx_account_lock_limit: usize,
     ) -> Result<()> {

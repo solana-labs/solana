@@ -47,6 +47,7 @@ pub mod poh_timing_report_service;
 pub mod poh_timing_reporter;
 pub mod progress_map;
 pub mod qos_service;
+pub mod read_write_account_set;
 pub mod repair_generic_traversal;
 pub mod repair_response;
 pub mod repair_service;
