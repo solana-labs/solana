@@ -706,9 +706,12 @@ impl AccountsHasher {
     }
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
-        balance
-            .try_into()
-            .expect("overflow is detected while summing capitalization")
+        balance.try_into().unwrap_or_else(|_| {
+            panic!(
+                "overflow is detected while summing capitalization: {}",
+                balance
+            )
+        })
     }
 
     /// return references to cache hash data, grouped by bin, sourced from 'sorted_data_by_pubkey',
