@@ -227,6 +227,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of findProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link findProgramAddressSync} instead
    */
   static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,
