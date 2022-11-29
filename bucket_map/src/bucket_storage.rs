@@ -473,9 +473,9 @@ mod test {
 
     #[test]
     fn test_time_mmap() {
-        use std::time::{Duration, Instant};
+        use std::time::Instant;
 
-        let mut v = vec![];
+        let v = vec![];
         for i in 1..1900000 {
             if i % 100 == 0 {
                 println!("{}", i);
