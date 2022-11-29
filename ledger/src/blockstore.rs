@@ -1800,7 +1800,7 @@ impl Blockstore {
         // Seek to the first shred with index >= start_index
         db_iterator.seek(&C::key((slot, start_index)));
 
-        // The index of the first missing shred in the slot
+        // The index of the first missing shred in the slot.
         let mut prev_index = start_index;
         'outer: loop {
             if !db_iterator.valid() {
