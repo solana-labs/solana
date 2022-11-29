@@ -3386,7 +3386,7 @@ export class Connection {
 
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
-    const subscriptionCommitment = commitment || this.commitment;
+    const confirmationCommitment = commitment || this.commitment;
     let timeoutId;
     let signatureSubscriptionId: number | undefined;
     let disposeSignatureSubscriptionStateChangeObserver:
@@ -3410,7 +3410,7 @@ export class Connection {
             done = true;
             resolve({__type: TransactionStatus.PROCESSED, response});
           },
-          subscriptionCommitment,
+          confirmationCommitment,
         );
         const subscriptionSetupPromise = new Promise<void>(
           resolveSubscriptionSetup => {
@@ -3438,10 +3438,36 @@ export class Connection {
             return;
           }
           const {context, value} = response;
+          if (value == null) {
+            return;
+          }
           if (value?.err) {
             reject(value.err);
-          }
-          if (value) {
+          } else {
+            switch (confirmationCommitment) {
+              case 'confirmed':
+              case 'single':
+              case 'singleGossip': {
+                if (value.confirmationStatus === 'processed') {
+                  return;
+                }
+                break;
+              }
+              case 'finalized':
+              case 'max':
+              case 'root': {
+                if (
+                  value.confirmationStatus === 'processed' ||
+                  value.confirmationStatus === 'confirmed'
+                ) {
+                  return;
+                }
+                break;
+              }
+              // exhaust enums to ensure full coverage
+              case 'processed':
+              case 'recent':
+            }
             done = true;
             resolve({
               __type: TransactionStatus.PROCESSED,
@@ -3463,7 +3489,7 @@ export class Connection {
     >(resolve => {
       if (typeof strategy === 'string') {
         let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
-        switch (subscriptionCommitment) {
+        switch (confirmationCommitment) {
           case 'processed':
           case 'recent':
           case 'single':
