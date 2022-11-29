@@ -268,7 +268,7 @@ export class Message {
     // Slice up wire data
     let byteArray = [...buffer];
 
-    const numRequiredSignatures = byteArray.shift() as number;
+    const numRequiredSignatures = byteArray.shift()!;
     if (
       numRequiredSignatures !==
       (numRequiredSignatures & VERSION_PREFIX_MASK)
@@ -278,8 +278,8 @@ export class Message {
       );
     }
 
-    const numReadonlySignedAccounts = byteArray.shift() as number;
-    const numReadonlyUnsignedAccounts = byteArray.shift() as number;
+    const numReadonlySignedAccounts = byteArray.shift()!;
+    const numReadonlyUnsignedAccounts = byteArray.shift()!;
 
     const accountCount = shortvec.decodeLength(byteArray);
     let accountKeys = [];
@@ -295,7 +295,7 @@ export class Message {
     const instructionCount = shortvec.decodeLength(byteArray);
     let instructions: CompiledInstruction[] = [];
     for (let i = 0; i < instructionCount; i++) {
-      const programIdIndex = byteArray.shift() as number;
+      const programIdIndex = byteArray.shift()!;
       const accountCount = shortvec.decodeLength(byteArray);
       const accounts = byteArray.slice(0, accountCount);
       byteArray = byteArray.slice(accountCount);
