@@ -71,7 +71,9 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
     }
 }
 
-// Generate shred repairs for main subtree rooted at `self.slot`
+/// Generate shred repairs for `tree` starting at `tree.root`.
+/// Prioritized by stake weight, additionally considers children not present in `tree` but in
+/// blockstore.
 pub fn get_best_repair_shreds<'a>(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,

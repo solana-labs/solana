@@ -40,6 +40,8 @@ impl<'a> Iterator for GenericTraversal<'a> {
     }
 }
 
+/// Does a generic traversal and inserts all slots that have a missing last index prioritized by how
+/// many shreds have been received
 pub fn get_unknown_last_index(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,
@@ -78,6 +80,8 @@ pub fn get_unknown_last_index(
         .collect()
 }
 
+/// Path of broken parents from start_slot to earliest ancestor not yet seen
+/// Uses blockstore for fork information
 fn get_unrepaired_path(
     start_slot: Slot,
     blockstore: &Blockstore,
@@ -103,6 +107,8 @@ fn get_unrepaired_path(
     path
 }
 
+/// Finds repairs for slots that are closest to completion (# of missing shreds).
+/// Additionaly we repair up to their oldest full ancestor (using blockstore fork info).
 pub fn get_closest_completion(
     tree: &HeaviestSubtreeForkChoice,
     blockstore: &Blockstore,

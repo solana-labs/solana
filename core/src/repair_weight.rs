@@ -196,6 +196,11 @@ impl RepairWeight {
         repairs.extend(best_shreds_repairs);
         get_best_shreds_elapsed.stop();
 
+        // Although we have generated repairs for orphan roots and slots in the rooted subtree,
+        // if we have space we should generate repairs for slots in orphan trees in preparation for
+        // when they are no longer rooted. Here we generate repairs for slots with unknown last
+        // indices as well as slots that are close to completion.
+
         let mut get_unknown_last_index_elapsed = Measure::start("get_unknown_last_index");
         let pre_num_slots = processed_slots.len();
         let unknown_last_index_repairs = self.get_best_unknown_last_index(
@@ -314,7 +319,7 @@ impl RepairWeight {
         self.root = new_root;
     }
 
-    // Generate shred repairs for main subtree rooted at `self.slot`
+    // Generate shred repairs for main subtree rooted at `self.root`
     fn get_best_shreds<'a>(
         &mut self,
         blockstore: &Blockstore,
@@ -403,6 +408,8 @@ impl RepairWeight {
         }
     }
 
+    /// For all remaining trees (orphan and rooted), generate repairs for slots missing last_index info
+    /// prioritized by # shreds received.
     fn get_best_unknown_last_index(
         &mut self,
         blockstore: &Blockstore,
@@ -427,6 +434,10 @@ impl RepairWeight {
         repairs
     }
 
+    /// For all remaining trees (orphan and rooted), generate repairs for subtrees that have last
+    /// index info but are missing shreds prioritized by how close to completion they are. These
+    /// repairs are also prioritized by age of ancestors, so slots close to completion will first
+    /// start by repairing broken ancestors.
     fn get_best_closest_completion(
         &mut self,
         blockstore: &Blockstore,
@@ -451,9 +462,9 @@ impl RepairWeight {
         repairs
     }
 
-    // Attempts to chain the orphan subtree rooted at `orphan_tree_root`
-    // to any earlier subtree with new ancestry information in `blockstore`.
-    // Returns the earliest known ancestor of `heaviest_tree_root`.
+    /// Attempts to chain the orphan subtree rooted at `orphan_tree_root`
+    /// to any earlier subtree with new ancestry information in `blockstore`.
+    /// Returns the earliest known ancestor of `heaviest_tree_root`.
     fn update_orphan_ancestors(
         &mut self,
         blockstore: &Blockstore,
