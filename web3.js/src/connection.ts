@@ -28,7 +28,7 @@ import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
-import {NonceAccount} from './nonce-account';
+import {DurableNonce, NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
@@ -45,6 +45,7 @@ import {sleep} from './utils/sleep';
 import {toBuffer} from './utils/to-buffer';
 import {
   TransactionExpiredBlockheightExceededError,
+  TransactionExpiredNonceInvalidError,
   TransactionExpiredTimeoutError,
 } from './transaction/expiry-custom-errors';
 import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
@@ -337,6 +338,28 @@ function extractCommitmentFromConfig<TConfig>(
   }
   return {commitment, config};
 }
+
+/**
+ * A strategy for confirming durable nonce transactions.
+ */
+export type DurableNonceTransactionConfirmationStrategy = {
+  /**
+   * The lowest slot at which to fetch the nonce value from the
+   * nonce account. This should be no lower than the slot at
+   * which the last-known value of the nonce was fetched.
+   */
+  minContextSlot: number;
+  /**
+   * The account where the current value of the nonce is stored.
+   */
+  nonceAccountPubkey: PublicKey;
+  /**
+   * The nonce value that was used to sign the transaction
+   * for which confirmation is being sought.
+   */
+  nonceValue: DurableNonce;
+  signature: TransactionSignature;
+};
 
 /**
  * @internal
@@ -2439,6 +2462,26 @@ export type GetTransactionCountConfig = {
 };
 
 /**
+ * Configuration object for `getNonce`
+ */
+export type GetNonceConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getNonceAndContext`
+ */
+export type GetNonceAndContextConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -3348,7 +3391,9 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy: BlockheightBasedTransactionConfirmationStrategy,
+    strategy:
+      | BlockheightBasedTransactionConfirmationStrategy
+      | DurableNonceTransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
@@ -3363,6 +3408,7 @@ export class Connection {
   async confirmTransaction(
     strategy:
       | BlockheightBasedTransactionConfirmationStrategy
+      | DurableNonceTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
@@ -3371,8 +3417,9 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config =
-        strategy as BlockheightBasedTransactionConfirmationStrategy;
+      const config = strategy as
+        | BlockheightBasedTransactionConfirmationStrategy
+        | DurableNonceTransactionConfirmationStrategy;
       rawSignature = config.signature;
     }
 
@@ -3386,31 +3433,58 @@ export class Connection {
 
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
-    const confirmationCommitment = commitment || this.commitment;
-    let timeoutId;
+    if (typeof strategy === 'string') {
+      return await this.confirmTransactionUsingLegacyTimeoutStrategy({
+        commitment: commitment || this.commitment,
+        signature: rawSignature,
+      });
+    } else if ('lastValidBlockHeight' in strategy) {
+      return await this.confirmTransactionUsingBlockHeightExceedanceStrategy({
+        commitment: commitment || this.commitment,
+        strategy,
+      });
+    } else {
+      return await this.confirmTransactionUsingDurableNonceStrategy({
+        commitment: commitment || this.commitment,
+        strategy,
+      });
+    }
+  }
+
+  private getTransactionConfirmationPromise({
+    commitment,
+    signature,
+  }: {
+    commitment?: Commitment;
+    signature: string;
+  }): {
+    abortConfirmation(): void;
+    confirmationPromise: Promise<{
+      __type: TransactionStatus.PROCESSED;
+      response: RpcResponseAndContext<SignatureResult>;
+    }>;
+  } {
     let signatureSubscriptionId: number | undefined;
     let disposeSignatureSubscriptionStateChangeObserver:
       | SubscriptionStateChangeDisposeFn
       | undefined;
     let done = false;
-
     const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
       try {
         signatureSubscriptionId = this.onSignature(
-          rawSignature,
+          signature,
           (result: SignatureResult, context: Context) => {
             signatureSubscriptionId = undefined;
             const response = {
               context,
               value: result,
             };
-            done = true;
             resolve({__type: TransactionStatus.PROCESSED, response});
           },
-          confirmationCommitment,
+          commitment,
         );
         const subscriptionSetupPromise = new Promise<void>(
           resolveSubscriptionSetup => {
@@ -3432,7 +3506,7 @@ export class Connection {
         (async () => {
           await subscriptionSetupPromise;
           if (done) return;
-          const response = await this.getSignatureStatus(rawSignature);
+          const response = await this.getSignatureStatus(signature);
           if (done) return;
           if (response == null) {
             return;
@@ -3444,7 +3518,7 @@ export class Connection {
           if (value?.err) {
             reject(value.err);
           } else {
-            switch (confirmationCommitment) {
+            switch (commitment) {
               case 'confirmed':
               case 'single':
               case 'singleGossip': {
@@ -3482,80 +3556,250 @@ export class Connection {
         reject(err);
       }
     });
-
-    const expiryPromise = new Promise<
-      | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
-      | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
-    >(resolve => {
-      if (typeof strategy === 'string') {
-        let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
-        switch (confirmationCommitment) {
-          case 'processed':
-          case 'recent':
-          case 'single':
-          case 'confirmed':
-          case 'singleGossip': {
-            timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
-            break;
-          }
-          // exhaust enums to ensure full coverage
-          case 'finalized':
-          case 'max':
-          case 'root':
-        }
-
-        timeoutId = setTimeout(
-          () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
-          timeoutMs,
-        );
-      } else {
-        let config =
-          strategy as BlockheightBasedTransactionConfirmationStrategy;
-        const checkBlockHeight = async () => {
-          try {
-            const blockHeight = await this.getBlockHeight(commitment);
-            return blockHeight;
-          } catch (_e) {
-            return -1;
-          }
-        };
-        (async () => {
-          let currentBlockHeight = await checkBlockHeight();
-          if (done) return;
-          while (currentBlockHeight <= config.lastValidBlockHeight) {
-            await sleep(1000);
-            if (done) return;
-            currentBlockHeight = await checkBlockHeight();
-            if (done) return;
-          }
-          resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
-        })();
-      }
-    });
-
-    let result: RpcResponseAndContext<SignatureResult>;
-    try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
-      switch (outcome.__type) {
-        case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
-          throw new TransactionExpiredBlockheightExceededError(rawSignature);
-        case TransactionStatus.PROCESSED:
-          result = outcome.response;
-          break;
-        case TransactionStatus.TIMED_OUT:
-          throw new TransactionExpiredTimeoutError(
-            rawSignature,
-            outcome.timeoutMs / 1000,
-          );
-      }
-    } finally {
-      clearTimeout(timeoutId);
+    const abortConfirmation = () => {
       if (disposeSignatureSubscriptionStateChangeObserver) {
         disposeSignatureSubscriptionStateChangeObserver();
+        disposeSignatureSubscriptionStateChangeObserver = undefined;
       }
       if (signatureSubscriptionId) {
         this.removeSignatureListener(signatureSubscriptionId);
+        signatureSubscriptionId = undefined;
       }
+    };
+    return {abortConfirmation, confirmationPromise};
+  }
+
+  private async confirmTransactionUsingBlockHeightExceedanceStrategy({
+    commitment,
+    strategy: {lastValidBlockHeight, signature},
+  }: {
+    commitment?: Commitment;
+    strategy: BlockheightBasedTransactionConfirmationStrategy;
+  }) {
+    let done: boolean = false;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.BLOCKHEIGHT_EXCEEDED;
+    }>(resolve => {
+      const checkBlockHeight = async () => {
+        try {
+          const blockHeight = await this.getBlockHeight(commitment);
+          return blockHeight;
+        } catch (_e) {
+          return -1;
+        }
+      };
+      (async () => {
+        let currentBlockHeight = await checkBlockHeight();
+        if (done) return;
+        while (currentBlockHeight <= lastValidBlockHeight) {
+          await sleep(1000);
+          if (done) return;
+          currentBlockHeight = await checkBlockHeight();
+          if (done) return;
+        }
+        resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
+      })();
+    });
+    const {abortConfirmation, confirmationPromise} =
+      this.getTransactionConfirmationPromise({commitment, signature});
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        throw new TransactionExpiredBlockheightExceededError(signature);
+      }
+    } finally {
+      done = true;
+      abortConfirmation();
+    }
+    return result;
+  }
+
+  private async confirmTransactionUsingDurableNonceStrategy({
+    commitment,
+    strategy: {minContextSlot, nonceAccountPubkey, nonceValue, signature},
+  }: {
+    commitment?: Commitment;
+    strategy: DurableNonceTransactionConfirmationStrategy;
+  }) {
+    let done: boolean = false;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.NONCE_INVALID;
+      slotInWhichNonceDidAdvance: number | null;
+    }>(resolve => {
+      let currentNonceValue: string | undefined = nonceValue;
+      let lastCheckedSlot: number | null = null;
+      const getCurrentNonceValue = async () => {
+        try {
+          const {context, value: nonceAccount} = await this.getNonceAndContext(
+            nonceAccountPubkey,
+            {
+              commitment,
+              minContextSlot,
+            },
+          );
+          lastCheckedSlot = context.slot;
+          return nonceAccount?.nonce;
+        } catch (e) {
+          // If for whatever reason we can't reach/read the nonce
+          // account, just keep using the last-known value.
+          return currentNonceValue;
+        }
+      };
+      (async () => {
+        currentNonceValue = await getCurrentNonceValue();
+        if (done) return;
+        while (
+          true // eslint-disable-line no-constant-condition
+        ) {
+          if (nonceValue !== currentNonceValue) {
+            resolve({
+              __type: TransactionStatus.NONCE_INVALID,
+              slotInWhichNonceDidAdvance: lastCheckedSlot,
+            });
+            return;
+          }
+          await sleep(2000);
+          if (done) return;
+          currentNonceValue = await getCurrentNonceValue();
+          if (done) return;
+        }
+      })();
+    });
+    const {abortConfirmation, confirmationPromise} =
+      this.getTransactionConfirmationPromise({commitment, signature});
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        // Double check that the transaction is indeed unconfirmed.
+        let signatureStatus:
+          | RpcResponseAndContext<SignatureStatus | null>
+          | null
+          | undefined;
+        while (
+          true // eslint-disable-line no-constant-condition
+        ) {
+          const status = await this.getSignatureStatus(signature);
+          if (status == null) {
+            break;
+          }
+          if (
+            status.context.slot <
+            (outcome.slotInWhichNonceDidAdvance ?? minContextSlot)
+          ) {
+            await sleep(400);
+            continue;
+          }
+          signatureStatus = status;
+          break;
+        }
+        if (signatureStatus?.value) {
+          const commitmentForStatus = commitment || 'finalized';
+          const {confirmationStatus} = signatureStatus.value;
+          switch (commitmentForStatus) {
+            case 'processed':
+            case 'recent':
+              if (
+                confirmationStatus !== 'processed' &&
+                confirmationStatus !== 'confirmed' &&
+                confirmationStatus !== 'finalized'
+              ) {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            case 'confirmed':
+            case 'single':
+            case 'singleGossip':
+              if (
+                confirmationStatus !== 'confirmed' &&
+                confirmationStatus !== 'finalized'
+              ) {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            case 'finalized':
+            case 'max':
+            case 'root':
+              if (confirmationStatus !== 'finalized') {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            default:
+              // Exhaustive switch.
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              ((_: never) => {})(commitmentForStatus);
+          }
+          result = {
+            context: signatureStatus.context,
+            value: {err: signatureStatus.value.err},
+          };
+        } else {
+          throw new TransactionExpiredNonceInvalidError(signature);
+        }
+      }
+    } finally {
+      done = true;
+      abortConfirmation();
+    }
+    return result;
+  }
+
+  private async confirmTransactionUsingLegacyTimeoutStrategy({
+    commitment,
+    signature,
+  }: {
+    commitment?: Commitment;
+    signature: string;
+  }) {
+    let timeoutId;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.TIMED_OUT;
+      timeoutMs: number;
+    }>(resolve => {
+      let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
+      switch (commitment) {
+        case 'processed':
+        case 'recent':
+        case 'single':
+        case 'confirmed':
+        case 'singleGossip': {
+          timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
+          break;
+        }
+        // exhaust enums to ensure full coverage
+        case 'finalized':
+        case 'max':
+        case 'root':
+      }
+      timeoutId = setTimeout(
+        () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
+        timeoutMs,
+      );
+    });
+    const {abortConfirmation, confirmationPromise} =
+      this.getTransactionConfirmationPromise({
+        commitment,
+        signature,
+      });
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        throw new TransactionExpiredTimeoutError(
+          signature,
+          outcome.timeoutMs / 1000,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      abortConfirmation();
     }
     return result;
   }
@@ -4708,11 +4952,11 @@ export class Connection {
    */
   async getNonceAndContext(
     nonceAccount: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetNonceAndContextConfig,
   ): Promise<RpcResponseAndContext<NonceAccount | null>> {
     const {context, value: accountInfo} = await this.getAccountInfoAndContext(
       nonceAccount,
-      commitment,
+      commitmentOrConfig,
     );
 
     let value = null;
@@ -4731,9 +4975,9 @@ export class Connection {
    */
   async getNonce(
     nonceAccount: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetNonceConfig,
   ): Promise<NonceAccount | null> {
-    return await this.getNonceAndContext(nonceAccount, commitment)
+    return await this.getNonceAndContext(nonceAccount, commitmentOrConfig)
       .then(x => x.value)
       .catch(e => {
         throw new Error(
