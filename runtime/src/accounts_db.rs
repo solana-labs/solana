@@ -7639,8 +7639,7 @@ impl AccountsDb {
             );
 
             // turn raw data into merkle tree hashes and sum of lamports
-            let (hash, lamports) = hash.rest_of_hash_calculation(result, &mut stats);
-            let final_result = (hash, lamports);
+            let final_result = hash.rest_of_hash_calculation(result, &mut stats);
 
             info!(
                 "calculate_accounts_hash_from_storages: slot: {} {:?}",

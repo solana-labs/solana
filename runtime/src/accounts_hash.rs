@@ -19,7 +19,7 @@ use {
         borrow::Borrow,
         convert::TryInto,
         fs::File,
-        io::BufWriter,
+        io::{BufWriter, Writer},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
@@ -50,12 +50,16 @@ impl MMapAccountHashesFile {
     }
 }
 
+/// 1 file containing account hashes sorted by pubkey
 pub struct AccountHashesFile {
+    /// an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
     file: Option<File>,
+    /// # hashes in the file
     count: usize,
 }
 
 impl AccountHashesFile {
+    /// map the file into memory and return a reader that can access it by slice
     fn get_reader(&self) -> Option<MMapAccountHashesFile> {
         self.file.as_ref().map(|file| MMapAccountHashesFile {
             mmap: unsafe { MmapMut::map_mut(file).unwrap() },
@@ -357,6 +361,7 @@ pub struct CumulativeOffsets {
     total_count: usize,
 }
 
+/// used by merkle tree calculation to lookup account hashes by overall index
 #[derive(Default)]
 pub struct CumulativeHashesFromFiles {
     /// source of hashes in order
@@ -599,7 +604,7 @@ impl AccountsHasher {
         specific_level_count: Option<usize>,
     ) -> (Hash, Vec<Hash>)
     where
-        // buffer to keep ownership, start_index into overall hashes[..] requested
+        // returns a slice of hashes starting at the given overall index
         F: Fn(usize) -> &'a [T] + std::marker::Sync,
         T: Borrow<Hash> + std::marker::Sync + 'a,
     {
@@ -848,7 +853,7 @@ impl AccountsHasher {
     /// returns:
     /// Vec, with one entry per bin
     ///  for each entry, Vec<Hash> in pubkey order
-    /// If return Vec<Vec<Hash>> was flattened, it would be all hashes, in pubkey order.
+    /// If return Vec<AccountHashesFile> was flattened, it would be all hashes, in pubkey order.
     fn de_dup_and_eliminate_zeros<'a>(
         &self,
         sorted_data_by_pubkey: &'a [SortedDataByPubkey<'a>],
@@ -937,7 +942,7 @@ impl AccountsHasher {
     // 1. eliminate zero lamport accounts
     // 2. pick the highest slot or (slot = and highest version) of each pubkey
     // 3. produce this output:
-    //   a. vec: individual hashes in pubkey order
+    //   a. AccountHashesFile: individual account hashes in pubkey order
     //   b. lamport sum
     //   c. unreduced count (ie. including duplicates and zero lamport)
     fn de_dup_accounts_in_parallel<'a>(
@@ -1016,8 +1021,8 @@ impl AccountsHasher {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
                 );
-                use std::io::Write;
                 if writer.is_none() {
+                    // we have hashes to write but no file yet, so create a file that will auto-delete on drop
                     writer = Some(BufWriter::new(tempfile().unwrap()));
                 }
                 assert_eq!(
@@ -1078,7 +1083,6 @@ impl AccountsHasher {
         let cumulative = CumulativeHashesFromFiles::from_files(&hashes);
 
         let mut hash_time = Measure::start("hash");
-        // hash all the rest and combine and hash until we have only 1 hash left
         let (hash, _) = Self::compute_merkle_root_from_slices(
             cumulative.total_count(),
             MERKLE_FANOUT,
