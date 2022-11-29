@@ -1107,6 +1107,97 @@ pub mod tests {
     use {super::*, std::str::FromStr};
 
     #[test]
+    fn test_account_hashes_file() {
+        // 0 hashes
+        let mut file = AccountHashesFile::default();
+        assert!(file.get_reader().is_none());
+        let hashes = (0..2).map(|i| Hash::new(&[i; 32])).collect::<Vec<_>>();
+
+        // 1 hash
+        file.write(&hashes[0]);
+        let reader = file.get_reader().unwrap();
+        assert_eq!(&[hashes[0]][..], reader.read(0));
+        assert!(reader.read(1).is_empty());
+
+        // multiple hashes
+        let mut file = AccountHashesFile::default();
+        assert!(file.get_reader().is_none());
+        hashes.iter().for_each(|hash| file.write(hash));
+        let reader = file.get_reader().unwrap();
+        (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.read(i)));
+        assert!(reader.read(2).is_empty());
+    }
+
+    #[test]
+    fn test_cumulative_hashes_from_files() {
+        (0..4).for_each(|permutation| {
+            let hashes = (0..2).map(|i| Hash::new(&[i + 1; 32])).collect::<Vec<_>>();
+
+            let mut combined = Vec::default();
+
+            // 0 hashes
+            let file0 = AccountHashesFile::default();
+
+            // 1 hash
+            let mut file1 = AccountHashesFile::default();
+            file1.write(&hashes[0]);
+            combined.push(hashes[0]);
+
+            // multiple hashes
+            let mut file2 = AccountHashesFile::default();
+            hashes.iter().for_each(|hash| {
+                file2.write(hash);
+                combined.push(*hash);
+            });
+
+            let hashes = if permutation == 0 {
+                vec![file0, file1, file2]
+            } else if permutation == 1 {
+                // include more empty files
+                vec![
+                    file0,
+                    file1,
+                    AccountHashesFile::default(),
+                    file2,
+                    AccountHashesFile::default(),
+                ]
+            } else if permutation == 2 {
+                vec![file1, file2]
+            } else {
+                // swap file2 and 1
+                let one = combined.remove(0);
+                combined.push(one);
+                vec![
+                    file2,
+                    AccountHashesFile::default(),
+                    AccountHashesFile::default(),
+                    file1,
+                ]
+            };
+
+            let cumulative = CumulativeHashesFromFiles::from_files(hashes);
+            let len = combined.len();
+            assert_eq!(cumulative.total_count(), len);
+            (0..combined.len()).for_each(|start| {
+                let mut retreived = Vec::default();
+                let mut cumulative_start = start;
+                // read all data
+                while retreived.len() < (len - start) {
+                    let this_one = cumulative.get_slice(cumulative_start);
+                    retreived.extend(this_one.iter());
+                    cumulative_start += this_one.len();
+                    assert_ne!(0, this_one.len());
+                }
+                assert_eq!(
+                    &combined[start..],
+                    &retreived[..],
+                    "permutation: {permutation}"
+                );
+            });
+        });
+    }
+
+    #[test]
     fn test_accountsdb_div_ceil() {
         assert_eq!(AccountsHasher::div_ceil(10, 3), 4);
         assert_eq!(AccountsHasher::div_ceil(0, 1), 0);
@@ -1187,7 +1278,7 @@ pub mod tests {
         }]]];
         let temp_vec = vec.to_vec();
         let slice = convert_to_slice2(&temp_vec);
-        let (hashes, lamports, _) =
+        let (mut hashes, lamports, _) =
             AccountsHasher::default().de_dup_accounts_in_parallel(&slice, 0);
         assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().read(0));
         assert_eq!(lamports, 1);
@@ -1196,7 +1287,7 @@ pub mod tests {
     fn get_vec_vec(hashes: Vec<AccountHashesFile>) -> Vec<Vec<Hash>> {
         hashes.into_iter().map(get_vec).collect()
     }
-    fn get_vec(hashes: AccountHashesFile) -> Vec<Hash> {
+    fn get_vec(mut hashes: AccountHashesFile) -> Vec<Hash> {
         hashes
             .get_reader()
             .map(|r| r.read(0).to_vec())
