@@ -31,6 +31,8 @@ const SAMPLE_INTERVAL_MEM_MS: u64 = 5 * MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
 const SAMPLE_INTERVAL_DISK_MS: u64 = 5 * MS_PER_S;
 const SAMPLE_INTERVAL_OPEN_FD_MS: u64 = 30 * MS_PER_S;
+const SAMPLE_INTERVAL_DISK_MS: u64 = 5 * MS_PER_S;
+const SAMPLE_INTERVAL_OPEN_FD_MS: u64 = 60 * MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
