@@ -699,14 +699,17 @@ export class Transaction {
   /**
    * @internal
    */
-  _verifySignatures(signData: Buffer, requireAllSignatures: boolean): boolean {
+  _verifySignatures(
+    signData: Uint8Array,
+    requireAllSignatures: boolean,
+  ): boolean {
     for (const {signature, publicKey} of this.signatures) {
       if (signature === null) {
         if (requireAllSignatures) {
           return false;
         }
       } else {
-        if (!verify(signature, signData, publicKey.toBuffer())) {
+        if (!verify(signature, signData, publicKey.toBytes())) {
           return false;
         }
       }
