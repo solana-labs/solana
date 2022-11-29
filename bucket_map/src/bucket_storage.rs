@@ -263,9 +263,31 @@ impl BucketStorage {
         }
     }
 
+    fn get_mmap_count() -> Option<usize> {
+        let pid = std::process::id();
+        let map_path = format!("/proc/{}/maps", pid);
+        let output = std::process::Command::new("wc")
+            .args(["-l", &map_path])
+            .output()
+            .unwrap();
+        if output.status.success() {
+            let n: usize = std::str::from_utf8(&output.stdout)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+
+            Some(n)
+        } else {
+            None
+        }
+    }
+
     fn get_mmap_fd_stats() -> Option<(usize, usize, Limit)> {
         let proc = Process::myself().ok()?;
-        let mmap_count = proc.maps().unwrap().len();
+        let mmap_count = Self::get_mmap_count().unwrap();
         let max_open_files_limit = proc.limits().unwrap().max_open_files;
         let num_open_files = proc.fd_count().unwrap();
 
@@ -447,5 +469,37 @@ mod test {
             LimitValue::Unlimited => {}
             LimitValue::Value(x) => assert!(x > 0),
         }
+    }
+
+    #[test]
+    fn test_time_mmap() {
+        use std::time::{Duration, Instant};
+
+        let mut v = vec![];
+        for i in 1..1900000 {
+            if i % 100 == 0 {
+                println!("{}", i);
+            }
+
+            let tmpdir = tempdir().unwrap();
+            let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
+            assert!(!paths.is_empty());
+            let mut s =
+                BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
+            v.push(s);
+        }
+
+        // test get_mmap_fd_stats
+        let start = Instant::now();
+        let (mmap_count, num_open_files, max_open_files_limit) =
+            BucketStorage::get_mmap_fd_stats().unwrap();
+        let duration = start.elapsed();
+
+        println!(
+            "{} {} {:?}",
+            mmap_count, num_open_files, max_open_files_limit
+        );
+
+        println!("Time elapsed is: {:?}", duration);
     }
 }
