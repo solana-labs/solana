@@ -263,12 +263,13 @@ impl BucketStorage {
         }
     }
 
-    fn get_number_of_open_files_and_limit() -> Option<(usize, Limit)> {
+    fn get_mmap_fd_stats() -> Option<(usize, usize, Limit)> {
         let proc = Process::myself().ok()?;
+        let mmap_count = proc.maps().unwrap().len();
         let max_open_files_limit = proc.limits().unwrap().max_open_files;
         let num_open_files = proc.fd_count().unwrap();
 
-        Some((num_open_files, max_open_files_limit))
+        Some((mmap_count, num_open_files, max_open_files_limit))
     }
 
     fn new_map(
@@ -289,12 +290,13 @@ impl BucketStorage {
             .create(true)
             .open(file.clone())
             .map_err(|e| {
-                if let Some((num_open_files, max_open_files_limit)) = Self::get_number_of_open_files_and_limit() {
+                if let Some((mmap_count, num_open_files, max_open_files_limit)) = Self::get_mmap_fd_stats() {
                     panic!(
-                        "Unable to create data file {} in current dir({:?}): {:?}, current number of open files: {}, max limit of open files: {:?}",
+                        "Unable to create data file {} in current dir({:?}): {:?}, current mmap_count: {}, current number of open files: {}, max limit of open files: {:?}",
                         file.display(),
                         std::env::current_dir(),
                         e,
+                        mmap_count,
                         num_open_files,
                         max_open_files_limit,
                     );
@@ -434,10 +436,11 @@ mod test {
         assert!(storage.is_free(ix));
         assert_eq!(storage.uid(ix), None);
 
-        // test get_number_of_open_files_and_limit
-        if let Some((num_open_files, max_open_files_limit)) =
-            BucketStorage::get_number_of_open_files_and_limit()
+        // test get_mmap_fd_stats
+        if let Some((mmap_count, num_open_files, max_open_files_limit)) =
+            BucketStorage::get_mmap_fd_stats()
         {
+            assert!(mmap_count > 0);
             assert!(num_open_files > 0);
             match max_open_files_limit.soft_limit {
                 LimitValue::Unlimited => {}
