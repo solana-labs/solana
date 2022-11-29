@@ -2747,7 +2747,6 @@ fn test_oc_bad_signatures() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_votes_land_in_fork_during_long_partition() {
     let total_stake = 3 * DEFAULT_NODE_STAKE;
     // Make `lighter_stake` insufficient for switching threshold
