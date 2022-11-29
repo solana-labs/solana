@@ -3627,14 +3627,20 @@ export class Connection {
     let done: boolean = false;
     const expiryPromise = new Promise<{
       __type: TransactionStatus.NONCE_INVALID;
+      slotInWhichNonceDidAdvance: number | null;
     }>(resolve => {
       let currentNonceValue: string | undefined = nonceValue;
+      let lastCheckedSlot: number | null = null;
       const getCurrentNonceValue = async () => {
         try {
-          const nonceAccount = await this.getNonce(nonceAccountPubkey, {
-            commitment,
-            minContextSlot,
-          });
+          const {context, value: nonceAccount} = await this.getNonceAndContext(
+            nonceAccountPubkey,
+            {
+              commitment,
+              minContextSlot,
+            },
+          );
+          lastCheckedSlot = context.slot;
           return nonceAccount?.nonce;
         } catch (e) {
           // If for whatever reason we can't reach/read the nonce
@@ -3649,7 +3655,10 @@ export class Connection {
           true // eslint-disable-line no-constant-condition
         ) {
           if (nonceValue !== currentNonceValue) {
-            resolve({__type: TransactionStatus.NONCE_INVALID});
+            resolve({
+              __type: TransactionStatus.NONCE_INVALID,
+              slotInWhichNonceDidAdvance: lastCheckedSlot,
+            });
             return;
           }
           await sleep(2000);
@@ -3679,7 +3688,10 @@ export class Connection {
           if (status == null) {
             break;
           }
-          if (status.context.slot < minContextSlot) {
+          if (
+            status.context.slot <
+            (outcome.slotInWhichNonceDidAdvance ?? minContextSlot)
+          ) {
             await sleep(400);
             continue;
           }
