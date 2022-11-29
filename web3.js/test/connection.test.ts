@@ -21,6 +21,7 @@ import {
   Message,
   AddressLookupTableProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
+  NONCE_ACCOUNT_LENGTH,
 } from '../src';
 import invariant from '../src/utils/assert';
 import {MOCK_PORT, url} from './url';
@@ -53,9 +54,11 @@ import {
   mockRpcMessage,
 } from './mocks/rpc-websockets';
 import {
+  NonceInformation,
   TransactionInstruction,
   TransactionSignature,
   TransactionExpiredBlockheightExceededError,
+  TransactionExpiredNonceInvalidError,
   TransactionExpiredTimeoutError,
 } from '../src/transaction';
 import type {
@@ -69,6 +72,33 @@ import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
 use(sinonChai);
+
+async function mockNonceAccountResponse(
+  nonceAccountPubkey: string,
+  nonceValue: string,
+  nonceAuthority: string,
+  slot?: number,
+) {
+  const mockNonceAccountData = Buffer.alloc(NONCE_ACCOUNT_LENGTH);
+  mockNonceAccountData.fill(0);
+  // Authority starts after 4 version bytes and 4 state bytes.
+  mockNonceAccountData.set(bs58.decode(nonceAuthority), 4 + 4);
+  // Nonce hash starts 32 bytes after the authority.
+  mockNonceAccountData.set(bs58.decode(nonceValue), 4 + 4 + 32);
+  await mockRpcResponse({
+    method: 'getAccountInfo',
+    params: [nonceAccountPubkey, {encoding: 'base64'}],
+    value: {
+      owner: SystemProgram.programId.toBase58(),
+      lamports: LAMPORTS_PER_SOL,
+      data: [mockNonceAccountData.toString('base64'), 'base64'],
+      executable: false,
+      rentEpoch: 20,
+    },
+    slot,
+    withContext: true,
+  });
+}
 
 const verifySignatureStatus = (
   status: SignatureStatus | null,
@@ -977,6 +1007,128 @@ describe('Connection', function () {
           );
         }).timeout(60 * 1000);
       });
+
+      describe('nonce-based transaction confirmation', () => {
+        let keypair: Keypair;
+        let minContextSlot: number;
+        let nonceInfo: NonceInformation;
+        let nonceKeypair: Keypair;
+        let transaction: Transaction;
+
+        beforeEach(async function () {
+          this.timeout(60 * 1000);
+          keypair = Keypair.generate();
+          nonceKeypair = Keypair.generate();
+          const [
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            _,
+            blockhash,
+            minimumNonceAccountRentLamports,
+          ] = await Promise.all([
+            connection.confirmTransaction(
+              await connection.requestAirdrop(
+                keypair.publicKey,
+                LAMPORTS_PER_SOL,
+              ),
+            ),
+            helpers.latestBlockhash({connection}),
+            connection.getMinimumBalanceForRentExemption(NONCE_ACCOUNT_LENGTH),
+          ]);
+          const createNonceAccountTransaction =
+            SystemProgram.createNonceAccount({
+              authorizedPubkey: keypair.publicKey,
+              fromPubkey: keypair.publicKey,
+              lamports: minimumNonceAccountRentLamports,
+              noncePubkey: nonceKeypair.publicKey,
+            });
+          createNonceAccountTransaction.recentBlockhash = blockhash.blockhash;
+          createNonceAccountTransaction.feePayer = keypair.publicKey;
+          const createNonceAccountTransactionSignature =
+            await connection.sendTransaction(createNonceAccountTransaction, [
+              keypair,
+              nonceKeypair,
+            ]);
+          const {context} = await connection.confirmTransaction({
+            ...blockhash,
+            signature: createNonceAccountTransactionSignature,
+          });
+          minContextSlot = context.slot;
+          const nonceAccount = await connection.getNonce(
+            nonceKeypair.publicKey,
+            {minContextSlot},
+          );
+          nonceInfo = {
+            nonce: nonceAccount!.nonce,
+            nonceInstruction: SystemProgram.nonceAdvance({
+              authorizedPubkey: keypair.publicKey,
+              noncePubkey: nonceKeypair.publicKey,
+            }),
+          };
+          invariant(
+            nonceAccount,
+            'Expected a nonce account to have been created in the test setup',
+          );
+          const ix = new TransactionInstruction({
+            keys: [
+              {
+                pubkey: keypair.publicKey,
+                isSigner: true,
+                isWritable: true,
+              },
+            ],
+            programId: new PublicKey(
+              'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+            ),
+            data: Buffer.from('Hello world', 'utf8'),
+          });
+          transaction = new Transaction({minContextSlot, nonceInfo});
+          transaction.add(ix);
+          transaction.sign(keypair);
+        });
+
+        it('confirms transactions using the durable nonce strategy', async () => {
+          const signature = await connection.sendTransaction(transaction, [
+            keypair,
+          ]);
+          const result = await connection.confirmTransaction(
+            {
+              minContextSlot,
+              nonceAccountPubkey: nonceKeypair.publicKey,
+              nonceValue: nonceInfo.nonce,
+              signature,
+            },
+            'processed',
+          );
+          expect(result.value).to.have.property('err', null);
+        }).timeout(60 * 1000);
+
+        it('throws when confirming using a nonce that is no longer valid', async () => {
+          // Advance the nonce.
+          const blockhash = await connection.getLatestBlockhash();
+          await sendAndConfirmTransaction(
+            connection,
+            new Transaction({feePayer: keypair.publicKey, ...blockhash}).add(
+              nonceInfo.nonceInstruction,
+            ),
+            [keypair],
+          );
+          const [currentSlot, signature] = await Promise.all([
+            connection.getSlot(),
+            connection.sendTransaction(transaction, [keypair], {
+              skipPreflight: true,
+            }),
+          ]);
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: currentSlot,
+            nonceAccountPubkey: nonceKeypair.publicKey,
+            nonceValue: nonceInfo.nonce, // The old nonce.
+            signature,
+          });
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
+        }).timeout(60 * 1000);
+      });
     });
   }
 
@@ -991,148 +1143,508 @@ describe('Connection', function () {
         clock.restore();
       });
 
-      it('confirm transaction - timeout expired', async () => {
-        const mockSignature =
-          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+      describe('timeout strategy (deprecated)', () => {
+        it('throws a `TransactionExpiredTimeoutError` when the timer elapses without a signature confirmation', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
 
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise(() => {}),
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}),
+          });
+          const timeoutPromise = connection.confirmTransaction(mockSignature);
+
+          // Advance the clock past all waiting timers, notably the expiry timer.
+          clock.runAllAsync();
+
+          await expect(timeoutPromise).to.be.rejectedWith(
+            TransactionExpiredTimeoutError,
+          );
         });
-        const timeoutPromise = connection.confirmTransaction(mockSignature);
-
-        // Advance the clock past all waiting timers, notably the expiry timer.
-        clock.runAllAsync();
-
-        await expect(timeoutPromise).to.be.rejectedWith(
-          TransactionExpiredTimeoutError,
-        );
       });
 
-      it('confirm transaction - block height exceeded', async () => {
-        const mockSignature =
-          '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
+      describe('block height strategy', () => {
+        it('throws a `TransactionExpiredBlockheightExceededError` when the block height advances past the last valid one for this transaction without a signature confirmation', async () => {
+          const mockSignature =
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
 
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise(() => {}), // Never resolve this = never get a response.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const lastValidBlockHeight = 3;
+
+          // Start the block height at `lastValidBlockHeight - 1`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight - 1,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Advance the block height to the `lastValidBlockHeight`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Advance the block height to `lastValidBlockHeight + 1`,
+          // past the last valid blockheight for this transaction.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight + 1,
+          });
+          clock.runAllAsync();
+          await expect(confirmationPromise).to.be.rejectedWith(
+            TransactionExpiredBlockheightExceededError,
+          );
         });
 
-        const lastValidBlockHeight = 3;
+        it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-        // Start the block height at `lastValidBlockHeight - 1`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight - 1,
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          // Simulate a failure to fetch the block height.
+          let rejectBlockheightPromise: () => void;
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: (() => {
+              const p = new Promise((_, reject) => {
+                rejectBlockheightPromise = reject;
+              });
+              p.catch(() => {});
+              return p;
+            })(),
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight: 3,
+          });
+
+          rejectBlockheightPromise();
+          clock.runToLastAsync();
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          expect(confirmationPromise).not.to.eventually.be.rejected;
         });
 
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight,
-        });
-        clock.runAllAsync();
+        it('confirms the transaction if the signature confirmation is received before the block height is exceeded', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-        // Advance the block height to the `lastValidBlockHeight`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight,
-        });
-        clock.runAllAsync();
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
 
-        // Advance the block height to `lastValidBlockHeight + 1`,
-        // past the last valid blockheight for this transaction.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight + 1,
+          const lastValidBlockHeight = 3;
+
+          // Advance the block height to the `lastValidBlockHeight`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Return a signature result in the nick of time.
+          resolveResultPromise({err: null});
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
-        clock.runAllAsync();
-        await expect(confirmationPromise).to.be.rejectedWith(
-          TransactionExpiredBlockheightExceededError,
-        );
       });
 
-      it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
-        const mockSignature =
-          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+      describe('nonce strategy', () => {
+        it('confirms the transaction if the signature confirmation is received before the nonce is advanced', async () => {
+          const mockSignature =
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
 
-        let resolveResultPromise: (result: SignatureResult) => void;
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise<SignatureResult>(resolve => {
-            resolveResultPromise = resolve;
-          }),
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          // Start with the nonce account matching the nonce used to sign the transaction.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            nonceValue,
+            authority.toBase58(),
+          );
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+
+          // Respond, a second time, with the same nonce hash.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            nonceValue,
+            authority.toBase58(),
+          );
+          clock.runAllAsync();
+
+          // Return a signature result in the nick of time.
+          resolveResultPromise({err: null});
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
 
-        // Simulate a failure to fetch the block height.
-        let rejectBlockheightPromise: () => void;
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: (() => {
-            const p = new Promise((_, reject) => {
-              rejectBlockheightPromise = reject;
-            });
-            p.catch(() => {});
-            return p;
-          })(),
+        it('succeeds if double-checking the signature after the nonce-advances demonstrates that the transaction is confirmed', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'finalized', // Demonstrate that the transaction is, in fact, confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
 
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight: 3,
+        it('keeps double-checking the signature after the nonce-advances until a signature from the minimum allowable slot is obtained', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 11,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+
+          // Simulate getting a response from an old slot.
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // A non-finalized value from an old slot.
+                slot: 10,
+              },
+            ],
+            slot: 10,
+            withContext: true,
+          });
+
+          // Then obtain a response from the minimum allowable slot.
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 32,
+                confirmationStatus: 'finalized', // Demonstrate that the transaction is, in fact, confirmed.
+                slot: 11,
+              },
+            ],
+            slot: 11,
+            withContext: true,
+          });
+          clock.runAllAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
 
-        rejectBlockheightPromise();
-        clock.runToLastAsync();
-        resolveResultPromise({err: null});
-        clock.runToLastAsync();
+        it('throws a `TransactionExpiredNonceInvalidError` when the nonce is no longer the one with which this transaction was signed', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-        expect(confirmationPromise).not.to.eventually.be.rejected;
-      });
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
 
-      it('confirm transaction - block height confirmed', async () => {
-        const mockSignature =
-          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
 
-        let resolveResultPromise: (result: SignatureResult) => void;
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise<SignatureResult>(resolve => {
-            resolveResultPromise = resolve;
-          }),
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // Demonstrate that the transaction is, in fact, not confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
         });
 
-        const lastValidBlockHeight = 3;
+        it('when fetching the nonce account throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-        // Advance the block height to the `lastValidBlockHeight`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight,
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          // Simulate a failure to fetch the nonce account.
+          let rejectNonceAccountFetchPromise: () => void;
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [],
+            value: (() => {
+              const p = new Promise((_, reject) => {
+                rejectNonceAccountFetchPromise = reject;
+              });
+              p.catch(() => {});
+              return p;
+            })(),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          rejectNonceAccountFetchPromise();
+          clock.runToLastAsync();
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
 
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight,
+        it('throws `TransactionExpiredNonceInvalidError` when the nonce account does not exist', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate a non-existent nonce account.
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [],
+            value: null,
+            withContext: true,
+          });
+          clock.runToLastAsync();
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // Demonstrate that the transaction is, in fact, not confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
         });
-        clock.runAllAsync();
 
-        // Return a signature result in the nick of time.
-        resolveResultPromise({err: null});
+        it('when the nonce account data fails to deserialize', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
 
-        await expect(confirmationPromise).to.eventually.deep.equal({
-          context: {slot: 11},
-          value: {err: null},
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          // Simulate a failure to deserialize the nonce.
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [nonceAccountPubkey.toBase58(), {encoding: 'base64'}],
+            value: {
+              owner: SystemProgram.programId.toBase58(),
+              lamports: LAMPORTS_PER_SOL,
+              data: ['JUNK_DATA', 'base64'],
+              executable: false,
+              rentEpoch: 20,
+            },
+            withContext: true,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+          clock.runToLastAsync();
+
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
         });
       });
 

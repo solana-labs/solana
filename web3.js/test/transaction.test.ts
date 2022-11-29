@@ -732,6 +732,28 @@ describe('Transaction', () => {
     expect(transaction.lastValidBlockHeight).to.eq(lastValidBlockHeight);
   });
 
+  it('constructs a transaction with nonce information', () => {
+    const nonceAuthority = new PublicKey(1);
+    const nonceAccountPubkey = new PublicKey(2);
+    const nonceValue = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
+    const nonceInfo = {
+      nonce: nonceValue,
+      nonceInstruction: SystemProgram.nonceAdvance({
+        noncePubkey: nonceAccountPubkey,
+        authorizedPubkey: nonceAuthority,
+      }),
+    };
+    const minContextSlot = 1234;
+    const transaction = new Transaction({
+      nonceInfo,
+      minContextSlot,
+    });
+    expect(transaction.recentBlockhash).to.be.undefined;
+    expect(transaction.lastValidBlockHeight).to.be.undefined;
+    expect(transaction.minNonceContextSlot).to.eq(minContextSlot);
+    expect(transaction.nonceInfo).to.eq(nonceInfo);
+  });
+
   it('constructs a transaction with only a recent blockhash', () => {
     const recentBlockhash = 'EETubP5AKHgjPAhzPAFcb8BAY1hMH639CWCFTqi3hq1k';
     const transaction = new Transaction({
