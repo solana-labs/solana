@@ -1180,4 +1180,14 @@ impl ProgramTestContext {
         self.last_blockhash = bank.last_blockhash();
         Ok(())
     }
+
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
+        let blockhash = self
+            .banks_client
+            .get_new_latest_blockhash(&self.last_blockhash)
+            .await?;
+        self.last_blockhash = blockhash;
+        Ok(blockhash)
+    }
 }
