@@ -2991,8 +2991,7 @@ pub mod rpc_bank {
 }
 
 // RPC interface that depends on AccountsDB
-// Expected to be provided by API nodes, but collected for easy separation and offloading to
-// accounts replica nodes in the future.
+// Expected to be provided by API nodes
 pub mod rpc_accounts {
     use super::*;
     #[rpc]
@@ -3015,42 +3014,12 @@ pub mod rpc_accounts {
             config: Option<RpcAccountInfoConfig>,
         ) -> Result<RpcResponse<Vec<Option<UiAccount>>>>;
 
-        #[rpc(meta, name = "getProgramAccounts")]
-        fn get_program_accounts(
-            &self,
-            meta: Self::Metadata,
-            program_id_str: String,
-            config: Option<RpcProgramAccountsConfig>,
-        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
-
-        #[rpc(meta, name = "getSecondaryIndexKeySize")]
-        fn get_secondary_index_key_size(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>>;
-
         #[rpc(meta, name = "getBlockCommitment")]
         fn get_block_commitment(
             &self,
             meta: Self::Metadata,
             block: Slot,
         ) -> Result<RpcBlockCommitment<BlockCommitmentArray>>;
-
-        #[rpc(meta, name = "getLargestAccounts")]
-        fn get_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcLargestAccountsConfig>,
-        ) -> Result<RpcResponse<Vec<RpcAccountBalance>>>;
-
-        #[rpc(meta, name = "getSupply")]
-        fn get_supply(
-            &self,
-            meta: Self::Metadata,
-            config: Option<RpcSupplyConfig>,
-        ) -> Result<RpcResponse<RpcSupply>>;
 
         #[rpc(meta, name = "getStakeActivation")]
         fn get_stake_activation(
@@ -3079,32 +3048,6 @@ pub mod rpc_accounts {
             mint_str: String,
             commitment: Option<CommitmentConfig>,
         ) -> Result<RpcResponse<UiTokenAmount>>;
-
-        #[rpc(meta, name = "getTokenLargestAccounts")]
-        fn get_token_largest_accounts(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>>;
-
-        #[rpc(meta, name = "getTokenAccountsByOwner")]
-        fn get_token_accounts_by_owner(
-            &self,
-            meta: Self::Metadata,
-            owner_str: String,
-            token_account_filter: RpcTokenAccountsFilter,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
-
-        #[rpc(meta, name = "getTokenAccountsByDelegate")]
-        fn get_token_accounts_by_delegate(
-            &self,
-            meta: Self::Metadata,
-            delegate_str: String,
-            token_account_filter: RpcTokenAccountsFilter,
-            config: Option<RpcAccountInfoConfig>,
-        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
     }
 
     pub struct AccountsDataImpl;
@@ -3149,6 +3092,132 @@ pub mod rpc_accounts {
                 .collect::<Result<Vec<_>>>()?;
             meta.get_multiple_accounts(pubkeys, config)
         }
+
+        fn get_block_commitment(
+            &self,
+            meta: Self::Metadata,
+            block: Slot,
+        ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
+            debug!("get_block_commitment rpc request received");
+            Ok(meta.get_block_commitment(block))
+        }
+
+        fn get_stake_activation(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcEpochConfig>,
+        ) -> Result<RpcStakeActivation> {
+            debug!(
+                "get_stake_activation rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.get_stake_activation(&pubkey, config)
+        }
+
+        fn get_token_account_balance(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<UiTokenAmount>> {
+            debug!(
+                "get_token_account_balance rpc request received: {:?}",
+                pubkey_str
+            );
+            let pubkey = verify_pubkey(&pubkey_str)?;
+            meta.get_token_account_balance(&pubkey, commitment)
+        }
+
+        fn get_token_supply(
+            &self,
+            meta: Self::Metadata,
+            mint_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<UiTokenAmount>> {
+            debug!("get_token_supply rpc request received: {:?}", mint_str);
+            let mint = verify_pubkey(&mint_str)?;
+            meta.get_token_supply(&mint, commitment)
+        }
+    }
+}
+
+// RPC interface that depends on AccountsDB and requires accounts scan
+// Expected to be provided by API nodes for now, but collected for easy separation and removal in
+// the future.
+pub mod rpc_accounts_scan {
+    use super::*;
+    #[rpc]
+    pub trait AccountsScan {
+        type Metadata;
+
+        #[rpc(meta, name = "getProgramAccounts")]
+        fn get_program_accounts(
+            &self,
+            meta: Self::Metadata,
+            program_id_str: String,
+            config: Option<RpcProgramAccountsConfig>,
+        ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
+
+        // This method does not itself do an accounts scan, but returns data only relevant to nodes
+        // that do support accounts-scan RPC apis
+        #[rpc(meta, name = "getSecondaryIndexKeySize")]
+        fn get_secondary_index_key_size(
+            &self,
+            meta: Self::Metadata,
+            pubkey_str: String,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>>;
+
+        #[rpc(meta, name = "getLargestAccounts")]
+        fn get_largest_accounts(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcLargestAccountsConfig>,
+        ) -> Result<RpcResponse<Vec<RpcAccountBalance>>>;
+
+        #[rpc(meta, name = "getSupply")]
+        fn get_supply(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcSupplyConfig>,
+        ) -> Result<RpcResponse<RpcSupply>>;
+
+        // SPL Token-specific RPC endpoints
+        // See https://github.com/solana-labs/solana-program-library/releases/tag/token-v2.0.0 for
+        // program details
+
+        #[rpc(meta, name = "getTokenLargestAccounts")]
+        fn get_token_largest_accounts(
+            &self,
+            meta: Self::Metadata,
+            mint_str: String,
+            commitment: Option<CommitmentConfig>,
+        ) -> Result<RpcResponse<Vec<RpcTokenAccountBalance>>>;
+
+        #[rpc(meta, name = "getTokenAccountsByOwner")]
+        fn get_token_accounts_by_owner(
+            &self,
+            meta: Self::Metadata,
+            owner_str: String,
+            token_account_filter: RpcTokenAccountsFilter,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
+
+        #[rpc(meta, name = "getTokenAccountsByDelegate")]
+        fn get_token_accounts_by_delegate(
+            &self,
+            meta: Self::Metadata,
+            delegate_str: String,
+            token_account_filter: RpcTokenAccountsFilter,
+            config: Option<RpcAccountInfoConfig>,
+        ) -> Result<RpcResponse<Vec<RpcKeyedAccount>>>;
+    }
+
+    pub struct AccountsScanImpl;
+    impl AccountsScan for AccountsScanImpl {
+        type Metadata = JsonRpcRequestProcessor;
 
         fn get_program_accounts(
             &self,
@@ -3196,15 +3265,6 @@ pub mod rpc_accounts {
             meta.get_secondary_index_key_size(&index_key, config)
         }
 
-        fn get_block_commitment(
-            &self,
-            meta: Self::Metadata,
-            block: Slot,
-        ) -> Result<RpcBlockCommitment<BlockCommitmentArray>> {
-            debug!("get_block_commitment rpc request received");
-            Ok(meta.get_block_commitment(block))
-        }
-
         fn get_largest_accounts(
             &self,
             meta: Self::Metadata,
@@ -3221,45 +3281,6 @@ pub mod rpc_accounts {
         ) -> Result<RpcResponse<RpcSupply>> {
             debug!("get_supply rpc request received");
             Ok(meta.get_supply(config)?)
-        }
-
-        fn get_stake_activation(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcEpochConfig>,
-        ) -> Result<RpcStakeActivation> {
-            debug!(
-                "get_stake_activation rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_stake_activation(&pubkey, config)
-        }
-
-        fn get_token_account_balance(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>> {
-            debug!(
-                "get_token_account_balance rpc request received: {:?}",
-                pubkey_str
-            );
-            let pubkey = verify_pubkey(&pubkey_str)?;
-            meta.get_token_account_balance(&pubkey, commitment)
-        }
-
-        fn get_token_supply(
-            &self,
-            meta: Self::Metadata,
-            mint_str: String,
-            commitment: Option<CommitmentConfig>,
-        ) -> Result<RpcResponse<UiTokenAmount>> {
-            debug!("get_token_supply rpc request received: {:?}", mint_str);
-            let mint = verify_pubkey(&mint_str)?;
-            meta.get_token_supply(&mint, commitment)
         }
 
         fn get_token_largest_accounts(
@@ -4652,7 +4673,8 @@ pub fn populate_blockstore_for_tests(
 pub mod tests {
     use {
         super::{
-            rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_9::*, rpc_full::*, rpc_minimal::*, *,
+            rpc_accounts::*, rpc_accounts_scan::*, rpc_bank::*, rpc_deprecated_v1_9::*,
+            rpc_full::*, rpc_minimal::*, *,
         },
         crate::{
             optimistically_confirmed_bank_tracker::{
@@ -4843,6 +4865,7 @@ pub mod tests {
             io.extend_with(rpc_minimal::MinimalImpl.to_delegate());
             io.extend_with(rpc_bank::BankDataImpl.to_delegate());
             io.extend_with(rpc_accounts::AccountsDataImpl.to_delegate());
+            io.extend_with(rpc_accounts_scan::AccountsScanImpl.to_delegate());
             io.extend_with(rpc_full::FullImpl.to_delegate());
             io.extend_with(rpc_deprecated_v1_9::DeprecatedV1_9Impl.to_delegate());
             Self {
