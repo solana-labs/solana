@@ -186,6 +186,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of createProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link createProgramAddressSync} instead
    */
   /* eslint-disable require-await */
   static async createProgramAddress(
