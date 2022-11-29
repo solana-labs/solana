@@ -2991,8 +2991,7 @@ pub mod rpc_bank {
 }
 
 // RPC interface that depends on AccountsDB
-// Expected to be provided by API nodes, but collected for easy separation and offloading to
-// accounts replica nodes in the future.
+// Expected to be provided by API nodes
 pub mod rpc_accounts {
     use super::*;
     #[rpc]
