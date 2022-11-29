@@ -69,7 +69,7 @@ export class PublicKey extends Struct {
         this._bn = new BN(value);
       }
 
-      if (this._bn.byteLength() > 32) {
+      if (this._bn.byteLength() > PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
     }
