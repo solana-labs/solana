@@ -19,7 +19,7 @@ use {
         borrow::Borrow,
         convert::TryInto,
         fs::File,
-        io::{BufWriter, Writer},
+        io::{BufWriter, Write},
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
@@ -51,19 +51,37 @@ impl MMapAccountHashesFile {
 }
 
 /// 1 file containing account hashes sorted by pubkey
+#[derive(Default)]
 pub struct AccountHashesFile {
     /// an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    file: Option<File>,
+    writer: Option<BufWriter<File>>,
     /// # hashes in the file
     count: usize,
 }
 
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
-    fn get_reader(&self) -> Option<MMapAccountHashesFile> {
-        self.file.as_ref().map(|file| MMapAccountHashesFile {
-            mmap: unsafe { MmapMut::map_mut(file).unwrap() },
+    fn get_reader(&mut self) -> Option<MMapAccountHashesFile> {
+        std::mem::take(&mut self.writer).map(|writer| {
+            let file = Some(writer.into_inner().unwrap());
+            MMapAccountHashesFile {
+                mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
+            }
         })
+    }
+
+    /// write 'hash' to the file
+    /// If the file isn't open, create it first.
+    pub fn write(&mut self, hash: &Hash) {
+        if self.writer.is_none() {
+            // we have hashes to write but no file yet, so create a file that will auto-delete on drop
+            self.writer = Some(BufWriter::new(tempfile().unwrap()));
+        }
+        assert_eq!(
+            std::mem::size_of::<Hash>(),
+            self.writer.as_mut().unwrap().write(hash.as_ref()).unwrap()
+        );
+        self.count += 1;
     }
 }
 
@@ -373,9 +391,9 @@ pub struct CumulativeHashesFromFiles {
 impl CumulativeHashesFromFiles {
     /// Calculate offset from overall index to which file and offset within that file based on the length of each hash file.
     /// Also collect readers to access the data.
-    pub fn from_files(hashes: &[AccountHashesFile]) -> Self {
+    pub fn from_files(hashes: Vec<AccountHashesFile>) -> Self {
         let mut readers = Vec::with_capacity(hashes.len());
-        let cumulative = CumulativeOffsets::new(hashes.iter().filter_map(|hash_file| {
+        let cumulative = CumulativeOffsets::new(hashes.into_iter().filter_map(|mut hash_file| {
             // ignores all hashfiles that have zero entries
             (hash_file.count > 0).then(|| {
                 readers.push(hash_file.get_reader().unwrap());
@@ -957,7 +975,7 @@ impl AccountsHasher {
         // map from index of an item in first_items[] to index of the corresponding item in pubkey_division[]
         // this will change as items in pubkey_division[] are exhausted
         let mut first_item_to_pubkey_division = Vec::with_capacity(len);
-        let mut writer = None;
+        let mut hashes = AccountHashesFile::default();
         // initialize 'first_items', which holds the current lowest item in each slot group
         pubkey_division.iter().enumerate().for_each(|(i, bins)| {
             // check to make sure we can do bins[pubkey_bin]
@@ -973,7 +991,6 @@ impl AccountsHasher {
         let mut overall_sum = 0;
         let mut duplicate_pubkey_indexes = Vec::with_capacity(len);
         let filler_accounts_enabled = self.filler_accounts_enabled();
-        let mut count = 0;
 
         // this loop runs once per unique pubkey contained in any slot group
         while !first_items.is_empty() {
@@ -1021,15 +1038,7 @@ impl AccountsHasher {
                 overall_sum = Self::checked_cast_for_capitalization(
                     item.lamports as u128 + overall_sum as u128,
                 );
-                if writer.is_none() {
-                    // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-                    writer = Some(BufWriter::new(tempfile().unwrap()));
-                }
-                assert_eq!(
-                    std::mem::size_of::<Hash>(),
-                    writer.as_mut().unwrap().write(item.hash.as_ref()).unwrap()
-                );
-                count += 1;
+                hashes.write(&item.hash);
             }
             if !duplicate_pubkey_indexes.is_empty() {
                 // skip past duplicate keys in earlier slots
@@ -1048,14 +1057,7 @@ impl AccountsHasher {
                 duplicate_pubkey_indexes.clear();
             }
         }
-        (
-            AccountHashesFile {
-                file: writer.map(|writer| writer.into_inner().unwrap()),
-                count,
-            },
-            overall_sum,
-            unreduced_count,
-        )
+        (hashes, overall_sum, unreduced_count)
     }
 
     fn is_filler_account(&self, pubkey: &Pubkey) -> bool {
@@ -1080,7 +1082,7 @@ impl AccountsHasher {
             PUBKEY_BINS_FOR_CALCULATING_HASHES,
         );
 
-        let cumulative = CumulativeHashesFromFiles::from_files(&hashes);
+        let cumulative = CumulativeHashesFromFiles::from_files(hashes);
 
         let mut hash_time = Measure::start("hash");
         let (hash, _) = Self::compute_merkle_root_from_slices(
