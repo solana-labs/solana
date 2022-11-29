@@ -2707,11 +2707,13 @@ fn main() {
                     arg_matches.is_present("no_os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
-                    !no_os_memory_stats_reporting,
-                    false,
-                    false,
-                    false,
-                    false,
+                    SystemMonitorStatsReportConfig {
+                        report_os_memory_stats: !no_os_memory_stats_reporting,
+                        report_os_network_stats: false,
+                        report_os_cpu_stats: false,
+                        report_os_disk_stats: false,
+                        report_os_open_fd_stats: false,
+                    },
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
