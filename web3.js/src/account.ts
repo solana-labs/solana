@@ -23,7 +23,7 @@ export class Account {
    *
    * @param secretKey Secret key for the account
    */
-  constructor(secretKey?: Buffer | Uint8Array | Array<number>) {
+  constructor(secretKey?: Uint8Array | Array<number>) {
     if (secretKey) {
       const secretKeyBuffer = toBuffer(secretKey);
       if (secretKey.length !== 64) {
