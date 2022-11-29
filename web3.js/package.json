@@ -79,7 +79,6 @@
     "@babel/plugin-transform-runtime": "^7.12.10",
     "@babel/preset-env": "^7.12.11",
     "@babel/preset-typescript": "^7.12.16",
-    "@babel/register": "^7.12.13",
     "@commitlint/config-conventional": "^17.0.2",
     "@rollup/plugin-alias": "^3.1.9",
     "@rollup/plugin-babel": "^5.2.3",
