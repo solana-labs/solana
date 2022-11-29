@@ -76,7 +76,7 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Returns a unique PublicKey for tests and benchmarks using acounter
+   * Returns a unique PublicKey for tests and benchmarks using a counter
    */
   static unique(): PublicKey {
     const key = new PublicKey(uniquePublicKeyCounter);
