@@ -4,10 +4,7 @@
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
-    crate::{
-        accounts_db::FoundStoredAccount,
-        append_vec::{AppendVec, StoredAccountMeta},
-    },
+    crate::{accounts_db::FoundStoredAccount, append_vec::AppendVec},
     solana_sdk::clock::Slot,
 };
 
@@ -25,7 +22,7 @@ pub enum StorageSelector {
 /// We need 1-2 of these slices constructed based on available bytes and individual account sizes.
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
-    accounts: Vec<&'a StoredAccountMeta<'a>>,
+    accounts: &'a [&'a FoundStoredAccount<'a>],
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
@@ -37,26 +34,22 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        stored_accounts: &'a [&'a FoundStoredAccount<'a>],
+        accounts: &'a [&'a FoundStoredAccount<'a>],
         slot: Slot,
     ) -> Self {
-        let num_accounts = stored_accounts.len();
-        let mut accounts = Vec::with_capacity(num_accounts);
+        let num_accounts = accounts.len();
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
-        stored_accounts.iter().for_each(|account| {
+        for (i, account) in accounts.iter().enumerate() {
             let account_size = account.account.stored_size as u64;
             if available_bytes >= account_size {
                 available_bytes = available_bytes.saturating_sub(account_size);
             } else if index_first_item_overflow == num_accounts {
-                available_bytes = 0;
                 // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
-                index_first_item_overflow = accounts.len();
+                index_first_item_overflow = i;
+                break;
             }
-            // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
-            // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
-            accounts.push(&account.account);
-        });
+        }
         Self {
             accounts,
             index_first_item_overflow,
@@ -70,7 +63,7 @@ impl<'a> AccountsToStore<'a> {
     }
 
     /// get the accounts to store in the given 'storage'
-    pub fn get(&self, storage: StorageSelector) -> &[&'a StoredAccountMeta<'a>] {
+    pub fn get(&self, storage: StorageSelector) -> &[&'a FoundStoredAccount<'a>] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
@@ -99,7 +92,7 @@ pub mod tests {
         super::*,
         crate::{
             accounts_db::{get_temp_accounts_paths, AppendVecId},
-            append_vec::{AccountMeta, StoredMeta},
+            append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
         },
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
@@ -162,7 +155,7 @@ pub mod tests {
             let accounts_to_store = AccountsToStore::new(available_bytes as u64, &map, slot);
             let accounts = accounts_to_store.get(selector);
             assert_eq!(
-                accounts,
+                accounts.iter().map(|b| &b.account).collect::<Vec<_>>(),
                 map.iter().map(|b| &b.account).collect::<Vec<_>>(),
                 "mismatch"
             );
