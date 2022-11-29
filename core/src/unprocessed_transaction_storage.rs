@@ -19,10 +19,13 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, saturating_add_assign,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, hash::Hash, saturating_add_assign,
         transaction::SanitizedTransaction,
     },
-    std::sync::{atomic::Ordering, Arc},
+    std::{
+        collections::HashMap,
+        sync::{atomic::Ordering, Arc},
+    },
 };
 
 // Step-size set to be 64, equal to the maximum batch/entry size. With the
@@ -132,6 +135,7 @@ pub struct ConsumeScannerPayload<'a> {
     pub account_locks: ReadWriteAccountSet,
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+    pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket>,
 }
 
 fn consume_scan_should_process_packet(
@@ -174,6 +178,9 @@ fn consume_scan_should_process_packet(
         )
         .is_err()
         {
+            payload
+                .message_hash_to_transaction
+                .remove(packet.message_hash());
             ProcessingDecision::Never
         } else if payload.account_locks.try_locking(message) {
             payload.sanitized_transactions.push(sanitized_transaction);
@@ -182,6 +189,9 @@ fn consume_scan_should_process_packet(
             ProcessingDecision::Later
         }
     } else {
+        payload
+            .message_hash_to_transaction
+            .remove(packet.message_hash());
         ProcessingDecision::Never
     }
 }
@@ -189,6 +199,7 @@ fn consume_scan_should_process_packet(
 fn create_consume_multi_iterator<'a, 'b, F>(
     packets: &'a [Arc<ImmutableDeserializedPacket>],
     slot_metrics_tracker: &'b mut LeaderSlotMetricsTracker,
+    message_hash_to_transaction: &'b mut HashMap<Hash, DeserializedPacket>,
     should_process_packet: F,
 ) -> MultiIteratorScanner<'a, Arc<ImmutableDeserializedPacket>, ConsumeScannerPayload<'b>, F>
 where
@@ -203,6 +214,7 @@ where
         account_locks: ReadWriteAccountSet::default(),
         sanitized_transactions: Vec::with_capacity(UNPROCESSED_BUFFER_STEP_SIZE),
         slot_metrics_tracker,
+        message_hash_to_transaction,
     };
     MultiIteratorScanner::new(
         packets,
@@ -333,7 +345,7 @@ impl UnprocessedTransactionStorage {
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         processing_function: F,
-    ) -> ConsumeScannerPayload<'a>
+    ) -> bool
     where
         F: FnMut(
             &Vec<Arc<ImmutableDeserializedPacket>>,
@@ -417,13 +429,14 @@ impl VoteStorage {
         FilterForwardingResults::default()
     }
 
+    // returns `true` if the end of slot is reached
     fn process_packets<'a, F>(
         &mut self,
         bank: Arc<Bank>,
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         mut processing_function: F,
-    ) -> ConsumeScannerPayload<'a>
+    ) -> bool
     where
         F: FnMut(
             &Vec<Arc<ImmutableDeserializedPacket>>,
@@ -445,9 +458,13 @@ impl VoteStorage {
         let all_vote_packets = self
             .latest_unprocessed_votes
             .drain_unprocessed(bank.clone());
+
+        // vote storage does not have a message hash map, so pass in an empty one
+        let mut dummy_message_hash_to_transaction = HashMap::new();
         let mut scanner = create_consume_multi_iterator(
             &all_vote_packets,
             slot_metrics_tracker,
+            &mut dummy_message_hash_to_transaction,
             should_process_packet,
         );
 
@@ -472,7 +489,7 @@ impl VoteStorage {
             }
         }
 
-        scanner.finalize()
+        scanner.finalize().reached_end_of_slot
     }
 }
 
@@ -629,7 +646,8 @@ impl ThreadLocalUnprocessedPackets {
                                     &accepted_packet_indexes,
                                 );
 
-                            self.collect_retained_packets(
+                            Self::collect_retained_packets(
+                                &mut self.unprocessed_packet_batches.message_hash_to_transaction,
                                 &packets_to_forward,
                                 &Self::prepare_filtered_packet_indexes(
                                     &transaction_to_packet_indexes,
@@ -807,11 +825,15 @@ impl ThreadLocalUnprocessedPackets {
     }
 
     fn collect_retained_packets(
-        &mut self,
+        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket>,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         retained_packet_indexes: &[usize],
     ) -> Vec<Arc<ImmutableDeserializedPacket>> {
-        self.remove_non_retained_packets(packets_to_process, retained_packet_indexes);
+        Self::remove_non_retained_packets(
+            message_hash_to_transaction,
+            packets_to_process,
+            retained_packet_indexes,
+        );
         retained_packet_indexes
             .iter()
             .map(|i| packets_to_process[*i].clone())
@@ -821,7 +843,7 @@ impl ThreadLocalUnprocessedPackets {
     /// remove packets from UnprocessedPacketBatches.message_hash_to_transaction after they have
     /// been removed from UnprocessedPacketBatches.packet_priority_queue
     fn remove_non_retained_packets(
-        &mut self,
+        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket>,
         packets_to_process: &[Arc<ImmutableDeserializedPacket>],
         retained_packet_indexes: &[usize],
     ) {
@@ -831,21 +853,20 @@ impl ThreadLocalUnprocessedPackets {
                 .chain(std::iter::once(&packets_to_process.len())),
             |start, end| {
                 for processed_packet in &packets_to_process[start..end] {
-                    self.unprocessed_packet_batches
-                        .message_hash_to_transaction
-                        .remove(processed_packet.message_hash());
+                    message_hash_to_transaction.remove(processed_packet.message_hash());
                 }
             },
         )
     }
 
+    // returns `true` if reached end of slot
     fn process_packets<'a, F>(
         &mut self,
         bank: &Bank,
         banking_stage_stats: &BankingStageStats,
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         mut processing_function: F,
-    ) -> ConsumeScannerPayload<'a>
+    ) -> bool
     where
         F: FnMut(
             &Vec<Arc<ImmutableDeserializedPacket>>,
@@ -864,6 +885,7 @@ impl ThreadLocalUnprocessedPackets {
         let mut scanner = create_consume_multi_iterator(
             &all_packets_to_process,
             slot_metrics_tracker,
+            &mut self.unprocessed_packet_batches.message_hash_to_transaction,
             should_process_packet,
         );
 
@@ -875,7 +897,11 @@ impl ThreadLocalUnprocessedPackets {
             let retryable_packets = if let Some(retryable_transaction_indexes) =
                 processing_function(&packets_to_process, payload)
             {
-                self.collect_retained_packets(&packets_to_process, &retryable_transaction_indexes)
+                Self::collect_retained_packets(
+                    payload.message_hash_to_transaction,
+                    &packets_to_process,
+                    &retryable_transaction_indexes,
+                )
             } else {
                 packets_to_process
             };
@@ -883,9 +909,12 @@ impl ThreadLocalUnprocessedPackets {
             new_retryable_packets.extend(retryable_packets);
         }
 
+        let reached_end_of_slot = scanner.finalize().reached_end_of_slot;
+
         self.unprocessed_packet_batches.packet_priority_queue = new_retryable_packets;
         self.verify_priority_queue(original_capacity);
-        scanner.finalize()
+
+        reached_end_of_slot
     }
 
     /// Prepare a chunk of packets for forwarding, filter out already forwarded packets while

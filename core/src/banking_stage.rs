@@ -722,7 +722,7 @@ impl BankingStage {
             bank_creation_time,
         }) = bank_start
         {
-            let returned_payload = unprocessed_transaction_storage.process_packets(
+            reached_end_of_slot = unprocessed_transaction_storage.process_packets(
                 working_bank.clone(),
                 banking_stage_stats,
                 slot_metrics_tracker,
@@ -745,8 +745,6 @@ impl BankingStage {
                     )
                 },
             );
-
-            reached_end_of_slot = returned_payload.reached_end_of_slot;
         } else {
             reached_end_of_slot = true;
         }
@@ -3665,6 +3663,78 @@ mod tests {
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(ledger_path.path());
+            let recorder = poh_recorder.read().unwrap().recorder();
+            let num_conflicting_transactions = transactions.len();
+            let deserialized_packets =
+                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
+                    .unwrap();
+            assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
+            let mut buffered_packet_batches =
+                UnprocessedTransactionStorage::new_transaction_storage(
+                    UnprocessedPacketBatches::from_iter(
+                        deserialized_packets.into_iter(),
+                        num_conflicting_transactions,
+                    ),
+                    ThreadType::Transactions,
+                );
+
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            // When the working bank in poh_recorder is None, no packets should be processed
+            assert!(!poh_recorder.read().unwrap().has_bank());
+            let max_tx_processing_ns = std::u128::MAX;
+            BankingStage::consume_buffered_packets(
+                max_tx_processing_ns,
+                &poh_recorder,
+                &mut buffered_packet_batches,
+                &None,
+                &gossip_vote_sender,
+                None::<Box<dyn Fn()>>,
+                &BankingStageStats::default(),
+                &recorder,
+                &QosService::new(1),
+                &mut LeaderSlotMetricsTracker::new(0),
+                None,
+            );
+            assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
+            // When the working bank in poh_recorder is Some, all packets should be processed.
+            // Multi-Iterator will process them 1-by-1 if all txs are conflicting.
+            poh_recorder.write().unwrap().set_bank(&bank, false);
+            BankingStage::consume_buffered_packets(
+                max_tx_processing_ns,
+                &poh_recorder,
+                &mut buffered_packet_batches,
+                &None,
+                &gossip_vote_sender,
+                None::<Box<dyn Fn()>>,
+                &BankingStageStats::default(),
+                &recorder,
+                &QosService::new(1),
+                &mut LeaderSlotMetricsTracker::new(0),
+                None,
+            );
+            assert!(buffered_packet_batches.is_empty());
+            poh_recorder
+                .read()
+                .unwrap()
+                .is_exited
+                .store(true, Ordering::Relaxed);
+            let _ = poh_simulator.join();
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
+    }
+
+    #[test]
+    fn test_consume_buffered_packets_sanitization_error() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let (mut transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
+                setup_conflicting_transactions(ledger_path.path());
+            let duplicate_account_key = transactions[0].message.account_keys[0];
+            transactions[0]
+                .message
+                .account_keys
+                .push(duplicate_account_key); // corrupt transaction
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
