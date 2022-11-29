@@ -722,7 +722,7 @@ impl BankingStage {
             bank_creation_time,
         }) = bank_start
         {
-            let returned_payload = unprocessed_transaction_storage.process_packets(
+            reached_end_of_slot = unprocessed_transaction_storage.process_packets(
                 working_bank.clone(),
                 banking_stage_stats,
                 slot_metrics_tracker,
@@ -745,8 +745,6 @@ impl BankingStage {
                     )
                 },
             );
-
-            reached_end_of_slot = returned_payload.reached_end_of_slot;
         } else {
             reached_end_of_slot = true;
         }
