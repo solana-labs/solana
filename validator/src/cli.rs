@@ -516,7 +516,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
         .arg(
             Arg::with_name("no_os_open_fd_stats_reporting")
                 .long("no-os-open-fd-stats-reporting")
-                .help("Disable reporting of open file descriptors statistics for current process.")
+                .help("Disable reporting of open file descriptor statistics.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
