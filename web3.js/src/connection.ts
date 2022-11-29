@@ -3433,22 +3433,20 @@ export class Connection {
 
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
-    if (
-      Object.prototype.hasOwnProperty.call(strategy, 'lastValidBlockHeight')
-    ) {
-      return await this.confirmTransactionUsingBlockHeightExceedanceStrategy({
-        commitment: commitment || this.commitment,
-        strategy: strategy as BlockheightBasedTransactionConfirmationStrategy,
-      });
-    } else if (Object.prototype.hasOwnProperty.call(strategy, 'nonceValue')) {
-      return await this.confirmTransactionUsingDurableNonceStrategy({
-        commitment: commitment || this.commitment,
-        strategy: strategy as DurableNonceTransactionConfirmationStrategy,
-      });
-    } else {
+    if (typeof strategy === 'string') {
       return await this.confirmTransactionUsingLegacyTimeoutStrategy({
         commitment: commitment || this.commitment,
         signature: rawSignature,
+      });
+    } else if ('lastValidBlockHeight' in strategy) {
+      return await this.confirmTransactionUsingBlockHeightExceedanceStrategy({
+        commitment: commitment || this.commitment,
+        strategy,
+      });
+    } else {
+      return await this.confirmTransactionUsingDurableNonceStrategy({
+        commitment: commitment || this.commitment,
+        strategy,
       });
     }
   }
