@@ -103,6 +103,7 @@ pub mod temporary_pub {
         )
         .await;
         ASYNC_TASK_SEMAPHORE.release();
+        info!("Done sending txn batch");
         handle_send_result(result, connection)
     }
 

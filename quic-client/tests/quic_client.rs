@@ -2,13 +2,19 @@
 mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
+        log::*,
         solana_perf::packet::PacketBatch,
-        solana_quic_client::nonblocking::quic_client::QuicLazyInitializedEndpoint,
+        solana_quic_client::nonblocking::quic_client::{
+            QuicClientCertificate, QuicLazyInitializedEndpoint,
+        },
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
-        solana_streamer::{quic::StreamStats, streamer::StakedNodes},
+        solana_streamer::{
+            quic::StreamStats, streamer::StakedNodes,
+            tls_certificates::new_self_signed_tls_certificate_chain,
+        },
         solana_tpu_client::connection_cache_stats::ConnectionCacheStats,
         std::{
-            net::{IpAddr, SocketAddr, UdpSocket},
+            net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
             sync::{
                 atomic::{AtomicBool, Ordering},
                 Arc, RwLock,
@@ -68,7 +74,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip, stats) = server_args();
-        let t = solana_streamer::quic::spawn_server(
+        let (_, t) = solana_streamer::quic::spawn_server(
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -103,6 +109,7 @@ mod tests {
         check_packets(receiver, num_bytes, num_expected_packets);
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
+        info!("Passed test_quic_client_multiple_writes");
     }
 
     #[tokio::test]
@@ -115,7 +122,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip, stats) = server_args();
-        let t = solana_streamer::nonblocking::quic::spawn_server(
+        let (_, t) = solana_streamer::nonblocking::quic::spawn_server(
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -150,5 +157,122 @@ mod tests {
         check_packets(receiver, num_bytes, num_expected_packets);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+    }
+
+    #[test]
+    fn test_quic_bi_direction() {
+        use {
+            solana_quic_client::quic_client::QuicTpuConnection,
+            solana_tpu_client::tpu_connection::TpuConnection,
+        };
+        solana_logger::setup();
+
+        // Request Receiver
+        let (sender, receiver) = unbounded();
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let (s, exit, keypair, ip, stats) = server_args();
+        let (endpoint, t) = solana_streamer::quic::spawn_server(
+            s.try_clone().unwrap(),
+            &keypair,
+            ip,
+            sender,
+            exit.clone(),
+            1,
+            staked_nodes.clone(),
+            10,
+            10,
+            stats,
+            1000,
+        )
+        .unwrap();
+
+        drop(endpoint);
+        // Response Receiver:
+        let (s2, exit2, keypair2, ip2, stats2) = server_args();
+        let (sender2, receiver2) = unbounded();
+
+        let addr = s2.local_addr().unwrap().ip();
+        let port = s2.local_addr().unwrap().port();
+        let server_addr = SocketAddr::new(addr, port);
+        println!("server address: {}", server_addr);
+        let (endpoint2, t2) = solana_streamer::quic::spawn_server(
+            s2,
+            &keypair2,
+            ip2,
+            sender2,
+            exit2.clone(),
+            1,
+            staked_nodes,
+            10,
+            10,
+            stats2,
+            1000,
+        )
+        .unwrap();
+
+        // Request Sender, it uses the same endpoint as the response receiver:
+        let addr = s.local_addr().unwrap().ip();
+        let port = s.local_addr().unwrap().port();
+        let tpu_addr = SocketAddr::new(addr, port);
+        let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
+
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to initialize QUIC client certificates");
+        let client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+
+        let endpoint = QuicLazyInitializedEndpoint::new(client_certificate, Some(endpoint2));
+        let client = QuicTpuConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
+        // Send a full size packet with single byte writes as a request.
+        let num_bytes = PACKET_DATA_SIZE;
+        let num_expected_packets: usize = 3000;
+        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+
+        assert!(client.send_wire_transaction_batch_async(packets).is_ok());
+        check_packets(receiver, num_bytes, num_expected_packets);
+        info!("Received requests!");
+
+        // Response sender
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        )
+        .expect("Failed to initialize QUIC client certificates");
+
+        let client_certificate2 = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+
+        let endpoint2 = QuicLazyInitializedEndpoint::new(client_certificate2, None);
+        let connection_cache_stats2 = Arc::new(ConnectionCacheStats::default());
+        let client2 =
+            QuicTpuConnection::new(Arc::new(endpoint2), server_addr, connection_cache_stats2);
+
+        // Send a full size packet with single byte writes.
+        let num_bytes = PACKET_DATA_SIZE;
+        let num_expected_packets: usize = 3000;
+        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+
+        assert!(client2.send_wire_transaction_batch_async(packets).is_ok());
+        check_packets(receiver2, num_bytes, num_expected_packets);
+        info!("Received responses!");
+
+        // Drop the clients explicitly to avoid hung on drops
+        drop(client);
+        drop(client2);
+
+        exit.store(true, Ordering::Relaxed);
+        t.join().unwrap();
+        info!("Request receiver exited!");
+
+        exit2.store(true, Ordering::Relaxed);
+        t2.join().unwrap();
+        info!("Response receiver exited!");
     }
 }
