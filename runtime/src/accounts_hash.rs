@@ -1,5 +1,9 @@
 use {
-    crate::{accounts_db::SnapshotStorages, ancestors::Ancestors, rent_collector::RentCollector},
+    crate::{
+        accounts_db::{SnapshotStorages, PUBKEY_BINS_FOR_CALCULATING_HASHES},
+        ancestors::Ancestors,
+        rent_collector::RentCollector,
+    },
     core::ops::Range,
     log::*,
     memmap2::MmapMut,
@@ -28,11 +32,13 @@ pub const MERKLE_FANOUT: usize = 16;
 /// the data passed through the processing functions
 pub type SortedDataByPubkey<'a> = Vec<&'a [CalculateHashIntermediate]>;
 
-struct MMapHashFile {
+/// 1 file containing account hashes sorted by pubkey, mapped into memory
+struct MMapAccountHashesFile {
     mmap: MmapMut,
 }
 
-impl MMapHashFile {
+impl MMapAccountHashesFile {
+    /// return a slice of account hashes starting at 'index'
     fn read(&self, index: usize) -> &[Hash] {
         let start = std::mem::size_of::<Hash>() * index;
         let item_slice: &[u8] = &self.mmap[start..];
@@ -44,53 +50,17 @@ impl MMapHashFile {
     }
 }
 
-impl std::fmt::Debug for HashFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "hashfile") // todo
-    }
-}
-
-pub struct HashFile {
+pub struct AccountHashesFile {
     file: Option<File>,
     count: usize,
 }
 
-impl HashFile {
-    fn write(hashes: &[Hash]) -> Self {
-        let file = tempfile().unwrap();
-        use std::io::Write;
-        let count = hashes.len();
-        let hash_size = std::mem::size_of::<Hash>();
-        let capacity = hash_size * count;
-        let mut writer = BufWriter::with_capacity(capacity, file);
-        hashes.iter().for_each(|hash| {
-            assert_eq!(hash_size, writer.write(hash.as_ref()).unwrap());
-        });
-        Self {
-            file: (!hashes.is_empty()).then(|| writer.into_inner().unwrap()),
-            count,
-        }
-    }
-    fn get_reader(&self) -> Option<MMapHashFile> {
-        self.file.as_ref().map(|file| MMapHashFile {
+impl AccountHashesFile {
+    fn get_reader(&self) -> Option<MMapAccountHashesFile> {
+        self.file.as_ref().map(|file| MMapAccountHashesFile {
             mmap: unsafe { MmapMut::map_mut(file).unwrap() },
         })
     }
-}
-
-#[derive(Default)]
-pub struct PreviousPassHashes {
-    /// hashes which were not processed previously because they did not end on an even merkle root boundary
-    pub remaining_unhashed: Vec<HashFile>,
-    /// # hashes to skip in remaining_unhashed[0]. The prior hashes in remaining_unhashed[0] were processed previously.
-    pub remaining_unhashed_first_offset: usize,
-}
-
-#[derive(Default)]
-pub struct PreviousPass {
-    pub reduced_hashes: Vec<HashFile>,
-    pub remaining_unhashed: PreviousPassHashes,
-    pub lamports: u64,
 }
 
 #[derive(Debug)]
@@ -389,78 +359,40 @@ pub struct CumulativeOffsets {
 
 #[derive(Default)]
 pub struct CumulativeHashesFromFiles {
-    // first files of hashes.
-    // The first file may need to be read starting in the middle of the file due to being partially read on a previous iteration.
-    first_files: PreviousPassHashes,
-
-    readers: Vec<MMapHashFile>,
-
+    /// source of hashes in order
+    readers: Vec<MMapAccountHashesFile>,
+    /// look up reader index and offset by overall index
     cumulative: CumulativeOffsets,
 }
 
 impl CumulativeHashesFromFiles {
-    pub fn from_files(first_files: PreviousPassHashes, remaining_files: &[HashFile]) -> Self {
-        let cumulative = CumulativeOffsets::new({
-            std::iter::once(first_files.remaining_unhashed.first().map(|first| {
-                first
-                    .count
-                    .saturating_sub(first_files.remaining_unhashed_first_offset)
-            }))
-            .flatten()
-            .chain(
-                first_files
-                    .remaining_unhashed
-                    .iter()
-                    .map(|hash_file| hash_file.count)
-                    .skip(1),
-            )
-            .chain(remaining_files.iter().map(|hash_file| hash_file.count))
-        });
-        let readers = std::iter::once(
-            first_files
-                .remaining_unhashed
-                .first()
-                .and_then(|first| first.get_reader()),
-        )
-        .flatten()
-        .chain(
-            first_files
-                .remaining_unhashed
-                .iter()
-                .map(|hash_file| hash_file.get_reader())
-                .skip(1)
-                .flatten(),
-        )
-        .chain(
-            remaining_files
-                .iter()
-                .filter_map(|hash_file| hash_file.get_reader()),
-        )
-        .collect();
+    /// Calculate offset from overall index to which file and offset within that file based on the length of each hash file.
+    /// Also collect readers to access the data.
+    pub fn from_files(hashes: &[AccountHashesFile]) -> Self {
+        let mut readers = Vec::with_capacity(hashes.len());
+        let cumulative = CumulativeOffsets::new(hashes.iter().filter_map(|hash_file| {
+            // ignores all hashfiles that have zero entries
+            (hash_file.count > 0).then(|| {
+                readers.push(hash_file.get_reader().unwrap());
+                hash_file.count
+            })
+        }));
         Self {
-            first_files,
             cumulative,
             readers,
         }
     }
 
+    /// total # of items referenced
     pub fn total_count(&self) -> usize {
         self.cumulative.total_count
     }
 
-    fn get_data_source(&self, data_source_index: usize) -> &MMapHashFile {
-        &self.readers[data_source_index]
-    }
-
-    // return the biggest slice possible that starts at 'start'
+    // return the biggest slice possible that starts at the overall index 'start'
     pub fn get_slice(&self, start: usize) -> &[Hash] {
-        let (mut start, offset) = self.cumulative.find(start);
+        let (start, offset) = self.cumulative.find(start);
         let data_source_index = offset.index[0];
-        let data = self.get_data_source(data_source_index);
-        if data_source_index == 0 {
-            // even if there is no first_files, this value will default to 0, so it will add 0 and be a no-op
-            start = start.saturating_add(self.first_files.remaining_unhashed_first_offset);
-        }
+        let data = &self.readers[data_source_index];
         // unwrap here because we should never ask for data that doesn't exist. If we do, then cumulative calculated incorrectly.
         data.read(start)
     }
@@ -922,7 +854,7 @@ impl AccountsHasher {
         sorted_data_by_pubkey: &'a [SortedDataByPubkey<'a>],
         stats: &mut HashStats,
         max_bin: usize,
-    ) -> (Vec<HashFile>, u64) {
+    ) -> (Vec<AccountHashesFile>, u64) {
         // 1. eliminate zero lamport accounts
         // 2. pick the highest slot or (slot = and highest version) of each pubkey
         // 3. produce this output:
@@ -1012,7 +944,7 @@ impl AccountsHasher {
         &self,
         pubkey_division: &'a [SortedDataByPubkey<'a>],
         pubkey_bin: usize,
-    ) -> (HashFile, u64, usize) {
+    ) -> (AccountHashesFile, u64, usize) {
         let len = pubkey_division.len();
         let mut unreduced_count = 0;
         let mut indexes = vec![0; len];
@@ -1112,7 +1044,7 @@ impl AccountsHasher {
             }
         }
         (
-            HashFile {
+            AccountHashesFile {
                 file: writer.map(|writer| writer.into_inner().unwrap()),
                 count,
             },
@@ -1136,110 +1068,27 @@ impl AccountsHasher {
         &self,
         data_sections_by_pubkey: Vec<SortedDataByPubkey<'_>>,
         mut stats: &mut HashStats,
-        is_last_pass: bool,
-        mut previous_state: PreviousPass,
-        max_bin: usize,
-    ) -> (Hash, u64, PreviousPass) {
-        let (hashes, mut total_lamports) =
-            self.de_dup_and_eliminate_zeros(&data_sections_by_pubkey, stats, max_bin);
+    ) -> (Hash, u64) {
+        let (hashes, total_lamports) = self.de_dup_and_eliminate_zeros(
+            &data_sections_by_pubkey,
+            stats,
+            PUBKEY_BINS_FOR_CALCULATING_HASHES,
+        );
 
-        total_lamports += previous_state.lamports;
+        let cumulative = CumulativeHashesFromFiles::from_files(&hashes);
 
-        // These items were not hashed last iteration because they didn't divide evenly.
-        // These are hashes for pubkeys that are < the pubkeys we are looking at now, so their hashes go first in order.
-        let previous_unhashed = std::mem::take(&mut previous_state.remaining_unhashed);
-
-        // TODO
-
-        let mut next_pass = PreviousPass::default();
-        let cumulative = CumulativeHashesFromFiles::from_files(previous_unhashed, &hashes);
-        let hash_total = cumulative.total_count();
-        next_pass.reduced_hashes = previous_state.reduced_hashes;
-
-        const TARGET_FANOUT_LEVEL: usize = 3;
-        if !is_last_pass {
-            /*
-            let target_fanout = MERKLE_FANOUT.pow(TARGET_FANOUT_LEVEL as u32);
-            next_pass.lamports = total_lamports;
-            total_lamports = 0;
-
-            // Save hashes that don't evenly hash. They will be combined with hashes from the next pass.
-            let left_over_hashes = hash_total % target_fanout;
-
-            // move tail hashes that don't evenly hash into a 1d vector for next time
-
-            let mut i = hash_total - left_over_hashes;
-            while i < hash_total {
-                let data = cumulative.get_slice(i);
-                next_pass.remaining_unhashed.extend(data.iter().cloned());
-                i += data.len();
-            }
-
-            hash_total -= left_over_hashes; // this is enough to cause the hashes at the end of the data set to be ignored
-            */
-        }
-
-        // if we have raw hashes to process and
-        //   we are not the last pass (we already modded against target_fanout) OR
-        //   we have previously surpassed target_fanout and hashed some already to the target_fanout level. In that case, we know
-        //     we need to hash whatever is left here to the target_fanout level.
-        if hash_total != 0 && (!is_last_pass || !next_pass.reduced_hashes.is_empty()) {
-            let mut hash_time = Measure::start("hash");
-            let partial_hashes = Self::compute_merkle_root_from_slices(
-                hash_total, // note this does not include the ones that didn't divide evenly, unless we're in the last iteration
-                MERKLE_FANOUT,
-                Some(TARGET_FANOUT_LEVEL),
-                |start| cumulative.get_slice(start),
-                Some(TARGET_FANOUT_LEVEL),
-            )
-            .1;
-            hash_time.stop();
-            stats.hash_time_total_us += hash_time.as_us();
-            stats.hash_time_pre_us += hash_time.as_us();
-            next_pass
-                .reduced_hashes
-                .push(HashFile::write(&partial_hashes));
-        }
-
-        let no_progress = is_last_pass && next_pass.reduced_hashes.is_empty() && !hashes.is_empty();
-        if no_progress {
-            // we never made partial progress, so hash everything now
-            hashes.into_iter().for_each(|v| {
-                if v.count != 0 {
-                    next_pass.reduced_hashes.push(v);
-                }
-            });
-        }
-
-        let hash = if is_last_pass {
-            let cumulative = CumulativeHashesFromFiles::from_files(
-                PreviousPassHashes::default(),
-                &next_pass.reduced_hashes,
-            );
-
-            let hash = if cumulative.total_count() == 1 && !no_progress {
-                // all the passes resulted in a single hash, that means we're done, so we had <= MERKLE_FANOUT total hashes
-                cumulative.get_slice(0)[0]
-            } else {
-                let mut hash_time = Measure::start("hash");
-                // hash all the rest and combine and hash until we have only 1 hash left
-                let (hash, _) = Self::compute_merkle_root_from_slices(
-                    cumulative.total_count(),
-                    MERKLE_FANOUT,
-                    None,
-                    |start| cumulative.get_slice(start),
-                    None,
-                );
-                hash_time.stop();
-                stats.hash_time_total_us += hash_time.as_us();
-                hash
-            };
-            next_pass.reduced_hashes = Vec::new();
-            hash
-        } else {
-            Hash::default()
-        };
-        (hash, total_lamports, next_pass)
+        let mut hash_time = Measure::start("hash");
+        // hash all the rest and combine and hash until we have only 1 hash left
+        let (hash, _) = Self::compute_merkle_root_from_slices(
+            cumulative.total_count(),
+            MERKLE_FANOUT,
+            None,
+            |start| cumulative.get_slice(start),
+            None,
+        );
+        hash_time.stop();
+        stats.hash_time_total_us += hash_time.as_us();
+        (hash, total_lamports)
     }
 }
 
@@ -1288,13 +1137,8 @@ pub mod tests {
         account_maps.push(val);
 
         let accounts_hash = AccountsHasher::default();
-        let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(&account_maps),
-            &mut HashStats::default(),
-            true,
-            PreviousPass::default(),
-            one_range(),
-        );
+        let result = accounts_hash
+            .rest_of_hash_calculation(for_rest(&account_maps), &mut HashStats::default());
         let expected_hash = Hash::from_str("8j9ARGFv4W2GfML7d3sVJK2MePwrikqYnu6yqer28cCa").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 88));
 
@@ -1304,13 +1148,8 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(hash, 20, key);
         account_maps.insert(0, val);
 
-        let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(&account_maps),
-            &mut HashStats::default(),
-            true,
-            PreviousPass::default(),
-            one_range(),
-        );
+        let result = accounts_hash
+            .rest_of_hash_calculation(for_rest(&account_maps), &mut HashStats::default());
         let expected_hash = Hash::from_str("EHv9C5vX7xQjjMpsJMzudnDTzoTSRwYkqLzY8tVMihGj").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 108));
 
@@ -1320,13 +1159,8 @@ pub mod tests {
         let val = CalculateHashIntermediate::new(hash, 30, key);
         account_maps.insert(1, val);
 
-        let result = accounts_hash.rest_of_hash_calculation(
-            for_rest(&account_maps),
-            &mut HashStats::default(),
-            true,
-            PreviousPass::default(),
-            one_range(),
-        );
+        let result = accounts_hash
+            .rest_of_hash_calculation(for_rest(&account_maps), &mut HashStats::default());
         let expected_hash = Hash::from_str("7NNPg5A8Xsg1uv4UFm6KZNwsipyyUnmgCrznP6MBWoBZ").unwrap();
         assert_eq!((result.0, result.1), (expected_hash, 118));
     }
@@ -1353,10 +1187,10 @@ pub mod tests {
         assert_eq!(lamports, 1);
     }
 
-    fn get_vec_vec(hashes: Vec<HashFile>) -> Vec<Vec<Hash>> {
+    fn get_vec_vec(hashes: Vec<AccountHashesFile>) -> Vec<Vec<Hash>> {
         hashes.into_iter().map(get_vec).collect()
     }
-    fn get_vec(hashes: HashFile) -> Vec<Hash> {
+    fn get_vec(hashes: AccountHashesFile) -> Vec<Hash> {
         hashes
             .get_reader()
             .map(|r| r.read(0).to_vec())
@@ -1610,7 +1444,7 @@ pub mod tests {
 
     fn test_de_dup_accounts_in_parallel<'a>(
         account_maps: &'a [SortedDataByPubkey<'a>],
-    ) -> (HashFile, u64, usize) {
+    ) -> (AccountHashesFile, u64, usize) {
         AccountsHasher::default().de_dup_accounts_in_parallel(account_maps, 0)
     }
 
