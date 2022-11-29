@@ -290,25 +290,21 @@ impl BucketStorage {
             .create(true)
             .open(file.clone())
             .map_err(|e| {
-                if let Some((mmap_count, num_open_files, max_open_files_limit)) = Self::get_mmap_fd_stats() {
-                    panic!(
-                        "Unable to create data file {} in current dir({:?}): {:?}, current mmap_count: {}, current number of open files: {}, max limit of open files: {:?}",
-                        file.display(),
-                        std::env::current_dir(),
-                        e,
-                        mmap_count,
-                        num_open_files,
-                        max_open_files_limit,
-                    );
-                }
-                else {
-                    panic!(
-                        "Unable to create data file {} in current dir({:?}): {:?}",
-                        file.display(),
-                        std::env::current_dir(),
-                        e,
-                    );
-                }
+                let mmap_msg = Self::get_mmap_fd_stats()
+                    .map(|(mmap_count, num_open_files, max_open_files_limit)| {
+                        format!("current mmap_count: {}, current number of open files: {}, max limit of open files: {:?}",
+                                        mmap_count,
+                                        num_open_files,
+                                        max_open_files_limit,
+                        )
+                    }).unwrap_or_default();
+                panic!(
+                    "Unable to create data file {} in current dir({:?}): {:?}. {}",
+                    file.display(),
+                    std::env::current_dir(),
+                    e,
+                    mmap_msg,
+                );
             })
             .unwrap();
 
@@ -437,23 +433,19 @@ mod test {
         assert_eq!(storage.uid(ix), None);
 
         // test get_mmap_fd_stats
-        if let Some((mmap_count, num_open_files, max_open_files_limit)) =
-            BucketStorage::get_mmap_fd_stats()
-        {
-            assert!(mmap_count > 0);
-            assert!(num_open_files > 0);
-            match max_open_files_limit.soft_limit {
-                LimitValue::Unlimited => {}
-                LimitValue::Value(x) => assert!(x > 0),
-            }
+        let (mmap_count, num_open_files, max_open_files_limit) =
+            BucketStorage::get_mmap_fd_stats().unwrap();
 
-            match max_open_files_limit.hard_limit {
-                LimitValue::Unlimited => {}
-                LimitValue::Value(x) => assert!(x > 0),
-            }
+        assert!(mmap_count > 0);
+        assert!(num_open_files > 0);
+        match max_open_files_limit.soft_limit {
+            LimitValue::Unlimited => {}
+            LimitValue::Value(x) => assert!(x > 0),
+        }
 
-            println!("{:?}", num_open_files);
-            println!("{:?}", max_open_files_limit);
+        match max_open_files_limit.hard_limit {
+            LimitValue::Unlimited => {}
+            LimitValue::Value(x) => assert!(x > 0),
         }
     }
 }
