@@ -1,4 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
+
+#[macro_use]
+extern crate lazy_static;
+
 mod bucket;
 pub mod bucket_api;
 mod bucket_item;

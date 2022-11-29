@@ -3,9 +3,19 @@
 use {
     crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
     solana_sdk::pubkey::Pubkey,
-    std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
+    std::{
+        convert::TryInto,
+        fmt::Debug,
+        fs,
+        path::PathBuf,
+        sync::{atomic::AtomicU64, Arc},
+    },
     tempfile::TempDir,
 };
+
+lazy_static! {
+    pub static ref ACCOUNT_INDEX_MMAPPED_FILES_OPEN: AtomicU64 = AtomicU64::default();
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct BucketMapConfig {

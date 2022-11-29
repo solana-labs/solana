@@ -4898,6 +4898,7 @@ name = "solana-bucket-map"
 version = "1.15.0"
 dependencies = [
  "fs_extra",
+ "lazy_static",
  "log",
  "memmap2",
  "modular-bitfield",

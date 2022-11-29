@@ -1,5 +1,5 @@
 use {
-    crate::{bucket_stats::BucketStats, MaxSearch},
+    crate::{bucket_map::ACCOUNT_INDEX_MMAPPED_FILES_OPEN, bucket_stats::BucketStats, MaxSearch},
     memmap2::MmapMut,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -92,6 +92,7 @@ pub enum BucketStorageError {
 impl Drop for BucketStorage {
     fn drop(&mut self) {
         let _ = remove_file(&self.path);
+        ACCOUNT_INDEX_MMAPPED_FILES_OPEN.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -107,6 +108,7 @@ impl BucketStorage {
     ) -> Self {
         let cell_size = elem_size * num_elems + std::mem::size_of::<Header>() as u64;
         let (mmap, path) = Self::new_map(&drives, cell_size as usize, capacity_pow2, &stats);
+        ACCOUNT_INDEX_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
         Self {
             path,
             mmap,

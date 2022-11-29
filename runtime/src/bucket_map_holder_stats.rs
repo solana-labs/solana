@@ -1,5 +1,6 @@
 use {
     crate::{accounts_index::IndexValue, bucket_map_holder::BucketMapHolder},
+    solana_bucket_map::bucket_map::ACCOUNT_INDEX_MMAPPED_FILES_OPEN,
     solana_sdk::timing::AtomicInterval,
     std::{
         fmt::Debug,
@@ -478,6 +479,11 @@ impl BucketMapHolderStats {
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
+                (
+                    "account_index_mmap_open",
+                    ACCOUNT_INDEX_MMAPPED_FILES_OPEN.load(Ordering::Relaxed) as i64,
+                    i64
+                ),
             );
         } else {
             datapoint_info!(
@@ -573,6 +579,11 @@ impl BucketMapHolderStats {
                 ("items", self.items.swap(0, Ordering::Relaxed), i64),
                 ("items_us", self.items_us.swap(0, Ordering::Relaxed), i64),
                 ("keys", self.keys.swap(0, Ordering::Relaxed), i64),
+                (
+                    "account_index_mmap_open",
+                    ACCOUNT_INDEX_MMAPPED_FILES_OPEN.load(Ordering::Relaxed) as i64,
+                    i64
+                ),
             );
         }
     }

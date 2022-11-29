@@ -4333,6 +4333,7 @@ dependencies = [
 name = "solana-bucket-map"
 version = "1.15.0"
 dependencies = [
+ "lazy_static",
  "log",
  "memmap2",
  "modular-bitfield",
