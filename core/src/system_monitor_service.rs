@@ -836,7 +836,7 @@ impl SystemMonitorService {
         Self::report_cpuid_values();
     }
 
-    fn get_open_fd_stats() -> Option<(usize, usize, usize)> {
+    fn get_open_fd_stats() -> Option<(usize, usize, usize, usize)> {
         let proc = Process::myself().ok()?;
         let curr_num_open_fd = proc.fd_count().unwrap();
         let curr_mmap_count = proc.maps().unwrap().len();
