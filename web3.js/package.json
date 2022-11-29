@@ -112,7 +112,6 @@
     "eslint-plugin-mocha": "^10.1.0",
     "eslint-plugin-prettier": "^4.2.1",
     "esm": "^3.2.25",
-    "http-server": "^14.0.0",
     "mocha": "^10.1.0",
     "mockttp": "^2.0.1",
     "mz": "^2.7.0",
