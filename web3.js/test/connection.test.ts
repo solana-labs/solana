@@ -1214,6 +1214,42 @@ describe('Connection', function () {
       //     value: {err: null},
       //   });
       // });
+
+      it('confirm transaction - does not confirm the transaction when signature status check yields confirmation for a lower commitment before signature subscription confirms the transaction', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        // Keep the subscription from ever returning data.
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise(() => {}), // Never resolve.
+        });
+        clock.runAllAsync();
+
+        const confirmationPromise =
+          connection.confirmTransaction(mockSignature);
+        clock.runAllAsync();
+
+        // Return a signature status with a lower finality through the RPC API.
+        await mockRpcResponse({
+          method: 'getSignatureStatuses',
+          params: [[mockSignature]],
+          value: [
+            {
+              slot: 0,
+              confirmations: null,
+              confirmationStatus: 'processed', // Lower than we expect
+              err: null,
+            },
+          ],
+        });
+        clock.runAllAsync();
+
+        await expect(confirmationPromise).to.be.rejectedWith(
+          TransactionExpiredTimeoutError,
+        );
+      });
     });
   }
 

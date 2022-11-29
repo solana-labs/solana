@@ -3444,6 +3444,30 @@ export class Connection {
           if (value?.err) {
             reject(value.err);
           } else {
+            switch (confirmationCommitment) {
+              case 'confirmed':
+              case 'single':
+              case 'singleGossip': {
+                if (value.confirmationStatus === 'processed') {
+                  return;
+                }
+                break;
+              }
+              case 'finalized':
+              case 'max':
+              case 'root': {
+                if (
+                  value.confirmationStatus === 'processed' ||
+                  value.confirmationStatus === 'confirmed'
+                ) {
+                  return;
+                }
+                break;
+              }
+              // exhaust enums to ensure full coverage
+              case 'processed':
+              case 'recent':
+            }
             done = true;
             resolve({
               __type: TransactionStatus.PROCESSED,
