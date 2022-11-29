@@ -3438,10 +3438,12 @@ export class Connection {
             return;
           }
           const {context, value} = response;
+          if (value == null) {
+            return;
+          }
           if (value?.err) {
             reject(value.err);
-          }
-          if (value) {
+          } else {
             done = true;
             resolve({
               __type: TransactionStatus.PROCESSED,
