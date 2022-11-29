@@ -96,7 +96,7 @@ impl PohTiming {
 impl PohService {
     pub fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        poh_config: &Arc<PohConfig>,
+        poh_config: PohConfig,
         poh_exit: &Arc<AtomicBool>,
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
@@ -104,7 +104,6 @@ impl PohService {
         record_receiver: Receiver<Record>,
     ) -> Self {
         let poh_exit_ = poh_exit.clone();
-        let poh_config = poh_config.clone();
         let tick_producer = Builder::new()
             .name("solPohTickProd".to_string())
             .spawn(move || {
@@ -414,11 +413,11 @@ mod tests {
             let default_target_tick_duration =
                 timing::duration_as_us(&PohConfig::default().target_tick_duration);
             let target_tick_duration = Duration::from_micros(default_target_tick_duration);
-            let poh_config = Arc::new(PohConfig::new(
+            let poh_config = PohConfig::new(
                 target_tick_duration,
                 None,
                 Some(clock::DEFAULT_HASHES_PER_TICK),
-            ));
+            );
             let exit = Arc::new(AtomicBool::new(false));
 
             let ticks_per_slot = bank.ticks_per_slot();
@@ -433,7 +432,7 @@ mod tests {
                 &Pubkey::default(),
                 &blockstore,
                 &leader_schedule_cache,
-                &poh_config,
+                poh_config,
                 exit.clone(),
             );
             let poh_recorder = Arc::new(RwLock::new(poh_recorder));
@@ -493,7 +492,7 @@ mod tests {
                 .unwrap_or(DEFAULT_HASHES_PER_BATCH);
             let poh_service = PohService::new(
                 poh_recorder.clone(),
-                &poh_config,
+                poh_config,
                 &exit,
                 0,
                 DEFAULT_PINNED_CPU_CORE,

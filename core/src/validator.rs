@@ -721,7 +721,7 @@ impl Validator {
             max_slots.clone(),
         );
 
-        let poh_config = Arc::new(genesis_config.poh_config.clone());
+        let poh_config = genesis_config.poh_config;
         let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
             let bank = &bank_forks.read().unwrap().working_bank();
@@ -736,7 +736,7 @@ impl Validator {
                 &blockstore,
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
-                &poh_config,
+                poh_config,
                 Some(poh_timing_point_sender),
                 exit.clone(),
             )
@@ -907,7 +907,7 @@ impl Validator {
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
-            &poh_config,
+            poh_config,
             &exit,
             bank_forks.read().unwrap().root_bank().ticks_per_slot(),
             config.poh_pinned_cpu_core,

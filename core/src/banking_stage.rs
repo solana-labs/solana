@@ -2419,7 +2419,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2635,7 +2635,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2772,7 +2772,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -2846,7 +2846,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3000,7 +3000,7 @@ mod tests {
                 &pubkey,
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3078,7 +3078,7 @@ mod tests {
                 &solana_sdk::pubkey::new_rand(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -3145,7 +3145,7 @@ mod tests {
             &Pubkey::new_unique(),
             &Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-            &Arc::new(PohConfig::default()),
+            PohConfig::default(),
             Arc::new(AtomicBool::default()),
         );
         let recorder = poh_recorder.recorder();
@@ -3351,7 +3351,7 @@ mod tests {
                 &pubkey,
                 &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3520,7 +3520,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 &blockstore,
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
@@ -3627,7 +3627,7 @@ mod tests {
             &solana_sdk::pubkey::new_rand(),
             &Arc::new(blockstore),
             &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-            &Arc::new(PohConfig::default()),
+            PohConfig::default(),
             exit,
         );
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));

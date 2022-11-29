@@ -3,7 +3,7 @@ use {
     std::time::Duration,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, AbiExample, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, AbiExample, Eq, PartialEq)]
 pub struct PohConfig {
     /// The target tick rate of the cluster.
     pub target_tick_duration: Duration,

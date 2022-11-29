@@ -3666,7 +3666,7 @@ pub(crate) mod tests {
                 &Pubkey::default(),
                 &blockstore,
                 &leader_schedule_cache,
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::new(false)),
             )
             .0,

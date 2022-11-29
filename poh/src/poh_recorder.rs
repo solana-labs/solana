@@ -221,7 +221,7 @@ pub struct PohRecorder {
     id: Pubkey,
     blockstore: Arc<Blockstore>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
-    poh_config: Arc<PohConfig>,
+    poh_config: PohConfig,
     ticks_per_slot: u64,
     target_ns_per_tick: u64,
     record_lock_contention_us: u64,
@@ -823,7 +823,7 @@ impl PohRecorder {
         blockstore: &Arc<Blockstore>,
         clear_bank_signal: Option<Sender<bool>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        poh_config: &Arc<PohConfig>,
+        poh_config: PohConfig,
         poh_timing_point_sender: Option<PohTimingSender>,
         is_exited: Arc<AtomicBool>,
     ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
@@ -862,7 +862,7 @@ impl PohRecorder {
                 leader_schedule_cache: leader_schedule_cache.clone(),
                 ticks_per_slot,
                 target_ns_per_tick,
-                poh_config: poh_config.clone(),
+                poh_config,
                 record_lock_contention_us: 0,
                 flush_cache_tick_us: 0,
                 flush_cache_no_tick_us: 0,
@@ -894,7 +894,7 @@ impl PohRecorder {
         id: &Pubkey,
         blockstore: &Arc<Blockstore>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
-        poh_config: &Arc<PohConfig>,
+        poh_config: PohConfig,
         is_exited: Arc<AtomicBool>,
     ) -> (Self, Receiver<WorkingBankEntry>, Receiver<Record>) {
         Self::new_with_clear_signal(
@@ -956,7 +956,7 @@ pub fn create_test_recorder(
         None => Arc::new(LeaderScheduleCache::new_from_bank(bank)),
     };
     let exit = Arc::new(AtomicBool::new(false));
-    let poh_config = Arc::new(poh_config.unwrap_or_default());
+    let poh_config = poh_config.unwrap_or_default();
     let (mut poh_recorder, entry_receiver, record_receiver) = PohRecorder::new(
         bank.tick_height(),
         bank.last_blockhash(),
@@ -966,7 +966,7 @@ pub fn create_test_recorder(
         &Pubkey::default(),
         blockstore,
         &leader_schedule_cache,
-        &poh_config,
+        poh_config,
         exit.clone(),
     );
     poh_recorder.set_bank(bank, false);
@@ -974,7 +974,7 @@ pub fn create_test_recorder(
     let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
-        &poh_config,
+        poh_config,
         &exit,
         bank.ticks_per_slot(),
         crate::poh_service::DEFAULT_PINNED_CPU_CORE,
@@ -1015,7 +1015,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1045,7 +1045,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1074,7 +1074,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1103,7 +1103,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1133,7 +1133,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank0)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1196,7 +1196,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1245,7 +1245,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank0)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1288,7 +1288,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1330,7 +1330,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank0)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1386,7 +1386,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1426,7 +1426,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1498,7 +1498,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank0)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1554,7 +1554,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1583,7 +1583,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1614,7 +1614,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::default()),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             poh_recorder.tick();
@@ -1648,7 +1648,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1680,7 +1680,7 @@ mod tests {
                     &Arc::new(blockstore),
                     Some(sender),
                     &Arc::new(LeaderScheduleCache::default()),
-                    &Arc::new(PohConfig::default()),
+                    PohConfig::default(),
                     None,
                     Arc::new(AtomicBool::default()),
                 );
@@ -1715,7 +1715,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1763,7 +1763,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &leader_schedule_cache,
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1826,7 +1826,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank0)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -1987,7 +1987,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 
@@ -2039,7 +2039,7 @@ mod tests {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
             //create a new bank
