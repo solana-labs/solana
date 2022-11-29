@@ -871,6 +871,9 @@ impl Validator {
             should_check_duplicate_instance,
             Some(stats_reporter_sender.clone()),
             &exit,
+            true, //use_quic
+            identity_keypair.clone(),
+            &staked_nodes,
         );
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),

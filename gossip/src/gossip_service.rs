@@ -10,11 +10,17 @@ use {
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Keypair, Signer},
+        quic::MAX_QUIC_CONNECTIONS_PER_PEER,
     },
     solana_streamer::{
+        streamer::StakedNodes,
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
+        quic::{spawn_server, MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS, StreamStats},
+        nonblocking::quic::{DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
     },
+    
     std::{
         collections::HashSet,
         net::{SocketAddr, TcpListener, UdpSocket},
@@ -40,6 +46,9 @@ impl GossipService {
         should_check_duplicate_instance: bool,
         stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
         exit: &Arc<AtomicBool>,
+        use_quic: bool,
+        keypair: Arc<Keypair>,
+        staked_nodes: Arc<RwLock<StakedNodes>>,
     ) -> Self {
         let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
@@ -49,7 +58,24 @@ impl GossipService {
             gossip_socket.local_addr().unwrap()
         );
         let socket_addr_space = *cluster_info.socket_addr_space();
-        let t_receiver = streamer::receiver(
+        let t_receiver = if use_quic{
+            let stats = Arc::new(StreamStats::default());
+            //todo: fix
+            spawn_server(
+                gossip_socket.try_clone().unwrap(),
+                &keypair,
+                cluster_info.my_contact_info().tpu.ip(),
+                request_sender,
+                exit.clone(),
+                MAX_QUIC_CONNECTIONS_PER_PEER,
+                staked_nodes,
+                MAX_STAKED_CONNECTIONS,
+                MAX_UNSTAKED_CONNECTIONS,
+                stats,
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS
+            ).unwrap()
+        } else{
+        streamer::receiver(
             gossip_socket.clone(),
             exit.clone(),
             request_sender,
@@ -58,7 +84,7 @@ impl GossipService {
             1,
             false,
             None,
-        );
+        )};
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
@@ -109,6 +135,7 @@ pub fn discover_cluster(
     entrypoint: &SocketAddr,
     num_nodes: usize,
     socket_addr_space: SocketAddrSpace,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
 ) -> std::io::Result<Vec<ContactInfo>> {
     const DISCOVER_CLUSTER_TIMEOUT: Duration = Duration::from_secs(120);
     let (_all_peers, validators) = discover(
@@ -121,6 +148,7 @@ pub fn discover_cluster(
         None, // my_gossip_addr
         0,    // my_shred_version
         socket_addr_space,
+        staked_nodes
     )?;
     Ok(validators)
 }
@@ -135,6 +163,7 @@ pub fn discover(
     my_gossip_addr: Option<&SocketAddr>,
     my_shred_version: u16,
     socket_addr_space: SocketAddrSpace,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
 ) -> std::io::Result<(
     Vec<ContactInfo>, // all gossip peers
     Vec<ContactInfo>, // tvu peers (validators)
@@ -149,6 +178,7 @@ pub fn discover(
         my_shred_version,
         true, // should_check_duplicate_instance,
         socket_addr_space,
+        staked_nodes
     );
 
     let id = spy_ref.id();
@@ -304,13 +334,15 @@ pub fn make_gossip_node(
     shred_version: u16,
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
+    let keypair = Arc::new(keypair);
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
         ClusterInfo::gossip_node(keypair.pubkey(), gossip_addr, shred_version)
     } else {
         ClusterInfo::spy_node(keypair.pubkey(), shred_version)
     };
-    let cluster_info = ClusterInfo::new(node, Arc::new(keypair), socket_addr_space);
+    let cluster_info = ClusterInfo::new(node, keypair.clone(), socket_addr_space);
     if let Some(entrypoint) = entrypoint {
         cluster_info.set_entrypoint(ContactInfo::new_gossip_entry_point(entrypoint));
     }
@@ -323,6 +355,9 @@ pub fn make_gossip_node(
         should_check_duplicate_instance,
         None,
         exit,
+        false,
+        keypair,
+        staked_nodes
     );
     (gossip_service, ip_echo, cluster_info)
 }
@@ -355,6 +390,10 @@ mod tests {
             true, // should_check_duplicate_instance
             None,
             &exit,
+            //todo: fix
+            true,
+            //keypair
+            //staked_nodes
         );
         exit.store(true, Ordering::Relaxed);
         d.join().unwrap();

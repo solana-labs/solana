@@ -13,12 +13,13 @@ use {
         gossip_service::discover, legacy_contact_info::LegacyContactInfo as ContactInfo,
     },
     solana_sdk::pubkey::Pubkey,
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes,},
     std::{
         error,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         process::exit,
         time::Duration,
+        sync::{Arc, RwLock},
     },
 };
 
@@ -242,6 +243,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         }),
     );
     let discover_timeout = Duration::from_secs(timeout.unwrap_or(u64::MAX));
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     let (_all_peers, validators) = discover(
         identity_keypair,
         entrypoint_addr.as_ref(),
@@ -252,6 +254,7 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         Some(&gossip_addr), // my_gossip_addr
         shred_version,
         socket_addr_space,
+        staked_nodes
     )?;
 
     process_spy_results(timeout, validators, num_nodes, num_nodes_exactly, pubkey);
@@ -277,6 +280,7 @@ fn process_rpc_url(
     let entrypoint_addr = parse_entrypoint(matches);
     let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version = value_t_or_exit!(matches, "shred_version", u16);
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     let (_all_peers, validators) = discover(
         None, // keypair
         entrypoint_addr.as_ref(),
@@ -287,6 +291,7 @@ fn process_rpc_url(
         None,                     // my_gossip_addr
         shred_version,
         socket_addr_space,
+        staked_nodes
     )?;
 
     let rpc_addrs: Vec<_> = validators

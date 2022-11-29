@@ -42,10 +42,9 @@ use {
     },
 };
 
-pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
+pub use solana_sdk::quic::MAX_QUIC_CONNECTIONS_PER_PEER;
 
-// allow multiple connections for NAT and any open/close overlap
-pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
+pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 pub struct TpuSockets {
     pub transactions: Vec<UdpSocket>,
