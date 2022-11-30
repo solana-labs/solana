@@ -958,7 +958,7 @@ pub fn main() {
         size: value_t_or_exit!(matches, "accounts_filler_size", usize),
     };
 
-    let mut accounts_db_config = AccountsDbConfig {
+    let accounts_db_config = AccountsDbConfig {
         index: Some(accounts_index_config),
         accounts_hash_cache_path: Some(ledger_path.clone()),
         filler_accounts_config,
@@ -971,9 +971,6 @@ pub fn main() {
         ..AccountsDbConfig::default()
     };
 
-    if let Some(passes) = value_t!(matches, "accounts_hash_num_passes", usize).ok() {
-        accounts_db_config.hash_calc_num_passes = Some(passes);
-    }
     let accounts_db_config = Some(accounts_db_config);
 
     let geyser_plugin_config_files = if matches.is_present("geyser_plugin_config") {
