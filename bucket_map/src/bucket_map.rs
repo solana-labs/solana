@@ -2,6 +2,7 @@
 
 use {
     crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
+    procfs::process::{LimitValue, Process},
     solana_sdk::pubkey::Pubkey,
     std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
     tempfile::TempDir,
@@ -179,6 +180,53 @@ impl<T: Clone + Copy + Debug> BucketMap<T> {
 fn read_be_u64(input: &[u8]) -> u64 {
     assert!(input.len() >= std::mem::size_of::<u64>());
     u64::from_be_bytes(input[0..std::mem::size_of::<u64>()].try_into().unwrap())
+}
+
+/// Utility function to get number of Mmap files for current process
+pub fn get_mmap_count() -> Option<usize> {
+    let pid = std::process::id();
+    let map_path = format!("/proc/{}/maps", pid);
+    let output = std::process::Command::new("wc")
+        .args(["-l", &map_path])
+        .output()
+        .unwrap();
+    if output.status.success() {
+        let n: usize = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        Some(n)
+    } else {
+        None
+    }
+}
+
+/// Utility function to get open_fd stats
+pub fn get_open_fd_stats() -> Option<(usize, usize, usize, usize)> {
+    let proc = Process::myself().ok()?;
+    let curr_num_open_fd = proc.fd_count().unwrap();
+    let curr_mmap_count = get_mmap_count().unwrap();
+    let max_open_fd_limit = proc.limits().unwrap().max_open_files;
+
+    let max_open_fd_soft_limit = match max_open_fd_limit.soft_limit {
+        LimitValue::Unlimited => usize::MAX,
+        LimitValue::Value(x) => x as usize,
+    };
+    let max_open_fd_hard_limit = match max_open_fd_limit.hard_limit {
+        LimitValue::Unlimited => usize::MAX,
+        LimitValue::Value(x) => x as usize,
+    };
+
+    Some((
+        curr_num_open_fd,
+        curr_mmap_count,
+        max_open_fd_soft_limit,
+        max_open_fd_hard_limit,
+    ))
 }
 
 #[cfg(test)]
