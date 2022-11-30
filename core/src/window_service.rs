@@ -276,7 +276,7 @@ where
     prune_shreds_elapsed.stop();
     ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
 
-    let (completed_data_sets, inserted_indices) = blockstore.insert_shreds_handle_duplicate(
+    let (completed_data_sets, _) = blockstore.insert_shreds_handle_duplicate(
         shreds,
         repairs,
         Some(leader_schedule_cache),
@@ -286,11 +286,6 @@ where
         reed_solomon_cache,
         metrics,
     )?;
-    for index in inserted_indices {
-        if repair_infos[index].is_some() {
-            metrics.num_repair += 1;
-        }
-    }
 
     completed_data_sets_sender.try_send(completed_data_sets)?;
     Ok(())
