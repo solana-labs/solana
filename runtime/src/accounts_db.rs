@@ -319,10 +319,11 @@ struct ShrinkCollect<'a> {
     original_bytes: u64,
     /// ids of stores that were scanned during account collection
     store_ids: Vec<AppendVecId>,
-    aligned_total: u64,
+    aligned_total_bytes: u64,
     unrefed_pubkeys: Vec<&'a Pubkey>,
     alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
-    alive_total: usize,
+    /// total size in storage of all alive accounts
+    alive_total_bytes: usize,
     total_starting_accounts: usize,
     /// true if all alive accounts are zero lamports
     all_are_zero_lamports: bool,
@@ -357,8 +358,8 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 struct LoadAccountsIndexForShrink<'a> {
-    /// number of alive accounts
-    alive_total: usize,
+    /// total stored bytes for all alive accounts
+    alive_total_bytes: usize,
     /// the specific alive accounts
     alive_accounts: Vec<&'a FoundStoredAccount<'a>>,
     /// pubkeys that were unref'd in the accounts index because they were dead
@@ -3683,7 +3684,7 @@ impl AccountsDb {
         let mut alive_accounts = Vec::with_capacity(count);
         let mut unrefed_pubkeys = Vec::with_capacity(count);
 
-        let mut alive_total = 0;
+        let mut alive_total_bytes = 0;
 
         let mut alive = 0;
         let mut dead = 0;
@@ -3712,7 +3713,7 @@ impl AccountsDb {
                     } else {
                         all_are_zero_lamports &= stored_account.account.lamports() == 0;
                         alive_accounts.push(stored_account);
-                        alive_total += stored_account.account.stored_size;
+                        alive_total_bytes += stored_account.account.stored_size;
                         alive += 1;
                     }
                 }
@@ -3726,7 +3727,7 @@ impl AccountsDb {
         stats.dead_accounts.fetch_add(dead, Ordering::Relaxed);
 
         LoadAccountsIndexForShrink {
-            alive_total,
+            alive_total_bytes,
             alive_accounts,
             unrefed_pubkeys,
             all_are_zero_lamports,
@@ -3808,7 +3809,7 @@ impl AccountsDb {
         *stored_accounts = stored_accounts_temp;
 
         let mut index_read_elapsed = Measure::start("index_read_elapsed");
-        let alive_total_collect = AtomicUsize::new(0);
+        let alive_total_bytes_collect = AtomicUsize::new(0);
 
         let len = stored_accounts.len();
         let alive_accounts_collect = Mutex::new(Vec::with_capacity(len));
@@ -3822,7 +3823,7 @@ impl AccountsDb {
                 .par_chunks(SHRINK_COLLECT_CHUNK_SIZE)
                 .for_each(|stored_accounts| {
                     let LoadAccountsIndexForShrink {
-                        alive_total,
+                        alive_total_bytes,
                         mut alive_accounts,
                         mut unrefed_pubkeys,
                         all_are_zero_lamports,
@@ -3837,7 +3838,7 @@ impl AccountsDb {
                         .lock()
                         .unwrap()
                         .append(&mut unrefed_pubkeys);
-                    alive_total_collect.fetch_add(alive_total, Ordering::Relaxed);
+                    alive_total_bytes_collect.fetch_add(alive_total_bytes, Ordering::Relaxed);
                     if !all_are_zero_lamports {
                         *all_are_zero_lamports_collect.lock().unwrap() = false;
                     }
@@ -3846,35 +3847,35 @@ impl AccountsDb {
 
         let alive_accounts = alive_accounts_collect.into_inner().unwrap();
         let unrefed_pubkeys = unrefed_pubkeys_collect.into_inner().unwrap();
-        let alive_total = alive_total_collect.load(Ordering::Relaxed);
+        let alive_total_bytes = alive_total_bytes_collect.load(Ordering::Relaxed);
 
         index_read_elapsed.stop();
         stats
             .index_read_elapsed
             .fetch_add(index_read_elapsed.as_us(), Ordering::Relaxed);
 
-        let aligned_total: u64 = Self::page_align(alive_total as u64);
+        let aligned_total_bytes: u64 = Self::page_align(alive_total_bytes as u64);
 
         stats
             .accounts_removed
             .fetch_add(len - alive_accounts.len(), Ordering::Relaxed);
         stats.bytes_removed.fetch_add(
-            original_bytes.saturating_sub(aligned_total),
+            original_bytes.saturating_sub(aligned_total_bytes),
             Ordering::Relaxed,
         );
         stats
             .bytes_written
-            .fetch_add(aligned_total, Ordering::Relaxed);
+            .fetch_add(aligned_total_bytes, Ordering::Relaxed);
 
         assert_eq!(store_ids.len(), 1);
 
         ShrinkCollect {
             store_ids,
             original_bytes,
-            aligned_total,
+            aligned_total_bytes,
             unrefed_pubkeys,
             alive_accounts,
-            alive_total,
+            alive_total_bytes,
             total_starting_accounts: len,
             all_are_zero_lamports: all_are_zero_lamports_collect.into_inner().unwrap(),
         }
@@ -3919,7 +3920,7 @@ impl AccountsDb {
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
         if Self::should_not_shrink(
-            shrink_collect.aligned_total,
+            shrink_collect.aligned_total_bytes,
             shrink_collect.original_bytes,
             shrink_collect.store_ids.len(),
         ) {
@@ -3940,8 +3941,8 @@ impl AccountsDb {
             slot,
             shrink_collect.total_starting_accounts,
             total_accounts_after_shrink,
-            shrink_collect.alive_total,
-            shrink_collect.aligned_total,
+            shrink_collect.alive_total_bytes,
+            shrink_collect.aligned_total_bytes,
             shrink_collect.original_bytes,
         );
 
@@ -3950,7 +3951,7 @@ impl AccountsDb {
         let mut remove_old_stores_shrink_us = 0;
         let mut store_accounts_timing = StoreAccountsTiming::default();
         let mut find_alive_elapsed = Measure::start("find_alive_elapsed");
-        if shrink_collect.aligned_total > 0 {
+        if shrink_collect.aligned_total_bytes > 0 {
             let mut accounts = Vec::with_capacity(total_accounts_after_shrink);
             let mut hashes = Vec::with_capacity(total_accounts_after_shrink);
             let mut write_versions = Vec::with_capacity(total_accounts_after_shrink);
@@ -3963,7 +3964,7 @@ impl AccountsDb {
             find_alive_elapsed.stop();
 
             let (shrunken_store, time) =
-                measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total));
+                measure!(self.get_store_for_shrink(slot, shrink_collect.aligned_total_bytes));
             create_and_insert_store_elapsed_us = time.as_us();
 
             // here, we're writing back alive_accounts. That should be an atomic operation
@@ -17647,7 +17648,7 @@ pub mod tests {
                                 let alive_total_one_account = 136 + space;
                                 if alive {
                                     assert_eq!(
-                                        shrink_collect.aligned_total,
+                                        shrink_collect.aligned_total_bytes,
                                         PAGE_SIZE
                                             * if account_count >= 100 {
                                                 4
@@ -17657,19 +17658,25 @@ pub mod tests {
                                                 1
                                             }
                                     );
-                                    let mut expected_alive_total =
+                                    let mut expected_alive_total_bytes =
                                         alive_total_one_account * normal_account_count;
                                     if append_opposite_zero_lamport_account {
                                         // zero lamport accounts store size=0 data
-                                        expected_alive_total -= space;
+                                        expected_alive_total_bytes -= space;
                                     }
-                                    assert_eq!(shrink_collect.alive_total, expected_alive_total);
+                                    assert_eq!(
+                                        shrink_collect.alive_total_bytes,
+                                        expected_alive_total_bytes
+                                    );
                                 } else if append_opposite_alive_account {
-                                    assert_eq!(shrink_collect.aligned_total, 4096);
-                                    assert_eq!(shrink_collect.alive_total, alive_total_one_account);
+                                    assert_eq!(shrink_collect.aligned_total_bytes, 4096);
+                                    assert_eq!(
+                                        shrink_collect.alive_total_bytes,
+                                        alive_total_one_account
+                                    );
                                 } else {
-                                    assert_eq!(shrink_collect.aligned_total, 0);
-                                    assert_eq!(shrink_collect.alive_total, 0);
+                                    assert_eq!(shrink_collect.aligned_total_bytes, 0);
+                                    assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
                                 assert_eq!(shrink_collect.original_bytes, 102400);
                                 assert_eq!(
