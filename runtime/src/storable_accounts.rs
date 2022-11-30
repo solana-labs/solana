@@ -1,6 +1,9 @@
 //! trait for abstracting underlying storage of pubkey and account pairs to be written
 use {
-    crate::{accounts_db::IncludeSlotInHash, append_vec::StoredAccountMeta},
+    crate::{
+        accounts_db::{FoundStoredAccount, IncludeSlotInHash},
+        append_vec::StoredAccountMeta,
+    },
     solana_sdk::{account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey},
 };
 
@@ -154,6 +157,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
 }
 
 /// this tuple contains a single different source slot that applies to all accounts
+/// accounts are StoredAccountMeta
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
@@ -192,6 +196,49 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     }
     fn write_version(&self, index: usize) -> u64 {
         self.1[index].meta.write_version
+    }
+}
+
+/// this tuple contains a single different source slot that applies to all accounts
+/// accounts are FoundStoredAccount
+impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
+    for (
+        Slot,
+        &'a [&'a FoundStoredAccount<'a>],
+        IncludeSlotInHash,
+        Slot,
+    )
+{
+    fn pubkey(&self, index: usize) -> &Pubkey {
+        self.1[index].pubkey()
+    }
+    fn account(&self, index: usize) -> &StoredAccountMeta<'a> {
+        &self.1[index].account
+    }
+    fn slot(&self, _index: usize) -> Slot {
+        // same other slot for all accounts
+        self.3
+    }
+    fn target_slot(&self) -> Slot {
+        self.0
+    }
+    fn len(&self) -> usize {
+        self.1.len()
+    }
+    fn contains_multiple_slots(&self) -> bool {
+        false
+    }
+    fn include_slot_in_hash(&self) -> IncludeSlotInHash {
+        self.2
+    }
+    fn has_hash_and_write_version(&self) -> bool {
+        true
+    }
+    fn hash(&self, index: usize) -> &Hash {
+        self.1[index].account.hash
+    }
+    fn write_version(&self, index: usize) -> u64 {
+        self.1[index].account.meta.write_version
     }
 }
 #[cfg(test)]
