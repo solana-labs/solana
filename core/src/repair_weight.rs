@@ -292,7 +292,7 @@ impl RepairWeight {
             // Find all descendants of `self.root` that are not reachable from `new_root`.
             // These are exactly the unrooted slots, which can be purged and added to
             // `self.unrooted_slots`.
-            let unrooted_slots = new_root_tree.subtree_diff(
+            let unrooted_slots = (&new_root_tree).subtree_diff(
                 (new_root_tree_root, Hash::default()),
                 (new_root, Hash::default()),
             );

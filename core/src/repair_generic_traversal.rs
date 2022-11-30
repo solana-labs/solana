@@ -31,7 +31,6 @@ impl<'a> Iterator for GenericTraversal<'a> {
                 .tree
                 .children(&(slot, Hash::default()))
                 .unwrap()
-                .iter()
                 .map(|(child_slot, _)| *child_slot)
                 .collect();
             self.pending.extend(children);
