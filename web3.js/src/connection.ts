@@ -4154,10 +4154,10 @@ export class Connection {
    * Fetch the fee for a message from the cluster, return with context
    */
   async getFeeForMessage(
-    message: Message,
+    message: VersionedMessage,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<number>> {
-    const wireMessage = message.serialize().toString('base64');
+    const wireMessage = toBuffer(message.serialize()).toString('base64');
     const args = this._buildArgs([wireMessage], commitment);
     const unsafeRes = await this._rpcRequest('getFeeForMessage', args);
 
