@@ -1224,14 +1224,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Number of bins to divide the accounts index into"),
         )
         .arg(
-            Arg::with_name("accounts_hash_num_passes")
-                .long("accounts-hash-num-passes")
-                .value_name("PASSES")
-                .validator(is_pow2)
-                .takes_value(true)
-                .help("Number of passes to calculate the hash of all accounts"),
-        )
-        .arg(
             Arg::with_name("accounts_index_path")
                 .long("accounts-index-path")
                 .value_name("PATH")

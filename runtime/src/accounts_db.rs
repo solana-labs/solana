@@ -337,7 +337,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING),
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
-    hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
     ancient_append_vec_offset: None,
@@ -348,7 +347,6 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
     accounts_hash_cache_path: None,
     filler_accounts_config: FillerAccountsConfig::const_default(),
-    hash_calc_num_passes: None,
     write_cache_limit_bytes: None,
     skip_rewrites: false,
     ancient_append_vec_offset: None,
@@ -406,7 +404,6 @@ pub struct AccountsDbConfig {
     pub index: Option<AccountsIndexConfig>,
     pub accounts_hash_cache_path: Option<PathBuf>,
     pub filler_accounts_config: FillerAccountsConfig,
-    pub hash_calc_num_passes: Option<usize>,
     pub write_cache_limit_bytes: Option<u64>,
     pub skip_rewrites: bool,
     /// if None, ancient append vecs are disabled
@@ -1390,12 +1387,6 @@ pub struct AccountsDb {
 
     pub(crate) verify_accounts_hash_in_bg: VerifyAccountsHashInBackground,
 
-    // # of passes should be a function of the total # of accounts that are active.
-    // higher passes = slower total time, lower dynamic memory usage
-    // lower passes = faster total time, higher dynamic memory usage
-    // passes=2 cuts dynamic memory usage in approximately half.
-    pub num_hash_scan_passes: Option<usize>,
-
     /// Used to disable logging dead slots during removal.
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
@@ -2277,12 +2268,12 @@ impl<'a> AppendVecScan for ScanState<'a> {
 
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None, None)
+        Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
     }
 
     /// return (num_hash_scan_passes, bins_per_pass)
-    fn bins_per_pass(num_hash_scan_passes: Option<usize>) -> (usize, usize) {
-        let num_hash_scan_passes = num_hash_scan_passes.unwrap_or(NUM_SCAN_PASSES_DEFAULT);
+    fn bins_per_pass() -> (usize, usize) {
+        let num_hash_scan_passes = NUM_SCAN_PASSES_DEFAULT;
         let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_hash_scan_passes;
         assert!(
             num_hash_scan_passes <= PUBKEY_BINS_FOR_CALCULATING_HASHES,
@@ -2300,7 +2291,6 @@ impl AccountsDb {
     fn default_with_accounts_index(
         accounts_index: AccountInfoAccountsIndex,
         accounts_hash_cache_path: Option<PathBuf>,
-        num_hash_scan_passes: Option<usize>,
     ) -> Self {
         let num_threads = get_thread_count();
         const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
@@ -2317,9 +2307,6 @@ impl AccountsDb {
 
         let mut bank_hashes = HashMap::new();
         bank_hashes.insert(0, BankHashInfo::default());
-
-        // validate inside here
-        Self::bins_per_pass(num_hash_scan_passes);
 
         // Increase the stack for accounts threads
         // rayon needs a lot of stack
@@ -2381,7 +2368,6 @@ impl AccountsDb {
             accounts_update_notifier: None,
             filler_accounts_config: FillerAccountsConfig::default(),
             filler_account_suffix: None,
-            num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
             exhaustively_verify_refcounts: false,
             epoch_accounts_hash_manager: EpochAccountsHashManager::new_invalid(),
@@ -2477,13 +2463,7 @@ impl AccountsDb {
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
             exhaustively_verify_refcounts,
-            ..Self::default_with_accounts_index(
-                accounts_index,
-                accounts_hash_cache_path,
-                accounts_db_config
-                    .as_ref()
-                    .and_then(|cfg| cfg.hash_calc_num_passes),
-            )
+            ..Self::default_with_accounts_index(accounts_index, accounts_hash_cache_path)
         };
         if paths_is_empty {
             // Create a temporary set of accounts directories, used primarily
@@ -7629,7 +7609,7 @@ impl AccountsDb {
 
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
-        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
+        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = || {
             let mut previous_pass = PreviousPass::default();
