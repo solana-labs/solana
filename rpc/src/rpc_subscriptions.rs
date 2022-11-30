@@ -1411,6 +1411,12 @@ pub(crate) mod tests {
                     encoding: UiAccountEncoding::Binary,
                 }));
 
+            // Sleep here to ensure adequate time for the async thread to fully process the
+            // subscribed notification before the bank transaction is processed. Without this
+            // sleep, the bank transaction ocassionally completes first and we hang forever
+            // waiting to receive a bank notification.
+            std::thread::sleep(Duration::from_millis(100));
+
             bank_forks
                 .read()
                 .unwrap()
