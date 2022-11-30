@@ -11,8 +11,6 @@ pub enum ProofError {
     #[error("proof generation failed")]
     Generation,
     #[error("proof failed to verify")]
-    Verification,
-    #[error("range proof failed to verify")]
     RangeProof,
     #[error("equality proof failed to verify")]
     EqualityProof,
@@ -30,6 +28,12 @@ pub enum ProofError {
     CiphertextDeserialization,
     #[error("invalid scalar data")]
     ScalarDeserialization,
+    #[error("invalid public key data")]
+    PubkeyDeserialization,
+    #[error("ciphertext does not exist in proof data")]
+    MissingCiphertext,
+    #[error("transfer amount split failed")]
+    TransferSplit,
 }
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
