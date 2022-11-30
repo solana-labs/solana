@@ -33,11 +33,11 @@ pub const MERKLE_FANOUT: usize = 16;
 pub type SortedDataByPubkey<'a> = Vec<&'a [CalculateHashIntermediate]>;
 
 /// 1 file containing account hashes sorted by pubkey, mapped into memory
-struct MMapAccountHashesFile {
+struct MmapAccountHashesFile {
     mmap: MmapMut,
 }
 
-impl MMapAccountHashesFile {
+impl MmapAccountHashesFile {
     /// return a slice of account hashes starting at 'index'
     fn read(&self, index: usize) -> &[Hash] {
         let start = std::mem::size_of::<Hash>() * index;
@@ -61,10 +61,10 @@ pub struct AccountHashesFile {
 
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
-    fn get_reader(&mut self) -> Option<MMapAccountHashesFile> {
+    fn get_reader(&mut self) -> Option<MmapAccountHashesFile> {
         std::mem::take(&mut self.writer).map(|writer| {
             let file = Some(writer.into_inner().unwrap());
-            MMapAccountHashesFile {
+            MmapAccountHashesFile {
                 mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
             }
         })
@@ -383,7 +383,7 @@ pub struct CumulativeOffsets {
 #[derive(Default)]
 pub struct CumulativeHashesFromFiles {
     /// source of hashes in order
-    readers: Vec<MMapAccountHashesFile>,
+    readers: Vec<MmapAccountHashesFile>,
     /// look up reader index and offset by overall index
     cumulative: CumulativeOffsets,
 }
