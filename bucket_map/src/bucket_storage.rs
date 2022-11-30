@@ -391,7 +391,7 @@ impl BucketStorage {
 
 #[cfg(test)]
 mod test {
-    use {super::*, procfs::process::LimitValue, tempfile::tempdir};
+    use {super::*, tempfile::tempdir};
 
     #[test]
     fn test_bucket_storage() {
@@ -424,27 +424,20 @@ mod test {
         assert_eq!(storage.uid(ix), None);
 
         // test get_mmap_fd_stats
-        let (mmap_count, num_open_files, max_open_files_limit) =
-            BucketStorage::get_mmap_fd_stats().unwrap();
+        let (mmap_count, num_open_files, soft_limit, hard_limit) =
+            get_open_fd_stats().unwrap();
 
         assert!(mmap_count > 0);
         assert!(num_open_files > 0);
-        match max_open_files_limit.soft_limit {
-            LimitValue::Unlimited => {}
-            LimitValue::Value(x) => assert!(x > 0),
-        }
-
-        match max_open_files_limit.hard_limit {
-            LimitValue::Unlimited => {}
-            LimitValue::Value(x) => assert!(x > 0),
-        }
+        assert!(soft_limit > 0);
+        assert!(hard_limit > 0);
     }
 
     #[test]
     fn test_time_mmap() {
         use std::time::Instant;
 
-        let v = vec![];
+        let mut v = vec![];
         for i in 1..1900000 {
             if i % 100 == 0 {
                 println!("{}", i);
@@ -453,7 +446,7 @@ mod test {
             let tmpdir = tempdir().unwrap();
             let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
             assert!(!paths.is_empty());
-            let mut s =
+            let s =
                 BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
             v.push(s);
         }
@@ -464,8 +457,8 @@ mod test {
         let duration = start.elapsed();
 
         println!(
-            "{} {} {:?}",
-            mmap_count, num_open_files, max_open_files_limit
+            "{} {} {} {}",
+            mmap_count, num_open_files, soft_limit, hard_limit 
         );
 
         println!("Time elapsed is: {:?}", duration);
