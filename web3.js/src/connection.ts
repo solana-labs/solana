@@ -517,6 +517,18 @@ export type GetBalanceConfig = {
 export type GetBlockConfig = {
   /** The level of finality desired */
   commitment?: Finality;
+  /**
+   * Whether to populate the rewards array. If parameter not provided, the default includes rewards.
+   */
+  rewards?: boolean;
+  /**
+   * Level of transaction detail to return, either "full", "accounts", "signatures", or "none". If
+   * parameter not provided, the default detail level is "full". If "accounts" are requested,
+   * transaction details only include signatures and an annotated list of accounts in each
+   * transaction. Transaction metadata is limited to only: fee, err, pre_balances, post_balances,
+   * pre_token_balances, and post_token_balances.
+   */
+  transactionDetails?: 'accounts' | 'full' | 'none' | 'signatures';
 };
 
 /**
