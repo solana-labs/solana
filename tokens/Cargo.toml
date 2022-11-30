@@ -27,7 +27,7 @@ solana-remote-wallet = { path = "../remote-wallet", version = "=1.14.10" }
 solana-sdk = { path = "../sdk", version = "=1.14.10" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.14.10" }
 solana-version = { path = "../version", version = "=1.14.10" }
-spl-associated-token-account = { version = "=1.1.1" }
+spl-associated-token-account = { version = "=1.1.2" }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
 tempfile = "3.3.0"
 thiserror = "1.0"
