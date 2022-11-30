@@ -1236,8 +1236,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::WindowIndex {
             header,
@@ -1270,8 +1269,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::HighestWindowIndex {
             header,
