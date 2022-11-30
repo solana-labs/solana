@@ -4548,6 +4548,7 @@ impl AccountsDb {
         let (to_store, find_alive_elapsed) = measure!(AccountsToStore::new(
             available_bytes,
             &shrink_collect.alive_accounts,
+            shrink_collect.alive_total_bytes,
             slot
         ));
 
@@ -9963,7 +9964,8 @@ pub mod tests {
         };
         let found = FoundStoredAccount { account, store_id };
         let map = vec![&found];
-        let to_store = AccountsToStore::new(available_bytes, &map, slot0);
+        let alive_total_bytes = found.account.stored_size;
+        let to_store = AccountsToStore::new(available_bytes, &map, alive_total_bytes, slot0);
         // Done: setup 'to_store'
 
         current_ancient.create_ancient_append_vec(slot0, &db);

@@ -35,19 +35,23 @@ impl<'a> AccountsToStore<'a> {
     pub fn new(
         mut available_bytes: u64,
         accounts: &'a [&'a FoundStoredAccount<'a>],
+        alive_total_bytes: usize,
         slot: Slot,
     ) -> Self {
         let num_accounts = accounts.len();
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
-        for (i, account) in accounts.iter().enumerate() {
-            let account_size = account.account.stored_size as u64;
-            if available_bytes >= account_size {
-                available_bytes = available_bytes.saturating_sub(account_size);
-            } else if index_first_item_overflow == num_accounts {
-                // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
-                index_first_item_overflow = i;
-                break;
+        if alive_total_bytes > available_bytes as usize {
+            // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
+            for (i, account) in accounts.iter().enumerate() {
+                let account_size = account.account.stored_size as u64;
+                if available_bytes >= account_size {
+                    available_bytes = available_bytes.saturating_sub(account_size);
+                } else if index_first_item_overflow == num_accounts {
+                    // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
+                    index_first_item_overflow = i;
+                    break;
+                }
             }
         }
         Self {
@@ -105,7 +109,7 @@ pub mod tests {
     fn test_accounts_to_store_simple() {
         let map = vec![];
         let slot = 1;
-        let accounts_to_store = AccountsToStore::new(0, &map, slot);
+        let accounts_to_store = AccountsToStore::new(0, &map, 0, slot);
         for selector in [StorageSelector::Primary, StorageSelector::Overflow] {
             let accounts = accounts_to_store.get(selector);
             assert!(accounts.is_empty());
@@ -152,7 +156,9 @@ pub mod tests {
             (StorageSelector::Overflow, account_size - 1),
         ] {
             let slot = 1;
-            let accounts_to_store = AccountsToStore::new(available_bytes as u64, &map, slot);
+            let alive_total_bytes = account_size;
+            let accounts_to_store =
+                AccountsToStore::new(available_bytes as u64, &map, alive_total_bytes, slot);
             let accounts = accounts_to_store.get(selector);
             assert_eq!(
                 accounts.iter().map(|b| &b.account).collect::<Vec<_>>(),
