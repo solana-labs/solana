@@ -4352,7 +4352,7 @@ impl AccountsDb {
     /// returns the pubkeys that are in 'accounts' that are already in 'existing_ancient_pubkeys'
     /// Also updated 'existing_ancient_pubkeys' to include all pubkeys in 'accounts' since they will soon be written into the ancient slot.
     fn get_keys_to_unref_ancient<'a>(
-        accounts: &'a [&StoredAccountMeta<'_>],
+        accounts: &'a [&FoundStoredAccount<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) -> HashSet<&'a Pubkey> {
         let mut unref = HashSet::<&Pubkey>::default();
@@ -4374,7 +4374,7 @@ impl AccountsDb {
     /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
-        accounts: &[&StoredAccountMeta<'_>],
+        accounts: &[&FoundStoredAccount<'_>],
         existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
         let unref = Self::get_keys_to_unref_ancient(accounts, existing_ancient_pubkeys);
@@ -10106,8 +10106,25 @@ pub mod tests {
             stored_size,
             hash: &hash,
         };
+        let store_id = 0;
+        let found_account = FoundStoredAccount {
+            account: stored_account,
+            store_id,
+        };
+        let found_account2 = FoundStoredAccount {
+            account: stored_account2,
+            store_id,
+        };
+        let found_account3 = FoundStoredAccount {
+            account: stored_account3,
+            store_id,
+        };
+        let found_account4 = FoundStoredAccount {
+            account: stored_account4,
+            store_id,
+        };
         let mut existing_ancient_pubkeys = HashSet::default();
-        let accounts = [&stored_account];
+        let accounts = [&found_account];
         // pubkey NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
@@ -10125,7 +10142,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey]);
         // pubkey2 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [&stored_account2];
+        let accounts = [&found_account2];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
@@ -10148,7 +10165,7 @@ pub mod tests {
         );
         assert_eq!(unrefs.iter().cloned().collect::<Vec<_>>(), vec![&pubkey2]);
         // pubkey3/4 NOT in existing_ancient_pubkeys, so do NOT unref, but add to existing_ancient_pubkeys
-        let accounts = [&stored_account3, &stored_account4];
+        let accounts = [&found_account3, &found_account4];
         let unrefs =
             AccountsDb::get_keys_to_unref_ancient(&accounts, &mut existing_ancient_pubkeys);
         assert!(unrefs.is_empty());
