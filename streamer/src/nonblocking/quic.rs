@@ -1016,7 +1016,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            100,
+            1000,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
