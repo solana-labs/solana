@@ -7,7 +7,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
-    procfs::process::{LimitValue, Process},
+    solana_bucket_map::bucket_map::get_open_fd_stats,
     solana_sdk::timing::AtomicInterval,
     std::{
         collections::HashMap,
@@ -832,58 +832,13 @@ impl SystemMonitorService {
         Self::report_cpuid_values();
     }
 
-    fn get_mmap_count() -> Option<usize> {
-        let pid = std::process::id();
-        let map_path = format!("/proc/{}/maps", pid);
-        let output = std::process::Command::new("wc")
-            .args(["-l", &map_path])
-            .output()
-            .unwrap();
-        if output.status.success() {
-            let n: usize = std::str::from_utf8(&output.stdout)
-                .unwrap()
-                .split_whitespace()
-                .next()
-                .unwrap()
-                .parse()
-                .unwrap();
-
-            Some(n)
-        } else {
-            None
-        }
-    }
-
-    fn get_open_fd_stats() -> Option<(usize, usize, usize, usize)> {
-        let proc = Process::myself().ok()?;
-        let curr_num_open_fd = proc.fd_count().unwrap();
-        let curr_mmap_count = Self::get_mmap_count().unwrap();
-        let max_open_fd_limit = proc.limits().unwrap().max_open_files;
-
-        let max_open_fd_soft_limit = match max_open_fd_limit.soft_limit {
-            LimitValue::Unlimited => usize::MAX,
-            LimitValue::Value(x) => x as usize,
-        };
-        let max_open_fd_hard_limit = match max_open_fd_limit.hard_limit {
-            LimitValue::Unlimited => usize::MAX,
-            LimitValue::Value(x) => x as usize,
-        };
-
-        Some((
-            curr_num_open_fd,
-            curr_mmap_count,
-            max_open_fd_soft_limit,
-            max_open_fd_hard_limit,
-        ))
-    }
-
     fn report_open_fd_stats() {
         if let Some((
             curr_num_open_fd,
             curr_mmap_count,
             max_open_fd_soft_limit,
             max_open_fd_hard_limit,
-        )) = Self::get_open_fd_stats()
+        )) = get_open_fd_stats()
         {
             datapoint_info!(
                 "open-fd-stats",

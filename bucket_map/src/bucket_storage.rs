@@ -1,7 +1,6 @@
 use {
-    crate::{bucket_stats::BucketStats, MaxSearch},
+    crate::{bucket_map::get_open_fd_stats, bucket_stats::BucketStats, MaxSearch},
     memmap2::MmapMut,
-    procfs::process::{Limit, Process},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
     std::{
@@ -263,37 +262,6 @@ impl BucketStorage {
         }
     }
 
-    fn get_mmap_count() -> Option<usize> {
-        let pid = std::process::id();
-        let map_path = format!("/proc/{}/maps", pid);
-        let output = std::process::Command::new("wc")
-            .args(["-l", &map_path])
-            .output()
-            .unwrap();
-        if output.status.success() {
-            let n: usize = std::str::from_utf8(&output.stdout)
-                .unwrap()
-                .split_whitespace()
-                .next()
-                .unwrap()
-                .parse()
-                .unwrap();
-
-            Some(n)
-        } else {
-            None
-        }
-    }
-
-    fn get_mmap_fd_stats() -> Option<(usize, usize, Limit)> {
-        let proc = Process::myself().ok()?;
-        let mmap_count = Self::get_mmap_count().unwrap();
-        let max_open_files_limit = proc.limits().unwrap().max_open_files;
-        let num_open_files = proc.fd_count().unwrap();
-
-        Some((mmap_count, num_open_files, max_open_files_limit))
-    }
-
     fn new_map(
         drives: &[PathBuf],
         cell_size: usize,
@@ -312,12 +280,13 @@ impl BucketStorage {
             .create(true)
             .open(file.clone())
             .map_err(|e| {
-                let mmap_msg = Self::get_mmap_fd_stats()
-                    .map(|(mmap_count, num_open_files, max_open_files_limit)| {
-                        format!("current mmap_count: {}, current number of open files: {}, max limit of open files: {:?}",
+                let mmap_msg = get_open_fd_stats()
+                    .map(|(mmap_count, num_open_files, soft_limit, hard_limit)| {
+                        format!("current mmap_count: {}, current number of open files: {}, soft_limit: {}, hard_limit: {}",
                                         mmap_count,
                                         num_open_files,
-                                        max_open_files_limit,
+                                        soft_limit, 
+                                        hard_limit, 
                         )
                     }).unwrap_or_default();
                 panic!(
@@ -491,8 +460,7 @@ mod test {
 
         // test get_mmap_fd_stats
         let start = Instant::now();
-        let (mmap_count, num_open_files, max_open_files_limit) =
-            BucketStorage::get_mmap_fd_stats().unwrap();
+        let (mmap_count, num_open_files, soft_limit, hard_limit) = get_open_fd_stats().unwrap();
         let duration = start.elapsed();
 
         println!(
