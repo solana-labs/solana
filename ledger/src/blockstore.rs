@@ -842,7 +842,13 @@ impl Blockstore {
                         leader_schedule,
                         shred_source,
                     ) {
-                        Err(InsertDataShredError::Exists) => metrics.num_data_shreds_exists += 1,
+                        Err(InsertDataShredError::Exists) => {
+                            if is_repaired {
+                                metrics.num_repaired_data_shreds_exists += 1;
+                            } else {
+                                metrics.num_turbine_data_shreds_exists += 1;
+                            }
+                        }
                         Err(InsertDataShredError::InvalidShred) => {
                             metrics.num_data_shreds_invalid += 1
                         }
