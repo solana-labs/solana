@@ -24,7 +24,7 @@ use {
         mem,
         path::{Path, PathBuf},
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicU64, AtomicUsize, Ordering},
             Mutex,
         },
     },
@@ -284,9 +284,14 @@ pub struct AppendVec {
     remove_on_drop: bool,
 }
 
+lazy_static! {
+    pub static ref APPEND_VEC_MMAPPED_FILES_OPEN: AtomicU64 = AtomicU64::default();
+}
+
 impl Drop for AppendVec {
     fn drop(&mut self) {
         if self.remove_on_drop {
+            APPEND_VEC_MMAPPED_FILES_OPEN.fetch_sub(1, Ordering::Relaxed);
             if let Err(_e) = remove_file(&self.path) {
                 // promote this to panic soon.
                 // disabled due to many false positive warnings while running tests.
@@ -341,6 +346,7 @@ impl AppendVec {
             );
             std::process::exit(1);
         });
+        APPEND_VEC_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
 
         AppendVec {
             path: file.to_path_buf(),
@@ -450,6 +456,7 @@ impl AppendVec {
             }
             result?
         };
+        APPEND_VEC_MMAPPED_FILES_OPEN.fetch_add(1, Ordering::Relaxed);
 
         Ok(AppendVec {
             path: path.as_ref().to_path_buf(),
