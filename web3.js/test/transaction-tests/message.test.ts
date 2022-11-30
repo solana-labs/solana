@@ -3,6 +3,7 @@ import {expect} from 'chai';
 import {sha256} from '@noble/hashes/sha256';
 
 import {
+  Transaction,
   TransactionInstruction,
   TransactionMessage,
 } from '../../src/transaction';
@@ -65,6 +66,40 @@ describe('TransactionMessage', () => {
     expect(decompiledMessage.payerKey).to.eql(payerKey);
     expect(decompiledMessage.recentBlockhash).to.eq(recentBlockhash);
     expect(decompiledMessage.instructions).to.eql(instructions);
+  });
+
+  // Regression test for https://github.com/solana-labs/solana/issues/28900
+  it('decompiles a legacy message the same way as the old API', () => {
+    const accountKeys = createTestKeys(7);
+    const legacyMessage = new Message({
+      header: {
+        numRequiredSignatures: 1,
+        numReadonlySignedAccounts: 0,
+        numReadonlyUnsignedAccounts: 5,
+      },
+      recentBlockhash: bs58.encode(sha256('test')),
+      accountKeys,
+      instructions: [
+        {
+          accounts: [0, 6, 1, 3, 4, 2],
+          data: '',
+          programIdIndex: 5,
+        },
+      ],
+    });
+
+    const transactionFromLegacyAPI = Transaction.populate(legacyMessage);
+    const transactionMessage = TransactionMessage.decompile(legacyMessage);
+
+    expect(transactionMessage.payerKey).to.eql(
+      transactionFromLegacyAPI.feePayer,
+    );
+    expect(transactionMessage.instructions).to.eql(
+      transactionFromLegacyAPI.instructions,
+    );
+    expect(transactionMessage.recentBlockhash).to.eql(
+      transactionFromLegacyAPI.recentBlockhash,
+    );
   });
 
   it('decompiles a V0 message', () => {
