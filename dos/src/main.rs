@@ -222,7 +222,7 @@ fn run_dos(
                 slot,
                 shred_index: 0,
             };
-            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
+            data = ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap();
         }
         DataType::RepairShred => {
             let slot = 100;
@@ -233,14 +233,14 @@ fn run_dos(
                 slot,
                 shred_index: 0,
             };
-            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
+            data = ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap();
         }
         DataType::RepairOrphan => {
             let slot = 100;
             let keypair = Keypair::new();
             let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
             let req = RepairProtocol::Orphan { header, slot };
-            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
+            data = ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap();
         }
         DataType::Random => {
             data.resize(params.data_size, 0);
@@ -369,75 +369,8 @@ struct TransactionParams {
     #[clap(long, help = "Generate a valid blockhash for transaction")]
     valid_blockhash: bool,
 
-<<<<<<< HEAD
     #[clap(long, help = "Generate valid signature(s) for transaction")]
     valid_signatures: bool,
-=======
-    if params.mode == Mode::Rpc {
-        // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
-        let rpc_client =
-            get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
-        // existence of data_input is checked at cli level
-        run_dos_rpc_mode(
-            rpc_client,
-            iterations,
-            params.data_type,
-            &params.data_input.unwrap(),
-        );
-    } else if params.data_type == DataType::Transaction
-        && params.transaction_params.unique_transactions
-    {
-        let (_, target_addr) = target.expect("should have target");
-        info!("Targeting {}", target_addr);
-        run_dos_transactions(
-            target_addr,
-            iterations,
-            client,
-            params.transaction_params,
-            params.tpu_use_quic,
-            params.num_gen_threads,
-            params.send_batch_size,
-        );
-    } else {
-        let (target_id, target_addr) = target.expect("should have target");
-        info!("Targeting {}", target_addr);
-        let mut data = match params.data_type {
-            DataType::RepairHighest => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::WindowIndex {
-                    header,
-                    slot,
-                    shred_index: 0,
-                };
-                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
-            }
-            DataType::RepairShred => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::HighestWindowIndex {
-                    header,
-                    slot,
-                    shred_index: 0,
-                };
-                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
-            }
-            DataType::RepairOrphan => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::Orphan { header, slot };
-                ServeRepair::repair_proto_to_bytes(&req, &keypair).unwrap()
-            }
-            DataType::Random => {
-                vec![0; params.data_size]
-            }
-            DataType::Transaction => {
-                let tp = params.transaction_params;
-                info!("{:?}", tp);
->>>>>>> 15050b14b (use signed repair request variants (#28283))
 
     #[clap(long, help = "Generate unique transactions")]
     unique_transactions: bool,

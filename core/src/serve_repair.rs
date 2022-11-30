@@ -26,16 +26,8 @@ use {
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
-<<<<<<< HEAD
     solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler},
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
-=======
-    solana_perf::{
-        data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PacketBatchRecycler},
-    },
     solana_runtime::bank_forks::BankForks,
->>>>>>> 15050b14b (use signed repair request variants (#28283))
     solana_sdk::{
         clock::Slot,
         hash::{Hash, HASH_BYTES},
@@ -1215,33 +1207,6 @@ mod tests {
         } else {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
-<<<<<<< HEAD
-
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&sign_repair_requests::id());
-        bank.feature_set = Arc::new(feature_set);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let serve_repair = ServeRepair::new(cluster_info, bank_forks.clone());
-
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        let request_bytes = serve_repair
-            .ancestor_repair_request_bytes(&keypair, &root_bank, &repair_peer_id, slot, nonce)
-            .unwrap();
-        let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), request_bytes.len() as u64);
-        if let RepairProtocol::LegacyAncestorHashes(ci, deserialized_slot, deserialized_nonce) =
-            deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
-=======
->>>>>>> 15050b14b (use signed repair request variants (#28283))
     }
 
     #[test]
@@ -1270,16 +1235,10 @@ mod tests {
             )
             .unwrap();
 
-<<<<<<< HEAD
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-=======
         let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
             deserialize_from_with_limit(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
->>>>>>> 15050b14b (use signed repair request variants (#28283))
         if let RepairProtocol::WindowIndex {
             header,
             slot: deserialized_slot,
@@ -1299,37 +1258,6 @@ mod tests {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
 
-<<<<<<< HEAD
-        let rsp = serve_repair
-            .map_repair_request(
-                &request,
-                &repair_peer_id,
-                &mut RepairStats::default(),
-                nonce,
-                None,
-            )
-            .unwrap();
-
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-        if let RepairProtocol::LegacyWindowIndexWithNonce(
-            ci,
-            deserialized_slot,
-            deserialized_shred_index,
-            deserialized_nonce,
-        ) = deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(shred_index, deserialized_shred_index);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
-
-=======
->>>>>>> 15050b14b (use signed repair request variants (#28283))
         let request = ShredRepairType::HighestShred(slot, shred_index);
         let request_bytes = serve_repair
             .map_repair_request(
@@ -1341,16 +1269,10 @@ mod tests {
             )
             .unwrap();
 
-<<<<<<< HEAD
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-=======
         let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
             deserialize_from_with_limit(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
->>>>>>> 15050b14b (use signed repair request variants (#28283))
         if let RepairProtocol::HighestWindowIndex {
             header,
             slot: deserialized_slot,
@@ -1369,37 +1291,6 @@ mod tests {
         } else {
             panic!("unexpected request type {:?}", &deserialized_request);
         }
-<<<<<<< HEAD
-
-        let rsp = serve_repair
-            .map_repair_request(
-                &request,
-                &repair_peer_id,
-                &mut RepairStats::default(),
-                nonce,
-                None,
-            )
-            .unwrap();
-
-        let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
-        assert_eq!(cursor.position(), rsp.len() as u64);
-        if let RepairProtocol::LegacyHighestWindowIndexWithNonce(
-            ci,
-            deserialized_slot,
-            deserialized_shred_index,
-            deserialized_nonce,
-        ) = deserialized_request
-        {
-            assert_eq!(slot, deserialized_slot);
-            assert_eq!(shred_index, deserialized_shred_index);
-            assert_eq!(nonce, deserialized_nonce);
-            assert_eq!(&serve_repair.my_id(), &ci.id);
-        } else {
-            panic!("unexpected request type {:?}", &deserialized_request);
-        }
-=======
->>>>>>> 15050b14b (use signed repair request variants (#28283))
     }
 
     #[test]

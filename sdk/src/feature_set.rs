@@ -411,61 +411,8 @@ pub mod prevent_crediting_accounts_that_end_rent_paying {
     solana_sdk::declare_id!("812kqX67odAp5NFwM8D2N24cku7WTm9CHUTFUXaDkWPn");
 }
 
-<<<<<<< HEAD
-pub mod sign_repair_requests {
-    solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
-}
-
 pub mod return_none_for_zero_lamport_accounts {
     solana_sdk::declare_id!("7K5HFrS1WAq6ND7RQbShXZXbtAookyTfaDQPTJNuZpze");
-=======
-pub mod cap_bpf_program_instruction_accounts {
-    solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
-}
-
-pub mod loosen_cpi_size_restriction {
-    solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
-}
-
-pub mod use_default_units_in_fee_calculation {
-    solana_sdk::declare_id!("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To");
-}
-
-pub mod compact_vote_state_updates {
-    solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
-}
-
-pub mod incremental_snapshot_only_incremental_hash_calculation {
-    solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
-}
-
-pub mod disable_cpi_setting_executable_and_rent_epoch {
-    solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
-}
-
-pub mod relax_authority_signer_check_for_lookup_table_creation {
-    solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
-}
-
-pub mod stop_sibling_instruction_search_at_parent {
-    solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
-}
-
-pub mod vote_state_update_root_fix {
-    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
-}
-
-pub mod cap_accounts_data_allocations_per_transaction {
-    solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
-}
-
-pub mod epoch_accounts_hash {
-    solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
-}
-
-pub mod remove_deprecated_request_unit_ix {
-    solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
->>>>>>> 15050b14b (use signed repair request variants (#28283))
 }
 
 pub mod increase_tx_account_lock_limit {
@@ -573,23 +520,7 @@ lazy_static! {
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
-<<<<<<< HEAD
-        (sign_repair_requests::id(), "sign repair requests #26834"),
         (return_none_for_zero_lamport_accounts::id(), "return none for zero lamport accounts #27800"),
-=======
-        (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
-        (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
-        (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
-        (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
-        (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
-        (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
-        (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
-        (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
-        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
-        (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
-        (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
-        (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
->>>>>>> 15050b14b (use signed repair request variants (#28283))
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         /*************** ADD NEW FEATURES HERE ***************/
