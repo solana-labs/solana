@@ -157,6 +157,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
 }
 
 /// this tuple contains a single different source slot that applies to all accounts
+/// accounts are StoredAccountMeta
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
@@ -199,6 +200,7 @@ impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
 }
 
 /// this tuple contains a single different source slot that applies to all accounts
+/// accounts are FoundStoredAccount
 impl<'a> StorableAccounts<'a, StoredAccountMeta<'a>>
     for (
         Slot,
