@@ -4123,12 +4123,10 @@ mod tests {
                 Blockstore::open(ledger_path.path())
                     .expect("Expected to be able to open database ledger"),
             );
-            let poh_config = PohConfig {
-                // limit tick count to avoid clearing working_bank at PohRecord then
-                // PohRecorderError(MaxHeightReached) at BankingStage
-                target_tick_count: Some(bank.max_tick_height() - 1),
-                ..PohConfig::default()
-            };
+            let mut poh_config = PohConfig::default();
+            // limit tick count to avoid clearing working_bank at PohRecord then
+            // PohRecorderError(MaxHeightReached) at BankingStage
+            poh_config.target_tick_count = Some(bank.max_tick_height() - 1);
             let (exit, poh_recorder, poh_service, _entry_receiver) =
                 create_test_recorder(&bank, &blockstore, Some(poh_config), None);
             let cluster_info = new_test_cluster_info(Node::new_localhost().info);

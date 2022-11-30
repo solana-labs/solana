@@ -2038,10 +2038,7 @@ impl Bank {
             "Bank snapshot genesis creation time does not match genesis.bin creation time.\
              The snapshot and genesis.bin might pertain to different clusters"
         );
-        assert_eq!(
-            bank.hashes_per_tick,
-            genesis_config.hashes_per_tick()
-        );
+        assert_eq!(bank.hashes_per_tick, genesis_config.hashes_per_tick());
         assert_eq!(bank.ticks_per_slot, genesis_config.ticks_per_slot);
         assert_eq!(
             bank.ns_per_slot,
@@ -10329,7 +10326,6 @@ pub(crate) mod tests {
                 })
                 .collect(),
             // set it up so the first epoch is a full year long
-
             poh_config: PohConfig::new_sleep(Duration::from_secs(
                 SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH as u64 / DEFAULT_TICKS_PER_SLOT,
             )),
