@@ -4942,7 +4942,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token-2022 0.5.0",
+ "spl-token-2022",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5949,75 +5949,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
-name = "solana-rpc-client"
-version = "1.15.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "base64 0.13.0",
- "bincode",
- "bs58",
- "crossbeam-channel",
- "futures 0.3.24",
- "indicatif",
- "jsonrpc-core",
- "jsonrpc-http-server",
- "log",
- "reqwest",
- "semver 1.0.14",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-rpc-client-api",
- "solana-sdk 1.15.0",
- "solana-transaction-status",
- "solana-version",
- "solana-vote-program",
- "tokio",
-]
-
-[[package]]
-name = "solana-rpc-client-api"
-version = "1.15.0"
-dependencies = [
- "base64 0.13.0",
- "bs58",
- "jsonrpc-core",
- "reqwest",
- "semver 1.0.14",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-sdk 1.15.0",
- "solana-transaction-status",
- "solana-version",
- "spl-token-2022",
- "thiserror",
-]
-
-[[package]]
-name = "solana-rpc-client-nonce-utils"
-version = "1.15.0"
-dependencies = [
- "anyhow",
- "clap 2.33.3",
- "futures 0.3.24",
- "serde_json",
- "solana-account-decoder",
- "solana-clap-utils",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-sdk 1.15.0",
- "thiserror",
- "tokio",
-]
-
-[[package]]
->>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979))
 name = "solana-rpc-test"
 version = "1.14.10"
 dependencies = [
@@ -6733,11 +6664,7 @@ dependencies = [
  "num-traits",
  "solana-program 1.14.8",
  "spl-token",
-<<<<<<< HEAD
- "spl-token-2022 0.4.2",
-=======
  "spl-token-2022",
->>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979))
  "thiserror",
 ]
 
@@ -6767,27 +6694,6 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
-<<<<<<< HEAD
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0a97cbf60b91b610c846ccf8eecca96d92a24a19ffbf9fe06cd0c84e76ec45e"
-dependencies = [
- "arrayref",
- "bytemuck",
- "num-derive",
- "num-traits",
- "num_enum",
- "solana-program 1.14.8",
- "solana-zk-token-sdk 1.14.8",
- "spl-memo",
- "spl-token",
- "thiserror",
-]
-
-[[package]]
-name = "spl-token-2022"
-=======
->>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979))
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0edb869dbe159b018f17fb9bfa67118c30f232d7f54a73742bc96794dff77ed8"
