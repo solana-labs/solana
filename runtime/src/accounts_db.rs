@@ -25,7 +25,7 @@ use {
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
             AccountsHash, AccountsHasher, CalcAccountsHashConfig, CalculateHashIntermediate,
-            HashStats, PreviousPass,
+            HashStats,
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
@@ -116,7 +116,6 @@ pub const DEFAULT_NUM_DIRS: u32 = 4;
 // When calculating hashes, it is helpful to break the pubkeys found into bins based on the pubkey value.
 // More bins means smaller vectors to sort, copy, etc.
 pub const PUBKEY_BINS_FOR_CALCULATING_HASHES: usize = 65536;
-pub const NUM_SCAN_PASSES_DEFAULT: usize = 2;
 
 // Without chunks, we end up with 1 output vec for each outer snapshot storage.
 // This results in too many vectors to be efficient.
@@ -2275,23 +2274,6 @@ impl<'a> AppendVecScan for ScanState<'a> {
 impl AccountsDb {
     pub fn default_for_tests() -> Self {
         Self::default_with_accounts_index(AccountInfoAccountsIndex::default_for_tests(), None)
-    }
-
-    /// return (num_hash_scan_passes, bins_per_pass)
-    fn bins_per_pass() -> (usize, usize) {
-        let num_hash_scan_passes = NUM_SCAN_PASSES_DEFAULT;
-        let bins_per_pass = PUBKEY_BINS_FOR_CALCULATING_HASHES / num_hash_scan_passes;
-        assert!(
-            num_hash_scan_passes <= PUBKEY_BINS_FOR_CALCULATING_HASHES,
-            "num_hash_scan_passes must be <= {}",
-            PUBKEY_BINS_FOR_CALCULATING_HASHES
-        );
-        assert_eq!(
-            bins_per_pass * num_hash_scan_passes,
-            PUBKEY_BINS_FOR_CALCULATING_HASHES
-        ); // evenly divisible
-
-        (num_hash_scan_passes, bins_per_pass)
     }
 
     fn default_with_accounts_index(
@@ -7615,63 +7597,49 @@ impl AccountsDb {
 
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
-        let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass();
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = || {
-            let mut previous_pass = PreviousPass::default();
-            let mut final_result = (Hash::default(), 0);
-
             let cache_hash_data = self.get_cache_hash_data(config, storages.max_slot_inclusive());
 
-            for pass in 0..num_hash_scan_passes {
-                let bounds = Range {
-                    start: pass * bins_per_pass,
-                    end: (pass + 1) * bins_per_pass,
-                };
+            let bounds = Range {
+                start: 0,
+                end: PUBKEY_BINS_FOR_CALCULATING_HASHES,
+            };
 
-                let hash = AccountsHasher {
-                    filler_account_suffix: if self.filler_accounts_config.count > 0 {
-                        self.filler_account_suffix
-                    } else {
-                        None
-                    },
-                };
+            let hash = AccountsHasher {
+                filler_account_suffix: if self.filler_accounts_config.count > 0 {
+                    self.filler_account_suffix
+                } else {
+                    None
+                },
+            };
 
-                // get raw data by scanning
-                let result = self.scan_snapshot_stores_with_cache(
-                    &cache_hash_data,
-                    storages,
-                    &mut stats,
-                    PUBKEY_BINS_FOR_CALCULATING_HASHES,
-                    &bounds,
-                    config,
-                    hash.filler_account_suffix.as_ref(),
-                )?;
+            // get raw data by scanning
+            let result = self.scan_snapshot_stores_with_cache(
+                &cache_hash_data,
+                storages,
+                &mut stats,
+                PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                &bounds,
+                config,
+                hash.filler_account_suffix.as_ref(),
+            )?;
 
-                // convert mmapped cache files into slices of data
-                let slices = result
-                    .iter()
-                    .map(|d| d.get_cache_hash_data())
-                    .collect::<Vec<_>>();
+            // convert mmapped cache files into slices of data
+            let slices = result
+                .iter()
+                .map(|d| d.get_cache_hash_data())
+                .collect::<Vec<_>>();
 
-                // rework slices of data into bins for parallel processing and to match data shape expected by 'rest_of_hash_calculation'
-                let result = AccountsHasher::get_binned_data(
-                    &slices,
-                    PUBKEY_BINS_FOR_CALCULATING_HASHES,
-                    &bounds,
-                );
+            // rework slices of data into bins for parallel processing and to match data shape expected by 'rest_of_hash_calculation'
+            let result = AccountsHasher::get_binned_data(
+                &slices,
+                PUBKEY_BINS_FOR_CALCULATING_HASHES,
+                &bounds,
+            );
 
-                // turn raw data into merkle tree hashes and sum of lamports
-                let (hash, lamports, for_next_pass) = hash.rest_of_hash_calculation(
-                    result,
-                    &mut stats,
-                    pass == num_hash_scan_passes - 1,
-                    previous_pass,
-                    bins_per_pass,
-                );
-                previous_pass = for_next_pass;
-                final_result = (hash, lamports);
-            }
+            // turn raw data into merkle tree hashes and sum of lamports
+            let final_result = hash.rest_of_hash_calculation(result, &mut stats);
 
             info!(
                 "calculate_accounts_hash_from_storages: slot: {} {:?}",
