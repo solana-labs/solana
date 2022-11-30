@@ -52,7 +52,6 @@ impl<'a> Iterator for RepairWeightTraversal<'a> {
                     .tree
                     .children(&(slot, Hash::default()))
                     .unwrap()
-                    .iter()
                     .map(|(child_slot, _)| Visit::Unvisited(*child_slot))
                     .collect();
 
