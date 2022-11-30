@@ -8,7 +8,7 @@ import {
 } from '../../src/transaction';
 import {PublicKey} from '../../src/publickey';
 import {AddressLookupTableAccount} from '../../src/programs';
-import {MessageV0} from '../../src/message';
+import {Message, MessageV0} from '../../src/message';
 
 function createTestKeys(count: number): Array<PublicKey> {
   return new Array(count).fill(0).map(() => PublicKey.unique());
@@ -31,7 +31,43 @@ function createTestLookupTable(
 }
 
 describe('TransactionMessage', () => {
-  it('decompile', () => {
+  it('decompiles a legacy message', () => {
+    const keys = createTestKeys(7);
+    const recentBlockhash = bs58.encode(sha256('test'));
+    const payerKey = keys[0];
+    const instructions = [
+      new TransactionInstruction({
+        programId: keys[5],
+        keys: [
+          {pubkey: keys[0], isSigner: true, isWritable: true},
+          {pubkey: keys[6], isSigner: false, isWritable: false},
+          {pubkey: keys[1], isSigner: false, isWritable: true},
+          {pubkey: keys[3], isSigner: false, isWritable: false},
+          {pubkey: keys[4], isSigner: false, isWritable: false},
+          {pubkey: keys[2], isSigner: false, isWritable: false},
+        ],
+        data: Buffer.alloc(1),
+      }),
+    ];
+
+    const message = Message.compile({
+      instructions,
+      payerKey,
+      recentBlockhash,
+    });
+
+    expect(() => TransactionMessage.decompile(message)).not.to.throw(
+      'Failed to get account keys because address table lookups were not resolved',
+    );
+
+    const decompiledMessage = TransactionMessage.decompile(message);
+
+    expect(decompiledMessage.payerKey).to.eql(payerKey);
+    expect(decompiledMessage.recentBlockhash).to.eq(recentBlockhash);
+    expect(decompiledMessage.instructions).to.eql(instructions);
+  });
+
+  it('decompiles a V0 message', () => {
     const keys = createTestKeys(7);
     const recentBlockhash = bs58.encode(sha256('test'));
     const payerKey = keys[0];
