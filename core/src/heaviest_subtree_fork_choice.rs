@@ -104,9 +104,6 @@ struct ForkInfo {
     latest_invalid_ancestor: Option<Slot>,
     // Set to true if this slot or a child node was duplicate confirmed.
     is_duplicate_confirmed: bool,
-    // Set to true if this slot is dumped. This indicates to not aggregate stake to parents, and to
-    // not choose this path for best slot.
-    is_dumped: bool,
 }
 
 impl ForkInfo {
@@ -120,7 +117,7 @@ impl ForkInfo {
 
     /// Returns if the fork rooted at this node is included in fork choice
     fn is_candidate(&self) -> bool {
-        self.latest_invalid_ancestor.is_none() && !self.is_dumped
+        self.latest_invalid_ancestor.is_none()
     }
 
     fn is_duplicate_confirmed(&self) -> bool {
@@ -328,7 +325,6 @@ impl HeaviestSubtreeForkChoice {
             parent: None,
             latest_invalid_ancestor: None,
             is_duplicate_confirmed: root_info.is_duplicate_confirmed,
-            is_dumped: false,
         };
         self.fork_infos.insert(root_parent, root_parent_info);
         self.tree_root = root_parent;
@@ -362,7 +358,6 @@ impl HeaviestSubtreeForkChoice {
                 // If the parent is none, then this is the root, which implies this must
                 // have reached the duplicate confirmed threshold
                 is_duplicate_confirmed: parent.is_none(),
-                is_dumped: false,
             });
 
         if parent.is_none() {
@@ -433,7 +428,8 @@ impl HeaviestSubtreeForkChoice {
             // Remove stake to be aggregated up the tree
             node_to_dump.stake_voted_subtree = 0;
             node_to_dump.stake_voted_at = 0;
-            node_to_dump.is_dumped = true;
+            // Mark this node as invalid so that it cannot be chosen as best child
+            node_to_dump.latest_invalid_ancestor = Some(slot_hash_key.0);
             node_to_dump.parent
         };
 
