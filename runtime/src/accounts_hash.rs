@@ -53,35 +53,45 @@ impl MmapAccountHashesFile {
 /// 1 file containing account hashes sorted by pubkey
 #[derive(Default)]
 pub struct AccountHashesFile {
-    /// an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
-    writer: Option<BufWriter<File>>,
-    /// # hashes in the file
-    count: usize,
+    /// # hashes and an open file that will be deleted on drop. None if there are zero hashes to represent, and thus, no file.
+    count_and_writer: Option<(usize, BufWriter<File>)>,
 }
 
 impl AccountHashesFile {
     /// map the file into memory and return a reader that can access it by slice
-    fn get_reader(&mut self) -> Option<MmapAccountHashesFile> {
-        std::mem::take(&mut self.writer).map(|writer| {
+    fn get_reader(&mut self) -> Option<(usize, MmapAccountHashesFile)> {
+        std::mem::take(&mut self.count_and_writer).map(|(count, writer)| {
             let file = Some(writer.into_inner().unwrap());
-            MmapAccountHashesFile {
-                mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
-            }
+            (
+                count,
+                MmapAccountHashesFile {
+                    mmap: unsafe { MmapMut::map_mut(file.as_ref().unwrap()).unwrap() },
+                },
+            )
         })
+    }
+
+    /// # hashes stored in this file
+    pub fn count(&self) -> usize {
+        self.count_and_writer
+            .as_ref()
+            .map(|(count, _)| *count)
+            .unwrap_or_default()
     }
 
     /// write 'hash' to the file
     /// If the file isn't open, create it first.
     pub fn write(&mut self, hash: &Hash) {
-        if self.writer.is_none() {
+        if self.count_and_writer.is_none() {
             // we have hashes to write but no file yet, so create a file that will auto-delete on drop
-            self.writer = Some(BufWriter::new(tempfile().unwrap()));
+            self.count_and_writer = Some((0, BufWriter::new(tempfile().unwrap())));
         }
+        let mut count_and_writer = self.count_and_writer.as_mut().unwrap();
         assert_eq!(
             std::mem::size_of::<Hash>(),
-            self.writer.as_mut().unwrap().write(hash.as_ref()).unwrap()
+            count_and_writer.1.write(hash.as_ref()).unwrap()
         );
-        self.count += 1;
+        count_and_writer.0 += 1;
     }
 }
 
@@ -395,9 +405,9 @@ impl CumulativeHashesFromFiles {
         let mut readers = Vec::with_capacity(hashes.len());
         let cumulative = CumulativeOffsets::new(hashes.into_iter().filter_map(|mut hash_file| {
             // ignores all hashfiles that have zero entries
-            (hash_file.count > 0).then(|| {
-                readers.push(hash_file.get_reader().unwrap());
-                hash_file.count
+            hash_file.get_reader().map(|(count, reader)| {
+                readers.push(reader);
+                count
             })
         }));
         Self {
@@ -900,7 +910,7 @@ impl AccountsHasher {
                         lamports_sum as u128 + lamports_bin as u128,
                     );
                     entries += unreduced_entries_count;
-                    hash_total += hashes_file.count;
+                    hash_total += hashes_file.count();
                     *lock = (min, max, lamports_sum, entries, hash_total);
                 }
                 hashes_file
@@ -1116,16 +1126,16 @@ pub mod tests {
         // 1 hash
         file.write(&hashes[0]);
         let reader = file.get_reader().unwrap();
-        assert_eq!(&[hashes[0]][..], reader.read(0));
-        assert!(reader.read(1).is_empty());
+        assert_eq!(&[hashes[0]][..], reader.1.read(0));
+        assert!(reader.1.read(1).is_empty());
 
         // multiple hashes
         let mut file = AccountHashesFile::default();
         assert!(file.get_reader().is_none());
         hashes.iter().for_each(|hash| file.write(hash));
         let reader = file.get_reader().unwrap();
-        (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.read(i)));
-        assert!(reader.read(2).is_empty());
+        (0..2).for_each(|i| assert_eq!(&hashes[i..], reader.1.read(i)));
+        assert!(reader.1.read(2).is_empty());
     }
 
     #[test]
@@ -1280,7 +1290,7 @@ pub mod tests {
         let slice = convert_to_slice2(&temp_vec);
         let (mut hashes, lamports, _) =
             AccountsHasher::default().de_dup_accounts_in_parallel(&slice, 0);
-        assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().read(0));
+        assert_eq!(&[Hash::default()], hashes.get_reader().unwrap().1.read(0));
         assert_eq!(lamports, 1);
     }
 
@@ -1290,7 +1300,7 @@ pub mod tests {
     fn get_vec(mut hashes: AccountHashesFile) -> Vec<Hash> {
         hashes
             .get_reader()
-            .map(|r| r.read(0).to_vec())
+            .map(|r| r.1.read(0).to_vec())
             .unwrap_or_default()
     }
 
