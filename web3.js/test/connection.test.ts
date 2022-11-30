@@ -24,6 +24,7 @@ import {
   NONCE_ACCOUNT_LENGTH,
 } from '../src';
 import invariant from '../src/utils/assert';
+import {toBuffer} from '../src/utils/to-buffer';
 import {MOCK_PORT, url} from './url';
 import {
   AccountInfo,
@@ -60,6 +61,7 @@ import {
   TransactionExpiredBlockheightExceededError,
   TransactionExpiredNonceInvalidError,
   TransactionExpiredTimeoutError,
+  TransactionMessage,
 } from '../src/transaction';
 import type {
   SignatureStatus,
@@ -3673,7 +3675,7 @@ describe('Connection', function () {
     expect(feeCalculator.lamportsPerSignature).to.eq(5000);
   });
 
-  it('get fee for message', async () => {
+  it('get fee for message (legacy)', async () => {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
@@ -3702,6 +3704,41 @@ describe('Connection', function () {
     });
 
     const fee = (await connection.getFeeForMessage(message, 'confirmed')).value;
+    expect(fee).to.eq(5000);
+  });
+
+  it('get fee for message (v0)', async () => {
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
+
+    const recentBlockhash = (await helpers.latestBlockhash({connection}))
+      .blockhash;
+    const instructions = [
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 10,
+      }),
+    ];
+
+    const messageV0 = new TransactionMessage({
+      payerKey: accountFrom.publicKey,
+      recentBlockhash,
+      instructions,
+    }).compileToV0Message();
+
+    await mockRpcResponse({
+      method: 'getFeeForMessage',
+      params: [
+        toBuffer(messageV0.serialize()).toString('base64'),
+        {commitment: 'confirmed'},
+      ],
+      value: 5000,
+      withContext: true,
+    });
+
+    const fee = (await connection.getFeeForMessage(messageV0, 'confirmed'))
+      .value;
     expect(fee).to.eq(5000);
   });
 
