@@ -857,6 +857,9 @@ impl Blockstore {
                             error!("blockstore error: {}", err);
                         }
                         Ok(completed_data_sets) => {
+                            if is_repaired {
+                                metrics.num_repair += 1;
+                            }
                             newly_completed_data_sets.extend(completed_data_sets);
                             inserted_indices.push(i);
                             metrics.num_inserted += 1;
