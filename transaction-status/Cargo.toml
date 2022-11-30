@@ -19,6 +19,7 @@ lazy_static = "1.4.0"
 log = "0.4.17"
 serde = "1.0.138"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.14.10" }
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.14.10" }
@@ -27,6 +28,13 @@ solana-metrics = { path = "../metrics", version = "=1.14.10" }
 solana-sdk = { path = "../sdk", version = "=1.14.10" }
 solana-vote-program = { path = "../programs/vote", version = "=1.14.10" }
 spl-associated-token-account = { version = "=1.1.1", features = ["no-entrypoint"] }
+=======
+serde_json = "1.0.83"
+solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
+spl-associated-token-account = { version = "=1.1.2", features = ["no-entrypoint"] }
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979))
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }

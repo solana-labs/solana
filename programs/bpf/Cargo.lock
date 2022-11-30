@@ -4070,7 +4070,7 @@ dependencies = [
  "solana-sdk 1.14.10",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.5.0",
+ "spl-token-2022",
  "thiserror",
  "zstd",
 ]
@@ -4343,7 +4343,62 @@ dependencies = [
 name = "solana-bpf-rust-invoke-and-return"
 version = "1.14.10"
 dependencies = [
+<<<<<<< HEAD:programs/bpf/Cargo.lock
  "solana-program 1.14.10",
+=======
+ "assert_matches",
+ "bincode",
+ "bitflags",
+ "byteorder 1.4.3",
+ "chrono",
+ "chrono-humanize",
+ "crossbeam-channel",
+ "dashmap",
+ "fs_extra",
+ "futures 0.3.24",
+ "itertools",
+ "lazy_static",
+ "libc",
+ "log",
+ "lru",
+ "num_cpus",
+ "num_enum",
+ "prost 0.11.0",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "reed-solomon-erasure",
+ "rocksdb",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_bytes",
+ "sha2 0.10.5",
+ "solana-account-decoder",
+ "solana-bpf-loader-program",
+ "solana-entry",
+ "solana-frozen-abi 1.15.0",
+ "solana-frozen-abi-macro 1.15.0",
+ "solana-measure",
+ "solana-metrics",
+ "solana-perf",
+ "solana-program-runtime",
+ "solana-rayon-threadlimit",
+ "solana-runtime",
+ "solana-sdk 1.15.0",
+ "solana-stake-program",
+ "solana-storage-bigtable",
+ "solana-storage-proto",
+ "solana-transaction-status",
+ "solana-vote-program",
+ "spl-token",
+ "spl-token-2022",
+ "static_assertions",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "trees",
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979)):programs/sbf/Cargo.lock
 ]
 
 [[package]]
@@ -4481,8 +4536,58 @@ dependencies = [
 name = "solana-bpf-rust-secp256k1-recover"
 version = "1.14.10"
 dependencies = [
+<<<<<<< HEAD:programs/bpf/Cargo.lock
  "libsecp256k1 0.7.0",
  "solana-program 1.14.10",
+=======
+ "base64 0.13.0",
+ "bincode",
+ "bs58",
+ "crossbeam-channel",
+ "dashmap",
+ "itertools",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-http-server",
+ "jsonrpc-pubsub",
+ "libc",
+ "log",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "soketto",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-entry",
+ "solana-faucet",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-measure",
+ "solana-metrics",
+ "solana-perf",
+ "solana-poh",
+ "solana-rayon-threadlimit",
+ "solana-rpc-client-api",
+ "solana-runtime",
+ "solana-sdk 1.15.0",
+ "solana-send-transaction-service",
+ "solana-stake-program",
+ "solana-storage-bigtable",
+ "solana-streamer",
+ "solana-tpu-client",
+ "solana-transaction-status",
+ "solana-version",
+ "solana-vote-program",
+ "spl-token",
+ "spl-token-2022",
+ "stream-cancel",
+ "thiserror",
+ "tokio",
+ "tokio-util 0.6.9",
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979)):programs/sbf/Cargo.lock
 ]
 
 [[package]]
@@ -4497,7 +4602,24 @@ dependencies = [
 name = "solana-bpf-rust-sibling-instructions"
 version = "1.14.10"
 dependencies = [
+<<<<<<< HEAD:programs/bpf/Cargo.lock
  "solana-program 1.14.10",
+=======
+ "base64 0.13.0",
+ "bs58",
+ "jsonrpc-core",
+ "reqwest",
+ "semver 1.0.14",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-sdk 1.15.0",
+ "solana-transaction-status",
+ "solana-version",
+ "spl-token-2022",
+ "thiserror",
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979)):programs/sbf/Cargo.lock
 ]
 
 [[package]]
@@ -5721,7 +5843,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
- "spl-token-2022 0.5.0",
+ "spl-token-2022",
  "thiserror",
 ]
 
@@ -5924,9 +6046,9 @@ dependencies = [
 
 [[package]]
 name = "spl-associated-token-account"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16a33ecc83137583902c3e13c02f34151c8b2f2b74120f9c2b3ff841953e083d"
+checksum = "fbc000f0fdf1f12f99d77d398137c1751345b18c88258ce0f99b7872cf6c9bd6"
 dependencies = [
  "assert_matches",
  "borsh",
@@ -5934,7 +6056,11 @@ dependencies = [
  "num-traits",
  "solana-program 1.14.8",
  "spl-token",
+<<<<<<< HEAD:programs/bpf/Cargo.lock
  "spl-token-2022 0.4.2",
+=======
+ "spl-token-2022",
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979)):programs/sbf/Cargo.lock
  "thiserror",
 ]
 
@@ -5964,6 +6090,7 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
+<<<<<<< HEAD:programs/bpf/Cargo.lock
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0a97cbf60b91b610c846ccf8eecca96d92a24a19ffbf9fe06cd0c84e76ec45e"
@@ -5982,6 +6109,8 @@ dependencies = [
 
 [[package]]
 name = "spl-token-2022"
+=======
+>>>>>>> 3d6eb1675 (Bump spl-ata to v1.1.2 (#28979)):programs/sbf/Cargo.lock
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0edb869dbe159b018f17fb9bfa67118c30f232d7f54a73742bc96794dff77ed8"
