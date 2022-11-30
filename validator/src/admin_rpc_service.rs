@@ -10,7 +10,9 @@ use {
         consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_runtime::bank_forks::BankForks,
+    solana_rpc::rpc::verify_pubkey,
+    solana_rpc_client_api::{config::RpcAccountIndex, custom_error::RpcCustomError},
+    solana_runtime::{accounts_index::AccountIndex, bank_forks::BankForks},
     solana_sdk::{
         exit::Exit,
         pubkey::Pubkey,
@@ -46,6 +48,7 @@ pub struct AdminRpcRequestMetadata {
     pub tower_storage: Arc<dyn TowerStorage>,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
+    pub full_api: bool,
 }
 impl Metadata for AdminRpcRequestMetadata {}
 
@@ -61,6 +64,10 @@ impl AdminRpcRequestMetadata {
                 "Retry once validator start up is complete",
             ))
         }
+    }
+
+    fn supports_full_api(&self) -> bool {
+        self.full_api
     }
 }
 
@@ -201,6 +208,13 @@ pub trait AdminRpc {
 
     #[rpc(meta, name = "setRepairWhitelist")]
     fn set_repair_whitelist(&self, meta: Self::Metadata, whitelist: Vec<Pubkey>) -> Result<()>;
+
+    #[rpc(meta, name = "getSecondaryIndexKeySize")]
+    fn get_secondary_index_key_size(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+    ) -> Result<HashMap<RpcAccountIndex, usize>>;
 }
 
 pub struct AdminRpcImpl;
@@ -368,6 +382,60 @@ impl AdminRpc for AdminRpcImpl {
             Ok(())
         })
     }
+
+    fn get_secondary_index_key_size(
+        &self,
+        meta: Self::Metadata,
+        pubkey_str: String,
+    ) -> Result<HashMap<RpcAccountIndex, usize>> {
+        AdminRpcImpl::supports_full_api(&meta)?;
+
+        debug!(
+            "get_secondary_index_key_size rpc request received: {:?}",
+            pubkey_str
+        );
+        let index_key = verify_pubkey(&pubkey_str)?;
+        meta.with_post_init(|post_init| {
+            let bank = post_init.bank_forks.read().unwrap().root_bank();
+
+            // Take ref to enabled AccountSecondaryIndexes
+            let enabled_account_indexes = &bank.accounts().accounts_db.account_indexes;
+
+            // Exit if secondary indexes are not enabled
+            if enabled_account_indexes.is_empty() {
+                debug!("get_secondary_index_key_size: secondary index not enabled.");
+                return Ok(HashMap::new());
+            };
+
+            // Make sure the requested key is not explicitly excluded
+            if !enabled_account_indexes.include_key(&index_key) {
+                return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
+                    index_key: index_key.to_string(),
+                }
+                .into());
+            }
+
+            // Grab a ref to the AccountsDbfor this Bank
+            let accounts_index = &bank.accounts().accounts_db.accounts_index;
+
+            // Find the size of the key in every index where it exists
+            let found_sizes = enabled_account_indexes
+                .indexes
+                .iter()
+                .filter_map(|index| {
+                    accounts_index
+                        .get_index_key_size(index, &index_key)
+                        .map(|size| (rpc_account_index_from_account_index(index), size))
+                })
+                .collect::<HashMap<_, _>>();
+
+            // Note: Will return an empty HashMap if no keys are found.
+            if found_sizes.is_empty() {
+                debug!("get_secondary_index_key_size: key not found in the secondary index.");
+            }
+            Ok(found_sizes)
+        })
+    }
 }
 
 impl AdminRpcImpl {
@@ -414,6 +482,24 @@ impl AdminRpcImpl {
             warn!("Identity set to {}", post_init.cluster_info.id());
             Ok(())
         })
+    }
+
+    fn supports_full_api(meta: &AdminRpcRequestMetadata) -> Result<()> {
+        if meta.supports_full_api() {
+            Ok(())
+        } else {
+            Err(jsonrpc_core::error::Error::invalid_params(
+                "RPC endpoint not supported by nodes without `--full-rpc-api`",
+            ))
+        }
+    }
+}
+
+fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAccountIndex {
+    match account_index {
+        AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
+        AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
+        AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
     }
 }
 

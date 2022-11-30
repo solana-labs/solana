@@ -353,6 +353,7 @@ fn main() {
             staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
+            full_api: true, // Matches JsonRpcConfig::default_for_test().full_api
         },
     );
     let dashboard = if output == Output::Dashboard {

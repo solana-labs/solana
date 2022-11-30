@@ -114,14 +114,6 @@ type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
-fn rpc_account_index_from_account_index(account_index: &AccountIndex) -> RpcAccountIndex {
-    match account_index {
-        AccountIndex::ProgramId => RpcAccountIndex::ProgramId,
-        AccountIndex::SplTokenOwner => RpcAccountIndex::SplTokenOwner,
-        AccountIndex::SplTokenMint => RpcAccountIndex::SplTokenMint,
-    }
-}
-
 fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
     RpcResponse {
         context: RpcResponseContext::new(bank.slot()),
@@ -502,51 +494,6 @@ impl JsonRpcRequestProcessor {
             true => OptionalContext::Context(new_response(&bank, accounts)),
             false => OptionalContext::NoContext(accounts),
         })
-    }
-
-    pub fn get_secondary_index_key_size(
-        &self,
-        index_key: &Pubkey,
-        config: Option<RpcContextConfig>,
-    ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>> {
-        // Acquire the bank
-        let bank = self.get_bank_with_config(config.unwrap_or_default())?;
-
-        // Exit if secondary indexes are not enabled
-        if self.config.account_indexes.is_empty() {
-            debug!("get_secondary_index_key_size: secondary index not enabled.");
-            return Ok(new_response(&bank, HashMap::new()));
-        };
-
-        // Make sure the requested key is not explicitly excluded
-        if !self.config.account_indexes.include_key(index_key) {
-            return Err(RpcCustomError::KeyExcludedFromSecondaryIndex {
-                index_key: index_key.to_string(),
-            }
-            .into());
-        }
-
-        // Grab a ref to the AccountsIndex for this Bank
-        let accounts_index = &bank.accounts().accounts_db.accounts_index;
-
-        // Find the size of the key in every index where it exists
-        let found_sizes = self
-            .config
-            .account_indexes
-            .indexes
-            .iter()
-            .filter_map(|index| {
-                accounts_index
-                    .get_index_key_size(index, index_key)
-                    .map(|size| (rpc_account_index_from_account_index(index), size))
-            })
-            .collect::<HashMap<_, _>>();
-
-        // Note: Will return an empty HashMap if no keys are found.
-        if found_sizes.is_empty() {
-            debug!("get_secondary_index_key_size: key not found in the secondary index.");
-        }
-        Ok(new_response(&bank, found_sizes))
     }
 
     pub async fn get_inflation_reward(
@@ -2262,7 +2209,7 @@ fn verify_filter(input: &RpcFilterType) -> Result<()> {
         .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
 }
 
-fn verify_pubkey(input: &str) -> Result<Pubkey> {
+pub fn verify_pubkey(input: &str) -> Result<Pubkey> {
     input
         .parse()
         .map_err(|e| Error::invalid_params(format!("Invalid param: {e:?}")))
@@ -3155,16 +3102,6 @@ pub mod rpc_accounts_scan {
             config: Option<RpcProgramAccountsConfig>,
         ) -> Result<OptionalContext<Vec<RpcKeyedAccount>>>;
 
-        // This method does not itself do an accounts scan, but returns data only relevant to nodes
-        // that do support accounts-scan RPC apis
-        #[rpc(meta, name = "getSecondaryIndexKeySize")]
-        fn get_secondary_index_key_size(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>>;
-
         #[rpc(meta, name = "getLargestAccounts")]
         fn get_largest_accounts(
             &self,
@@ -3243,20 +3180,6 @@ pub mod rpc_accounts_scan {
                 verify_filter(filter)?;
             }
             meta.get_program_accounts(&program_id, config, filters, with_context)
-        }
-
-        fn get_secondary_index_key_size(
-            &self,
-            meta: Self::Metadata,
-            pubkey_str: String,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<HashMap<RpcAccountIndex, usize>>> {
-            debug!(
-                "get_secondary_index_key_size rpc request received: {:?}",
-                pubkey_str
-            );
-            let index_key = verify_pubkey(&pubkey_str)?;
-            meta.get_secondary_index_key_size(&index_key, config)
         }
 
         fn get_largest_accounts(
