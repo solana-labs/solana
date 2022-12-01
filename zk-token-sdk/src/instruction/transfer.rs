@@ -455,11 +455,11 @@ impl TransferPubkeys {
         let (source_pubkey, destination_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
 
         let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Decryption)?;
-        let destination_pubkey =
-            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Decryption)?;
+            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
+        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
+            .ok_or(ProofError::PubkeyDeserialization)?;
         let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Decryption)?;
+            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
 
         Ok(Self {
             source_pubkey,
