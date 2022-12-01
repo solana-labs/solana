@@ -209,8 +209,7 @@ mod tests {
         )
         .unwrap();
 
-        // set limit ratio so each batch can only have one test transaction,
-        // eg ratio = floor(MAX_WRITABLE_ACCOUNT_UNITS- / tx_cost.sum())
+        // set limit ratio so each batch can only have one test transaction
         let limit_ratio: u32 =
             ((block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS - cost + 1) / cost) as u32;
         (sanitized_transaction, deserialized_packet, limit_ratio)
@@ -247,7 +246,7 @@ mod tests {
     #[test]
     fn test_try_add_packet_to_batches() {
         // setup two transactions, one has high priority that writes to hot account, the
-        // other write to non-content account with no priority
+        // other write to non-contentious account with no priority
         let hot_account = solana_sdk::pubkey::new_rand();
         let other_account = solana_sdk::pubkey::new_rand();
         let (tx_high_priority, packet_high_priority, limit_ratio) =
@@ -309,7 +308,7 @@ mod tests {
         }
 
         // Assert lower priority packet will be successfully added to first bucket
-        // since non-content account is still free
+        // since non-contentious account is still free
         {
             assert!(forward_packet_batches_by_accounts.add_packet_to_batches(
                 &tx_low_priority,
@@ -369,7 +368,7 @@ mod tests {
         // Assert no other packets can be added to forwarding buffer since accepting_packets is
         // now false
         {
-            // build a small packet to a non-content account with high priority
+            // build a small packet to a non-contentious account with high priority
             let (tx2, packet2, _) =
                 build_test_transaction_and_packet(100, &solana_sdk::pubkey::new_rand());
 
