@@ -408,11 +408,15 @@ impl LeaderTpuCache {
     // Get the TPU sockets for the current leader and upcoming leaders according to fanout size
     pub(crate) fn get_leader_sockets(
         &self,
-        current_slot: Slot,
+        estimated_current_slot: Slot,
         fanout_slots: u64,
     ) -> Vec<SocketAddr> {
         let mut leader_set = HashSet::new();
         let mut leader_sockets = Vec::new();
+        // `first_slot` might have been advanced since caller last read the `estimated_current_slot`
+        // value. Take the greater of the two values to ensure we are reading from the latest
+        // leader schedule.
+        let current_slot = std::cmp::max(estimated_current_slot, self.first_slot);
         for leader_slot in current_slot..current_slot + fanout_slots {
             if let Some(leader) = self.get_slot_leader(leader_slot) {
                 if let Some(tpu_socket) = self.leader_tpu_map.get(leader) {
