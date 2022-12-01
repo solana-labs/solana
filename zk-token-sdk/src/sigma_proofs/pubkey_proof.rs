@@ -101,7 +101,10 @@ impl PubkeySigmaProof {
         let c = transcript.challenge_scalar(b"c");
 
         // check that the required algebraic condition holds
-        let Y = self.Y.decompress().ok_or(ProofVerificationError::Format)?;
+        let Y = self
+            .Y
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let check = RistrettoPoint::vartime_multiscalar_mul(
             vec![&self.z, &(-&c), &(-&Scalar::one())],
@@ -124,14 +127,14 @@ impl PubkeySigmaProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, PubkeyValidityProofError> {
         if bytes.len() != 64 {
-            return Err(ProofVerificationError::Format.into());
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 64];
         let (Y, z) = array_refs![bytes, 32, 32];
 
         let Y = CompressedRistretto::from_slice(Y);
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Format)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(PubkeySigmaProof { Y, z })
     }

@@ -35,7 +35,7 @@ pub enum ProofVerificationError {
     #[error("required algebraic relation does not hold")]
     AlgebraicRelation,
     #[error("malformed proof")]
-    Format,
+    Deserialization,
     #[error("multiscalar multiplication failed")]
     MultiscalarMul,
     #[error("transcript failed to produce a challenge")]

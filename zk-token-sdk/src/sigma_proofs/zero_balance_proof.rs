@@ -123,11 +123,11 @@ impl ZeroBalanceProof {
         let Y_P = self
             .Y_P
             .decompress()
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let Y_D = self
             .Y_D
             .decompress()
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         // check the required algebraic relation
         let check = RistrettoPoint::multiscalar_mul(
@@ -166,7 +166,7 @@ impl ZeroBalanceProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
         if bytes.len() != 96 {
-            return Err(ProofVerificationError::Format.into());
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 96];
@@ -175,7 +175,7 @@ impl ZeroBalanceProof {
         let Y_P = CompressedRistretto::from_slice(Y_P);
         let Y_D = CompressedRistretto::from_slice(Y_D);
 
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Format)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }

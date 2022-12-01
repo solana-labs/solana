@@ -143,15 +143,15 @@ impl ValidityProof {
         let Y_0 = self
             .Y_0
             .decompress()
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let Y_1 = self
             .Y_1
             .decompress()
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let Y_2 = self
             .Y_2
             .decompress()
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let P_dest = destination_pubkey.get_point();
         let P_auditor = auditor_pubkey.get_point();
@@ -206,7 +206,7 @@ impl ValidityProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ValidityProofError> {
         if bytes.len() != 160 {
-            return Err(ProofVerificationError::Format.into());
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 160];
@@ -216,8 +216,10 @@ impl ValidityProof {
         let Y_1 = CompressedRistretto::from_slice(Y_1);
         let Y_2 = CompressedRistretto::from_slice(Y_2);
 
-        let z_r = Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Format)?;
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Format)?;
+        let z_r =
+            Scalar::from_canonical_bytes(*z_r).ok_or(ProofVerificationError::Deserialization)?;
+        let z_x =
+            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(ValidityProof {
             Y_0,

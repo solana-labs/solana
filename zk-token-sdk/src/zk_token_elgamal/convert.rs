@@ -294,7 +294,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 448 {
-                return Err(ProofVerificationError::Format.into());
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 672];
@@ -324,7 +324,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 512 {
-                return Err(ProofVerificationError::Format.into());
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 736];
@@ -354,7 +354,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 576 {
-                return Err(ProofVerificationError::Format.into());
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 800];

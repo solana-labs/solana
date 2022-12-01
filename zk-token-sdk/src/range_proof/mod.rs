@@ -339,10 +339,10 @@ impl RangeProof {
     // changed.
     pub fn from_bytes(slice: &[u8]) -> Result<RangeProof, RangeProofError> {
         if slice.len() % 32 != 0 {
-            return Err(ProofVerificationError::Format.into());
+            return Err(ProofVerificationError::Deserialization.into());
         }
         if slice.len() < 7 * 32 {
-            return Err(ProofVerificationError::Format.into());
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let A = CompressedRistretto(util::read32(&slice[0..]));
@@ -351,11 +351,11 @@ impl RangeProof {
         let T_2 = CompressedRistretto(util::read32(&slice[3 * 32..]));
 
         let t_x = Scalar::from_canonical_bytes(util::read32(&slice[4 * 32..]))
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let t_x_blinding = Scalar::from_canonical_bytes(util::read32(&slice[5 * 32..]))
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let e_blinding = Scalar::from_canonical_bytes(util::read32(&slice[6 * 32..]))
-            .ok_or(ProofVerificationError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let ipp_proof = InnerProductProof::from_bytes(&slice[7 * 32..])?;
 
