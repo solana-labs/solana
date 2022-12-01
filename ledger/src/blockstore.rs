@@ -178,6 +178,7 @@ pub struct Blockstore {
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
     pub slots_stats: SlotsStats,
+    reed_solomon_cache: ReedSolomonCache,
 }
 
 pub struct IndexMetaWorkingSetEntry {
@@ -335,6 +336,7 @@ impl Blockstore {
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
             slots_stats: SlotsStats::default(),
+            reed_solomon_cache: ReedSolomonCache::default(),
         };
         if initialize_transaction_status_index {
             blockstore.initialize_transaction_status_index()?;
@@ -795,7 +797,6 @@ impl Blockstore {
         is_trusted: bool,
         retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
         handle_duplicate: &F,
-        reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
     where
@@ -892,7 +893,7 @@ impl Blockstore {
                 &erasure_metas,
                 &mut index_working_set,
                 &just_inserted_shreds,
-                reed_solomon_cache,
+                &self.reed_solomon_cache,
             );
 
             metrics.num_recovered += recovered_shreds
@@ -1092,7 +1093,6 @@ impl Blockstore {
             is_trusted,
             None,    // retransmit-sender
             &|_| {}, // handle-duplicates
-            &ReedSolomonCache::default(),
             &mut BlockstoreInsertionMetrics::default(),
         )
     }

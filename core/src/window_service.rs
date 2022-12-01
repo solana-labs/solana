@@ -16,7 +16,7 @@ use {
     solana_ledger::{
         blockstore::{Blockstore, BlockstoreInsertionMetrics},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{self, Nonce, ReedSolomonCache, Shred},
+        shred::{self, Nonce, Shred},
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_error,
@@ -220,7 +220,6 @@ fn run_insert<F>(
     completed_data_sets_sender: &CompletedDataSetsSender,
     retransmit_sender: &Sender<Vec<ShredPayload>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
-    reed_solomon_cache: &ReedSolomonCache,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -283,7 +282,6 @@ where
         false, // is_trusted
         Some(retransmit_sender),
         &handle_duplicate,
-        reed_solomon_cache,
         metrics,
     )?;
 
@@ -408,7 +406,6 @@ impl WindowService {
             .thread_name(|i| format!("solWinInsert{:02}", i))
             .build()
             .unwrap();
-        let reed_solomon_cache = ReedSolomonCache::default();
         Builder::new()
             .name("solWinInsert".to_string())
             .spawn(move || {
@@ -430,7 +427,6 @@ impl WindowService {
                         &completed_data_sets_sender,
                         &retransmit_sender,
                         &outstanding_requests,
-                        &reed_solomon_cache,
                     ) {
                         ws_metrics.record_error(&e);
                         if Self::should_exit_on_error(e, &handle_error) {
@@ -482,7 +478,7 @@ mod test {
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
             get_tmp_ledger_path,
-            shred::{ProcessShredsStats, Shredder},
+            shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
         },
         solana_sdk::{
             hash::Hash,
