@@ -74,3 +74,13 @@ macro_rules! define_mul_variants {
         }
     };
 }
+
+macro_rules! impl_from_transcript_error {
+    ($sigma_error_type:ty) => {
+        impl From<TranscriptError> for $sigma_error_type {
+            fn from(err: TranscriptError) -> Self {
+                ProofVerificationError::Transcript(err).into()
+            }
+        }
+    };
+}

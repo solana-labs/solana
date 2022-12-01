@@ -8,7 +8,10 @@ use {
     rand::rngs::OsRng,
 };
 use {
-    crate::{sigma_proofs::errors::FeeSigmaProofError, transcript::TranscriptProtocol},
+    crate::{
+        errors::ProofVerificationError, sigma_proofs::errors::FeeSigmaProofError,
+        transcript::TranscriptProtocol,
+    },
     arrayref::{array_ref, array_refs},
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
@@ -284,19 +287,19 @@ impl FeeSigmaProof {
             .fee_max_proof
             .Y_max_proof
             .decompress()
-            .ok_or(FeeSigmaProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let z_max = self.fee_max_proof.z_max_proof;
 
         let Y_delta_real = self
             .fee_equality_proof
             .Y_delta
             .decompress()
-            .ok_or(FeeSigmaProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let Y_claimed = self
             .fee_equality_proof
             .Y_claimed
             .decompress()
-            .ok_or(FeeSigmaProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let z_x = self.fee_equality_proof.z_x;
         let z_delta_real = self.fee_equality_proof.z_delta;
         let z_claimed = self.fee_equality_proof.z_claimed;
@@ -342,7 +345,7 @@ impl FeeSigmaProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(FeeSigmaProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -361,7 +364,7 @@ impl FeeSigmaProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
         if bytes.len() != 256 {
-            return Err(FeeSigmaProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 256];
@@ -369,17 +372,19 @@ impl FeeSigmaProof {
             array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
 
         let Y_max_proof = CompressedRistretto::from_slice(Y_max_proof);
-        let z_max_proof =
-            Scalar::from_canonical_bytes(*z_max_proof).ok_or(FeeSigmaProofError::Format)?;
-        let c_max_proof =
-            Scalar::from_canonical_bytes(*c_max_proof).ok_or(FeeSigmaProofError::Format)?;
+        let z_max_proof = Scalar::from_canonical_bytes(*z_max_proof)
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let c_max_proof = Scalar::from_canonical_bytes(*c_max_proof)
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         let Y_delta = CompressedRistretto::from_slice(Y_delta);
         let Y_claimed = CompressedRistretto::from_slice(Y_claimed);
-        let z_x = Scalar::from_canonical_bytes(*z_x).ok_or(FeeSigmaProofError::Format)?;
-        let z_delta = Scalar::from_canonical_bytes(*z_delta).ok_or(FeeSigmaProofError::Format)?;
-        let z_claimed =
-            Scalar::from_canonical_bytes(*z_claimed).ok_or(FeeSigmaProofError::Format)?;
+        let z_x =
+            Scalar::from_canonical_bytes(*z_x).ok_or(ProofVerificationError::Deserialization)?;
+        let z_delta = Scalar::from_canonical_bytes(*z_delta)
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let z_claimed = Scalar::from_canonical_bytes(*z_claimed)
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(Self {
             fee_max_proof: FeeMaxProof {

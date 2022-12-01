@@ -9,9 +9,12 @@
 
 #[cfg(not(target_os = "solana"))]
 use {
-    crate::encryption::{
-        elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        pedersen::H,
+    crate::{
+        encryption::{
+            elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
+            pedersen::H,
+        },
+        errors::ProofVerificationError,
     },
     curve25519_dalek::traits::MultiscalarMul,
     rand::rngs::OsRng,
@@ -117,8 +120,14 @@ impl ZeroBalanceProof {
         let w_negated = -&w;
 
         // decompress Y or return verification error
-        let Y_P = self.Y_P.decompress().ok_or(ZeroBalanceProofError::Format)?;
-        let Y_D = self.Y_D.decompress().ok_or(ZeroBalanceProofError::Format)?;
+        let Y_P = self
+            .Y_P
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
+        let Y_D = self
+            .Y_D
+            .decompress()
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         // check the required algebraic relation
         let check = RistrettoPoint::multiscalar_mul(
@@ -143,7 +152,7 @@ impl ZeroBalanceProof {
         if check.is_identity() {
             Ok(())
         } else {
-            Err(ZeroBalanceProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -157,7 +166,7 @@ impl ZeroBalanceProof {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ZeroBalanceProofError> {
         if bytes.len() != 96 {
-            return Err(ZeroBalanceProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let bytes = array_ref![bytes, 0, 96];
@@ -166,7 +175,7 @@ impl ZeroBalanceProof {
         let Y_P = CompressedRistretto::from_slice(Y_P);
         let Y_D = CompressedRistretto::from_slice(Y_D);
 
-        let z = Scalar::from_canonical_bytes(*z).ok_or(ZeroBalanceProofError::Format)?;
+        let z = Scalar::from_canonical_bytes(*z).ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(ZeroBalanceProof { Y_P, Y_D, z })
     }
