@@ -7,7 +7,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
-    solana_bucket_map::bucket_map::get_open_fd_stats,
+    solana_bucket_map::bucket_map::get_mmap_count,
     solana_sdk::timing::AtomicInterval,
     std::{
         collections::HashMap,
@@ -832,23 +832,18 @@ impl SystemMonitorService {
         Self::report_cpuid_values();
     }
 
+    #[cfg(target_os = "linux")]
     fn report_open_fd_stats() {
-        if let Some((
-            curr_num_open_fd,
-            curr_mmap_count,
-            max_open_fd_soft_limit,
-            max_open_fd_hard_limit,
-        )) = get_open_fd_stats()
-        {
+        if let Some(curr_mmap_count) = get_mmap_count() {
             datapoint_info!(
-                "open-fd-stats",
-                ("number_open_files", curr_num_open_fd, i64),
+                "open-mmap-stats",
                 ("number_mmap_files", curr_mmap_count, i64),
-                ("max_open_files_hard_limit", max_open_fd_hard_limit, i64),
-                ("max_open_files_soft_limit", max_open_fd_soft_limit, i64),
             );
         }
     }
+
+    #[cfg(not(target_os = "linux"))]
+    fn report_open_fd_stats() {}
 
     #[cfg(target_os = "linux")]
     fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {

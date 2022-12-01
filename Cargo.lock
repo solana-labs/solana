@@ -3542,21 +3542,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "procfs"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dfb6451c91904606a1abe93e83a8ec851f45827fa84273f256ade45dc095818"
-dependencies = [
- "bitflags",
- "byteorder",
- "chrono",
- "flate2",
- "hex",
- "lazy_static",
- "rustix",
-]
-
-[[package]]
 name = "proptest"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4916,7 +4901,6 @@ dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
- "procfs",
  "rand 0.7.3",
  "rayon",
  "solana-logger 1.15.0",
