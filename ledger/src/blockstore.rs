@@ -4038,14 +4038,19 @@ fn handle_chaining_for_slot(
     // update all child slots with `is_connected` = true because these children are also now newly
     // connected to trunk of the ledger
     let should_propagate_is_connected =
+<<<<<<< HEAD
         is_newly_completed_slot(&RefCell::borrow(&*meta), meta_backup)
             && RefCell::borrow(&*meta).is_connected;
+=======
+        is_newly_completed_slot(&RefCell::borrow(meta), meta_backup)
+            && RefCell::borrow(meta).is_connected();
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
 
     if should_propagate_is_connected {
         // slot_function returns a boolean indicating whether to explore the children
         // of the input slot
         let slot_function = |slot: &mut SlotMeta| {
-            slot.is_connected = true;
+            slot.set_connected();
 
             // We don't want to set the is_connected flag on the children of non-full
             // slots
@@ -4125,7 +4130,9 @@ fn chain_new_slot_to_prev_slot(
     current_slot_meta: &mut SlotMeta,
 ) {
     prev_slot_meta.next_slots.push(current_slot);
-    current_slot_meta.is_connected = prev_slot_meta.is_connected && prev_slot_meta.is_full();
+    if prev_slot_meta.is_connected() && prev_slot_meta.is_full() {
+        current_slot_meta.set_connected();
+    }
 }
 
 fn is_newly_completed_slot(slot_meta: &SlotMeta, backup_slot_meta: &Option<SlotMeta>) -> bool {
@@ -4139,7 +4146,7 @@ fn slot_has_updates(slot_meta: &SlotMeta, slot_meta_backup: &Option<SlotMeta>) -
     // from block 0, which is true iff:
     // 1) The block with index prev_block_index is itself part of the trunk of consecutive blocks
     // starting from block 0,
-    slot_meta.is_connected &&
+    slot_meta.is_connected() &&
         // AND either:
         // 1) The slot didn't exist in the database before, and now we have a consecutive
         // block for that slot
@@ -5050,7 +5057,7 @@ pub mod tests {
         assert_eq!(meta.parent_slot, Some(0));
         assert_eq!(meta.last_index, Some(num_shreds - 1));
         assert!(meta.next_slots.is_empty());
-        assert!(meta.is_connected);
+        assert!(meta.is_connected());
     }
 
     #[test]
@@ -5514,9 +5521,15 @@ pub mod tests {
         let s1 = blockstore.meta(1).unwrap().unwrap();
         assert!(s1.next_slots.is_empty());
         // Slot 1 is not trunk because slot 0 hasn't been inserted yet
+<<<<<<< HEAD
         assert!(!s1.is_connected);
         assert_eq!(s1.parent_slot, Some(0));
         assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
+=======
+        assert!(!meta1.is_connected());
+        assert_eq!(meta1.parent_slot, Some(0));
+        assert_eq!(meta1.last_index, Some(shreds_per_slot as u64 - 1));
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
 
         // 2) Write to the second slot
         let shreds2 = shreds
@@ -5526,6 +5539,7 @@ pub mod tests {
         let s2 = blockstore.meta(2).unwrap().unwrap();
         assert!(s2.next_slots.is_empty());
         // Slot 2 is not trunk because slot 0 hasn't been inserted yet
+<<<<<<< HEAD
         assert!(!s2.is_connected);
         assert_eq!(s2.parent_slot, Some(1));
         assert_eq!(s2.last_index, Some(shreds_per_slot as u64 - 1));
@@ -5537,6 +5551,19 @@ pub mod tests {
         assert!(!s1.is_connected);
         assert_eq!(s1.parent_slot, Some(0));
         assert_eq!(s1.last_index, Some(shreds_per_slot as u64 - 1));
+=======
+        assert!(!meta2.is_connected());
+        assert_eq!(meta2.parent_slot, Some(1));
+        assert_eq!(meta2.last_index, Some(shreds_per_slot as u64 - 1));
+
+        // Check the first slot again, it should chain to the second slot,
+        // but still isn't part of the trunk
+        let meta1 = blockstore.meta(1).unwrap().unwrap();
+        assert_eq!(meta1.next_slots, vec![2]);
+        assert!(!meta1.is_connected());
+        assert_eq!(meta1.parent_slot, Some(0));
+        assert_eq!(meta1.last_index, Some(shreds_per_slot as u64 - 1));
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
 
         // 3) Write to the zeroth slot, check that every slot
         // is now part of the trunk
@@ -5552,8 +5579,13 @@ pub mod tests {
             } else {
                 assert_eq!(s.parent_slot, Some(i - 1));
             }
+<<<<<<< HEAD
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
             assert!(s.is_connected);
+=======
+            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            assert!(meta.is_connected());
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
         }
     }
 
@@ -5606,10 +5638,17 @@ pub mod tests {
                 assert_eq!(s.parent_slot, Some(i - 1));
             }
 
+<<<<<<< HEAD
             if i == 0 {
                 assert!(s.is_connected);
             } else {
                 assert!(!s.is_connected);
+=======
+            if slot == 0 {
+                assert!(meta.is_connected());
+            } else {
+                assert!(!meta.is_connected());
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
             }
         }
 
@@ -5633,8 +5672,13 @@ pub mod tests {
             } else {
                 assert_eq!(s.parent_slot, Some(i - 1));
             }
+<<<<<<< HEAD
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
             assert!(s.is_connected);
+=======
+            assert_eq!(meta.last_index, Some(shreds_per_slot as u64 - 1));
+            assert!(meta.is_connected());
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
         }
     }
 
@@ -5676,10 +5720,21 @@ pub mod tests {
                 assert!(s.next_slots.is_empty());
             }
 
+<<<<<<< HEAD
             if i == 0 {
                 assert_eq!(s.parent_slot, Some(0));
             } else {
                 assert_eq!(s.parent_slot, Some(i - 1));
+=======
+            // Ensure that each slot has their parent correct
+            // Additionally, slot 0 should be the only connected slot
+            if slot == 0 {
+                assert_eq!(meta.parent_slot, Some(0));
+                assert!(meta.is_connected());
+            } else {
+                assert_eq!(meta.parent_slot, Some(slot - 1));
+                assert!(!meta.is_connected());
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
             }
 
             assert_eq!(s.last_index, Some(shreds_per_slot as u64 - 1));
@@ -5706,10 +5761,17 @@ pub mod tests {
                     } else {
                         assert!(s.next_slots.is_empty());
                     }
+<<<<<<< HEAD
                     if i <= slot_index as u64 + 3 {
                         assert!(s.is_connected);
                     } else {
                         assert!(!s.is_connected);
+=======
+                    if slot <= slot_index + 3 {
+                        assert!(meta.is_connected());
+                    } else {
+                        assert!(!meta.is_connected());
+>>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
                     }
 
                     if i == 0 {
@@ -5789,7 +5851,7 @@ pub mod tests {
                 let slot_meta = blockstore.meta(slot).unwrap().unwrap();
                 assert_eq!(slot_meta.consumed, entries_per_slot);
                 assert_eq!(slot_meta.received, entries_per_slot);
-                assert!(slot_meta.is_connected);
+                assert!(slot_meta.is_connected());
                 let slot_parent = {
                     if slot == 0 {
                         0
