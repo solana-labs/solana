@@ -797,7 +797,7 @@ impl Blockstore {
         handle_duplicate: &F,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreInsertionMetrics,
-    ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
+    ) -> Result<Vec<CompletedDataSetInfo>>
     where
         F: Fn(Shred),
     {
@@ -820,8 +820,7 @@ impl Blockstore {
         let mut start = Measure::start("Shred insertion");
         let mut index_meta_time_us = 0;
         let mut newly_completed_data_sets: Vec<CompletedDataSetInfo> = vec![];
-        let mut inserted_indices = Vec::new();
-        for (i, (shred, is_repaired)) in shreds.into_iter().zip(is_repaired).enumerate() {
+        for (shred, is_repaired) in shreds.into_iter().zip(is_repaired) {
             let shred_source = if is_repaired {
                 ShredSource::Repaired
             } else {
@@ -861,7 +860,6 @@ impl Blockstore {
                                 metrics.num_repair += 1;
                             }
                             newly_completed_data_sets.extend(completed_data_sets);
-                            inserted_indices.push(i);
                             metrics.num_inserted += 1;
                         }
                     };
@@ -1007,7 +1005,7 @@ impl Blockstore {
         metrics.total_elapsed_us += total_start.as_us();
         metrics.index_meta_time_us += index_meta_time_us;
 
-        Ok((newly_completed_data_sets, inserted_indices))
+        Ok(newly_completed_data_sets)
     }
 
     pub fn add_new_shred_signal(&self, s: Sender<bool>) {
@@ -1083,7 +1081,7 @@ impl Blockstore {
         shreds: Vec<Shred>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-    ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)> {
+    ) -> Result<Vec<CompletedDataSetInfo>> {
         let shreds_len = shreds.len();
         self.insert_shreds_handle_duplicate(
             shreds,
@@ -5093,13 +5091,11 @@ pub mod tests {
         assert!(blockstore
             .insert_shreds(shreds[1..].to_vec(), None, false)
             .unwrap()
-            .0
             .is_empty());
         assert_eq!(
             blockstore
                 .insert_shreds(vec![shreds[0].clone()], None, false)
-                .unwrap()
-                .0,
+                .unwrap(),
             vec![CompletedDataSetInfo {
                 slot,
                 start_index: 0,
@@ -5110,7 +5106,6 @@ pub mod tests {
         assert!(blockstore
             .insert_shreds(shreds, None, false)
             .unwrap()
-            .0
             .is_empty());
     }
 
