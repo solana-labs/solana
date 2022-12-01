@@ -2004,6 +2004,13 @@ const ConfirmedTransactionResult = pick({
   }),
 });
 
+const AnnotatedAccountKey = pick({
+  pubkey: PublicKeyFromString,
+  signer: boolean(),
+  writable: boolean(),
+  source: optional(union([literal('transaction'), literal('lookupTable')])),
+});
+
 const ParsedInstructionResult = pick({
   parsed: unknown(),
   program: string(),
@@ -2052,16 +2059,7 @@ const ParsedOrRawInstruction = coerce(
 const ParsedConfirmedTransactionResult = pick({
   signatures: array(string()),
   message: pick({
-    accountKeys: array(
-      pick({
-        pubkey: PublicKeyFromString,
-        signer: boolean(),
-        writable: boolean(),
-        source: optional(
-          union([literal('transaction'), literal('lookupTable')]),
-        ),
-      }),
-    ),
+    accountKeys: array(AnnotatedAccountKey),
     instructions: array(ParsedOrRawInstruction),
     recentBlockhash: string(),
     addressTableLookups: optional(nullable(array(AddressTableLookupStruct))),
