@@ -36,4 +36,4 @@ jobs:
           body: PR opened by Github Action
           branch: update-version-${{ env.SOLANA_NEW_VERSION }}
           base: ${{ github.event.release.target_commitish }}
-          labels: automerge
+          labels: automerge,ci
