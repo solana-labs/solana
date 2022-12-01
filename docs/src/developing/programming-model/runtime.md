@@ -35,13 +35,19 @@ The policy is as follows:
   - And only if the data is zero-initialized or empty.
 - An account not assigned to the program cannot have its balance decrease.
 - The balance of read-only and executable accounts may not change.
-- Only the system program can change the size of the data and only if the system
-  program owns the account.
-- Only the owner may change account data.
+- Only the owner may change account size and data.
   - And if the account is writable.
   - And if the account is not executable.
 - Executable is one-way (false->true) and only the account owner may set it.
 - No one can make modifications to the rent_epoch associated with this account.
+
+## Balancing the balances
+
+Before and after each instruction, the sum of all account balances must stay the same.
+E.g. if one account's balance is increased, another's must be decreased by the same ammount.
+Because the runtime can not see changes to accounts which were not passed to it,
+all accounts for which the balances were modified must be passed,
+even if they are not needed in the called instruction.
 
 ## Compute Budget
 
