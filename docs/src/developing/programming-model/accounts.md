@@ -58,7 +58,9 @@ possible to upload a totally new program to an existing program address.
 To create an account, a client generates a _keypair_ and registers its public key
 using the `SystemProgram::CreateAccount` instruction with a fixed
 storage size in bytes preallocated.
-The current maximum size of an account's data is 10 megabytes.
+The current maximum size of an account's data is 10 MiB, which can be changed
+(increased or decreased) at a rate over all accounts of 20 MiB per transaction,
+and the size can be increased by 10 KiB per account and per instruction.
 
 An account address can be any arbitrary 256 bit value, and there are mechanisms
 for advanced users to create derived addresses
