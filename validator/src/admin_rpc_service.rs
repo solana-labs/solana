@@ -615,3 +615,100 @@ pub fn load_staked_nodes_overrides(
         Err(format!("Staked nodes overrides provided '{path}' a non-existing file path.").into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_core::tower_storage::NullTowerStorage,
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_rpc::rpc::create_validator_exit,
+        solana_runtime::{
+            accounts_index::AccountSecondaryIndexes,
+            bank::{Bank, BankTestConfig},
+        },
+        solana_streamer::socket::SocketAddrSpace,
+        std::sync::atomic::AtomicBool,
+    };
+
+    #[derive(Default)]
+    struct TestConfig {
+        account_indexes: AccountSecondaryIndexes,
+    }
+
+    struct RpcHandler {
+        io: MetaIoHandler<AdminRpcRequestMetadata>,
+        meta: AdminRpcRequestMetadata,
+        bank_forks: Arc<RwLock<BankForks>>,
+    }
+
+    impl RpcHandler {
+        fn _start() -> Self {
+            Self::start_with_config(TestConfig::default())
+        }
+
+        fn start_with_config(config: TestConfig) -> Self {
+            let identity = Pubkey::new_unique();
+            let cluster_info = Arc::new(ClusterInfo::new(
+                ContactInfo {
+                    id: identity,
+                    ..ContactInfo::default()
+                },
+                Arc::new(Keypair::new()),
+                SocketAddrSpace::Unspecified,
+            ));
+            let exit = Arc::new(AtomicBool::new(false));
+            let validator_exit = create_validator_exit(&exit);
+            let (bank_forks, vote_keypair) = new_bank_forks_with_config(BankTestConfig {
+                secondary_indexes: config.account_indexes,
+            });
+            let vote_account = vote_keypair.pubkey();
+            let start_progress = Arc::new(RwLock::new(ValidatorStartProgress::default()));
+            let repair_whitelist = Arc::new(RwLock::new(HashSet::new()));
+            let meta = AdminRpcRequestMetadata {
+                rpc_addr: None,
+                start_time: SystemTime::now(),
+                start_progress,
+                validator_exit,
+                authorized_voter_keypairs: Arc::new(RwLock::new(vec![vote_keypair])),
+                tower_storage: Arc::new(NullTowerStorage {}),
+                post_init: Arc::new(RwLock::new(Some(AdminRpcRequestMetadataPostInit {
+                    cluster_info,
+                    bank_forks: bank_forks.clone(),
+                    vote_account,
+                    repair_whitelist,
+                }))),
+                staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
+                full_api: true,
+            };
+            let mut io = MetaIoHandler::default();
+            io.extend_with(AdminRpcImpl.to_delegate());
+
+            Self {
+                io,
+                meta,
+                bank_forks,
+            }
+        }
+
+        fn root_bank(&self) -> Arc<Bank> {
+            self.bank_forks.read().unwrap().root_bank()
+        }
+    }
+
+    fn new_bank_forks_with_config(
+        config: BankTestConfig,
+    ) -> (Arc<RwLock<BankForks>>, Arc<Keypair>) {
+        let GenesisConfigInfo {
+            genesis_config,
+            voting_keypair,
+            ..
+        } = create_genesis_config(1_000_000_000);
+
+        let bank = Bank::new_for_tests_with_config(&genesis_config, config);
+        (
+            Arc::new(RwLock::new(BankForks::new(bank))),
+            Arc::new(voting_keypair),
+        )
+    }
+}
