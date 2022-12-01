@@ -57,7 +57,7 @@ mod target_arch {
                 elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
                 pedersen::PedersenCommitment,
             },
-            errors::ProofError,
+            errors::{ProofInstructionError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
@@ -97,10 +97,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ElGamalCiphertext> for ElGamalCiphertext {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(ct: pod::ElGamalCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
+            Self::from_bytes(&ct.0).ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 
@@ -111,10 +111,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ElGamalPubkey> for ElGamalPubkey {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pk.0).ok_or(ProofError::CiphertextDeserialization)
+            Self::from_bytes(&pk.0).ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 
@@ -146,10 +146,10 @@ mod target_arch {
 
     #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+            Self::from_bytes(&pod.0).ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 
@@ -170,10 +170,10 @@ mod target_arch {
 
     #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::DecryptHandle> for DecryptHandle {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::DecryptHandle) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
+            Self::from_bytes(&pod.0).ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 
@@ -184,10 +184,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::AeCiphertext> for AeCiphertext {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(ct: pod::AeCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
+            Self::from_bytes(&ct.0).ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 
@@ -282,7 +282,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::PubkeySigmaProof> for PubkeySigmaProof {
-        type Error = PubkeySigmaProofError;
+        type Error = PubkeyValidityProofError;
 
         fn try_from(pod: pod::PubkeySigmaProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -294,7 +294,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 448 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Format.into());
             }
 
             let mut buf = [0_u8; 672];
@@ -324,7 +324,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 512 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Format.into());
             }
 
             let mut buf = [0_u8; 736];
@@ -354,7 +354,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 576 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Format.into());
             }
 
             let mut buf = [0_u8; 800];
@@ -389,7 +389,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferPubkeys> for TransferPubkeys {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -412,7 +412,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferWithFeePubkeys> for TransferWithFeePubkeys {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -438,7 +438,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferAmountEncryption> for TransferAmountEncryption {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -463,7 +463,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::FeeEncryption> for FeeEncryption {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
             Ok(Self {

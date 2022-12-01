@@ -9,7 +9,7 @@ use {
             elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::PedersenOpening,
         },
-        errors::ProofError,
+        errors::ProofInstructionError,
         instruction::Verifiable,
         sigma_proofs::equality_proof::CtxtCtxtEqualityProof,
         transcript::TranscriptProtocol,
@@ -46,7 +46,7 @@ impl WithdrawWithheldTokensData {
         destination_pubkey: &ElGamalPubkey,
         withdraw_withheld_authority_ciphertext: &ElGamalCiphertext,
         amount: u64,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofInstructionError> {
         // encrypt withdraw amount under destination public key
         let destination_opening = PedersenOpening::new_rand();
         let destination_ciphertext = destination_pubkey.encrypt_with(amount, &destination_opening);
@@ -86,7 +86,7 @@ impl WithdrawWithheldTokensData {
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for WithdrawWithheldTokensData {
-    fn verify(&self) -> Result<(), ProofError> {
+    fn verify(&self) -> Result<(), ProofInstructionError> {
         let mut transcript = WithdrawWithheldTokensProof::transcript_new(
             &self.withdraw_withheld_authority_pubkey,
             &self.destination_pubkey,
@@ -175,7 +175,7 @@ impl WithdrawWithheldTokensProof {
         source_ciphertext: &ElGamalCiphertext,
         destination_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofInstructionError> {
         let proof: CtxtCtxtEqualityProof = self.proof.try_into()?;
         proof.verify(
             source_pubkey,

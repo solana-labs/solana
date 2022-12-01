@@ -9,7 +9,7 @@ use {
             elgamal::{ElGamal, ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
             pedersen::{Pedersen, PedersenCommitment},
         },
-        errors::ProofError,
+        errors::ProofInstructionError,
         instruction::Verifiable,
         range_proof::RangeProof,
         sigma_proofs::equality_proof::CtxtCommEqualityProof,
@@ -50,13 +50,13 @@ impl WithdrawData {
         keypair: &ElGamalKeypair,
         current_balance: u64,
         current_ciphertext: &ElGamalCiphertext,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofInstructionError> {
         // subtract withdraw amount from current balance
         //
         // errors if current_balance < amount
         let final_balance = current_balance
             .checked_sub(amount)
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofInstructionError::Generation)?;
 
         // encode withdraw amount as an ElGamal ciphertext and subtract it from
         // current source balance
@@ -77,7 +77,7 @@ impl WithdrawData {
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for WithdrawData {
-    fn verify(&self) -> Result<(), ProofError> {
+    fn verify(&self) -> Result<(), ProofInstructionError> {
         let mut transcript = WithdrawProof::transcript_new(&self.pubkey, &self.final_ciphertext);
 
         let elgamal_pubkey = self.pubkey.try_into()?;
@@ -154,7 +154,7 @@ impl WithdrawProof {
         pubkey: &ElGamalPubkey,
         final_ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofInstructionError> {
         transcript.append_commitment(b"commitment", &self.commitment);
 
         let commitment: PedersenCommitment = self.commitment.try_into()?;

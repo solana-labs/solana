@@ -11,7 +11,7 @@ use {
             },
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
-        errors::ProofError,
+        errors::ProofInstructionError,
         instruction::{combine_lo_hi_ciphertexts, split_u64, Role, Verifiable},
         range_proof::RangeProof,
         sigma_proofs::{
@@ -66,7 +66,7 @@ impl TransferData {
         (spendable_balance, ciphertext_old_source): (u64, &ElGamalCiphertext),
         source_keypair: &ElGamalKeypair,
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofInstructionError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
@@ -87,7 +87,7 @@ impl TransferData {
         // subtract transfer amount from the spendable ciphertext
         let new_spendable_balance = spendable_balance
             .checked_sub(transfer_amount)
-            .ok_or(ProofError::Generation)?;
+            .ok_or(ProofInstructionError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -143,7 +143,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
         let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
@@ -164,7 +164,7 @@ impl TransferData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
-    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
         let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
@@ -185,7 +185,11 @@ impl TransferData {
     }
 
     /// Decrypts transfer amount from transfer data
-    pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+    pub fn decrypt_amount(
+        &self,
+        role: Role,
+        sk: &ElGamalSecretKey,
+    ) -> Result<u64, ProofInstructionError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
@@ -196,14 +200,14 @@ impl TransferData {
             let two_power = 1 << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + two_power * amount_hi)
         } else {
-            Err(ProofError::Decryption)
+            Err(ProofInstructionError::Decryption)
         }
     }
 }
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for TransferData {
-    fn verify(&self) -> Result<(), ProofError> {
+    fn verify(&self) -> Result<(), ProofInstructionError> {
         // generate transcript and append all public inputs
         let mut transcript = TransferProof::transcript_new(
             &self.transfer_pubkeys,
@@ -356,7 +360,7 @@ impl TransferProof {
         transfer_pubkeys: &TransferPubkeys,
         ciphertext_new_spendable: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofInstructionError> {
         transcript.append_commitment(b"commitment-new-source", &self.new_source_commitment);
 
         let commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
@@ -450,16 +454,16 @@ impl TransferPubkeys {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofInstructionError> {
         let bytes = array_ref![bytes, 0, 96];
         let (source_pubkey, destination_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
 
-        let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Decryption)?;
-        let destination_pubkey =
-            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Decryption)?;
-        let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Decryption)?;
+        let source_pubkey = ElGamalPubkey::from_bytes(source_pubkey)
+            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
+        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
+            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
+        let auditor_pubkey = ElGamalPubkey::from_bytes(auditor_pubkey)
+            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
 
         Ok(Self {
             source_pubkey,

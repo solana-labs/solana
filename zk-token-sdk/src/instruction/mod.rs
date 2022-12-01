@@ -12,7 +12,7 @@ use {
             elgamal::ElGamalCiphertext,
             pedersen::{PedersenCommitment, PedersenOpening},
         },
-        errors::ProofError,
+        errors::ProofInstructionError,
     },
     curve25519_dalek::scalar::Scalar,
 };
@@ -24,7 +24,7 @@ pub use {
 
 #[cfg(not(target_os = "solana"))]
 pub trait Verifiable {
-    fn verify(&self) -> Result<(), ProofError>;
+    fn verify(&self) -> Result<(), ProofInstructionError>;
 }
 
 #[cfg(not(target_os = "solana"))]

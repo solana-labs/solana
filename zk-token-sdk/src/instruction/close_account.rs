@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::elgamal::{ElGamalCiphertext, ElGamalKeypair, ElGamalPubkey},
-        errors::ProofError,
+        errors::ProofInstructionError,
         instruction::Verifiable,
         sigma_proofs::zero_balance_proof::ZeroBalanceProof,
         transcript::TranscriptProtocol,
@@ -40,7 +40,7 @@ impl CloseAccountData {
     pub fn new(
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
-    ) -> Result<Self, ProofError> {
+    ) -> Result<Self, ProofInstructionError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
@@ -58,7 +58,7 @@ impl CloseAccountData {
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for CloseAccountData {
-    fn verify(&self) -> Result<(), ProofError> {
+    fn verify(&self) -> Result<(), ProofInstructionError> {
         let mut transcript = CloseAccountProof::transcript_new(&self.pubkey, &self.ciphertext);
 
         let pubkey = self.pubkey.try_into()?;
@@ -108,7 +108,7 @@ impl CloseAccountProof {
         pubkey: &ElGamalPubkey,
         ciphertext: &ElGamalCiphertext,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofError> {
+    ) -> Result<(), ProofInstructionError> {
         let proof: ZeroBalanceProof = self.proof.try_into()?;
         proof.verify(pubkey, ciphertext, transcript)?;
 
