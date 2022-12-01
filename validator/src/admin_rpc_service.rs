@@ -740,13 +740,9 @@ mod tests {
             };
 
             // RPC & Bank Setup
-            let rpc = RpcHandler::start_with_config(JsonRpcConfig {
-                enable_rpc_transaction_history: true,
-                account_indexes,
-                ..JsonRpcConfig::default()
-            });
+            let rpc = RpcHandler::start_with_config(TestConfig { account_indexes });
 
-            let bank = rpc.working_bank();
+            let bank = rpc.root_bank();
             let RpcHandler { io, meta, .. } = rpc;
 
             // Pubkeys
@@ -772,7 +768,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert!(sizes.is_empty());
             } else {
                 // Count SPL Token Program Default Accounts
@@ -783,8 +779,9 @@ mod tests {
                 let res = io.handle_request_sync(&req, meta.clone());
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
+                println!("{:?}", result);
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 num_default_spl_token_program_accounts =
                     *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
@@ -797,7 +794,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 num_default_system_program_accounts =
                     *sizes.get(&RpcAccountIndex::ProgramId).unwrap();
@@ -941,7 +938,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert!(sizes.is_empty());
                 // --------------- Test Queries ---------------
                 // 1) Wallet1 - Owns 1 SPL Token
@@ -952,7 +949,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 1);
                 // 2) Wallet2 - Owns 2 SPL Tokens
@@ -963,7 +960,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenOwner).unwrap(), 2);
                 // 3) Mint1 - Is in 2 SPL Accounts
@@ -974,7 +971,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 2);
                 // 4) Mint2 - Is in 1 SPL Account
@@ -985,7 +982,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(*sizes.get(&RpcAccountIndex::SplTokenMint).unwrap(), 1);
                 // 5) SPL Token Program Owns 6 Accounts - 1 Default, 5 created above.
@@ -997,7 +994,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(
                     *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
@@ -1012,7 +1009,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert_eq!(sizes.len(), 1);
                 assert_eq!(
                     *sizes.get(&RpcAccountIndex::ProgramId).unwrap(),
@@ -1027,7 +1024,7 @@ mod tests {
                 let result: Value = serde_json::from_str(&res.expect("actual response"))
                     .expect("actual response deserialization");
                 let sizes: HashMap<RpcAccountIndex, usize> =
-                    serde_json::from_value(result["result"]["value"].clone()).unwrap();
+                    serde_json::from_value(result["result"].clone()).unwrap();
                 assert!(sizes.is_empty());
             }
         }
