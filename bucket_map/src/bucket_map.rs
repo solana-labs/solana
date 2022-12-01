@@ -2,7 +2,6 @@
 
 use {
     crate::{bucket_api::BucketApi, bucket_stats::BucketMapStats, MaxSearch, RefCount},
-    procfs::process::{LimitValue, Process},
     solana_sdk::pubkey::Pubkey,
     std::{convert::TryInto, fmt::Debug, fs, path::PathBuf, sync::Arc},
     tempfile::TempDir,
@@ -183,50 +182,12 @@ fn read_be_u64(input: &[u8]) -> u64 {
 }
 
 /// Utility function to get number of Mmap files for current process
+#[cfg(target_os = "linux")]
 pub fn get_mmap_count() -> Option<usize> {
-    // 1. readlines
-    // use std::io::BufRead;
-
-    // let pid = std::process::id();
-    // let map_path = format!("/proc/{}/maps", pid);
-    // let tmp_dir = tempfile::TempDir::new().ok()?;
-    // let copy_path = tmp_dir.path().join("maps");
-    // std::fs::copy(map_path, copy_path.as_os_str()).unwrap();
-
-    // let file = std::fs::File::open(copy_path).ok()?;
-    // Some(std::io::BufReader::new(file).lines().count())
-
-    // wc-l
-    // let pid = std::process::id();
-    // let map_path = format!("/proc/{}/maps", pid);
-    // let output = std::process::Command::new("wc")
-    //     .args(["-l", &map_path])
-    //     .output()
-    //     .unwrap();
-    // if output.status.success() {
-    //     let n: usize = std::str::from_utf8(&output.stdout)
-    //         .unwrap()
-    //         .split_whitespace()
-    //         .next()
-    //         .unwrap()
-    //         .parse()
-    //         .unwrap();
-
-    //     Some(n)
-    // } else {
-    //     None
-    // }
-
-    // wc-l-copy
     let pid = std::process::id();
     let map_path = format!("/proc/{}/maps", pid);
-
-    let tmp_dir = tempfile::TempDir::new().ok()?;
-    let copy_path = tmp_dir.path().join("maps");
-    std::fs::copy(map_path, copy_path.as_os_str()).unwrap();
-
     let output = std::process::Command::new("wc")
-        .args(["-l", copy_path.to_str().unwrap()])
+        .args(["-l", &map_path])
         .output()
         .unwrap();
     if output.status.success() {
@@ -244,28 +205,40 @@ pub fn get_mmap_count() -> Option<usize> {
     }
 }
 
-/// Utility function to get open_fd stats
-pub fn get_open_fd_stats() -> Option<(usize, usize, usize, usize)> {
-    let proc = Process::myself().ok()?;
-    let curr_num_open_fd = proc.fd_count().unwrap();
-    let curr_mmap_count = get_mmap_count().unwrap();
-    let max_open_fd_limit = proc.limits().unwrap().max_open_files;
+#[cfg(not(target_os = "linux"))]
+pub fn get_mmap_count() -> Option<usize> {
+    None
+}
 
-    let max_open_fd_soft_limit = match max_open_fd_limit.soft_limit {
-        LimitValue::Unlimited => usize::MAX,
-        LimitValue::Value(x) => x as usize,
-    };
-    let max_open_fd_hard_limit = match max_open_fd_limit.hard_limit {
-        LimitValue::Unlimited => usize::MAX,
-        LimitValue::Value(x) => x as usize,
+/// Utility function to get open_fd limits
+#[cfg(target_os = "linux")]
+pub fn get_open_fd_limits() -> Option<(usize, usize)> {
+    let run = |cmd, args| -> Option<usize> {
+        let output = std::process::Command::new(cmd).args(args).output().unwrap();
+        if output.status.success() {
+            let n: usize = std::str::from_utf8(&output.stdout)
+                .unwrap()
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+
+            Some(n)
+        } else {
+            None
+        }
     };
 
-    Some((
-        curr_num_open_fd,
-        curr_mmap_count,
-        max_open_fd_soft_limit,
-        max_open_fd_hard_limit,
-    ))
+    let soft_limit = run("sh", ["-c", "ulimit -Sn"])?;
+    let hard_limit = run("sh", ["-c", "ulimit -Hn"])?;
+
+    Some((soft_limit, hard_limit))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn get_open_fd_limits() -> Option<(usize, usize, usize)> {
+    None
 }
 
 #[cfg(test)]
