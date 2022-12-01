@@ -57,7 +57,7 @@ mod target_arch {
                 elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
                 pedersen::PedersenCommitment,
             },
-            errors::{ProofInstructionError, ProofVerificationError},
+            errors::{ProofError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
@@ -83,11 +83,10 @@ mod target_arch {
     }
 
     impl TryFrom<PodScalar> for Scalar {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: PodScalar) -> Result<Self, Self::Error> {
-            Scalar::from_canonical_bytes(pod.0)
-                .ok_or(ProofInstructionError::CiphertextDeserialization)
+            Scalar::from_canonical_bytes(pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -98,10 +97,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ElGamalCiphertext> for ElGamalCiphertext {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(ct: pod::ElGamalCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofInstructionError::CiphertextDeserialization)
+            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -112,10 +111,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::ElGamalPubkey> for ElGamalPubkey {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pk: pod::ElGamalPubkey) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pk.0).ok_or(ProofInstructionError::CiphertextDeserialization)
+            Self::from_bytes(&pk.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -147,10 +146,10 @@ mod target_arch {
 
     #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::PedersenCommitment> for PedersenCommitment {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::PedersenCommitment) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofInstructionError::CiphertextDeserialization)
+            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -171,10 +170,10 @@ mod target_arch {
 
     #[cfg(not(target_os = "solana"))]
     impl TryFrom<pod::DecryptHandle> for DecryptHandle {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::DecryptHandle) -> Result<Self, Self::Error> {
-            Self::from_bytes(&pod.0).ok_or(ProofInstructionError::CiphertextDeserialization)
+            Self::from_bytes(&pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -185,10 +184,10 @@ mod target_arch {
     }
 
     impl TryFrom<pod::AeCiphertext> for AeCiphertext {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(ct: pod::AeCiphertext) -> Result<Self, Self::Error> {
-            Self::from_bytes(&ct.0).ok_or(ProofInstructionError::CiphertextDeserialization)
+            Self::from_bytes(&ct.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -390,7 +389,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferPubkeys> for TransferPubkeys {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::TransferPubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -413,7 +412,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferWithFeePubkeys> for TransferWithFeePubkeys {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::TransferWithFeePubkeys) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -439,7 +438,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::TransferAmountEncryption> for TransferAmountEncryption {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::TransferAmountEncryption) -> Result<Self, Self::Error> {
             Ok(Self {
@@ -464,7 +463,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::FeeEncryption> for FeeEncryption {
-        type Error = ProofInstructionError;
+        type Error = ProofError;
 
         fn try_from(pod: pod::FeeEncryption) -> Result<Self, Self::Error> {
             Ok(Self {

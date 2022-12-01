@@ -11,7 +11,7 @@ use {
             },
             pedersen::{Pedersen, PedersenCommitment, PedersenOpening},
         },
-        errors::ProofInstructionError,
+        errors::ProofError,
         instruction::{
             combine_lo_hi_ciphertexts, combine_lo_hi_commitments, combine_lo_hi_openings,
             combine_lo_hi_u64, split_u64, transfer::TransferAmountEncryption, Role, Verifiable,
@@ -95,7 +95,7 @@ impl TransferWithFeeData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
         fee_parameters: FeeParameters,
         withdraw_withheld_authority_pubkey: &ElGamalPubkey,
-    ) -> Result<Self, ProofInstructionError> {
+    ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
         let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
@@ -115,7 +115,7 @@ impl TransferWithFeeData {
         // subtract transfer amount from the spendable ciphertext
         let new_spendable_balance = spendable_balance
             .checked_sub(transfer_amount)
-            .ok_or(ProofInstructionError::Generation)?;
+            .ok_or(ProofError::Generation)?;
 
         let transfer_amount_lo_source = ElGamalCiphertext {
             commitment: ciphertext_lo.commitment,
@@ -139,7 +139,7 @@ impl TransferWithFeeData {
         // TODO: add comment on delta fee
         let (fee_amount, delta_fee) =
             calculate_fee(transfer_amount, fee_parameters.fee_rate_basis_points)
-                .ok_or(ProofInstructionError::Generation)?;
+                .ok_or(ProofError::Generation)?;
 
         let below_max = u64::ct_gt(&fee_parameters.maximum_fee, &fee_amount);
         let fee_to_encrypt =
@@ -209,7 +209,7 @@ impl TransferWithFeeData {
     }
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
-    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
+    fn ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
@@ -225,12 +225,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofInstructionError::MissingCiphertext)
+            Err(ProofError::MissingCiphertext)
         }
     }
 
     /// Extracts the lo ciphertexts associated with a transfer-with-fee data
-    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
+    fn ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
@@ -246,12 +246,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofInstructionError::MissingCiphertext)
+            Err(ProofError::MissingCiphertext)
         }
     }
 
     /// Extracts the lo fee ciphertexts associated with a transfer_with_fee data
-    fn fee_ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
+    fn fee_ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let fee_ciphertext_lo: FeeEncryption = self.fee_ciphertext_lo.try_into()?;
 
         let fee_handle_lo = match role {
@@ -269,12 +269,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofInstructionError::MissingCiphertext)
+            Err(ProofError::MissingCiphertext)
         }
     }
 
     /// Extracts the hi fee ciphertexts associated with a transfer_with_fee data
-    fn fee_ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
+    fn fee_ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
         let fee_ciphertext_hi: FeeEncryption = self.fee_ciphertext_hi.try_into()?;
 
         let fee_handle_hi = match role {
@@ -292,16 +292,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofInstructionError::MissingCiphertext)
+            Err(ProofError::MissingCiphertext)
         }
     }
 
     /// Decrypts transfer amount from transfer-with-fee data
-    pub fn decrypt_amount(
-        &self,
-        role: Role,
-        sk: &ElGamalSecretKey,
-    ) -> Result<u64, ProofInstructionError> {
+    pub fn decrypt_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.ciphertext_lo(role)?;
         let ciphertext_hi = self.ciphertext_hi(role)?;
 
@@ -312,16 +308,12 @@ impl TransferWithFeeData {
             let shifted_amount_hi = amount_hi << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + shifted_amount_hi)
         } else {
-            Err(ProofInstructionError::Decryption)
+            Err(ProofError::Decryption)
         }
     }
 
     /// Decrypts transfer amount from transfer-with-fee data
-    pub fn decrypt_fee_amount(
-        &self,
-        role: Role,
-        sk: &ElGamalSecretKey,
-    ) -> Result<u64, ProofInstructionError> {
+    pub fn decrypt_fee_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
         let ciphertext_lo = self.fee_ciphertext_lo(role)?;
         let ciphertext_hi = self.fee_ciphertext_hi(role)?;
 
@@ -332,14 +324,14 @@ impl TransferWithFeeData {
             let shifted_fee_amount_hi = fee_amount_hi << FEE_AMOUNT_LO_BITS;
             Ok(fee_amount_lo + shifted_fee_amount_hi)
         } else {
-            Err(ProofInstructionError::Decryption)
+            Err(ProofError::Decryption)
         }
     }
 }
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for TransferWithFeeData {
-    fn verify(&self) -> Result<(), ProofInstructionError> {
+    fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = TransferWithFeeProof::transcript_new(
             &self.transfer_with_fee_pubkeys,
             &self.ciphertext_lo,
@@ -587,7 +579,7 @@ impl TransferWithFeeProof {
         fee_ciphertext_hi: &FeeEncryption,
         fee_parameters: FeeParameters,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofInstructionError> {
+    ) -> Result<(), ProofError> {
         transcript.append_commitment(b"commitment-new-source", &self.new_source_commitment);
 
         let new_source_commitment: PedersenCommitment = self.new_source_commitment.try_into()?;
@@ -726,20 +718,20 @@ impl TransferWithFeePubkeys {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofInstructionError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProofError> {
         let bytes = array_ref![bytes, 0, 128];
         let (source_pubkey, destination_pubkey, auditor_pubkey, withdraw_withheld_authority_pubkey) =
             array_refs![bytes, 32, 32, 32, 32];
 
-        let source_pubkey = ElGamalPubkey::from_bytes(source_pubkey)
-            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
+        let source_pubkey =
+            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
         let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
-            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
-        let auditor_pubkey = ElGamalPubkey::from_bytes(auditor_pubkey)
-            .ok_or(ProofInstructionError::PubkeyDeserialization)?;
+            .ok_or(ProofError::PubkeyDeserialization)?;
+        let auditor_pubkey =
+            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
         let withdraw_withheld_authority_pubkey =
             ElGamalPubkey::from_bytes(withdraw_withheld_authority_pubkey)
-                .ok_or(ProofInstructionError::PubkeyDeserialization)?;
+                .ok_or(ProofError::PubkeyDeserialization)?;
 
         Ok(Self {
             source_pubkey,

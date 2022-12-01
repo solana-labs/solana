@@ -6,7 +6,7 @@ use {
 use {
     crate::{
         encryption::elgamal::{ElGamalKeypair, ElGamalPubkey},
-        errors::ProofInstructionError,
+        errors::ProofError,
         instruction::Verifiable,
         sigma_proofs::pubkey_proof::PubkeySigmaProof,
         transcript::TranscriptProtocol,
@@ -33,7 +33,7 @@ pub struct PubkeyValidityData {
 
 #[cfg(not(target_os = "solana"))]
 impl PubkeyValidityData {
-    pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofInstructionError> {
+    pub fn new(keypair: &ElGamalKeypair) -> Result<Self, ProofError> {
         let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
 
         let mut transcript = PubkeyValidityProof::transcript_new(&pod_pubkey);
@@ -49,7 +49,7 @@ impl PubkeyValidityData {
 
 #[cfg(not(target_os = "solana"))]
 impl Verifiable for PubkeyValidityData {
-    fn verify(&self) -> Result<(), ProofInstructionError> {
+    fn verify(&self) -> Result<(), ProofError> {
         let mut transcript = PubkeyValidityProof::transcript_new(&self.pubkey);
         let pubkey = self.pubkey.try_into()?;
         self.proof.verify(&pubkey, &mut transcript)
@@ -84,7 +84,7 @@ impl PubkeyValidityProof {
         &self,
         pubkey: &ElGamalPubkey,
         transcript: &mut Transcript,
-    ) -> Result<(), ProofInstructionError> {
+    ) -> Result<(), ProofError> {
         let proof: PubkeySigmaProof = self.proof.try_into()?;
         proof.verify(pubkey, transcript)?;
         Ok(())

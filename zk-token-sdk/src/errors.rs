@@ -5,7 +5,7 @@ use {
 };
 
 #[derive(Error, Clone, Debug, Eq, PartialEq)]
-pub enum ProofInstructionError {
+pub enum ProofError {
     #[error("invalid transfer amount range")]
     TransferAmount,
     #[error("proof generation failed")]
@@ -58,36 +58,36 @@ pub enum TranscriptError {
     ValidationError,
 }
 
-impl From<RangeProofError> for ProofInstructionError {
+impl From<RangeProofError> for ProofError {
     fn from(err: RangeProofError) -> Self {
         Self::VerificationError(ProofType::RangeProof, err.0)
     }
 }
 
-impl From<EqualityProofError> for ProofInstructionError {
+impl From<EqualityProofError> for ProofError {
     fn from(err: EqualityProofError) -> Self {
         Self::VerificationError(ProofType::EqualityProof, err.0)
     }
 }
 
-impl From<FeeSigmaProofError> for ProofInstructionError {
+impl From<FeeSigmaProofError> for ProofError {
     fn from(err: FeeSigmaProofError) -> Self {
         Self::VerificationError(ProofType::FeeSigmaProof, err.0)
     }
 }
 
-impl From<ZeroBalanceProofError> for ProofInstructionError {
+impl From<ZeroBalanceProofError> for ProofError {
     fn from(err: ZeroBalanceProofError) -> Self {
         Self::VerificationError(ProofType::ZeroBalanceProof, err.0)
     }
 }
-impl From<ValidityProofError> for ProofInstructionError {
+impl From<ValidityProofError> for ProofError {
     fn from(err: ValidityProofError) -> Self {
         Self::VerificationError(ProofType::ValidityProof, err.0)
     }
 }
 
-impl From<PubkeyValidityProofError> for ProofInstructionError {
+impl From<PubkeyValidityProofError> for ProofError {
     fn from(err: PubkeyValidityProofError) -> Self {
         Self::VerificationError(ProofType::PubkeyValidityProof, err.0)
     }
