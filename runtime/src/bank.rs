@@ -10461,85 +10461,102 @@ pub(crate) mod tests {
     // Test that purging 0 lamports accounts works.
     #[test]
     fn test_purge_empty_accounts() {
-        solana_logger::setup();
-        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
-        let amount = genesis_config.rent.minimum_balance(0);
-        let parent = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut bank = parent;
-        for _ in 0..10 {
-            let blockhash = bank.last_blockhash();
-            let pubkey = solana_sdk::pubkey::new_rand();
-            let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
-            bank.process_transaction(&tx).unwrap();
+        // When using the write cache, flushing is destructive/cannot be undone
+        //  so we have to stop at various points and restart to actively test.
+        for pass in 0..3 {
+            solana_logger::setup();
+            let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
+            let amount = genesis_config.rent.minimum_balance(0);
+            let parent = Arc::new(Bank::new_for_tests_with_config(
+                &genesis_config,
+                bank_test_config_caching_enabled(),
+            ));
+            let mut bank = parent;
+            for _ in 0..10 {
+                let blockhash = bank.last_blockhash();
+                let pubkey = solana_sdk::pubkey::new_rand();
+                let tx = system_transaction::transfer(&mint_keypair, &pubkey, 0, blockhash);
+                bank.process_transaction(&tx).unwrap();
+                bank.freeze();
+                bank.squash();
+                bank = Arc::new(new_from_parent(&bank));
+            }
+
             bank.freeze();
             bank.squash();
-            bank = Arc::new(new_from_parent(&bank));
+            bank.force_flush_accounts_cache();
+            let hash = bank.update_accounts_hash_for_tests();
+            bank.clean_accounts_for_tests();
+            assert_eq!(bank.update_accounts_hash_for_tests(), hash);
+
+            let bank0 = Arc::new(new_from_parent(&bank));
+            let blockhash = bank.last_blockhash();
+            let keypair = Keypair::new();
+            let tx =
+                system_transaction::transfer(&mint_keypair, &keypair.pubkey(), amount, blockhash);
+            bank0.process_transaction(&tx).unwrap();
+
+            let bank1 = Arc::new(new_from_parent(&bank0));
+            let pubkey = solana_sdk::pubkey::new_rand();
+            let blockhash = bank.last_blockhash();
+            let tx = system_transaction::transfer(&keypair, &pubkey, amount, blockhash);
+            bank1.process_transaction(&tx).unwrap();
+
+            assert_eq!(
+                bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
+                amount
+            );
+            assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+            info!("bank0 purge");
+            let hash = bank0.update_accounts_hash_for_tests();
+            bank0.clean_accounts_for_tests();
+            assert_eq!(bank0.update_accounts_hash_for_tests(), hash);
+
+            assert_eq!(
+                bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
+                amount
+            );
+            assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+            info!("bank1 purge");
+            bank1.clean_accounts_for_tests();
+
+            assert_eq!(
+                bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
+                amount
+            );
+            assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+            if pass == 0 {
+                add_root_and_flush_write_cache(&bank0);
+                assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
+                continue;
+            }
+
+            // Squash and then verify hash_internal value
+            bank0.freeze();
+            bank0.squash();
+            add_root_and_flush_write_cache(&bank0);
+            if pass == 1 {
+                assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
+                continue;
+            }
+
+            bank1.freeze();
+            bank1.squash();
+            add_root_and_flush_write_cache(&bank1);
+            bank1.update_accounts_hash_for_tests();
+            assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
+
+            // keypair should have 0 tokens on both forks
+            assert_eq!(bank0.get_account(&keypair.pubkey()), None);
+            assert_eq!(bank1.get_account(&keypair.pubkey()), None);
+
+            bank1.clean_accounts_for_tests();
+
+            assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
         }
-
-        bank.freeze();
-        bank.squash();
-        bank.force_flush_accounts_cache();
-        let hash = bank.update_accounts_hash_for_tests();
-        bank.clean_accounts_for_tests();
-        assert_eq!(bank.update_accounts_hash_for_tests(), hash);
-
-        let bank0 = Arc::new(new_from_parent(&bank));
-        let blockhash = bank.last_blockhash();
-        let keypair = Keypair::new();
-        let tx = system_transaction::transfer(&mint_keypair, &keypair.pubkey(), amount, blockhash);
-        bank0.process_transaction(&tx).unwrap();
-
-        let bank1 = Arc::new(new_from_parent(&bank0));
-        let pubkey = solana_sdk::pubkey::new_rand();
-        let blockhash = bank.last_blockhash();
-        let tx = system_transaction::transfer(&keypair, &pubkey, amount, blockhash);
-        bank1.process_transaction(&tx).unwrap();
-
-        assert_eq!(
-            bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
-            amount
-        );
-        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-
-        info!("bank0 purge");
-        let hash = bank0.update_accounts_hash_for_tests();
-        bank0.clean_accounts_for_tests();
-        assert_eq!(bank0.update_accounts_hash_for_tests(), hash);
-
-        assert_eq!(
-            bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
-            amount
-        );
-        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-
-        info!("bank1 purge");
-        bank1.clean_accounts_for_tests();
-
-        assert_eq!(
-            bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
-            amount
-        );
-        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-
-        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
-
-        // Squash and then verify hash_internal value
-        bank0.freeze();
-        bank0.squash();
-        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
-
-        bank1.freeze();
-        bank1.squash();
-        bank1.update_accounts_hash_for_tests();
-        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
-
-        // keypair should have 0 tokens on both forks
-        assert_eq!(bank0.get_account(&keypair.pubkey()), None);
-        assert_eq!(bank1.get_account(&keypair.pubkey()), None);
-        bank1.force_flush_accounts_cache();
-        bank1.clean_accounts_for_tests();
-
-        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
