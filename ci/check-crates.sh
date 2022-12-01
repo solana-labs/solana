@@ -53,6 +53,7 @@ for file in "${files[@]}"; do
 done
 
 if [ ${#including_unverified_owners[@]} -eq 0 ] && [ "${#unknown_errors[@]}" -eq 0 ]; then
+    echo "success"
     exit 0
 else
     echo "including unverified owner: ${#including_unverified_owners[@]}"
