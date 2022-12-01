@@ -15033,6 +15033,11 @@ pub(crate) mod tests {
         );
     }
 
+    fn add_root_and_flush_write_cache(bank: &Bank) {
+        bank.rc.accounts.add_root(bank.slot());
+        bank.flush_accounts_cache_slot_for_tests()
+    }
+
     #[test]
     fn test_add_builtin_account_inherited_cap_while_replacing() {
         let (genesis_config, mint_keypair) = create_genesis_config(100_000);
@@ -15143,21 +15148,41 @@ pub(crate) mod tests {
 
     #[test]
     fn test_add_precompiled_account_inherited_cap_while_replacing() {
-        let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let program_id = solana_sdk::pubkey::new_rand();
+        // when we flush the cache, it has side effects, so we have to restart the test each time we flush the cache
+        // and then want to continue modifying the bank
+        for pass in 0..4 {
+            let (genesis_config, mint_keypair) = create_genesis_config(100_000);
+            let bank = Bank::new_for_tests_with_config(
+                &genesis_config,
+                bank_test_config_caching_enabled(),
+            );
+            let program_id = solana_sdk::pubkey::new_rand();
 
-        bank.add_precompiled_account(&program_id);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+            bank.add_precompiled_account(&program_id);
+            if pass == 0 {
+                add_root_and_flush_write_cache(&bank);
+                assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+                continue;
+            }
 
-        // someone mess with program_id's balance
-        bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
-        assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
-        bank.deposit(&program_id, 10).unwrap();
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+            // someone mess with program_id's balance
+            bank.withdraw(&mint_keypair.pubkey(), 10).unwrap();
+            if pass == 1 {
+                add_root_and_flush_write_cache(&bank);
+                assert_ne!(bank.capitalization(), bank.calculate_capitalization(true));
+                continue;
+            }
+            bank.deposit(&program_id, 10).unwrap();
+            if pass == 2 {
+                add_root_and_flush_write_cache(&bank);
+                assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+                continue;
+            }
 
-        bank.add_precompiled_account(&program_id);
-        assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+            bank.add_precompiled_account(&program_id);
+            add_root_and_flush_write_cache(&bank);
+            assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
+        }
     }
 
     #[test]
