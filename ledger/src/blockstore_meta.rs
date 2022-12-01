@@ -422,6 +422,12 @@ mod test {
     };
 
     #[test]
+    fn test_slot_meta_slot_zero_connected() {
+        let meta = SlotMeta::new(0 /* slot */, None /* parent */);
+        assert!(meta.is_connected());
+    }
+
+    #[test]
     fn test_erasure_meta_status() {
         use ErasureMetaStatus::*;
 
