@@ -60,35 +60,35 @@ pub enum TranscriptError {
 
 impl From<RangeProofError> for ProofInstructionError {
     fn from(err: RangeProofError) -> Self {
-        Self::VerificationError(ProofType::RangeProof, err.0.into())
+        Self::VerificationError(ProofType::RangeProof, err.0)
     }
 }
 
 impl From<EqualityProofError> for ProofInstructionError {
     fn from(err: EqualityProofError) -> Self {
-        Self::VerificationError(ProofType::EqualityProof, err.0.into())
+        Self::VerificationError(ProofType::EqualityProof, err.0)
     }
 }
 
 impl From<FeeSigmaProofError> for ProofInstructionError {
     fn from(err: FeeSigmaProofError) -> Self {
-        Self::VerificationError(ProofType::FeeSigmaProof, err.0.into())
+        Self::VerificationError(ProofType::FeeSigmaProof, err.0)
     }
 }
 
 impl From<ZeroBalanceProofError> for ProofInstructionError {
     fn from(err: ZeroBalanceProofError) -> Self {
-        Self::VerificationError(ProofType::ZeroBalanceProof, err.0.into())
+        Self::VerificationError(ProofType::ZeroBalanceProof, err.0)
     }
 }
 impl From<ValidityProofError> for ProofInstructionError {
     fn from(err: ValidityProofError) -> Self {
-        Self::VerificationError(ProofType::ValidityProof, err.0.into())
+        Self::VerificationError(ProofType::ValidityProof, err.0)
     }
 }
 
 impl From<PubkeyValidityProofError> for ProofInstructionError {
     fn from(err: PubkeyValidityProofError) -> Self {
-        Self::VerificationError(ProofType::PubkeyValidityProof, err.0.into())
+        Self::VerificationError(ProofType::PubkeyValidityProof, err.0)
     }
 }
