@@ -459,12 +459,16 @@ mod tests {
                         }
                         let len = batch_id;
 
-                        let br = if pre_generate_data {
+                        // No duplicates being generated, so all shreds
+                        // being passed to insert() are getting inserted
+                        let num_shred_inserted = if pre_generate_data {
                             let mut sl = cloned_shreds.lock().unwrap();
                             if let Some(shreds_from_queue) = sl.pop_front() {
-                                total += shreds_from_queue.len();
+                                let num_shreds = shreds_from_queue.len();
+                                total += num_shreds;
                                 cloned_blockstore.insert_shreds(
-                                    shreds_from_queue, None, false).unwrap()
+                                    shreds_from_queue, None, false).unwrap();
+                                num_shreds
                             } else {
                                 // If the queue is empty, we're done!
                                 break;
@@ -474,19 +478,23 @@ mod tests {
                             if slot_id > 0 {
                                 let (shreds_with_parent, _) = make_many_slot_shreds(
                                     slot_id, batch_size_slots, shreds_per_slot);
-                                total += shreds_with_parent.len();
+                                let num_shreds = shreds_with_parent.len();
+                                total += num_shreds;
                                 cloned_blockstore.insert_shreds(
-                                    shreds_with_parent.clone(), None, false).unwrap()
+                                    shreds_with_parent.clone(), None, false).unwrap();
+                                num_shreds
                             } else {
-                                total += first_shreds.len();
+                                let num_shreds = first_shreds.len();
+                                total += num_shreds;
                                 cloned_blockstore.insert_shreds(
-                                    first_shreds.clone(), None, false).unwrap()
+                                    first_shreds.clone(), None, false).unwrap();
+                                num_shreds
                             }
                         };
 
                         total_batches += 1;
-                        total_inserted_shreds += br.1.len();
-                        num_shreds += br.1.len();
+                        total_inserted_shreds += num_shred_inserted;
+                        num_shreds += num_shred_inserted;
                         shared_finished_count.fetch_add(1, Ordering::Relaxed);
 
                         // as_secs() returns whole number of seconds, so this runs every second

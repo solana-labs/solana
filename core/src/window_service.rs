@@ -276,7 +276,7 @@ where
     prune_shreds_elapsed.stop();
     ws_metrics.prune_shreds_elapsed_us += prune_shreds_elapsed.as_us();
 
-    let (completed_data_sets, _) = blockstore.insert_shreds_handle_duplicate(
+    let completed_data_sets = blockstore.insert_shreds_handle_duplicate(
         shreds,
         repairs,
         Some(leader_schedule_cache),
