@@ -6833,6 +6833,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.9.13",
  "signal-hook",
+ "solana-account-decoder",
  "solana-clap-utils",
  "solana-cli-config",
  "solana-core",
@@ -6859,6 +6860,7 @@ dependencies = [
  "solana-tpu-client",
  "solana-version",
  "solana-vote-program",
+ "spl-token-2022",
  "symlink",
  "tikv-jemallocator",
 ]
