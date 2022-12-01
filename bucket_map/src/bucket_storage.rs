@@ -1,5 +1,9 @@
 use {
-    crate::{bucket_map::get_open_fd_stats, bucket_stats::BucketStats, MaxSearch},
+    crate::{
+        bucket_map::{get_mmap_count, get_open_fd_limits},
+        bucket_stats::BucketStats,
+        MaxSearch,
+    },
     memmap2::MmapMut,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -280,21 +284,23 @@ impl BucketStorage {
             .create(true)
             .open(file.clone())
             .map_err(|e| {
-                let mmap_msg = get_open_fd_stats()
-                    .map(|(mmap_count, num_open_files, soft_limit, hard_limit)| {
-                        format!("current mmap_count: {}, current number of open files: {}, soft_limit: {}, hard_limit: {}",
-                                        mmap_count,
-                                        num_open_files,
-                                        soft_limit, 
-                                        hard_limit, 
-                        )
-                    }).unwrap_or_default();
+                let mmap_msg = get_mmap_count()
+                    .map(|mmap_count| format!("current mmap_count: {}", mmap_count))
+                    .unwrap_or_default();
+
+                let limit_msg = get_open_fd_limits()
+                    .map(|(soft_limit, hard_limit)| {
+                        format!("soft_limit: {}, hard_limit: {}", soft_limit, hard_limit,)
+                    })
+                    .unwrap_or_default();
+
                 panic!(
-                    "Unable to create data file {} in current dir({:?}): {:?}. {}",
+                    "Unable to create data file {} in current dir({:?}): {:?}. {}, {}",
                     file.display(),
                     std::env::current_dir(),
                     e,
                     mmap_msg,
+                    limit_msg,
                 );
             })
             .unwrap();
@@ -393,6 +399,7 @@ impl BucketStorage {
 mod test {
     use {super::*, tempfile::tempdir};
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn test_bucket_storage() {
         let tmpdir = tempdir().unwrap();
@@ -424,15 +431,16 @@ mod test {
         assert_eq!(storage.uid(ix), None);
 
         // test get_mmap_fd_stats
-        let (mmap_count, num_open_files, soft_limit, hard_limit) =
-            get_open_fd_stats().unwrap();
+        let mmap_count = get_mmap_count().unwrap();
+        let (soft_limit, hard_limit) = get_open_fd_limits().unwrap();
 
         assert!(mmap_count > 0);
-        assert!(num_open_files > 0);
         assert!(soft_limit > 0);
         assert!(hard_limit > 0);
     }
 
+    #[cfg(target_os = "linux")]
+    #[ignore]
     #[test]
     fn test_time_mmap() {
         use std::time::Instant;
@@ -446,21 +454,16 @@ mod test {
             let tmpdir = tempdir().unwrap();
             let paths: Vec<PathBuf> = vec![tmpdir.path().to_path_buf()];
             assert!(!paths.is_empty());
-            let s =
-                BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
+            let s = BucketStorage::new(Arc::new(paths), 1, 1, 1, Arc::default(), Arc::default());
             v.push(s);
         }
 
         // test get_mmap_fd_stats
         let start = Instant::now();
-        let (mmap_count, num_open_files, soft_limit, hard_limit) = get_open_fd_stats().unwrap();
+        let mmap_count = get_mmap_count().unwrap();
         let duration = start.elapsed();
 
-        println!(
-            "{} {} {} {}",
-            mmap_count, num_open_files, soft_limit, hard_limit 
-        );
-
+        println!("{}", mmap_count);
         println!("Time elapsed is: {:?}", duration);
     }
 }
