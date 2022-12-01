@@ -1,13 +1,9 @@
 use {
-<<<<<<< HEAD
     crate::{
         erasure::ErasureConfig,
         shred::{Shred, ShredType},
     },
-=======
-    crate::shred::{Shred, ShredType},
     bitflags::bitflags,
->>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
     serde::{Deserialize, Deserializer, Serialize, Serializer},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
@@ -252,8 +248,6 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
-<<<<<<< HEAD
-=======
     pub fn is_connected(&self) -> bool {
         self.connected_flags.contains(ConnectedFlags::CONNECTED)
     }
@@ -262,12 +256,6 @@ impl SlotMeta {
         self.connected_flags.set(ConnectedFlags::CONNECTED, true);
     }
 
-    /// Dangerous. Currently only needed for a local-cluster test
-    pub fn unset_parent(&mut self) {
-        self.parent_slot = None;
-    }
-
->>>>>>> 01cd55a27 (Change SlotMeta is_connected bool to bitflags (#29001))
     pub fn clear_unconfirmed_slot(&mut self) {
         let mut new_self = SlotMeta::new_orphan(self.slot);
         std::mem::swap(&mut new_self.next_slots, &mut self.next_slots);
