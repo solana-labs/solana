@@ -184,34 +184,64 @@ fn read_be_u64(input: &[u8]) -> u64 {
 
 /// Utility function to get number of Mmap files for current process
 pub fn get_mmap_count() -> Option<usize> {
-    use std::io::BufRead;
+    // 1. readlines
+    // use std::io::BufRead;
 
+    // let pid = std::process::id();
+    // let map_path = format!("/proc/{}/maps", pid);
+    // let tmp_dir = tempfile::TempDir::new().ok()?;
+    // let copy_path = tmp_dir.path().join("maps");
+    // std::fs::copy(map_path, copy_path.as_os_str()).unwrap();
+
+    // let file = std::fs::File::open(copy_path).ok()?;
+    // Some(std::io::BufReader::new(file).lines().count())
+
+    // wc-l
+    // let pid = std::process::id();
+    // let map_path = format!("/proc/{}/maps", pid);
+    // let output = std::process::Command::new("wc")
+    //     .args(["-l", &map_path])
+    //     .output()
+    //     .unwrap();
+    // if output.status.success() {
+    //     let n: usize = std::str::from_utf8(&output.stdout)
+    //         .unwrap()
+    //         .split_whitespace()
+    //         .next()
+    //         .unwrap()
+    //         .parse()
+    //         .unwrap();
+
+    //     Some(n)
+    // } else {
+    //     None
+    // }
+
+    // wc-l-copy
     let pid = std::process::id();
     let map_path = format!("/proc/{}/maps", pid);
+
     let tmp_dir = tempfile::TempDir::new().ok()?;
     let copy_path = tmp_dir.path().join("maps");
     std::fs::copy(map_path, copy_path.as_os_str()).unwrap();
 
-    let file = std::fs::File::open(copy_path).ok()?;
-    Some(std::io::BufReader::new(file).lines().count())
+    let output = std::process::Command::new("wc")
+        .args(["-l", copy_path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    if output.status.success() {
+        let n: usize = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
 
-    //    let output = std::process::Command::new("wc")
-    //        .args(["-l", &map_path])
-    //        .output()
-    //        .unwrap();
-    //    if output.status.success() {
-    //        let n: usize = std::str::from_utf8(&output.stdout)
-    //            .unwrap()
-    //            .split_whitespace()
-    //            .next()
-    //            .unwrap()
-    //            .parse()
-    //            .unwrap();
-    //
-    //        Some(n)
-    //    } else {
-    //        None
-    //    }
+        Some(n)
+    } else {
+        None
+    }
 }
 
 /// Utility function to get open_fd stats
