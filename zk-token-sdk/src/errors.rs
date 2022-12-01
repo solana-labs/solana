@@ -18,6 +18,8 @@ pub enum ProofInstructionError {
     CiphertextDeserialization,
     #[error("invalid pubkey data")]
     PubkeyDeserialization,
+    #[error("ciphertext does not exist in instruction data")]
+    MissingCiphertext,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

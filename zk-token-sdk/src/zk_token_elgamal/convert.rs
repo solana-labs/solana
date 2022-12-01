@@ -83,10 +83,11 @@ mod target_arch {
     }
 
     impl TryFrom<PodScalar> for Scalar {
-        type Error = ProofError;
+        type Error = ProofInstructionError;
 
         fn try_from(pod: PodScalar) -> Result<Self, Self::Error> {
-            Scalar::from_canonical_bytes(pod.0).ok_or(ProofError::CiphertextDeserialization)
+            Scalar::from_canonical_bytes(pod.0)
+                .ok_or(ProofInstructionError::CiphertextDeserialization)
         }
     }
 

@@ -225,7 +225,7 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
@@ -246,12 +246,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
     /// Extracts the lo fee ciphertexts associated with a transfer_with_fee data
-    fn fee_ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn fee_ciphertext_lo(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
         let fee_ciphertext_lo: FeeEncryption = self.fee_ciphertext_lo.try_into()?;
 
         let fee_handle_lo = match role {
@@ -269,12 +269,12 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
     /// Extracts the hi fee ciphertexts associated with a transfer_with_fee data
-    fn fee_ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofError> {
+    fn fee_ciphertext_hi(&self, role: Role) -> Result<ElGamalCiphertext, ProofInstructionError> {
         let fee_ciphertext_hi: FeeEncryption = self.fee_ciphertext_hi.try_into()?;
 
         let fee_handle_hi = match role {
@@ -292,7 +292,7 @@ impl TransferWithFeeData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
@@ -312,12 +312,16 @@ impl TransferWithFeeData {
             let shifted_amount_hi = amount_hi << TRANSFER_AMOUNT_LO_BITS;
             Ok(amount_lo + shifted_amount_hi)
         } else {
-            Err(ProofError::Decryption)
+            Err(ProofInstructionError::Decryption)
         }
     }
 
     /// Decrypts transfer amount from transfer-with-fee data
-    pub fn decrypt_fee_amount(&self, role: Role, sk: &ElGamalSecretKey) -> Result<u64, ProofError> {
+    pub fn decrypt_fee_amount(
+        &self,
+        role: Role,
+        sk: &ElGamalSecretKey,
+    ) -> Result<u64, ProofInstructionError> {
         let ciphertext_lo = self.fee_ciphertext_lo(role)?;
         let ciphertext_hi = self.fee_ciphertext_hi(role)?;
 
@@ -328,7 +332,7 @@ impl TransferWithFeeData {
             let shifted_fee_amount_hi = fee_amount_hi << FEE_AMOUNT_LO_BITS;
             Ok(fee_amount_lo + shifted_fee_amount_hi)
         } else {
-            Err(ProofError::Decryption)
+            Err(ProofInstructionError::Decryption)
         }
     }
 }

@@ -159,7 +159,7 @@ impl TransferData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
@@ -180,7 +180,7 @@ impl TransferData {
                 handle,
             })
         } else {
-            Err(ProofError::MissingCiphertext)
+            Err(ProofInstructionError::MissingCiphertext)
         }
     }
 
