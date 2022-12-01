@@ -15,7 +15,8 @@ declare -A verified_crate_owners=(
 # search all Cargo.toml
 readarray -t files <<<"$(find . -name "Cargo.toml")"
 
-error_count=0
+declare -A including_unverified_owners=()
+declare -A unknown_errors=()
 
 for file in "${files[@]}"; do
 
@@ -33,7 +34,7 @@ for file in "${files[@]}"; do
             continue
         fi
         if [[ $owner =~ ^error ]]; then
-            ((error_count++))
+            unknown_errors+=(["$crate_name ($file)"]=1)
             echo "❌ ERROR"
             printf "%s\n" "${owners[@]}"
             break
@@ -43,16 +44,24 @@ for file in "${files[@]}"; do
         if [[ ${verified_crate_owners[$owner_id]} ]]; then
             echo "✅ $owner"
         else
+            including_unverified_owners+=(["$crate_name ($file)"]=1)
             echo "❌ $owner"
-            ((error_count++))
         fi
     done
 
     echo ""
 done
 
-if [ "$error_count" -eq 0 ]; then
+if [ ${#including_unverified_owners[@]} -eq 0 ] && [ "${#unknown_errors[@]}" -eq 0 ]; then
     exit 0
 else
+    echo "including unverified owner: ${#including_unverified_owners[@]}"
+    printf "%s\n" "${!including_unverified_owners[@]}"
+    echo ""
+
+    echo "unknown error: ${#unknown_errors[@]}"
+    printf "%s\n" "${!unknown_errors[@]}"
+    echo ""
+
     exit 1
 fi
