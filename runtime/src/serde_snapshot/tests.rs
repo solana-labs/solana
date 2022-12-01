@@ -7,7 +7,7 @@ use {
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         accounts_hash::AccountsHash,
         append_vec::AppendVec,
-        bank::{Bank, Rewrites},
+        bank::{bank_test_config_caching_enabled, Bank, Rewrites},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
@@ -495,16 +495,25 @@ fn test_bank_serialize_newer() {
     }
 }
 
+fn add_root_and_flush_write_cache(bank: &Bank) {
+    bank.rc.accounts.add_root(bank.slot());
+    bank.flush_accounts_cache_slot_for_tests()
+}
+
 #[test]
 fn test_extra_fields_eof() {
     solana_logger::setup();
     let (mut genesis_config, _) = create_genesis_config(500);
     activate_feature(&mut genesis_config, disable_fee_calculator::id());
 
-    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank0 = Arc::new(Bank::new_for_tests_with_config(
+        &genesis_config,
+        bank_test_config_caching_enabled(),
+    ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
 
+    add_root_and_flush_write_cache(&bank0);
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
@@ -626,9 +635,13 @@ fn test_blank_extra_fields() {
     let (mut genesis_config, _) = create_genesis_config(500);
     activate_feature(&mut genesis_config, disable_fee_calculator::id());
 
-    let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+    let bank0 = Arc::new(Bank::new_for_tests_with_config(
+        &genesis_config,
+        bank_test_config_caching_enabled(),
+    ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
+    add_root_and_flush_write_cache(&bank0);
 
     // Set extra fields
     bank.fee_rate_governor.lamports_per_signature = 7000;
