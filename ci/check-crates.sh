@@ -3,9 +3,9 @@
 # env:
 #   - CRATE_TOKEN
 
-declare -A ignore_files=(
-    ["./Cargo.toml"]=1
-    ["./programs/sbf/Cargo.toml"]=1
+declare skip_patterns=(
+    "./Cargo.toml"
+    "./programs/sbf/Cargo.toml"
 )
 
 declare -A verified_crate_owners=(
@@ -19,10 +19,11 @@ declare -A including_unverified_owners=()
 declare -A unknown_errors=()
 
 for file in "${files[@]}"; do
-
-    if [[ ${ignore_files[$file]} ]]; then
-        continue
-    fi
+    for skip_pattern in "${skip_patterns[@]}"; do
+        if [[ $file =~ ^$skip_pattern ]]; then
+            continue 2
+        fi
+    done
 
     crate_name=$(grep -Poz '[\s\S]*?package\][\s\S]*?name = "\K([a-zA-Z0-9_\-]*)' "$file" | tr -d '\0')
     echo "=== $crate_name ($file) ==="
