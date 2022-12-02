@@ -11662,12 +11662,16 @@ pub(crate) mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
         // Checkpointing should always result in a new state
-        let bank2 = new_from_parent(&Arc::new(bank1));
+        let bank1 = Arc::new(bank1);
+        let bank2 = new_from_parent(&bank1);
         assert_ne!(bank0.hash_internal_state(), bank2.hash_internal_state());
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
+        add_root_and_flush_write_cache(&bank0);
+        add_root_and_flush_write_cache(&bank1);
+        add_root_and_flush_write_cache(&bank2);
         bank2.update_accounts_hash_for_tests();
         assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
