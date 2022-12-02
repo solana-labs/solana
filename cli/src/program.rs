@@ -637,7 +637,7 @@ pub fn parse_program_subcommand(
                 signers: vec![],
             }
         }
-        ("dump-executabe", Some(matches)) => CliCommandInfo {
+        ("dump-executable", Some(matches)) => CliCommandInfo {
             command: CliCommand::Program(ProgramCliCommand::DumpExecutable {
                 account_pubkey: pubkey_of(matches, "account"),
                 output_location: matches.value_of("output_location").unwrap().to_string(),
