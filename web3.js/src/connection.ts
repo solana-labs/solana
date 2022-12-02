@@ -3712,7 +3712,7 @@ export class Connection {
         disposeSignatureSubscriptionStateChangeObserver();
         disposeSignatureSubscriptionStateChangeObserver = undefined;
       }
-      if (signatureSubscriptionId) {
+      if (signatureSubscriptionId != null) {
         this.removeSignatureListener(signatureSubscriptionId);
         signatureSubscriptionId = undefined;
       }
