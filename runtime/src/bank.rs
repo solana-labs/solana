@@ -12888,75 +12888,90 @@ pub(crate) mod tests {
 
     #[test]
     fn test_add_instruction_processor_for_existing_unrelated_accounts() {
-        let mut bank = create_simple_test_bank(500);
+        for pass in 0..5 {
+            let mut bank = create_simple_test_bank(500);
 
-        fn mock_ix_processor(
-            _first_instruction_account: IndexOfAccount,
-            _invoke_context: &mut InvokeContext,
-        ) -> std::result::Result<(), InstructionError> {
-            Err(InstructionError::Custom(42))
-        }
+            fn mock_ix_processor(
+                _first_instruction_account: IndexOfAccount,
+                _invoke_context: &mut InvokeContext,
+            ) -> std::result::Result<(), InstructionError> {
+                Err(InstructionError::Custom(42))
+            }
 
-        // Non-builtin loader accounts can not be used for instruction processing
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().as_ref().is_empty());
-        }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+            // Non-builtin loader accounts can not be used for instruction processing
+            {
+                let stakes = bank.stakes_cache.stakes();
+                assert!(stakes.vote_accounts().as_ref().is_empty());
+            }
+            assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+            if pass == 0 {
+                add_root_and_flush_write_cache(&bank);
+                assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+                continue;
+            }
 
-        let ((vote_id, vote_account), (stake_id, stake_account)) =
-            crate::stakes::tests::create_staked_node_accounts(1_0000);
-        bank.capitalization
-            .fetch_add(vote_account.lamports() + stake_account.lamports(), Relaxed);
-        bank.store_account(&vote_id, &vote_account);
-        bank.store_account(&stake_id, &stake_account);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(!stakes.vote_accounts().as_ref().is_empty());
-        }
-        assert!(!bank.stakes_cache.stakes().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+            let ((vote_id, vote_account), (stake_id, stake_account)) =
+                crate::stakes::tests::create_staked_node_accounts(1_0000);
+            bank.capitalization
+                .fetch_add(vote_account.lamports() + stake_account.lamports(), Relaxed);
+            bank.store_account(&vote_id, &vote_account);
+            bank.store_account(&stake_id, &stake_account);
+            {
+                let stakes = bank.stakes_cache.stakes();
+                assert!(!stakes.vote_accounts().as_ref().is_empty());
+            }
+            assert!(!bank.stakes_cache.stakes().stake_delegations().is_empty());
+            if pass == 1 {
+                add_root_and_flush_write_cache(&bank);
+                assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+                continue;
+            }
 
-        bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
-        bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().as_ref().is_empty());
-        }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
-        assert_eq!(
-            "mock_program1",
-            String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
-        );
-        assert_eq!(
-            "mock_program2",
-            String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
-        );
+            bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
+            bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
+            {
+                let stakes = bank.stakes_cache.stakes();
+                assert!(stakes.vote_accounts().as_ref().is_empty());
+            }
+            assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+            if pass == 2 {
+                add_root_and_flush_write_cache(&bank);
+                assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+                continue;
+            }
+            assert_eq!(
+                "mock_program1",
+                String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
+            );
+            assert_eq!(
+                "mock_program2",
+                String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
+            );
 
-        // Re-adding builtin programs should be no-op
-        bank.update_accounts_hash_for_tests();
-        let old_hash = bank.get_accounts_hash();
-        bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
-        bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
-        bank.update_accounts_hash_for_tests();
-        let new_hash = bank.get_accounts_hash();
-        assert_eq!(old_hash, new_hash);
-        {
-            let stakes = bank.stakes_cache.stakes();
-            assert!(stakes.vote_accounts().as_ref().is_empty());
+            // Re-adding builtin programs should be no-op
+            bank.update_accounts_hash_for_tests();
+            let old_hash = bank.get_accounts_hash();
+            bank.add_builtin("mock_program1", &vote_id, mock_ix_processor);
+            bank.add_builtin("mock_program2", &stake_id, mock_ix_processor);
+            add_root_and_flush_write_cache(&bank);
+            bank.update_accounts_hash_for_tests();
+            let new_hash = bank.get_accounts_hash();
+            assert_eq!(old_hash, new_hash);
+            {
+                let stakes = bank.stakes_cache.stakes();
+                assert!(stakes.vote_accounts().as_ref().is_empty());
+            }
+            assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
+            assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
+            assert_eq!(
+                "mock_program1",
+                String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
+            );
+            assert_eq!(
+                "mock_program2",
+                String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
+            );
         }
-        assert!(bank.stakes_cache.stakes().stake_delegations().is_empty());
-        assert_eq!(bank.calculate_capitalization(true), bank.capitalization());
-        assert_eq!(
-            "mock_program1",
-            String::from_utf8_lossy(bank.get_account(&vote_id).unwrap_or_default().data())
-        );
-        assert_eq!(
-            "mock_program2",
-            String::from_utf8_lossy(bank.get_account(&stake_id).unwrap_or_default().data())
-        );
     }
 
     #[allow(deprecated)]
