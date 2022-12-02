@@ -19,8 +19,8 @@ use {
     solana_measure::measure,
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, hash::Hash, saturating_add_assign,
-        transaction::SanitizedTransaction,
+        clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
+        saturating_add_assign, transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
@@ -636,6 +636,7 @@ impl ThreadLocalUnprocessedPackets {
                                     &transaction_to_packet_indexes,
                                     &forwardable_transaction_indexes,
                                     &mut dropped_tx_before_forwarding_count,
+                                    &bank.feature_set,
                                 );
                             accepting_packets = accepted_packet_indexes.len()
                                 == forwardable_transaction_indexes.len();
@@ -798,6 +799,7 @@ impl ThreadLocalUnprocessedPackets {
         transaction_to_packet_indexes: &[usize],
         forwardable_transaction_indexes: &[usize],
         dropped_tx_before_forwarding_count: &mut usize,
+        feature_set: &FeatureSet,
     ) -> Vec<usize> {
         let mut added_packets_count: usize = 0;
         let mut accepted_packet_indexes = Vec::with_capacity(transaction_to_packet_indexes.len());
@@ -807,8 +809,11 @@ impl ThreadLocalUnprocessedPackets {
                 transaction_to_packet_indexes[*forwardable_transaction_index];
             let immutable_deserialized_packet =
                 packets_to_process[forwardable_packet_index].clone();
-            if !forward_buffer.try_add_packet(sanitized_transaction, immutable_deserialized_packet)
-            {
+            if !forward_buffer.try_add_packet(
+                sanitized_transaction,
+                immutable_deserialized_packet,
+                feature_set,
+            ) {
                 break;
             }
             accepted_packet_indexes.push(forwardable_packet_index);

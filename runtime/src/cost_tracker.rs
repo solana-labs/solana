@@ -95,18 +95,6 @@ impl CostTracker {
         Ok(self.block_cost)
     }
 
-    /// Using user requested compute-units to track cost.
-    pub fn try_add_requested_cus(
-        &mut self,
-        write_lock_accounts: &[Pubkey],
-        requested_cus: u64,
-        is_vote: bool,
-    ) -> Result<u64, CostTrackerError> {
-        self.would_fit_internal(write_lock_accounts.iter(), requested_cus, is_vote, 0)?;
-        self.add_transaction_cost_internal(write_lock_accounts.iter(), requested_cus, is_vote, 0);
-        Ok(self.block_cost)
-    }
-
     pub fn update_execution_cost(
         &mut self,
         estimated_tx_cost: &TransactionCost,
