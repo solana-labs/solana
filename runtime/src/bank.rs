@@ -15281,41 +15281,51 @@ pub(crate) mod tests {
 
     #[test]
     fn test_add_precompiled_account() {
-        let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
-        activate_all_features(&mut genesis_config);
+        for pass in 0..2 {
+            let (mut genesis_config, _mint_keypair) = create_genesis_config(100_000);
+            activate_all_features(&mut genesis_config);
 
-        let slot = 123;
-        let program_id = solana_sdk::pubkey::new_rand();
+            let slot = 123;
+            let program_id = solana_sdk::pubkey::new_rand();
 
-        let bank = Arc::new(Bank::new_from_parent(
-            &Arc::new(Bank::new_for_tests(&genesis_config)),
-            &Pubkey::default(),
-            slot,
-        ));
-        assert_eq!(bank.get_account_modified_slot(&program_id), None);
+            let bank = Arc::new(Bank::new_from_parent(
+                &Arc::new(Bank::new_for_tests_with_config(
+                    &genesis_config,
+                    bank_test_config_caching_enabled(),
+                )),
+                &Pubkey::default(),
+                slot,
+            ));
+            add_root_and_flush_write_cache(&bank.parent().unwrap());
+            assert_eq!(bank.get_account_modified_slot(&program_id), None);
 
-        assert_capitalization_diff(
-            &bank,
-            || bank.add_precompiled_account(&program_id),
-            |old, new| {
-                assert_eq!(old + 1, new);
-                true
-            },
-        );
+            assert_capitalization_diff(
+                &bank,
+                || bank.add_precompiled_account(&program_id),
+                |old, new| {
+                    assert_eq!(old + 1, new);
+                    pass == 0
+                },
+            );
+            if pass == 0 {
+                continue;
+            }
 
-        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+            assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
 
-        let bank = Arc::new(new_from_parent(&bank));
-        assert_capitalization_diff(
-            &bank,
-            || bank.add_precompiled_account(&program_id),
-            |old, new| {
-                assert_eq!(old, new);
-                true
-            },
-        );
+            let bank = Arc::new(new_from_parent(&bank));
+            add_root_and_flush_write_cache(&bank.parent().unwrap());
+            assert_capitalization_diff(
+                &bank,
+                || bank.add_precompiled_account(&program_id),
+                |old, new| {
+                    assert_eq!(old, new);
+                    true
+                },
+            );
 
-        assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+            assert_eq!(bank.get_account_modified_slot(&program_id).unwrap().1, slot);
+        }
     }
 
     #[test]
