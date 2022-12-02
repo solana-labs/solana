@@ -1,3 +1,5 @@
+use solana_cli_output::{CliAccount, CliAccountNewConfig};
+
 use {
     crate::{
         checks::*,
@@ -107,9 +109,13 @@ pub enum ProgramCliCommand {
         all: bool,
         use_lamports_unit: bool,
     },
-    Dump {
+    DumpExecutable {
         account_pubkey: Option<Pubkey>,
         output_location: String,
+    },
+    DumpOwnedAccounts {
+        account_pubkey: Option<Pubkey>,
+        output_directory: String,
     },
     Close {
         account_pubkey: Option<Pubkey>,
@@ -337,8 +343,8 @@ impl ProgramSubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("dump")
-                        .about("Write the program data to a file")
+                    SubCommand::with_name("dump-executable")
+                        .about("Write the executable program buffer data to a file")
                         .arg(
                             Arg::with_name("account")
                                 .index(1)
@@ -354,6 +360,26 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .takes_value(true)
                                 .required(true)
                                 .help("/path/to/program.so"),
+                        ),
+                )
+                .subcommand(
+                    SubCommand::with_name("dump-owned-accounts")
+                        .about("Write the program owned accounts to a directory in a format compatible with solana_test_validator")
+                        .arg(
+                            Arg::with_name("account")
+                                .index(1)
+                                .value_name("ACCOUNT_ADDRESS")
+                                .takes_value(true)
+                                .required(true)
+                                .help("Address of the program")
+                        )
+                        .arg(
+                            Arg::with_name("output_directory")
+                                .index(2)
+                                .value_name("OUTPUT_DIRECTORY")
+                                .takes_value(true)
+                                .required(true)
+                                .help("/path/to"),
                         ),
                 )
                 .subcommand(
@@ -611,10 +637,17 @@ pub fn parse_program_subcommand(
                 signers: vec![],
             }
         }
-        ("dump", Some(matches)) => CliCommandInfo {
-            command: CliCommand::Program(ProgramCliCommand::Dump {
+        ("dump-executabe", Some(matches)) => CliCommandInfo {
+            command: CliCommand::Program(ProgramCliCommand::DumpExecutable {
                 account_pubkey: pubkey_of(matches, "account"),
                 output_location: matches.value_of("output_location").unwrap().to_string(),
+            }),
+            signers: vec![],
+        },
+        ("dump-owned-accounts", Some(matches)) => CliCommandInfo {
+            command: CliCommand::Program(ProgramCliCommand::DumpOwnedAccounts {
+                account_pubkey: pubkey_of(matches, "account"),
+                output_directory: matches.value_of("output_directory").unwrap().to_string(),
             }),
             signers: vec![],
         },
@@ -752,10 +785,14 @@ pub fn process_program_subcommand(
             *all,
             *use_lamports_unit,
         ),
-        ProgramCliCommand::Dump {
+        ProgramCliCommand::DumpExecutable {
             account_pubkey,
             output_location,
-        } => process_dump(&rpc_client, config, *account_pubkey, output_location),
+        } => process_dump_executable(&rpc_client, config, *account_pubkey, output_location),
+        ProgramCliCommand::DumpOwnedAccounts {
+            account_pubkey,
+            output_directory,
+        } => process_dump_owned_accounts(&rpc_client, config, *account_pubkey, output_directory),
         ProgramCliCommand::Close {
             account_pubkey,
             recipient_pubkey,
@@ -1416,7 +1453,7 @@ fn process_show(
     }
 }
 
-fn process_dump(
+fn process_dump_executable(
     rpc_client: &RpcClient,
     config: &CliConfig,
     account_pubkey: Option<Pubkey>,
@@ -1466,6 +1503,53 @@ fn process_dump(
                         account_pubkey
                     )
                     .into())
+                }
+            } else {
+                Err(format!("{} is not an SBF program", account_pubkey).into())
+            }
+        } else {
+            Err(format!("Unable to find the account {}", account_pubkey).into())
+        }
+    } else {
+        Err("No account specified".into())
+    }
+}
+
+fn process_dump_owned_accounts(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    account_pubkey: Option<Pubkey>,
+    output_directory: &str,
+) -> ProcessResult {
+    if let Some(account_pubkey) = account_pubkey {
+        if let Some(account) = rpc_client
+            .get_account_with_commitment(&account_pubkey, config.commitment)?
+            .value
+        {
+            if account.owner == bpf_loader::id()
+                || account.owner == bpf_loader_deprecated::id()
+                || account.owner == bpf_loader_upgradeable::id()
+            {
+                let program_accounts = rpc_client.get_program_accounts(&account_pubkey);
+                match program_accounts {
+                    Ok(program_accounts) => {
+                        for (pubkey, account) in program_accounts {
+                            let output_path =
+                                format!("{}/{}.json", output_directory, pubkey.to_string());
+
+                            let mut file = File::create(&output_path).unwrap();
+
+                            let acc = CliAccount::new_with_config(
+                                &pubkey,
+                                &account,
+                                &CliAccountNewConfig::default(),
+                            );
+                            file.write(serde_json::to_string(&acc).unwrap().as_bytes())
+                                .unwrap();
+                        }
+                        Ok(format!("Wrote program accounts to {}", output_directory))
+                    }
+                    Err(e) => Err(format!("Unable to fetch program owned accounts {:?}", e).into()),
                 }
             } else {
                 Err(format!("{} is not an SBF program", account_pubkey).into())
