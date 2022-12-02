@@ -11,10 +11,14 @@ pub use {
     solana_perf::packet::{
         to_packet_batches, Batch, BatchRecycler, NUM_PACKETS, PACKETS_PER_BATCH,
     },
-    solana_sdk::packet::{BasePacket, Meta, Packet},
+    solana_sdk::packet::{BasePacket, Meta},
 };
 
-pub fn recv_from(batch: &mut Batch<Packet>, socket: &UdpSocket, max_wait_ms: u64) -> Result<usize> {
+pub fn recv_from<P: BasePacket>(
+    batch: &mut Batch<P>,
+    socket: &UdpSocket,
+    max_wait_ms: u64,
+) -> Result<usize> {
     let mut i = 0;
     //DOCUMENTED SIDE-EFFECT
     //Performance out of the IO without poll
@@ -28,7 +32,7 @@ pub fn recv_from(batch: &mut Batch<Packet>, socket: &UdpSocket, max_wait_ms: u64
     loop {
         batch.resize(
             std::cmp::min(i + NUM_RCVMMSGS, PACKETS_PER_BATCH),
-            Packet::default(),
+            P::default(),
         );
         match recv_mmsg(socket, &mut batch[i..]) {
             Err(_) if i > 0 => {
@@ -59,8 +63,8 @@ pub fn recv_from(batch: &mut Batch<Packet>, socket: &UdpSocket, max_wait_ms: u64
     Ok(i)
 }
 
-pub fn send_to(
-    batch: &Batch<Packet>,
+pub fn send_to<P: BasePacket>(
+    batch: &Batch<P>,
     socket: &UdpSocket,
     socket_addr_space: &SocketAddrSpace,
 ) -> Result<()> {
@@ -79,6 +83,7 @@ pub fn send_to(
 mod tests {
     use {
         super::*,
+        solana_sdk::packet::Packet,
         std::{
             io,
             io::Write,

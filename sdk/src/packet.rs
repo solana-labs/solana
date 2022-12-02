@@ -42,7 +42,7 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
-pub trait BasePacket: Default + Clone + Sync + Send + Eq {
+pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
     const DATA_SIZE: usize;
     fn populate_packet<T: Serialize>(&mut self, dest: Option<&SocketAddr>, data: &T) -> Result<()>;
 

@@ -11,12 +11,15 @@ use {
     std::{mem, os::unix::io::AsRawFd},
 };
 use {
-    solana_sdk::packet::{BasePacket, Meta, Packet},
+    solana_sdk::packet::{BasePacket, Meta},
     std::{cmp, io, net::UdpSocket},
 };
 
 #[cfg(not(target_os = "linux"))]
-pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
+pub fn recv_mmsg<P: BasePacket>(
+    socket: &UdpSocket,
+    packets: &mut [P],
+) -> io::Result</*num packets:*/ usize> {
     debug_assert!(packets.iter().all(|pkt| pkt.meta() == &Meta::default()));
     let mut i = 0;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
@@ -69,7 +72,10 @@ fn cast_socket_addr(addr: &sockaddr_storage, hdr: &mmsghdr) -> Option<InetAddr> 
 
 #[cfg(target_os = "linux")]
 #[allow(clippy::uninit_assumed_init)]
-pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num packets:*/ usize> {
+pub fn recv_mmsg<P: BasePacket>(
+    sock: &UdpSocket,
+    packets: &mut [P],
+) -> io::Result</*num packets:*/ usize> {
     // Assert that there are no leftovers in packets.
     debug_assert!(packets.iter().all(|pkt| pkt.meta() == &Meta::default()));
     const SOCKADDR_STORAGE_SIZE: usize = mem::size_of::<sockaddr_storage>();
@@ -119,6 +125,7 @@ pub fn recv_mmsg(sock: &UdpSocket, packets: &mut [Packet]) -> io::Result</*num p
 mod tests {
     use {
         crate::recvmmsg::*,
+        solana_sdk::packet::Packet,
         std::{
             net::{SocketAddr, UdpSocket},
             time::{Duration, Instant},
