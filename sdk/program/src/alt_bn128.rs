@@ -50,6 +50,8 @@ pub enum AltBn128Error {
     SliceOutOfBounds,
     #[error("Unexpected error")]
     UnexpectedError,
+    #[error("Failed to convert a byte slice into a vector {0:?}")]
+    TryIntoVecError(Vec<u8>),
 }
 
 impl From<u64> for AltBn128Error {
@@ -58,6 +60,7 @@ impl From<u64> for AltBn128Error {
             1 => AltBn128Error::InvalidInputData,
             2 => AltBn128Error::GroupError,
             3 => AltBn128Error::SliceOutOfBounds,
+            4 => AltBn128Error::TryIntoVecError(Vec::new()),
             _ => AltBn128Error::UnexpectedError,
         }
     }
@@ -69,6 +72,7 @@ impl From<AltBn128Error> for u64 {
             AltBn128Error::InvalidInputData => 1,
             AltBn128Error::GroupError => 2,
             AltBn128Error::SliceOutOfBounds => 3,
+            AltBn128Error::TryIntoVecError(_) => 4,
             AltBn128Error::UnexpectedError => 0,
         }
     }
@@ -110,12 +114,14 @@ mod target_arch {
             }
             let g1 = <Self as FromBytes>::read(&*[&bytes.0[..], &[0u8][..]].concat());
 
-            if !g1.as_ref().unwrap().is_on_curve() {
-                return Err(AltBn128Error::GroupError);
-            }
-
             match g1 {
-                Ok(g1) => Ok(g1),
+                Ok(g1) => {
+                    if !g1.is_on_curve() {
+                        Err(AltBn128Error::GroupError)
+                    } else {
+                        Ok(g1)
+                    }
+                }
                 Err(_) => Err(AltBn128Error::InvalidInputData),
             }
         }
@@ -130,12 +136,14 @@ mod target_arch {
             }
             let g2 = <Self as FromBytes>::read(&*[&bytes.0[..], &[0u8][..]].concat());
 
-            if !g2.as_ref().unwrap().is_on_curve() {
-                return Err(AltBn128Error::GroupError);
-            }
-
             match g2 {
-                Ok(g2) => Ok(g2),
+                Ok(g2) => {
+                    if !g2.is_on_curve() {
+                        Err(AltBn128Error::GroupError)
+                    } else {
+                        Ok(g2)
+                    }
+                }
                 Err(_) => Err(AltBn128Error::InvalidInputData),
             }
         }
@@ -149,20 +157,23 @@ mod target_arch {
         let mut input = input.to_vec();
         input.resize(ALT_BN128_ADDITION_INPUT_LEN, 0);
 
-        let p: G1 = PodG1(convert_edianness_64(&input[..64]).try_into().unwrap())
-            .try_into()
-            .unwrap();
+        let p: G1 = PodG1(
+            convert_edianness_64(&input[..64])
+                .try_into()
+                .map_err(AltBn128Error::TryIntoVecError)?,
+        )
+        .try_into()?;
         let q: G1 = PodG1(
             convert_edianness_64(&input[64..ALT_BN128_ADDITION_INPUT_LEN])
                 .try_into()
-                .unwrap(),
+                .map_err(AltBn128Error::TryIntoVecError)?,
         )
-        .try_into()
-        .unwrap();
+        .try_into()?;
 
         let mut result_point_data = [0; ALT_BN128_ADDITION_OUTPUT_LEN + 1];
         let result_point = p + q;
-        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..]).unwrap();
+        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..])
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
 
         if result_point == G1::zero() {
             return Ok([0u8; ALT_BN128_ADDITION_OUTPUT_LEN].to_vec());
@@ -178,15 +189,19 @@ mod target_arch {
         let mut input = input.to_vec();
         input.resize(ALT_BN128_MULTIPLICATION_INPUT_LEN, 0);
 
-        let p: G1 = PodG1(convert_edianness_64(&input[..64]).try_into().unwrap())
-            .try_into()
-            .unwrap();
-        let fr =
-            <BigInteger256 as FromBytes>::read(&*convert_edianness_64(&input[64..96])).unwrap();
+        let p: G1 = PodG1(
+            convert_edianness_64(&input[..64])
+                .try_into()
+                .map_err(AltBn128Error::TryIntoVecError)?,
+        )
+        .try_into()?;
+        let fr = <BigInteger256 as FromBytes>::read(convert_edianness_64(&input[64..96]).as_ref())
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
 
         let mut result_point_data = [0; ALT_BN128_MULTIPLICATION_OUTPUT_LEN + 1];
         let result_point: G1 = p.into_projective().mul(&fr).into();
-        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..]).unwrap();
+        <G1 as ToBytes>::write(&result_point, &mut result_point_data[..])
+            .map_err(|_| AltBn128Error::InvalidInputData)?;
         if result_point == G1::zero() {
             return Ok([0u8; ALT_BN128_MULTIPLICATION_OUTPUT_LEN].to_vec());
         }
@@ -200,8 +215,7 @@ mod target_arch {
         if input
             .len()
             .checked_rem(consts::ALT_BN128_PAIRING_ELEMENT_LEN)
-            .unwrap()
-            != 0
+            .is_none()
         {
             return Err(AltBn128Error::InvalidInputData);
         }
@@ -216,10 +230,9 @@ mod target_arch {
                             .saturating_add(ALT_BN128_POINT_SIZE)],
                 )
                 .try_into()
-                .unwrap(),
+                .map_err(AltBn128Error::TryIntoVecError)?,
             )
-            .try_into()
-            .unwrap();
+            .try_into()?;
             let g2: G2 = PodG2(
                 convert_edianness_128(
                     &input[i
@@ -229,10 +242,9 @@ mod target_arch {
                             .saturating_add(ALT_BN128_PAIRING_ELEMENT_LEN)],
                 )
                 .try_into()
-                .unwrap(),
+                .map_err(AltBn128Error::TryIntoVecError)?,
             )
-            .try_into()
-            .unwrap();
+            .try_into()?;
             vec_pairs.push((g1.into(), g2.into()));
         }
 
@@ -310,8 +322,7 @@ mod target_arch {
         if input
             .len()
             .checked_rem(consts::ALT_BN128_PAIRING_ELEMENT_LEN)
-            .unwrap()
-            != 0
+            .is_none()
         {
             return Err(AltBn128Error::InvalidInputData);
         }
