@@ -210,7 +210,7 @@ pub fn get_mmap_count() -> Option<usize> {
     None
 }
 
-/// Utility function to get open files limits
+/// Utility function to get open files limits on the system
 #[cfg(target_os = "linux")]
 pub fn get_open_fd_limits() -> Option<(usize, usize)> {
     let run = |cmd, args| -> Option<usize> {
@@ -241,7 +241,7 @@ pub fn get_open_fd_limits() -> Option<(usize, usize)> {
     None
 }
 
-/// Utility function to get num of open file descriptors
+/// Utility function to get number of open file descriptors for current process
 #[cfg(target_os = "linux")]
 pub fn get_num_open_fd() -> Option<usize> {
     let pid = std::process::id();
