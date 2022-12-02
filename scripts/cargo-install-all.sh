@@ -2,7 +2,6 @@
 #
 # |cargo install| of the top-level crate will not install binaries for
 # other workspace crates or native program crates.
-here="$(dirname "$0")"
 readlink_cmd="readlink"
 echo "OSTYPE IS: $OSTYPE"
 if [[ $OSTYPE == darwin* ]]; then
