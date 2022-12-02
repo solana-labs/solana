@@ -338,7 +338,7 @@ fn translate_slice_inner<'a, T>(
     }
 
     let total_size = len.saturating_mul(size_of::<T>() as u64);
-    if check_size & isize::try_from(total_size).is_err() {
+    if check_size && isize::try_from(total_size).is_err() {
         return Err(SyscallError::InvalidLength.into());
     }
 
