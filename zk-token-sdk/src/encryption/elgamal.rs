@@ -71,14 +71,10 @@ impl ElGamal {
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen_with_scalar(s: &Scalar) -> ElGamalKeypair {
-        assert!(s != &Scalar::zero());
+        let secret = ElGamalSecretKey(*s);
+        let public = ElGamalPubkey::new(&secret);
 
-        let P = s.invert() * &(*H);
-
-        ElGamalKeypair {
-            public: ElGamalPubkey(P),
-            secret: ElGamalSecretKey(*s),
-        }
+        ElGamalKeypair { public, secret }
     }
 
     /// On input an ElGamal public key and an amount to be encrypted, the function returns a
@@ -267,7 +263,10 @@ impl ElGamalPubkey {
     /// Derives the `ElGamalPubkey` that uniquely corresponds to an `ElGamalSecretKey`.
     #[allow(non_snake_case)]
     pub fn new(secret: &ElGamalSecretKey) -> Self {
-        ElGamalPubkey(&secret.0 * &(*H))
+        let s = &secret.0;
+        assert!(s != &Scalar::zero());
+
+        ElGamalPubkey(s.invert() * &(*H))
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {
