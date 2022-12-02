@@ -526,66 +526,6 @@ impl TransferWithFeeProof {
 
         // generate the range proof
         let opening_claimed_negated = &PedersenOpening::default() - &opening_claimed;
-<<<<<<< HEAD
-        let range_proof = if TRANSFER_AMOUNT_LO_BITS == 32 {
-            RangeProof::new(
-                vec![
-                    source_new_balance,
-                    transfer_amount_lo as u64,
-                    transfer_amount_hi as u64,
-                    delta_fee,
-                    MAX_FEE_BASIS_POINTS - delta_fee,
-                ],
-                vec![
-                    TRANSFER_SOURCE_AMOUNT_BITS,
-                    TRANSFER_AMOUNT_LO_BITS,
-                    TRANSFER_AMOUNT_HI_BITS,
-                    TRANSFER_DELTA_BITS,
-                    TRANSFER_DELTA_BITS,
-                ],
-                vec![
-                    &opening_source,
-                    opening_lo,
-                    opening_hi,
-                    &opening_claimed,
-                    &opening_claimed_negated,
-                ],
-                transcript,
-            )
-        } else {
-            let transfer_amount_lo_negated =
-                ((1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1) - transfer_amount_lo as u64;
-            let opening_lo_negated = &PedersenOpening::default() - opening_lo;
-
-            RangeProof::new(
-                vec![
-                    source_new_balance,
-                    transfer_amount_lo as u64,
-                    transfer_amount_lo_negated,
-                    transfer_amount_hi as u64,
-                    delta_fee,
-                    MAX_FEE_BASIS_POINTS - delta_fee,
-                ],
-                vec![
-                    TRANSFER_SOURCE_AMOUNT_BITS,
-                    TRANSFER_AMOUNT_LO_BITS,
-                    TRANSFER_AMOUNT_LO_NEGATED_BITS,
-                    TRANSFER_AMOUNT_HI_BITS,
-                    TRANSFER_DELTA_BITS,
-                    TRANSFER_DELTA_BITS,
-                ],
-                vec![
-                    &opening_source,
-                    opening_lo,
-                    &opening_lo_negated,
-                    opening_hi,
-                    &opening_claimed,
-                    &opening_claimed_negated,
-                ],
-                transcript,
-            )
-        };
-=======
         let range_proof = RangeProof::new(
             vec![
                 source_new_balance,
@@ -616,7 +556,6 @@ impl TransferWithFeeProof {
             ],
             transcript,
         );
->>>>>>> 11efaf75a ([zk-token-sdk] divide fee encryption into two ciphertexts (#28472))
 
         Self {
             new_source_commitment: pod_new_source_commitment,
