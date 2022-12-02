@@ -3071,6 +3071,229 @@ describe('Connection', function () {
     });
   }
 
+  describe('get parsed block', function () {
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [3712706991, 5765419239, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [3712711991, 5765419239, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    {
+                      pubkey: '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                      signer: true,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                      signer: false,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'Vote111111111111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                  ],
+                  addressTableLookups: null,
+                  instructions: [
+                    {
+                      parsed: {
+                        info: {
+                          clockSysvar:
+                            'SysvarC1ock11111111111111111111111111111111',
+                          slotHashesSysvar:
+                            'SysvarS1otHashes111111111111111111111111111',
+                          vote: {
+                            hash: '2gmQ8xMjZaXn63kr8qzPAUjQAHi7xCDjSibPdJxhVYMm',
+                            slots: [164153060, 164153061],
+                            timestamp: 1669845645,
+                          },
+                          voteAccount:
+                            'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                          voteAuthority:
+                            '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                        },
+                        type: 'vote',
+                      },
+                      program: 'vote',
+                      programId: 'Vote111111111111111111111111111111111111111',
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '5qDZ3nUUwp8VHFfAE5ydTQRULCoVLMGs16EprwdXsvyNCLe1NfckCkRE4BPi6wyEW9hXvG9iWU2prXfbM8SNPVEC',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [18237691394, 26858640, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [18237696394, 26858640, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: '914RFshndUeZaNPjf8UWDCyo49ahQ1XQ2w9BnEMwpHKF',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '4cCd4SGrMswhqboYBJ5AcCVvCjh5NtaeZNwWFJzsnUWY',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  '5ZDp1HfNZhNRHc75ncsiZ4sCq1fGJHMGf9u36M3foD5PMH4Xu5S4X2x7aryn4JinUdG11oSYCk7zxbNmLJzzqUft',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+  });
+
   describe('get block', function () {
     beforeEach(async function () {
       await mockRpcResponse({
@@ -3235,6 +3458,187 @@ describe('Connection', function () {
       ).to.be.rejectedWith(
         `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
       );
+    });
+
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                loadedAddresses: {readonly: [], writable: []},
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [12278161908, 39995373, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [12278166908, 39995373, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    'FTWuJ2tqjecNizCSE66z4BD1tBHomG6DVffGUwRuWUkM',
+                    'H2z3pBT62ByS4jpqsiEMtgN3NUFEuZHiTvoKCFjqCtD6',
+                    'SysvarC1ock11111111111111111111111111111111',
+                    'SysvarS1otHashes111111111111111111111111111',
+                    'Vote111111111111111111111111111111111111111',
+                  ],
+                  header: {
+                    numReadonlySignedAccounts: 0,
+                    numReadonlyUnsignedAccounts: 3,
+                    numRequiredSignatures: 1,
+                  },
+                  instructions: [
+                    {
+                      accounts: [1, 3, 2, 0],
+                      data: '29z5mr1JoRmJYQ6zG7p2F3mu68pWTNw9q49Tu7KrSEgoS6Jh1LMPGUK3HXs1N3Dody3icCcXxu6xPYoXLWnUTafEGm3knK',
+                      programIdIndex: 4,
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '4SZofEnXEVzCYvzk16z6ScR6F3iNtZ3FsCC1PEWegpzvGwTJR6x9cDi8VHRmCFGC5XFs2yEFms3j36Mj7XVyHXbb',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [2751549948, 11751747405, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [2751554948, 11751747405, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: 'D7hwgGRTr1vaCxzmfEKCaf56SPgBJmjHh6UXHG3p12bB',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '8iLE53Y9k4sccy4gxrT936BHbhYS6J13kQT5vRXhXFMX',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  'uNKj2ogn8ZRRjyVWXLC7sLRWpKQyMUomm66RXoDuWLXikPSJN8C7ZZK95j8S2bzcjwH6MvrXKSHtCWEURPpEXMB',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
     });
   });
 
