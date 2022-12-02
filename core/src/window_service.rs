@@ -9,12 +9,14 @@ use {
         repair_response,
         repair_service::{OutstandingShredRepairs, RepairInfo, RepairService},
         result::{Error, Result},
+        window_service::shred::ErasureSetId,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        blockstore::{Blockstore, BlockstoreInsertionMetrics},
+        blockstore::{Blockstore, BlockstoreInsertionMetrics, BlockstoreRecoveryMetrics},
+        blockstore_meta::ErasureRecoverMeta,
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, Nonce, ReedSolomonCache, Shred},
     },
@@ -221,6 +223,8 @@ fn run_insert<F>(
     retransmit_sender: &Sender<Vec<ShredPayload>>,
     outstanding_requests: &RwLock<OutstandingShredRepairs>,
     reed_solomon_cache: &ReedSolomonCache,
+    erasure_meta_sender: Sender<HashMap<ErasureSetId, ErasureRecoverMeta>>,
+    recover_shred_receiver: Receiver<Vec<Shred>>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -285,6 +289,8 @@ where
         &handle_duplicate,
         reed_solomon_cache,
         metrics,
+        Some(erasure_meta_sender),
+        Some(recover_shred_receiver),
     )?;
 
     completed_data_sets_sender.try_send(completed_data_sets)?;
@@ -300,6 +306,7 @@ pub(crate) struct WindowService {
     t_insert: JoinHandle<()>,
     t_check_duplicate: JoinHandle<()>,
     repair_service: RepairService,
+    t_recover: JoinHandle<()>,
 }
 
 impl WindowService {
@@ -343,21 +350,36 @@ impl WindowService {
             duplicate_slots_sender,
         );
 
+        let reed_solomon_cache = Arc::new(ReedSolomonCache::default());
+        let (erasure_meta_sender, erasure_meta_receiver) = unbounded();
+        let (recover_shred_sender, recover_shred_receiver) = unbounded();
         let t_insert = Self::start_window_insert_thread(
-            exit,
-            blockstore,
+            exit.clone(),
+            blockstore.clone(),
             leader_schedule_cache,
             verified_receiver,
             duplicate_sender,
             completed_data_sets_sender,
             retransmit_sender,
             outstanding_requests,
+            reed_solomon_cache.clone(),
+            erasure_meta_sender,
+            recover_shred_receiver,
+        );
+
+        let t_recover = Self::start_recover_thread(
+            exit,
+            blockstore,
+            reed_solomon_cache,
+            erasure_meta_receiver,
+            recover_shred_sender,
         );
 
         WindowService {
             t_insert,
             t_check_duplicate,
             repair_service,
+            t_recover,
         }
     }
 
@@ -390,6 +412,56 @@ impl WindowService {
             .unwrap()
     }
 
+    fn start_recover_thread(
+        exit: Arc<AtomicBool>,
+        blockstore: Arc<Blockstore>,
+        reed_solomon_cache: Arc<ReedSolomonCache>,
+        erasure_meta_receiver: Receiver<HashMap<ErasureSetId, ErasureRecoverMeta>>,
+        recovered_shred_sender: Sender<Vec<Shred>>,
+    ) -> JoinHandle<()> {
+        Builder::new()
+            .name("solShrRecov".to_string())
+            .spawn(move || {
+                let mut erasure_metas = HashMap::new();
+                let mut metrics = BlockstoreRecoveryMetrics::default();
+                let mut last_print = Instant::now();
+                while !exit.load(Ordering::Relaxed) {
+                    // Collect all the new recovery requests
+                    let mut start = Measure::start("receive erasures elapsed");
+                    while let Ok(new_erasure_metas) = erasure_meta_receiver.try_recv() {
+                        erasure_metas.extend(new_erasure_metas);
+                    }
+                    start.stop();
+                    metrics.rcv_erasure_metas_elapsed_us += start.as_us();
+
+                    // Process recovery requests
+                    start = Measure::start("shred recovery elapsed");
+                    if !erasure_metas.is_empty() {
+                        blockstore.run_shred_recover(
+                            &mut erasure_metas,
+                            &reed_solomon_cache,
+                            recovered_shred_sender.clone(),
+                            &mut metrics,
+                        );
+                    }
+                    start.stop();
+                    metrics.shred_recovery_elapsed_us += start.as_us();
+
+                    // Print metrics periodically
+                    if last_print.elapsed().as_secs() > 2 {
+                        metrics.report_metrics("blockstore-recover-shreds");
+                        metrics = BlockstoreRecoveryMetrics::default();
+                        last_print = Instant::now();
+                    }
+
+                    // No sense spinning indefinitely waiting for erasure sets to be ready
+                    // for recovery. Save some CPU cycles
+                    thread::sleep(Duration::from_millis(1));
+                }
+            })
+            .unwrap()
+    }
+
     fn start_window_insert_thread(
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
@@ -399,6 +471,9 @@ impl WindowService {
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
+        reed_solomon_cache: Arc<ReedSolomonCache>,
+        erasure_meta_sender: Sender<HashMap<ErasureSetId, ErasureRecoverMeta>>,
+        recover_shred_receiver: Receiver<Vec<Shred>>,
     ) -> JoinHandle<()> {
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
@@ -408,7 +483,6 @@ impl WindowService {
             .thread_name(|i| format!("solWinInsert{i:02}"))
             .build()
             .unwrap();
-        let reed_solomon_cache = ReedSolomonCache::default();
         Builder::new()
             .name("solWinInsert".to_string())
             .spawn(move || {
@@ -431,6 +505,8 @@ impl WindowService {
                         &retransmit_sender,
                         &outstanding_requests,
                         &reed_solomon_cache,
+                        erasure_meta_sender.clone(),
+                        recover_shred_receiver.clone(),
                     ) {
                         ws_metrics.record_error(&e);
                         if Self::should_exit_on_error(e, &handle_error) {
@@ -468,6 +544,7 @@ impl WindowService {
 
     pub(crate) fn join(self) -> thread::Result<()> {
         self.t_insert.join()?;
+        self.t_recover.join()?;
         self.t_check_duplicate.join()?;
         self.repair_service.join()
     }

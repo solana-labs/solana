@@ -43,6 +43,14 @@ pub struct BlockstoreInsertionMetrics {
     pub num_coding_shreds_inserted: usize,
 }
 
+#[derive(Default)]
+pub struct BlockstoreRecoveryMetrics {
+    pub rcv_erasure_metas_elapsed_us: u64,
+    pub shred_recovery_elapsed_us: u64,
+    pub erasure_sets_num: usize,
+    pub missing_shreds_num: usize,
+}
+
 impl BlockstoreInsertionMetrics {
     pub fn report_metrics(&self, metric_name: &'static str) {
         datapoint_info!(
@@ -139,6 +147,26 @@ impl BlockstoreInsertionMetrics {
                 self.num_coding_shreds_inserted,
                 i64
             ),
+        );
+    }
+}
+
+impl BlockstoreRecoveryMetrics {
+    pub fn report_metrics(&self, metric_name: &'static str) {
+        datapoint_info!(
+            metric_name,
+            (
+                "rcv_erasure_metas_elapsed_us",
+                self.rcv_erasure_metas_elapsed_us as i64,
+                i64
+            ),
+            (
+                "shred_recovery_elapsed_us",
+                self.shred_recovery_elapsed_us as i64,
+                i64
+            ),
+            ("erasure_sets_num", self.erasure_sets_num as i64, i64),
+            ("missing_shreds_num", self.missing_shreds_num as i64, i64),
         );
     }
 }

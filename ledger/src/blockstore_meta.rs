@@ -130,6 +130,14 @@ pub struct ErasureMeta {
     config: ErasureConfig,
 }
 
+#[derive(Clone)]
+pub struct ErasureRecoverMeta {
+    pub erasure_meta: ErasureMeta,
+    pub data: Vec<u64>,
+    pub coding: Vec<u64>,
+    pub timestamp: u64,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ErasureConfig {
     num_data: usize,
@@ -146,7 +154,7 @@ pub struct DuplicateSlotProof {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErasureMetaStatus {
-    CanRecover,
+    CanRecover(usize),
     DataFull,
     StillNeed(usize),
 }
@@ -350,7 +358,32 @@ impl ErasureMeta {
         if data_missing == 0 {
             DataFull
         } else if num_needed == 0 {
-            CanRecover
+            CanRecover(data_missing)
+        } else {
+            StillNeed(num_needed)
+        }
+    }
+}
+
+impl ErasureRecoverMeta {
+    pub(crate) fn status(&self) -> ErasureMetaStatus {
+        use ErasureMetaStatus::*;
+
+        let num_coding = self.coding.len();
+        let num_data = self.data.len();
+
+        let (data_missing, num_needed) = (
+            self.erasure_meta.config.num_data.saturating_sub(num_data),
+            self.erasure_meta
+                .config
+                .num_data
+                .saturating_sub(num_data + num_coding),
+        );
+
+        if data_missing == 0 {
+            DataFull
+        } else if num_needed == 0 {
+            CanRecover(data_missing)
         } else {
             StillNeed(num_needed)
         }
@@ -467,7 +500,7 @@ mod test {
         {
             index.data_mut().index.remove(&idx);
 
-            assert_eq!(e_meta.status(&index), CanRecover);
+            assert_eq!(e_meta.status(&index), CanRecover(_));
         }
 
         for ix in data_indexes {
