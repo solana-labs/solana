@@ -1537,15 +1537,34 @@ fn process_dump_owned_accounts(
                             let output_path =
                                 format!("{}/{}.json", output_directory, pubkey.to_string());
 
-                            let mut file = File::create(&output_path).unwrap();
-
-                            let acc = CliAccount::new_with_config(
-                                &pubkey,
-                                &account,
-                                &CliAccountNewConfig::default(),
-                            );
-                            file.write(serde_json::to_string(&acc).unwrap().as_bytes())
-                                .unwrap();
+                            match File::create(&output_path) {
+                                Ok(mut file) => {
+                                    let acc = CliAccount::new_with_config(
+                                        &pubkey,
+                                        &account,
+                                        &CliAccountNewConfig::default(),
+                                    );
+                                    match file
+                                        .write(serde_json::to_string(&acc).unwrap().as_bytes())
+                                    {
+                                        Ok(_) => {}
+                                        Err(e) => {
+                                            return Err(format!(
+                                                "Unable to write file={} err={:?}",
+                                                output_path, e
+                                            )
+                                            .into())
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    return Err(format!(
+                                        "Unable to create file={} err={:?}",
+                                        output_path, e
+                                    )
+                                    .into())
+                                }
+                            }
                         }
                         Ok(format!("Wrote program accounts to {}", output_directory))
                     }
