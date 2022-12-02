@@ -78,6 +78,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().recorder();
+        let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
@@ -92,8 +93,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
-                std::u128::MAX,
-                &poh_recorder,
+                &bank_start,
                 &mut transaction_buffer,
                 &None,
                 &s,
