@@ -248,6 +248,32 @@ impl RepairWeight {
         repairs
     }
 
+    /// Orphan `slot` and descendants in repair weighting
+    /// Orphaned slots should be removed from `unrooted_slots` as on proper repair these slots might
+    /// now be part of the rooted path
+    pub fn orphan_slot(&mut self, slot: Slot) {
+        if slot == self.root {
+            error!("Trying to orphan root of repair tree {}", slot);
+            return;
+        }
+        if let Some(subtree_root) = self.slot_to_tree.get(&slot) {
+            if *subtree_root == slot {
+                info!("{} is already orphan, skipping", slot);
+                return;
+            }
+            let subtree = self
+                .trees
+                .get_mut(subtree_root)
+                .expect("subtree must exist");
+            let orphaned_tree = subtree.split_off(&(slot, Hash::default()));
+            for ((orphaned_slot, _), _) in orphaned_tree.all_slots_stake_voted_subtree() {
+                self.unrooted_slots.remove(orphaned_slot);
+                self.slot_to_tree.insert(*orphaned_slot, slot);
+            }
+            self.trees.insert(slot, orphaned_tree);
+        }
+    }
+
     pub fn set_root(&mut self, new_root: Slot) {
         // Roots should be monotonically increasing
         assert!(self.root <= new_root);
