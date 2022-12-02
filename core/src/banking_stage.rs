@@ -729,9 +729,6 @@ impl BankingStage {
             slot_metrics_tracker.set_end_of_slot_unprocessed_buffer_len(
                 unprocessed_transaction_storage.len() as u64,
             );
-
-            // We've hit the end of this slot, no need to perform more processing,
-            // Packet filtering will be done before forwarding.
         }
 
         proc_start.stop();
