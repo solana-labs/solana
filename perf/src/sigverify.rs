@@ -13,7 +13,7 @@ use {
     solana_sdk::{
         hash::Hash,
         message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
-        packet::{BasePacket, Packet, PacketFlags},
+        packet::{BasePacket, PacketFlags},
         pubkey::Pubkey,
         saturating_add_assign,
         short_vec::decode_shortu16_len,
