@@ -17,7 +17,7 @@ if [[ $OSTYPE == darwin* ]]; then
   fi
 fi
 
-cargo="$("${readlink_cmd}" -f "${here}/../cargo")"
+cargo="cargo"
 
 set -e
 

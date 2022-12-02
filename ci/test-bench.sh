@@ -7,7 +7,7 @@ source ci/upload-ci-artifact.sh
 
 eval "$(ci/channel-info.sh)"
 
-cargo="$(readlink -f "./cargo")"
+cargoNightly="$(readlink -f "./cargo-nightly")"
 
 set -o pipefail
 export RUST_BACKTRACE=1

@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 source ci/semver_bash/semver.sh
 source ci/rust-version.sh stable
 
-cargo="$(readlink -f ./cargo)"
+cargo="cargo"
 
 # shellcheck disable=SC2086
 is_crate_version_uploaded() {

@@ -21,7 +21,7 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
-cargo="$(readlink -f "./cargo")"
+cargoNightly="$(readlink -f "./cargo-nightly")"
 
 : "${CI_COMMIT:=local}"
 reportName="lcov-${CI_COMMIT:0:9}"
@@ -78,8 +78,8 @@ fi
 NPROC=$(nproc)
 JOBS=$((JOBS>NPROC ? NPROC : JOBS))
 
-RUST_LOG=solana=trace _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
-if RUST_LOG=solana=trace _ "$cargo" nightly test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture 2> >(tee target/cov/coverage-stderr.log >&2); then
+RUST_LOG=solana=trace _ "$cargoNightly" test --jobs "$JOBS" --target-dir target/cov --no-run "${packages[@]}"
+if RUST_LOG=solana=trace _ "$cargoNightly" test --jobs "$JOBS" --target-dir target/cov "${packages[@]}" -- --nocapture 2> >(tee target/cov/coverage-stderr.log >&2); then
   test_status=0
 else
   test_status=$?

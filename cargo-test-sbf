@@ -11,4 +11,4 @@ done
 
 export CARGO_BUILD_SBF="$here"/cargo-build-sbf
 set -x
-exec "$here"/cargo run --manifest-path "$here"/sdk/cargo-test-sbf/Cargo.toml -- $maybe_sbf_sdk "$@"
+exec cargo run --manifest-path "$here"/sdk/cargo-test-sbf/Cargo.toml -- $maybe_sbf_sdk "$@"

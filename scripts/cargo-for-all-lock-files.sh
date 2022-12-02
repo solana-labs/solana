@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 here="$(dirname "$0")"
-cargo="$(readlink -f "${here}/../cargo")"
+cargo="cargo"
 
 if [[ -z $cargo ]]; then
   >&2 echo "Failed to find cargo. Mac readlink doesn't support -f. Consider switching

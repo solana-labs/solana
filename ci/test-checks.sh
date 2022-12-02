@@ -8,7 +8,7 @@ source ci/_
 source ci/rust-version.sh stable
 source ci/rust-version.sh nightly
 eval "$(ci/channel-info.sh)"
-cargo="$(readlink -f "./cargo")"
+cargoNightly="$(readlink -f "./cargo-nightly")"
 
 scripts/increment-cargo-version.sh check
 
@@ -33,14 +33,14 @@ echo --- build environment
   rustup run "$rust_stable" rustc --version --verbose
   rustup run "$rust_nightly" rustc --version --verbose
 
-  "$cargo" stable --version --verbose
-  "$cargo" nightly --version --verbose
+  cargo stable --version --verbose
+  "$cargoNightly" --version --verbose
 
-  "$cargo" stable clippy --version --verbose
-  "$cargo" nightly clippy --version --verbose
+  cargo stable clippy --version --verbose
+  "$cargoNightly" nightly clippy --version --verbose
 
   # audit is done only with "$cargo stable"
-  "$cargo" stable audit --version
+  cargo stable audit --version
 
   grcov --version
 )
