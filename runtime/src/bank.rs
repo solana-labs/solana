@@ -6944,11 +6944,19 @@ impl Bank {
             .check_complete()
     }
 
+    /// Get this bank's storages to use for snapshots.
+    ///
+    /// If a base slot is provided, return only the storages that are *higher* than this slot.
     pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStorages {
+        // if a base slot is provided, request storages starting at the slot *after*
+        let start_slot = base_slot.map_or(0, |slot| slot.saturating_add(1));
+        // we want to *include* the storage at our slot
+        let requested_slots = start_slot..=self.slot();
+
         self.rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(self.slot(), base_slot, None)
+            .get_snapshot_storages(requested_slots, None)
             .0
     }
 
