@@ -7,7 +7,7 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
-    solana_bucket_map::bucket_map::get_mmap_count,
+    solana_bucket_map::bucket_map::{get_mmap_count, get_num_open_fd},
     solana_sdk::timing::AtomicInterval,
     std::{
         collections::HashMap,
@@ -835,10 +835,13 @@ impl SystemMonitorService {
     #[cfg(target_os = "linux")]
     fn report_open_fd_stats() {
         if let Some(curr_mmap_count) = get_mmap_count() {
-            datapoint_info!(
-                "open-mmap-stats",
-                ("number_mmap_files", curr_mmap_count, i64),
-            );
+            if let Some(curr_open_fd) = get_num_open_fd() {
+                datapoint_info!(
+                    "open-mmap-stats",
+                    ("number_mmap_files", curr_mmap_count, i64),
+                    ("number_open_fd", curr_open_fd, i64),
+                );
+            }
         }
     }
 

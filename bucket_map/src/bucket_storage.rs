@@ -1,6 +1,6 @@
 use {
     crate::{
-        bucket_map::{get_mmap_count, get_open_fd_limits},
+        bucket_map::{get_mmap_count, get_num_open_fd, get_open_fd_limits},
         bucket_stats::BucketStats,
         MaxSearch,
     },
@@ -288,6 +288,10 @@ impl BucketStorage {
                     .map(|mmap_count| format!("current mmap_count: {}", mmap_count))
                     .unwrap_or_default();
 
+                let open_fd_msg = get_num_open_fd()
+                    .map(|open_fd| format!("current open_fd: {}", open_fd))
+                    .unwrap_or_default();
+
                 let limit_msg = get_open_fd_limits()
                     .map(|(soft_limit, hard_limit)| {
                         format!("soft_limit: {}, hard_limit: {}", soft_limit, hard_limit,)
@@ -295,10 +299,11 @@ impl BucketStorage {
                     .unwrap_or_default();
 
                 panic!(
-                    "Unable to create data file {} in current dir({:?}): {:?}. {}, {}",
+                    "Unable to create data file {} in current dir({:?}): {:?}. {}, {}, {}",
                     file.display(),
                     std::env::current_dir(),
                     e,
+                    open_fd_msg,
                     mmap_msg,
                     limit_msg,
                 );
@@ -432,9 +437,11 @@ mod test {
 
         // test get_mmap_fd_stats
         let mmap_count = get_mmap_count().unwrap();
+        let open_fd = get_num_open_fd().unwrap();
         let (soft_limit, hard_limit) = get_open_fd_limits().unwrap();
 
         assert!(mmap_count > 0);
+        assert!(open_fd > 0);
         assert!(soft_limit > 0);
         assert!(hard_limit > 0);
     }
