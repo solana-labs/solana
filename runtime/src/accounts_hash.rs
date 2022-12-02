@@ -99,7 +99,7 @@ impl AccountHashesFile {
 #[allow(dead_code)]
 pub struct FullSnapshotAccountsHashInfo {
     /// accounts hash over all accounts when the full snapshot was taken
-    hash: Hash,
+    hash: AccountsHash,
     /// slot where full snapshot was taken
     slot: Slot,
 }
