@@ -10416,6 +10416,8 @@ pub(crate) mod tests {
         assert_ne!(bank1.capitalization(), bank.capitalization());
 
         bank1.freeze();
+        add_root_and_flush_write_cache(&bank);
+        add_root_and_flush_write_cache(&bank1);
         assert!(bank1.calculate_and_verify_capitalization(true));
 
         // verify voting and staking rewards are recorded
