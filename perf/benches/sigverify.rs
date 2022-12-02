@@ -6,11 +6,12 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     solana_perf::{
-        packet::{to_packet_batches, Packet, PacketBatch},
+        packet::{to_packet_batches, Batch},
         recycler::Recycler,
         sigverify,
         test_tx::{test_multisig_tx, test_tx},
     },
+    solana_sdk::packet::{BasePacket, Packet},
     test::Bencher,
 };
 
@@ -40,7 +41,7 @@ fn gen_batches(
     use_same_tx: bool,
     packets_per_batch: usize,
     total_packets: usize,
-) -> Vec<PacketBatch> {
+) -> Vec<Batch<Packet>> {
     if use_same_tx {
         let tx = test_tx();
         to_packet_batches(&vec![tx; total_packets], packets_per_batch)
@@ -145,7 +146,7 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
             len -= current_packets - num_packets;
             current_packets = num_packets;
         }
-        let mut batch = PacketBatch::with_capacity(len);
+        let mut batch = Batch::<Packet>::with_capacity(len);
         batch.resize(len, Packet::default());
         for packet in batch.iter_mut() {
             if thread_rng().gen_ratio(1, 2) {

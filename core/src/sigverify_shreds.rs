@@ -3,9 +3,13 @@ use {
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
-    solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
+    solana_perf::{self, packet::Batch, recycler_cache::RecyclerCache},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot,
+        packet::{BasePacket, Packet},
+        pubkey::Pubkey,
+    },
     std::{
         collections::HashMap,
         sync::{
@@ -29,9 +33,9 @@ pub(crate) fn spawn_shred_sigverify(
     self_pubkey: Pubkey,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
-    shred_fetch_receiver: Receiver<PacketBatch>,
+    shred_fetch_receiver: Receiver<Batch<Packet>>,
     retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
-    verified_sender: Sender<Vec<PacketBatch>>,
+    verified_sender: Sender<Vec<Batch<Packet>>>,
     turbine_disabled: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     let recycler_cache = RecyclerCache::warmed();
@@ -65,9 +69,9 @@ fn run_shred_sigverify(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
-    shred_fetch_receiver: &Receiver<PacketBatch>,
+    shred_fetch_receiver: &Receiver<Batch<Packet>>,
     retransmit_sender: &Sender<Vec</*shred:*/ Vec<u8>>>,
-    verified_sender: &Sender<Vec<PacketBatch>>,
+    verified_sender: &Sender<Vec<Batch<Packet>>>,
     turbine_disabled: &AtomicBool,
     stats: &mut ShredSigVerifyStats,
 ) -> Result<(), Error> {
@@ -78,7 +82,7 @@ fn run_shred_sigverify(
         .collect();
     let now = Instant::now();
     stats.num_iters += 1;
-    stats.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
+    stats.num_packets += packets.iter().map(Batch::<Packet>::len).sum::<usize>();
     stats.num_discards_pre += count_discards(&packets);
     verify_packets(
         self_pubkey,
@@ -91,7 +95,7 @@ fn run_shred_sigverify(
     // Exclude repair packets from retransmit.
     let shreds: Vec<_> = packets
         .iter()
-        .flat_map(PacketBatch::iter)
+        .flat_map(Batch::<Packet>::iter)
         .filter(|packet| !packet.meta().discard() && !packet.meta().repair())
         .filter_map(shred::layout::get_shred)
         .map(<[u8]>::to_vec)
@@ -110,7 +114,7 @@ fn verify_packets(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     recycler_cache: &RecyclerCache,
-    packets: &mut [PacketBatch],
+    packets: &mut [Batch<Packet>],
 ) {
     let working_bank = bank_forks.read().unwrap().working_bank();
     let leader_slots: HashMap<Slot, [u8; 32]> =
@@ -130,7 +134,7 @@ fn verify_packets(
 //   - slot leader is the node itself (circular transmission).
 fn get_slot_leaders(
     self_pubkey: &Pubkey,
-    batches: &mut [PacketBatch],
+    batches: &mut [Batch<Packet>],
     leader_schedule_cache: &LeaderScheduleCache,
     bank: &Bank,
 ) -> HashMap<Slot, Option<Pubkey>> {
@@ -161,10 +165,10 @@ fn get_slot_leaders(
     leaders
 }
 
-fn count_discards(packets: &[PacketBatch]) -> usize {
+fn count_discards(packets: &[Batch<Packet>]) -> usize {
     packets
         .iter()
-        .flat_map(PacketBatch::iter)
+        .flat_map(Batch::<Packet>::iter)
         .filter(|packet| packet.meta().discard())
         .count()
 }
@@ -234,9 +238,11 @@ mod tests {
             genesis_utils::create_genesis_config_with_leader,
             shred::{Shred, ShredFlags},
         },
-        solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
-        solana_sdk::signature::{Keypair, Signer},
+        solana_sdk::{
+            packet::{BasePacket, Packet},
+            signature::{Keypair, Signer},
+        },
     };
 
     #[test]
@@ -249,7 +255,7 @@ mod tests {
         let leader_schedule_cache = LeaderScheduleCache::new_from_bank(&bank);
         let bank_forks = RwLock::new(BankForks::new(bank));
         let batch_size = 2;
-        let mut batch = PacketBatch::with_capacity(batch_size);
+        let mut batch = Batch::<Packet>::with_capacity(batch_size);
         batch.resize(batch_size, Packet::default());
         let mut batches = vec![batch];
 

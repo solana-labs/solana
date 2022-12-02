@@ -1,13 +1,14 @@
 use {
     crate::{
-        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        forward_packet_batches_by_accounts::ForwardBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     },
     itertools::Itertools,
     rand::{thread_rng, Rng},
-    solana_perf::packet::Packet,
     solana_runtime::bank::Bank,
-    solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot, packet::BasePacket, program_utils::limited_deserialize, pubkey::Pubkey,
+    },
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         collections::HashMap,
@@ -24,16 +25,16 @@ pub enum VoteSource {
 
 /// Holds deserialized vote messages as well as their source, foward status and slot
 #[derive(Debug, Clone)]
-pub struct LatestValidatorVotePacket {
+pub struct LatestValidatorVotePacket<P: BasePacket> {
     vote_source: VoteSource,
     pubkey: Pubkey,
-    vote: Option<Arc<ImmutableDeserializedPacket>>,
+    vote: Option<Arc<ImmutableDeserializedPacket<P>>>,
     slot: Slot,
     forwarded: bool,
 }
 
-impl LatestValidatorVotePacket {
-    pub fn new(packet: Packet, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
+impl<P: BasePacket> LatestValidatorVotePacket<P> {
+    pub fn new(packet: P, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
         if !packet.meta().is_simple_vote_tx() {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
@@ -41,9 +42,11 @@ impl LatestValidatorVotePacket {
         let vote = Arc::new(ImmutableDeserializedPacket::new(packet, None)?);
         Self::new_from_immutable(vote, vote_source)
     }
+}
 
+impl<P: BasePacket> LatestValidatorVotePacket<P> {
     pub fn new_from_immutable(
-        vote: Arc<ImmutableDeserializedPacket>,
+        vote: Arc<ImmutableDeserializedPacket<P>>,
         vote_source: VoteSource,
     ) -> Result<Self, DeserializedPacketError> {
         let message = vote.transaction().get_message();
@@ -75,7 +78,7 @@ impl LatestValidatorVotePacket {
         }
     }
 
-    pub fn get_vote_packet(&self) -> Arc<ImmutableDeserializedPacket> {
+    pub fn get_vote_packet(&self) -> Arc<ImmutableDeserializedPacket<P>> {
         self.vote.as_ref().unwrap().clone()
     }
 
@@ -96,7 +99,7 @@ impl LatestValidatorVotePacket {
         self.vote.is_none()
     }
 
-    pub fn take_vote(&mut self) -> Option<Arc<ImmutableDeserializedPacket>> {
+    pub fn take_vote(&mut self) -> Option<Arc<ImmutableDeserializedPacket<P>>> {
         self.vote.take()
     }
 }
@@ -131,11 +134,11 @@ pub(crate) struct VoteBatchInsertionMetrics {
 }
 
 #[derive(Debug, Default)]
-pub struct LatestUnprocessedVotes {
-    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, Arc<RwLock<LatestValidatorVotePacket>>>>,
+pub struct LatestUnprocessedVotes<P: BasePacket> {
+    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, Arc<RwLock<LatestValidatorVotePacket<P>>>>>,
 }
 
-impl LatestUnprocessedVotes {
+impl<P: BasePacket> LatestUnprocessedVotes<P> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -156,7 +159,7 @@ impl LatestUnprocessedVotes {
 
     pub(crate) fn insert_batch(
         &self,
-        votes: impl Iterator<Item = LatestValidatorVotePacket>,
+        votes: impl Iterator<Item = LatestValidatorVotePacket<P>>,
     ) -> VoteBatchInsertionMetrics {
         let mut num_dropped_gossip = 0;
         let mut num_dropped_tpu = 0;
@@ -176,7 +179,7 @@ impl LatestUnprocessedVotes {
         }
     }
 
-    fn get_entry(&self, pubkey: Pubkey) -> Option<Arc<RwLock<LatestValidatorVotePacket>>> {
+    fn get_entry(&self, pubkey: Pubkey) -> Option<Arc<RwLock<LatestValidatorVotePacket<P>>>> {
         self.latest_votes_per_pubkey
             .read()
             .unwrap()
@@ -189,8 +192,8 @@ impl LatestUnprocessedVotes {
     /// Otherwise returns None
     pub fn update_latest_vote(
         &self,
-        vote: LatestValidatorVotePacket,
-    ) -> Option<LatestValidatorVotePacket> {
+        vote: LatestValidatorVotePacket<P>,
+    ) -> Option<LatestValidatorVotePacket<P>> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
         if let Some(latest_vote) = self.get_entry(pubkey) {
@@ -231,7 +234,7 @@ impl LatestUnprocessedVotes {
     pub fn get_and_insert_forwardable_packets(
         &self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
+        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<P>,
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
@@ -279,7 +282,7 @@ impl LatestUnprocessedVotes {
     }
 
     /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
-    pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Arc<ImmutableDeserializedPacket>> {
+    pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Arc<ImmutableDeserializedPacket<P>>> {
         let pubkeys_by_stake = weighted_random_order_by_stake(
             &bank,
             self.latest_votes_per_pubkey.read().unwrap().keys(),
@@ -319,7 +322,7 @@ mod tests {
         super::*,
         itertools::Itertools,
         rand::{thread_rng, Rng},
-        solana_perf::packet::{Packet, PacketBatch, PacketFlags},
+        solana_perf::packet::{Batch, Packet, PacketFlags},
         solana_runtime::{
             bank::Bank,
             genesis_utils::{self, ValidatorVoteKeypairs},
@@ -336,7 +339,7 @@ mod tests {
         slots: Vec<(u64, u32)>,
         vote_source: VoteSource,
         keypairs: &ValidatorVoteKeypairs,
-    ) -> LatestValidatorVotePacket {
+    ) -> LatestValidatorVotePacket<Packet> {
         let vote = VoteStateUpdate::from(slots);
         let vote_tx = new_vote_state_update_transaction(
             vote,
@@ -351,16 +354,20 @@ mod tests {
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
-        LatestValidatorVotePacket::new(packet, vote_source).unwrap()
+        LatestValidatorVotePacket::<Packet>::new(packet, vote_source).unwrap()
     }
 
     fn deserialize_packets<'a>(
-        packet_batch: &'a PacketBatch,
+        packet_batch: &'a Batch<Packet>,
         packet_indexes: &'a [usize],
         vote_source: VoteSource,
-    ) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
+    ) -> impl Iterator<Item = LatestValidatorVotePacket<Packet>> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
-            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
+            LatestValidatorVotePacket::<Packet>::new(
+                packet_batch[*packet_index].clone(),
+                vote_source,
+            )
+            .ok()
         })
     }
 
@@ -443,7 +450,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let packet_batch = PacketBatch::new(vec![
+        let packet_batch = Batch::<Packet>::new(vec![
             vote,
             vote_switch,
             vote_state_update,
@@ -589,7 +596,7 @@ mod tests {
         let latest_unprocessed_votes = LatestUnprocessedVotes::new();
         let bank = Arc::new(Bank::default_for_tests());
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            ForwardBatchesByAccounts::new_with_default_batch_limits();
 
         let keypair_a = ValidatorVoteKeypairs::new_rand();
         let keypair_b = ValidatorVoteKeypairs::new_rand();
@@ -619,7 +626,7 @@ mod tests {
         .genesis_config;
         let bank = Bank::new_for_tests(&config);
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            ForwardBatchesByAccounts::new_with_default_batch_limits();
 
         // Don't forward votes from gossip
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
@@ -644,7 +651,7 @@ mod tests {
         .genesis_config;
         let bank = Arc::new(Bank::new_for_tests(&config));
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            ForwardBatchesByAccounts::new_with_default_batch_limits();
 
         // Forward from TPU
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
@@ -663,7 +670,7 @@ mod tests {
 
         // Don't forward again
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            ForwardBatchesByAccounts::new_with_default_batch_limits();
         let forwarded = latest_unprocessed_votes
             .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 

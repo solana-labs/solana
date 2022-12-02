@@ -3,11 +3,14 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
-        solana_perf::packet::PacketBatch,
+        solana_perf::packet::Batch,
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
+        solana_sdk::{
+            packet::{BasePacket, Packet, PACKET_DATA_SIZE},
+            signature::Keypair,
+        },
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
@@ -24,7 +27,7 @@ mod tests {
     };
 
     fn check_packets(
-        receiver: Receiver<PacketBatch>,
+        receiver: Receiver<Batch<Packet>>,
         num_bytes: usize,
         num_expected_packets: usize,
     ) {

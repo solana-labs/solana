@@ -5,6 +5,7 @@ use {
     bincode::config::Options,
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator},
     serde::{de::DeserializeOwned, Serialize},
+    solana_sdk::packet::BasePacket,
     std::{
         io::Read,
         net::SocketAddr,
@@ -19,21 +20,21 @@ pub const PACKETS_PER_BATCH: usize = 64;
 pub const NUM_RCVMMSGS: usize = 64;
 
 #[derive(Debug, Default, Clone)]
-pub struct PacketBatch {
-    packets: PinnedVec<Packet>,
+pub struct Batch<P: Default + Clone> {
+    packets: PinnedVec<P>,
 }
 
-pub type PacketBatchRecycler = Recycler<PinnedVec<Packet>>;
+pub type BatchRecycler<P> = Recycler<PinnedVec<P>>;
 
-impl PacketBatch {
-    pub fn new(packets: Vec<Packet>) -> Self {
+impl<P: BasePacket> Batch<P> {
+    pub fn new(packets: Vec<P>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         let packets = PinnedVec::with_capacity(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_pinned_with_capacity(capacity: usize) -> Self {
@@ -43,29 +44,29 @@ impl PacketBatch {
     }
 
     pub fn new_unpinned_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: BatchRecycler<P>,
         capacity: usize,
         name: &'static str,
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler(
-        recycler: PacketBatchRecycler,
+        recycler: BatchRecycler<P>,
         capacity: usize,
         name: &'static str,
     ) -> Self {
         let mut packets = recycler.allocate(name);
         packets.reserve_and_pin(capacity);
-        PacketBatch { packets }
+        Self { packets }
     }
 
     pub fn new_with_recycler_data(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<P>,
         name: &'static str,
-        mut packets: Vec<Packet>,
+        mut packets: Vec<P>,
     ) -> Self {
         let mut batch = Self::new_with_recycler(recycler.clone(), packets.len(), name);
         batch.packets.append(&mut packets);
@@ -73,19 +74,16 @@ impl PacketBatch {
     }
 
     pub fn new_unpinned_with_recycler_data_and_dests<T: Serialize>(
-        recycler: PacketBatchRecycler,
+        recycler: BatchRecycler<P>,
         name: &'static str,
         dests_and_data: &[(SocketAddr, T)],
     ) -> Self {
-        let mut batch =
-            PacketBatch::new_unpinned_with_recycler(recycler, dests_and_data.len(), name);
-        batch
-            .packets
-            .resize(dests_and_data.len(), Packet::default());
+        let mut batch = Self::new_unpinned_with_recycler(recycler, dests_and_data.len(), name);
+        batch.packets.resize(dests_and_data.len(), P::default());
 
         for ((addr, data), packet) in dests_and_data.iter().zip(batch.packets.iter_mut()) {
             if !addr.ip().is_unspecified() && addr.port() != 0 {
-                if let Err(e) = Packet::populate_packet(packet, Some(addr), &data) {
+                if let Err(e) = P::populate_packet(packet, Some(addr), &data) {
                     // TODO: This should never happen. Instead the caller should
                     // break the payload into smaller messages, and here any errors
                     // should be propagated.
@@ -99,16 +97,16 @@ impl PacketBatch {
     }
 
     pub fn new_unpinned_with_recycler_data(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<P>,
         name: &'static str,
-        mut packets: Vec<Packet>,
+        mut packets: Vec<P>,
     ) -> Self {
         let mut batch = Self::new_unpinned_with_recycler(recycler.clone(), packets.len(), name);
         batch.packets.append(&mut packets);
         batch
     }
 
-    pub fn resize(&mut self, new_len: usize, value: Packet) {
+    pub fn resize(&mut self, new_len: usize, value: P) {
         self.packets.resize(new_len, value)
     }
 
@@ -116,7 +114,7 @@ impl PacketBatch {
         self.packets.truncate(len);
     }
 
-    pub fn push(&mut self, packet: Packet) {
+    pub fn push(&mut self, packet: P) {
         self.packets.push(packet);
     }
 
@@ -138,15 +136,15 @@ impl PacketBatch {
         self.packets.is_empty()
     }
 
-    pub fn as_ptr(&self) -> *const Packet {
+    pub fn as_ptr(&self) -> *const P {
         self.packets.as_ptr()
     }
 
-    pub fn iter(&self) -> Iter<'_, Packet> {
+    pub fn iter(&self) -> Iter<'_, P> {
         self.packets.iter()
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<'_, Packet> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, P> {
         self.packets.iter_mut()
     }
 
@@ -163,7 +161,7 @@ impl PacketBatch {
     }
 }
 
-impl<I: SliceIndex<[Packet]>> Index<I> for PacketBatch {
+impl<P: Clone + Default, I: SliceIndex<[P]>> Index<I> for Batch<P> {
     type Output = I::Output;
 
     #[inline]
@@ -172,52 +170,55 @@ impl<I: SliceIndex<[Packet]>> Index<I> for PacketBatch {
     }
 }
 
-impl<I: SliceIndex<[Packet]>> IndexMut<I> for PacketBatch {
+impl<P: Clone + Default, I: SliceIndex<[P]>> IndexMut<I> for Batch<P> {
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.packets[index]
     }
 }
 
-impl<'a> IntoIterator for &'a PacketBatch {
-    type Item = &'a Packet;
-    type IntoIter = Iter<'a, Packet>;
+impl<'a, P: Clone + Default> IntoIterator for &'a Batch<P> {
+    type Item = &'a P;
+    type IntoIter = Iter<'a, P>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.packets.iter()
     }
 }
 
-impl<'a> IntoParallelIterator for &'a PacketBatch {
-    type Iter = rayon::slice::Iter<'a, Packet>;
-    type Item = &'a Packet;
+impl<'a, P: Clone + Default + Send + Sync> IntoParallelIterator for &'a Batch<P> {
+    type Iter = rayon::slice::Iter<'a, P>;
+    type Item = &'a P;
     fn into_par_iter(self) -> Self::Iter {
         self.packets.par_iter()
     }
 }
 
-impl<'a> IntoParallelIterator for &'a mut PacketBatch {
-    type Iter = rayon::slice::IterMut<'a, Packet>;
-    type Item = &'a mut Packet;
+impl<'a, P: Clone + Default + Send + Sized + Sync> IntoParallelIterator for &'a mut Batch<P> {
+    type Iter = rayon::slice::IterMut<'a, P>;
+    type Item = &'a mut P;
     fn into_par_iter(self) -> Self::Iter {
         self.packets.par_iter_mut()
     }
 }
 
-impl From<PacketBatch> for Vec<Packet> {
-    fn from(batch: PacketBatch) -> Self {
+impl<P: Clone + Default> From<Batch<P>> for Vec<P> {
+    fn from(batch: Batch<P>) -> Self {
         batch.packets.into()
     }
 }
 
-pub fn to_packet_batches<T: Serialize>(items: &[T], chunk_size: usize) -> Vec<PacketBatch> {
+pub fn to_packet_batches<P: BasePacket, T: Serialize>(
+    items: &[T],
+    chunk_size: usize,
+) -> Vec<Batch<P>> {
     items
         .chunks(chunk_size)
         .map(|batch_items| {
-            let mut batch = PacketBatch::with_capacity(batch_items.len());
-            batch.resize(batch_items.len(), Packet::default());
+            let mut batch = Batch::<P>::with_capacity(batch_items.len());
+            batch.resize(batch_items.len(), P::default());
             for (item, packet) in batch_items.iter().zip(batch.packets.iter_mut()) {
-                Packet::populate_packet(packet, None, item).expect("serialize request");
+                P::populate_packet(packet, None, item).expect("serialize request");
             }
             batch
         })
@@ -225,7 +226,7 @@ pub fn to_packet_batches<T: Serialize>(items: &[T], chunk_size: usize) -> Vec<Pa
 }
 
 #[cfg(test)]
-pub fn to_packet_batches_for_tests<T: Serialize>(items: &[T]) -> Vec<PacketBatch> {
+pub fn to_packet_batches_for_tests<P: BasePacket, T: Serialize>(items: &[T]) -> Vec<Batch<P>> {
     to_packet_batches(items, NUM_PACKETS)
 }
 
@@ -259,17 +260,17 @@ mod tests {
         let keypair = Keypair::new();
         let hash = Hash::new(&[1; 32]);
         let tx = system_transaction::transfer(&keypair, &keypair.pubkey(), 1, hash);
-        let rv = to_packet_batches_for_tests(&[tx.clone(); 1]);
+        let rv = to_packet_batches_for_tests::<Packet, _>(&[tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].len(), 1);
 
         #[allow(clippy::useless_vec)]
-        let rv = to_packet_batches_for_tests(&vec![tx.clone(); NUM_PACKETS]);
+        let rv = to_packet_batches_for_tests::<Packet, _>(&vec![tx.clone(); NUM_PACKETS]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].len(), NUM_PACKETS);
 
         #[allow(clippy::useless_vec)]
-        let rv = to_packet_batches_for_tests(&vec![tx; NUM_PACKETS + 1]);
+        let rv = to_packet_batches_for_tests::<Packet, _>(&vec![tx; NUM_PACKETS + 1]);
         assert_eq!(rv.len(), 2);
         assert_eq!(rv[0].len(), NUM_PACKETS);
         assert_eq!(rv[1].len(), 1);
@@ -277,10 +278,10 @@ mod tests {
 
     #[test]
     fn test_to_packets_pinning() {
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         for i in 0..2 {
             let _first_packets =
-                PacketBatch::new_with_recycler(recycler.clone(), i + 1, "first one");
+                Batch::<Packet>::new_with_recycler(recycler.clone(), i + 1, "first one");
         }
     }
 }

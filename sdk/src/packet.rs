@@ -44,6 +44,59 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
+pub trait BasePacket: Default + Clone + Sync + Send + Eq {
+    const DATA_SIZE: usize;
+    fn populate_packet<T: Serialize>(&mut self, dest: Option<&SocketAddr>, data: &T) -> Result<()>;
+
+    fn meta(&self) -> &Meta;
+    fn meta_mut(&mut self) -> &mut Meta;
+    fn buffer(&self) -> &[u8];
+
+    /// Returns a mutable reference to the entirety of the underlying buffer to
+    /// write into. The caller is responsible for updating Packet.meta.size
+    /// after writing to the buffer.
+    fn buffer_mut(&mut self) -> &mut [u8];
+
+    /// Returns an immutable reference to the underlying buffer up to
+    /// packet.meta.size. The rest of the buffer is not valid to read from.
+    /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
+    /// Returns None if the index is invalid or if the packet is already marked
+    /// as discard.
+    #[inline]
+    fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
+    where
+        I: SliceIndex<[u8]>,
+    {
+        // If the packet is marked as discard, it is either invalid or
+        // otherwise should be ignored, and so the payload should not be read
+        // from.
+        if self.meta().discard() {
+            None
+        } else {
+            self.buffer().get(..self.meta().size)?.get(index)
+        }
+    }
+
+    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+        let mut packet = Self::default();
+        Self::populate_packet(&mut packet, dest, &data)?;
+        Ok(packet)
+    }
+
+    fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
+    where
+        T: serde::de::DeserializeOwned,
+        I: SliceIndex<[u8], Output = [u8]>,
+    {
+        let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
+        bincode::options()
+            .with_limit(Self::DATA_SIZE as u64)
+            .with_fixint_encoding()
+            .reject_trailing_bytes()
+            .deserialize(bytes)
+    }
+}
+
 macro_rules! impl_packet {
     ($P:ident, $S:ident) => {
         #[derive(Clone, Eq)]
@@ -56,58 +109,15 @@ macro_rules! impl_packet {
         }
 
         impl $P {
-            pub const DATA_SIZE: usize = $S;
-
             pub fn new(buffer: [u8; $S], meta: Meta) -> Self {
                 Self { buffer, meta }
             }
+        }
 
-            /// Returns an immutable reference to the underlying buffer up to
-            /// packet.meta.size. The rest of the buffer is not valid to read from.
-            /// packet.data(..) returns packet.buffer.get(..packet.meta.size).
-            /// Returns None if the index is invalid or if the packet is already marked
-            /// as discard.
-            #[inline]
-            pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
-            where
-                I: SliceIndex<[u8]>,
-            {
-                // If the packet is marked as discard, it is either invalid or
-                // otherwise should be ignored, and so the payload should not be read
-                // from.
-                if self.meta.discard() {
-                    None
-                } else {
-                    self.buffer.get(..self.meta.size)?.get(index)
-                }
-            }
+        impl BasePacket for $P {
+            const DATA_SIZE: usize = $S;
 
-            /// Returns a mutable reference to the entirety of the underlying buffer to
-            /// write into. The caller is responsible for updating Packet.meta.size
-            /// after writing to the buffer.
-            #[inline]
-            pub fn buffer_mut(&mut self) -> &mut [u8] {
-                debug_assert!(!self.meta.discard());
-                &mut self.buffer[..]
-            }
-
-            #[inline]
-            pub fn meta(&self) -> &Meta {
-                &self.meta
-            }
-
-            #[inline]
-            pub fn meta_mut(&mut self) -> &mut Meta {
-                &mut self.meta
-            }
-
-            pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
-                let mut packet = Self::default();
-                Self::populate_packet(&mut packet, dest, &data)?;
-                Ok(packet)
-            }
-
-            pub fn populate_packet<T: Serialize>(
+            fn populate_packet<T: Serialize>(
                 &mut self,
                 dest: Option<&SocketAddr>,
                 data: &T,
@@ -122,17 +132,21 @@ macro_rules! impl_packet {
                 Ok(())
             }
 
-            pub fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
-            where
-                T: serde::de::DeserializeOwned,
-                I: SliceIndex<[u8], Output = [u8]>,
-            {
-                let bytes = self.data(index).ok_or(bincode::ErrorKind::SizeLimit)?;
-                bincode::options()
-                    .with_limit(Self::DATA_SIZE as u64)
-                    .with_fixint_encoding()
-                    .reject_trailing_bytes()
-                    .deserialize(bytes)
+            fn meta(&self) -> &Meta {
+                &self.meta
+            }
+
+            fn meta_mut(&mut self) -> &mut Meta {
+                &mut self.meta
+            }
+
+            fn buffer(&self) -> &[u8] {
+                &self.buffer
+            }
+
+            fn buffer_mut(&mut self) -> &mut [u8] {
+                debug_assert!(!self.meta.discard());
+                &mut self.buffer[..]
             }
         }
 

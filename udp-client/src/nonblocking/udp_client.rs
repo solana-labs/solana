@@ -54,7 +54,7 @@ impl TpuConnection for UdpTpuConnection {
 mod tests {
     use {
         super::*,
-        solana_sdk::packet::Packet,
+        solana_sdk::packet::{BasePacket, Packet},
         solana_streamer::nonblocking::recvmmsg::recv_mmsg,
         std::net::{IpAddr, Ipv4Addr},
         tokio::net::UdpSocket,

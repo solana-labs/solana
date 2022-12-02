@@ -3,7 +3,10 @@ use {
         blockstore::Blockstore,
         shred::{Nonce, SIZE_OF_NONCE},
     },
-    solana_sdk::{clock::Slot, packet::Packet},
+    solana_sdk::{
+        clock::Slot,
+        packet::{BasePacket, Packet},
+    },
     std::{io, net::SocketAddr},
 };
 

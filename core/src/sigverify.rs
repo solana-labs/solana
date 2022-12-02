@@ -9,12 +9,15 @@ pub use solana_perf::sigverify::{
 };
 use {
     crate::{
-        banking_stage::BankingPacketBatch,
+        banking_stage::BankingBatch,
         sigverify_stage::{SigVerifier, SigVerifyServiceError},
     },
     crossbeam_channel::Sender,
-    solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
-    solana_sdk::{packet::Packet, saturating_add_assign},
+    solana_perf::{cuda_runtime::PinnedVec, packet::Batch, recycler::Recycler, sigverify},
+    solana_sdk::{
+        packet::{BasePacket, Packet},
+        saturating_add_assign,
+    },
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -84,7 +87,7 @@ impl TransactionSigVerifier {
 }
 
 impl SigVerifier for TransactionSigVerifier {
-    type SendType = BankingPacketBatch;
+    type SendType = BankingBatch<Packet>;
 
     #[inline(always)]
     fn process_received_packet(
@@ -125,7 +128,7 @@ impl SigVerifier for TransactionSigVerifier {
 
     fn send_packets(
         &mut self,
-        packet_batches: Vec<PacketBatch>,
+        packet_batches: Vec<Batch<Packet>>,
     ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
         let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
         self.packet_sender
@@ -135,9 +138,9 @@ impl SigVerifier for TransactionSigVerifier {
 
     fn verify_batches(
         &self,
-        mut batches: Vec<PacketBatch>,
+        mut batches: Vec<Batch<Packet>>,
         valid_packets: usize,
-    ) -> Vec<PacketBatch> {
+    ) -> Vec<Batch<Packet>> {
         sigverify::ed25519_verify(
             &mut batches,
             &self.recycler,

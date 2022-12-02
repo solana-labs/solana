@@ -191,7 +191,9 @@ impl<T: Default + Reset> RecyclerX<T> {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::packet::PacketBatchRecycler, std::iter::repeat_with};
+    use {
+        super::*, crate::packet::BatchRecycler, solana_sdk::packet::Packet, std::iter::repeat_with,
+    };
 
     impl Reset for u64 {
         fn reset(&mut self) {
@@ -218,7 +220,7 @@ mod tests {
     #[test]
     fn test_recycler_shrink() {
         let mut rng = rand::thread_rng();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         // Allocate a burst of packets.
         const NUM_PACKETS: usize = RECYCLER_SHRINK_SIZE * 2;
         {

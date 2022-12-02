@@ -39,7 +39,7 @@ use {
         loader_instruction,
         message::Message,
         native_token::Sol,
-        packet::Packet,
+        packet::{BasePacket, Packet},
         pubkey::Pubkey,
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
         system_instruction::{self, SystemError},

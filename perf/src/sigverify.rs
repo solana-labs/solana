@@ -6,7 +6,7 @@
 use {
     crate::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketFlags, PACKET_DATA_SIZE},
+        packet::{Batch, PACKET_DATA_SIZE},
         perf_libs,
         recycler::Recycler,
     },
@@ -18,6 +18,7 @@ use {
     solana_sdk::{
         hash::Hash,
         message::{MESSAGE_HEADER_LENGTH, MESSAGE_VERSION_PREFIX},
+        packet::{BasePacket, Packet, PacketFlags},
         pubkey::Pubkey,
         saturating_add_assign,
         short_vec::decode_shortu16_len,
@@ -165,12 +166,12 @@ fn verify_packet(packet: &mut Packet, reject_non_vote: bool) -> bool {
     true
 }
 
-pub fn count_packets_in_batches(batches: &[PacketBatch]) -> usize {
+pub fn count_packets_in_batches(batches: &[Batch<Packet>]) -> usize {
     batches.iter().map(|batch| batch.len()).sum()
 }
 
 pub fn count_valid_packets(
-    batches: &[PacketBatch],
+    batches: &[Batch<Packet>],
     mut process_valid_packet: impl FnMut(&Packet),
 ) -> usize {
     batches
@@ -190,7 +191,7 @@ pub fn count_valid_packets(
         .sum()
 }
 
-pub fn count_discarded_packets(batches: &[PacketBatch]) -> usize {
+pub fn count_discarded_packets(batches: &[Batch<Packet>]) -> usize {
     batches
         .iter()
         .map(|batch| batch.iter().filter(|p| p.meta().discard()).count())
@@ -431,7 +432,7 @@ fn check_for_simple_vote_transaction(
 }
 
 pub fn generate_offsets(
-    batches: &mut [PacketBatch],
+    batches: &mut [Batch<Packet>],
     recycler: &Recycler<TxOffset>,
     reject_non_vote: bool,
 ) -> TxOffsets {
@@ -556,7 +557,7 @@ impl Deduper {
 
     pub fn dedup_packets_and_count_discards(
         &self,
-        batches: &mut [PacketBatch],
+        batches: &mut [Batch<Packet>],
         mut process_received_packet: impl FnMut(&mut Packet, bool, bool),
     ) -> u64 {
         let mut num_removed: u64 = 0;
@@ -575,7 +576,7 @@ impl Deduper {
 }
 
 //inplace shrink a batch of packets
-pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
+pub fn shrink_batches(batches: &mut Vec<Batch<Packet>>) {
     let mut valid_batch_ix = 0;
     let mut valid_packet_ix = 0;
     let mut last_valid_batch = 0;
@@ -608,7 +609,11 @@ pub fn shrink_batches(batches: &mut Vec<PacketBatch>) {
     batches.truncate(last_valid_batch);
 }
 
-pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, packet_count: usize) {
+pub fn ed25519_verify_cpu(
+    batches: &mut [Batch<Packet>],
+    reject_non_vote: bool,
+    packet_count: usize,
+) {
     debug!("CPU ECDSA for {}", packet_count);
     let desired_thread_count = packet_count
         .saturating_add(VERIFY_MIN_PACKETS_PER_THREAD)
@@ -641,19 +646,21 @@ pub fn ed25519_verify_cpu(batches: &mut [PacketBatch], reject_non_vote: bool, pa
     } else {
         // When using all available threads, skip the overhead of flattening, collecting, etc.
         PAR_THREAD_POOL.install(|| {
-            batches.into_par_iter().for_each(|batch: &mut PacketBatch| {
-                batch.par_iter_mut().for_each(|packet: &mut Packet| {
-                    if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
-                        packet.meta_mut().set_discard(true);
-                    }
-                })
-            });
+            batches
+                .into_par_iter()
+                .for_each(|batch: &mut Batch<Packet>| {
+                    batch.par_iter_mut().for_each(|packet: &mut Packet| {
+                        if !packet.meta().discard() && !verify_packet(packet, reject_non_vote) {
+                            packet.meta_mut().set_discard(true);
+                        }
+                    })
+                });
         });
     }
     inc_new_counter_debug!("ed25519_verify_cpu", packet_count);
 }
 
-pub fn ed25519_verify_disabled(batches: &mut [PacketBatch]) {
+pub fn ed25519_verify_disabled(batches: &mut [Batch<Packet>]) {
     let packet_count = count_packets_in_batches(batches);
     debug!("disabled ECDSA for {}", packet_count);
     batches.into_par_iter().for_each(|batch| {
@@ -707,7 +714,7 @@ pub fn get_checked_scalar(scalar: &[u8; 32]) -> Result<[u8; 32], PacketError> {
     Ok(out)
 }
 
-pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
+pub fn mark_disabled(batches: &mut [Batch<Packet>], r: &[Vec<u8>]) {
     for (batch, v) in batches.iter_mut().zip(r) {
         for (pkt, f) in batch.iter_mut().zip(v) {
             if !pkt.meta().discard() {
@@ -718,7 +725,7 @@ pub fn mark_disabled(batches: &mut [PacketBatch], r: &[Vec<u8>]) {
 }
 
 pub fn ed25519_verify(
-    batches: &mut [PacketBatch],
+    batches: &mut [Batch<Packet>],
     recycler: &Recycler<TxOffset>,
     recycler_out: &Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
@@ -799,7 +806,7 @@ mod tests {
     use {
         super::*,
         crate::{
-            packet::{to_packet_batches, Packet, PacketBatch, PACKETS_PER_BATCH},
+            packet::{to_packet_batches, Batch, Packet, PACKETS_PER_BATCH},
             sigverify::{self, PacketOffsets},
             test_tx::{new_test_vote_tx, test_multisig_tx, test_tx},
         },
@@ -868,9 +875,9 @@ mod tests {
     #[test]
     fn test_mark_disabled() {
         let batch_size = 1;
-        let mut batch = PacketBatch::with_capacity(batch_size);
+        let mut batch = Batch::<Packet>::with_capacity(batch_size);
         batch.resize(batch_size, Packet::default());
-        let mut batches: Vec<PacketBatch> = vec![batch];
+        let mut batches: Vec<Batch<Packet>> = vec![batch];
         mark_disabled(&mut batches, &[vec![0]]);
         assert!(batches[0][0].meta().discard());
         batches[0][0].meta_mut().set_discard(false);
@@ -1176,12 +1183,12 @@ mod tests {
         packet: &Packet,
         max_packets_per_batch: usize,
         num_batches: usize,
-    ) -> Vec<PacketBatch> {
+    ) -> Vec<Batch<Packet>> {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
                 let num_packets_per_batch = thread_rng().gen_range(1, max_packets_per_batch);
-                let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
+                let mut packet_batch = Batch::<Packet>::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
                     packet_batch.push(packet.clone());
                 }
@@ -1198,11 +1205,11 @@ mod tests {
         packet: &Packet,
         num_packets_per_batch: usize,
         num_batches: usize,
-    ) -> Vec<PacketBatch> {
+    ) -> Vec<Batch<Packet>> {
         // generate packet vector
         let batches: Vec<_> = (0..num_batches)
             .map(|_| {
-                let mut packet_batch = PacketBatch::with_capacity(num_packets_per_batch);
+                let mut packet_batch = Batch::<Packet>::with_capacity(num_packets_per_batch);
                 for _ in 0..num_packets_per_batch {
                     packet_batch.push(packet.clone());
                 }
@@ -1237,7 +1244,7 @@ mod tests {
             .all(|p| p.meta().discard() == should_discard));
     }
 
-    fn ed25519_verify(batches: &mut [PacketBatch]) {
+    fn ed25519_verify(batches: &mut [Batch<Packet>]) {
         let recycler = Recycler::default();
         let recycler_out = Recycler::default();
         let packet_count = sigverify::count_packets_in_batches(batches);
@@ -1512,7 +1519,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let mut current_offset = 0usize;
-        let mut batch = PacketBatch::default();
+        let mut batch = Batch::<Packet>::default();
         batch.push(Packet::from_data(None, test_tx()).unwrap());
         let tx = new_test_vote_tx(&mut rng);
         batch.push(Packet::from_data(None, tx).unwrap());
@@ -1596,7 +1603,7 @@ mod tests {
     #[test]
     fn test_shrink_fuzz() {
         for _ in 0..5 {
-            let mut batches = to_packet_batches(
+            let mut batches = to_packet_batches::<Packet, _>(
                 &(0..PACKETS_PER_BATCH * 3)
                     .map(|_| test_tx())
                     .collect::<Vec<_>>(),
@@ -1642,14 +1649,14 @@ mod tests {
         shrink_batches(&mut Vec::new());
         // One empty batch
         {
-            let mut batches = vec![PacketBatch::with_capacity(0)];
+            let mut batches = vec![Batch::<Packet>::with_capacity(0)];
             shrink_batches(&mut batches);
             assert_eq!(batches.len(), 0);
         }
         // Many empty batches
         {
             let mut batches = (0..BATCH_COUNT)
-                .map(|_| PacketBatch::with_capacity(0))
+                .map(|_| Batch::<Packet>::with_capacity(0))
                 .collect::<Vec<_>>();
             shrink_batches(&mut batches);
             assert_eq!(batches.len(), 0);

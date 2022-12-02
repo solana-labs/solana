@@ -61,10 +61,10 @@ use {
     reed_solomon_erasure::Error::TooFewShardsPresent,
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::Packet,
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
+        packet::{BasePacket, Packet},
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer, SIGNATURE_BYTES},
     },

@@ -3,9 +3,10 @@
 use {
     clap::{crate_description, crate_name, Arg, Command},
     crossbeam_channel::unbounded,
+    solana_sdk::packet::{BasePacket, Packet},
     solana_streamer::{
-        packet::{Packet, PacketBatch, PacketBatchRecycler},
-        streamer::{receiver, PacketBatchReceiver, StreamerReceiveStats},
+        packet::{Batch, BatchRecycler},
+        streamer::{receiver, BatchReceiver, StreamerReceiveStats},
     },
     std::{
         cmp::max,
@@ -22,7 +23,7 @@ use {
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
     let batch_size = 10;
-    let mut packet_batch = PacketBatch::with_capacity(batch_size);
+    let mut packet_batch = Batch::<Packet>::with_capacity(batch_size);
     packet_batch.resize(batch_size, Packet::default());
     for w in packet_batch.iter_mut() {
         w.meta_mut().size = Packet::DATA_SIZE;
@@ -45,7 +46,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     })
 }
 
-fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: PacketBatchReceiver) -> JoinHandle<()> {
+fn sink(exit: Arc<AtomicBool>, rvs: Arc<AtomicUsize>, r: BatchReceiver<Packet>) -> JoinHandle<()> {
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {
             return;
@@ -93,7 +94,7 @@ fn main() -> Result<()> {
 
     let mut read_channels = Vec::new();
     let mut read_threads = Vec::new();
-    let recycler = PacketBatchRecycler::default();
+    let recycler = BatchRecycler::<Packet>::default();
     let (_port, read_sockets) = solana_net_utils::multi_bind_in_range(
         ip_addr,
         (port, port + num_sockets as u16),

@@ -17,11 +17,12 @@ use {
     },
     solana_measure::measure::Measure,
     solana_perf::{
-        packet::{to_packet_batches, PacketBatch},
+        packet::{to_packet_batches, Batch},
         test_tx::test_tx,
     },
     solana_sdk::{
         hash::Hash,
+        packet::{BasePacket, Packet},
         signature::{Keypair, Signer},
         system_transaction,
         timing::duration_as_ms,
@@ -35,7 +36,7 @@ fn run_bench_packet_discard(num_ips: usize, bencher: &mut Bencher) {
     let len = 30 * 1000;
     let chunk_size = 1024;
     let tx = test_tx();
-    let mut batches = to_packet_batches(&vec![tx; len], chunk_size);
+    let mut batches = to_packet_batches::<Packet, _>(&vec![tx; len], chunk_size);
 
     let mut total = 0;
 
@@ -91,7 +92,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
         std::net::IpAddr::from(addr)
     }
     let mut rng = thread_rng();
-    let mut batches = to_packet_batches(&vec![test_tx(); SIZE], CHUNK_SIZE);
+    let mut batches = to_packet_batches::<Packet, _>(&vec![test_tx(); SIZE], CHUNK_SIZE);
     let spam_addr = new_rand_addr(&mut rng);
     for batch in batches.iter_mut() {
         for packet in batch.iter_mut() {
@@ -118,7 +119,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     });
 }
 
-fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch> {
+fn gen_batches(use_same_tx: bool) -> Vec<Batch<Packet>> {
     let len = 4096;
     let chunk_size = 1024;
     if use_same_tx {
@@ -186,7 +187,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     stage.join().unwrap();
 }
 
-fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
+fn prepare_batches(discard_factor: i32) -> (Vec<Batch<Packet>>, usize) {
     let len = 10_000; // max batch size
     let chunk_size = 1024;
 
@@ -204,7 +205,7 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
             )
         })
         .collect();
-    let mut batches = to_packet_batches(&txs, chunk_size);
+    let mut batches = to_packet_batches::<Packet, _>(&txs, chunk_size);
 
     let mut rng = rand::thread_rng();
     let die = Uniform::<i32>::from(1..100);

@@ -17,7 +17,7 @@ use {
     solana_metrics::*,
     solana_perf::{
         cuda_runtime::PinnedVec,
-        packet::{Packet, PacketBatch, PacketBatchRecycler, PACKETS_PER_BATCH},
+        packet::{Batch, BatchRecycler, PACKETS_PER_BATCH},
         perf_libs,
         recycler::Recycler,
         sigverify,
@@ -25,7 +25,7 @@ use {
     solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{
         hash::Hash,
-        packet::Meta,
+        packet::{BasePacket, Meta, Packet},
         timing,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
@@ -311,7 +311,7 @@ impl EntrySigVerificationState {
 pub struct VerifyRecyclers {
     hash_recycler: Recycler<PinnedVec<Hash>>,
     tick_count_recycler: Recycler<PinnedVec<u64>>,
-    packet_recycler: PacketBatchRecycler,
+    packet_recycler: BatchRecycler<Packet>,
     out_recycler: Recycler<PinnedVec<u8>>,
     tx_offset_recycler: Recycler<sigverify::TxOffset>,
 }
@@ -494,7 +494,7 @@ pub fn start_verify_transactions(
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
-                    let mut packet_batch = PacketBatch::new_with_recycler(
+                    let mut packet_batch = Batch::<Packet>::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
                         "entry-sig-verify",

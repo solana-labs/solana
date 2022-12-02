@@ -4,7 +4,7 @@
 use {
     ahash::AHasher,
     rand::{thread_rng, Rng},
-    solana_perf::packet::Packet,
+    solana_sdk::packet::BasePacket,
     std::hash::Hasher,
 };
 
@@ -24,7 +24,7 @@ impl Default for PacketHasher {
 }
 
 impl PacketHasher {
-    pub(crate) fn hash_packet(&self, packet: &Packet) -> u64 {
+    pub(crate) fn hash_packet<P: BasePacket>(&self, packet: &P) -> u64 {
         self.hash_data(packet.data(..).unwrap_or_default())
     }
 

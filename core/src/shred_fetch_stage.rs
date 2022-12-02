@@ -6,10 +6,13 @@ use {
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
-    solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
+    solana_perf::packet::{Batch, BatchRecycler, PacketFlags},
     solana_runtime::bank_forks::BankForks,
-    solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_sdk::{
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
+        packet::{BasePacket, Packet},
+    },
+    solana_streamer::streamer::{self, BatchReceiver, StreamerReceiveStats},
     std::{
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
@@ -28,8 +31,8 @@ pub(crate) struct ShredFetchStage {
 impl ShredFetchStage {
     // updates packets received on a channel and sends them on another channel
     fn modify_packets(
-        recvr: PacketBatchReceiver,
-        sendr: Sender<PacketBatch>,
+        recvr: BatchReceiver<Packet>,
+        sendr: Sender<Batch<Packet>>,
         bank_forks: &RwLock<BankForks>,
         shred_version: u16,
         name: &'static str,
@@ -110,8 +113,8 @@ impl ShredFetchStage {
     fn packet_modifier(
         sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: Sender<PacketBatch>,
-        recycler: PacketBatchRecycler,
+        sender: Sender<Batch<Packet>>,
+        recycler: BatchRecycler<Packet>,
         bank_forks: Arc<RwLock<BankForks>>,
         shred_version: u16,
         name: &'static str,
@@ -158,13 +161,13 @@ impl ShredFetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        sender: Sender<PacketBatch>,
+        sender: Sender<Batch<Packet>>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
-        let recycler = PacketBatchRecycler::warmed(100, 1024);
+        let recycler = BatchRecycler::<Packet>::warmed(100, 1024);
 
         let (mut tvu_threads, tvu_filter) = Self::packet_modifier(
             sockets,

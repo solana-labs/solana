@@ -31,6 +31,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         message::Message,
+        packet::{BasePacket, Packet},
         pubkey,
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
@@ -251,9 +252,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
         assert!(r.is_ok(), "sanity parallel execution");
     }
     bank.clear_signatures();
-    let verified: Vec<_> = to_packet_batches(&transactions, PACKETS_PER_BATCH);
+    let verified: Vec<_> = to_packet_batches::<Packet, _>(&transactions, PACKETS_PER_BATCH);
     let vote_packets = vote_txs.map(|vote_txs| {
-        let mut packet_batches = to_packet_batches(&vote_txs, PACKETS_PER_BATCH);
+        let mut packet_batches = to_packet_batches::<Packet, _>(&vote_txs, PACKETS_PER_BATCH);
         for batch in packet_batches.iter_mut() {
             for packet in batch.iter_mut() {
                 packet.meta_mut().set_simple_vote(true);

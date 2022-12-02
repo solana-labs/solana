@@ -16,7 +16,7 @@ use {
         instruction::Instruction,
         message::Message,
         native_token::lamports_to_sol,
-        packet::TransactionPacket,
+        packet::{BasePacket, TransactionPacket},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         system_instruction,

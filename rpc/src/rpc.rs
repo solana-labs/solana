@@ -65,7 +65,7 @@ use {
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::SanitizedMessage,
-        packet::TransactionPacket,
+        packet::{BasePacket, TransactionPacket},
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},

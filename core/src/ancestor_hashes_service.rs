@@ -17,18 +17,19 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{
-        packet::{deserialize_from_with_limit, Packet, PacketBatch},
+        packet::{deserialize_from_with_limit, Batch},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
+        packet::{BasePacket, Packet},
         pubkey::Pubkey,
         signature::Signable,
         signer::keypair::Keypair,
         timing::timestamp,
     },
-    solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
+    solana_streamer::streamer::{self, BatchReceiver, StreamerReceiveStats},
     std::{
         collections::HashSet,
         io::{Cursor, Read},
@@ -205,7 +206,7 @@ impl AncestorHashesService {
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
-        response_receiver: PacketBatchReceiver,
+        response_receiver: BatchReceiver<Packet>,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -254,7 +255,7 @@ impl AncestorHashesService {
     #[allow(clippy::too_many_arguments)]
     fn process_new_packets_from_channel(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        response_receiver: &PacketBatchReceiver,
+        response_receiver: &BatchReceiver<Packet>,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
@@ -301,7 +302,7 @@ impl AncestorHashesService {
 
     fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        packet_batch: PacketBatch,
+        packet_batch: Batch<Packet>,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,
@@ -949,7 +950,7 @@ mod test {
         t_listen: JoinHandle<()>,
         exit: Arc<AtomicBool>,
         responder_info: ContactInfo,
-        response_receiver: PacketBatchReceiver,
+        response_receiver: BatchReceiver<Packet>,
         correct_bank_hashes: HashMap<Slot, Hash>,
     }
 

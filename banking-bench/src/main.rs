@@ -15,13 +15,14 @@ use {
         leader_schedule_cache::LeaderScheduleCache,
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::{to_packet_batches, PacketBatch},
+    solana_perf::packet::{to_packet_batches, Batch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         message::Message,
+        packet::Packet,
         pubkey::{self, Pubkey},
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
@@ -179,7 +180,7 @@ fn make_transfer_transaction_with_compute_unit_price(
 }
 
 struct PacketsPerIteration {
-    packet_batches: Vec<PacketBatch>,
+    packet_batches: Vec<Batch<Packet>>,
     transactions: Vec<Transaction>,
     packets_per_batch: usize,
 }
@@ -203,7 +204,8 @@ impl PacketsPerIteration {
             mint_txs_percentage,
         );
 
-        let packet_batches: Vec<PacketBatch> = to_packet_batches(&transactions, packets_per_batch);
+        let packet_batches: Vec<Batch<Packet>> =
+            to_packet_batches(&transactions, packets_per_batch);
         assert_eq!(packet_batches.len(), batches_per_iteration);
         Self {
             packet_batches,
@@ -457,7 +459,7 @@ fn main() {
             {
                 sent += packet_batch.len();
                 trace!(
-                    "Sending PacketBatch index {}, {}",
+                    "Sending Packet Batch index {}, {}",
                     packet_batch_index,
                     timestamp(),
                 );

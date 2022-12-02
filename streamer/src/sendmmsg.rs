@@ -162,10 +162,10 @@ where
 mod tests {
     use {
         crate::{
-            packet::Packet,
             recvmmsg::recv_mmsg,
             sendmmsg::{batch_send, multi_target_send, SendPktsError},
         },
+        solana_sdk::packet::{BasePacket, Packet},
         std::{
             io::ErrorKind,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket},
