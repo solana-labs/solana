@@ -18266,7 +18266,7 @@ pub(crate) mod tests {
         }
         // Big transaction.
         {
-            let tx = make_transaction(25);
+            let tx = make_transaction(50);
             assert!(bincode::serialized_size(&tx).unwrap() > TransactionPacket::DATA_SIZE as u64);
             assert_eq!(
                 bank.verify_transaction(tx.into(), TransactionVerificationMode::FullVerification)
@@ -18276,7 +18276,7 @@ pub(crate) mod tests {
         }
         // Assert that verify fails as soon as serialized
         // size exceeds packet data size.
-        for size in 1..30 {
+        for size in 1..60 {
             let tx = make_transaction(size);
             assert_eq!(
                 bincode::serialized_size(&tx).unwrap() <= TransactionPacket::DATA_SIZE as u64,

@@ -17,9 +17,9 @@ static_assertions::const_assert_eq!(PACKET_DATA_SIZE, 1232);
 ///   8 bytes is the size of the fragment header
 pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 #[cfg(test)]
-static_assertions::const_assert_eq!(TRANSACTION_DATA_SIZE, 1232);
+static_assertions::const_assert_eq!(TRANSACTION_DATA_SIZE, 2464);
 /// Maximum over-the-wire size of a transaction, currently two packets
-pub const TRANSACTION_DATA_SIZE: usize = PACKET_DATA_SIZE;
+pub const TRANSACTION_DATA_SIZE: usize = PACKET_DATA_SIZE * 2;
 
 bitflags! {
     #[repr(C)]
