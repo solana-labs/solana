@@ -10342,6 +10342,8 @@ pub(crate) mod tests {
             ]
         );
         bank1.freeze();
+        add_root_and_flush_write_cache(&bank0);
+        add_root_and_flush_write_cache(&bank1);
         assert!(bank1.calculate_and_verify_capitalization(true));
     }
 
