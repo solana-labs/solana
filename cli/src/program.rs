@@ -10,12 +10,16 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::{syscalls::register_syscalls, ThisInstructionMeter},
+    solana_bpf_loader_program::syscalls::register_syscalls,
     solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -47,10 +51,6 @@ use {
         sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
-    },
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
     },
     std::{
         fs::File,
@@ -1398,7 +1398,7 @@ fn process_show(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())
@@ -1468,7 +1468,7 @@ fn process_dump(
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{} is not an SBF program", account_pubkey).into())
             }
         } else {
             Err(format!("Unable to find the account {}", account_pubkey).into())
@@ -2004,7 +2004,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let executable = Executable::<ThisInstructionMeter>::from_elf(
+    let executable = Executable::<InvokeContext>::from_elf(
         &program_data,
         Config {
             reject_broken_elfs: true,
@@ -2014,9 +2014,8 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 
-    let _ =
-        VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(executable)
-            .map_err(|err| format!("ELF error: {}", err))?;
+    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+        .map_err(|err| format!("ELF error: {}", err))?;
 
     Ok(program_data)
 }

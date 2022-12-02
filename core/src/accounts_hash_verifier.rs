@@ -9,7 +9,7 @@ use {
     solana_gossip::cluster_info::{ClusterInfo, MAX_SNAPSHOT_HASHES},
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
-        accounts_hash::{CalcAccountsHashConfig, HashStats},
+        accounts_hash::{AccountsHash, CalcAccountsHashConfig, HashStats},
         epoch_accounts_hash::EpochAccountsHash,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
@@ -210,7 +210,7 @@ impl AccountsHashVerifier {
     }
 
     /// returns calculated accounts hash
-    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> Hash {
+    fn calculate_and_verify_accounts_hash(accounts_package: &AccountsPackage) -> AccountsHash {
         let mut measure_hash = Measure::start("hash");
         let mut sort_time = Measure::start("sort_storages");
         let sorted_storages = SortedStorages::new(&accounts_package.snapshot_storages);
@@ -298,13 +298,14 @@ impl AccountsHashVerifier {
             );
 
         measure_hash.stop();
-        solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
-            accounts_package.snapshot_links.path(),
-            accounts_package.slot,
-            &accounts_hash,
-            None,
-            None,
-        );
+        if let Some(snapshot_info) = &accounts_package.snapshot_info {
+            solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
+                snapshot_info.snapshot_links.path(),
+                accounts_package.slot,
+                &accounts_hash,
+                None,
+            );
+        }
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
@@ -312,13 +313,13 @@ impl AccountsHashVerifier {
         accounts_hash
     }
 
-    fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: Hash) {
+    fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: AccountsHash) {
         if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
             info!(
                 "saving epoch accounts hash, slot: {}, hash: {}",
-                accounts_package.slot, accounts_hash
+                accounts_package.slot, accounts_hash.0,
             );
-            let epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
+            let epoch_accounts_hash = EpochAccountsHash::from(accounts_hash);
             accounts_package
                 .accounts
                 .accounts_db
@@ -345,17 +346,17 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
-        accounts_hash: Hash,
+        accounts_hash: AccountsHash,
     ) {
         if fault_injection_rate_slots != 0
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(&accounts_hash);
+            let fault_hash = Self::generate_fault_hash(&accounts_hash.0);
             warn!("inserting fault at slot: {}", accounts_package.slot);
             hashes.push((accounts_package.slot, fault_hash));
         } else {
-            hashes.push((accounts_package.slot, accounts_hash));
+            hashes.push((accounts_package.slot, accounts_hash.0));
         }
 
         retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
@@ -377,7 +378,7 @@ impl AccountsHashVerifier {
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
         snapshot_config: Option<&SnapshotConfig>,
-        accounts_hash: Hash,
+        accounts_hash: AccountsHash,
     ) {
         if pending_snapshot_package.is_none()
             || !snapshot_config
@@ -469,18 +470,12 @@ mod tests {
         super::*,
         rand::seq::SliceRandom,
         solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
-        solana_runtime::{
-            rent_collector::RentCollector,
-            snapshot_utils::{ArchiveFormat, SnapshotVersion},
-        },
         solana_sdk::{
-            genesis_config::ClusterType,
             hash::hash,
             signature::{Keypair, Signer},
-            sysvar::epoch_schedule::EpochSchedule,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::{str::FromStr, time::Instant},
+        std::str::FromStr,
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -527,7 +522,6 @@ mod tests {
     #[test]
     fn test_max_hashes() {
         solana_logger::setup();
-        use {std::path::PathBuf, tempfile::TempDir};
         let keypair = Keypair::new();
 
         let contact_info = ContactInfo::new_localhost(&keypair.pubkey(), 0);
@@ -543,27 +537,13 @@ mod tests {
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             ..SnapshotConfig::default()
         };
-        let accounts = Arc::new(solana_runtime::accounts::Accounts::default_for_tests());
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
+            let slot = full_snapshot_archive_interval_slots + i as u64;
             let accounts_package = AccountsPackage {
-                package_type: AccountsPackageType::AccountsHashVerifier,
-                slot: full_snapshot_archive_interval_slots + i as u64,
-                block_height: full_snapshot_archive_interval_slots + i as u64,
-                slot_deltas: vec![],
-                snapshot_links: TempDir::new().unwrap(),
-                snapshot_storages: vec![],
-                archive_format: ArchiveFormat::TarBzip2,
-                snapshot_version: SnapshotVersion::default(),
-                full_snapshot_archives_dir: PathBuf::default(),
-                incremental_snapshot_archives_dir: PathBuf::default(),
-                expected_capitalization: 0,
-                accounts_hash_for_testing: None,
-                cluster_type: ClusterType::MainnetBeta,
-                accounts: Arc::clone(&accounts),
-                epoch_schedule: EpochSchedule::default(),
-                rent_collector: RentCollector::default(),
-                enqueued: Instant::now(),
+                slot,
+                block_height: slot,
+                ..AccountsPackage::default_for_tests()
             };
 
             AccountsHashVerifier::process_accounts_package(
@@ -578,7 +558,7 @@ mod tests {
                 Some(&snapshot_config),
             );
 
-            // sleep for 1ms to create a newer timestmap for gossip entry
+            // sleep for 1ms to create a newer timestamp for gossip entry
             // otherwise the timestamp won't be newer.
             std::thread::sleep(Duration::from_millis(1));
         }

@@ -476,6 +476,7 @@ extern crate self as solana_program;
 
 pub mod account_info;
 pub mod address_lookup_table_account;
+pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;
@@ -740,25 +741,6 @@ macro_rules! unchecked_div_by_const {
         let quotient = $num / $den;
         quotient
     }};
-}
-
-use std::{mem::MaybeUninit, ptr::write_bytes};
-
-#[macro_export]
-macro_rules! copy_field {
-    ($ptr:expr, $self:ident, $field:ident) => {
-        std::ptr::addr_of_mut!((*$ptr).$field).write($self.$field)
-    };
-}
-
-pub fn clone_zeroed<T, F>(clone: F) -> T
-where
-    F: Fn(&mut MaybeUninit<T>),
-{
-    let mut value = MaybeUninit::<T>::uninit();
-    unsafe { write_bytes(&mut value, 0, 1) }
-    clone(&mut value);
-    unsafe { value.assume_init() }
 }
 
 // This module is purposefully listed after all other exports: because of an

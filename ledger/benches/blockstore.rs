@@ -95,7 +95,7 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_shreds - 1], read num_reads shreds sequentially
         let start_index = rng.gen_range(0, num_small_shreds + num_large_shreds);
         for i in start_index..start_index + num_reads {
-            let _ = blockstore.get_data_shred(slot, i as u64 % total_shreds);
+            let _ = blockstore.get_data_shred(slot, i % total_shreds);
         }
     });
 

@@ -522,7 +522,7 @@ impl LeaderSlotMetricsTracker {
                     .timing_metrics
                     .process_packets_timings
                     .cost_model_us,
-                *cost_model_us as u64
+                *cost_model_us
             );
 
             leader_slot_metrics
@@ -764,18 +764,6 @@ impl LeaderSlotMetricsTracker {
                     .timing_metrics
                     .process_buffered_packets_timings
                     .forward_and_hold_us,
-                us
-            );
-        }
-    }
-
-    pub(crate) fn increment_consume_buffered_packets_poh_recorder_lock_us(&mut self, us: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .timing_metrics
-                    .consume_buffered_packets_timings
-                    .poh_recorder_lock_us,
                 us
             );
         }

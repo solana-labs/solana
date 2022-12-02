@@ -522,12 +522,32 @@ pub mod remove_deprecated_request_unit_ix {
     solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
 }
 
+pub mod disable_rehash_for_rent_epoch {
+    solana_sdk::declare_id!("DTVTkmw3JSofd8CJVJte8PXEbxNQ2yZijvVr3pe2APPj");
+}
+
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
 
 pub mod limit_max_instruction_trace_length {
     solana_sdk::declare_id!("GQALDaC48fEhZGWRj9iL5Q889emJKcj3aCvHF7VCbbF4");
+}
+
+pub mod check_syscall_outputs_do_not_overlap {
+    solana_sdk::declare_id!("3uRVPBpyEJRo1emLCrq38eLRFGcu6uKSpUXqGvU8T7SZ");
+}
+
+pub mod enable_bpf_loader_set_authority_checked_ix {
+    solana_sdk::declare_id!("5x3825XS7M2A3Ekbn5VGGkvFoAg5qrRWkTrY4bARP1GL");
+}
+
+pub mod cap_transaction_accounts_data_size {
+    solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
+}
+
+pub mod enable_alt_bn128_syscall {
+    solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
 
 lazy_static! {
@@ -601,8 +621,8 @@ lazy_static! {
         (reject_vote_account_close_unless_zero_credit_epoch::id(), "fail vote account withdraw to 0 unless account earned 0 credits in last completed epoch"),
         (add_get_processed_sibling_instruction_syscall::id(), "add add_get_processed_sibling_instruction_syscall"),
         (bank_tranaction_count_fix::id(), "fixes Bank::transaction_count to include all committed transactions, not just successful ones"),
-        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* BPF instructions"),
-        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved BPF symbols at runtime"),
+        (disable_bpf_deprecated_load_instructions::id(), "disable ldabs* and ldind* SBF instructions"),
+        (disable_bpf_unresolved_symbols_at_runtime::id(), "disable reporting of unresolved SBF symbols at runtime"),
         (record_instruction_in_transaction_context_push::id(), "move the CPI stack overflow check to the end of push"),
         (syscall_saturated_math::id(), "syscalls use saturated math"),
         (check_physical_overlapping::id(), "check physical overlapping regions"),
@@ -640,6 +660,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (disable_rehash_for_rent_epoch::id(), "on accounts hash calculation, do not try to rehash accounts #28934"),
         (account_hash_ignore_slot::id(), "ignore slot when calculating an account hash #28420"),
         (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
@@ -656,7 +677,11 @@ lazy_static! {
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         (increase_tx_account_lock_limit::id(), "increase tx account lock limit to 128 #27241"),
-        (limit_max_instruction_trace_length::id(), "limit max instruction trace length"),
+        (limit_max_instruction_trace_length::id(), "limit max instruction trace length #27939"),
+        (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
+        (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
+        (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
+        (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

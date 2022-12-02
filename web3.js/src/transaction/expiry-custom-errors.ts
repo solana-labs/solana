@@ -33,3 +33,16 @@ export class TransactionExpiredTimeoutError extends Error {
 Object.defineProperty(TransactionExpiredTimeoutError.prototype, 'name', {
   value: 'TransactionExpiredTimeoutError',
 });
+
+export class TransactionExpiredNonceInvalidError extends Error {
+  signature: string;
+
+  constructor(signature: string) {
+    super(`Signature ${signature} has expired: the nonce is no longer valid.`);
+    this.signature = signature;
+  }
+}
+
+Object.defineProperty(TransactionExpiredNonceInvalidError.prototype, 'name', {
+  value: 'TransactionExpiredNonceInvalidError',
+});

@@ -44,7 +44,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{
+    solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
     std::{
@@ -152,7 +152,7 @@ impl Default for TestValidatorGenesis {
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
-            accounts_db_caching_enabled: bool::default(),
+            accounts_db_caching_enabled: true,
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
@@ -433,9 +433,9 @@ impl TestValidatorGenesis {
         )
     }
 
-    /// Add a BPF program to the test environment.
+    /// Add a SBF program to the test environment.
     ///
-    /// `program_name` will also used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also used to locate the SBF shared object in the current or fixtures
     /// directory.
     pub fn add_program(&mut self, program_name: &str, program_id: Pubkey) -> &mut Self {
         let program_path = solana_program_test::find_file(&format!("{}.so", program_name))
@@ -818,12 +818,12 @@ impl TestValidator {
             enforce_ulimit_nofile: false,
             warp_slot: config.warp_slot,
             validator_exit: config.validator_exit.clone(),
-            rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
+            account_indexes: config.rpc_config.account_indexes.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

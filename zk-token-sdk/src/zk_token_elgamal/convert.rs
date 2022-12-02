@@ -57,7 +57,7 @@ mod target_arch {
                 elgamal::{DecryptHandle, ElGamalCiphertext, ElGamalPubkey},
                 pedersen::PedersenCommitment,
             },
-            errors::ProofError,
+            errors::{ProofError, ProofVerificationError},
             instruction::{
                 transfer::{TransferAmountEncryption, TransferPubkeys},
                 transfer_with_fee::{FeeEncryption, FeeParameters, TransferWithFeePubkeys},
@@ -82,9 +82,11 @@ mod target_arch {
         }
     }
 
-    impl From<PodScalar> for Scalar {
-        fn from(pod: PodScalar) -> Self {
-            Scalar::from_bits(pod.0)
+    impl TryFrom<PodScalar> for Scalar {
+        type Error = ProofError;
+
+        fn try_from(pod: PodScalar) -> Result<Self, Self::Error> {
+            Scalar::from_canonical_bytes(pod.0).ok_or(ProofError::CiphertextDeserialization)
         }
     }
 
@@ -280,7 +282,7 @@ mod target_arch {
     }
 
     impl TryFrom<pod::PubkeySigmaProof> for PubkeySigmaProof {
-        type Error = PubkeySigmaProofError;
+        type Error = PubkeyValidityProofError;
 
         fn try_from(pod: pod::PubkeySigmaProof) -> Result<Self, Self::Error> {
             Self::from_bytes(&pod.0)
@@ -292,7 +294,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 448 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 672];
@@ -322,7 +324,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 512 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 736];
@@ -352,7 +354,7 @@ mod target_arch {
 
         fn try_from(proof: RangeProof) -> Result<Self, Self::Error> {
             if proof.ipp_proof.serialized_size() != 576 {
-                return Err(RangeProofError::Format);
+                return Err(ProofVerificationError::Deserialization.into());
             }
 
             let mut buf = [0_u8; 800];

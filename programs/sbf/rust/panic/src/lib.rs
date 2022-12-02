@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that panics
+//! Example Rust-based SBF program that panics
 
 #[cfg(all(feature = "custom-panic", target_os = "solana"))]
 #[no_mangle]

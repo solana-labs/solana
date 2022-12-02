@@ -88,7 +88,7 @@ impl CrdsFilter {
     pub(crate) fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
-        let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
+        let mask_bits = Self::mask_bits(num_items as f64, max_items);
         let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
         let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
         let mask = Self::compute_mask(seed, mask_bits);
@@ -102,7 +102,7 @@ impl CrdsFilter {
     fn compute_mask(seed: u64, mask_bits: u32) -> u64 {
         assert!(seed <= 2u64.pow(mask_bits));
         let seed: u64 = seed.checked_shl(64 - mask_bits).unwrap_or(0x0);
-        seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0) as u64
+        seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0)
     }
     fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
         let m = max_bits;
@@ -152,7 +152,7 @@ impl CrdsFilterSet {
     fn new(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = CrdsFilter::max_items(max_bits, FALSE_RATE, KEYS);
-        let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items as f64);
+        let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items);
         let filters =
             repeat_with(|| Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize).into())
                 .take(1 << mask_bits)

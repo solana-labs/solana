@@ -1,4 +1,4 @@
-//! Example Rust-based BPF that tests out using a custom heap
+//! Example Rust-based SBF that tests out using a custom heap
 
 use {
     solana_program::{

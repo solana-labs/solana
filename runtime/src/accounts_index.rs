@@ -1358,7 +1358,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // if 'avoid_callback_result' is Some(_), then callback is NOT called
         //  and _ is returned as if callback were called.
         F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
-        I: IntoIterator<Item = &'a Pubkey>,
+        I: Iterator<Item = &'a Pubkey>,
     {
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
@@ -1469,6 +1469,22 @@ impl<T: IndexValue> AccountsIndex<T> {
                     }
                 }
             }
+        }
+    }
+
+    pub fn get_index_key_size(&self, index: &AccountIndex, index_key: &Pubkey) -> Option<usize> {
+        match index {
+            AccountIndex::ProgramId => self.program_id_index.index.get(index_key).map(|x| x.len()),
+            AccountIndex::SplTokenOwner => self
+                .spl_token_owner_index
+                .index
+                .get(index_key)
+                .map(|x| x.len()),
+            AccountIndex::SplTokenMint => self
+                .spl_token_mint_index
+                .index
+                .get(index_key)
+                .map(|x| x.len()),
         }
     }
 
@@ -1666,11 +1682,6 @@ impl<T: IndexValue> AccountsIndex<T> {
 
         map.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         self.update_secondary_indexes(pubkey, account, account_indexes);
-    }
-
-    pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let map = self.get_bin(pubkey);
-        map.unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
@@ -3007,27 +3018,27 @@ pub mod tests {
 
         run_test_range_indexes(&index, &pubkeys, Some(ITER_BATCH_SIZE), None);
 
-        run_test_range_indexes(&index, &pubkeys, None, Some(2 * ITER_BATCH_SIZE as usize));
+        run_test_range_indexes(&index, &pubkeys, None, Some(2 * ITER_BATCH_SIZE));
 
         run_test_range_indexes(
             &index,
             &pubkeys,
-            Some(ITER_BATCH_SIZE as usize),
-            Some(2 * ITER_BATCH_SIZE as usize),
+            Some(ITER_BATCH_SIZE),
+            Some(2 * ITER_BATCH_SIZE),
         );
 
         run_test_range_indexes(
             &index,
             &pubkeys,
-            Some(ITER_BATCH_SIZE as usize),
-            Some(2 * ITER_BATCH_SIZE as usize - 1),
+            Some(ITER_BATCH_SIZE),
+            Some(2 * ITER_BATCH_SIZE - 1),
         );
 
         run_test_range_indexes(
             &index,
             &pubkeys,
             Some(ITER_BATCH_SIZE - 1_usize),
-            Some(2 * ITER_BATCH_SIZE as usize + 1),
+            Some(2 * ITER_BATCH_SIZE + 1),
         );
     }
 

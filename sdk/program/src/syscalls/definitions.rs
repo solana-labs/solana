@@ -1,5 +1,5 @@
 use crate::{
-    instruction::{AccountMeta, AccountPropertyUpdate, ProcessedSiblingInstruction},
+    instruction::{AccountMeta, ProcessedSiblingInstruction},
     pubkey::Pubkey,
 };
 
@@ -61,11 +61,11 @@ define_syscall!(fn sol_get_return_data(data: *mut u8, length: u64, program_id: *
 define_syscall!(fn sol_log_data(data: *const u8, data_len: u64));
 define_syscall!(fn sol_get_processed_sibling_instruction(index: u64, meta: *mut ProcessedSiblingInstruction, program_id: *mut Pubkey, data: *mut u8, accounts: *mut AccountMeta) -> u64);
 define_syscall!(fn sol_get_stack_height() -> u64);
-define_syscall!(fn sol_set_account_properties(updates_addr: *const AccountPropertyUpdate, updates_count: u64));
 define_syscall!(fn sol_curve_validate_point(curve_id: u64, point_addr: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_group_op(curve_id: u64, group_op: u64, left_input_addr: *const u8, right_input_addr: *const u8, result_point_addr: *mut u8) -> u64);
 define_syscall!(fn sol_curve_multiscalar_mul(curve_id: u64, scalars_addr: *const u8, points_addr: *const u8, points_len: u64, result_point_addr: *mut u8) -> u64);
 define_syscall!(fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64);
+define_syscall!(fn sol_alt_bn128_group_op(group_op: u64, input: *const u8, input_size: u64, result: *mut u8) -> u64);
 
 #[cfg(target_feature = "static-syscalls")]
 pub const fn sys_hash(name: &str) -> usize {

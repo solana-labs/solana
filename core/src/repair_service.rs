@@ -8,7 +8,6 @@ use {
         duplicate_repair_status::DuplicateSlotRepairStatus,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
-        result::Result,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
@@ -481,39 +480,7 @@ impl RepairService {
         }
     }
 
-    // Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
-    pub fn generate_repairs_in_range(
-        blockstore: &Blockstore,
-        max_repairs: usize,
-        repair_range: &RepairSlotRange,
-    ) -> Result<Vec<ShredRepairType>> {
-        // Slot height and shred indexes for shreds we want to repair
-        let mut repairs: Vec<ShredRepairType> = vec![];
-        for slot in repair_range.start..=repair_range.end {
-            if repairs.len() >= max_repairs {
-                break;
-            }
-
-            let meta = blockstore
-                .meta(slot)
-                .expect("Unable to lookup slot meta")
-                .unwrap_or(SlotMeta {
-                    slot,
-                    ..SlotMeta::default()
-                });
-
-            let new_repairs = Self::generate_repairs_for_slot(
-                blockstore,
-                slot,
-                &meta,
-                max_repairs - repairs.len(),
-            );
-            repairs.extend(new_repairs);
-        }
-
-        Ok(repairs)
-    }
-
+    /// If this slot is missing shreds generate repairs
     pub fn generate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -538,7 +505,7 @@ impl RepairService {
         }
     }
 
-    /// Repairs any fork starting at the input slot
+    /// Repairs any fork starting at the input slot (uses blockstore for fork info)
     pub fn generate_repairs_for_fork<'a>(
         blockstore: &Blockstore,
         repairs: &mut Vec<ShredRepairType>,
@@ -567,6 +534,40 @@ impl RepairService {
                 break;
             }
         }
+    }
+
+    /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
+    #[cfg(test)]
+    pub fn generate_repairs_in_range(
+        blockstore: &Blockstore,
+        max_repairs: usize,
+        repair_range: &RepairSlotRange,
+    ) -> crate::result::Result<Vec<ShredRepairType>> {
+        // Slot height and shred indexes for shreds we want to repair
+        let mut repairs: Vec<ShredRepairType> = vec![];
+        for slot in repair_range.start..=repair_range.end {
+            if repairs.len() >= max_repairs {
+                break;
+            }
+
+            let meta = blockstore
+                .meta(slot)
+                .expect("Unable to lookup slot meta")
+                .unwrap_or(SlotMeta {
+                    slot,
+                    ..SlotMeta::default()
+                });
+
+            let new_repairs = Self::generate_repairs_for_slot(
+                blockstore,
+                slot,
+                &meta,
+                max_repairs - repairs.len(),
+            );
+            repairs.extend(new_repairs);
+        }
+
+        Ok(repairs)
     }
 
     #[cfg(test)]
@@ -657,7 +658,7 @@ impl RepairService {
         repair_stats: &mut RepairStats,
         nonce: Nonce,
         identity_keypair: &Keypair,
-    ) -> Result<()> {
+    ) -> crate::result::Result<()> {
         let req = serve_repair.map_repair_request(
             repair_type,
             repair_pubkey,
@@ -828,7 +829,7 @@ mod test {
             let num_slots = 2;
 
             // Create some shreds
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, 150);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
@@ -856,7 +857,7 @@ mod test {
                 .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |shred_index| ShredRepairType::Shred(slot as u64, *shred_index))
+                        .map(move |shred_index| ShredRepairType::Shred(slot, *shred_index))
                 })
                 .collect();
 
@@ -969,10 +970,10 @@ mod test {
                     let expected: Vec<ShredRepairType> = (repair_slot_range.start
                         ..=repair_slot_range.end)
                         .map(|slot_index| {
-                            if slots.contains(&(slot_index as u64)) {
-                                ShredRepairType::Shred(slot_index as u64, 0)
+                            if slots.contains(&slot_index) {
+                                ShredRepairType::Shred(slot_index, 0)
                             } else {
-                                ShredRepairType::HighestShred(slot_index as u64, 0)
+                                ShredRepairType::HighestShred(slot_index, 0)
                             }
                         })
                         .collect();

@@ -196,6 +196,11 @@ impl RepairWeight {
         repairs.extend(best_shreds_repairs);
         get_best_shreds_elapsed.stop();
 
+        // Although we have generated repairs for orphan roots and slots in the rooted subtree,
+        // if we have space we should generate repairs for slots in orphan trees in preparation for
+        // when they are no longer rooted. Here we generate repairs for slots with unknown last
+        // indices as well as slots that are close to completion.
+
         let mut get_unknown_last_index_elapsed = Measure::start("get_unknown_last_index");
         let pre_num_slots = processed_slots.len();
         let unknown_last_index_repairs = self.get_best_unknown_last_index(
@@ -287,7 +292,7 @@ impl RepairWeight {
             // Find all descendants of `self.root` that are not reachable from `new_root`.
             // These are exactly the unrooted slots, which can be purged and added to
             // `self.unrooted_slots`.
-            let unrooted_slots = new_root_tree.subtree_diff(
+            let unrooted_slots = (&new_root_tree).subtree_diff(
                 (new_root_tree_root, Hash::default()),
                 (new_root, Hash::default()),
             );
@@ -296,7 +301,7 @@ impl RepairWeight {
                 new_root,
             );
 
-            new_root_tree.set_root((new_root, Hash::default()));
+            new_root_tree.set_tree_root((new_root, Hash::default()));
 
             // Update `self.slot_to_tree` to reflect new root
             self.rename_tree_root(&new_root_tree, new_root);
@@ -314,7 +319,7 @@ impl RepairWeight {
         self.root = new_root;
     }
 
-    // Generate shred repairs for main subtree rooted at `self.slot`
+    // Generate shred repairs for main subtree rooted at `self.root`
     fn get_best_shreds<'a>(
         &mut self,
         blockstore: &Blockstore,
@@ -403,6 +408,8 @@ impl RepairWeight {
         }
     }
 
+    /// For all remaining trees (orphan and rooted), generate repairs for slots missing last_index info
+    /// prioritized by # shreds received.
     fn get_best_unknown_last_index(
         &mut self,
         blockstore: &Blockstore,
@@ -427,6 +434,10 @@ impl RepairWeight {
         repairs
     }
 
+    /// For all remaining trees (orphan and rooted), generate repairs for subtrees that have last
+    /// index info but are missing shreds prioritized by how close to completion they are. These
+    /// repairs are also prioritized by age of ancestors, so slots close to completion will first
+    /// start by repairing broken ancestors.
     fn get_best_closest_completion(
         &mut self,
         blockstore: &Blockstore,
@@ -451,9 +462,9 @@ impl RepairWeight {
         repairs
     }
 
-    // Attempts to chain the orphan subtree rooted at `orphan_tree_root`
-    // to any earlier subtree with new any ancestry information in `blockstore`.
-    // Returns the earliest known ancestor of `heaviest_tree_root`.
+    /// Attempts to chain the orphan subtree rooted at `orphan_tree_root`
+    /// to any earlier subtree with new ancestry information in `blockstore`.
+    /// Returns the earliest known ancestor of `heaviest_tree_root`.
     fn update_orphan_ancestors(
         &mut self,
         blockstore: &Blockstore,
@@ -480,6 +491,8 @@ impl RepairWeight {
                 let num_skip = usize::from(parent_tree_root.is_some());
 
                 for ancestor in new_ancestors.iter().skip(num_skip).rev() {
+                    // We temporarily use orphan_tree_root as the tree root and later
+                    // rename tree root to either the parent_tree_root or the earliest_ancestor
                     self.slot_to_tree.insert(*ancestor, orphan_tree_root);
                     heaviest_tree.add_root_parent((*ancestor, Hash::default()));
                 }
@@ -1143,11 +1156,14 @@ mod test {
         assert_eq!(*repair_weight.slot_to_tree.get(&2).unwrap(), 1);
 
         // Trees tracked should be updated
-        assert_eq!(repair_weight.trees.get(&1).unwrap().root().0, 1);
+        assert_eq!(repair_weight.trees.get(&1).unwrap().tree_root().0, 1);
 
         // Orphan slots should not be changed
         for orphan in &[8, 20] {
-            assert_eq!(repair_weight.trees.get(orphan).unwrap().root().0, *orphan);
+            assert_eq!(
+                repair_weight.trees.get(orphan).unwrap().tree_root().0,
+                *orphan
+            );
             assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
         }
     }
@@ -1171,7 +1187,10 @@ mod test {
 
         // Orphan slots should not be changed
         for orphan in &[8, 20] {
-            assert_eq!(repair_weight.trees.get(orphan).unwrap().root().0, *orphan);
+            assert_eq!(
+                repair_weight.trees.get(orphan).unwrap().tree_root().0,
+                *orphan
+            );
             assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
         }
     }
@@ -1193,7 +1212,7 @@ mod test {
         assert!(!repair_weight.slot_to_tree.contains_key(&8));
 
         // Other higher orphan branch rooted at slot `20` remains unchanged
-        assert_eq!(repair_weight.trees.get(&20).unwrap().root().0, 20);
+        assert_eq!(repair_weight.trees.get(&20).unwrap().tree_root().0, 20);
         assert_eq!(*repair_weight.slot_to_tree.get(&20).unwrap(), 20);
     }
 
@@ -1234,7 +1253,7 @@ mod test {
 
         // Orphan 20 should still exist
         assert_eq!(repair_weight.trees.len(), 2);
-        assert_eq!(repair_weight.trees.get(&20).unwrap().root().0, 20);
+        assert_eq!(repair_weight.trees.get(&20).unwrap().tree_root().0, 20);
         assert_eq!(*repair_weight.slot_to_tree.get(&20).unwrap(), 20);
 
         // Now set root at a slot 30 that doesnt exist in `repair_weight`, but is
@@ -1405,7 +1424,10 @@ mod test {
 
         // Check orphans are present
         for orphan in &[8, 20] {
-            assert_eq!(repair_weight.trees.get(orphan).unwrap().root().0, *orphan);
+            assert_eq!(
+                repair_weight.trees.get(orphan).unwrap().tree_root().0,
+                *orphan
+            );
             assert_eq!(repair_weight.slot_to_tree.get(orphan).unwrap(), orphan);
         }
         (blockstore, bank, repair_weight)
@@ -1423,7 +1445,7 @@ mod test {
 
         // Validate new root
         assert_eq!(
-            repair_weight.trees.get(&new_root).unwrap().root().0,
+            repair_weight.trees.get(&new_root).unwrap().tree_root().0,
             new_root
         );
         assert_eq!(

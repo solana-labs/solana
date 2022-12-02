@@ -8,6 +8,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
@@ -25,7 +26,7 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -37,7 +38,6 @@ use {
         transaction::{Transaction, VersionedTransaction},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::{
         vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
     },
@@ -70,7 +70,6 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(100_000);
     let bank = Arc::new(Bank::new_for_benches(&genesis_config));
     let ledger_path = get_tmp_ledger_path!();
-    let my_pubkey = pubkey::new_rand();
     {
         let blockstore = Arc::new(
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
@@ -79,6 +78,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
             create_test_recorder(&bank, &blockstore, None, None);
 
         let recorder = poh_recorder.read().unwrap().recorder();
+        let bank_start = poh_recorder.read().unwrap().bank_start().unwrap();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
@@ -93,18 +93,15 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         // If the packet buffers are copied, performance will be poor.
         bencher.iter(move || {
             BankingStage::consume_buffered_packets(
-                &my_pubkey,
-                std::u128::MAX,
-                &poh_recorder,
+                &bank_start,
                 &mut transaction_buffer,
                 &None,
                 &s,
                 None::<Box<dyn Fn()>>,
                 &BankingStageStats::default(),
                 &recorder,
-                &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                &QosService::new(1),
                 &mut LeaderSlotMetricsTracker::new(0),
-                10,
                 None,
             );
         });
@@ -286,7 +283,6 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             vote_receiver,
             None,
             s,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(ConnectionCache::default()),
             bank_forks,

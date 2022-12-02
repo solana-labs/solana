@@ -294,7 +294,7 @@ fn run_accounts_bench(
                 last_balance = Instant::now();
                 if *balance < lamports * 2 {
                     info!(
-                        "Balance {} is less than needed: {}, doing aidrop...",
+                        "Balance {} is less than needed: {}, doing airdrop...",
                         balance, lamports
                     );
                     if !airdrop_lamports(
@@ -381,7 +381,7 @@ fn run_accounts_bench(
         }
 
         count += 1;
-        if last_log.elapsed().as_millis() > 3000 || count >= iterations {
+        if last_log.elapsed().as_millis() > 3000 || (count >= iterations && iterations != 0) {
             info!(
                 "total_accounts_created: {} total_accounts_closed: {} tx_sent_count: {} loop_count: {} balance(s): {:?}",
                 total_accounts_created, total_accounts_closed, tx_sent_count, count, balances

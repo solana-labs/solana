@@ -44,13 +44,13 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
         )
         .unwrap();
     });
-    let summary = bencher.bench(|_bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     info!("data no change by owner: {} ns/iter", summary.median);
 
     let pre_data = vec![BUFSIZE];
     let post_data = vec![BUFSIZE];
     bencher.iter(|| pre_data == post_data);
-    let summary = bencher.bench(|_bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     info!("data compare {} ns/iter", summary.median);
 
     let pre = PreAccount::new(
@@ -68,7 +68,7 @@ fn bench_verify_account_changes_data(bencher: &mut Bencher) {
         )
         .unwrap();
     });
-    let summary = bencher.bench(|_bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
     info!("data no change by non owner: {} ns/iter", summary.median);
 }
 

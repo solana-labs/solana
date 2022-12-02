@@ -11,6 +11,7 @@ use {
         timings::{ExecuteDetailsTimings, ExecuteTimings},
     },
     solana_measure::measure::Measure,
+    solana_rbpf::vm::ContextObject,
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
@@ -58,33 +59,20 @@ impl std::fmt::Debug for BuiltinProgram {
     }
 }
 
-/// Compute meter
-pub struct ComputeMeter {
-    remaining: u64,
-}
-impl ComputeMeter {
-    /// Consume compute units
-    pub fn consume(&mut self, amount: u64) -> Result<(), InstructionError> {
-        let exceeded = self.remaining < amount;
-        self.remaining = self.remaining.saturating_sub(amount);
-        if exceeded {
-            return Err(InstructionError::ComputationalBudgetExceeded);
-        }
-        Ok(())
+impl<'a> ContextObject for InvokeContext<'a> {
+    fn trace(&mut self, state: [u64; 12]) {
+        self.trace_log.push(state);
     }
-    /// Get the number of remaining compute units
-    pub fn get_remaining(&self) -> u64 {
-        self.remaining
+
+    fn consume(&mut self, amount: u64) {
+        // 1 to 1 instruction to compute unit mapping
+        // ignore overflow, Ebpf will bail if exceeded
+        let mut compute_meter = self.compute_meter.borrow_mut();
+        *compute_meter = compute_meter.saturating_sub(amount);
     }
-    /// Set compute units
-    ///
-    /// Only use for tests and benchmarks
-    pub fn mock_set_remaining(&mut self, remaining: u64) {
-        self.remaining = remaining;
-    }
-    /// Construct a new one with the given remaining units
-    pub fn new_ref(remaining: u64) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { remaining }))
+
+    fn get_remaining(&self) -> u64 {
+        *self.compute_meter.borrow()
     }
 }
 
@@ -116,10 +104,11 @@ pub struct InvokeContext<'a> {
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
     pub sysvar_cache: Cow<'a, SysvarCache>,
+    pub trace_log: Vec<[u64; 12]>,
     log_collector: Option<Rc<RefCell<LogCollector>>>,
     compute_budget: ComputeBudget,
     current_compute_budget: ComputeBudget,
-    compute_meter: Rc<RefCell<ComputeMeter>>,
+    compute_meter: RefCell<u64>,
     accounts_data_meter: AccountsDataMeter,
     pub tx_executor_cache: Rc<RefCell<TransactionExecutorCache>>,
     pub feature_set: Arc<FeatureSet>,
@@ -150,10 +139,11 @@ impl<'a> InvokeContext<'a> {
             pre_accounts: Vec::new(),
             builtin_programs,
             sysvar_cache,
+            trace_log: Vec::new(),
             log_collector,
             current_compute_budget: compute_budget,
             compute_budget,
-            compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
+            compute_meter: RefCell::new(compute_budget.compute_unit_limit),
             accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             tx_executor_cache,
             feature_set,
@@ -746,7 +736,7 @@ impl<'a> InvokeContext<'a> {
                 self.transaction_context
                     .set_return_data(program_id, Vec::new())?;
 
-                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
+                let pre_remaining_units = self.get_remaining();
                 let result = if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
@@ -761,7 +751,7 @@ impl<'a> InvokeContext<'a> {
                 } else {
                     (entry.process_instruction)(first_instruction_account, self)
                 };
-                let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                let post_remaining_units = self.get_remaining();
                 *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
 
                 process_executable_chain_time.stop();
@@ -784,9 +774,22 @@ impl<'a> InvokeContext<'a> {
         self.log_collector.clone()
     }
 
-    /// Get this invocation's ComputeMeter
-    pub fn get_compute_meter(&self) -> Rc<RefCell<ComputeMeter>> {
-        self.compute_meter.clone()
+    /// Consume compute units
+    pub fn consume_checked(&self, amount: u64) -> Result<(), InstructionError> {
+        let mut compute_meter = self.compute_meter.borrow_mut();
+        let exceeded = *compute_meter < amount;
+        *compute_meter = compute_meter.saturating_sub(amount);
+        if exceeded {
+            return Err(InstructionError::ComputationalBudgetExceeded);
+        }
+        Ok(())
+    }
+
+    /// Set compute units
+    ///
+    /// Only use for tests and benchmarks
+    pub fn mock_set_remaining(&self, remaining: u64) {
+        *self.compute_meter.borrow_mut() = remaining;
     }
 
     /// Get this invocation's AccountsDataMeter
@@ -1138,10 +1141,7 @@ mod tests {
                     compute_units_to_consume,
                     desired_result,
                 } => {
-                    invoke_context
-                        .get_compute_meter()
-                        .borrow_mut()
-                        .consume(compute_units_to_consume)?;
+                    invoke_context.consume_checked(compute_units_to_consume)?;
                     return desired_result;
                 }
                 MockInstruction::Resize { new_len } => instruction_context

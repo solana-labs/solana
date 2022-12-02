@@ -7,6 +7,7 @@ import {Connection} from '../../src';
 type RpcRequest = {
   method: string;
   params?: Array<any>;
+  subscriptionEstablishmentPromise?: Promise<void>;
 };
 
 type RpcResponse = {
@@ -24,13 +25,15 @@ export const mockRpcMessage = ({
   method,
   params,
   result,
+  subscriptionEstablishmentPromise,
 }: {
   method: string;
   params: Array<any>;
   result: any | Promise<any>;
+  subscriptionEstablishmentPromise?: Promise<void>;
 }) => {
   mockRpcSocket.push([
-    {method, params},
+    {method, params, subscriptionEstablishmentPromise},
     {
       context: {slot: 11},
       value: result,
@@ -107,6 +110,10 @@ class MockClient {
       expect(params[0]).to.be.a('number');
     } else {
       expect(params).to.eql(mockRequest.params);
+    }
+
+    if (mockRequest.subscriptionEstablishmentPromise) {
+      await mockRequest.subscriptionEstablishmentPromise;
     }
 
     let id = ++this.subscriptionCounter;

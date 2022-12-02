@@ -5,25 +5,25 @@ use {
 
 #[derive(Default)]
 pub struct ConnectionCacheStats {
-    pub(crate) cache_hits: AtomicU64,
-    pub(crate) cache_misses: AtomicU64,
-    pub(crate) cache_evictions: AtomicU64,
-    pub(crate) eviction_time_ms: AtomicU64,
-    pub(crate) sent_packets: AtomicU64,
-    pub(crate) total_batches: AtomicU64,
-    pub(crate) batch_success: AtomicU64,
-    pub(crate) batch_failure: AtomicU64,
-    pub(crate) get_connection_ms: AtomicU64,
-    pub(crate) get_connection_lock_ms: AtomicU64,
-    pub(crate) get_connection_hit_ms: AtomicU64,
-    pub(crate) get_connection_miss_ms: AtomicU64,
+    pub cache_hits: AtomicU64,
+    pub cache_misses: AtomicU64,
+    pub cache_evictions: AtomicU64,
+    pub eviction_time_ms: AtomicU64,
+    pub sent_packets: AtomicU64,
+    pub total_batches: AtomicU64,
+    pub batch_success: AtomicU64,
+    pub batch_failure: AtomicU64,
+    pub get_connection_ms: AtomicU64,
+    pub get_connection_lock_ms: AtomicU64,
+    pub get_connection_hit_ms: AtomicU64,
+    pub get_connection_miss_ms: AtomicU64,
 
     // Need to track these separately per-connection
     // because we need to track the base stat value from quinn
     pub total_client_stats: ClientStats,
 }
 
-pub(crate) const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
+pub const CONNECTION_STAT_SUBMISSION_INTERVAL: u64 = 2000;
 
 impl ConnectionCacheStats {
     pub fn add_client_stats(
@@ -56,6 +56,10 @@ impl ConnectionCacheStats {
             client_stats.make_connection_ms.load(Ordering::Relaxed),
             Ordering::Relaxed,
         );
+        self.total_client_stats.send_timeout.fetch_add(
+            client_stats.send_timeout.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
         self.sent_packets
             .fetch_add(num_packets as u64, Ordering::Relaxed);
         self.total_batches.fetch_add(1, Ordering::Relaxed);
@@ -66,7 +70,7 @@ impl ConnectionCacheStats {
         }
     }
 
-    pub(crate) fn report(&self) {
+    pub fn report(&self) {
         datapoint_info!(
             "quic-client-connection-stats",
             (
@@ -186,6 +190,13 @@ impl ConnectionCacheStats {
             (
                 "batch_failure",
                 self.batch_failure.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "send_timeout",
+                self.total_client_stats
+                    .send_timeout
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
         );

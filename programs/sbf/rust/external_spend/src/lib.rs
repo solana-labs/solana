@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that moves a lamport from one account to another
+//! Example Rust-based SBF program that moves a lamport from one account to another
 
 extern crate solana_program;
 use solana_program::{account_info::AccountInfo, entrypoint::ProgramResult, pubkey::Pubkey};

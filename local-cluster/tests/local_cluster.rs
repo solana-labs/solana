@@ -6,6 +6,7 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
+    solana_client::thin_client::ThinClient,
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
@@ -53,7 +54,6 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_thin_client::thin_client::ThinClient,
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         collections::{HashMap, HashSet},
@@ -97,8 +97,8 @@ fn test_local_cluster_start_and_exit_with_config() {
         node_stakes: vec![DEFAULT_NODE_STAKE; NUM_NODES],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
         ticks_per_slot: 8,
-        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH as u64,
-        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH as u64,
+        slots_per_epoch: MINIMUM_SLOTS_PER_EPOCH,
+        stakers_slot_offset: MINIMUM_SLOTS_PER_EPOCH,
         ..ClusterConfig::default()
     };
     let cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
@@ -282,7 +282,7 @@ fn test_two_unbalanced_stakes() {
     let validator_config = ValidatorConfig::default_for_test();
     let num_ticks_per_second = 100;
     let num_ticks_per_slot = 10;
-    let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH as u64;
+    let num_slots_per_epoch = MINIMUM_SLOTS_PER_EPOCH;
 
     let mut cluster = LocalCluster::new(
         &mut ClusterConfig {
@@ -1277,7 +1277,7 @@ fn test_snapshot_restart_tower() {
         full_snapshot_archive_info.hash(),
         full_snapshot_archive_info.archive_format(),
     );
-    fs::hard_link(full_snapshot_archive_info.path(), &validator_archive_path).unwrap();
+    fs::hard_link(full_snapshot_archive_info.path(), validator_archive_path).unwrap();
 
     // Restart validator from snapshot, the validator's tower state in this snapshot
     // will contain slots < the root bank of the snapshot. Validator should not panic.
@@ -1350,7 +1350,7 @@ fn test_snapshots_blockstore_floor() {
         archive_info.hash(),
         ArchiveFormat::TarBzip2,
     );
-    fs::hard_link(archive_info.path(), &validator_archive_path).unwrap();
+    fs::hard_link(archive_info.path(), validator_archive_path).unwrap();
     let slot_floor = archive_info.slot();
 
     // Start up a new node from a snapshot
@@ -2229,6 +2229,7 @@ fn test_hard_fork_with_gap_in_roots() {
 
     let validator_config = ValidatorConfig {
         snapshot_config: Some(LocalCluster::create_dummy_load_only_snapshot_config()),
+        accounts_db_caching_enabled: true,
         ..ValidatorConfig::default()
     };
     let mut config = ClusterConfig {
@@ -2530,7 +2531,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 fn test_votes_land_in_fork_during_long_partition() {
     let total_stake = 3 * DEFAULT_NODE_STAKE;
     // Make `lighter_stake` insufficient for switching threshold
-    let lighter_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+    let lighter_stake = (SWITCH_FORK_THRESHOLD * total_stake as f64) as u64;
     let heavier_stake = lighter_stake + 1;
     let failures_stake = total_stake - lighter_stake - heavier_stake;
 

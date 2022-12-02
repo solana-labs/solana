@@ -367,7 +367,7 @@ fn partition_id_to_tos(partition: usize) -> u8 {
 
 fn shape_network(matches: &ArgMatches) {
     let config_path = PathBuf::from(matches.value_of_t_or_exit::<String>("file"));
-    let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+    let config = fs::read_to_string(config_path).expect("Unable to read config file");
     let topology: NetworkTopology =
         serde_json::from_str(&config).expect("Failed to parse log as JSON");
     let interface: String = matches.value_of_t_or_exit("iface");

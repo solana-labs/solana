@@ -604,7 +604,7 @@ fn test_switch_threshold_uses_gossip_votes() {
     let total_stake = 100 * DEFAULT_NODE_STAKE;
 
     // Minimum stake needed to generate a switching proof
-    let minimum_switch_stake = (SWITCH_FORK_THRESHOLD as f64 * total_stake as f64) as u64;
+    let minimum_switch_stake = (SWITCH_FORK_THRESHOLD * total_stake as f64) as u64;
 
     // Make the heavier stake insufficient for switching so tha the lighter validator
     // cannot switch without seeing a vote from the dead/failure_stake validator.

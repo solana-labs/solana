@@ -4,11 +4,8 @@
 //! 2. multiple 'slots' squashed into a single older (ie. ancient) slot for convenience and performance
 //! Otherwise, an ancient append vec is the same as any other append vec
 use {
-    crate::{
-        accounts_db::FoundStoredAccount,
-        append_vec::{AppendVec, StoredAccountMeta},
-    },
-    solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
+    crate::{accounts_db::FoundStoredAccount, append_vec::AppendVec},
+    solana_sdk::clock::Slot,
 };
 
 /// a set of accounts need to be stored.
@@ -25,11 +22,11 @@ pub enum StorageSelector {
 /// We need 1-2 of these slices constructed based on available bytes and individual account sizes.
 /// The slice arithmetic accross both hashes and account data gets messy. So, this struct abstracts that.
 pub struct AccountsToStore<'a> {
-    hashes: Vec<&'a Hash>,
-    accounts: Vec<(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)>,
+    accounts: &'a [&'a FoundStoredAccount<'a>],
     /// if 'accounts' contains more items than can be contained in the primary storage, then we have to split these accounts.
     /// 'index_first_item_overflow' specifies the index of the first item in 'accounts' that will go into the overflow storage
     index_first_item_overflow: usize,
+    pub slot: Slot,
 }
 
 impl<'a> AccountsToStore<'a> {
@@ -37,32 +34,30 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        stored_accounts: &'a [&'a (Pubkey, FoundStoredAccount<'a>)],
+        accounts: &'a [&'a FoundStoredAccount<'a>],
+        alive_total_bytes: usize,
         slot: Slot,
     ) -> Self {
-        let num_accounts = stored_accounts.len();
-        let mut hashes = Vec::with_capacity(num_accounts);
-        let mut accounts = Vec::with_capacity(num_accounts);
+        let num_accounts = accounts.len();
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
-        stored_accounts.iter().for_each(|account| {
-            let account_size = account.1.account.stored_size as u64;
-            if available_bytes >= account_size {
-                available_bytes = available_bytes.saturating_sub(account_size);
-            } else if index_first_item_overflow == num_accounts {
-                available_bytes = 0;
-                // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
-                index_first_item_overflow = hashes.len();
+        if alive_total_bytes > available_bytes as usize {
+            // not all the alive bytes fit, so we have to find how many accounts fit within available_bytes
+            for (i, account) in accounts.iter().enumerate() {
+                let account_size = account.account.stored_size as u64;
+                if available_bytes >= account_size {
+                    available_bytes = available_bytes.saturating_sub(account_size);
+                } else if index_first_item_overflow == num_accounts {
+                    // the # of accounts we have so far seen is the most that will fit in the current ancient append vec
+                    index_first_item_overflow = i;
+                    break;
+                }
             }
-            hashes.push(account.1.account.hash);
-            // we have to specify 'slot' here because we are writing to an ancient append vec and squashing slots,
-            // so we need to update the previous accounts index entry for this account from 'slot' to 'ancient_slot'
-            accounts.push((&account.1.account.meta.pubkey, &account.1.account, slot));
-        });
+        }
         Self {
-            hashes,
             accounts,
             index_first_item_overflow,
+            slot,
         }
     }
 
@@ -71,19 +66,13 @@ impl<'a> AccountsToStore<'a> {
         self.index_first_item_overflow < self.accounts.len()
     }
 
-    /// get the accounts and hashes to store in the given 'storage'
-    pub fn get(
-        &self,
-        storage: StorageSelector,
-    ) -> (
-        &[(&'a Pubkey, &'a StoredAccountMeta<'a>, Slot)],
-        &[&'a Hash],
-    ) {
+    /// get the accounts to store in the given 'storage'
+    pub fn get(&self, storage: StorageSelector) -> &[&'a FoundStoredAccount<'a>] {
         let range = match storage {
             StorageSelector::Primary => 0..self.index_first_item_overflow,
             StorageSelector::Overflow => self.index_first_item_overflow..self.accounts.len(),
         };
-        (&self.accounts[range.clone()], &self.hashes[range])
+        &self.accounts[range]
     }
 }
 
@@ -107,20 +96,23 @@ pub mod tests {
         super::*,
         crate::{
             accounts_db::{get_temp_accounts_paths, AppendVecId},
-            append_vec::{AccountMeta, StoredMeta},
+            append_vec::{AccountMeta, StoredAccountMeta, StoredMeta},
         },
-        solana_sdk::account::{AccountSharedData, ReadableAccount},
+        solana_sdk::{
+            account::{AccountSharedData, ReadableAccount},
+            hash::Hash,
+            pubkey::Pubkey,
+        },
     };
 
     #[test]
     fn test_accounts_to_store_simple() {
         let map = vec![];
         let slot = 1;
-        let accounts_to_store = AccountsToStore::new(0, &map, slot);
+        let accounts_to_store = AccountsToStore::new(0, &map, 0, slot);
         for selector in [StorageSelector::Primary, StorageSelector::Overflow] {
-            let (accounts, hash) = accounts_to_store.get(selector);
+            let accounts = accounts_to_store.get(selector);
             assert!(accounts.is_empty());
-            assert!(hash.is_empty());
         }
         assert!(!accounts_to_store.has_overflow());
     }
@@ -158,30 +150,27 @@ pub mod tests {
             hash: &hash,
         };
         let found = FoundStoredAccount { account, store_id };
-        let item = (pubkey, found);
-        let map = vec![&item];
+        let map = vec![&found];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
         ] {
             let slot = 1;
-            let accounts_to_store = AccountsToStore::new(available_bytes as u64, &map, slot);
-            let (accounts, hashes) = accounts_to_store.get(selector);
+            let alive_total_bytes = account_size;
+            let accounts_to_store =
+                AccountsToStore::new(available_bytes as u64, &map, alive_total_bytes, slot);
+            let accounts = accounts_to_store.get(selector);
             assert_eq!(
-                accounts,
-                map.iter()
-                    .map(|(a, b)| (a, &b.account, slot))
-                    .collect::<Vec<_>>(),
+                accounts.iter().map(|b| &b.account).collect::<Vec<_>>(),
+                map.iter().map(|b| &b.account).collect::<Vec<_>>(),
                 "mismatch"
             );
-            assert_eq!(hashes, vec![&hash]);
-            let (accounts, hash) = accounts_to_store.get(get_opposite(&selector));
+            let accounts = accounts_to_store.get(get_opposite(&selector));
             assert_eq!(
                 selector == StorageSelector::Overflow,
                 accounts_to_store.has_overflow()
             );
             assert!(accounts.is_empty());
-            assert!(hash.is_empty());
         }
     }
     fn get_opposite(selector: &StorageSelector) -> StorageSelector {

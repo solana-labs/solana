@@ -12,10 +12,7 @@
 //! epochs increasing in slots until they last for [`DEFAULT_SLOTS_PER_EPOCH`].
 
 pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
-use {
-    crate::{clone_zeroed, copy_field},
-    std::mem::MaybeUninit,
-};
+use solana_sdk_macro::CloneZeroed;
 
 /// The default number of slots before an epoch starts to calculate the leader schedule.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
@@ -32,7 +29,7 @@ pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]
-#[derive(Debug, Copy, PartialEq, Eq, Deserialize, Serialize, AbiExample)]
+#[derive(Debug, CloneZeroed, Copy, PartialEq, Eq, Deserialize, Serialize, AbiExample)]
 #[serde(rename_all = "camelCase")]
 pub struct EpochSchedule {
     /// The maximum number of slots in each epoch.
@@ -66,21 +63,6 @@ impl Default for EpochSchedule {
     }
 }
 
-impl Clone for EpochSchedule {
-    fn clone(&self) -> Self {
-        clone_zeroed(|cloned: &mut MaybeUninit<Self>| {
-            let ptr = cloned.as_mut_ptr();
-            unsafe {
-                copy_field!(ptr, self, slots_per_epoch);
-                copy_field!(ptr, self, leader_schedule_slot_offset);
-                copy_field!(ptr, self, warmup);
-                copy_field!(ptr, self, first_normal_epoch);
-                copy_field!(ptr, self, first_normal_slot);
-            }
-        })
-    }
-}
-
 impl EpochSchedule {
     pub fn new(slots_per_epoch: u64) -> Self {
         Self::custom(slots_per_epoch, slots_per_epoch, true)
@@ -93,7 +75,7 @@ impl EpochSchedule {
         )
     }
     pub fn custom(slots_per_epoch: u64, leader_schedule_slot_offset: u64, warmup: bool) -> Self {
-        assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH as u64);
+        assert!(slots_per_epoch >= MINIMUM_SLOTS_PER_EPOCH);
         let (first_normal_epoch, first_normal_slot) = if warmup {
             let next_power_of_two = slots_per_epoch.next_power_of_two();
             let log2_slots_per_epoch = next_power_of_two
@@ -120,7 +102,7 @@ impl EpochSchedule {
     pub fn get_slots_in_epoch(&self, epoch: Epoch) -> u64 {
         if epoch < self.first_normal_epoch {
             2u64.saturating_pow(
-                (epoch as u32).saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros() as u32),
+                (epoch as u32).saturating_add(MINIMUM_SLOTS_PER_EPOCH.trailing_zeros()),
             )
         } else {
             self.slots_per_epoch

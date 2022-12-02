@@ -11,7 +11,10 @@ use {
     itertools::Itertools,
     log::*,
     regex::Regex,
-    serde::Serialize,
+    serde::{
+        ser::{SerializeSeq, Serializer},
+        Serialize,
+    },
     serde_json::json,
     solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding},
     solana_clap_utils::{
@@ -20,6 +23,7 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
+    solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
         system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
     },
@@ -39,6 +43,7 @@ use {
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
+        accounts::Accounts,
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
@@ -46,7 +51,7 @@ use {
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::{Bank, RewardCalculationEvent},
+        bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
@@ -66,7 +71,7 @@ use {
         account_utils::StateMut,
         clock::{Epoch, Slot},
         feature::{self, Feature},
-        feature_set,
+        feature_set::{self, FeatureSet},
         genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         inflation::Inflation,
@@ -106,6 +111,15 @@ mod ledger_path;
 enum LedgerOutputMethod {
     Print,
     Json,
+}
+
+fn parse_encoding_format(matches: &ArgMatches<'_>) -> UiAccountEncoding {
+    match matches.value_of("encoding") {
+        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
+        Some("base64") => UiAccountEncoding::Base64,
+        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
+        _ => UiAccountEncoding::Base64,
+    }
 }
 
 fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutputMethod) {
@@ -1187,8 +1201,6 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     let mut num_programs = 0;
 
     let mut program_ids = HashMap::new();
-    let mut cost_model = CostModel::default();
-    cost_model.initialize_cost_table(&blockstore.read_program_costs().unwrap());
     let mut cost_tracker = CostTracker::default();
 
     for entry in entries {
@@ -1212,7 +1224,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
             .for_each(|transaction| {
                 num_programs += transaction.message().instructions().len();
 
-                let tx_cost = cost_model.calculate_cost(&transaction);
+                let tx_cost = CostModel::calculate_cost(&transaction, &FeatureSet::all_enabled());
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(
@@ -1308,10 +1320,6 @@ fn main() {
         .long("no-bpf-jit")
         .takes_value(false)
         .help("Disable the just-in-time compiler and instead use the interpreter for BP");
-    let no_accounts_db_caching_arg = Arg::with_name("no_accounts_db_caching")
-        .long("no-accounts-db-caching")
-        .takes_value(false)
-        .help("Disables accounts-db caching");
     let accounts_index_bins = Arg::with_name("accounts_index_bins")
         .long("accounts-index-bins")
         .value_name("BINS")
@@ -1396,7 +1404,12 @@ fn main() {
             .hidden(true);
     let ancient_append_vecs = Arg::with_name("accounts_db_ancient_append_vecs")
         .long("accounts-db-ancient-append-vecs")
-        .help("AppendVecs that are older than an epoch are squashed together.")
+        .value_name("SLOT-OFFSET")
+        .validator(is_parsable::<u64>)
+        .takes_value(true)
+        .help(
+            "AppendVecs that are older than (slots_per_epoch - SLOT-OFFSET) are squashed together.",
+        )
         .hidden(true);
     let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
             .long("halt-at-slot-store-hash-raw-data")
@@ -1485,6 +1498,13 @@ fn main() {
         .takes_value(true)
         .multiple(true)
         .help("Specify the configuration file for the Geyser plugin.");
+
+    let accounts_data_encoding_arg = Arg::with_name("encoding")
+        .long("encoding")
+        .takes_value(true)
+        .possible_values(&["base64", "base64+zstd", "jsonParsed"])
+        .default_value("base64")
+        .help("Print account data in specified format when printing account contents.");
 
     let rent = Rent::default();
     let default_bootstrap_validator_lamports = &sol_to_lamports(500.0)
@@ -1676,15 +1696,7 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
-            .arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base64")
-                    .requires("accounts")
-                    .help("Print account data in specified format when printing account contents."),
-            )
+            .arg(&accounts_data_encoding_arg.clone().requires("accounts"))
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
@@ -1782,7 +1794,6 @@ fn main() {
             .arg(&ancient_append_vecs)
             .arg(&halt_at_slot_store_hash_raw_data)
             .arg(&hard_forks_arg)
-            .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
             .arg(&no_os_memory_stats_reporting_arg)
             .arg(&no_bpf_jit_arg)
@@ -2018,6 +2029,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&geyser_plugin_args)
+            .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("include_sysvars")
                     .long("include-sysvars")
@@ -2034,13 +2046,6 @@ fn main() {
                 .long("no-account-data")
                 .takes_value(false)
                 .help("Do not print account data when printing account contents."),
-            ).arg(
-                Arg::with_name("encoding")
-                    .long("encoding")
-                    .takes_value(true)
-                    .possible_values(&["base64", "base64+zstd", "jsonParsed"])
-                    .default_value("base64")
-                    .help("Print account data in specified format when printing account contents."),
             )
             .arg(&max_genesis_archive_unpacked_size_arg)
         ).subcommand(
@@ -2341,12 +2346,7 @@ fn main() {
                 let print_accounts = arg_matches.is_present("accounts");
                 if print_accounts {
                     let print_account_data = !arg_matches.is_present("no_account_data");
-                    let print_encoding_format = match arg_matches.value_of("encoding") {
-                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
-                        Some("base64") => UiAccountEncoding::Base64,
-                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base64,
-                    };
+                    let print_encoding_format = parse_encoding_format(arg_matches);
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
                             &pubkey,
@@ -2749,7 +2749,12 @@ fn main() {
                     accounts_hash_cache_path: Some(ledger_path.clone()),
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vec_offset: value_t!(
+                        matches,
+                        "accounts_db_ancient_append_vecs",
+                        u64
+                    )
+                    .ok(),
                     exhaustively_verify_refcounts: arg_matches
                         .is_present("accounts_db_verify_refcounts"),
                     skip_initial_hash_calc: arg_matches
@@ -2769,7 +2774,7 @@ fn main() {
                     run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
-                    accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
+                    accounts_db_caching_enabled: true,
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
                         "limit_load_slot_count_from_snapshot",
@@ -2972,16 +2977,24 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
-                assert!(
-                    blockstore.meta(snapshot_slot).unwrap().is_some(),
-                    "snapshot slot doesn't exist"
-                );
+                if blockstore
+                    .meta(snapshot_slot)
+                    .unwrap()
+                    .filter(|m| m.is_full())
+                    .is_none()
+                {
+                    eprintln!(
+                        "Error: snapshot slot {} does not exist in blockstore or is not full.",
+                        snapshot_slot,
+                    );
+                    exit(1);
+                }
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
-                            "ending_slot ({}) must be greater than snapshot_slot ({})",
+                            "Error: ending_slot ({}) must be greater than snapshot_slot ({})",
                             ending_slot, snapshot_slot
                         );
                         exit(1);
@@ -3009,7 +3022,12 @@ fn main() {
 
                 let accounts_db_config = Some(AccountsDbConfig {
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
-                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    ancient_append_vec_offset: value_t!(
+                        matches,
+                        "accounts_db_ancient_append_vecs",
+                        u64
+                    )
+                    .ok(),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -3369,52 +3387,64 @@ fn main() {
                 });
 
                 let bank = bank_forks.read().unwrap().working_bank();
-                let mut measure = Measure::start("getting accounts");
-                let accounts: BTreeMap<_, _> = bank
-                    .get_all_accounts_with_modified_slots()
-                    .unwrap()
-                    .into_iter()
-                    .filter(|(pubkey, _account, _slot)| {
-                        include_sysvars || !solana_sdk::sysvar::is_sysvar_id(pubkey)
-                    })
-                    .map(|(pubkey, account, slot)| (pubkey, (account, slot)))
-                    .collect();
-                measure.stop();
-                info!("{}", measure);
-
-                let mut measure = Measure::start("calculating total accounts stats");
-                let total_accounts_stats = bank.calculate_total_accounts_stats(
-                    accounts
-                        .iter()
-                        .map(|(pubkey, (account, _slot))| (pubkey, account)),
-                );
-                measure.stop();
-                info!("{}", measure);
-
-                let print_account_contents = !arg_matches.is_present("no_account_contents");
-                if print_account_contents {
-                    let print_account_data = !arg_matches.is_present("no_account_data");
-                    let print_encoding_format = match arg_matches.value_of("encoding") {
-                        Some("jsonParsed") => UiAccountEncoding::JsonParsed,
-                        Some("base64") => UiAccountEncoding::Base64,
-                        Some("base64+zstd") => UiAccountEncoding::Base64Zstd,
-                        _ => UiAccountEncoding::Base64,
+                let mut serializer = serde_json::Serializer::new(stdout());
+                let (summarize, mut json_serializer) =
+                    match OutputFormat::from_matches(arg_matches, "output_format", false) {
+                        OutputFormat::Json | OutputFormat::JsonCompact => {
+                            (false, Some(serializer.serialize_seq(None).unwrap()))
+                        }
+                        _ => (true, None),
                     };
-                    let mut measure = Measure::start("printing account contents");
-                    for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(
-                            &pubkey,
-                            &account,
-                            Some(slot),
-                            print_account_data,
-                            print_encoding_format,
-                        );
-                    }
-                    measure.stop();
-                    info!("{}", measure);
-                }
+                let mut total_accounts_stats = TotalAccountsStats::default();
+                let rent_collector = bank.rent_collector();
+                let print_account_contents = !arg_matches.is_present("no_account_contents");
+                let print_account_data = !arg_matches.is_present("no_account_data");
+                let data_encoding = parse_encoding_format(arg_matches);
+                let cli_account_new_config = CliAccountNewConfig {
+                    data_encoding,
+                    ..CliAccountNewConfig::default()
+                };
+                let scan_func = |some_account_tuple: Option<(&Pubkey, AccountSharedData, Slot)>| {
+                    if let Some((pubkey, account, slot)) = some_account_tuple
+                        .filter(|(_, account, _)| Accounts::is_loadable(account.lamports()))
+                    {
+                        if !include_sysvars && solana_sdk::sysvar::is_sysvar_id(pubkey) {
+                            return;
+                        }
 
-                println!("{:#?}", total_accounts_stats);
+                        total_accounts_stats.accumulate_account(pubkey, &account, rent_collector);
+
+                        if print_account_contents {
+                            if let Some(json_serializer) = json_serializer.as_mut() {
+                                let cli_account = CliAccount::new_with_config(
+                                    pubkey,
+                                    &account,
+                                    &cli_account_new_config,
+                                );
+                                json_serializer.serialize_element(&cli_account).unwrap();
+                            } else {
+                                output_account(
+                                    pubkey,
+                                    &account,
+                                    Some(slot),
+                                    print_account_data,
+                                    data_encoding,
+                                );
+                            }
+                        }
+                    }
+                };
+                let mut measure = Measure::start("scanning accounts");
+                bank.scan_all_accounts_with_modified_slots(scan_func)
+                    .unwrap();
+                measure.stop();
+                info!("{}", measure);
+                if let Some(json_serializer) = json_serializer {
+                    json_serializer.end().unwrap();
+                }
+                if summarize {
+                    println!("\n{:#?}", total_accounts_stats);
+                }
             }
             ("capitalization", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
@@ -3683,7 +3713,7 @@ fn main() {
                             let mut csv_writer = if arg_matches.is_present("csv_filename") {
                                 let csv_filename =
                                     value_t_or_exit!(arg_matches, "csv_filename", String);
-                                let file = File::create(&csv_filename).unwrap();
+                                let file = File::create(csv_filename).unwrap();
                                 Some(csv::WriterBuilder::new().from_writer(file))
                             } else {
                                 None

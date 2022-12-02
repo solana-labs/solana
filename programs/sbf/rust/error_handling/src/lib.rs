@@ -1,4 +1,4 @@
-//! Example Rust-based BPF program that exercises error handling
+//! Example Rust-based SBF program that exercises error handling
 
 extern crate solana_program;
 use {

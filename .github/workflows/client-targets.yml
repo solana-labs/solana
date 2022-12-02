@@ -1,82 +1,73 @@
 name: client_targets
 
 on:
+  push:
+    branches:
+      - master
   pull_request:
     branches:
-     - master
+      - master
     paths:
       - "client/**"
       - "sdk/**"
       - ".github/workflows/client-targets.yml"
+      - "ci/rust-version.sh"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check_compilation:
-    name: Client compilation
-    runs-on: ${{ matrix.os }}
+  android:
     strategy:
       matrix:
-        target: [aarch64-apple-ios, x86_64-apple-ios, aarch64-apple-darwin, x86_64-apple-darwin, aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android]
-        include:
-          - target: aarch64-apple-ios
-            platform: ios
-            os: macos-latest
-          - target: x86_64-apple-ios
-            platform: ios
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            platform: ios
-            os: macos-latest
-          - target: x86_64-apple-darwin
-            platform: ios
-            os: macos-latest
-          - target: aarch64-linux-android
-            platform: android
-            os: ubuntu-latest
-          - target: armv7-linux-androideabi
-            platform: android
-            os: ubuntu-latest
-          - target: i686-linux-android
-            platform: android
-            os: ubuntu-latest
-          - target: x86_64-linux-android
-            platform: android
-            os: ubuntu-latest
+        os:
+          - ubuntu-20.04
+        target:
+          - x86_64-linux-android
+          - aarch64-linux-android
+          - i686-linux-android
+          - armv7-linux-androideabi
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-      - name: Install cargo-ndk
-        if: ${{ matrix.platform == 'android' }}
-        run: cargo install cargo-ndk@2.11.0
-      - name: Install NDK 21
-        if: ${{ matrix.platform == 'android' }}
+      - uses: actions/checkout@v3
+
+      - run: cargo install cargo-ndk@2.12.2
+
+      - name: Setup Rust
         run: |
-          ANDROID_ROOT=/usr/local/lib/android
-          ANDROID_SDK_ROOT=${ANDROID_ROOT}/sdk
-          SDKMANAGER=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager
-          echo "y" | $SDKMANAGER "ndk;21.4.7075529"
-      - uses: actions-rs/cargo@v1
-        if: ${{ matrix.platform == 'android' }}
-        with:
-          command: ndk
-          args: --target ${{ matrix.target }} build -p solana-client
-      - uses: actions-rs/cargo@v1
-        if: ${{ matrix.platform == 'ios' }}
-        with:
-          command: build
-          args: -p solana-client --target ${{ matrix.target }}
-      - name: Send Slack notifiaction
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1
-        with:
-          channel: ${{ secrets.SLACK_CHANNEL }}
-          status: FAILED
-          color: danger
+          source ci/rust-version.sh stable
+          rustup target add --toolchain "$rust_stable" ${{ matrix.target }}
+
+      - name: Stable build
+        run: ./cargo stable ndk --target ${{ matrix.target }} build -p solana-client
+
+  ios:
+    strategy:
+      matrix:
+        os:
+          - macos-11
+        target:
+          - aarch64-apple-ios
+          - x86_64-apple-ios
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Rust
+        run: |
+          source ci/rust-version.sh stable
+          rustup target add --toolchain "$rust_stable" ${{ matrix.target }}
+
+      - name: Stable build
+        run: ./cargo stable build --target ${{ matrix.target }} -p solana-client
+
+  error_reporting:
+    needs:
+      - android
+      - ios
+    if: failure() && github.event_name == 'push'
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}

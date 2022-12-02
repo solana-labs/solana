@@ -4420,12 +4420,14 @@ impl RpcClient {
         if let Some(filters) = config.filters {
             config.filters = Some(self.maybe_map_filters(filters).await?);
         }
-        let accounts: Vec<RpcKeyedAccount> = self
-            .send(
+
+        let accounts = self
+            .send::<OptionalContext<Vec<RpcKeyedAccount>>>(
                 RpcRequest::GetProgramAccounts,
                 json!([pubkey.to_string(), config]),
             )
-            .await?;
+            .await?
+            .parse_value();
         parse_keyed_accounts(accounts, RpcRequest::GetProgramAccounts)
     }
 

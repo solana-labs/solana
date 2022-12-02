@@ -5,7 +5,7 @@ fn mem_op_consume(invoke_context: &mut InvokeContext, n: u64) -> Result<(), Ebpf
     let cost = compute_budget
         .mem_op_base_cost
         .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
-    invoke_context.get_compute_meter().consume(cost)
+    consume_compute_meter(invoke_context, cost)
 }
 
 declare_syscall!(
@@ -26,7 +26,7 @@ declare_syscall!(
             .feature_set
             .is_active(&check_physical_overlapping::id());
 
-        if !is_nonoverlapping(src_addr, dst_addr, n) {
+        if !is_nonoverlapping(src_addr, n, dst_addr, n) {
             return Err(SyscallError::CopyOverlapping.into());
         }
 
@@ -47,7 +47,7 @@ declare_syscall!(
         )?
         .as_ptr();
         if do_check_physical_overlapping
-            && !is_nonoverlapping(src_ptr as usize, dst_ptr as usize, n as usize)
+            && !is_nonoverlapping(src_ptr as usize, n as usize, dst_ptr as usize, n as usize)
         {
             unsafe {
                 std::ptr::copy(src_ptr, dst_ptr, n as usize);
@@ -134,17 +134,7 @@ declare_syscall!(
             let a = *s1.get(i).ok_or(SyscallError::InvalidLength)?;
             let b = *s2.get(i).ok_or(SyscallError::InvalidLength)?;
             if a != b {
-                *cmp_result = if invoke_context
-                    .feature_set
-                    .is_active(&syscall_saturated_math::id())
-                {
-                    (a as i32).saturating_sub(b as i32)
-                } else {
-                    #[allow(clippy::integer_arithmetic)]
-                    {
-                        a as i32 - b as i32
-                    }
-                };
+                *cmp_result = (a as i32).saturating_sub(b as i32);
                 return Ok(0);
             };
             i = i.saturating_add(1);

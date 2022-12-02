@@ -10,7 +10,11 @@ use {
         parse_bpf_upgradeable_loader, BpfUpgradeableLoaderAccountType,
     },
     solana_ledger::token_balances::collect_token_balances,
-    solana_program_runtime::{compute_budget::ComputeBudget, timings::ExecuteTimings},
+    solana_program_runtime::{
+        compute_budget::{self, ComputeBudget},
+        invoke_context::InvokeContext,
+        timings::ExecuteTimings,
+    },
     solana_runtime::{
         bank::{
             DurableNonceFee, InnerInstruction, TransactionBalancesSet, TransactionExecutionDetails,
@@ -49,19 +53,16 @@ use {
     std::{collections::HashMap, str::FromStr},
 };
 use {
-    log::{log_enabled, trace, Level::Trace},
     solana_bpf_loader_program::{
         create_vm,
         serialization::{deserialize_parameters, serialize_parameters},
         syscalls::register_syscalls,
-        ThisInstructionMeter,
     },
     solana_program_runtime::invoke_context::with_mock_invoke_context,
     solana_rbpf::{
         elf::Executable,
-        static_analysis::Analysis,
         verifier::RequisiteVerifier,
-        vm::{Config, Tracer, VerifiedExecutable},
+        vm::{Config, VerifiedExecutable},
     },
     solana_runtime::{
         bank::Bank,
@@ -223,14 +224,12 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let compute_meter = invoke_context.get_compute_meter();
-        let mut instruction_meter = ThisInstructionMeter { compute_meter };
         let config = Config {
             enable_instruction_tracing: true,
             reject_broken_elfs: true,
             ..Config::default()
         };
-        let executable = Executable::<ThisInstructionMeter>::from_elf(
+        let executable = Executable::<InvokeContext>::from_elf(
             &data,
             config,
             register_syscalls(
@@ -243,10 +242,8 @@ fn run_program(name: &str) -> u64 {
 
         #[allow(unused_mut)]
         let mut verified_executable =
-            VerifiedExecutable::<RequisiteVerifier, ThisInstructionMeter>::from_executable(
-                executable,
-            )
-            .unwrap();
+            VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+                .unwrap();
 
         let run_program_iterations = {
             #[cfg(target_arch = "x86_64")]
@@ -259,7 +256,7 @@ fn run_program(name: &str) -> u64 {
         };
 
         let mut instruction_count = 0;
-        let mut tracer = None;
+        let mut trace_log = None;
         for i in 0..run_program_iterations {
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context
@@ -290,53 +287,24 @@ fn run_program(name: &str) -> u64 {
                     invoke_context,
                 )
                 .unwrap();
-                let result = if i == 0 {
-                    vm.execute_program_interpreted(&mut instruction_meter)
-                } else {
-                    vm.execute_program_jit(&mut instruction_meter)
-                };
+                let (compute_units_consumed, result) = vm.execute_program(i == 0);
                 assert_eq!(SUCCESS, result.unwrap());
                 if i == 1 {
-                    assert_eq!(instruction_count, vm.get_total_instruction_count());
+                    assert_eq!(instruction_count, compute_units_consumed);
                 }
-                instruction_count = vm.get_total_instruction_count();
+                instruction_count = compute_units_consumed;
                 if config.enable_instruction_tracing {
-                    if i == 1 {
-                        if !Tracer::compare(
-                            tracer.as_ref().unwrap(),
-                            &vm.get_program_environment().tracer,
-                        ) {
-                            let analysis =
-                                Analysis::from_executable(verified_executable.get_executable())
-                                    .unwrap();
-                            let stdout = std::io::stdout();
-                            println!("TRACE (interpreted):");
-                            tracer
-                                .as_ref()
-                                .unwrap()
-                                .write(&mut stdout.lock(), &analysis)
-                                .unwrap();
-                            println!("TRACE (jit):");
-                            vm.get_program_environment()
-                                .tracer
-                                .write(&mut stdout.lock(), &analysis)
-                                .unwrap();
-                            assert!(false);
-                        } else if log_enabled!(Trace) {
-                            let analysis =
-                                Analysis::from_executable(verified_executable.get_executable())
-                                    .unwrap();
-                            let mut trace_buffer = Vec::<u8>::new();
-                            tracer
-                                .as_ref()
-                                .unwrap()
-                                .write(&mut trace_buffer, &analysis)
-                                .unwrap();
-                            let trace_string = String::from_utf8(trace_buffer).unwrap();
-                            trace!("SBF Program Instruction Trace:\n{}", trace_string);
+                    if i == 0 {
+                        trace_log = Some(vm.context_object.trace_log.clone());
+                    } else {
+                        let interpreter = trace_log.as_ref().unwrap().as_slice();
+                        let mut jit = vm.context_object.trace_log.as_slice();
+                        if jit.len() > interpreter.len() {
+                            jit = &jit[0..interpreter.len()];
                         }
+                        assert_eq!(interpreter, jit);
+                        trace_log = None;
                     }
-                    tracer = Some(vm.get_program_environment().tracer.clone());
                 }
             }
             assert!(match deserialize_parameters(
@@ -3014,13 +2982,17 @@ fn test_program_sbf_realloc() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[realloc_extend_and_fill(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        1,
-                        &mut bump,
-                    )],
+                    &[
+                        realloc_extend_and_fill(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            1,
+                            &mut bump,
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 ),
             )
@@ -3038,12 +3010,16 @@ fn test_program_sbf_realloc() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[realloc_extend(
-                        &program_id,
-                        &pubkey,
-                        MAX_PERMITTED_DATA_INCREASE,
-                        &mut bump
-                    )],
+                    &[
+                        realloc_extend(
+                            &program_id,
+                            &pubkey,
+                            MAX_PERMITTED_DATA_INCREASE,
+                            &mut bump
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3057,7 +3033,10 @@ fn test_program_sbf_realloc() {
         .send_and_confirm_message(
             signer,
             Message::new(
-                &[realloc(&program_id, &pubkey, 0, &mut bump)],
+                &[
+                    realloc(&program_id, &pubkey, 0, &mut bump),
+                    ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                ],
                 Some(&mint_pubkey),
             ),
         )
@@ -3261,14 +3240,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_PLUS_ONE],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_PLUS_ONE],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3283,14 +3266,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_TWICE],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_TWICE],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3513,14 +3500,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_MAX_INVOKE_MAX],
-                        vec![
-                            AccountMeta::new(invoke_pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_MAX_INVOKE_MAX],
+                            vec![
+                                AccountMeta::new(invoke_pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3582,15 +3573,19 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_INVOKE_MAX_TWICE],
-                        vec![
-                            AccountMeta::new(invoke_pubkey, false),
-                            AccountMeta::new_readonly(realloc_invoke_program_id, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_INVOKE_MAX_TWICE],
+                            vec![
+                                AccountMeta::new(invoke_pubkey, false),
+                                AccountMeta::new_readonly(realloc_invoke_program_id, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3618,14 +3613,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_EXTEND_MAX, 1, i as u8, (i / 255) as u8],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 ),
             )
@@ -3643,14 +3642,18 @@ fn test_program_sbf_realloc_invoke() {
             .send_and_confirm_message(
                 signer,
                 Message::new(
-                    &[Instruction::new_with_bytes(
-                        realloc_invoke_program_id,
-                        &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
-                        vec![
-                            AccountMeta::new(pubkey, false),
-                            AccountMeta::new_readonly(realloc_program_id, false),
-                        ],
-                    )],
+                    &[
+                        Instruction::new_with_bytes(
+                            realloc_invoke_program_id,
+                            &[INVOKE_REALLOC_EXTEND_MAX, 2, 1, 1],
+                            vec![
+                                AccountMeta::new(pubkey, false),
+                                AccountMeta::new_readonly(realloc_program_id, false),
+                            ],
+                        ),
+                        // Request max transaction accounts data size to allow large instruction
+                        ComputeBudgetInstruction::set_accounts_data_size_limit(u32::MAX),
+                    ],
                     Some(&mint_pubkey),
                 )
             )
@@ -3815,6 +3818,8 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        false,
+        compute_budget::LoadedAccountsDataLimitType::V0,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3837,6 +3842,8 @@ fn test_program_fees() {
         &fee_structure,
         true,
         false,
+        false,
+        compute_budget::LoadedAccountsDataLimitType::V0,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 

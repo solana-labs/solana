@@ -28,9 +28,9 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
+        shell: bash
+        run: |
+          source ci/rust-version.sh stable
 
       # copy the newest version env.sh before switching version.
       - name: Copy Env Script
@@ -52,9 +52,9 @@ jobs:
           choco install protoc
           export PROTOC="C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe"
           source /tmp/env.sh
-          echo "::set-output name=tag::$CI_TAG"
+          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"
-          echo "::set-output name=channel::$CHANNEL"
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           ci/publish-tarball.sh
 
       - name: Prepare Upload Files

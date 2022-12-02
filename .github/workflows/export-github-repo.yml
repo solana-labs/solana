@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.x"
       - name: cmd
@@ -25,12 +25,11 @@ jobs:
           chmod +x ./ci/export-github-repo.sh
           ./ci/export-github-repo.sh web3.js/ solana-web3.js
         shell: bash
-      - name: Send Slack notifiaction
-        if: failure()
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_NOTIFICATIONS_BOT_TOKEN }}
-        uses: voxmedia/github-action-slack-notify-build@v1
-        with:
-          channel: ${{ secrets.SLACK_CHANNEL }}
-          status: FAILED
-          color: danger
+
+  error_reporting:
+    needs:
+      - web3
+    if: failure() && github.event_name == 'push'
+    uses: ./.github/workflows/error-reporting.yml
+    secrets:
+      WEBHOOK: ${{ secrets.SLACK_ERROR_REPORTING_WEBHOOK }}

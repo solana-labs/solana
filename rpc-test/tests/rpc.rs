@@ -6,6 +6,10 @@ use {
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
+    solana_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -25,10 +29,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
-    solana_tpu_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,

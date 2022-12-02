@@ -16,6 +16,7 @@ use {
         staked_nodes_updater_service::StakedNodesUpdaterService,
     },
     crossbeam_channel::{unbounded, Receiver},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{blockstore::Blockstore, blockstore_processor::TransactionStatusSender},
     solana_poh::poh_recorder::{PohRecorder, WorkingBankEntry},
@@ -25,15 +26,14 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
-        cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
+        nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
-    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         collections::HashMap,
         net::UdpSocket,
@@ -93,7 +93,6 @@ impl Tpu {
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
-        cost_model: &Arc<RwLock<CostModel>>,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
@@ -169,6 +168,7 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -183,6 +183,7 @@ impl Tpu {
             MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
             0, // Prevent unstaked nodes from forwarding transactions
             stats,
+            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         )
         .unwrap();
 
@@ -229,7 +230,6 @@ impl Tpu {
             verified_gossip_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_model.clone(),
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),

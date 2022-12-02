@@ -12,8 +12,8 @@ pub use signer::signers;
 #[cfg(not(target_os = "solana"))]
 pub use solana_program::program_stubs;
 pub use solana_program::{
-    account_info, address_lookup_table_account, blake3, borsh, bpf_loader, bpf_loader_deprecated,
-    bpf_loader_upgradeable, clock, clone_zeroed, config, copy_field, custom_heap_default,
+    account_info, address_lookup_table_account, alt_bn128, blake3, borsh, bpf_loader,
+    bpf_loader_deprecated, bpf_loader_upgradeable, clock, config, custom_heap_default,
     custom_panic_default, debug_account_data, declare_deprecated_sysvar_id, declare_sysvar_id,
     decode_error, ed25519_program, epoch_schedule, fee_calculator, impl_sysvar_get, incinerator,
     instruction, keccak, lamports, loader_instruction, loader_upgradeable_instruction, message,

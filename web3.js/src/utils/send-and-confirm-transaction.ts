@@ -1,4 +1,4 @@
-import {Connection} from '../connection';
+import {Connection, SignatureResult} from '../connection';
 import {Transaction} from '../transaction';
 import type {ConfirmOptions} from '../connection';
 import type {Signer} from '../keypair';
@@ -34,25 +34,46 @@ export async function sendAndConfirmTransaction(
     sendOptions,
   );
 
-  const status =
+  let status: SignatureResult;
+  if (
     transaction.recentBlockhash != null &&
     transaction.lastValidBlockHeight != null
-      ? (
-          await connection.confirmTransaction(
-            {
-              signature: signature,
-              blockhash: transaction.recentBlockhash,
-              lastValidBlockHeight: transaction.lastValidBlockHeight,
-            },
-            options && options.commitment,
-          )
-        ).value
-      : (
-          await connection.confirmTransaction(
-            signature,
-            options && options.commitment,
-          )
-        ).value;
+  ) {
+    status = (
+      await connection.confirmTransaction(
+        {
+          signature: signature,
+          blockhash: transaction.recentBlockhash,
+          lastValidBlockHeight: transaction.lastValidBlockHeight,
+        },
+        options && options.commitment,
+      )
+    ).value;
+  } else if (
+    transaction.minNonceContextSlot != null &&
+    transaction.nonceInfo != null
+  ) {
+    const {nonceInstruction} = transaction.nonceInfo;
+    const nonceAccountPubkey = nonceInstruction.keys[0].pubkey;
+    status = (
+      await connection.confirmTransaction(
+        {
+          minContextSlot: transaction.minNonceContextSlot,
+          nonceAccountPubkey,
+          nonceValue: transaction.nonceInfo.nonce,
+          signature,
+        },
+        options && options.commitment,
+      )
+    ).value;
+  } else {
+    status = (
+      await connection.confirmTransaction(
+        signature,
+        options && options.commitment,
+      )
+    ).value;
+  }
 
   if (status.err) {
     throw new Error(
