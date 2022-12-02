@@ -57,9 +57,9 @@ mod tests {
                 recvmmsg::{recv_mmsg, recv_mmsg_exact},
                 sendmmsg::{batch_send, multi_target_send},
             },
-            packet::Packet,
             sendmmsg::SendPktsError,
         },
+        solana_sdk::packet::{BasePacket, Packet},
         std::{
             io::ErrorKind,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},

@@ -3,7 +3,8 @@
 extern crate test;
 
 use {
-    solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
+    solana_perf::{packet::BatchRecycler, recycler::Recycler},
+    solana_sdk::packet::Packet,
     test::Bencher,
 };
 
@@ -11,7 +12,7 @@ use {
 fn bench_recycler(bencher: &mut Bencher) {
     solana_logger::setup();
 
-    let recycler: PacketBatchRecycler = Recycler::default();
+    let recycler: BatchRecycler<Packet> = Recycler::default();
 
     for _ in 0..1000 {
         let _packet = recycler.allocate("");

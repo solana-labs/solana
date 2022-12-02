@@ -27,14 +27,14 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
-        packet::{PacketBatch, PacketBatchRecycler},
+        packet::{Batch, BatchRecycler},
     },
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::Slot,
         genesis_config::ClusterType,
         hash::{Hash, HASH_BYTES},
-        packet::Packet,
+        packet::{BasePacket, Packet},
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
@@ -42,7 +42,7 @@ use {
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
-        streamer::{PacketBatchReceiver, PacketBatchSender},
+        streamer::{BatchReceiver, BatchSender},
     },
     std::{
         cmp::Reverse,
@@ -343,13 +343,13 @@ impl ServeRepair {
     }
 
     fn handle_repair(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
         ping_cache: &mut PingCache,
-    ) -> Option<PacketBatch> {
+    ) -> Option<Batch<Packet>> {
         let now = Instant::now();
         let (res, label) = {
             match &request {
@@ -450,10 +450,10 @@ impl ServeRepair {
     fn run_listen(
         &self,
         ping_cache: &mut PingCache,
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         blockstore: &Blockstore,
-        requests_receiver: &PacketBatchReceiver,
-        response_sender: &PacketBatchSender,
+        requests_receiver: &BatchReceiver<Packet>,
+        response_sender: &BatchSender<Packet>,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) -> Result<()> {
@@ -656,8 +656,8 @@ impl ServeRepair {
     pub fn listen(
         self,
         blockstore: Arc<Blockstore>,
-        requests_receiver: PacketBatchReceiver,
-        response_sender: PacketBatchSender,
+        requests_receiver: BatchReceiver<Packet>,
+        response_sender: BatchSender<Packet>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         const INTERVAL_MS: u64 = 1000;
@@ -673,7 +673,7 @@ impl ServeRepair {
             REPAIR_PING_CACHE_CAPACITY,
         );
 
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         Builder::new()
             .name("solRepairListen".to_string())
             .spawn(move || {
@@ -811,10 +811,10 @@ impl ServeRepair {
     fn handle_packets(
         &self,
         ping_cache: &mut PingCache,
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         blockstore: &Blockstore,
         requests: Vec<RepairRequestWithMeta>,
-        response_sender: &PacketBatchSender,
+        response_sender: &BatchSender<Packet>,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
@@ -867,7 +867,7 @@ impl ServeRepair {
 
         if !pending_pings.is_empty() {
             stats.pings_sent += pending_pings.len();
-            let batch = PacketBatch::new(pending_pings);
+            let batch = Batch::<Packet>::new(pending_pings);
             let _ignore = response_sender.send(batch);
         }
     }
@@ -1023,7 +1023,7 @@ impl ServeRepair {
     pub(crate) fn handle_repair_response_pings(
         repair_socket: &UdpSocket,
         keypair: &Keypair,
-        packet_batch: &mut PacketBatch,
+        packet_batch: &mut Batch<Packet>,
         stats: &mut ShredFetchStats,
     ) {
         let mut pending_pongs = Vec::default();
@@ -1098,13 +1098,13 @@ impl ServeRepair {
     }
 
     fn run_window_request(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
-    ) -> Option<PacketBatch> {
+    ) -> Option<Batch<Packet>> {
         // Try to find the requested index in one of the slots
         let packet = repair_response::repair_response_packet(
             blockstore,
@@ -1115,7 +1115,7 @@ impl ServeRepair {
         )?;
 
         inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
-        Some(PacketBatch::new_unpinned_with_recycler_data(
+        Some(Batch::<Packet>::new_unpinned_with_recycler_data(
             recycler,
             "run_window_request",
             vec![packet],
@@ -1123,13 +1123,13 @@ impl ServeRepair {
     }
 
     fn run_highest_window_request(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
         slot: Slot,
         highest_index: u64,
         nonce: Nonce,
-    ) -> Option<PacketBatch> {
+    ) -> Option<Batch<Packet>> {
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
         if meta.received > highest_index {
@@ -1141,7 +1141,7 @@ impl ServeRepair {
                 from_addr,
                 nonce,
             )?;
-            return Some(PacketBatch::new_unpinned_with_recycler_data(
+            return Some(Batch::<Packet>::new_unpinned_with_recycler_data(
                 recycler,
                 "run_highest_window_request",
                 vec![packet],
@@ -1151,15 +1151,18 @@ impl ServeRepair {
     }
 
     fn run_orphan(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
         mut slot: Slot,
         max_responses: usize,
         nonce: Nonce,
-    ) -> Option<PacketBatch> {
-        let mut res =
-            PacketBatch::new_unpinned_with_recycler(recycler.clone(), max_responses, "run_orphan");
+    ) -> Option<Batch<Packet>> {
+        let mut res = Batch::<Packet>::new_unpinned_with_recycler(
+            recycler.clone(),
+            max_responses,
+            "run_orphan",
+        );
         // Try to find the next "n" parent slots of the input slot
         while let Ok(Some(meta)) = blockstore.meta(slot) {
             if meta.received == 0 {
@@ -1191,12 +1194,12 @@ impl ServeRepair {
     }
 
     fn run_ancestor_hashes(
-        recycler: &PacketBatchRecycler,
+        recycler: &BatchRecycler<Packet>,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
         slot: Slot,
         nonce: Nonce,
-    ) -> Option<PacketBatch> {
+    ) -> Option<Batch<Packet>> {
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
                 AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
@@ -1216,7 +1219,7 @@ impl ServeRepair {
             from_addr,
             nonce,
         )?;
-        Some(PacketBatch::new_unpinned_with_recycler_data(
+        Some(Batch::<Packet>::new_unpinned_with_recycler_data(
             recycler,
             "run_ancestor_hashes",
             vec![packet],
@@ -1578,7 +1581,7 @@ mod tests {
 
     /// test run_window_request responds with the right shred, and do not overrun
     fn run_highest_window_request(slot: Slot, num_slots: u64, nonce: Nonce) {
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -1647,7 +1650,7 @@ mod tests {
 
     /// test window requests respond with the right shred, and do not overrun
     fn run_window_request(slot: Slot, nonce: Nonce) {
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path!();
         {
@@ -1807,7 +1810,7 @@ mod tests {
 
     fn run_orphan(slot: Slot, num_slots: u64, nonce: Nonce) {
         solana_logger::setup();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -1874,7 +1877,7 @@ mod tests {
     #[test]
     fn run_orphan_corrupted_shred_size() {
         solana_logger::setup();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let blockstore = Arc::new(Blockstore::open(&ledger_path).unwrap());
@@ -1935,7 +1938,7 @@ mod tests {
         }
 
         solana_logger::setup();
-        let recycler = PacketBatchRecycler::default();
+        let recycler = BatchRecycler::<Packet>::default();
         let ledger_path = get_tmp_ledger_path!();
         {
             let slot = 0;

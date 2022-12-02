@@ -1,5 +1,4 @@
 use {
-    solana_perf::packet::Packet,
     solana_runtime::transaction_priority_details::{
         GetTransactionPriorityDetails, TransactionPriorityDetails,
     },
@@ -7,6 +6,7 @@ use {
         feature_set,
         hash::Hash,
         message::Message,
+        packet::BasePacket,
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -37,17 +37,17 @@ pub enum DeserializedPacketError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ImmutableDeserializedPacket {
-    original_packet: Packet,
+pub struct ImmutableDeserializedPacket<P: BasePacket> {
+    original_packet: P,
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
     priority_details: TransactionPriorityDetails,
 }
 
-impl ImmutableDeserializedPacket {
+impl<P: BasePacket> ImmutableDeserializedPacket<P> {
     pub fn new(
-        packet: Packet,
+        packet: P,
         priority_details: Option<TransactionPriorityDetails>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
@@ -75,7 +75,7 @@ impl ImmutableDeserializedPacket {
         })
     }
 
-    pub fn original_packet(&self) -> &Packet {
+    pub fn original_packet(&self) -> &P {
         &self.original_packet
     }
 
@@ -122,20 +122,20 @@ impl ImmutableDeserializedPacket {
     }
 }
 
-impl PartialOrd for ImmutableDeserializedPacket {
+impl<P: BasePacket> PartialOrd for ImmutableDeserializedPacket<P> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ImmutableDeserializedPacket {
+impl<P: BasePacket> Ord for ImmutableDeserializedPacket<P> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.priority().cmp(&other.priority())
     }
 }
 
 /// Read the transaction message from packet data
-fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
+fn packet_message<P: BasePacket>(packet: &P) -> Result<&[u8], DeserializedPacketError> {
     let (sig_len, sig_size) = packet
         .data(..)
         .and_then(|bytes| decode_shortu16_len(bytes).ok())
@@ -151,7 +151,7 @@ fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError> {
 mod tests {
     use {
         super::*,
-        solana_sdk::{signature::Keypair, system_transaction},
+        solana_sdk::{packet::Packet, signature::Keypair, system_transaction},
     };
 
     #[test]

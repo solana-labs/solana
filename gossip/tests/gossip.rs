@@ -10,10 +10,10 @@ use {
         crds::Cursor,
         gossip_service::GossipService,
     },
-    solana_perf::packet::Packet,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         hash::Hash,
+        packet::{BasePacket, Packet},
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::timestamp,

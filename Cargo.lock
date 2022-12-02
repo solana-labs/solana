@@ -4805,6 +4805,7 @@ dependencies = [
  "clap 3.1.8",
  "crossbeam-channel",
  "solana-net-utils",
+ "solana-sdk 1.15.0",
  "solana-streamer",
  "solana-version",
 ]

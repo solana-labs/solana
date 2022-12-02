@@ -4,15 +4,13 @@ use {
     crate::result::{Error, Result},
     crossbeam_channel::{unbounded, RecvTimeoutError},
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
-    solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
+    solana_perf::{packet::BatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
     solana_sdk::{
         clock::{DEFAULT_TICKS_PER_SLOT, HOLD_TRANSACTIONS_SLOT_OFFSET},
-        packet::{Packet, PacketFlags},
+        packet::{BasePacket, Packet, PacketFlags},
     },
-    solana_streamer::streamer::{
-        self, PacketBatchReceiver, PacketBatchSender, StreamerReceiveStats,
-    },
+    solana_streamer::streamer::{self, BatchReceiver, BatchSender, StreamerReceiveStats},
     solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
     std::{
         net::UdpSocket,
@@ -38,7 +36,7 @@ impl FetchStage {
         exit: &Arc<AtomicBool>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
-    ) -> (Self, PacketBatchReceiver, PacketBatchReceiver) {
+    ) -> (Self, BatchReceiver<Packet>, BatchReceiver<Packet>) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
         let (forward_sender, forward_receiver) = unbounded();
@@ -68,10 +66,10 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        sender: &PacketBatchSender,
-        vote_sender: &PacketBatchSender,
-        forward_sender: &PacketBatchSender,
-        forward_receiver: PacketBatchReceiver,
+        sender: &BatchSender<Packet>,
+        vote_sender: &BatchSender<Packet>,
+        forward_sender: &BatchSender<Packet>,
+        forward_receiver: BatchReceiver<Packet>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -97,8 +95,8 @@ impl FetchStage {
     }
 
     fn handle_forwarded_packets(
-        recvr: &PacketBatchReceiver,
-        sendr: &PacketBatchSender,
+        recvr: &BatchReceiver<Packet>,
+        sendr: &BatchSender<Packet>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
     ) -> Result<()> {
         let mark_forwarded = |packet: &mut Packet| {
@@ -144,16 +142,16 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: &PacketBatchSender,
-        vote_sender: &PacketBatchSender,
-        forward_sender: &PacketBatchSender,
-        forward_receiver: PacketBatchReceiver,
+        sender: &BatchSender<Packet>,
+        vote_sender: &BatchSender<Packet>,
+        forward_sender: &BatchSender<Packet>,
+        forward_receiver: BatchReceiver<Packet>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
         tpu_enable_udp: bool,
     ) -> Self {
-        let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
+        let recycler: BatchRecycler<Packet> = Recycler::warmed(1000, 1024);
 
         let tpu_stats = Arc::new(StreamerReceiveStats::new("tpu_receiver"));
 

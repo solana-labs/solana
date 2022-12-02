@@ -6,9 +6,10 @@ extern crate test;
 use {
     rand::prelude::*,
     solana_perf::{
-        packet::{to_packet_batches, PacketBatch},
+        packet::{to_packet_batches, Batch},
         sigverify,
     },
+    solana_sdk::packet::{BasePacket, Packet},
     std::time::Duration,
     test::Bencher,
 };
@@ -22,7 +23,7 @@ fn test_packet_with_size(size: usize, rng: &mut ThreadRng) -> Vec<u8> {
         .collect()
 }
 
-fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) {
+fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<Batch<Packet>>) {
     // verify packets
     let mut deduper = sigverify::Deduper::new(1_000_000, Duration::from_millis(2_000));
     bencher.iter(|| {

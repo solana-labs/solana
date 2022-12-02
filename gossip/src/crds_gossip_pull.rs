@@ -669,7 +669,7 @@ pub(crate) mod tests {
         solana_perf::test_tx::new_test_vote_tx,
         solana_sdk::{
             hash::{hash, HASH_BYTES},
-            packet::Packet,
+            packet::{BasePacket, Packet},
             timing::timestamp,
         },
     };

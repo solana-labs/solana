@@ -1,4 +1,4 @@
-use crate::instruction::InstructionError;
+use crate::{instruction::InstructionError, packet::BasePacket};
 
 /// Deserialize with a limit based the maximum amount of data a program can expect to get.
 /// This function should be used in place of direct deserialization to help prevent OOM errors

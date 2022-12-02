@@ -6,20 +6,25 @@ extern crate test;
 use {
     rand::distributions::{Distribution, Uniform},
     solana_core::{
-        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        forward_packet_batches_by_accounts::ForwardBatchesByAccounts,
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{
             ThreadType, UnprocessedTransactionStorage, UNPROCESSED_BUFFER_STEP_SIZE,
         },
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::{Packet, PacketBatch},
+    solana_perf::packet::Batch,
     solana_runtime::{
         bank::Bank,
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
     },
-    solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+    solana_sdk::{
+        hash::Hash,
+        packet::{BasePacket, Packet},
+        signature::Keypair,
+        system_transaction,
+    },
     std::sync::{Arc, RwLock},
     test::Bencher,
 };
@@ -27,8 +32,8 @@ use {
 fn build_packet_batch(
     packet_per_batch_count: usize,
     recent_blockhash: Option<Hash>,
-) -> (PacketBatch, Vec<usize>) {
-    let packet_batch = PacketBatch::new(
+) -> (Batch<Packet>, Vec<usize>) {
+    let packet_batch = Batch::<Packet>::new(
         (0..packet_per_batch_count)
             .map(|sender_stake| {
                 let tx = system_transaction::transfer(
@@ -51,11 +56,11 @@ fn build_packet_batch(
 fn build_randomized_packet_batch(
     packet_per_batch_count: usize,
     recent_blockhash: Option<Hash>,
-) -> (PacketBatch, Vec<usize>) {
+) -> (Batch<Packet>, Vec<usize>) {
     let mut rng = rand::thread_rng();
     let distribution = Uniform::from(0..200_000);
 
-    let packet_batch = PacketBatch::new(
+    let packet_batch = Batch::<Packet>::new(
         (0..packet_per_batch_count)
             .map(|_| {
                 let tx = system_transaction::transfer(
@@ -109,7 +114,7 @@ fn bench_packet_clone(bencher: &mut Bencher) {
     let batch_count = 1000;
     let packet_per_batch_count = UNPROCESSED_BUFFER_STEP_SIZE;
 
-    let packet_batches: Vec<PacketBatch> = (0..batch_count)
+    let packet_batches: Vec<Batch<Packet>> = (0..batch_count)
         .map(|_| build_packet_batch(packet_per_batch_count, None).0)
         .collect();
 
@@ -233,7 +238,7 @@ fn buffer_iter_desc_and_forward(
             ThreadType::Transactions,
         );
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            ForwardBatchesByAccounts::new_with_default_batch_limits();
         let _ = transaction_storage.filter_forwardable_packets_and_add_batches(
             current_bank,
             &mut forward_packet_batches_by_accounts,

@@ -9,7 +9,11 @@ use {
         },
         shredder::ERASURE_BATCH_SIZE,
     },
-    solana_sdk::{clock::Slot, packet::Packet, signature::Signature},
+    solana_sdk::{
+        clock::Slot,
+        packet::{BasePacket, Packet},
+        signature::Signature,
+    },
     static_assertions::const_assert_eq,
 };
 

@@ -7,9 +7,9 @@ use {
     pem::Pem,
     quinn::{Endpoint, IdleTimeout, ServerConfig, VarInt},
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
-    solana_perf::packet::PacketBatch,
+    solana_perf::packet::Batch,
     solana_sdk::{
-        packet::PACKET_DATA_SIZE,
+        packet::{Packet, PACKET_DATA_SIZE},
         quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
@@ -305,7 +305,7 @@ pub fn spawn_server(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<PacketBatch>,
+    packet_sender: Sender<Batch<Packet>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -352,7 +352,7 @@ mod test {
     fn setup_quic_server() -> (
         std::thread::JoinHandle<()>,
         Arc<AtomicBool>,
-        crossbeam_channel::Receiver<PacketBatch>,
+        crossbeam_channel::Receiver<Batch<Packet>>,
         SocketAddr,
     ) {
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();

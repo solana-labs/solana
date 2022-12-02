@@ -1,10 +1,11 @@
 use {
-    crate::packet::PacketBatch,
+    crate::packet::Batch,
     rand::{thread_rng, Rng},
+    solana_sdk::packet::Packet,
 };
 
 pub fn discard_batches_randomly(
-    batches: &mut Vec<PacketBatch>,
+    batches: &mut Vec<Batch<Packet>>,
     max_packets: usize,
     mut total_packets: usize,
 ) -> usize {
@@ -23,7 +24,7 @@ mod tests {
     #[test]
     fn test_batch_discard_random() {
         solana_logger::setup();
-        let mut batch = PacketBatch::default();
+        let mut batch = Batch::<Packet>::default();
         batch.resize(1, Packet::default());
         let num_batches = 100;
         let mut batches = vec![batch; num_batches];

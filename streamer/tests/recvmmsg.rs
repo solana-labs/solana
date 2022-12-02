@@ -1,10 +1,8 @@
 #![cfg(target_os = "linux")]
 
 use {
-    solana_streamer::{
-        packet::{Meta, Packet},
-        recvmmsg::*,
-    },
+    solana_sdk::packet::{BasePacket, Meta, Packet},
+    solana_streamer::recvmmsg::*,
     std::{net::UdpSocket, time::Instant},
 };
 

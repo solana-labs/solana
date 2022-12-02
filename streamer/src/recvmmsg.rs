@@ -4,15 +4,15 @@
 #[allow(deprecated)]
 use nix::sys::socket::InetAddr;
 pub use solana_perf::packet::NUM_RCVMMSGS;
-use {
-    crate::packet::{Meta, Packet},
-    std::{cmp, io, net::UdpSocket},
-};
 #[cfg(target_os = "linux")]
 use {
     itertools::izip,
     libc::{iovec, mmsghdr, sockaddr_storage, socklen_t, AF_INET, AF_INET6, MSG_WAITFORONE},
     std::{mem, os::unix::io::AsRawFd},
+};
+use {
+    solana_sdk::packet::{BasePacket, Meta, Packet},
+    std::{cmp, io, net::UdpSocket},
 };
 
 #[cfg(not(target_os = "linux"))]

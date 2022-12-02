@@ -1,10 +1,8 @@
 //! The `recvmmsg` module provides a nonblocking recvmmsg() API implementation
 
 use {
-    crate::{
-        packet::{Meta, Packet},
-        recvmmsg::NUM_RCVMMSGS,
-    },
+    crate::recvmmsg::NUM_RCVMMSGS,
+    solana_sdk::packet::{BasePacket, Meta, Packet},
     std::{cmp, io},
     tokio::net::UdpSocket,
 };
