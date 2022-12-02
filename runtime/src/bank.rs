@@ -18005,6 +18005,7 @@ pub(crate) mod tests {
 
         let slot = 1;
         let bank1 = Bank::new_from_parent(&bank0, &collector, slot);
+        add_root_and_flush_write_cache(&bank0);
         bank1
             .transfer(amount, &mint_keypair, &key1.pubkey())
             .unwrap();
@@ -18027,6 +18028,7 @@ pub(crate) mod tests {
 
         bank2.freeze(); // the freeze here is not strictly necessary, but more for illustration
         bank2.squash();
+        add_root_and_flush_write_cache(&bank2);
 
         drop(bank1);
         bank2.clean_accounts_for_tests();
