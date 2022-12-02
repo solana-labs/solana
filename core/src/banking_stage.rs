@@ -63,7 +63,7 @@ use {
             HOLD_TRANSACTIONS_SLOT_OFFSET, MAX_PROCESSING_AGE,
         },
         feature_set::allow_votes_to_directly_update_vote_state,
-        packet::{BasePacket, Packet},
+        packet::{BasePacket, Packet, TransactionPacket},
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -386,7 +386,7 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<Packet>,
+        verified_receiver: BankingReceiver<TransactionPacket>,
         tpu_verified_vote_receiver: BankingReceiver<Packet>,
         verified_vote_receiver: BankingReceiver<Packet>,
         transaction_status_sender: Option<TransactionStatusSender>,
@@ -414,7 +414,7 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<Packet>,
+        verified_receiver: BankingReceiver<TransactionPacket>,
         tpu_verified_vote_receiver: BankingReceiver<Packet>,
         verified_vote_receiver: BankingReceiver<Packet>,
         num_threads: u32,
@@ -444,46 +444,6 @@ impl BankingStage {
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
-                let (verified_receiver, unprocessed_transaction_storage) =
-                    match (i, should_split_voting_threads) {
-                        (0, false) => (
-                            verified_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Gossip),
-                            ),
-                        ),
-                        (0, true) => (
-                            verified_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Gossip,
-                            ),
-                        ),
-                        (1, false) => (
-                            tpu_verified_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Voting(VoteSource::Tpu),
-                            ),
-                        ),
-                        (1, true) => (
-                            tpu_verified_vote_receiver.clone(),
-                            UnprocessedTransactionStorage::new_vote_storage(
-                                latest_unprocessed_votes.clone(),
-                                VoteSource::Tpu,
-                            ),
-                        ),
-                        _ => (
-                            verified_receiver.clone(),
-                            UnprocessedTransactionStorage::new_transaction_storage(
-                                UnprocessedPacketBatches::with_capacity(batch_limit),
-                                ThreadType::Transactions,
-                            ),
-                        ),
-                    };
-
-                let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
@@ -492,25 +452,87 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
-                Builder::new()
-                    .name(format!("solBanknStgTx{i:02}"))
-                    .spawn(move || {
-                        Self::process_loop(
-                            &mut packet_deserializer,
-                            &poh_recorder,
-                            &cluster_info,
-                            &mut recv_start,
-                            i,
-                            transaction_status_sender,
-                            gossip_vote_sender,
-                            &data_budget,
-                            log_messages_bytes_limit,
-                            connection_cache,
-                            &bank_forks,
-                            unprocessed_transaction_storage,
+                if i == 0 || i == 1 {
+                    let (verified_receiver, unprocessed_transaction_storage) =
+                        match (i, should_split_voting_threads) {
+                            (0, false) => (
+                                verified_vote_receiver.clone(),
+                                UnprocessedTransactionStorage::new_transaction_storage(
+                                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                                    ThreadType::Voting(VoteSource::Gossip),
+                                ),
+                            ),
+                            (0, true) => (
+                                verified_vote_receiver.clone(),
+                                UnprocessedTransactionStorage::new_vote_storage(
+                                    latest_unprocessed_votes.clone(),
+                                    VoteSource::Gossip,
+                                ),
+                            ),
+                            (1, false) => (
+                                tpu_verified_vote_receiver.clone(),
+                                UnprocessedTransactionStorage::new_transaction_storage(
+                                    UnprocessedPacketBatches::with_capacity(batch_limit),
+                                    ThreadType::Voting(VoteSource::Tpu),
+                                ),
+                            ),
+                            (1, true) => (
+                                tpu_verified_vote_receiver.clone(),
+                                UnprocessedTransactionStorage::new_vote_storage(
+                                    latest_unprocessed_votes.clone(),
+                                    VoteSource::Tpu,
+                                ),
+                            ),
+                            _ => unreachable!(),
+                        };
+                    let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
+                    Builder::new()
+                        .name(format!("solBanknStgTx{i:02}"))
+                        .spawn(move || {
+                            Self::process_loop(
+                                &mut packet_deserializer,
+                                &poh_recorder,
+                                &cluster_info,
+                                &mut recv_start,
+                                i,
+                                transaction_status_sender,
+                                gossip_vote_sender,
+                                &data_budget,
+                                log_messages_bytes_limit,
+                                connection_cache,
+                                &bank_forks,
+                                unprocessed_transaction_storage,
+                            );
+                        })
+                        .unwrap()
+                } else {
+                    let mut packet_deserializer =
+                        PacketDeserializer::new(verified_receiver.clone());
+                    let unprocessed_transaction_storage =
+                        UnprocessedTransactionStorage::new_transaction_storage(
+                            UnprocessedPacketBatches::with_capacity(batch_limit),
+                            ThreadType::Transactions,
                         );
-                    })
-                    .unwrap()
+                    Builder::new()
+                        .name(format!("solBanknStgTx{i:02}"))
+                        .spawn(move || {
+                            Self::process_loop(
+                                &mut packet_deserializer,
+                                &poh_recorder,
+                                &cluster_info,
+                                &mut recv_start,
+                                i,
+                                transaction_status_sender,
+                                gossip_vote_sender,
+                                &data_budget,
+                                log_messages_bytes_limit,
+                                connection_cache,
+                                &bank_forks,
+                                unprocessed_transaction_storage,
+                            );
+                        })
+                        .unwrap()
+                }
             })
             .collect();
         Self { bank_thread_hdls }
@@ -518,13 +540,13 @@ impl BankingStage {
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
-    fn forward_buffered_packets<'a>(
+    fn forward_buffered_packets<'a, P: BasePacket + 'a>(
         connection_cache: &ConnectionCache,
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
-        forwardable_packets: impl Iterator<Item = &'a Packet>,
+        forwardable_packets: impl Iterator<Item = &'a P>,
         data_budget: &DataBudget,
         banking_stage_stats: &BankingStageStats,
     ) -> (
@@ -612,9 +634,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn do_process_packets(
+    fn do_process_packets<P: BasePacket>(
         bank_start: &BankStart,
-        payload: &mut ConsumeScannerPayload<Packet>,
+        payload: &mut ConsumeScannerPayload<P>,
         recorder: &TransactionRecorder,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -624,7 +646,7 @@ impl BankingStage {
         consumed_buffered_packets_count: &mut usize,
         rebuffered_packet_count: &mut usize,
         test_fn: &Option<impl Fn()>,
-        packets_to_process: &Vec<Arc<ImmutableDeserializedPacket<Packet>>>,
+        packets_to_process: &Vec<Arc<ImmutableDeserializedPacket<P>>>,
     ) -> Option<Vec<usize>> {
         if payload.reached_end_of_slot {
             return None;
@@ -689,9 +711,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn consume_buffered_packets(
+    pub fn consume_buffered_packets<P: BasePacket>(
         bank_start: &BankStart,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<Packet>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
@@ -821,12 +843,12 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_buffered_packets(
+    fn process_buffered_packets<P: BasePacket>(
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<Packet>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -920,9 +942,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_forwarding(
+    fn handle_forwarding<P: BasePacket>(
         cluster_info: &ClusterInfo,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<Packet>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
@@ -1017,8 +1039,8 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_loop(
-        packet_deserializer: &mut PacketDeserializer<Packet>,
+    fn process_loop<P: BasePacket>(
+        packet_deserializer: &mut PacketDeserializer<P>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1029,7 +1051,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        mut unprocessed_transaction_storage: UnprocessedTransactionStorage<Packet>,
+        mut unprocessed_transaction_storage: UnprocessedTransactionStorage<P>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1808,12 +1830,12 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
-    fn receive_and_buffer_packets(
-        packet_deserializer: &mut PacketDeserializer<Packet>,
+    fn receive_and_buffer_packets<P: BasePacket>(
+        packet_deserializer: &mut PacketDeserializer<P>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<Packet>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -1877,9 +1899,9 @@ impl BankingStage {
         Ok(())
     }
 
-    fn push_unprocessed(
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<Packet>,
-        deserialized_packets: Vec<ImmutableDeserializedPacket<Packet>>,
+    fn push_unprocessed<P: BasePacket>(
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
+        deserialized_packets: Vec<ImmutableDeserializedPacket<P>>,
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
@@ -2124,9 +2146,9 @@ mod tests {
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
-    pub fn convert_from_old_verified(
-        mut with_vers: Vec<(Batch<Packet>, Vec<u8>)>,
-    ) -> Vec<Batch<Packet>> {
+    pub fn convert_from_old_verified<P: BasePacket>(
+        mut with_vers: Vec<(Batch<P>, Vec<u8>)>,
+    ) -> Vec<Batch<P>> {
         with_vers.iter_mut().for_each(|(b, v)| {
             b.iter_mut()
                 .zip(v)
@@ -3652,7 +3674,7 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
+                unprocessed_packet_batches::transactions_to_deserialized_packets::<TransactionPacket>(&transactions)
                     .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
@@ -3710,7 +3732,7 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
+                unprocessed_packet_batches::transactions_to_deserialized_packets::<TransactionPacket>(&transactions)
                     .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
@@ -3780,9 +3802,9 @@ mod tests {
                 .spawn(move || {
                     let num_conflicting_transactions = transactions.len();
                     let deserialized_packets =
-                        unprocessed_packet_batches::transactions_to_deserialized_packets(
-                            &transactions,
-                        )
+                        unprocessed_packet_batches::transactions_to_deserialized_packets::<
+                            TransactionPacket,
+                        >(&transactions)
                         .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let mut buffered_packet_batches =
@@ -4175,7 +4197,6 @@ mod tests {
             [
                 (tpu_packet_batches, tpu_vote_sender.clone()),
                 (gossip_packet_batches, gossip_verified_vote_sender.clone()),
-                (tx_packet_batches, verified_sender.clone()),
             ]
             .into_iter()
             .map(|(packet_batches, sender)| {
@@ -4183,6 +4204,15 @@ mod tests {
                     .spawn(move || sender.send((packet_batches, None)).unwrap())
                     .unwrap()
             })
+            .chain(
+                [(tx_packet_batches, verified_sender.clone())]
+                    .into_iter()
+                    .map(|(packet_batches, sender)| {
+                        Builder::new()
+                            .spawn(move || sender.send((packet_batches, None)).unwrap())
+                            .unwrap()
+                    }),
+            )
             .for_each(|handle| handle.join().unwrap());
 
             drop(verified_sender);

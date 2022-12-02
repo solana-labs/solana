@@ -332,7 +332,7 @@ impl ClusterInfoVoteListener {
         votes: Vec<Transaction>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
-        let mut packet_batches = packet::to_packet_batches(&votes, 1);
+        let mut packet_batches = packet::to_packet_batches::<Packet, _>(&votes, 1);
 
         // Votes should already be filtered by this point.
         sigverify::ed25519_verify_cpu(

@@ -22,7 +22,7 @@ use {
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         message::Message,
-        packet::Packet,
+        packet::{BasePacket, TransactionPacket},
         pubkey::{self, Pubkey},
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
@@ -179,13 +179,13 @@ fn make_transfer_transaction_with_compute_unit_price(
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
-struct PacketsPerIteration {
-    packet_batches: Vec<Batch<Packet>>,
+struct PacketsPerIteration<P: BasePacket> {
+    packet_batches: Vec<Batch<P>>,
     transactions: Vec<Transaction>,
     packets_per_batch: usize,
 }
 
-impl PacketsPerIteration {
+impl<P: BasePacket> PacketsPerIteration<P> {
     fn new(
         packets_per_batch: usize,
         batches_per_iteration: usize,
@@ -204,8 +204,7 @@ impl PacketsPerIteration {
             mint_txs_percentage,
         );
 
-        let packet_batches: Vec<Batch<Packet>> =
-            to_packet_batches(&transactions, packets_per_batch);
+        let packet_batches: Vec<Batch<P>> = to_packet_batches(&transactions, packets_per_batch);
         assert_eq!(packet_batches.len(), batches_per_iteration);
         Self {
             packet_batches,
@@ -336,8 +335,8 @@ fn main() {
         .unwrap()
         .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
-    let mut all_packets: Vec<PacketsPerIteration> = std::iter::from_fn(|| {
-        Some(PacketsPerIteration::new(
+    let mut all_packets: Vec<PacketsPerIteration<_>> = std::iter::from_fn(|| {
+        Some(PacketsPerIteration::<TransactionPacket>::new(
             packets_per_batch,
             batches_per_iteration,
             genesis_config.hash(),

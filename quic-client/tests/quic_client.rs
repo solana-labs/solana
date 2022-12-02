@@ -8,7 +8,7 @@ mod tests {
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
         solana_sdk::{
-            packet::{BasePacket, Packet, PACKET_DATA_SIZE},
+            packet::{BasePacket, TransactionPacket},
             signature::Keypair,
         },
         solana_streamer::{
@@ -26,8 +26,8 @@ mod tests {
         },
     };
 
-    fn check_packets(
-        receiver: Receiver<Batch<Packet>>,
+    fn check_packets<P: BasePacket>(
+        receiver: Receiver<Batch<P>>,
         num_bytes: usize,
         num_expected_packets: usize,
     ) {
@@ -103,9 +103,9 @@ mod tests {
         );
 
         // Send a full size packet with single byte writes.
-        let num_bytes = PACKET_DATA_SIZE;
+        let num_bytes = TransactionPacket::DATA_SIZE;
         let num_expected_packets: usize = 3000;
-        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+        let packets = vec![vec![0u8; TransactionPacket::DATA_SIZE]; num_expected_packets];
 
         assert!(client.send_wire_transaction_batch_async(packets).is_ok());
 
@@ -150,9 +150,9 @@ mod tests {
         );
 
         // Send a full size packet with single byte writes.
-        let num_bytes = PACKET_DATA_SIZE;
+        let num_bytes = TransactionPacket::DATA_SIZE;
         let num_expected_packets: usize = 3000;
-        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+        let packets = vec![vec![0u8; TransactionPacket::DATA_SIZE]; num_expected_packets];
 
         assert!(client.send_wire_transaction_batch(&packets).await.is_ok());
 

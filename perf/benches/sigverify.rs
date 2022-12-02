@@ -24,7 +24,7 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
     let num_packets = NUM;
 
     // generate packet vector
-    let mut batches = to_packet_batches(
+    let mut batches = to_packet_batches::<Packet, _>(
         &std::iter::repeat(tx).take(num_packets).collect::<Vec<_>>(),
         128,
     );
@@ -37,19 +37,19 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
     })
 }
 
-fn gen_batches(
+fn gen_batches<P: BasePacket>(
     use_same_tx: bool,
     packets_per_batch: usize,
     total_packets: usize,
-) -> Vec<Batch<Packet>> {
+) -> Vec<Batch<P>> {
     if use_same_tx {
         let tx = test_tx();
-        to_packet_batches(&vec![tx; total_packets], packets_per_batch)
+        to_packet_batches::<P, _>(&vec![tx; total_packets], packets_per_batch)
     } else {
         let txs: Vec<_> = std::iter::repeat_with(test_tx)
             .take(total_packets)
             .collect();
-        to_packet_batches(&txs, packets_per_batch)
+        to_packet_batches::<P, _>(&txs, packets_per_batch)
     }
 }
 
@@ -57,7 +57,7 @@ fn gen_batches(
 #[ignore]
 fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
-    let mut batches = gen_batches(false, 1, num_packets);
+    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -69,7 +69,7 @@ fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
-    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -81,7 +81,7 @@ fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
-    let mut batches = gen_batches(false, 1, num_packets);
+    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -93,7 +93,7 @@ fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
-    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -105,7 +105,7 @@ fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
-    let mut batches = gen_batches(false, 1, num_packets);
+    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -117,7 +117,7 @@ fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_high_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
-    let mut batches = gen_batches(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     // verify packets
@@ -179,7 +179,7 @@ fn bench_get_offsets(bencher: &mut Bencher) {
 
     // generate packet vector
     let mut batches =
-        to_packet_batches(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
+        to_packet_batches::<Packet, _>(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
 
     let recycler = Recycler::default();
     // verify packets

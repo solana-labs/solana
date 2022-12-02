@@ -11,10 +11,7 @@ use {
         distributions::{Distribution, Uniform},
         thread_rng, Rng,
     },
-    solana_core::{
-        sigverify::TransactionSigVerifier,
-        sigverify_stage::{SigVerifier, SigVerifyStage},
-    },
+    solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
     solana_measure::measure::Measure,
     solana_perf::{
         packet::{to_packet_batches, Batch},

@@ -28,7 +28,11 @@ use {
         bank_forks::BankForks,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::{pubkey::Pubkey, signature::Keypair},
+    solana_sdk::{
+        packet::{Packet, TransactionPacket},
+        pubkey::Pubkey,
+        signature::Keypair,
+    },
     solana_streamer::{
         nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
@@ -137,7 +141,7 @@ impl Tpu {
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
-        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
+        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new::<TransactionPacket>(
             packet_receiver,
             find_packet_sender_stake_sender,
             staked_nodes.clone(),
@@ -147,7 +151,7 @@ impl Tpu {
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
             unbounded();
 
-        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new(
+        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new::<Packet>(
             vote_packet_receiver,
             vote_find_packet_sender_stake_sender,
             staked_nodes.clone(),
@@ -188,15 +192,16 @@ impl Tpu {
         .unwrap();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::new(verified_sender);
+            let verifier = TransactionSigVerifier::<TransactionPacket>::new(verified_sender);
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
 
         let vote_sigverify_stage = {
-            let verifier =
-                TransactionSigVerifier::new_reject_non_vote(verified_tpu_vote_packets_sender);
+            let verifier = TransactionSigVerifier::<Packet>::new_reject_non_vote(
+                verified_tpu_vote_packets_sender,
+            );
             SigVerifyStage::new(
                 vote_find_packet_sender_stake_receiver,
                 verifier,

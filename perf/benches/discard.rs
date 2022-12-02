@@ -4,6 +4,7 @@ extern crate test;
 
 use {
     solana_perf::{discard::discard_batches_randomly, packet::to_packet_batches, test_tx::test_tx},
+    solana_sdk::packet::TransactionPacket,
     test::Bencher,
 };
 
@@ -16,7 +17,7 @@ fn bench_discard(bencher: &mut Bencher) {
     let num_packets = NUM;
 
     // generate packet vector
-    let batches = to_packet_batches(
+    let batches = to_packet_batches::<TransactionPacket, _>(
         &std::iter::repeat(tx).take(num_packets).collect::<Vec<_>>(),
         10,
     );

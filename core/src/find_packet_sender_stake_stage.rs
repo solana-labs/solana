@@ -2,10 +2,7 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     solana_measure::measure::Measure,
     solana_perf::packet::Batch,
-    solana_sdk::{
-        packet::{BasePacket, Packet},
-        timing::timestamp,
-    },
+    solana_sdk::{packet::BasePacket, timing::timestamp},
     solana_streamer::streamer::{self, StakedNodes, StreamerError},
     std::{
         collections::HashMap,
@@ -20,8 +17,8 @@ use {
 // 50ms/(200ns/packet) = 250k packets
 const MAX_FINDPACKETSENDERSTAKE_BATCH: usize = 250_000;
 
-pub type FindPacketSenderStakeSender = Sender<Vec<Batch<Packet>>>;
-pub type FindPacketSenderStakeReceiver = Receiver<Vec<Batch<Packet>>>;
+pub type FindPacketSenderStakeSender<P> = Sender<Vec<Batch<P>>>;
+pub type FindPacketSenderStakeReceiver<P> = Receiver<Vec<Batch<P>>>;
 
 #[derive(Debug, Default)]
 struct FindPacketSenderStakeStats {
@@ -79,9 +76,9 @@ pub struct FindPacketSenderStakeStage {
 }
 
 impl FindPacketSenderStakeStage {
-    pub fn new(
-        packet_receiver: streamer::BatchReceiver<Packet>,
-        sender: FindPacketSenderStakeSender,
+    pub fn new<P: BasePacket + 'static>(
+        packet_receiver: streamer::BatchReceiver<P>,
+        sender: FindPacketSenderStakeSender<P>,
         staked_nodes: Arc<RwLock<StakedNodes>>,
         name: &'static str,
     ) -> Self {
@@ -148,7 +145,10 @@ impl FindPacketSenderStakeStage {
         Self { thread_hdl }
     }
 
-    fn apply_sender_stakes(batches: &mut [Batch<Packet>], ip_to_stake: &HashMap<IpAddr, u64>) {
+    fn apply_sender_stakes<P: BasePacket>(
+        batches: &mut [Batch<P>],
+        ip_to_stake: &HashMap<IpAddr, u64>,
+    ) {
         batches
             .iter_mut()
             .flat_map(|batch| batch.iter_mut())

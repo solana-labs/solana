@@ -42,15 +42,15 @@ pub type BatchReceiver<P> = Receiver<Batch<P>>;
 pub type BatchSender<P> = Sender<Batch<P>>;
 
 #[derive(Error, Debug)]
-pub enum StreamerError {
+pub enum StreamerError<P: BasePacket> {
     #[error("I/O error")]
     Io(#[from] std::io::Error),
 
     #[error("receive timeout error")]
     RecvTimeout(#[from] RecvTimeoutError),
 
-    #[error("send packets error")]
-    Send(#[from] SendError<Batch<Packet>>),
+    #[error("send error")]
+    Send(#[from] SendError<Batch<P>>),
 
     #[error(transparent)]
     SendPktsError(#[from] SendPktsError),
@@ -102,23 +102,23 @@ impl StreamerReceiveStats {
     }
 }
 
-pub type Result<T> = std::result::Result<T, StreamerError>;
+pub type Result<T, P> = std::result::Result<T, StreamerError<P>>;
 
-fn recv_loop(
+fn recv_loop<P: BasePacket>(
     socket: &UdpSocket,
     exit: Arc<AtomicBool>,
-    packet_batch_sender: &BatchSender<Packet>,
-    recycler: &BatchRecycler<Packet>,
+    packet_batch_sender: &BatchSender<P>,
+    recycler: &BatchRecycler<P>,
     stats: &StreamerReceiveStats,
     coalesce_ms: u64,
     use_pinned_memory: bool,
     in_vote_only_mode: Option<Arc<AtomicBool>>,
-) -> Result<()> {
+) -> Result<(), P> {
     loop {
         let mut packet_batch = if use_pinned_memory {
-            Batch::<Packet>::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, stats.name)
+            Batch::<P>::new_with_recycler(recycler.clone(), PACKETS_PER_BATCH, stats.name)
         } else {
-            Batch::<Packet>::with_capacity(PACKETS_PER_BATCH)
+            Batch::<P>::with_capacity(PACKETS_PER_BATCH)
         };
         loop {
             // Check for exit signal, even if socket is busy
@@ -159,11 +159,11 @@ fn recv_loop(
     }
 }
 
-pub fn receiver(
+pub fn receiver<P: BasePacket + 'static>(
     socket: Arc<UdpSocket>,
     exit: Arc<AtomicBool>,
-    packet_batch_sender: BatchSender<Packet>,
-    recycler: BatchRecycler<Packet>,
+    packet_batch_sender: BatchSender<P>,
+    recycler: BatchRecycler<P>,
     stats: Arc<StreamerReceiveStats>,
     coalesce_ms: u64,
     use_pinned_memory: bool,
@@ -290,19 +290,19 @@ impl StreamerSendStats {
         };
     }
 
-    fn record(&mut self, pkt: &Packet) {
+    fn record<P: BasePacket>(&mut self, pkt: &P) {
         let ent = self.host_map.entry(pkt.meta().addr).or_default();
         ent.count += 1;
         ent.bytes += pkt.data(..).map(<[u8]>::len).unwrap_or_default() as u64;
     }
 }
 
-fn recv_send(
+fn recv_send<P: BasePacket>(
     sock: &UdpSocket,
-    r: &BatchReceiver<Packet>,
+    r: &BatchReceiver<P>,
     socket_addr_space: &SocketAddrSpace,
     stats: &mut Option<StreamerSendStats>,
-) -> Result<()> {
+) -> Result<(), P> {
     let timer = Duration::new(1, 0);
     let packet_batch = r.recv_timeout(timer)?;
     if let Some(stats) = stats {
@@ -317,9 +317,10 @@ fn recv_send(
     Ok(())
 }
 
-pub fn recv_vec_packet_batches(
-    recvr: &Receiver<Vec<Batch<Packet>>>,
-) -> Result<(Vec<Batch<Packet>>, usize, Duration)> {
+type ReceivedPacketBatches<P> = (Vec<Batch<P>>, usize, Duration);
+pub fn recv_vec_packet_batches<P: BasePacket>(
+    recvr: &Receiver<Vec<Batch<P>>>,
+) -> Result<ReceivedPacketBatches<P>, P> {
     let timer = Duration::new(1, 0);
     let mut packet_batches = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
@@ -345,9 +346,9 @@ pub fn recv_vec_packet_batches(
     Ok((packet_batches, num_packets, recv_duration))
 }
 
-pub fn recv_packet_batches(
-    recvr: &BatchReceiver<Packet>,
-) -> Result<(Vec<Batch<Packet>>, usize, Duration)> {
+pub fn recv_packet_batches<P: BasePacket>(
+    recvr: &BatchReceiver<P>,
+) -> Result<(Vec<Batch<P>>, usize, Duration), P> {
     let timer = Duration::new(1, 0);
     let packet_batch = recvr.recv_timeout(timer)?;
     let recv_start = Instant::now();
