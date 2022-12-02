@@ -2295,10 +2295,7 @@ fn can_submit_accounts_package(
 mod tests {
     use {
         super::*,
-        crate::{
-            accounts_db::{ACCOUNTS_DB_CONFIG_FOR_TESTING, TEST_DISABLE_REHASH_FOR_RENT_EPOCH},
-            status_cache::Status,
-        },
+        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -3917,7 +3914,6 @@ mod tests {
                 accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
                 epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
                 rent_collector: crate::rent_collector::RentCollector::default(),
-                disable_rehash_for_rent_epoch: TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             }
         }
 

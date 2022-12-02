@@ -9,7 +9,7 @@ use {
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
         accounts::{test_utils::create_test_accounts, AccountAddressFilter, Accounts},
-        accounts_db::{AccountShrinkThreshold, TEST_DISABLE_REHASH_FOR_RENT_EPOCH},
+        accounts_db::AccountShrinkThreshold,
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
@@ -114,7 +114,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         &ancestors,
         &EpochSchedule::default(),
         &RentCollector::default(),
-        TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
     );
     let test_hash_calculation = false;
     bencher.iter(|| {
@@ -129,7 +128,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             false,
             false,
             false,
-            TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
         ))
     });
 }
@@ -153,7 +151,6 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
             &ancestors,
             &EpochSchedule::default(),
             &RentCollector::default(),
-            TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
         );
     });
 }

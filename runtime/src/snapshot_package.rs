@@ -48,7 +48,6 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
-    pub disable_rehash_for_rent_epoch: bool,
 }
 
 impl AccountsPackage {
@@ -119,9 +118,6 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
-            disable_rehash_for_rent_epoch: bank
-                .feature_set
-                .is_active(&solana_sdk::feature_set::disable_rehash_for_rent_epoch::id()),
         })
     }
 }

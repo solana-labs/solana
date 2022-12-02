@@ -143,7 +143,6 @@ impl AccountsHashVerifier {
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
-                    disable_rehash_for_rent_epoch: accounts_package.disable_rehash_for_rent_epoch,
                 },
                 &sorted_storages,
                 timings,
@@ -167,8 +166,6 @@ impl AccountsHashVerifier {
                         // now that we've failed, store off the failing contents that produced a bad capitalization
                         store_detailed_debug_info_on_failure: true,
                         full_snapshot: None,
-                        disable_rehash_for_rent_epoch: accounts_package
-                            .disable_rehash_for_rent_epoch,
                     },
                     &sorted_storages,
                     HashStats::default(),
@@ -339,7 +336,6 @@ mod tests {
         super::*,
         solana_gossip::{cluster_info::make_accounts_hashes_message, contact_info::ContactInfo},
         solana_runtime::{
-            accounts_db::TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             rent_collector::RentCollector,
             snapshot_utils::{ArchiveFormat, SnapshotVersion},
         },
@@ -433,7 +429,6 @@ mod tests {
                 accounts: Arc::clone(&accounts),
                 epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
-                disable_rehash_for_rent_epoch: TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             };
 
             AccountsHashVerifier::process_accounts_package(

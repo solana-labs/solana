@@ -10,7 +10,7 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             Accounts,
         },
-        accounts_db::{AccountShrinkThreshold, TEST_DISABLE_REHASH_FOR_RENT_EPOCH},
+        accounts_db::AccountShrinkThreshold,
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
@@ -125,7 +125,6 @@ fn main() {
                 &ancestors,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             );
             time.stop();
             let mut time_store = Measure::start("hash using store");
@@ -139,7 +138,6 @@ fn main() {
                 &EpochSchedule::default(),
                 &RentCollector::default(),
                 false,
-                TEST_DISABLE_REHASH_FOR_RENT_EPOCH,
             );
             time_store.stop();
             if results != results_store {
