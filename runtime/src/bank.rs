@@ -11674,39 +11674,60 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_hash_internal_state_verify() {
-        solana_logger::setup();
-        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        let amount = genesis_config.rent.minimum_balance(0);
+        for pass in 0..3 {
+            solana_logger::setup();
+            let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1.));
+            let bank0 = Bank::new_for_tests(&genesis_config);
+            let amount = genesis_config.rent.minimum_balance(0);
 
-        let pubkey = solana_sdk::pubkey::new_rand();
-        info!("transfer 0 {} mint: {}", pubkey, mint_keypair.pubkey());
-        bank0.transfer(amount, &mint_keypair, &pubkey).unwrap();
+            let pubkey = solana_sdk::pubkey::new_rand();
+            info!("transfer 0 {} mint: {}", pubkey, mint_keypair.pubkey());
+            bank0.transfer(amount, &mint_keypair, &pubkey).unwrap();
 
-        let bank0_state = bank0.hash_internal_state();
-        let bank0 = Arc::new(bank0);
-        // Checkpointing should result in a new state while freezing the parent
-        let bank2 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 1);
-        assert_ne!(bank0_state, bank2.hash_internal_state());
-        // Checkpointing should modify the checkpoint's state when freezed
-        assert_ne!(bank0_state, bank0.hash_internal_state());
+            let bank0_state = bank0.hash_internal_state();
+            let bank0 = Arc::new(bank0);
+            // Checkpointing should result in a new state while freezing the parent
+            let bank2 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 1);
+            assert_ne!(bank0_state, bank2.hash_internal_state());
+            // Checkpointing should modify the checkpoint's state when freezed
+            assert_ne!(bank0_state, bank0.hash_internal_state());
 
-        // Checkpointing should never modify the checkpoint's state once frozen
-        let bank0_state = bank0.hash_internal_state();
-        bank2.update_accounts_hash_for_tests();
-        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
-        let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
-        assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
-        bank3.update_accounts_hash_for_tests();
-        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
+            // Checkpointing should never modify the checkpoint's state once frozen
+            add_root_and_flush_write_cache(&bank0);
+            let bank0_state = bank0.hash_internal_state();
+            if pass == 0 {
+                // we later modify bank 2, so this flush is destructive to the test
+                add_root_and_flush_write_cache(&bank2);
+                bank2.update_accounts_hash_for_tests();
+                assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
+            }
+            let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
+            assert_eq!(bank0_state, bank0.hash_internal_state());
+            if pass == 0 {
+                // this relies on us having set the bank hash in the pass==0 if above
+                assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
+                continue;
+            }
+            if pass == 1 {
+                // flushing slot 3 here causes us to mark it as a root. Marking it as a root
+                // prevents us from marking slot 2 as a root later since slot 2 is < slot 3.
+                // Doing so throws an assert. So, we can't flush 3 until 2 is flushed.
+                add_root_and_flush_write_cache(&bank3);
+                bank3.update_accounts_hash_for_tests();
+                assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
+                continue;
+            }
 
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-        info!("transfer 2 {}", pubkey2);
-        bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
-        bank2.update_accounts_hash_for_tests();
-        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
-        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
+            let pubkey2 = solana_sdk::pubkey::new_rand();
+            info!("transfer 2 {}", pubkey2);
+            bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
+            add_root_and_flush_write_cache(&bank2);
+            bank2.update_accounts_hash_for_tests();
+            assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
+            add_root_and_flush_write_cache(&bank3);
+            bank3.update_accounts_hash_for_tests();
+            assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
+        }
     }
 
     #[test]
