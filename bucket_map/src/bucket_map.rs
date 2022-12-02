@@ -210,7 +210,7 @@ pub fn get_mmap_count() -> Option<usize> {
     None
 }
 
-/// Utility function to get open_fd limits
+/// Utility function to get open files limits
 #[cfg(target_os = "linux")]
 pub fn get_open_fd_limits() -> Option<(usize, usize)> {
     let run = |cmd, args| -> Option<usize> {
@@ -237,7 +237,38 @@ pub fn get_open_fd_limits() -> Option<(usize, usize)> {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn get_open_fd_limits() -> Option<(usize, usize, usize)> {
+pub fn get_open_fd_limits() -> Option<(usize, usize)> {
+    None
+}
+
+/// Utility function to get num of open file descriptors
+#[cfg(target_os = "linux")]
+pub fn get_num_open_fd() -> Option<usize> {
+    let pid = std::process::id();
+    let fd_path = format!("/proc/{}/fd", pid);
+    let cmd = format!("ls -l {} | wc -l", fd_path);
+
+    let output = std::process::Command::new("sh")
+        .args(["-c", &cmd])
+        .output()
+        .unwrap();
+    if output.status.success() {
+        let n: usize = std::str::from_utf8(&output.stdout)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        Some(n)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn get_num_open_fd() -> Option<usize> {
     None
 }
 
