@@ -8,12 +8,6 @@
   dependencies:
     "@jridgewell/trace-mapping" "^0.3.0"
 
-"@ardatan/aggregate-error@0.0.6":
-  version "0.0.6"
-  resolved "https://registry.npmjs.org/@ardatan/aggregate-error/-/aggregate-error-0.0.6.tgz"
-  dependencies:
-    tslib "~2.0.1"
-
 "@babel/code-frame@^7.0.0", "@babel/code-frame@^7.10.4", "@babel/code-frame@^7.16.7", "@babel/code-frame@^7.18.6":
   version "7.18.6"
   resolved "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.18.6.tgz"
@@ -890,21 +884,37 @@
   version "1.1.3"
   resolved "https://registry.npmjs.org/@gar/promisify/-/promisify-1.1.3.tgz"
 
-"@graphql-tools/schema@^7.1.5":
-  version "7.1.5"
-  resolved "https://registry.npmjs.org/@graphql-tools/schema/-/schema-7.1.5.tgz"
+"@graphql-tools/merge@8.3.1":
+  version "8.3.1"
+  resolved "https://registry.yarnpkg.com/@graphql-tools/merge/-/merge-8.3.1.tgz#06121942ad28982a14635dbc87b5d488a041d722"
+  integrity sha512-BMm99mqdNZbEYeTPK3it9r9S6rsZsQKtlqJsSBknAclXq2pGEfOxjcIZi+kBSkHZKPKCRrYDd5vY0+rUmIHVLg==
   dependencies:
-    "@graphql-tools/utils" "^7.1.2"
-    tslib "~2.2.0"
-    value-or-promise "1.0.6"
+    "@graphql-tools/utils" "8.9.0"
+    tslib "^2.4.0"
 
-"@graphql-tools/utils@^7.1.2":
-  version "7.10.0"
-  resolved "https://registry.npmjs.org/@graphql-tools/utils/-/utils-7.10.0.tgz"
+"@graphql-tools/schema@^8.5.0":
+  version "8.5.1"
+  resolved "https://registry.yarnpkg.com/@graphql-tools/schema/-/schema-8.5.1.tgz#c2f2ff1448380919a330312399c9471db2580b58"
+  integrity sha512-0Esilsh0P/qYcB5DKQpiKeQs/jevzIadNTaT0jeWklPMwNbT7yMX4EqZany7mbeRRlSRwMzNzL5olyFdffHBZg==
   dependencies:
-    "@ardatan/aggregate-error" "0.0.6"
-    camel-case "4.1.2"
-    tslib "~2.2.0"
+    "@graphql-tools/merge" "8.3.1"
+    "@graphql-tools/utils" "8.9.0"
+    tslib "^2.4.0"
+    value-or-promise "1.0.11"
+
+"@graphql-tools/utils@8.9.0":
+  version "8.9.0"
+  resolved "https://registry.yarnpkg.com/@graphql-tools/utils/-/utils-8.9.0.tgz#c6aa5f651c9c99e1aca55510af21b56ec296cdb7"
+  integrity sha512-pjJIWH0XOVnYGXCqej8g/u/tsfV4LvLlj0eATKQu5zwnxd/TiTHq7Cg313qUPTFFHZ3PP5wJ15chYVtLDwaymg==
+  dependencies:
+    tslib "^2.4.0"
+
+"@graphql-tools/utils@^8.8.0":
+  version "8.13.1"
+  resolved "https://registry.yarnpkg.com/@graphql-tools/utils/-/utils-8.13.1.tgz#b247607e400365c2cd87ff54654d4ad25a7ac491"
+  integrity sha512-qIh9yYpdUFmctVqovwMdheVNJqFh+DQNWIhX87FJStfXYnmweBUDATok9fWPleKeFwxnW8IapKmY8m8toJEkAw==
+  dependencies:
+    tslib "^2.4.0"
 
 "@hapi/hoek@^9.0.0":
   version "9.2.1"
@@ -916,46 +926,28 @@
   dependencies:
     "@hapi/hoek" "^9.0.0"
 
-"@httptoolkit/httpolyglot@^2.0.1":
-  version "2.0.1"
-  resolved "https://registry.npmjs.org/@httptoolkit/httpolyglot/-/httpolyglot-2.0.1.tgz"
+"@httptoolkit/httpolyglot@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/httpolyglot/-/httpolyglot-2.1.0.tgz#61eaf272bad880e8d61a1e32d58127ba46045e4f"
+  integrity sha512-IkTpczmtH8XM/vAL5SL2/aLJYVD1m9KOMZEfl5AaI+xve7EBrj7NRPztk4YKC364tes3cnzCFg5JMjVpVqzWUw==
   dependencies:
     "@types/node" "^16.7.10"
 
-"@httptoolkit/proxy-agent@^5.0.1-socks-lookup-fix.0":
-  version "5.0.1-socks-lookup-fix.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/proxy-agent/-/proxy-agent-5.0.1-socks-lookup-fix.0.tgz"
-  dependencies:
-    "@httptoolkit/socks-proxy-agent" "^6.1.1-use-request-lookup-fix.0"
-    agent-base "^6.0.0"
-    debug "4"
-    http-proxy-agent "^4.0.0"
-    https-proxy-agent "^5.0.0"
-    lru-cache "^5.1.1"
-    pac-proxy-agent "^5.0.0"
-    proxy-from-env "^1.0.0"
-
-"@httptoolkit/socks-proxy-agent@^6.1.1-use-request-lookup-fix.0":
-  version "6.1.1-use-request-lookup-fix.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/socks-proxy-agent/-/socks-proxy-agent-6.1.1-use-request-lookup-fix.0.tgz"
-  dependencies:
-    agent-base "^6.0.2"
-    debug "^4.3.1"
-    socks "^2.6.1"
-
-"@httptoolkit/subscriptions-transport-ws@^0.9.19":
-  version "0.9.19"
-  resolved "https://registry.npmjs.org/@httptoolkit/subscriptions-transport-ws/-/subscriptions-transport-ws-0.9.19.tgz"
+"@httptoolkit/subscriptions-transport-ws@^0.11.2":
+  version "0.11.2"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/subscriptions-transport-ws/-/subscriptions-transport-ws-0.11.2.tgz#514663c926264e2de7f6cd33d09f81675c35b9e3"
+  integrity sha512-YB+gYYVjgYUeJrGkfS91ABeNWCFU7EVcn9Cflf2UXjsIiPJEI6yPxujPcjKv9wIJpM+33KQW/qVEmc+BdIDK2w==
   dependencies:
     backo2 "^1.0.2"
     eventemitter3 "^3.1.0"
     iterall "^1.2.1"
     symbol-observable "^1.0.4"
-    ws "^7.4.6"
+    ws "^8.8.0"
 
-"@httptoolkit/websocket-stream@^6.0.0":
-  version "6.0.0"
-  resolved "https://registry.npmjs.org/@httptoolkit/websocket-stream/-/websocket-stream-6.0.0.tgz"
+"@httptoolkit/websocket-stream@^6.0.1":
+  version "6.0.1"
+  resolved "https://registry.yarnpkg.com/@httptoolkit/websocket-stream/-/websocket-stream-6.0.1.tgz#8d732f1509860236276f6b0759db4cc9859bbb62"
+  integrity sha512-A0NOZI+Glp3Xgcz6Na7i7o09+/+xm2m0UCU8gdtM2nIv6/cjLmhMZMqehSpTlgbx9omtLmV8LVqOskPEyWnmZQ==
   dependencies:
     "@types/ws" "*"
     duplexify "^3.5.1"
@@ -1654,9 +1646,10 @@
     "@types/node" "*"
     form-data "^3.0.0"
 
-"@types/node@*":
-  version "17.0.35"
-  resolved "https://registry.npmjs.org/@types/node/-/node-17.0.35.tgz"
+"@types/node@*", "@types/node@^18.11.10":
+  version "18.11.10"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.11.10.tgz#4c64759f3c2343b7e6c4b9caf761c7a3a05cee34"
+  integrity sha512-juG3RWMBOqcOuXC643OAdSA525V44cVgGV6dUDuiFtss+8Fk5x1hI93Rsld43VeJVIeqlP9I7Fn9/qaVqoEAuQ==
 
 "@types/node@^12.12.54":
   version "12.20.47"
@@ -1665,11 +1658,6 @@
 "@types/node@^16.7.10":
   version "16.11.27"
   resolved "https://registry.npmjs.org/@types/node/-/node-16.11.27.tgz"
-
-"@types/node@^18.11.10":
-  version "18.11.10"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.11.10.tgz#4c64759f3c2343b7e6c4b9caf761c7a3a05cee34"
-  integrity sha512-juG3RWMBOqcOuXC643OAdSA525V44cVgGV6dUDuiFtss+8Fk5x1hI93Rsld43VeJVIeqlP9I7Fn9/qaVqoEAuQ==
 
 "@types/normalize-package-data@^2.4.0":
   version "2.4.1"
@@ -1828,7 +1816,7 @@ acorn@^8.4.1, acorn@^8.5.0, acorn@^8.7.0, acorn@^8.8.0:
   version "8.8.0"
   resolved "https://registry.npmjs.org/acorn/-/acorn-8.8.0.tgz"
 
-agent-base@6, agent-base@^6.0.0, agent-base@^6.0.2:
+agent-base@6, agent-base@^6.0.2:
   version "6.0.2"
   resolved "https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz"
   dependencies:
@@ -2299,13 +2287,6 @@ callsites@^3.0.0:
   version "3.1.0"
   resolved "https://registry.npmjs.org/callsites/-/callsites-3.1.0.tgz"
 
-camel-case@4.1.2:
-  version "4.1.2"
-  resolved "https://registry.npmjs.org/camel-case/-/camel-case-4.1.2.tgz"
-  dependencies:
-    pascal-case "^3.1.2"
-    tslib "^2.0.3"
-
 camelcase-keys@^6.2.2:
   version "6.2.2"
   resolved "https://registry.npmjs.org/camelcase-keys/-/camelcase-keys-6.2.2.tgz"
@@ -2647,7 +2628,7 @@ cross-env@7.0.3:
   dependencies:
     cross-spawn "^7.0.1"
 
-cross-fetch@^3.1.4:
+cross-fetch@^3.1.4, cross-fetch@^3.1.5:
   version "3.1.5"
   resolved "https://registry.npmjs.org/cross-fetch/-/cross-fetch-3.1.5.tgz"
   dependencies:
@@ -2689,7 +2670,7 @@ debug@2.6.9, debug@^2.6.9:
   dependencies:
     ms "2.0.0"
 
-debug@4, debug@4.3.4, debug@^4.0.0, debug@^4.1.0, debug@^4.1.1, debug@^4.3.1, debug@^4.3.2, debug@^4.3.3, debug@^4.3.4:
+debug@4, debug@4.3.4, debug@^4.0.0, debug@^4.1.0, debug@^4.1.1, debug@^4.3.2, debug@^4.3.3, debug@^4.3.4:
   version "4.3.4"
   resolved "https://registry.npmjs.org/debug/-/debug-4.3.4.tgz"
   dependencies:
@@ -2807,6 +2788,13 @@ deprecation@^2.0.0, deprecation@^2.3.1:
 destroy@~1.0.4:
   version "1.0.4"
   resolved "https://registry.npmjs.org/destroy/-/destroy-1.0.4.tgz"
+
+destroyable-server@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/destroyable-server/-/destroyable-server-1.0.0.tgz#aa2d3aecff7c99b0290ef4654b94a1983e57966b"
+  integrity sha512-78rUr9j0b4bRWO0eBtqKqmb43htBwNbofRRukpo+R7PZqHD6llb7aQoNVt81U9NQGhINRKBHz7lkrxZJj9vyog==
+  dependencies:
+    "@types/node" "*"
 
 dezalgo@^1.0.0:
   version "1.0.4"
@@ -3310,12 +3298,6 @@ fastq@^1.6.0:
   dependencies:
     reusify "^1.0.4"
 
-fetch-ponyfill@^7.1.0:
-  version "7.1.0"
-  resolved "https://registry.npmjs.org/fetch-ponyfill/-/fetch-ponyfill-7.1.0.tgz"
-  dependencies:
-    node-fetch "~2.6.1"
-
 figures@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/figures/-/figures-2.0.0.tgz"
@@ -3745,11 +3727,13 @@ http-cache-semantics@^4.1.0:
   version "4.1.0"
   resolved "https://registry.npmjs.org/http-cache-semantics/-/http-cache-semantics-4.1.0.tgz"
 
-http-encoding@^1.5.0:
-  version "1.5.0"
-  resolved "https://registry.npmjs.org/http-encoding/-/http-encoding-1.5.0.tgz"
+http-encoding@^1.5.1:
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/http-encoding/-/http-encoding-1.5.1.tgz#ae0b48fbe97b5a2e0a211fdb3e5412bead8d9865"
+  integrity sha512-2m4JnG1Z5RX5pRMdccyp6rX1jVo4LO+ussQzWdwR4AmrWhtX0KP1NyslVAFAspQwMxt2P00CCWXIBKj7ILZLpQ==
   dependencies:
     brotli-wasm "^1.1.0"
+    pify "^5.0.0"
     zstd-codec "^0.1.4"
 
 http-errors@1.8.0:
@@ -3788,16 +3772,18 @@ http-proxy-agent@^5.0.0:
     agent-base "6"
     debug "4"
 
-http2-wrapper@2.0.5:
-  version "2.0.5"
-  resolved "https://registry.npmjs.org/http2-wrapper/-/http2-wrapper-2.0.5.tgz"
+http2-wrapper@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/http2-wrapper/-/http2-wrapper-2.2.0.tgz#b80ad199d216b7d3680195077bd7b9060fa9d7f3"
+  integrity sha512-kZB0wxMo0sh1PehyjJUWRFEd99KC5TLjZ2cULC4f9iqJBAmKQQXEICjxl5iPJRwP40dpeHFqqhm7tYCvODpqpQ==
   dependencies:
     quick-lru "^5.1.1"
-    resolve-alpn "^1.1.1"
+    resolve-alpn "^1.2.0"
 
-https-proxy-agent@5, https-proxy-agent@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-5.0.0.tgz"
+https-proxy-agent@5, https-proxy-agent@^5.0.0, https-proxy-agent@^5.0.1:
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/https-proxy-agent/-/https-proxy-agent-5.0.1.tgz#c59ef224a04fe8b754f3db0063a25ea30d0005d6"
+  integrity sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==
   dependencies:
     agent-base "6"
     debug "4"
@@ -4525,27 +4511,16 @@ loupe@^2.3.1:
   dependencies:
     get-func-name "^2.0.0"
 
-lower-case@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.npmjs.org/lower-case/-/lower-case-2.0.2.tgz"
-  dependencies:
-    tslib "^2.0.3"
-
-lru-cache@^5.1.1:
-  version "5.1.1"
-  resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-5.1.1.tgz"
-  dependencies:
-    yallist "^3.0.2"
-
 lru-cache@^6.0.0:
   version "6.0.0"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-6.0.0.tgz"
   dependencies:
     yallist "^4.0.0"
 
-lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
-  version "7.14.0"
-  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.14.0.tgz#21be64954a4680e303a09e9468f880b98a0b3c7f"
+lru-cache@^7.14.0, lru-cache@^7.4.4, lru-cache@^7.5.1, lru-cache@^7.7.1:
+  version "7.14.1"
+  resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-7.14.1.tgz#8da8d2f5f59827edb388e63e459ac23d6d408fea"
+  integrity sha512-ysxwsnTKdAx96aTRdhDOCQfDgbHnt8SK0KY8SEjO0wHinhWOFTESbjVCMPbU1uGXg/ch4lifqx0wfjOawU2+WA==
 
 lunr@^2.3.9:
   version "2.3.9"
@@ -4886,15 +4861,16 @@ mocha@^10.1.0:
     yargs-parser "20.2.4"
     yargs-unparser "2.0.0"
 
-mockttp@^2.0.1:
-  version "2.7.0"
-  resolved "https://registry.npmjs.org/mockttp/-/mockttp-2.7.0.tgz"
+mockttp@^3.6.1:
+  version "3.6.1"
+  resolved "https://registry.yarnpkg.com/mockttp/-/mockttp-3.6.1.tgz#768afe53515f58cf85b552dd94c40e9ed07390f3"
+  integrity sha512-DIFToUNq4cMYaKSUdhF0h6YNEIfu0HBvzOf/chjEaNEXoH18igMI0NUj/C1TixwA5mJSm8yncSuoYrLOPE6pag==
   dependencies:
-    "@graphql-tools/schema" "^7.1.5"
-    "@httptoolkit/httpolyglot" "^2.0.1"
-    "@httptoolkit/proxy-agent" "^5.0.1-socks-lookup-fix.0"
-    "@httptoolkit/subscriptions-transport-ws" "^0.9.19"
-    "@httptoolkit/websocket-stream" "^6.0.0"
+    "@graphql-tools/schema" "^8.5.0"
+    "@graphql-tools/utils" "^8.8.0"
+    "@httptoolkit/httpolyglot" "^2.1.0"
+    "@httptoolkit/subscriptions-transport-ws" "^0.11.2"
+    "@httptoolkit/websocket-stream" "^6.0.1"
     "@types/cors" "^2.8.6"
     "@types/node" "*"
     base64-arraybuffer "^0.1.5"
@@ -4904,22 +4880,30 @@ mockttp@^2.0.1:
     connect "^3.7.0"
     cors "^2.8.4"
     cors-gate "^1.1.3"
+    cross-fetch "^3.1.5"
+    destroyable-server "^1.0.0"
     express "^4.14.0"
     express-graphql "^0.11.0"
-    fetch-ponyfill "^7.1.0"
     graphql "^14.0.2 || ^15.5"
     graphql-subscriptions "^1.1.0"
     graphql-tag "^2.12.6"
-    http-encoding "^1.5.0"
-    http2-wrapper "2.0.5"
+    http-encoding "^1.5.1"
+    http2-wrapper "^2.2.0"
+    https-proxy-agent "^5.0.1"
+    isomorphic-ws "^4.0.1"
     lodash "^4.16.4"
+    lru-cache "^7.14.0"
     native-duplexpair "^1.0.0"
     node-forge "^1.2.1"
+    pac-proxy-agent "^5.0.0"
+    parse-multipart-data "^1.4.0"
     performance-now "^2.1.0"
-    portfinder "^1.0.23"
+    portfinder "1.0.28"
+    read-tls-client-hello "^1.0.0"
+    socks-proxy-agent "^7.0.0"
     typed-error "^3.0.2"
     uuid "^8.3.2"
-    ws "^7.3.1"
+    ws "^8.8.0"
 
 modify-values@^1.0.0:
   version "1.0.1"
@@ -4991,13 +4975,6 @@ nise@^5.1.1:
     just-extend "^4.0.2"
     path-to-regexp "^1.7.0"
 
-no-case@^3.0.4:
-  version "3.0.4"
-  resolved "https://registry.npmjs.org/no-case/-/no-case-3.0.4.tgz"
-  dependencies:
-    lower-case "^2.0.2"
-    tslib "^2.0.3"
-
 node-abort-controller@^3.0.1:
   version "3.0.1"
   resolved "https://registry.yarnpkg.com/node-abort-controller/-/node-abort-controller-3.0.1.tgz#f91fa50b1dee3f909afabb7e261b1e1d6b0cb74e"
@@ -5013,7 +4990,7 @@ node-emoji@^1.11.0:
   dependencies:
     lodash "^4.17.21"
 
-node-fetch@2, node-fetch@2.6.7, node-fetch@^2.6.1, node-fetch@^2.6.7, node-fetch@~2.6.1:
+node-fetch@2, node-fetch@2.6.7, node-fetch@^2.6.1, node-fetch@^2.6.7:
   version "2.6.7"
   resolved "https://registry.npmjs.org/node-fetch/-/node-fetch-2.6.7.tgz"
   dependencies:
@@ -5560,16 +5537,14 @@ parse-json@^5.0.0:
     json-parse-even-better-errors "^2.3.0"
     lines-and-columns "^1.1.6"
 
+parse-multipart-data@^1.4.0:
+  version "1.5.0"
+  resolved "https://registry.yarnpkg.com/parse-multipart-data/-/parse-multipart-data-1.5.0.tgz#ab894cc6c40229d0a2042500e120df7562d94b87"
+  integrity sha512-ck5zaMF0ydjGfejNMnlo5YU2oJ+pT+80Jb1y4ybanT27j+zbVP/jkYmCrUGsEln0Ox/hZmuvgy8Ra7AxbXP2Mw==
+
 parseurl@~1.3.3:
   version "1.3.3"
   resolved "https://registry.npmjs.org/parseurl/-/parseurl-1.3.3.tgz"
-
-pascal-case@^3.1.2:
-  version "3.1.2"
-  resolved "https://registry.npmjs.org/pascal-case/-/pascal-case-3.1.2.tgz"
-  dependencies:
-    no-case "^3.0.4"
-    tslib "^2.0.3"
 
 path-exists@^3.0.0:
   version "3.0.0"
@@ -5645,6 +5620,11 @@ pify@^3.0.0:
   version "3.0.0"
   resolved "https://registry.npmjs.org/pify/-/pify-3.0.0.tgz"
 
+pify@^5.0.0:
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/pify/-/pify-5.0.0.tgz#1f5eca3f5e87ebec28cc6d54a0e4aaf00acc127f"
+  integrity sha512-eW/gHNMlxdSP6dmG6uJip6FXN0EQBwm2clYYd8Wul42Cwu/DK8HEftzsapcNdYe2MfLiIwZqsDk2RDEsTE79hA==
+
 pkg-conf@^2.1.0:
   version "2.1.0"
   resolved "https://registry.npmjs.org/pkg-conf/-/pkg-conf-2.1.0.tgz"
@@ -5658,9 +5638,10 @@ pkg-dir@^4.1.0:
   dependencies:
     find-up "^4.0.0"
 
-portfinder@^1.0.23:
+portfinder@1.0.28:
   version "1.0.28"
-  resolved "https://registry.npmjs.org/portfinder/-/portfinder-1.0.28.tgz"
+  resolved "https://registry.yarnpkg.com/portfinder/-/portfinder-1.0.28.tgz#67c4622852bd5374dd1dd900f779f53462fac778"
+  integrity sha512-Se+2isanIcEqf2XMHjyUKskczxbPH7dQnlMjXX6+dybayyHvAf/TCgyMRlzf/B6QDhAEFOGes0pzRo3by4AbMA==
   dependencies:
     async "^2.6.2"
     debug "^3.1.1"
@@ -5729,10 +5710,6 @@ proxy-addr@~2.0.7:
   dependencies:
     forwarded "0.2.0"
     ipaddr.js "1.9.1"
-
-proxy-from-env@^1.0.0:
-  version "1.1.0"
-  resolved "https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz"
 
 ps-tree@1.2.0:
   version "1.2.0"
@@ -5848,6 +5825,13 @@ read-pkg@^5.0.0, read-pkg@^5.2.0:
     normalize-package-data "^2.5.0"
     parse-json "^5.0.0"
     type-fest "^0.6.0"
+
+read-tls-client-hello@^1.0.0:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/read-tls-client-hello/-/read-tls-client-hello-1.0.1.tgz#b4d37bc8751d3d8b86ff74cc60d878d25a1d3698"
+  integrity sha512-OvSzfVv6Y656ekUxB7aDhWkLW7y1ck16ChfLFNJhKNADFNweH2fvyiEZkGmmdtXbOtlNuH2zVXZoFCW349M+GA==
+  dependencies:
+    "@types/node" "*"
 
 read@1, read@^1.0.7, read@~1.0.7:
   version "1.0.7"
@@ -5977,9 +5961,10 @@ require-main-filename@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/require-main-filename/-/require-main-filename-2.0.0.tgz"
 
-resolve-alpn@^1.1.1:
+resolve-alpn@^1.2.0:
   version "1.2.1"
-  resolved "https://registry.npmjs.org/resolve-alpn/-/resolve-alpn-1.2.1.tgz"
+  resolved "https://registry.yarnpkg.com/resolve-alpn/-/resolve-alpn-1.2.1.tgz#b7adbdac3546aaaec20b45e7d8265927072726f9"
+  integrity sha512-0a1F4l73/ZFZOakJnQ3FvkJ2+gSTQWz/r2KE5OdDY0TxPm5h4GkqkWWfM47T7HsbnOtcJVEF4epCVy6u7Q3K+g==
 
 resolve-from@^4.0.0:
   version "4.0.0"
@@ -6322,7 +6307,7 @@ socks-proxy-agent@^7.0.0:
     debug "^4.3.3"
     socks "^2.6.2"
 
-socks@^2.3.3, socks@^2.6.1, socks@^2.6.2:
+socks@^2.3.3, socks@^2.6.2:
   version "2.6.2"
   resolved "https://registry.npmjs.org/socks/-/socks-2.6.2.tgz"
   dependencies:
@@ -6756,17 +6741,14 @@ tslib@^1.8.1:
   version "1.14.1"
   resolved "https://registry.npmjs.org/tslib/-/tslib-1.14.1.tgz"
 
-tslib@^2.0.1, tslib@^2.0.3, tslib@^2.1.0:
+tslib@^2.0.1, tslib@^2.1.0:
   version "2.4.0"
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.4.0.tgz"
 
-tslib@~2.0.1:
-  version "2.0.3"
-  resolved "https://registry.npmjs.org/tslib/-/tslib-2.0.3.tgz"
-
-tslib@~2.2.0:
-  version "2.2.0"
-  resolved "https://registry.npmjs.org/tslib/-/tslib-2.2.0.tgz"
+tslib@^2.4.0:
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.4.1.tgz#0d0bfbaac2880b91e22df0768e55be9753a5b17e"
+  integrity sha512-tGyy4dAjRIEwI7BzsB0lynWgOpfqjUdq91XXAlIWD2OwKBH7oCl/GZG/HT4BOHrTlPMOASlMQ7veyTqpmRcrNA==
 
 tsutils@^3.21.0:
   version "3.21.0"
@@ -6983,9 +6965,10 @@ validate-npm-package-name@^4.0.0:
   dependencies:
     builtins "^5.0.0"
 
-value-or-promise@1.0.6:
-  version "1.0.6"
-  resolved "https://registry.npmjs.org/value-or-promise/-/value-or-promise-1.0.6.tgz"
+value-or-promise@1.0.11:
+  version "1.0.11"
+  resolved "https://registry.yarnpkg.com/value-or-promise/-/value-or-promise-1.0.11.tgz#3e90299af31dd014fe843fe309cefa7c1d94b140"
+  integrity sha512-41BrgH+dIbCFXClcSapVs5M6GkENd3gQOJpEfPDNa71LsUGMXDL0jMWpI/Rh7WhX+Aalfz2TTS3Zt5pUsbnhLg==
 
 vary@^1, vary@~1.1.2:
   version "1.1.2"
@@ -7118,13 +7101,14 @@ write-file-atomic@^4.0.0, write-file-atomic@^4.0.1:
     imurmurhash "^0.1.4"
     signal-exit "^3.0.7"
 
-ws@*, ws@^7.3.1, ws@^7.4.5, ws@^7.4.6:
+ws@*, ws@^8.5.0, ws@^8.8.0:
+  version "8.11.0"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.11.0.tgz#6a0d36b8edfd9f96d8b25683db2f8d7de6e8e143"
+  integrity sha512-HPG3wQd9sNQoT9xHyNCXoDUa+Xw/VevmY9FoHyQ+g+rrMn4j6FB4np7Z0OhdTgjx6MgQLK7jwSy1YecU1+4Asg==
+
+ws@^7.4.5:
   version "7.5.7"
   resolved "https://registry.npmjs.org/ws/-/ws-7.5.7.tgz"
-
-ws@^8.5.0:
-  version "8.8.0"
-  resolved "https://registry.npmjs.org/ws/-/ws-8.8.0.tgz"
 
 xregexp@2.0.0:
   version "2.0.0"
@@ -7141,10 +7125,6 @@ y18n@^4.0.0:
 y18n@^5.0.5:
   version "5.0.8"
   resolved "https://registry.npmjs.org/y18n/-/y18n-5.0.8.tgz"
-
-yallist@^3.0.2:
-  version "3.1.1"
-  resolved "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz"
 
 yallist@^4.0.0:
   version "4.0.0"
