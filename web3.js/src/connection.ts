@@ -311,9 +311,39 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
  * A strategy for confirming transactions that uses the last valid
  * block height for a given blockhash to check for transaction expiration.
  */
-export type BlockheightBasedTransactionConfirmationStrategy = {
+export type BlockheightBasedTransactionConfirmationStrategy =
+  BaseTransactionConfirmationStrategy & BlockhashWithExpiryBlockHeight;
+
+/**
+ * A strategy for confirming durable nonce transactions.
+ */
+export type DurableNonceTransactionConfirmationStrategy =
+  BaseTransactionConfirmationStrategy & {
+    /**
+     * The lowest slot at which to fetch the nonce value from the
+     * nonce account. This should be no lower than the slot at
+     * which the last-known value of the nonce was fetched.
+     */
+    minContextSlot: number;
+    /**
+     * The account where the current value of the nonce is stored.
+     */
+    nonceAccountPubkey: PublicKey;
+    /**
+     * The nonce value that was used to sign the transaction
+     * for which confirmation is being sought.
+     */
+    nonceValue: DurableNonce;
+  };
+
+/**
+ * Properties shared by all transaction confirmation strategies
+ */
+export type BaseTransactionConfirmationStrategy = Readonly<{
+  /** A signal that, when aborted, cancels any outstanding transaction confirmation operations */
+  abortSignal?: AbortSignal;
   signature: TransactionSignature;
-} & BlockhashWithExpiryBlockHeight;
+}>;
 
 /* @internal */
 function assertEndpointUrl(putativeUrl: string) {
@@ -339,28 +369,6 @@ function extractCommitmentFromConfig<TConfig>(
   }
   return {commitment, config};
 }
-
-/**
- * A strategy for confirming durable nonce transactions.
- */
-export type DurableNonceTransactionConfirmationStrategy = {
-  /**
-   * The lowest slot at which to fetch the nonce value from the
-   * nonce account. This should be no lower than the slot at
-   * which the last-known value of the nonce was fetched.
-   */
-  minContextSlot: number;
-  /**
-   * The account where the current value of the nonce is stored.
-   */
-  nonceAccountPubkey: PublicKey;
-  /**
-   * The nonce value that was used to sign the transaction
-   * for which confirmation is being sought.
-   */
-  nonceValue: DurableNonce;
-  signature: TransactionSignature;
-};
 
 /**
  * @internal
@@ -3571,6 +3579,9 @@ export class Connection {
       const config = strategy as
         | BlockheightBasedTransactionConfirmationStrategy
         | DurableNonceTransactionConfirmationStrategy;
+      if (config.abortSignal?.aborted) {
+        return Promise.reject(config.abortSignal.reason);
+      }
       rawSignature = config.signature;
     }
 
@@ -3600,6 +3611,21 @@ export class Connection {
         strategy,
       });
     }
+  }
+
+  private getCancellationPromise(signal?: AbortSignal): Promise<never> {
+    return new Promise<never>((_, reject) => {
+      if (signal == null) {
+        return;
+      }
+      if (signal.aborted) {
+        reject(signal.reason);
+      } else {
+        signal.addEventListener('abort', () => {
+          reject(signal.reason);
+        });
+      }
+    });
   }
 
   private getTransactionConfirmationPromise({
@@ -3722,7 +3748,7 @@ export class Connection {
 
   private async confirmTransactionUsingBlockHeightExceedanceStrategy({
     commitment,
-    strategy: {lastValidBlockHeight, signature},
+    strategy: {abortSignal, lastValidBlockHeight, signature},
   }: {
     commitment?: Commitment;
     strategy: BlockheightBasedTransactionConfirmationStrategy;
@@ -3753,9 +3779,14 @@ export class Connection {
     });
     const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
+    const cancellationPromise = this.getCancellationPromise(abortSignal);
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      const outcome = await Promise.race([
+        cancellationPromise,
+        confirmationPromise,
+        expiryPromise,
+      ]);
       if (outcome.__type === TransactionStatus.PROCESSED) {
         result = outcome.response;
       } else {
@@ -3770,7 +3801,13 @@ export class Connection {
 
   private async confirmTransactionUsingDurableNonceStrategy({
     commitment,
-    strategy: {minContextSlot, nonceAccountPubkey, nonceValue, signature},
+    strategy: {
+      abortSignal,
+      minContextSlot,
+      nonceAccountPubkey,
+      nonceValue,
+      signature,
+    },
   }: {
     commitment?: Commitment;
     strategy: DurableNonceTransactionConfirmationStrategy;
@@ -3821,9 +3858,14 @@ export class Connection {
     });
     const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
+    const cancellationPromise = this.getCancellationPromise(abortSignal);
     let result: RpcResponseAndContext<SignatureResult>;
     try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      const outcome = await Promise.race([
+        cancellationPromise,
+        confirmationPromise,
+        expiryPromise,
+      ]);
       if (outcome.__type === TransactionStatus.PROCESSED) {
         result = outcome.response;
       } else {
