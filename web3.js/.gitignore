@@ -25,8 +25,5 @@ doc
 # `solana-test-validator` ledger location
 test-ledger/
 
-# Flow
-module.flow.js
-
 # TypeScript
 declarations
