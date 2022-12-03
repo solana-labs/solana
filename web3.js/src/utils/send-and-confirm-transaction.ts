@@ -19,7 +19,11 @@ export async function sendAndConfirmTransaction(
   connection: Connection,
   transaction: Transaction,
   signers: Array<Signer>,
-  options?: ConfirmOptions,
+  options?: ConfirmOptions &
+    Readonly<{
+      // A signal that, when aborted, cancels any outstanding transaction confirmation operations
+      abortSignal?: AbortSignal;
+    }>,
 ): Promise<TransactionSignature> {
   const sendOptions = options && {
     skipPreflight: options.skipPreflight,
@@ -42,6 +46,7 @@ export async function sendAndConfirmTransaction(
     status = (
       await connection.confirmTransaction(
         {
+          abortSignal: options?.abortSignal,
           signature: signature,
           blockhash: transaction.recentBlockhash,
           lastValidBlockHeight: transaction.lastValidBlockHeight,
@@ -58,6 +63,7 @@ export async function sendAndConfirmTransaction(
     status = (
       await connection.confirmTransaction(
         {
+          abortSignal: options?.abortSignal,
           minContextSlot: transaction.minNonceContextSlot,
           nonceAccountPubkey,
           nonceValue: transaction.nonceInfo.nonce,
@@ -67,6 +73,13 @@ export async function sendAndConfirmTransaction(
       )
     ).value;
   } else {
+    if (options?.abortSignal != null) {
+      console.warn(
+        'sendAndConfirmTransaction(): A transaction with a deprecated confirmation strategy was ' +
+          'supplied along with an `abortSignal`. Only transactions having `lastValidBlockHeight` ' +
+          'or a combination of `nonceInfo` and `minNonceContextSlot` are abortable.',
+      );
+    }
     status = (
       await connection.confirmTransaction(
         signature,

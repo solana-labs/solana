@@ -3,6 +3,7 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {AbortController} from 'node-abort-controller';
 import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
 import sinonChai from 'sinon-chai';
 
@@ -1167,6 +1168,44 @@ describe('Connection', function () {
       });
 
       describe('block height strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              blockhash: 'sampleBlockhash',
+              lastValidBlockHeight: 1,
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight: 1,
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
         it('throws a `TransactionExpiredBlockheightExceededError` when the block height advances past the last valid one for this transaction without a signature confirmation', async () => {
           const mockSignature =
             '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
@@ -1295,6 +1334,46 @@ describe('Connection', function () {
       });
 
       describe('nonce strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              minContextSlot: 1,
+              nonceAccountPubkey: new PublicKey(1),
+              nonceValue: 'fakenonce',
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            minContextSlot: 1,
+            nonceAccountPubkey: new PublicKey(1),
+            nonceValue: 'fakenonce',
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
         it('confirms the transaction if the signature confirmation is received before the nonce is advanced', async () => {
           const mockSignature =
             '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
