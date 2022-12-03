@@ -86,7 +86,11 @@ impl CrdsGossip {
         &self,
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
-    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+    ) -> (
+        HashMap<Pubkey, Vec<CrdsValue>>,
+        usize, // number of values
+        usize, // number of push messages
+    ) {
         {
             let mut crds = self.crds.write().unwrap();
             for entry in pending_push_messages {
