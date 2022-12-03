@@ -3,6 +3,7 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {AbortController} from 'node-abort-controller';
 import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
 import sinonChai from 'sinon-chai';
 
