@@ -166,6 +166,8 @@ pub struct GossipStats {
     pub(crate) pull_requests_count: Counter,
     pub(crate) purge: Counter,
     pub(crate) purge_count: Counter,
+    pub(crate) push_fanout_num_entries: Counter,
+    pub(crate) push_fanout_num_nodes: Counter,
     pub(crate) push_message_count: Counter,
     pub(crate) push_message_pushes: Counter,
     pub(crate) push_message_value_count: Counter,
@@ -443,6 +445,16 @@ pub(crate) fn submit_gossip_stats(
             i64
         ),
         ("push_message_count", stats.push_message_count.clear(), i64),
+        (
+            "push_fanout_num_entries",
+            stats.push_fanout_num_entries.clear(),
+            i64
+        ),
+        (
+            "push_fanout_num_nodes",
+            stats.push_fanout_num_nodes.clear(),
+            i64
+        ),
         (
             "push_message_pushes",
             stats.push_message_pushes.clear(),

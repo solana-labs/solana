@@ -1511,11 +1511,17 @@ impl ClusterInfo {
     }
     fn new_push_requests(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.id();
-        let mut push_messages = {
+        let (mut push_messages, num_entries, num_nodes) = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
             self.gossip
                 .new_push_messages(self.drain_push_queue(), timestamp())
         };
+        self.stats
+            .push_fanout_num_entries
+            .add_relaxed(num_entries as u64);
+        self.stats
+            .push_fanout_num_nodes
+            .add_relaxed(num_nodes as u64);
         if self.require_stake_for_gossip(stakes) {
             push_messages.retain(|_, data| {
                 retain_staked(data, stakes);
@@ -3723,7 +3729,7 @@ RPC Enabled Nodes: 1"#;
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
-        let push_messages = cluster_info
+        let (push_messages, _, _) = cluster_info
             .gossip
             .new_push_messages(cluster_info.drain_push_queue(), timestamp());
         // there should be some pushes ready
