@@ -1514,7 +1514,7 @@ impl ClusterInfo {
         let (mut push_messages, num_entries, num_nodes) = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
             self.gossip
-                .new_push_messages(self.drain_push_queue(), timestamp())
+                .new_push_messages(timestamp(), self.drain_push_queue(), stakes)
         };
         self.stats
             .push_fanout_num_entries
@@ -3729,9 +3729,11 @@ RPC Enabled Nodes: 1"#;
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
-        let (push_messages, _, _) = cluster_info
-            .gossip
-            .new_push_messages(cluster_info.drain_push_queue(), timestamp());
+        let (push_messages, _, _) = cluster_info.gossip.new_push_messages(
+            timestamp(),
+            cluster_info.drain_push_queue(),
+            &HashMap::<Pubkey, u64>::default(), // stakes
+        );
         // there should be some pushes ready
         assert!(!push_messages.is_empty());
         push_messages

@@ -36,7 +36,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        cmp,
+        cmp::{self, Reverse},
         collections::{HashMap, HashSet},
         iter::repeat,
         net::SocketAddr,
@@ -267,13 +267,35 @@ impl CrdsGossipPush {
     /// pruned the source addresses.
     pub(crate) fn new_push_messages(
         &self,
-        crds: &RwLock<Crds>,
         now: u64,
+        crds: &RwLock<Crds>,
+        stakes: &HashMap<Pubkey, /*stake:*/ u64>,
     ) -> (
         HashMap<Pubkey, Vec<CrdsValue>>,
         usize, // number of values
         usize, // number of push messages
     ) {
+        // Buffer all entries upserted since last push.
+        let entries: Vec<CrdsValue> = {
+            let wallclock_window = self.wallclock_window(now);
+            let mut crds_cursor = self.crds_cursor.lock().unwrap();
+            // crds should be locked last after self.{active_set,crds_cursor}.
+            let crds = crds.read().unwrap();
+            crds.get_entries(crds_cursor.deref_mut())
+                .filter(|entry| wallclock_window.contains(&entry.value.wallclock()))
+                .map(|entry| entry.value.clone())
+                .collect()
+        };
+        // Lookup stake associated with each entry's origin.
+        let mut entries: Vec<(/*stake:*/ u64, CrdsValue)> = entries
+            .into_iter()
+            .map(|entry| {
+                let stake = stakes.get(&entry.pubkey()).copied();
+                (stake.unwrap_or_default(), entry)
+            })
+            .collect();
+        // Sort entries in descending order of their associated stake.
+        entries.sort_unstable_by_key(|&(stake, _)| Reverse(stake));
         let active_set = self.active_set.read().unwrap();
         let active_set_len = active_set.len();
         let push_fanout = self.push_fanout.min(active_set_len);
@@ -284,15 +306,7 @@ impl CrdsGossipPush {
         let mut num_values = 0;
         let mut total_bytes: usize = 0;
         let mut push_messages: HashMap<Pubkey, Vec<CrdsValue>> = HashMap::new();
-        let wallclock_window = self.wallclock_window(now);
-        let mut crds_cursor = self.crds_cursor.lock().unwrap();
-        // crds should be locked last after self.{active_set,crds_cursor}.
-        let crds = crds.read().unwrap();
-        let entries = crds
-            .get_entries(crds_cursor.deref_mut())
-            .map(|entry| &entry.value)
-            .filter(|value| wallclock_window.contains(&value.wallclock()));
-        for value in entries {
+        for (_stake, value) in entries {
             let serialized_size = serialized_size(&value).unwrap();
             total_bytes = total_bytes.saturating_add(serialized_size as usize);
             if total_bytes > self.max_bytes {
@@ -313,8 +327,6 @@ impl CrdsGossipPush {
                 }
             }
         }
-        drop(crds);
-        drop(crds_cursor);
         drop(active_set);
         self.num_pushes.fetch_add(num_pushes, Ordering::Relaxed);
         trace!("new_push_messages {} {}", num_values, active_set_len);
@@ -1001,7 +1013,14 @@ mod tests {
             [Ok(origin)]
         );
         assert_eq!(push.active_set.read().unwrap().len(), 1);
-        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
+        assert_eq!(
+            push.new_push_messages(
+                0, // now timestamp
+                &crds,
+                &HashMap::<Pubkey, u64>::default(), // stakes
+            ),
+            (expected, 2, 1)
+        );
     }
     #[test]
     fn test_personalized_push_messages() {
@@ -1055,7 +1074,14 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(push.active_set.read().unwrap().len(), 3);
-        assert_eq!(push.new_push_messages(&crds, now).0, expected);
+        assert_eq!(
+            push.new_push_messages(
+                now,
+                &crds,
+                &HashMap::<Pubkey, u64>::default(), // stakes
+            ),
+            (expected, 1, 2)
+        );
     }
     #[test]
     fn test_process_prune() {
@@ -1100,7 +1126,14 @@ mod tests {
             &peer.label().pubkey(),
             &[new_msg.label().pubkey()],
         );
-        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
+        assert_eq!(
+            push.new_push_messages(
+                0, // now timestamp
+                &crds,
+                &HashMap::<Pubkey, u64>::default(), // stakes
+            ),
+            (expected, 0, 0)
+        );
     }
     #[test]
     fn test_purge_old_pending_push_messages() {
@@ -1135,7 +1168,14 @@ mod tests {
             push.process_push_message(&crds, &Pubkey::default(), vec![new_msg], 1),
             [Ok(origin)],
         );
-        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
+        assert_eq!(
+            push.new_push_messages(
+                0, // now timestamp
+                &crds,
+                &HashMap::<Pubkey, u64>::default(), // stakes
+            ),
+            (expected, 0, 0)
+        );
     }
 
     #[test]

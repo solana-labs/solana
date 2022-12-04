@@ -84,8 +84,9 @@ impl CrdsGossip {
 
     pub fn new_push_messages(
         &self,
-        pending_push_messages: Vec<CrdsValue>,
         now: u64,
+        pending_push_messages: Vec<CrdsValue>,
+        stakes: &HashMap<Pubkey, /*stake:*/ u64>,
     ) -> (
         HashMap<Pubkey, Vec<CrdsValue>>,
         usize, // number of values
@@ -97,7 +98,7 @@ impl CrdsGossip {
                 let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
             }
         }
-        self.push.new_push_messages(&self.crds, now)
+        self.push.new_push_messages(now, &self.crds, stakes)
     }
 
     pub(crate) fn push_duplicate_shred(
