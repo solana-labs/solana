@@ -13435,11 +13435,10 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         // D: Make pubkey1 0-lamport; also triggers clean of step B
         current_slot += 1;
-        accounts.flush_root_write_cache(current_slot - 1);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store_from_test(current_slot, &[(&pubkey1, &zero_lamport_account)]);
         accounts.add_root_and_flush_write_cache(current_slot);
