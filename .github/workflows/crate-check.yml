@@ -8,14 +8,31 @@ on:
     branches:
       - master
     paths:
-      - '**/Cargo.toml'
-      - '.github/workflows/crate-check.yml'
+      - "**/Cargo.toml"
+      - ".github/workflows/crate-check.yml"
 
 jobs:
   check:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
+
+      - name: Get commit range (push)
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "COMMIT_RANGE=$GIHTUB_SHA" >> $GITHUB_ENV
+
+      - name: Get commit range (pull_request)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          echo "COMMIT_RANGE=${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+
+      - name: Setup Rust
+        shell: bash
+        run: |
+          source ci/rust-version.sh stable
+          rustup default $rust_stable
+
       - run: |
           ci/check-crates.sh
 
