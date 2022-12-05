@@ -1233,7 +1233,7 @@ impl Bank {
         Self::new_with_config_for_tests(
             genesis_config,
             test_config.secondary_indexes,
-            test_config.accounts_db_caching_enabled,
+            true,
             AccountShrinkThreshold::default(),
         )
     }
