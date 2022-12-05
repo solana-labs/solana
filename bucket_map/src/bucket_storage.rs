@@ -435,7 +435,7 @@ mod test {
         assert!(storage.is_free(ix));
         assert_eq!(storage.uid(ix), None);
 
-        // test get_mmap_fd_stats
+        // test get_open_fd stats
         let mmap_count = get_mmap_count().unwrap();
         let open_fd = get_num_open_fd().unwrap();
         let (soft_limit, hard_limit) = get_open_fd_limits().unwrap();
@@ -446,6 +446,8 @@ mod test {
         assert!(hard_limit > 0);
     }
 
+    /// bench get_mmap_count
+    /// 2M mmaps takes 1.5s
     #[cfg(target_os = "linux")]
     #[ignore]
     #[test]
@@ -465,7 +467,6 @@ mod test {
             v.push(s);
         }
 
-        // test get_mmap_fd_stats
         let start = Instant::now();
         let mmap_count = get_mmap_count().unwrap();
         let duration = start.elapsed();
