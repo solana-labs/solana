@@ -19,9 +19,8 @@ if [[ -n $RUST_STABLE_VERSION ]]; then
   stable_version="$RUST_STABLE_VERSION"
 else
   # read rust version from rust-toolchain.toml file
-  base="$(dirname "${BASH_SOURCE[0]}")"
-  source "$base/../scripts/read-cargo-variable.sh"
-  stable_version=$(readCargoVariable channel "$base/../rust-toolchain.toml")
+  source "./scripts/read-cargo-variable.sh"
+  stable_version=$(readCargoVariable channel "./rust-toolchain.toml")
 fi
 
 if [[ -n $RUST_NIGHTLY_VERSION ]]; then
