@@ -96,17 +96,6 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
-  - name: set automerge label on mergify backport PRs
-    conditions:
-      - author=mergify[bot]
-      - head~=^mergify/bp/
-      - "#status-failure=0"
-      - "-merged"
-      - label!=no-automerge
-    actions:
-      label:
-        add:
-          - automerge
   - name: v1.13 feature-gate backport
     conditions:
       - label=v1.13
