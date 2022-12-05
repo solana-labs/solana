@@ -35,6 +35,11 @@ jobs:
           source ci/rust-version.sh stable
           rustup default $rust_stable
 
+      - name: Install toml-cli
+        shell: bash
+        run: |
+          cargo install toml-cli
+
       - run: |
           ci/check-crates.sh
 
