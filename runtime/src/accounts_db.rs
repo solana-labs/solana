@@ -11569,11 +11569,14 @@ pub mod tests {
         //This test is pedantic
         //A slot is purged when a non root bank is cleaned up.  If a slot is behind root but it is
         //not root, it means we are retaining dead banks.
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        accounts.caching_enabled = true;
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
-        accounts.store_uncached(0, &[(&pubkey, &account)]);
+        accounts.store_from_test(0, &[(&pubkey, &account)]);
+        accounts.add_root_and_flush_write_cache(0);
+
         let ancestors = vec![(0, 0)].into_iter().collect();
         let id = {
             let (lock, idx) = accounts
@@ -11583,7 +11586,6 @@ pub mod tests {
             lock.slot_list()[idx].1.store_id()
         };
         accounts.get_accounts_delta_hash(0);
-        accounts.add_root(1);
 
         //slot is still there, since gc is lazy
         assert!(accounts
@@ -11596,13 +11598,14 @@ pub mod tests {
             .is_some());
 
         //store causes clean
-        accounts.store_uncached(1, &[(&pubkey, &account)]);
+        accounts.store_from_test(1, &[(&pubkey, &account)]);
 
         // generate delta state for slot 1, so clean operates on it.
         accounts.get_accounts_delta_hash(1);
 
         //slot is gone
         accounts.print_accounts_stats("pre-clean");
+        accounts.add_root_and_flush_write_cache(1);
         accounts.clean_accounts_for_tests();
         assert!(accounts.storage.map.get(&0).is_none());
 
@@ -16628,6 +16631,42 @@ pub mod tests {
     }
 
     impl AccountsDb {
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        fn add_root_and_flush_write_cache(&self, slot: Slot) {
+            if self.caching_enabled {
+                self.add_root(slot);
+                self.flush_root_write_cache(slot);
+            }
+        }
+
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        fn flush_root_write_cache(&self, root: Slot) {
+            if self.caching_enabled {
+                assert!(
+                    self.accounts_index
+                        .roots_tracker
+                        .read()
+                        .unwrap()
+                        .alive_roots
+                        .contains(&root),
+                    "slot: {root}"
+                );
+                self.flush_accounts_cache(true, Some(root));
+            }
+        }
+
+        /// used to be store_uncached. But, this is not allowed anymore.
+        fn store_from_test(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+            self.store(
+                (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
+                self.caching_enabled,
+                None,
+                StoreReclaims::Default,
+            );
+        }
+
         /// helper function to test unref_accounts or clean_dead_slots_from_accounts_index
         fn test_unref(
             &self,
