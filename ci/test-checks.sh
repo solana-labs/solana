@@ -37,7 +37,7 @@ echo --- build environment
   "$cargoNightly" --version --verbose
 
   cargo stable clippy --version --verbose
-  "$cargoNightly" nightly clippy --version --verbose
+  "$cargoNightly" clippy --version --verbose
 
   # audit is done only with "$cargo stable"
   cargo stable audit --version
