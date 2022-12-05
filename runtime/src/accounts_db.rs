@@ -13404,41 +13404,61 @@ pub mod tests {
         let dummy_pubkey = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&pubkey1, &account)]);
-        accounts.store_uncached(current_slot, &[(&pubkey2, &account)]);
+        accounts.store_from_test(current_slot, &[(&pubkey1, &account)]);
+        accounts.store_from_test(current_slot, &[(&pubkey2, &account)]);
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         // B: Test multiple updates to pubkey1 in a single slot/storage
         current_slot += 1;
         assert_eq!(0, accounts.alive_account_count_in_slot(current_slot));
+        accounts.add_root_and_flush_write_cache(current_slot - 1);
         assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
-        accounts.store_uncached(current_slot, &[(&pubkey1, &account2)]);
-        accounts.store_uncached(current_slot, &[(&pubkey1, &account2)]);
+        accounts.store_from_test(current_slot, &[(&pubkey1, &account2)]);
+        accounts.store_from_test(current_slot, &[(&pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(1, accounts.alive_account_count_in_slot(current_slot));
         // Stores to same pubkey, same slot only count once towards the
         // ref count
         assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
 
         // C: Yet more update to trigger lazy clean of step A
         current_slot += 1;
         assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
-        accounts.store_uncached(current_slot, &[(&pubkey1, &account3)]);
+        accounts.store_from_test(current_slot, &[(&pubkey1, &account3)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         // D: Make pubkey1 0-lamport; also triggers clean of step B
         current_slot += 1;
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
-        accounts.store_uncached(current_slot, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.store_from_test(current_slot, &[(&pubkey1, &zero_lamport_account)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
+        // had to be a root to flush, but clean won't work as this test expects if it is a root
+        // so, remove the root from alive_roots, then restore it after clean
+        accounts
+            .accounts_index
+            .roots_tracker
+            .write()
+            .unwrap()
+            .alive_roots
+            .remove(&current_slot);
         accounts.clean_accounts_for_tests();
+        accounts
+            .accounts_index
+            .roots_tracker
+            .write()
+            .unwrap()
+            .alive_roots
+            .insert(current_slot);
 
         assert_eq!(
             // Removed one reference from the dead slot (reference only counted once
@@ -13451,7 +13471,7 @@ pub mod tests {
 
         // E: Avoid missing bank hash error
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&dummy_pubkey, &dummy_account)]);
+        accounts.store_from_test(current_slot, &[(&dummy_pubkey, &dummy_account)]);
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
@@ -13463,6 +13483,7 @@ pub mod tests {
         // If step C and step D should be purged, snapshot restore would cause
         // pubkey1 to be revived as the state of step A.
         // So, prevent that from happening by introducing refcount
+        ((current_slot - 1)..=current_slot).for_each(|slot| accounts.flush_root_write_cache(slot));
         accounts.clean_accounts_for_tests();
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
         accounts.clean_accounts_for_tests();
@@ -13475,11 +13496,12 @@ pub mod tests {
 
         // F: Finally, make Step A cleanable
         current_slot += 1;
-        accounts.store_uncached(current_slot, &[(&pubkey2, &account)]);
+        accounts.store_from_test(current_slot, &[(&pubkey2, &account)]);
         accounts.get_accounts_delta_hash(current_slot);
         accounts.add_root(current_slot);
 
         // Do clean
+        accounts.flush_root_write_cache(current_slot);
         accounts.clean_accounts_for_tests();
 
         // 2nd clean needed to clean-up pubkey1
@@ -16628,6 +16650,42 @@ pub mod tests {
     }
 
     impl AccountsDb {
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        fn add_root_and_flush_write_cache(&self, slot: Slot) {
+            if self.caching_enabled {
+                self.add_root(slot);
+                self.flush_root_write_cache(slot);
+            }
+        }
+
+        /// useful to adapt tests written prior to introduction of the write cache
+        /// to use the write cache
+        fn flush_root_write_cache(&self, root: Slot) {
+            if self.caching_enabled {
+                assert!(
+                    self.accounts_index
+                        .roots_tracker
+                        .read()
+                        .unwrap()
+                        .alive_roots
+                        .contains(&root),
+                    "slot: {root}"
+                );
+                self.flush_accounts_cache(true, Some(root));
+            }
+        }
+
+        /// used to be store_uncached. But, this is not allowed anymore.
+        fn store_from_test(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
+            self.store(
+                (slot, accounts, INCLUDE_SLOT_IN_HASH_TESTS),
+                self.caching_enabled,
+                None,
+                StoreReclaims::Default,
+            );
+        }
+
         /// helper function to test unref_accounts or clean_dead_slots_from_accounts_index
         fn test_unref(
             &self,
