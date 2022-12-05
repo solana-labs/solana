@@ -30,7 +30,7 @@ Prior to the balance check, the leader validates all the signatures in the trans
 2. Check if the fee account is present in the cache, or load the account from accounts_db and store the lamport balance in the cache.
 3. If the balance is less than the fee, drop the transaction.
 4. Subtract the fee from the balance.
-5. For all the keys in the transaction that are Credit-Debit and are referenced by an instruction, reduce their balance to 0 in the cache. The account fee is declared as Credit-Debit, but as long as it is not used in any instruction its balance will not be reduced to 0.
+5. If fee account is called by system program, or it is passed to a instruction with system program, then reduce its balance to 0 in the cache.
 
 ## Leader Replay
 
