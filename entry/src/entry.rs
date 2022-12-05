@@ -511,7 +511,7 @@ pub fn start_verify_transactions(
                         .map(|tx| tx.to_versioned_transaction());
 
                     let res = packet_batch.par_iter_mut().zip(entry_tx_iter).all(|pair| {
-                        pair.0.meta = Meta::default();
+                        *pair.0.meta_mut() = Meta::default();
                         Packet::populate_packet(pair.0, None, &pair.1).is_ok()
                     });
                     if res {
@@ -538,7 +538,7 @@ pub fn start_verify_transactions(
                     );
                     let verified = packet_batches
                         .iter()
-                        .all(|batch| batch.iter().all(|p| !p.meta.discard()));
+                        .all(|batch| batch.iter().all(|p| !p.meta().discard()));
                     verify_time.stop();
                     (verified, verify_time.as_us())
                 })

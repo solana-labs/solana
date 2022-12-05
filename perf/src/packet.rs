@@ -122,7 +122,7 @@ impl PacketBatch {
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
         for p in self.iter_mut() {
-            p.meta.set_socket_addr(addr);
+            p.meta_mut().set_socket_addr(addr);
         }
     }
 

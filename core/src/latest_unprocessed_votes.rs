@@ -34,7 +34,7 @@ pub struct LatestValidatorVotePacket {
 
 impl LatestValidatorVotePacket {
     pub fn new(packet: Packet, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
-        if !packet.meta.is_simple_vote_tx() {
+        if !packet.meta().is_simple_vote_tx() {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
 
@@ -347,7 +347,10 @@ mod tests {
             None,
         );
         let mut packet = Packet::from_data(None, vote_tx).unwrap();
-        packet.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        packet
+            .meta_mut()
+            .flags
+            .set(PacketFlags::SIMPLE_VOTE_TX, true);
         LatestValidatorVotePacket::new(packet, vote_source).unwrap()
     }
 
@@ -380,7 +383,7 @@ mod tests {
             ),
         )
         .unwrap();
-        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         let mut vote_switch = Packet::from_data(
             None,
             new_vote_transaction(
@@ -395,7 +398,7 @@ mod tests {
         )
         .unwrap();
         vote_switch
-            .meta
+            .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
         let mut vote_state_update = Packet::from_data(
@@ -411,7 +414,7 @@ mod tests {
         )
         .unwrap();
         vote_state_update
-            .meta
+            .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
         let mut vote_state_update_switch = Packet::from_data(
@@ -427,7 +430,7 @@ mod tests {
         )
         .unwrap();
         vote_state_update_switch
-            .meta
+            .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
         let random_transaction = Packet::from_data(

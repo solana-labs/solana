@@ -126,7 +126,7 @@ impl UnprocessedPacketBatches {
                 if dropped_packet
                     .immutable_section()
                     .original_packet()
-                    .meta
+                    .meta()
                     .is_tracer_packet()
                 {
                     num_dropped_tracer_packets += 1;
@@ -478,7 +478,7 @@ mod tests {
             packet_vector.push(Packet::from_data(None, tx).unwrap());
         }
         for index in vote_indexes.iter() {
-            packet_vector[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
+            packet_vector[*index].meta_mut().flags |= PacketFlags::SIMPLE_VOTE_TX;
         }
 
         packet_vector

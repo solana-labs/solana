@@ -95,9 +95,9 @@ impl ShredFetchStage {
                     &mut shreds_received,
                     &mut stats,
                 ) {
-                    packet.meta.set_discard(true);
+                    packet.meta_mut().set_discard(true);
                 } else {
-                    packet.meta.flags.insert(flags);
+                    packet.meta_mut().flags.insert(flags);
                 }
             }
             stats.maybe_submit(name, STATS_SUBMIT_CADENCE);
