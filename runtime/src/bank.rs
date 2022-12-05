@@ -11766,6 +11766,7 @@ pub(crate) mod tests {
         )
         .unwrap();
         bank.freeze();
+        add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
         assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
 
