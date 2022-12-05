@@ -66,12 +66,12 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         net::{SocketAddr, UdpSocket},
         process::exit,
-        sync::Arc,
+        sync::{RwLock, Arc,},
         thread,
         time::{Duration, Instant},
     },
@@ -737,6 +737,7 @@ fn main() {
     let (nodes, client) = if !cmd_params.skip_gossip {
         info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
         let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (gossip_nodes, validators) = discover(
             None, // keypair
             Some(&cmd_params.entrypoint_addr),
@@ -747,6 +748,7 @@ fn main() {
             None,                              // my_gossip_addr
             0,                                 // my_shred_version
             socket_addr_space,
+            staked_nodes
         )
         .unwrap_or_else(|err| {
             eprintln!(

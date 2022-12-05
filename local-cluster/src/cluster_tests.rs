@@ -31,7 +31,7 @@ use {
         timing::{duration_as_ms, timestamp},
         transport::TransportError,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_vote_program::vote_transaction,
     std::{
         collections::{HashMap, HashSet},
@@ -60,8 +60,9 @@ pub fn spend_and_verify_all_nodes<S: ::std::hash::BuildHasher + Sync + Send>(
     socket_addr_space: SocketAddrSpace,
     connection_cache: &Arc<ConnectionCache>,
 ) {
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     let cluster_nodes =
-        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space, staked_nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let ignore_nodes = Arc::new(ignore_nodes);
     cluster_nodes.par_iter().for_each(|ingress_node| {
@@ -210,8 +211,9 @@ pub fn kill_entry_and_spend_and_verify_rest(
     socket_addr_space: SocketAddrSpace,
 ) {
     info!("kill_entry_and_spend_and_verify_rest...");
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     let cluster_nodes =
-        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space).unwrap();
+        discover_cluster(&entry_point_info.gossip, nodes, socket_addr_space, staked_nodes).unwrap();
     assert!(cluster_nodes.len() >= nodes);
     let (rpc, tpu) = get_client_facing_addr(entry_point_info);
     let client = ThinClient::new(rpc, tpu, connection_cache.clone());

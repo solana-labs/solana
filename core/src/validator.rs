@@ -873,7 +873,7 @@ impl Validator {
             &exit,
             true, //use_quic
             identity_keypair.clone(),
-            &staked_nodes,
+            staked_nodes.clone(),
         );
         let serve_repair = ServeRepair::new(
             cluster_info.clone(),

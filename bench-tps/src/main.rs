@@ -22,10 +22,10 @@ use {
         commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
         system_program,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
         collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
-        sync::Arc,
+        sync::{RwLock, Arc,},
     },
 };
 
@@ -59,8 +59,9 @@ fn create_client(
             if let Some((rpc, tpu)) = rpc_tpu_sockets {
                 Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
+                let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
                 let nodes =
-                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified)
+                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified, staked_nodes)
                         .unwrap_or_else(|err| {
                             eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
                             exit(1);

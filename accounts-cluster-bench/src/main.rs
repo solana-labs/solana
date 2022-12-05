@@ -22,7 +22,7 @@ use {
         system_instruction, system_program,
         transaction::Transaction,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes,},
     solana_transaction_status::parse_token::spl_token_instruction,
     std::{
         cmp::min,
@@ -31,6 +31,7 @@ use {
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc,
+            RwLock,
         },
         thread::sleep,
         time::{Duration, Instant},
@@ -660,6 +661,8 @@ fn main() {
 
     let rpc_addr = if !skip_gossip {
         info!("Finding cluster entry: {:?}", entrypoint_addr);
+        //todo: is this right?
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (gossip_nodes, _validators) = discover(
             None, // keypair
             Some(&entrypoint_addr),
@@ -670,6 +673,7 @@ fn main() {
             None,                    // my_gossip_addr
             0,                       // my_shred_version
             SocketAddrSpace::Unspecified,
+            staked_nodes
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");

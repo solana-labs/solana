@@ -25,13 +25,14 @@ use {
         system_instruction,
         transaction::Transaction,
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
         net::SocketAddr,
         process::exit,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc,
+            RwLock,
         },
         thread::sleep,
         time::{Duration, Instant},
@@ -587,6 +588,7 @@ fn main() {
     let payer_keypair_refs: Vec<&Keypair> = payer_keypairs.iter().collect();
     let account_keypair_refs: Vec<&Keypair> = account_keypairs.iter().collect();
 
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     let rpc_addr = if !skip_gossip {
         info!("Finding cluster entry: {:?}", entrypoint_addr);
         let (gossip_nodes, _validators) = discover(
@@ -599,6 +601,7 @@ fn main() {
             None,                    // my_gossip_addr
             0,                       // my_shred_version
             SocketAddrSpace::Unspecified,
+            staked_nodes
         )
         .unwrap_or_else(|err| {
             eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");

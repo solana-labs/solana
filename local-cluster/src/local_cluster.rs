@@ -42,7 +42,7 @@ use {
         transaction::Transaction,
     },
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{streamer::StakedNodes, socket::SocketAddrSpace},
     solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
@@ -343,10 +343,12 @@ impl LocalCluster {
             );
         });
 
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         discover_cluster(
             &cluster.entry_point_info.gossip,
             config.node_stakes.len() + config.num_listeners as usize,
             socket_addr_space,
+            staked_nodes.clone()
         )
         .unwrap();
 
@@ -354,6 +356,7 @@ impl LocalCluster {
             &cluster.entry_point_info.gossip,
             config.node_stakes.len(),
             socket_addr_space,
+            staked_nodes
         )
         .unwrap();
 
@@ -530,10 +533,12 @@ impl LocalCluster {
             .collect();
         assert!(!alive_node_contact_infos.is_empty());
         info!("{} discovering nodes", test_name);
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let cluster_nodes = discover_cluster(
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
             socket_addr_space,
+            staked_nodes
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
@@ -560,10 +565,12 @@ impl LocalCluster {
             .collect();
         assert!(!alive_node_contact_infos.is_empty());
         info!("{} discovering nodes", test_name);
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let cluster_nodes = discover_cluster(
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
             socket_addr_space,
+            staked_nodes
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());

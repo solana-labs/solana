@@ -43,7 +43,7 @@ use {
         rent::Rent,
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_tpu_client::tpu_connection_cache::{
         DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
     },
@@ -843,10 +843,11 @@ impl TestValidator {
             config.tpu_enable_udp,
         )?);
 
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1, socket_addr_space)
-            .map_err(|err| format!("TestValidator startup failed: {err:?}"))?;
+        discover_cluster(&gossip, 1, socket_addr_space, staked_nodes)
+            .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         let test_validator = TestValidator {
             ledger_path,
