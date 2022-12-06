@@ -13240,28 +13240,28 @@ pub mod tests {
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
         accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &account3)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_count_and_status("before reconstruct");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
