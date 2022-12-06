@@ -14389,7 +14389,7 @@ pub mod tests {
             let slot = slot as Slot;
             db.store_for_tests(slot, &[(key, &zero_lamport_account)]);
             db.get_accounts_delta_hash(slot);
-            db.add_root(slot);
+            db.add_root_and_flush_write_cache(slot);
             // reset next_id to what it was previously to cause us to re-use the same id
             db.next_id.store(AppendVecId::MAX, Ordering::Release);
         });
