@@ -69,7 +69,8 @@ jobs:
     needs:
       - check
     if: ${{ needs.check.outputs.continue == 1 }}
-    name: build & deploy
+    # the name is used by .mergify.yml as well
+    name: build & deploy docs
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
