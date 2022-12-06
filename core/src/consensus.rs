@@ -651,8 +651,10 @@ impl Tower {
         latest_validator_votes_for_frozen_banks: &LatestValidatorVotesForFrozenBanks,
         heaviest_subtree_fork_choice: &HeaviestSubtreeForkChoice,
     ) -> SwitchForkDecision {
-        self.last_voted_slot_hash()
-            .map(|(last_voted_slot, last_voted_hash)| {
+        let (last_voted_slot, last_voted_hash) = match self.last_voted_slot_hash() {
+            None => return SwitchForkDecision::SameFork,
+            Some(slot_hash) => slot_hash,
+        };
                 let root = self.root();
                 let empty_ancestors = HashSet::default();
                 let empty_ancestors_due_to_minor_unsynced_ledger = || {
@@ -806,17 +808,17 @@ impl Tower {
                     //    `last_vote`
                     // 5) Don't consider any banks before the root because
                     //    all lockouts must be ancestors of `last_vote`
-                    if !progress.get_fork_stats(*candidate_slot).map(|stats| stats.computed).unwrap_or(false)
+                    if !progress.get_fork_stats(*candidate_slot).map(|stats| stats.computed).unwrap_or(false) || {
                         // If any of the descendants have the `computed` flag set, then there must be a more
                         // recent frozen bank on this fork to use, so we can ignore this one. Otherwise,
                         // even if this bank has descendants, if they have not yet been frozen / stats computed,
                         // then use this bank as a representative for the fork.
-                        || descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
-                        || *candidate_slot == last_voted_slot
+                        descendants.iter().any(|d| progress.get_fork_stats(*d).map(|stats| stats.computed).unwrap_or(false))
+                        } || *candidate_slot == last_voted_slot || {
                         // Ignore if the `candidate_slot` is a descendant of the `last_voted_slot`, since we do not
                         // want to count votes on the same fork.
-                        || Self::is_candidate_slot_descendant_of_last_vote(*candidate_slot, last_voted_slot, ancestors).expect("exists in descendants map, so must exist in ancestors map")
-                        || *candidate_slot <= root
+                        Self::is_candidate_slot_descendant_of_last_vote(*candidate_slot, last_voted_slot, ancestors).expect("exists in descendants map, so must exist in ancestors map")
+                        } || *candidate_slot <= root
                     {
                         continue;
                     }
@@ -850,12 +852,13 @@ impl Tower {
                                     // 1) Not ancestors of `last_vote`, meaning being on different fork
                                     // 2) Not from before the current root as we can't determine if
                                     // anything before the root was an ancestor of `last_vote` or not
-                                    if !last_vote_ancestors.contains(lockout_interval_start)
+                                    if !last_vote_ancestors.contains(lockout_interval_start) && {
                                         // Given a `lockout_interval_start` < root that appears in a
                                         // bank for a `candidate_slot`, it must be that `lockout_interval_start`
                                         // is an ancestor of the current root, because `candidate_slot` is a
                                         // descendant of the current root
-                                        && *lockout_interval_start > root
+                                        *lockout_interval_start > root
+                                    }
                                     {
                                         let stake = epoch_vote_accounts
                                             .get(vote_account_pubkey)
@@ -884,7 +887,7 @@ impl Tower {
                     }
 
                     if *candidate_latest_frozen_vote > last_voted_slot
-                        &&
+                        && {
                             // Because `candidate_latest_frozen_vote` is the last vote made by some validator
                             // in the cluster for a frozen bank `B` observed through gossip, we may have cleared
                             // that frozen bank `B` because we `set_root(root)` for a `root` on a different fork,
@@ -907,7 +910,7 @@ impl Tower {
                             // on some descendant of the root, at which time they can be included in switching proofs.
                             !Self::is_candidate_slot_descendant_of_last_vote(
                                 *candidate_latest_frozen_vote, last_voted_slot, ancestors)
-                            .unwrap_or(true)
+                            .unwrap_or(true) }
                             {
                                 let stake = epoch_vote_accounts
                                     .get(vote_account_pubkey)
@@ -924,8 +927,6 @@ impl Tower {
                 // We have not detected sufficient lockout past the last voted slot to generate
                 // a switching proof
                 SwitchForkDecision::FailedSwitchThreshold(locked_out_stake, total_stake)
-            })
-        .unwrap_or(SwitchForkDecision::SameFork)
     }
 
     #[allow(clippy::too_many_arguments)]
