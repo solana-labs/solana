@@ -13305,7 +13305,8 @@ pub mod tests {
         let zero_lamport_account = AccountSharedData::new(zero_lamport, data_size, &owner);
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_sized_no_extra_stores(Vec::new(), store_size);
+        let mut accounts = AccountsDb::new_sized_no_extra_stores(Vec::new(), store_size);
+        accounts.caching_enabled = true;
 
         // A: Initialize AccountsDb with pubkey1 and pubkey2
         current_slot += 1;
@@ -13317,7 +13318,7 @@ pub mod tests {
             accounts.store_for_tests(current_slot, &[(&pubkey1, &account)]);
         }
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         info!("post A");
         accounts.print_accounts_stats("Post-A");
@@ -13328,12 +13329,12 @@ pub mod tests {
         assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account2)]);
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account2)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(1, accounts.alive_account_count_in_slot(current_slot));
         // Stores to same pubkey, same slot only count once towards the
         // ref count
         assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("Post-B pre-clean");
 
@@ -13348,9 +13349,9 @@ pub mod tests {
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account3)]);
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account3)]);
         accounts.store_for_tests(current_slot, &[(&pubkey3, &account4)]);
+        accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
 
         info!("post C");
 
@@ -13376,7 +13377,7 @@ pub mod tests {
         accounts.print_accounts_stats("Post-D");
 
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
         accounts.clean_accounts_for_tests();
 
         accounts.print_accounts_stats("Post-D clean");
