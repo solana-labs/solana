@@ -556,7 +556,7 @@ impl BankingStage {
 
         let packet_vec: Vec<_> = forwardable_packets
             .filter_map(|p| {
-                if !p.meta.forwarded() && data_budget.take(p.meta.size) {
+                if !p.meta().forwarded() && data_budget.take(p.meta().size) {
                     Some(p.data(..)?.to_vec())
                 } else {
                     None
@@ -2122,7 +2122,7 @@ mod tests {
         with_vers.iter_mut().for_each(|(b, v)| {
             b.iter_mut()
                 .zip(v)
-                .for_each(|(p, f)| p.meta.set_discard(*f == 0))
+                .for_each(|(p, f)| p.meta_mut().set_discard(*f == 0))
         });
         with_vers.into_iter().map(|(b, _)| b).collect()
     }
@@ -3925,7 +3925,7 @@ mod tests {
         let forwarded_packet = {
             let transaction = system_transaction::transfer(&keypair, &pubkey, 1, fwd_block_hash);
             let mut packet = Packet::from_data(None, transaction).unwrap();
-            packet.meta.flags |= PacketFlags::FORWARDED;
+            packet.meta_mut().flags |= PacketFlags::FORWARDED;
             DeserializedPacket::new(packet).unwrap()
         };
 
@@ -4005,7 +4005,7 @@ mod tests {
                 let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
                 assert_eq!(num_received, expected_ids.len(), "{}", name);
                 for (i, expected_id) in expected_ids.iter().enumerate() {
-                    assert_eq!(packets[i].meta.size, 215);
+                    assert_eq!(packets[i].meta().size, 215);
                     let recv_transaction: VersionedTransaction =
                         packets[i].deserialize_slice(..).unwrap();
                     assert_eq!(

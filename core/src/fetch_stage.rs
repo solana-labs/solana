@@ -102,7 +102,7 @@ impl FetchStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
     ) -> Result<()> {
         let mark_forwarded = |packet: &mut Packet| {
-            packet.meta.flags |= PacketFlags::FORWARDED;
+            packet.meta_mut().flags |= PacketFlags::FORWARDED;
         };
 
         let mut packet_batch = recvr.recv()?;
