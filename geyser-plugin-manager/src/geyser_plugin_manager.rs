@@ -46,7 +46,17 @@ impl GeyserPluginManager {
                         plugin.name(),
                         libpath
                     );
-                    plugin.on_load(config_file)?;
+                    match plugin.on_load(config_file) {
+                        Ok(()) => info!("Loaded Geyser plugin for {:?}", plugin.name()),
+                        Err(err) => {
+                            error!(
+                                "Failed to load Geyser plugin for {:?}. Error: {:?}",
+                                plugin.name(),
+                                err
+                            );
+                            return Err(err.into());
+                        }
+                    }
                     self.geyser_plugins.push(plugin);
                     loaded = true;
                 }
@@ -57,11 +67,21 @@ impl GeyserPluginManager {
         match Self::get_plugin::<dyn BpfTracerPlugin>(&lib, "_create_bpf_tracer_plugin") {
             Ok(mut plugin) => {
                 info!(
-                    "Loading BPF Tracer plugin for {:?} from {:?}",
+                    "Loading BPF Tracer plugin for {:?} from {:?}...",
                     plugin.name(),
                     libpath
                 );
-                plugin.on_load(config_file)?;
+                match plugin.on_load(config_file) {
+                    Ok(()) => info!("Loaded BPF Tracer plugin for {:?}", plugin.name()),
+                    Err(err) => {
+                        error!(
+                            "Failed to load BPF Tracer plugin for {:?}. Error: {:?}",
+                            plugin.name(),
+                            err
+                        );
+                        return Err(err.into());
+                    }
+                }
                 self.bpf_tracer_plugins.push(plugin);
                 loaded = true;
             }

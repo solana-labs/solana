@@ -1493,7 +1493,7 @@ fn main() {
     .default_value(default_max_incremental_snapshot_archives_to_retain)
     .help("The maximum number of incremental snapshot archives to hold on to when purging older snapshots.");
 
-    let geyser_plugin_args = Arg::with_name("plugin_config")
+    let plugin_args = Arg::with_name("plugin_config")
         .long("plugin-config")
         .alias("geyser-plugin-config")
         .value_name("FILE")
@@ -1802,7 +1802,7 @@ fn main() {
             .arg(&allow_dead_slots_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&debug_key_arg)
-            .arg(&geyser_plugin_args)
+            .arg(&plugin_args)
             .arg(
                 Arg::with_name("skip_poh_verify")
                     .long("skip-poh-verify")
@@ -1857,7 +1857,7 @@ fn main() {
             .arg(&snapshot_version_arg)
             .arg(&maximum_full_snapshot_archives_to_retain)
             .arg(&maximum_incremental_snapshot_archives_to_retain)
-            .arg(&geyser_plugin_args)
+            .arg(&plugin_args)
             .arg(
                 Arg::with_name("snapshot_slot")
                     .index(1)
@@ -2030,7 +2030,7 @@ fn main() {
             .arg(&account_paths_arg)
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
-            .arg(&geyser_plugin_args)
+            .arg(&plugin_args)
             .arg(&accounts_data_encoding_arg)
             .arg(
                 Arg::with_name("include_sysvars")
@@ -2058,7 +2058,7 @@ fn main() {
             .arg(&halt_at_slot_arg)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
-            .arg(&geyser_plugin_args)
+            .arg(&plugin_args)
             .arg(
                 Arg::with_name("warp_epoch")
                     .required(false)

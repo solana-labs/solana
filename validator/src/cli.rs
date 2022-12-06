@@ -1043,13 +1043,14 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Number of threads to use for servicing AccountsDb Replication requests"),
         )
         .arg(
-            Arg::with_name("geyser_plugin_config")
-                .long("geyser-plugin-config")
+            Arg::with_name("plugin_config")
+                .long("plugin-config")
+                .alias("geyser-plugin-config")
                 .alias("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .help("Specify the configuration file for the Geyser plugin."),
+                .help("Specify the configuration file for the Geyser or BPF tracing plugin."),
         )
         .arg(
             Arg::with_name("halt_on_known_validators_accounts_hash_mismatch")
@@ -2127,13 +2128,14 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 ),
         )
         .arg(
-            Arg::with_name("geyser_plugin_config")
-                .long("geyser-plugin-config")
+            Arg::with_name("plugin_config")
+                .long("plugin-config")
+                .alias("geyser-plugin-config")
                 .alias("accountsdb-plugin-config")
                 .value_name("FILE")
                 .takes_value(true)
                 .multiple(true)
-                .help("Specify the configuration file for the Geyser plugin."),
+                .help("Specify the configuration file for the Geyser or BPF tracing plugin."),
         )
         .arg(
             Arg::with_name("deactivate_feature")
