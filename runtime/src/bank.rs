@@ -14902,6 +14902,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_shrink_candidate_slots_cached() {
         solana_logger::setup();
 
@@ -14977,6 +14978,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
         let pubkey1 = solana_sdk::pubkey::new_rand();

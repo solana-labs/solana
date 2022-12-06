@@ -11678,7 +11678,10 @@ pub mod tests {
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
         assert_eq!(account_info1.storage_location(), StorageLocation::Cached);
-        assert_eq!(account_info1.storage_location(), account_info2.storage_location());
+        assert_eq!(
+            account_info1.storage_location(),
+            account_info2.storage_location()
+        );
 
         // Update account 1 in slot 1
         accounts.store_for_tests(1, &[(&pubkey1, &account)]);
@@ -13747,6 +13750,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_shrink_candidate_slots() {
         solana_logger::setup();
 
@@ -17603,6 +17607,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_shrink_collect_simple() {
         solana_logger::setup();
         let account_counts = [
