@@ -12040,7 +12040,8 @@ pub mod tests {
     fn test_uncleaned_roots_with_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        accounts.caching_enabled = true;
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         //store an account
@@ -12048,7 +12049,7 @@ pub mod tests {
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
 
         // simulate slots are rooted after while
-        accounts.add_root(0);
+        accounts.add_root_and_flush_write_cache(0);
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 1);
 
         //now uncleaned roots are cleaned up
@@ -12060,12 +12061,13 @@ pub mod tests {
     fn test_uncleaned_roots_with_no_account() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        accounts.caching_enabled = true;
 
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 0);
 
         // simulate slots are rooted after while
-        accounts.add_root(0);
+        accounts.add_root_and_flush_write_cache(0);
         assert_eq!(accounts.accounts_index.uncleaned_roots_len(), 1);
 
         //now uncleaned roots are cleaned up
