@@ -13173,14 +13173,15 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_with_base_slot() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
 
         let slot = 10;
         db.store_for_tests(slot, &[(&key, &account)]);
-        db.add_root(slot);
+        db.add_root_and_flush_write_cache(slot);
         assert_eq!(
             0,
             db.get_snapshot_storages(slot + 1..=slot + 1, None).0.len()
