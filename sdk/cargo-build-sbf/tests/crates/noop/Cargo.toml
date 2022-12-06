@@ -14,5 +14,3 @@ solana-program = { path = "../../../../program", version = "=1.15.0" }
 
 [lib]
 crate-type = ["cdylib"]
-
-[workspace]
