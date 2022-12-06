@@ -143,7 +143,7 @@ pub fn get_all_hashes_from_invoke_context(invoke_context: &InvokeContext) -> Vec
         .get_instruction_context_at_index_in_trace(invoke_stack_len - stack_height)
         .unwrap();
     let num_accounts = tx_context.get_number_of_accounts() as usize;
-    // First, we generate a hash of all the account keys (deduped, sorted) in the transaction
+    // Then we generate a hash of all the account keys (deduped, sorted) in the transaction
     let account_key_hash = hashv(
         (0..num_accounts)
             .map(|i| *tx_context.get_key_of_account_at_index(i as u16).unwrap())
@@ -157,7 +157,7 @@ pub fn get_all_hashes_from_invoke_context(invoke_context: &InvokeContext) -> Vec
             .as_slice(),
     );
     let data = starting_context.get_instruction_data().to_vec();
-    // We then computed all of the candidate hashes for the current transaction
+    // We then compute all of the candidate hashes for the current transaction
     #[allow(deprecated)]
     let hashes = invoke_context
         .sysvar_cache
