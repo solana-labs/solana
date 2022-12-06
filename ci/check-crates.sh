@@ -61,18 +61,25 @@ for file in "${files[@]}"; do
 		fi
 	else
 		readarray -t owners <<<"$result"
+
+		verified_owner_count=0
+		unverified_owner_count=0
 		for owner in "${owners[@]}"; do
 			if [[ -z $owner ]]; then
 				continue
 			fi
 			owner_id="$(echo "$owner" | awk '{print $1}')"
 			if [[ ${verified_crate_owners[$owner_id]} ]]; then
+				((verified_owner_count++))
 				echo "✅ $owner"
 			else
-				((error_count++))
+				((unverified_owner_count++))
 				echo "❌ $owner"
 			fi
 		done
+		if (("$unverified_owner_count" != 0)) || (("$verified_owner_count" == 0)); then
+			((error_count++))
+		fi
 	fi
 	echo ""
 done
