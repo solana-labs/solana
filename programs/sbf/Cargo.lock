@@ -4477,7 +4477,6 @@ dependencies = [
  "serde_derive",
  "solana-address-lookup-table-program",
  "solana-bloom",
- "solana-bucket-map",
  "solana-client",
  "solana-entry",
  "solana-frozen-abi 1.15.0",
