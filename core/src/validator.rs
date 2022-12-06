@@ -715,7 +715,7 @@ impl Validator {
             max_slots.clone(),
         );
 
-        let poh_config = Arc::new(genesis_config.poh_config.clone());
+        let poh_config = genesis_config.poh_config.clone();
         let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
             let bank = &bank_forks.read().unwrap().working_bank();
