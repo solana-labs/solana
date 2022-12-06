@@ -10207,8 +10207,8 @@ pub mod tests {
 
     fn sample_storages_and_account_in_slot(
         slot: Slot,
+        accounts: &AccountsDb,
     ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
@@ -10255,7 +10255,7 @@ pub mod tests {
             .collect::<Vec<_>>();
 
         accounts.store_for_tests(slot, &to_store[..]);
-        accounts.add_root(slot);
+        accounts.add_root_and_flush_write_cache(slot);
 
         let (storages, slots) = accounts.get_snapshot_storages(..=slot, None);
         assert_eq!(storages.len(), slots.len());
@@ -10270,8 +10270,10 @@ pub mod tests {
         (storages, raw_expected)
     }
 
-    fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
-        sample_storages_and_account_in_slot(1)
+    fn sample_storages_and_accounts(
+        accounts: &AccountsDb,
+    ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+        sample_storages_and_account_in_slot(1, accounts)
     }
 
     fn get_storage_refs(input: &[SnapshotStorage]) -> SortedStorages {
@@ -10312,12 +10314,13 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
         solana_logger::setup();
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&accounts_db);
 
         let bins = 1;
         let mut stats = HashStats::default();
 
-        let accounts_db = AccountsDb::new_single_for_tests();
         let result = accounts_db
             .scan_snapshot_stores(
                 &get_storage_refs(&storages),
@@ -10398,17 +10401,18 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores_2nd_chunk() {
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
         // enough stores to get to 2nd chunk
         let bins = 1;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
-        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
+        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
             SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
-        let accounts_db = AccountsDb::new_single_for_tests();
         let result = accounts_db
             .scan_snapshot_stores(
                 &sorted_storages,
@@ -10428,12 +10432,13 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_snapshot_stores_binning() {
         let mut stats = HashStats::default();
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&accounts_db);
 
         // just the first bin of 2
         let bins = 2;
         let half_bins = bins / 2;
-        let accounts_db = AccountsDb::new_single_for_tests();
         let result = accounts_db
             .scan_snapshot_stores(
                 &get_storage_refs(&storages),
@@ -10534,11 +10539,13 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores_binning_2nd_chunk() {
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
         // enough stores to get to 2nd chunk
         // range is for only 1 bin out of 256.
         let bins = 256;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
-        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
+        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
@@ -10547,7 +10554,6 @@ pub mod tests {
         let mut stats = HashStats::default();
         let range = 1;
         let start = 127;
-        let accounts_db = AccountsDb::new_single_for_tests();
         let result = accounts_db
             .scan_snapshot_stores(
                 &sorted_storages,
@@ -10596,13 +10602,14 @@ pub mod tests {
     fn test_accountsdb_calculate_accounts_hash_from_storages() {
         solana_logger::setup();
 
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&db);
         let expected_hash =
             AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
             .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig::default(),
@@ -12897,7 +12904,7 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
-        db.add_root(some_slot);
+        db.add_root_and_flush_write_cache(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
@@ -13243,35 +13250,36 @@ pub mod tests {
         let purged_pubkey2 = solana_sdk::pubkey::new_rand();
 
         let mut current_slot = 0;
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         // create intermediate updates to purged_pubkey1 so that
         // generate_index must add slots as root last at once
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&pubkey, &account)]);
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey1, &zero_lamport_account)]);
         accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &account3)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&purged_pubkey2, &zero_lamport_account)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         accounts.store_for_tests(current_slot, &[(&dummy_pubkey, &dummy_account)]);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_count_and_status("before reconstruct");
         let accounts = reconstruct_accounts_db_via_serialization(&accounts, current_slot);
@@ -14380,7 +14388,7 @@ pub mod tests {
             let slot = slot as Slot;
             db.store_for_tests(slot, &[(key, &zero_lamport_account)]);
             db.get_accounts_delta_hash(slot);
-            db.add_root(slot);
+            db.add_root_and_flush_write_cache(slot);
         });
         assert_eq!(slots - 1, db.next_id.load(Ordering::Acquire));
         let ancestors = Ancestors::default();
@@ -14418,7 +14426,8 @@ pub mod tests {
 
     #[test]
     fn test_zero_lamport_new_root_not_cleaned() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
         let account_key = Pubkey::new_unique();
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
@@ -14427,9 +14436,9 @@ pub mod tests {
         db.store_for_tests(0, &[(&account_key, &zero_lamport_account)]);
         db.store_for_tests(1, &[(&account_key, &zero_lamport_account)]);
         db.get_accounts_delta_hash(0);
-        db.add_root(0);
+        db.add_root_and_flush_write_cache(0);
         db.get_accounts_delta_hash(1);
-        db.add_root(1);
+        db.add_root_and_flush_write_cache(1);
 
         // Only clean zero lamport accounts up to slot 0
         db.clean_accounts(Some(0), false, None);
