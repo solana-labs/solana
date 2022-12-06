@@ -113,6 +113,7 @@ lazy_static! {
 lazy_static! {}
 
 pub fn get_hash_from_transaction(transaction: &Transaction, index: usize) -> String {
+    // First, we generate a hash of all the account keys (deduped, sorted) in the transaction
     let account_key_hash = hashv(
         transaction
             .message
@@ -136,12 +137,15 @@ pub fn get_hash_from_transaction(transaction: &Transaction, index: usize) -> Str
 
 pub fn get_all_hashes_from_invoke_context(invoke_context: &InvokeContext) -> Vec<String> {
     let tx_context = &invoke_context.transaction_context;
+    // We first grab the relevant instruction from the invoke context
+    // This should be the closest top level instruction
     let invoke_stack_len = tx_context.get_instruction_trace_length();
     let stack_height = invoke_context.get_stack_height();
     let starting_context = tx_context
         .get_instruction_context_at_index_in_trace(invoke_stack_len - stack_height)
         .unwrap();
     let num_accounts = tx_context.get_number_of_accounts() as usize;
+    // First, we generate a hash of all the account keys (deduped, sorted) in the transaction
     let account_key_hash = hashv(
         (0..num_accounts)
             .map(|i| *tx_context.get_key_of_account_at_index(i as u16).unwrap())
@@ -155,6 +159,7 @@ pub fn get_all_hashes_from_invoke_context(invoke_context: &InvokeContext) -> Vec
             .as_slice(),
     );
     let data = starting_context.get_instruction_data().to_vec();
+    // We then computed all of the candidate hashes for the current transaction
     #[allow(deprecated)]
     let hashes = invoke_context
         .sysvar_cache
@@ -229,9 +234,10 @@ pub fn builtin_process_instruction(
 
     if invoke_context.get_stack_height() == 1 {
         let mut map = TRANSACTION_DETAILS.lock().unwrap();
-        // This should always be a new entry
+        // This should always be a new entry because the stack height is 1
         let index = map.executed_instructions.len();
         map.executed_instructions.push(vec![]);
+        // Add the first executed instruction
         map.executed_instructions[index].push(ExecutedInstruction {
             stack_depth: invoke_context.get_stack_height(),
             program_id: *program_id,
@@ -239,7 +245,9 @@ pub fn builtin_process_instruction(
             data: instruction_data.to_vec(),
         });
         let hashes = get_all_hashes_from_invoke_context(invoke_context);
+        // Create a one-to-many mapping from the index of the executed instruction to all hashes
         map.index_to_hash.push(hashes.clone());
+        // Create a many-to-one mapping from all hashes to the index of the executed instruction
         for hash in hashes {
             map.hash_candidates.insert(hash, index);
         }
@@ -417,11 +425,14 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             }
         }
 
+        // Create a new scope so the lock is dropped before the call to process_instruction (RAII)
         {
+            // Look up the index of the executed instruction list by using the least recent hash
             let hashes = get_all_hashes_from_invoke_context(invoke_context);
             let hash = hashes.iter().next().unwrap();
             let mut map = TRANSACTION_DETAILS.lock().unwrap();
             let index = *map.hash_candidates.get_mut(hash).unwrap();
+            // Update the list of executed instructions
             map.executed_instructions[index].push(ExecutedInstruction {
                 stack_depth: invoke_context.get_stack_height() + 1,
                 program_id: instruction.program_id,
@@ -1324,8 +1335,11 @@ impl ProgramTestContext {
     ) -> Vec<ExecutedInstruction> {
         let mut map = TRANSACTION_DETAILS.lock().unwrap();
         let hash = get_hash_from_transaction(transaction, tx_index);
+        // Panics if the hash is not found. This will happen on the off-chance that the transaction's blockhash
+        // expires before the transaction details are queried.
         let index = *map.hash_candidates.get(&hash).unwrap();
         let res = map.executed_instructions[index].clone();
+        // Clean up the state
         map.executed_instructions[index].drain(..);
         for key in map.index_to_hash[index].clone().iter() {
             map.hash_candidates.remove(key);
