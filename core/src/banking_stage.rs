@@ -450,9 +450,13 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
+                // Otherwise said: i < NUM_VOTE_PROCESSING_THREADS, but safe in
+                // case NUM_VOTE_PROCESSING_THREADS is changed
                 if i == 0 || i == 1 {
+                    // build vote processing threads
                     let (verified_receiver, unprocessed_transaction_storage) =
                         match (i, should_split_voting_threads) {
+                            // first thread is for gossip votes
                             (0, false) => (
                                 verified_vote_receiver.clone(),
                                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -467,6 +471,7 @@ impl BankingStage {
                                     VoteSource::Gossip,
                                 ),
                             ),
+                            // second thread is for tpu votes
                             (1, false) => (
                                 tpu_verified_vote_receiver.clone(),
                                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -504,6 +509,7 @@ impl BankingStage {
                         })
                         .unwrap()
                 } else {
+                    // all other threads are non-vote banking threads
                     let mut packet_deserializer =
                         PacketDeserializer::new(verified_receiver.clone());
                     let unprocessed_transaction_storage =
