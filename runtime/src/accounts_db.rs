@@ -13150,7 +13150,8 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_exclude_empty() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -13158,7 +13159,7 @@ pub mod tests {
         let after_slot = base_slot + 1;
 
         db.store_for_tests(base_slot, &[(&key, &account)]);
-        db.add_root(base_slot);
+        db.add_root_and_flush_write_cache(base_slot);
         assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
 
         db.storage
