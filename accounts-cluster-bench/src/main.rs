@@ -67,22 +67,20 @@ pub fn airdrop_lamports(
                     }
                     if tries >= 5 {
                         panic!(
-                            "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
-                            faucet_addr, airdrop_amount, result
+                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: {airdrop_amount} {result:?}"
                         )
                     }
                 }
             }
             Err(err) => {
                 panic!(
-                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, faucet_addr, airdrop_amount
+                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: {airdrop_amount}"
                 );
             }
         };
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            panic!("airdrop error {}", e);
+            panic!("airdrop error {e}");
         });
         info!("current balance {}...", current_balance);
 
@@ -575,14 +573,14 @@ fn main() {
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
     let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
     if let Some(addr) = matches.value_of("faucet_addr") {
         faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
@@ -594,7 +592,7 @@ fn main() {
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
-        eprintln!("bad num_instructions: {}", num_instructions);
+        eprintln!("bad num_instructions: {num_instructions}");
         exit(1);
     }
 
@@ -604,7 +602,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
     let mut payer_keypair_refs: Vec<&Keypair> = vec![];
@@ -626,7 +624,7 @@ fn main() {
             SocketAddrSpace::Unspecified,
         )
         .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
+            eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
             exit(1);
         });
 

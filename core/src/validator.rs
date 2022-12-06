@@ -392,8 +392,7 @@ impl Validator {
         if !config.no_os_network_stats_reporting {
             if let Err(e) = verify_net_stats_access() {
                 return Err(format!(
-                    "Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.",
-                    e,
+                    "Failed to access Network stats: {e}. Bypass check with --no-os-network-stats-reporting.",
                 ));
             }
         }
@@ -409,7 +408,7 @@ impl Validator {
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {:?}", err));
+                        return Err(format!("Failed to load the Geyser plugin: {err:?}"));
                     }
                 }
             } else {
@@ -430,7 +429,7 @@ impl Validator {
         }
 
         if rayon::ThreadPoolBuilder::new()
-            .thread_name(|ix| format!("solRayonGlob{:02}", ix))
+            .thread_name(|ix| format!("solRayonGlob{ix:02}"))
             .build_global()
             .is_err()
         {
@@ -447,8 +446,7 @@ impl Validator {
 
         if !ledger_path.is_dir() {
             return Err(format!(
-                "ledger directory does not exist or is not accessible: {:?}",
-                ledger_path
+                "ledger directory does not exist or is not accessible: {ledger_path:?}"
             ));
         }
 
@@ -903,7 +901,7 @@ impl Validator {
             &start_progress,
         ) {
             Ok(waited) => waited,
-            Err(e) => return Err(format!("wait_for_supermajority failed: {:?}", e)),
+            Err(e) => return Err(format!("wait_for_supermajority failed: {e:?}")),
         };
 
         let ledger_metric_report_service =
@@ -1232,9 +1230,8 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. \
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}. \
                 If you wish to continue, try --no-poh-speed-test",
-                my_ns_per_slot, target_ns_per_slot,
             ));
         }
     }
@@ -1273,10 +1270,8 @@ fn post_process_restored_tower(
             // intentionally fail to restore tower; we're supposedly in a new hard fork; past
             // out-of-chain vote state doesn't make sense at all
             // what if --wait-for-supermajority again if the validator restarted?
-            let message = format!(
-                "Hard fork is detected; discarding tower restoration result: {:?}",
-                tower
-            );
+            let message =
+                format!("Hard fork is detected; discarding tower restoration result: {tower:?}");
             datapoint_error!("tower_error", ("error", message, String),);
             error!("{}", message);
 
@@ -1306,15 +1301,14 @@ fn post_process_restored_tower(
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
-                    ("error", format!("Unable to restore tower: {}", err), String),
+                    ("error", format!("Unable to restore tower: {err}"), String),
                 );
             }
             if should_require_tower && voting_has_been_active {
                 return Err(format!(
-                    "Requested mandatory tower restore failed: {}. \
+                    "Requested mandatory tower restore failed: {err}. \
                      And there is an existing vote_account containing actual votes. \
-                     Aborting due to possible conflicting duplicate votes",
-                    err
+                     Aborting due to possible conflicting duplicate votes"
                 ));
             }
             if err.is_file_missing() && !voting_has_been_active {
@@ -1380,10 +1374,7 @@ fn load_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             return Err(format!(
-                "genesis hash mismatch: hash={} expected={}. Delete the ledger directory to continue: {:?}",
-                genesis_hash,
-                expected_genesis_hash,
-                ledger_path,
+                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. Delete the ledger directory to continue: {ledger_path:?}",
             ));
         }
     }
@@ -1599,7 +1590,7 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 &self.accounts_background_request_sender,
             ) {
-                return Err(format!("Failed to load ledger: {:?}", e));
+                return Err(format!("Failed to load ledger: {e:?}"));
             }
 
             exit.store(true, Ordering::Relaxed);
@@ -1617,10 +1608,7 @@ impl<'a> ProcessBlockStore<'a> {
                         self.blockstore,
                         &mut self.original_blockstore_root,
                     ) {
-                        return Err(format!(
-                            "Failed to reconcile blockstore with tower: {:?}",
-                            e
-                        ));
+                        return Err(format!("Failed to reconcile blockstore with tower: {e:?}"));
                     }
                 }
 
@@ -1645,8 +1633,7 @@ impl<'a> ProcessBlockStore<'a> {
                     &mut self.original_blockstore_root,
                 ) {
                     return Err(format!(
-                        "Failed to reconcile blockstore with hard fork: {:?}",
-                        e
+                        "Failed to reconcile blockstore with hard fork: {e:?}"
                     ));
                 }
             }
@@ -1715,7 +1702,7 @@ fn maybe_warp_slot(
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         ) {
             Ok(archive_info) => archive_info,
-            Err(e) => return Err(format!("Unable to create snapshot: {}", e)),
+            Err(e) => return Err(format!("Unable to create snapshot: {e}")),
         };
         info!(
             "created snapshot: {}",

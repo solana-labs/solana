@@ -99,7 +99,7 @@ const MAX_REPAIR_RETRY_LOOP_ATTEMPTS: usize = 10;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
-        .thread_name(|ix| format!("solReplay{:02}", ix))
+        .thread_name(|ix| format!("solReplay{ix:02}"))
         .build()
         .unwrap();
 }
@@ -1796,13 +1796,13 @@ impl ReplayStage {
         if is_serious {
             datapoint_error!(
                 "replay-stage-mark_dead_slot",
-                ("error", format!("error: {:?}", err), String),
+                ("error", format!("error: {err:?}"), String),
                 ("slot", slot, i64)
             );
         } else {
             datapoint_info!(
                 "replay-stage-mark_dead_slot",
-                ("error", format!("error: {:?}", err), String),
+                ("error", format!("error: {err:?}"), String),
                 ("slot", slot, i64)
             );
         }
@@ -1815,7 +1815,7 @@ impl ReplayStage {
 
         rpc_subscriptions.notify_slot_update(SlotUpdate::Dead {
             slot,
-            err: format!("error: {:?}", err),
+            err: format!("error: {err:?}"),
             timestamp: timestamp(),
         });
         let dead_state = DeadState::new_from_state(
@@ -2134,7 +2134,7 @@ impl ReplayStage {
             tower.refresh_last_vote_tx_blockhash(recent_blockhash);
 
             // Send the votes to the TPU and gossip for network propagation
-            let hash_string = format!("{}", recent_blockhash);
+            let hash_string = format!("{recent_blockhash}");
             datapoint_info!(
                 "refresh_vote",
                 ("last_voted_slot", last_voted_slot, i64),
@@ -2894,7 +2894,7 @@ impl ReplayStage {
         // Otherwise we have to check the votes for confirmation
         let mut propagated_stats = progress
             .get_propagated_stats_mut(slot)
-            .unwrap_or_else(|| panic!("slot={} must exist in ProgressMap", slot));
+            .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"));
 
         if propagated_stats.slot_vote_tracker.is_none() {
             propagated_stats.slot_vote_tracker = vote_tracker.get_slot_vote_tracker(slot);

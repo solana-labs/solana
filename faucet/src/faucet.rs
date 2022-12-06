@@ -367,8 +367,7 @@ pub async fn run_faucet(
             listener.as_ref().map(|listener| listener.local_addr().unwrap())
                 .map_err(|err| {
                     format!(
-                        "Unable to bind faucet to {:?}, check the address is not already in use: {}",
-                        faucet_addr, err
+                        "Unable to bind faucet to {faucet_addr:?}, check the address is not already in use: {err}"
                     )
                 })
             )

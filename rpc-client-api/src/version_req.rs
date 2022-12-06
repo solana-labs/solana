@@ -8,7 +8,7 @@ impl VersionReq {
         let mut version_reqs = vec![];
         for version in versions {
             let version_req = semver::VersionReq::parse(version.as_ref())
-                .map_err(|err| format!("Could not parse version {:?}: {:?}", version, err))?;
+                .map_err(|err| format!("Could not parse version {version:?}: {err:?}"))?;
             version_reqs.push(version_req);
         }
         Ok(Self(version_reqs))

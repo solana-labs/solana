@@ -3306,8 +3306,7 @@ impl Bank {
         for (pubkey, account) in genesis_config.accounts.iter() {
             assert!(
                 self.get_account(pubkey).is_none(),
-                "{} repeated in genesis config",
-                pubkey
+                "{pubkey} repeated in genesis config"
             );
             self.store_account(pubkey, account);
             self.capitalization.fetch_add(account.lamports(), Relaxed);
@@ -3320,8 +3319,7 @@ impl Bank {
         for (pubkey, account) in genesis_config.rewards_pools.iter() {
             assert!(
                 self.get_account(pubkey).is_none(),
-                "{} repeated in genesis config",
-                pubkey
+                "{pubkey} repeated in genesis config"
             );
             self.store_account(pubkey, account);
             self.accounts_data_size_initial += account.data().len() as u64;
@@ -3396,8 +3394,7 @@ impl Bank {
             // updating builtin program
             match &existing_genuine_program {
                 None => panic!(
-                    "There is no account to replace with builtin program ({}, {}).",
-                    name, program_id
+                    "There is no account to replace with builtin program ({name}, {program_id})."
                 ),
                 Some(account) => {
                     if *name == String::from_utf8_lossy(account.data()) {
@@ -3416,10 +3413,8 @@ impl Bank {
 
         assert!(
             !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new builtin program ({}, {}). \
-            Maybe, inconsistent program activation is detected on snapshot restore?",
-            name,
-            program_id
+            "Can't change frozen bank by adding not-existing new builtin program ({name}, {program_id}). \
+            Maybe, inconsistent program activation is detected on snapshot restore?"
         );
 
         // Add a bogus executable builtin account, which will be loaded and ignored.
@@ -3449,9 +3444,8 @@ impl Bank {
 
         assert!(
             !self.freeze_started(),
-            "Can't change frozen bank by adding not-existing new precompiled program ({}). \
-                Maybe, inconsistent program activation is detected on snapshot restore?",
-            program_id
+            "Can't change frozen bank by adding not-existing new precompiled program ({program_id}). \
+                Maybe, inconsistent program activation is detected on snapshot restore?"
         );
 
         // Add a bogus executable account, which will be loaded and ignored.
@@ -5720,8 +5714,8 @@ impl Bank {
             end_index,
             partition_count,
             (end_key_prefix - start_key_prefix),
-            start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
-            end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
+            start_pubkey.iter().map(|x| format!("{x:02x}")).join(""),
+            end_pubkey.iter().map(|x| format!("{x:02x}")).join(""),
         );
         #[cfg(test)]
         if start_index != end_index {
@@ -5732,21 +5726,12 @@ impl Bank {
                     start_index + 1
                 },
                 Self::partition_from_pubkey(&start_pubkey_final, partition_count),
-                "{}, {}, start_key_prefix: {}, {}, {}",
-                start_index,
-                end_index,
-                start_key_prefix,
-                start_pubkey_final,
-                partition_count
+                "{start_index}, {end_index}, start_key_prefix: {start_key_prefix}, {start_pubkey_final}, {partition_count}"
             );
             assert_eq!(
                 end_index,
                 Self::partition_from_pubkey(&end_pubkey_final, partition_count),
-                "{}, {}, {}, {}",
-                start_index,
-                end_index,
-                end_pubkey_final,
-                partition_count
+                "{start_index}, {end_index}, {end_pubkey_final}, {partition_count}"
             );
             if start_index != 0 {
                 start_pubkey[0..PREFIX_SIZE]
@@ -13108,7 +13093,7 @@ pub(crate) mod tests {
             if num_banks % 100 == 0 {
                 #[cfg(target_os = "linux")]
                 {
-                    let pages_consumed = std::fs::read_to_string(format!("/proc/{}/statm", pid))
+                    let pages_consumed = std::fs::read_to_string(format!("/proc/{pid}/statm"))
                         .unwrap()
                         .split_whitespace()
                         .next()
@@ -14561,7 +14546,7 @@ pub(crate) mod tests {
             .enumerate()
             .map(|i| {
                 let key = solana_sdk::pubkey::new_rand();
-                let name = format!("program{:?}", i);
+                let name = format!("program{i:?}");
                 bank.add_builtin(&name, &key, mock_ok_vote_processor);
                 (key, name.as_bytes().to_vec())
             })
@@ -14698,7 +14683,7 @@ pub(crate) mod tests {
                 assert_eq!(account.data(), name);
             }
             info!("result: {:?}", result);
-            let result_key = format!("{:?}", result);
+            let result_key = format!("{result:?}");
             *results.entry(result_key).or_insert(0) += 1;
         }
         info!("results: {:?}", results);
@@ -16749,7 +16734,7 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(50000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.finish_init(&genesis_config, None, false);
-        let debug = format!("{:#?}", bank);
+        let debug = format!("{bank:#?}");
         assert!(!debug.is_empty());
     }
 
@@ -20207,7 +20192,7 @@ pub(crate) mod tests {
         let index1 = Bank::partition_from_pubkey(&pk1, n);
         let index2 = Bank::partition_from_pubkey(&pk2, n);
         assert!(index1 > 0, "{}", index1);
-        assert!(index2 > index1, "{}, {}", index2, index1);
+        assert!(index2 > index1, "{index2}, {index1}");
 
         let epoch_schedule = EpochSchedule::custom(n, 0, false);
 

@@ -405,7 +405,7 @@ impl WindowService {
         };
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("solWinInsert{:02}", i))
+            .thread_name(|i| format!("solWinInsert{i:02}"))
             .build()
             .unwrap();
         let reed_solomon_cache = ReedSolomonCache::default();

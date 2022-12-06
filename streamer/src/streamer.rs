@@ -372,7 +372,7 @@ pub fn responder(
     stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name(format!("solRspndr{}", name))
+        .name(format!("solRspndr{name}"))
         .spawn(move || {
             let mut errors = 0;
             let mut last_error = None;

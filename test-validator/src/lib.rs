@@ -300,14 +300,14 @@ impl TestValidatorGenesis {
             info!("Fetching {:?} over RPC...", chunk);
             let responses = rpc_client
                 .get_multiple_accounts(chunk)
-                .map_err(|err| format!("Failed to fetch: {}", err))?;
+                .map_err(|err| format!("Failed to fetch: {err}"))?;
             for (address, res) in chunk.iter().zip(responses) {
                 if let Some(account) = res {
                     self.add_account(*address, AccountSharedData::from(account));
                 } else if skip_missing {
                     warn!("Could not find {}, skipping.", address);
                 } else {
-                    return Err(format!("Failed to fetch {}", address));
+                    return Err(format!("Failed to fetch {address}"));
                 }
             }
         }
@@ -401,7 +401,7 @@ impl TestValidatorGenesis {
                 lamports,
                 data: solana_program_test::read_file(
                     solana_program_test::find_file(filename).unwrap_or_else(|| {
-                        panic!("Unable to locate {}", filename);
+                        panic!("Unable to locate {filename}");
                     }),
                 ),
                 owner,
@@ -425,7 +425,7 @@ impl TestValidatorGenesis {
             AccountSharedData::from(Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -438,8 +438,8 @@ impl TestValidatorGenesis {
     /// `program_name` will also used to locate the SBF shared object in the current or fixtures
     /// directory.
     pub fn add_program(&mut self, program_name: &str, program_id: Pubkey) -> &mut Self {
-        let program_path = solana_program_test::find_file(&format!("{}.so", program_name))
-            .unwrap_or_else(|| panic!("Unable to locate program {}", program_name));
+        let program_path = solana_program_test::find_file(&format!("{program_name}.so"))
+            .unwrap_or_else(|| panic!("Unable to locate program {program_name}"));
 
         self.programs.push(ProgramInfo {
             program_id,
@@ -500,7 +500,7 @@ impl TestValidatorGenesis {
         let mint_keypair = Keypair::new();
         self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
-            .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
+            .unwrap_or_else(|err| panic!("Test validator failed to start: {err}"))
     }
 
     pub async fn start_async(&self) -> (TestValidator, Keypair) {
@@ -520,7 +520,7 @@ impl TestValidatorGenesis {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
             }
-            Err(err) => panic!("Test validator failed to start: {}", err),
+            Err(err) => panic!("Test validator failed to start: {err}"),
         }
     }
 }
@@ -849,7 +849,7 @@ impl TestValidator {
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
         discover_cluster(&gossip, 1, socket_addr_space)
-            .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
+            .map_err(|err| format!("TestValidator startup failed: {err:?}"))?;
 
         let test_validator = TestValidator {
             ledger_path,
@@ -887,7 +887,7 @@ impl TestValidator {
             if num_tries > MAX_TRIES {
                 break;
             }
-            println!("Waiting for fees to stabilize {:?}...", num_tries);
+            println!("Waiting for fees to stabilize {num_tries:?}...");
             match rpc_client.get_latest_blockhash().await {
                 Ok(blockhash) => {
                     message.recent_blockhash = blockhash;

@@ -522,10 +522,10 @@ impl RpcClient {
             drop(r_node_version);
             let mut w_node_version = self.node_version.write().await;
             let node_version = self.get_version().await.map_err(|e| {
-                RpcError::RpcRequestError(format!("cluster version query failed: {}", e))
+                RpcError::RpcRequestError(format!("cluster version query failed: {e}"))
             })?;
             let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
-                RpcError::RpcRequestError(format!("failed to parse cluster version: {}", e))
+                RpcError::RpcRequestError(format!("failed to parse cluster version: {e}"))
             })?;
             *w_node_version = Some(node_version.clone());
             Ok(node_version)
@@ -1150,8 +1150,7 @@ impl RpcClient {
         let progress_bar = spinner::new_progress_bar();
 
         progress_bar.set_message(format!(
-            "[{}/{}] Finalizing transaction {}",
-            confirmations, desired_confirmations, signature,
+            "[{confirmations}/{desired_confirmations}] Finalizing transaction {signature}",
         ));
 
         let now = Instant::now();
@@ -1986,11 +1985,8 @@ impl RpcClient {
                     .iter()
                     .map(|slot_leader| {
                         Pubkey::from_str(slot_leader).map_err(|err| {
-                            ClientErrorKind::Custom(format!(
-                                "pubkey deserialization failed: {}",
-                                err
-                            ))
-                            .into()
+                            ClientErrorKind::Custom(format!("pubkey deserialization failed: {err}"))
+                                .into()
                         })
                     })
                     .collect()
@@ -3289,7 +3285,7 @@ impl RpcClient {
         response
             .map(|result_json: Value| {
                 if result_json.is_null() {
-                    return Err(RpcError::ForUser(format!("Block Not Found: slot={}", slot)).into());
+                    return Err(RpcError::ForUser(format!("Block Not Found: slot={slot}")).into());
                 }
                 let result = serde_json::from_value(result_json)
                     .map_err(|err| ClientError::new_with_request(err.into(), request))?;
@@ -3785,7 +3781,7 @@ impl RpcClient {
         self.get_account_with_commitment(pubkey, self.commitment())
             .await?
             .value
-            .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into())
+            .ok_or_else(|| RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into())
     }
 
     /// Returns all information associated with the account of the provided pubkey.
@@ -3908,7 +3904,7 @@ impl RpcClient {
             .map(|result_json: Value| {
                 if result_json.is_null() {
                     return Err(
-                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into(),
                     );
                 }
                 let Response {
@@ -3925,8 +3921,7 @@ impl RpcClient {
             })
             .map_err(|err| {
                 Into::<ClientError>::into(RpcError::ForUser(format!(
-                    "AccountNotFound: pubkey={}: {}",
-                    pubkey, err
+                    "AccountNotFound: pubkey={pubkey}: {err}"
                 )))
             })?
     }
@@ -4780,7 +4775,7 @@ impl RpcClient {
             .map(|result_json: Value| {
                 if result_json.is_null() {
                     return Err(
-                        RpcError::ForUser(format!("AccountNotFound: pubkey={}", pubkey)).into(),
+                        RpcError::ForUser(format!("AccountNotFound: pubkey={pubkey}")).into(),
                     );
                 }
                 let Response {
@@ -4802,16 +4797,14 @@ impl RpcClient {
                         }
                     }
                     Err(Into::<ClientError>::into(RpcError::ForUser(format!(
-                        "Account could not be parsed as token account: pubkey={}",
-                        pubkey
+                        "Account could not be parsed as token account: pubkey={pubkey}"
                     ))))
                 };
                 response?
             })
             .map_err(|err| {
                 Into::<ClientError>::into(RpcError::ForUser(format!(
-                    "AccountNotFound: pubkey={}: {}",
-                    pubkey, err
+                    "AccountNotFound: pubkey={pubkey}: {err}"
                 )))
             })?
     }
@@ -5017,7 +5010,7 @@ impl RpcClient {
         .await
         .and_then(|signature: String| {
             Signature::from_str(&signature).map_err(|err| {
-                ClientErrorKind::Custom(format!("signature deserialization failed: {}", err)).into()
+                ClientErrorKind::Custom(format!("signature deserialization failed: {err}")).into()
             })
         })
         .map_err(|_| {
@@ -5343,14 +5336,13 @@ where
     T: serde::ser::Serialize,
 {
     let serialized = serialize(input)
-        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {}", e)))?;
+        .map_err(|e| ClientErrorKind::Custom(format!("Serialization failed: {e}")))?;
     let encoded = match encoding {
         UiTransactionEncoding::Base58 => bs58::encode(serialized).into_string(),
         UiTransactionEncoding::Base64 => base64::encode(serialized),
         _ => {
             return Err(ClientErrorKind::Custom(format!(
-                "unsupported encoding: {}. Supported encodings: base58, base64",
-                encoding
+                "unsupported encoding: {encoding}. Supported encodings: base58, base64"
             ))
             .into())
         }
@@ -5360,9 +5352,9 @@ where
 
 pub(crate) fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
     if tls {
-        format!("https://{}", rpc_addr)
+        format!("https://{rpc_addr}")
     } else {
-        format!("http://{}", rpc_addr)
+        format!("http://{rpc_addr}")
     }
 }
 

@@ -559,7 +559,7 @@ mod tests {
                             map.insert(&k, (&v, rc))
                         } else {
                             map.update(&k, |current| {
-                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{}", k);
+                                assert_eq!(current, v_old.map(|(v, rc)| (&v[..], *rc)), "{k}");
                                 Some((v.clone(), rc))
                             })
                         }

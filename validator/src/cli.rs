@@ -1114,7 +1114,7 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                     let core_index = usize::from_str(&s).map_err(|e| e.to_string())?;
                     let max_index = core_affinity::get_core_ids().map(|cids| cids.len() - 1).unwrap_or(0);
                     if core_index > max_index {
-                        return Err(format!("core index must be in the range [0, {}]", max_index));
+                        return Err(format!("core index must be in the range [0, {max_index}]"));
                     }
                     Ok(())
                 })
@@ -1582,7 +1582,7 @@ pub fn warn_for_deprecated_arguments(matches: &ArgMatches) {
         if matches.is_present(arg) {
             warn!(
                 "{}",
-                format!("--{} is deprecated. {}", arg, help).replace('_', "-")
+                format!("--{arg} is deprecated. {help}").replace('_', "-")
             );
         }
     }
@@ -1741,7 +1741,7 @@ impl Default for DefaultArgs {
 pub fn port_validator(port: String) -> Result<(), String> {
     port.parse::<u16>()
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{e:?}"))
 }
 
 pub fn port_range_validator(port_range: String) -> Result<(), String> {
@@ -1765,7 +1765,7 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
 fn hash_validator(hash: String) -> Result<(), String> {
     Hash::from_str(&hash)
         .map(|_| ())
-        .map_err(|e| format!("{:?}", e))
+        .map_err(|e| format!("{e:?}"))
 }
 
 lazy_static! {
@@ -1976,12 +1976,12 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(|value| {
                     value
                         .parse::<PathBuf>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
                         .and_then(|path| {
                             if path.exists() && path.is_dir() {
                                 Ok(())
                             } else {
-                                Err(format!("path does not exist or is not a directory: {}", value))
+                                Err(format!("path does not exist or is not a directory: {value}"))
                             }
                         })
                 })
@@ -2014,10 +2014,10 @@ pub fn test_app<'a>(version: &'a str, default_args: &'a DefaultTestArgs) -> App<
                 .validator(|value| {
                     value
                         .parse::<Slot>()
-                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .map_err(|err| format!("error parsing '{value}': {err}"))
                         .and_then(|slot| {
                             if slot < MINIMUM_SLOTS_PER_EPOCH {
-                                Err(format!("value must be >= {}", MINIMUM_SLOTS_PER_EPOCH))
+                                Err(format!("value must be >= {MINIMUM_SLOTS_PER_EPOCH}"))
                             } else {
                                 Ok(())
                             }

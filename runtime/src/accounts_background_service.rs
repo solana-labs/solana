@@ -97,7 +97,7 @@ impl DropCallback for SendDroppedBankCallback {
 
 impl Debug for SendDroppedBankCallback {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "SendDroppedBankCallback({:p})", self)
+        write!(f, "SendDroppedBankCallback({self:p})")
     }
 }
 

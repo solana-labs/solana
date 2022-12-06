@@ -838,7 +838,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         if config.keypair_path.starts_with("usb://") {
             let pubkey = config
                 .pubkey()
-                .map(|pubkey| format!("{:?}", pubkey))
+                .map(|pubkey| format!("{pubkey:?}"))
                 .unwrap_or_else(|_| "Unavailable".to_string());
             println_name_value("Pubkey:", &pubkey);
         }
@@ -1817,7 +1817,7 @@ mod tests {
         let test_commands = get_clap_app("test", "desc", "version");
 
         let pubkey = solana_sdk::pubkey::new_rand();
-        let pubkey_string = format!("{}", pubkey);
+        let pubkey_string = format!("{pubkey}");
 
         let default_keypair = Keypair::new();
         let keypair_file = make_tmp_path("keypair_file");
@@ -1889,7 +1889,7 @@ mod tests {
 
         // Test Confirm Subcommand
         let signature = Signature::new(&[1; 64]);
-        let signature_string = format!("{:?}", signature);
+        let signature_string = format!("{signature:?}");
         let test_confirm =
             test_commands
                 .clone()
@@ -2520,7 +2520,7 @@ mod tests {
 
         //Test Transfer Subcommand, submit offline `from`
         let from_sig = from_keypair.sign_message(&[0u8]);
-        let from_signer = format!("{}={}", from_pubkey, from_sig);
+        let from_signer = format!("{from_pubkey}={from_sig}");
         let test_transfer = test_commands.clone().get_matches_from(vec![
             "test",
             "transfer",

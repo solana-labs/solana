@@ -384,7 +384,7 @@ fn main() {
                 .iter()
                 .for_each(|tx| {
                     let res = bank.process_transaction(tx);
-                    assert!(res.is_ok(), "sanity test transactions error: {:?}", res);
+                    assert!(res.is_ok(), "sanity test transactions error: {res:?}");
                 });
         });
         bank.clear_signatures();
@@ -395,7 +395,7 @@ fn main() {
                 let res =
                     bank.process_transactions(packets_for_single_iteration.transactions.iter());
                 for r in res {
-                    assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
+                    assert!(r.is_ok(), "sanity parallel execution error: {r:?}");
                 }
                 bank.clear_signatures();
             });

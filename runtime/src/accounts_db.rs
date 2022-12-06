@@ -2125,7 +2125,7 @@ pub fn make_min_priority_thread_pool() -> ThreadPool {
     // Use lower thread count to reduce priority.
     let num_threads = quarter_thread_count();
     rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("solAccountsLo{:02}", i))
+        .thread_name(|i| format!("solAccountsLo{i:02}"))
         .num_threads(num_threads)
         .build()
         .unwrap()
@@ -2329,7 +2329,7 @@ impl AccountsDb {
             file_size: DEFAULT_FILE_SIZE,
             thread_pool: rayon::ThreadPoolBuilder::new()
                 .num_threads(num_threads)
-                .thread_name(|i| format!("solAccounts{:02}", i))
+                .thread_name(|i| format!("solAccounts{i:02}"))
                 .stack_size(ACCOUNTS_STACK_SIZE)
                 .build()
                 .unwrap(),
@@ -5236,9 +5236,8 @@ impl AccountsDb {
                 // fetched from storage. This means a race occurred between this function and clean
                 // accounts/purge_slots
                 let message = format!(
-                    "do_load() failed to get key: {} from storage, latest attempt was for \
-                     slot: {}, storage_location: {:?}, load_hint: {:?}",
-                    pubkey, slot, storage_location, load_hint,
+                    "do_load() failed to get key: {pubkey} from storage, latest attempt was for \
+                     slot: {slot}, storage_location: {storage_location:?}, load_hint: {load_hint:?}",
                 );
                 datapoint_warn!("accounts_db-do_load_warn", ("warn", message, String));
                 true
@@ -5971,8 +5970,7 @@ impl AccountsDb {
         // storage entries should be purged from self.storage
         assert!(
             self.storage.get_slot_stores(remove_slot).is_none(),
-            "slot {} is not none",
-            remove_slot
+            "slot {remove_slot} is not none"
         );
     }
 
@@ -6006,8 +6004,7 @@ impl AccountsDb {
             .get_rooted_from_list(remove_slots.iter().map(|(slot, _)| slot));
         assert!(
             rooted_slots.is_empty(),
-            "Trying to remove accounts for rooted slots {:?}",
-            rooted_slots
+            "Trying to remove accounts for rooted slots {rooted_slots:?}"
         );
 
         let RemoveUnrootedSlotsSynchronization {
@@ -7558,10 +7555,7 @@ impl AccountsDb {
         let current = Self::get_slot_one_epoch_prior(slot, epoch_schedule);
         assert!(
             previous <= current,
-            "get_accounts_hash_complete_one_epoch_old: {}, get_slot_one_epoch_prior: {}, slot: {}",
-            previous,
-            current,
-            slot
+            "get_accounts_hash_complete_one_epoch_old: {previous}, get_slot_one_epoch_prior: {current}, slot: {slot}"
         );
     }
 
@@ -12205,7 +12199,7 @@ pub mod tests {
     fn assert_not_load_account(accounts: &AccountsDb, slot: Slot, pubkey: Pubkey) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
         let load = accounts.load_without_fixed_root(&ancestors, &pubkey);
-        assert!(load.is_none(), "{:?}", load);
+        assert!(load.is_none(), "{load:?}");
     }
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDb, slot: Slot) -> AccountsDb {
@@ -12537,7 +12531,7 @@ pub mod tests {
                             let (account, slot) = db
                                 .load_without_fixed_root(&Ancestors::default(), &pubkey)
                                 .unwrap_or_else(|| {
-                                    panic!("Could not fetch stored account {}, iter {}", pubkey, i)
+                                    panic!("Could not fetch stored account {pubkey}, iter {i}")
                                 });
                             assert_eq!(slot, slot);
                             assert_eq!(account.lamports(), account_bal);
@@ -14601,10 +14595,7 @@ pub mod tests {
                         db.accounts_cache
                             .slot_cache(unrooted_slot as Slot)
                             .is_some(),
-                        "unrooted_slot: {}, total_slots: {}, expected_size: {}",
-                        unrooted_slot,
-                        total_slots,
-                        expected_size
+                        "unrooted_slot: {unrooted_slot}, total_slots: {total_slots}, expected_size: {expected_size}"
                     );
                 }
             }
@@ -16062,7 +16053,7 @@ pub mod tests {
                 assert!(db.accounts_cache.slot_cache(*slot).is_none());
                 let account_in_slot = slot_to_pubkey_map[slot];
                 let item = db.accounts_index.get_account_read_entry(&account_in_slot);
-                assert!(item.is_none(), "item: {:?}", item);
+                assert!(item.is_none(), "item: {item:?}");
             }
 
             // Wait for flush to finish before starting next trial
@@ -16672,7 +16663,7 @@ pub mod tests {
         assert!(result.is_empty());
         for extra in 1..3 {
             let result = db.calc_alive_ancient_historical_roots(extra);
-            assert_eq!(result, HashSet::default(), "extra: {}", extra);
+            assert_eq!(result, HashSet::default(), "extra: {extra}");
         }
 
         let extra = 3;
@@ -16680,7 +16671,7 @@ pub mod tests {
         db.accounts_index.add_root(active_root, false);
         let result = db.calc_alive_ancient_historical_roots(extra);
         let expected_alive_roots = [active_root].into_iter().collect();
-        assert_eq!(result, expected_alive_roots, "extra: {}", extra);
+        assert_eq!(result, expected_alive_roots, "extra: {extra}");
     }
 
     impl AccountsDb {
@@ -17129,8 +17120,7 @@ pub mod tests {
                 Some(MAX_ITEMS_PER_CHUNK..plus_1 + offset),
                 None
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 2 full chunks, aligned
@@ -17145,8 +17135,7 @@ pub mod tests {
                 None,
                 None
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 2 full chunks + 1, mis-aligned
@@ -17161,8 +17150,7 @@ pub mod tests {
                 Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 2 + offset),
                 None,
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 3 full chunks - 1, mis-aligned by 2
@@ -17178,8 +17166,7 @@ pub mod tests {
                 Some(MAX_ITEMS_PER_CHUNK * 2..MAX_ITEMS_PER_CHUNK * 3),
                 Some(MAX_ITEMS_PER_CHUNK * 3..MAX_ITEMS_PER_CHUNK * 3 + 1),
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 1 full chunk - 1, mis-aligned by 2
@@ -17193,8 +17180,7 @@ pub mod tests {
                 Some(offset..MAX_ITEMS_PER_CHUNK),
                 Some(MAX_ITEMS_PER_CHUNK..MAX_ITEMS_PER_CHUNK + 1),
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 1 full chunk - 1, aligned at big offset
@@ -17206,8 +17192,7 @@ pub mod tests {
         assert_eq!(
             result,
             [Some(offset..MAX_ITEMS_PER_CHUNK * 101 - 1), None,],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
 
         // 1 full chunk - 1, mis-aligned by 2 at big offset
@@ -17222,8 +17207,7 @@ pub mod tests {
                 Some(offset..MAX_ITEMS_PER_CHUNK * 101),
                 Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
     }
 
@@ -17242,8 +17226,7 @@ pub mod tests {
                 Some(offset..MAX_ITEMS_PER_CHUNK * 101),
                 Some(MAX_ITEMS_PER_CHUNK * 101..MAX_ITEMS_PER_CHUNK * 101 + 1),
             ],
-            "{:?}",
-            splitter
+            "{splitter:?}"
         );
     }
 
@@ -17787,7 +17770,7 @@ pub mod tests {
             .filter_map(|slot| {
                 let storages = db.get_storages_for_slot(slot);
                 storages.map(|storages| {
-                    assert_eq!(storages.len(), 1, "slot: {}, slots: {:?}", slot, slots);
+                    assert_eq!(storages.len(), 1, "slot: {slot}, slots: {slots:?}");
                     let storage = storages.first().unwrap();
                     storage
                         .accounts

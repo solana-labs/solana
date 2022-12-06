@@ -295,6 +295,6 @@ impl From<PubkeyError> for ProgramError {
 
 impl From<BorshIoError> for ProgramError {
     fn from(error: BorshIoError) -> Self {
-        Self::BorshIoError(format!("{}", error))
+        Self::BorshIoError(format!("{error}"))
     }
 }

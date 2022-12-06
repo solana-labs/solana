@@ -576,7 +576,7 @@ fn process_create_lookup_table(
         },
     );
     match result {
-        Err(err) => Err(format!("Create failed: {}", err).into()),
+        Err(err) => Err(format!("Create failed: {err}").into()),
         Ok(signature) => Ok(config
             .output_format
             .formatted_string(&CliAddressLookupTableCreated {
@@ -635,7 +635,7 @@ fn process_freeze_lookup_table(
         },
     );
     match result {
-        Err(err) => Err(format!("Freeze failed: {}", err).into()),
+        Err(err) => Err(format!("Freeze failed: {err}").into()),
         Ok(signature) => Ok(config.output_format.formatted_string(&CliSignature {
             signature: signature.to_string(),
         })),
@@ -695,7 +695,7 @@ fn process_extend_lookup_table(
         },
     );
     match result {
-        Err(err) => Err(format!("Extend failed: {}", err).into()),
+        Err(err) => Err(format!("Extend failed: {err}").into()),
         Ok(signature) => Ok(config.output_format.formatted_string(&CliSignature {
             signature: signature.to_string(),
         })),
@@ -753,7 +753,7 @@ fn process_deactivate_lookup_table(
         },
     );
     match result {
-        Err(err) => Err(format!("Deactivate failed: {}", err).into()),
+        Err(err) => Err(format!("Deactivate failed: {err}").into()),
         Ok(signature) => Ok(config.output_format.formatted_string(&CliSignature {
             signature: signature.to_string(),
         })),
@@ -810,7 +810,7 @@ fn process_close_lookup_table(
         },
     );
     match result {
-        Err(err) => Err(format!("Close failed: {}", err).into()),
+        Err(err) => Err(format!("Close failed: {err}").into()),
         Ok(signature) => Ok(config.output_format.formatted_string(&CliSignature {
             signature: signature.to_string(),
         })),

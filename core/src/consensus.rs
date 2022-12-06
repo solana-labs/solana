@@ -292,7 +292,7 @@ impl Tower {
                         "tower_warn",
                         (
                             "warn",
-                            format!("Unable to get vote_state from account {}", key),
+                            format!("Unable to get vote_state from account {key}"),
                             String
                         ),
                     );
@@ -621,10 +621,7 @@ impl Tower {
                 // non-descendants of the root every time root is set
                 assert!(
                     ancestors.contains(&root_slot),
-                    "ancestors: {:?}, slot: {} root: {}",
-                    ancestors,
-                    slot,
-                    root_slot
+                    "ancestors: {ancestors:?}, slot: {slot} root: {root_slot}"
                 );
             }
         }
@@ -681,8 +678,7 @@ impl Tower {
                         // newer snapshots on validator restart
                         let message = format!(
                             "bank_forks doesn't have corresponding data for the stray restored \
-                           last vote({}), meaning some inconsistency between saved tower and ledger.",
-                           last_voted_slot
+                           last vote({last_voted_slot}), meaning some inconsistency between saved tower and ledger."
                         );
                         warn!("{}", message);
                         datapoint_warn!("tower_warn", ("warn", message, String));
@@ -771,7 +767,7 @@ impl Tower {
                         // all of them.
                         empty_ancestors_due_to_minor_unsynced_ledger()
                     } else {
-                        panic!("no ancestors found with slot: {}", last_voted_slot);
+                        panic!("no ancestors found with slot: {last_voted_slot}");
                     }
                 });
 
@@ -788,10 +784,7 @@ impl Tower {
                         return suspended_decision_due_to_major_unsynced_ledger();
                     } else {
                         panic!(
-                            "Should never consider switching to ancestor ({}) of last vote: {}, ancestors({:?})",
-                            switch_slot,
-                            last_voted_slot,
-                            last_vote_ancestors,
+                            "Should never consider switching to ancestor ({switch_slot}) of last vote: {last_voted_slot}, ancestors({last_vote_ancestors:?})",
                         );
                     }
                 }
@@ -1106,8 +1099,7 @@ impl Tower {
                 let message = format!(
                     "For some reason, we're REPROCESSING slots which has already been \
                      voted and ROOTED by us; \
-                     VOTING will be SUSPENDED UNTIL {}!",
-                    last_voted_slot,
+                     VOTING will be SUSPENDED UNTIL {last_voted_slot}!",
                 );
                 error!("{}", message);
                 datapoint_error!("tower_error", ("error", message, String));
@@ -1371,9 +1363,8 @@ pub fn reconcile_blockstore_roots_with_external_source(
                 Ordering::Greater => true,
                 Ordering::Equal => false,
                 Ordering::Less => panic!(
-                    "last_blockstore_root({}) is skipped while traversing \
-                     blockstore (currently at {}) from external root ({:?})!?",
-                    last_blockstore_root, current, external_source,
+                    "last_blockstore_root({last_blockstore_root}) is skipped while traversing \
+                     blockstore (currently at {current}) from external root ({external_source:?})!?",
                 ),
             })
             .collect();
@@ -2824,7 +2815,7 @@ pub mod test {
                     .write(true)
                     .truncate(true)
                     .open(path)
-                    .unwrap_or_else(|_| panic!("Failed to truncate file: {:?}", path));
+                    .unwrap_or_else(|_| panic!("Failed to truncate file: {path:?}"));
             },
         );
         assert_matches!(loaded, Err(TowerError::SerializeError(_)))

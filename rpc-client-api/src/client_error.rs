@@ -59,11 +59,11 @@ impl From<ErrorKind> for TransportError {
         match client_error_kind {
             ErrorKind::Io(err) => Self::IoError(err),
             ErrorKind::TransactionError(err) => Self::TransactionError(err),
-            ErrorKind::Reqwest(err) => Self::Custom(format!("{:?}", err)),
-            ErrorKind::RpcError(err) => Self::Custom(format!("{:?}", err)),
-            ErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
-            ErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
-            ErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::Reqwest(err) => Self::Custom(format!("{err:?}")),
+            ErrorKind::RpcError(err) => Self::Custom(format!("{err:?}")),
+            ErrorKind::SerdeJson(err) => Self::Custom(format!("{err:?}")),
+            ErrorKind::SigningError(err) => Self::Custom(format!("{err:?}")),
+            ErrorKind::Custom(err) => Self::Custom(format!("{err:?}")),
         }
     }
 }
