@@ -13091,7 +13091,8 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_only_older_than_or_equal_to_snapshot_slot() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
 
         let key = Pubkey::default();
         let account = AccountSharedData::new(1, 0, &key);
@@ -13099,8 +13100,8 @@ pub mod tests {
         let base_slot = before_slot + 1;
         let after_slot = base_slot + 1;
 
-        db.add_root(base_slot);
         db.store_for_tests(base_slot, &[(&key, &account)]);
+        db.add_root_and_flush_write_cache(base_slot);
         assert!(db.get_snapshot_storages(..=before_slot, None).0.is_empty());
 
         assert_eq!(1, db.get_snapshot_storages(..=base_slot, None).0.len());
