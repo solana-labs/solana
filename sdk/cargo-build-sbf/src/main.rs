@@ -100,7 +100,7 @@ where
         let file = File::create(&script_name).unwrap();
         let mut out = BufWriter::new(file);
         for (key, value) in env::vars() {
-            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+            writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
         for arg in args.iter() {
@@ -263,7 +263,7 @@ fn postprocess_dump(program_dump: &Path) {
         if head_re.is_match(line) {
             let captures = head_re.captures(line).unwrap();
             pc = u64::from_str_radix(&captures[1], 16).unwrap();
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
             continue;
         }
         if insn_re.is_match(line) {
@@ -286,11 +286,11 @@ fn postprocess_dump(program_dump: &Path) {
                 if a2n.contains_key(&address) {
                     writeln!(out, "{} ; {}", line, a2n[&address]).unwrap();
                 } else {
-                    writeln!(out, "{}", line).unwrap();
+                    writeln!(out, "{line}").unwrap();
                 }
             }
         } else {
-            writeln!(out, "{}", line).unwrap();
+            writeln!(out, "{line}").unwrap();
         }
         pc = pc.checked_add(step).unwrap();
     }
@@ -659,11 +659,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     }
 
     if let Some(program_name) = program_name {
-        let program_unstripped_so = target_build_directory.join(format!("{}.so", program_name));
-        let program_dump = sbf_out_dir.join(format!("{}-dump.txt", program_name));
-        let program_so = sbf_out_dir.join(format!("{}.so", program_name));
-        let program_debug = sbf_out_dir.join(format!("{}.debug", program_name));
-        let program_keypair = sbf_out_dir.join(format!("{}-keypair.json", program_name));
+        let program_unstripped_so = target_build_directory.join(format!("{program_name}.so"));
+        let program_dump = sbf_out_dir.join(format!("{program_name}-dump.txt"));
+        let program_so = sbf_out_dir.join(format!("{program_name}.so"));
+        let program_debug = sbf_out_dir.join(format!("{program_name}.debug"));
+        let program_keypair = sbf_out_dir.join(format!("{program_name}-keypair.json"));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
             let prerequisite_metadata = fs::metadata(prerequisite_file).unwrap_or_else(|err| {

@@ -289,7 +289,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     .set_data_from_slice(&account_info_data)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
-                    panic!("{:?}", err);
+                    panic!("{err:?}");
                 }
                 _ => {}
             }
@@ -545,7 +545,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
-                    panic!("Unable to locate {}", filename);
+                    panic!("Unable to locate {filename}");
                 })),
                 owner,
                 executable: false,
@@ -568,7 +568,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -666,7 +666,7 @@ impl ProgramTest {
             }
         };
 
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{program_name}.so"));
         match (self.prefer_bpf, program_file, process_instruction) {
             // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
@@ -681,18 +681,12 @@ impl ProgramTest {
             // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program file data not available for {program_name} ({program_id})");
             }
 
             // Invalid: regular `test` invocation without a processor.
             (false, _, None) => {
-                panic!(
-                    "Program processor not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program processor not available for {program_name} ({program_id})");
             }
         }
     }
@@ -874,7 +868,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
@@ -908,7 +902,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         ProgramTestContext::new(
             bank_forks,

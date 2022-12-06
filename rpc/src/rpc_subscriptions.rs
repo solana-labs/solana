@@ -105,24 +105,24 @@ pub enum NotificationEntry {
 impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            NotificationEntry::Root(root) => write!(f, "Root({})", root),
-            NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
-            NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
+            NotificationEntry::Root(root) => write!(f, "Root({root})"),
+            NotificationEntry::Vote(vote) => write!(f, "Vote({vote:?})"),
+            NotificationEntry::Slot(slot_info) => write!(f, "Slot({slot_info:?})"),
             NotificationEntry::SlotUpdate(slot_update) => {
-                write!(f, "SlotUpdate({:?})", slot_update)
+                write!(f, "SlotUpdate({slot_update:?})")
             }
             NotificationEntry::Bank(commitment_slots) => {
                 write!(f, "Bank({{slot: {:?}}})", commitment_slots.slot)
             }
             NotificationEntry::SignaturesReceived(slot_signatures) => {
-                write!(f, "SignaturesReceived({:?})", slot_signatures)
+                write!(f, "SignaturesReceived({slot_signatures:?})")
             }
-            NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
+            NotificationEntry::Gossip(slot) => write!(f, "Gossip({slot:?})"),
             NotificationEntry::Subscribed(params, id) => {
-                write!(f, "Subscribed({:?}, {:?})", params, id)
+                write!(f, "Subscribed({params:?}, {id:?})")
             }
             NotificationEntry::Unsubscribed(params, id) => {
-                write!(f, "Unsubscribed({:?}, {:?})", params, id)
+                write!(f, "Unsubscribed({params:?}, {id:?})")
             }
         }
     }
@@ -652,7 +652,7 @@ impl RpcSubscriptions {
                     .spawn(move || {
                         let pool = rayon::ThreadPoolBuilder::new()
                             .num_threads(notification_threads)
-                            .thread_name(|i| format!("solRpcNotify{:02}", i))
+                            .thread_name(|i| format!("solRpcNotify{i:02}"))
                             .build()
                             .unwrap();
                         pool.install(|| {
@@ -2648,8 +2648,7 @@ pub(crate) mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
 
@@ -2691,8 +2690,7 @@ pub(crate) mod tests {
             let expected_res_str =
                 serde_json::to_string(&serde_json::to_value(expected_root).unwrap()).unwrap();
             let expected = format!(
-                r#"{{"jsonrpc":"2.0","method":"rootNotification","params":{{"result":{},"subscription":0}}}}"#,
-                expected_res_str
+                r#"{{"jsonrpc":"2.0","method":"rootNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
             );
             assert_eq!(expected, response);
         }

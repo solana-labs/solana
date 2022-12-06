@@ -368,7 +368,7 @@ impl AppendVec {
         if file_size == 0 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too small file size {} for AppendVec", file_size),
+                format!("too small file size {file_size} for AppendVec"),
             ))
         } else if usize::try_from(MAXIMUM_APPEND_VEC_FILE_SIZE)
             .map(|max| file_size > max)
@@ -376,12 +376,12 @@ impl AppendVec {
         {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("too large file size {} for AppendVec", file_size),
+                format!("too large file size {file_size} for AppendVec"),
             ))
         } else if current_len > file_size {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("current_len is larger than file size ({})", file_size),
+                format!("current_len is larger than file size ({file_size})"),
             ))
         } else {
             Ok(())
@@ -417,7 +417,7 @@ impl AppendVec {
     }
 
     pub fn file_name(slot: Slot, id: impl std::fmt::Display) -> String {
-        format!("{}.{}", slot, id)
+        format!("{slot}.{id}")
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {

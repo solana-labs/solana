@@ -46,7 +46,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solEntry{:02}", ix))
+        .thread_name(|ix| format!("solEntry{ix:02}"))
         .build()
         .unwrap();
 }
@@ -678,7 +678,7 @@ impl EntrySlice for [Entry] {
                             );
                         },
                         _ => {
-                            panic!("unsupported simd len: {}", simd_len);
+                            panic!("unsupported simd len: {simd_len}");
                         }
                     }
                     let entry_start = i * simd_len;

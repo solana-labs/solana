@@ -85,7 +85,7 @@ pub enum QuicError {
 
 impl From<QuicError> for ClientErrorKind {
     fn from(quic_error: QuicError) -> Self {
-        Self::Custom(format!("{:?}", quic_error))
+        Self::Custom(format!("{quic_error:?}"))
     }
 }
 

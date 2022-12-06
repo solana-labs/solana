@@ -490,7 +490,7 @@ impl BankingStage {
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 Builder::new()
-                    .name(format!("solBanknStgTx{:02}", i))
+                    .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
@@ -1151,7 +1151,7 @@ impl BankingStage {
                         starting_transaction_index: None,
                     };
                 }
-                Err(e) => panic!("Poh recorder returned unexpected error: {:?}", e),
+                Err(e) => panic!("Poh recorder returned unexpected error: {e:?}"),
             }
         }
 
@@ -3903,7 +3903,7 @@ mod tests {
 
                 let mut packets = vec![Packet::default(); 2];
                 let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
-                assert_eq!(num_received, expected_num_forwarded, "{}", name);
+                assert_eq!(num_received, expected_num_forwarded, "{name}");
             }
 
             exit.store(true, Ordering::Relaxed);
@@ -4003,7 +4003,7 @@ mod tests {
 
                 let mut packets = vec![Packet::default(); 2];
                 let num_received = recv_mmsg(recv_socket, &mut packets[..]).unwrap_or_default();
-                assert_eq!(num_received, expected_ids.len(), "{}", name);
+                assert_eq!(num_received, expected_ids.len(), "{name}");
                 for (i, expected_id) in expected_ids.iter().enumerate() {
                     assert_eq!(packets[i].meta().size, 215);
                     let recv_transaction: VersionedTransaction =
@@ -4011,17 +4011,12 @@ mod tests {
                     assert_eq!(
                         recv_transaction.message.recent_blockhash(),
                         expected_id,
-                        "{}",
-                        name
+                        "{name}"
                     );
                 }
 
                 let num_unprocessed_packets: usize = unprocessed_packet_batches.len();
-                assert_eq!(
-                    num_unprocessed_packets, expected_num_unprocessed,
-                    "{}",
-                    name
-                );
+                assert_eq!(num_unprocessed_packets, expected_num_unprocessed, "{name}");
             }
 
             exit.store(true, Ordering::Relaxed);

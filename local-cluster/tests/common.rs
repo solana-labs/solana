@@ -63,7 +63,7 @@ pub fn restore_tower(tower_path: &Path, node_pubkey: &Pubkey) -> Option<Tower> {
         if tower_err.is_file_missing() {
             return None;
         } else {
-            panic!("tower restore failed...: {:?}", tower_err);
+            panic!("tower restore failed...: {tower_err:?}");
         }
     }
     // actually saved tower must have at least one vote.
@@ -98,7 +98,7 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
             },
         )
         .unwrap_or_else(|e| {
-            panic!("Failed to open ledger at {:?}, err: {}", ledger_path, e);
+            panic!("Failed to open ledger at {ledger_path:?}, err: {e}");
         })
     })
 }

@@ -730,8 +730,7 @@ where
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(
         max_append_vec_id <= AppendVecId::MAX / 2,
-        "Storage id {} larger than allowed max",
-        max_append_vec_id
+        "Storage id {max_append_vec_id} larger than allowed max"
     );
 
     // Process deserialized data, set necessary fields in self

@@ -1094,9 +1094,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for full snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for full snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }
@@ -1114,9 +1112,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for incremental snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for incremental snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }

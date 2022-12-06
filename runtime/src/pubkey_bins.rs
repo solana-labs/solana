@@ -63,7 +63,7 @@ pub mod tests {
         for i in 0..=24 {
             let bins = 2u32.pow(i);
             let calc = PubkeyBinCalculator24::new(bins as usize);
-            assert_eq!(calc.shift_bits, 24 - i, "i: {}", i);
+            assert_eq!(calc.shift_bits, 24 - i, "i: {i}");
             for bin in 0..bins {
                 assert_eq!(
                     bin as usize,

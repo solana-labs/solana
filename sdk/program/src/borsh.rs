@@ -52,7 +52,7 @@ fn get_declaration_packed_len(
             "u64" | "i64" => 8,
             "u128" | "i128" => 16,
             "nil" => 0,
-            _ => panic!("Missing primitive type: {}", declaration),
+            _ => panic!("Missing primitive type: {declaration}"),
         },
     }
 }

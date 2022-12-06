@@ -91,12 +91,12 @@ pub use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstore{:02}", ix))
+        .thread_name(|ix| format!("solBstore{ix:02}"))
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
-        .thread_name(|ix| format!("solBstoreAll{:02}", ix))
+        .thread_name(|ix| format!("solBstoreAll{ix:02}"))
         .build()
         .unwrap();
 }
@@ -468,7 +468,7 @@ impl Blockstore {
             (
                 slot,
                 deserialize(&slot_meta_bytes).unwrap_or_else(|e| {
-                    panic!("Could not deserialize SlotMeta for slot {}: {:?}", slot, e)
+                    panic!("Could not deserialize SlotMeta for slot {slot}: {e:?}")
                 }),
             )
         }))
@@ -727,7 +727,7 @@ impl Blockstore {
                         slot,
                         erasure_meta,
                         false,
-                        format!("still need: {}", needed),
+                        format!("still need: {needed}"),
                         0,
                     );
                 }
@@ -1452,8 +1452,7 @@ impl Blockstore {
                 (
                     "error",
                     format!(
-                        "Leader {:?}, slot {}: received index {} >= slot.last_index {:?}, shred_source: {:?}",
-                        leader_pubkey, slot, shred_index, last_index, shred_source
+                        "Leader {leader_pubkey:?}, slot {slot}: received index {shred_index} >= slot.last_index {last_index:?}, shred_source: {shred_source:?}"
                     ),
                     String
                 )
@@ -1601,7 +1600,7 @@ impl Blockstore {
         let shred = self.data_shred_cf.get_bytes((slot, index))?;
         let shred = shred.map(ShredData::resize_stored_shred).transpose();
         shred.map_err(|err| {
-            let err = format!("Invalid stored shred: {}", err);
+            let err = format!("Invalid stored shred: {err}");
             let err = Box::new(bincode::ErrorKind::Custom(err));
             BlockstoreError::InvalidShredData(err)
         })
@@ -1946,7 +1945,7 @@ impl Blockstore {
                 let blockhash = slot_entries
                     .last()
                     .map(|entry| entry.hash)
-                    .unwrap_or_else(|| panic!("Rooted slot {:?} must have blockhash", slot));
+                    .unwrap_or_else(|| panic!("Rooted slot {slot:?} must have blockhash"));
                 let slot_transaction_iterator = slot_entries
                     .into_iter()
                     .flat_map(|entry| entry.transactions)
@@ -2451,7 +2450,7 @@ impl Blockstore {
         let block = self.get_complete_block(slot, false).map_err(|err| {
             BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
-                format!("Unable to get block: {}", err),
+                format!("Unable to get block: {err}"),
             ))
         })?;
 
@@ -2915,14 +2914,13 @@ impl Blockstore {
                         }
                         return Err(BlockstoreError::InvalidShredData(Box::new(
                             bincode::ErrorKind::Custom(format!(
-                                "Missing shred for slot {}, index {}",
-                                slot, idx
+                                "Missing shred for slot {slot}, index {idx}"
                             )),
                         )));
                     }
                     Shred::new_from_serialized_shred(shred_bytes.unwrap()).map_err(|err| {
                         BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(
-                            format!("Could not reconstruct shred from shred payload: {:?}", err),
+                            format!("Could not reconstruct shred from shred payload: {err:?}"),
                         )))
                     })
                 })
@@ -2933,16 +2931,14 @@ impl Blockstore {
 
         let deshred_payload = Shredder::deshred(&data_shreds).map_err(|e| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
-                "Could not reconstruct data block from constituent shreds, error: {:?}",
-                e
+                "Could not reconstruct data block from constituent shreds, error: {e:?}"
             ))))
         })?;
 
         debug!("{:?} shreds in last FEC set", data_shreds.len(),);
         bincode::deserialize::<Vec<Entry>>(&deshred_payload).map_err(|e| {
             BlockstoreError::InvalidShredData(Box::new(bincode::ErrorKind::Custom(format!(
-                "could not reconstruct entries: {:?}",
-                e
+                "could not reconstruct entries: {e:?}"
             ))))
         })
     }
@@ -3933,44 +3929,38 @@ pub fn create_new_ledger(
 
             fs::rename(
                 ledger_path.join(DEFAULT_GENESIS_ARCHIVE),
-                ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_ARCHIVE)),
+                ledger_path.join(format!("{DEFAULT_GENESIS_ARCHIVE}.failed")),
             )
             .unwrap_or_else(|e| {
                 let _ = write!(
                     &mut error_messages,
-                    "/failed to stash problematic {}: {}",
-                    DEFAULT_GENESIS_ARCHIVE, e
+                    "/failed to stash problematic {DEFAULT_GENESIS_ARCHIVE}: {e}"
                 );
             });
             fs::rename(
                 ledger_path.join(DEFAULT_GENESIS_FILE),
-                ledger_path.join(format!("{}.failed", DEFAULT_GENESIS_FILE)),
+                ledger_path.join(format!("{DEFAULT_GENESIS_FILE}.failed")),
             )
             .unwrap_or_else(|e| {
                 let _ = write!(
                     &mut error_messages,
-                    "/failed to stash problematic {}: {}",
-                    DEFAULT_GENESIS_FILE, e
+                    "/failed to stash problematic {DEFAULT_GENESIS_FILE}: {e}"
                 );
             });
             fs::rename(
                 ledger_path.join(blockstore_dir),
-                ledger_path.join(format!("{}.failed", blockstore_dir)),
+                ledger_path.join(format!("{blockstore_dir}.failed")),
             )
             .unwrap_or_else(|e| {
                 let _ = write!(
                     &mut error_messages,
-                    "/failed to stash problematic {}: {}",
-                    blockstore_dir, e
+                    "/failed to stash problematic {blockstore_dir}: {e}"
                 );
             });
 
             return Err(BlockstoreError::Io(IoError::new(
                 ErrorKind::Other,
-                format!(
-                    "Error checking to unpack genesis archive: {}{}",
-                    unpack_err, error_messages
-                ),
+                format!("Error checking to unpack genesis archive: {unpack_err}{error_messages}"),
             )));
         }
     }
@@ -8113,7 +8103,7 @@ pub mod tests {
             assert!(sig_infos.found_before);
             let results = sig_infos.infos;
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+            assert_eq!(results[0], all0[i], "Unexpected result for {i}");
         }
         // Fetch all signatures for address 0 individually using `until`
         for i in 0..all0.len() {
@@ -8136,7 +8126,7 @@ pub mod tests {
                 .unwrap()
                 .infos;
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+            assert_eq!(results[0], all0[i], "Unexpected result for {i}");
         }
 
         let sig_infos = blockstore
@@ -8284,7 +8274,7 @@ pub mod tests {
                 .unwrap()
                 .infos;
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+            assert_eq!(results[0], all0[i], "Unexpected result for {i}");
         }
         // Fetch all signatures for address 0 individually using `until`
         for i in 0..all0.len() {
@@ -8307,7 +8297,7 @@ pub mod tests {
                 .unwrap()
                 .infos;
             assert_eq!(results.len(), 1);
-            assert_eq!(results[0], all0[i], "Unexpected result for {}", i);
+            assert_eq!(results[0], all0[i], "Unexpected result for {i}");
         }
 
         assert!(blockstore
@@ -9546,7 +9536,7 @@ pub mod tests {
                 // Check that each thread processed their task before continuing
                 for _ in 1..=2 {
                     let res = signal_receiver.recv().unwrap();
-                    assert!(res.is_ok(), "race condition: {:?}", res);
+                    assert!(res.is_ok(), "race condition: {res:?}");
                 }
             }
 

@@ -75,7 +75,7 @@ fn append_vec_sequential_read(bencher: &mut Bencher) {
     let mut indexes = add_test_accounts(&vec, size);
     bencher.iter(|| {
         let (sample, pos) = indexes.pop().unwrap();
-        println!("reading pos {} {}", sample, pos);
+        println!("reading pos {sample} {pos}");
         let (account, _next) = vec.get_account(pos).unwrap();
         let (_meta, test) = create_test_account(sample);
         assert_eq!(account.data, test.data());

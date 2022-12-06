@@ -635,8 +635,7 @@ where
     let consumed_size = data_file_stream.stream_position()?;
     if consumed_size > maximum_file_size {
         let error_message = format!(
-            "too large snapshot data file to serialize: {:?} has {} bytes",
-            data_file_path, consumed_size
+            "too large snapshot data file to serialize: {data_file_path:?} has {consumed_size} bytes"
         );
         return Err(get_io_error(&error_message));
     }
@@ -2975,8 +2974,7 @@ mod tests {
         for snap_name in expected_snapshots {
             assert!(
                 retained_snaps.contains(snap_name.as_str()),
-                "{} not found",
-                snap_name
+                "{snap_name} not found"
             );
         }
         assert_eq!(retained_snaps.len(), expected_snapshots.len());

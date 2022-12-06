@@ -1129,13 +1129,9 @@ mod tests {
         assert!(num_inserts > crds.table.len());
         let (num_nodes, num_votes, num_epoch_slots) = check_crds_value_indices(&mut rng, &crds);
         assert!(num_nodes * 3 < crds.table.len());
-        assert!(num_nodes > 100, "num nodes: {}", num_nodes);
-        assert!(num_votes > 100, "num votes: {}", num_votes);
-        assert!(
-            num_epoch_slots > 100,
-            "num epoch slots: {}",
-            num_epoch_slots
-        );
+        assert!(num_nodes > 100, "num nodes: {num_nodes}");
+        assert!(num_votes > 100, "num votes: {num_votes}");
+        assert!(num_epoch_slots > 100, "num epoch slots: {num_epoch_slots}");
         // Remove values one by one and assert that nodes indices stay valid.
         while !crds.table.is_empty() {
             let index = rng.gen_range(0, crds.table.len());

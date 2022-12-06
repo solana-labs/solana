@@ -823,10 +823,7 @@ impl AccountsHasher {
 
     pub fn checked_cast_for_capitalization(balance: u128) -> u64 {
         balance.try_into().unwrap_or_else(|_| {
-            panic!(
-                "overflow is detected while summing capitalization: {}",
-                balance
-            )
+            panic!("overflow is detected while summing capitalization: {balance}")
         })
     }
 
@@ -1450,20 +1447,12 @@ pub mod tests {
                     assert_eq!(
                         expected2,
                         hashes4.into_iter().flatten().collect::<Vec<_>>(),
-                        "last_slice: {}, start: {}, end: {}, slice: {:?}",
-                        last_slice,
-                        start,
-                        end,
-                        slice
+                        "last_slice: {last_slice}, start: {start}, end: {end}, slice: {slice:?}"
                     );
                     assert_eq!(
                         expected2.clone(),
                         hashes5.iter().flatten().copied().collect::<Vec<_>>(),
-                        "last_slice: {}, start: {}, end: {}, slice: {:?}",
-                        last_slice,
-                        start,
-                        end,
-                        slice
+                        "last_slice: {last_slice}, start: {start}, end: {end}, slice: {slice:?}"
                     );
                     assert_eq!(
                         expected2.clone(),
@@ -1491,7 +1480,7 @@ pub mod tests {
                         })
                         .collect::<String>();
 
-                    let hash_result_as_string = format!("{:?}", hashes2);
+                    let hash_result_as_string = format!("{hashes2:?}");
 
                     let packaged_result: ExpectedType = (
                         human_readable,

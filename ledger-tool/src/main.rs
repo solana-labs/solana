@@ -140,7 +140,7 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                         "    {:<44}  {:^15}  {}◎{:<14.9}  ◎{:<18.9}   {}",
                         reward.pubkey,
                         if let Some(reward_type) = reward.reward_type {
-                            format!("{}", reward_type)
+                            format!("{reward_type}")
                         } else {
                             "-".to_string()
                         },
@@ -149,7 +149,7 @@ fn output_slot_rewards(blockstore: &Blockstore, slot: Slot, method: &LedgerOutpu
                         lamports_to_sol(reward.post_balance),
                         reward
                             .commission
-                            .map(|commission| format!("{:>9}%", commission))
+                            .map(|commission| format!("{commission:>9}%"))
                             .unwrap_or_else(|| "    -".to_string())
                     );
                 }
@@ -175,7 +175,7 @@ fn output_entry(
                 entry.transactions.len()
             );
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {}", transactions_index);
+                println!("    Transaction {transactions_index}");
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
@@ -225,12 +225,12 @@ fn output_slot(
 
     let (entries, num_shreds, is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, allow_dead_slots)
-        .map_err(|err| format!("Failed to load entries for slot {}: {:?}", slot, err))?;
+        .map_err(|err| format!("Failed to load entries for slot {slot}: {err:?}"))?;
 
     if *method == LedgerOutputMethod::Print {
         if let Ok(Some(meta)) = blockstore.meta(slot) {
             if verbose_level >= 1 {
-                println!("  {:?} is_full: {}", meta, is_full);
+                println!("  {meta:?} is_full: {is_full}");
             } else {
                 println!(
                     "  num_shreds: {}, parent_slot: {:?}, next_slots: {:?}, num_entries: {}, is_full: {}",
@@ -289,10 +289,7 @@ fn output_slot(
             }
         }
 
-        println!(
-            "  Transactions: {}, hashes: {}, block_hash: {}",
-            transactions, num_hashes, blockhash,
-        );
+        println!("  Transactions: {transactions}, hashes: {num_hashes}, block_hash: {blockhash}",);
         for (pubkey, count) in program_ids.iter() {
             *all_program_ids.entry(*pubkey).or_insert(0) += count;
         }
@@ -315,10 +312,7 @@ fn output_ledger(
     let slot_iterator = blockstore
         .slot_meta_iterator(starting_slot)
         .unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to load entries starting from slot {}: {:?}",
-                starting_slot, err
-            );
+            eprintln!("Failed to load entries starting from slot {starting_slot}: {err:?}");
             exit(1);
         });
 
@@ -355,7 +349,7 @@ fn output_ledger(
             verbose_level,
             &mut all_program_ids,
         ) {
-            eprintln!("{}", err);
+            eprintln!("{err}");
         }
         num_printed += 1;
         if num_printed >= num_slots as usize {
@@ -387,12 +381,12 @@ fn output_account(
     print_account_data: bool,
     encoding: UiAccountEncoding,
 ) {
-    println!("{}:", pubkey);
+    println!("{pubkey}:");
     println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
     println!("  owner: '{}'", account.owner());
     println!("  executable: {}", account.executable());
     if let Some(slot) = modified_slot {
-        println!("  slot: {}", slot);
+        println!("  slot: {slot}");
     }
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
@@ -400,7 +394,7 @@ fn output_account(
         let account_data = UiAccount::encode(pubkey, account, encoding, None, None).data;
         match account_data {
             UiAccountData::Binary(data, data_encoding) => {
-                println!("  data: '{}'", data);
+                println!("  data: '{data}'");
                 println!(
                     "  encoding: {}",
                     serde_json::to_string(&data_encoding).unwrap()
@@ -420,12 +414,12 @@ fn output_account(
 
 fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result<()> {
     let mut child = Command::new("dot")
-        .arg(format!("-T{}", output_format))
-        .arg(format!("-o{}", output_file))
+        .arg(format!("-T{output_format}"))
+        .arg(format!("-o{output_file}"))
         .stdin(Stdio::piped())
         .spawn()
         .map_err(|err| {
-            eprintln!("Failed to spawn dot: {:?}", err);
+            eprintln!("Failed to spawn dot: {err:?}");
             err
         })?;
 
@@ -944,7 +938,7 @@ fn open_blockstore(
             })
         }
         Err(err) => {
-            eprintln!("Failed to open blockstore at {:?}: {:?}", ledger_path, err);
+            eprintln!("Failed to open blockstore at {ledger_path:?}: {err:?}");
             exit(1);
         }
     }
@@ -988,10 +982,10 @@ fn print_blockstore_file_metadata(
 ) -> Result<(), String> {
     let live_files = blockstore
         .live_files_metadata()
-        .map_err(|err| format!("{:?}", err))?;
+        .map_err(|err| format!("{err:?}"))?;
 
     // All files under live_files_metadata are prefixed with "/".
-    let sst_file_name = file_name.as_ref().map(|name| format!("/{}", name));
+    let sst_file_name = file_name.as_ref().map(|name| format!("/{name}"));
     for file in live_files {
         if sst_file_name.is_none() || file.name.eq(sst_file_name.as_ref().unwrap()) {
             println!(
@@ -1011,8 +1005,7 @@ fn print_blockstore_file_metadata(
     }
     if sst_file_name.is_some() {
         return Err(format!(
-            "Failed to find or load the metadata of the specified file {:?}",
-            file_name
+            "Failed to find or load the metadata of the specified file {file_name:?}"
         ));
     }
     Ok(())
@@ -1075,10 +1068,7 @@ fn load_bank_forks(
         // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
         //  - This will not catch the case when loading from genesis without a full slot 0.
         if !blockstore.slot_range_connected(starting_slot, halt_slot) {
-            eprintln!(
-                "Unable to load bank forks at slot {} due to disconnected blocks.",
-                halt_slot,
-            );
+            eprintln!("Unable to load bank forks at slot {halt_slot} due to disconnected blocks.",);
             exit(1);
         }
     }
@@ -1123,7 +1113,7 @@ fn load_bank_forks(
         let geyser_service =
             GeyserPluginService::new(confirmed_bank_receiver, &geyser_config_files).unwrap_or_else(
                 |err| {
-                    eprintln!("Failed to setup Geyser service: {:?}", err);
+                    eprintln!("Failed to setup Geyser service: {err:?}");
                     exit(1);
                 },
             );
@@ -1195,7 +1185,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
 
     let (entries, _num_shreds, _is_full) = blockstore
         .get_slot_entries_with_shred_info(slot, 0, false)
-        .map_err(|err| format!(" Slot: {}, Failed to load entries, err {:?}", slot, err))?;
+        .map_err(|err| format!(" Slot: {slot}, Failed to load entries, err {err:?}"))?;
 
     let num_entries = entries.len();
     let mut num_transactions = 0;
@@ -1229,8 +1219,7 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
                 let result = cost_tracker.try_add(&tx_cost);
                 if result.is_err() {
                     println!(
-                        "Slot: {}, CostModel rejected transaction {:?}, reason {:?}",
-                        slot, transaction, result,
+                        "Slot: {slot}, CostModel rejected transaction {transaction:?}, reason {result:?}",
                     );
                 }
                 for (program_id, _instruction) in transaction.message().program_instructions_iter()
@@ -1241,10 +1230,9 @@ fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> 
     }
 
     println!(
-        "Slot: {}, Entries: {}, Transactions: {}, Programs {}",
-        slot, num_entries, num_transactions, num_programs,
+        "Slot: {slot}, Entries: {num_entries}, Transactions: {num_transactions}, Programs {num_programs}",
     );
-    println!("  Programs: {:?}", program_ids);
+    println!("  Programs: {program_ids:?}");
 
     Ok(())
 }
@@ -1868,8 +1856,7 @@ fn main() {
                             Ok(())
                         } else {
                             Err(format!(
-                                "Unable to parse as a number or the keyword ROOT, provided: {}",
-                                value
+                                "Unable to parse as a number or the keyword ROOT, provided: {value}"
                             ))
                         }
                     })
@@ -2312,8 +2299,7 @@ fn main() {
                         "Shred storage type of target_db cannot be inferred, \
                      the default RocksLevel will be used. \
                      If you want to use FIFO shred_storage_type on an empty target_db, \
-                     create {} foldar the specified target_db directory.",
-                        BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+                     create {BLOCKSTORE_DIRECTORY_ROCKS_FIFO} foldar the specified target_db directory.",
                     ),
                 );
 
@@ -2358,7 +2344,7 @@ fn main() {
                         );
                     }
                 } else {
-                    println!("{}", genesis_config);
+                    println!("{genesis_config}");
                 }
             }
             ("genesis-hash", Some(arg_matches)) => {
@@ -2391,7 +2377,7 @@ fn main() {
                     LedgerColumnOptions::default(),
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Failed to write genesis config: {:?}", err);
+                    eprintln!("Failed to write genesis config: {err:?}");
                     exit(1);
                 });
 
@@ -2438,7 +2424,7 @@ fn main() {
                         );
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2517,7 +2503,7 @@ fn main() {
                         println!("{}", &bank_forks.read().unwrap().working_bank().hash());
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2533,7 +2519,7 @@ fn main() {
                     force_update_to_open,
                 );
                 for slot in slots {
-                    println!("Slot {}", slot);
+                    println!("Slot {slot}");
                     if let Err(err) = output_slot(
                         &blockstore,
                         slot,
@@ -2542,7 +2528,7 @@ fn main() {
                         verbose_level,
                         &mut HashMap::new(),
                     ) {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                 }
             }
@@ -2576,7 +2562,7 @@ fn main() {
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
-                    println!("{}", slot);
+                    println!("{slot}");
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
@@ -2589,7 +2575,7 @@ fn main() {
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
-                    println!("{}", slot);
+                    println!("{slot}");
                 }
             }
             ("set-dead-slot", Some(arg_matches)) => {
@@ -2603,8 +2589,8 @@ fn main() {
                 );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
-                        Ok(_) => println!("Slot {} dead", slot),
-                        Err(err) => eprintln!("Failed to set slot {} dead slot: {:?}", slot, err),
+                        Ok(_) => println!("Slot {slot} dead"),
+                        Err(err) => eprintln!("Failed to set slot {slot} dead slot: {err:?}"),
                     }
                 }
             }
@@ -2619,9 +2605,9 @@ fn main() {
                 );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
-                        Ok(_) => println!("Slot {} not longer marked dead", slot),
+                        Ok(_) => println!("Slot {slot} not longer marked dead"),
                         Err(err) => {
-                            eprintln!("Failed to remove dead flag for slot {}, {:?}", slot, err)
+                            eprintln!("Failed to remove dead flag for slot {slot}, {err:?}")
                         }
                     }
                 }
@@ -2690,10 +2676,7 @@ fn main() {
 
                 for ((slot1, frozen_log), (slot2, full_log)) in frozen.iter().zip(full.iter()) {
                     assert_eq!(slot1, slot2);
-                    println!(
-                        "Slot: {}\n, full: {}\n, frozen: {}",
-                        slot1, full_log, frozen_log
-                    );
+                    println!("Slot: {slot1}\n, full: {full_log}\n, frozen: {frozen_log}");
                 }
             }
             ("verify", Some(arg_matches)) => {
@@ -2819,7 +2802,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Ledger verification failed: {:?}", err);
+                    eprintln!("Ledger verification failed: {err:?}");
                     exit(1);
                 });
                 if print_accounts_stats {
@@ -2877,12 +2860,12 @@ fn main() {
                         };
 
                         match result {
-                            Ok(_) => println!("Wrote {}", output_file),
-                            Err(err) => eprintln!("Unable to write {}: {}", output_file, err),
+                            Ok(_) => println!("Wrote {output_file}"),
+                            Err(err) => eprintln!("Unable to write {output_file}: {err}"),
                         }
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -2924,8 +2907,7 @@ fn main() {
                 if bootstrap_validator_stake_lamports < minimum_stake_lamports {
                     eprintln!(
                         "Error: insufficient --bootstrap-validator-stake-lamports. \
-                           Minimum amount is {}",
-                        minimum_stake_lamports
+                           Minimum amount is {minimum_stake_lamports}"
                     );
                     exit(1);
                 }
@@ -2941,7 +2923,7 @@ fn main() {
                     SnapshotVersion::default(),
                     |s| {
                         s.parse::<SnapshotVersion>().unwrap_or_else(|e| {
-                            eprintln!("Error: {}", e);
+                            eprintln!("Error: {e}");
                             exit(1)
                         })
                     },
@@ -2951,7 +2933,7 @@ fn main() {
                     let archive_format_str =
                         value_t_or_exit!(arg_matches, "snapshot_archive_format", String);
                     ArchiveFormat::from_cli_arg(&archive_format_str).unwrap_or_else(|| {
-                        panic!("Archive format not recognized: {}", archive_format_str)
+                        panic!("Archive format not recognized: {archive_format_str}")
                     })
                 };
 
@@ -2988,8 +2970,7 @@ fn main() {
                     .is_none()
                 {
                     eprintln!(
-                        "Error: snapshot slot {} does not exist in blockstore or is not full.",
-                        snapshot_slot,
+                        "Error: snapshot slot {snapshot_slot} does not exist in blockstore or is not full.",
                     );
                     exit(1);
                 }
@@ -2998,8 +2979,7 @@ fn main() {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                     if ending_slot <= snapshot_slot {
                         eprintln!(
-                            "Error: ending_slot ({}) must be greater than snapshot_slot ({})",
-                            ending_slot, snapshot_slot
+                            "Error: ending_slot ({ending_slot}) must be greater than snapshot_slot ({snapshot_slot})"
                         );
                         exit(1);
                     }
@@ -3057,7 +3037,7 @@ fn main() {
                             .unwrap()
                             .get(snapshot_slot)
                             .unwrap_or_else(|| {
-                                eprintln!("Error: Slot {} is not available", snapshot_slot);
+                                eprintln!("Error: Slot {snapshot_slot} is not available");
                                 exit(1);
                             });
 
@@ -3110,8 +3090,7 @@ fn main() {
                         for address in accounts_to_remove {
                             let mut account = bank.get_account(&address).unwrap_or_else(|| {
                                 eprintln!(
-                                    "Error: Account does not exist, unable to remove it: {}",
-                                    address
+                                    "Error: Account does not exist, unable to remove it: {address}"
                                 );
                                 exit(1);
                             });
@@ -3227,8 +3206,7 @@ fn main() {
                             if let Some(warp_slot) = warp_slot {
                                 if warp_slot < minimum_warp_slot {
                                     eprintln!(
-                                        "Error: --warp-slot too close.  Must be >= {}",
-                                        minimum_warp_slot
+                                        "Error: --warp-slot too close.  Must be >= {minimum_warp_slot}"
                                     );
                                     exit(1);
                                 }
@@ -3300,7 +3278,7 @@ fn main() {
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
                                 .unwrap_or_else(|err| {
-                                    eprintln!("Unable to create incremental snapshot: {}", err);
+                                    eprintln!("Unable to create incremental snapshot: {err}");
                                     exit(1);
                                 });
 
@@ -3324,7 +3302,7 @@ fn main() {
                                     maximum_incremental_snapshot_archives_to_retain,
                                 )
                                 .unwrap_or_else(|err| {
-                                    eprintln!("Unable to create snapshot: {}", err);
+                                    eprintln!("Unable to create snapshot: {err}");
                                     exit(1);
                                 });
 
@@ -3355,7 +3333,7 @@ fn main() {
                         );
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -3386,7 +3364,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 )
                 .unwrap_or_else(|err| {
-                    eprintln!("Failed to load ledger: {:?}", err);
+                    eprintln!("Failed to load ledger: {err:?}");
                     exit(1);
                 });
 
@@ -3447,7 +3425,7 @@ fn main() {
                     json_serializer.end().unwrap();
                 }
                 if summarize {
-                    println!("\n{:#?}", total_accounts_stats);
+                    println!("\n{total_accounts_stats:#?}");
                 }
             }
             ("capitalization", Some(arg_matches)) => {
@@ -3478,7 +3456,7 @@ fn main() {
                         let bank_forks = bank_forks.read().unwrap();
                         let slot = bank_forks.working_bank().slot();
                         let bank = bank_forks.get(slot).unwrap_or_else(|| {
-                            eprintln!("Error: Slot {} is not available", slot);
+                            eprintln!("Error: Slot {slot} is not available");
                             exit(1);
                         });
 
@@ -3698,10 +3676,10 @@ fn main() {
                                     }
                                     InflationPointCalculationEvent::Skipped(skipped_reason) => {
                                         if detail.skipped_reasons.is_empty() {
-                                            detail.skipped_reasons = format!("{:?}", skipped_reason);
+                                            detail.skipped_reasons = format!("{skipped_reason:?}");
                                         } else {
                                             use std::fmt::Write;
-                                            let _ = write!(&mut detail.skipped_reasons, "/{:?}", skipped_reason);
+                                            let _ = write!(&mut detail.skipped_reasons, "/{skipped_reason:?}");
                                         }
                                     }
                                 }
@@ -3806,7 +3784,7 @@ fn main() {
                                         detail_ref.as_ref().map(|detail_ref| detail_ref.value());
                                     println!(
                                         "{:<45}({}): {} => {} (+{} {:>4.9}%) {:?}",
-                                        format!("{}", pubkey), // format! is needed to pad/justify correctly.
+                                        format!("{pubkey}"), // format! is needed to pad/justify correctly.
                                         base_account.owner(),
                                         Sol(base_account.lamports()),
                                         Sol(warped_account.lamports()),
@@ -3853,7 +3831,7 @@ fn main() {
                                         fn format_or_na<T: std::fmt::Display>(
                                             data: Option<T>,
                                         ) -> String {
-                                            data.map(|data| format!("{}", data))
+                                            data.map(|data| format!("{data}"))
                                                 .unwrap_or_else(|| "N/A".to_owned())
                                         }
                                         let mut point_details = detail
@@ -3872,7 +3850,7 @@ fn main() {
                                                     base_bank.cluster_type()
                                                 ),
                                                 rewarded_epoch: base_bank.epoch(),
-                                                account: format!("{}", pubkey),
+                                                account: format!("{pubkey}"),
                                                 owner: format!("{}", base_account.owner()),
                                                 old_balance: base_account.lamports(),
                                                 new_balance: warped_account.lamports(),
@@ -3979,7 +3957,7 @@ fn main() {
                         }
                     }
                     Err(err) => {
-                        eprintln!("Failed to load ledger: {:?}", err);
+                        eprintln!("Failed to load ledger: {err:?}");
                         exit(1);
                     }
                 }
@@ -4015,17 +3993,14 @@ fn main() {
                             *slots.last().unwrap()
                         }
                         Err(err) => {
-                            eprintln!("Unable to read the Ledger: {:?}", err);
+                            eprintln!("Unable to read the Ledger: {err:?}");
                             exit(1);
                         }
                     },
                 };
 
                 if end_slot < start_slot {
-                    eprintln!(
-                        "end slot {} is less than start slot {}",
-                        end_slot, start_slot
-                    );
+                    eprintln!("end slot {end_slot} is less than start slot {start_slot}");
                     exit(1);
                 }
                 info!(
@@ -4134,7 +4109,7 @@ fn main() {
                     .for_each(|(i, (slot, hash))| {
                         if i < num_roots {
                             output_file
-                                .write_all(format!("{:?}: {:?}\n", slot, hash).as_bytes())
+                                .write_all(format!("{slot:?}: {hash:?}\n").as_bytes())
                                 .expect("failed to write");
                         }
                     });
@@ -4160,7 +4135,7 @@ fn main() {
                         let datetime: DateTime<Utc> = t.into();
                         datetime.to_rfc3339()
                     };
-                    let hash_str = format!("{}", hash);
+                    let hash_str = format!("{hash}");
                     println!("{:>20} {:>44} {:>32}", slot, &hash_str, &time_str);
                 }
             }
@@ -4188,10 +4163,9 @@ fn main() {
                 let num_slots = start_root - end_root - 1; // Adjust by one since start_root need not be checked
                 if arg_matches.is_present("end_root") && num_slots > max_slots {
                     eprintln!(
-                        "Requested range {} too large, max {}. \
+                        "Requested range {num_slots} too large, max {max_slots}. \
                     Either adjust `--until` value, or pass a larger `--repair-limit` \
                     to override the limit",
-                        num_slots, max_slots,
                     );
                     exit(1);
                 }
@@ -4203,19 +4177,16 @@ fn main() {
                 if !roots_to_fix.is_empty() {
                     eprintln!("{} slots to be rooted", roots_to_fix.len());
                     for chunk in roots_to_fix.chunks(100) {
-                        eprintln!("{:?}", chunk);
+                        eprintln!("{chunk:?}");
                         blockstore
                             .set_roots(roots_to_fix.iter())
                             .unwrap_or_else(|err| {
-                                eprintln!("Unable to set roots {:?}: {}", roots_to_fix, err);
+                                eprintln!("Unable to set roots {roots_to_fix:?}: {err}");
                                 exit(1);
                             });
                     }
                 } else {
-                    println!(
-                        "No missing roots found in range {} to {}",
-                        end_root, start_root
-                    );
+                    println!("No missing roots found in range {end_root} to {start_root}");
                 }
             }
             ("bounds", Some(arg_matches)) => {
@@ -4244,10 +4215,10 @@ fn main() {
                                     last
                                 );
                                 if all {
-                                    println!("Non-empty slots: {:?}", slots);
+                                    println!("Non-empty slots: {slots:?}");
                                 }
                             } else {
-                                println!("Ledger has data for slot {:?}", first);
+                                println!("Ledger has data for slot {first:?}");
                             }
                         }
                         if let Ok(rooted) = blockstore.rooted_slot_iterator(0) {
@@ -4270,16 +4241,15 @@ fn main() {
                                 }
                             }
                             println!(
-                                "  with {} rooted slots from {:?} to {:?}",
-                                total_rooted, first_rooted, last_rooted
+                                "  with {total_rooted} rooted slots from {first_rooted:?} to {last_rooted:?}"
                             );
-                            println!("  and {} slots past the last root", count_past_root);
+                            println!("  and {count_past_root} slots past the last root");
                         } else {
                             println!("  with no rooted slots");
                         }
                     }
                     Err(err) => {
-                        eprintln!("Unable to read the Ledger: {:?}", err);
+                        eprintln!("Unable to read the Ledger: {err:?}");
                         exit(1);
                     }
                 };
@@ -4317,7 +4287,7 @@ fn main() {
 
                 for slot in slots {
                     if let Err(err) = compute_slot_cost(&blockstore, slot) {
-                        eprintln!("{}", err);
+                        eprintln!("{err}");
                     }
                 }
             }
@@ -4331,7 +4301,7 @@ fn main() {
                 );
                 let sst_file_name = arg_matches.value_of("file_name");
                 if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
-                    eprintln!("{}", err);
+                    eprintln!("{err}");
                 }
             }
             ("", _) => {

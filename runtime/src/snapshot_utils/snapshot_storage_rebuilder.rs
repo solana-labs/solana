@@ -71,8 +71,7 @@ impl SnapshotStorageRebuilder {
         let snapshot_version_str = snapshot_version_from_file(snapshot_version_path)?;
         let snapshot_version = snapshot_version_str.parse().map_err(|_| {
             get_io_error(&format!(
-                "unsupported snapshot version: {}",
-                snapshot_version_str,
+                "unsupported snapshot version: {snapshot_version_str}",
             ))
         })?;
         let snapshot_storage_lengths =

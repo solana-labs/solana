@@ -1377,7 +1377,7 @@ pub struct BpfExecutor {
 // Well, implement Debug for solana_rbpf::vm::Executable in solana-rbpf...
 impl Debug for BpfExecutor {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BpfExecutor({:p})", self)
+        write!(f, "BpfExecutor({self:p})")
     }
 }
 

@@ -1400,12 +1400,9 @@ pub fn process_create_stake_account(
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&stake_account_address) {
             let err_msg = if stake_account.owner == stake::program::id() {
-                format!("Stake account {} already exists", stake_account_address)
+                format!("Stake account {stake_account_address} already exists")
             } else {
-                format!(
-                    "Account {} already exists and is not a stake account",
-                    stake_account_address
-                )
+                format!("Account {stake_account_address} already exists and is not a stake account")
             };
             return Err(CliError::BadParameter(err_msg).into());
         }
@@ -1415,8 +1412,7 @@ pub fn process_create_stake_account(
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
-                minimum_balance, lamports
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
             ))
             .into());
         }
@@ -1506,8 +1502,7 @@ pub fn process_stake_authorize(
                 }
             } else {
                 return Err(CliError::RpcRequestError(format!(
-                    "{:?} is not an Initialized or Delegated stake account",
-                    stake_account_pubkey,
+                    "{stake_account_pubkey:?} is not an Initialized or Delegated stake account",
                 ))
                 .into());
             }
@@ -1614,8 +1609,7 @@ pub fn process_deactivate_stake_account(
         let stake_account = rpc_client.get_account(&stake_account_address)?;
         if stake_account.owner != stake::program::id() {
             return Err(CliError::BadParameter(format!(
-                "{} is not a stake account",
-                stake_account_address,
+                "{stake_account_address} is not a stake account",
             ))
             .into());
         }
@@ -1625,16 +1619,14 @@ pub fn process_deactivate_stake_account(
                 StakeState::Stake(_, stake) => stake.delegation.voter_pubkey,
                 _ => {
                     return Err(CliError::BadParameter(format!(
-                        "{} is not a delegated stake account",
-                        stake_account_address,
+                        "{stake_account_address} is not a delegated stake account",
                     ))
                     .into())
                 }
             },
             Err(err) => {
                 return Err(CliError::RpcRequestError(format!(
-                    "Account data could not be deserialized to stake state: {}",
-                    err
+                    "Account data could not be deserialized to stake state: {err}"
                 ))
                 .into())
             }
@@ -1879,14 +1871,10 @@ pub fn process_split_stake(
     if !sign_only {
         if let Ok(stake_account) = rpc_client.get_account(&split_stake_account_address) {
             let err_msg = if stake_account.owner == stake::program::id() {
-                format!(
-                    "Stake account {} already exists",
-                    split_stake_account_address
-                )
+                format!("Stake account {split_stake_account_address} already exists")
             } else {
                 format!(
-                    "Account {} already exists and is not a stake account",
-                    split_stake_account_address
+                    "Account {split_stake_account_address} already exists and is not a stake account"
                 )
             };
             return Err(CliError::BadParameter(err_msg).into());
@@ -1897,8 +1885,7 @@ pub fn process_split_stake(
 
         if lamports < minimum_balance {
             return Err(CliError::BadParameter(format!(
-                "need at least {} lamports for stake account to be rent exempt, provided lamports: {}",
-                minimum_balance, lamports
+                "need at least {minimum_balance} lamports for stake account to be rent exempt, provided lamports: {lamports}"
             ))
             .into());
         }
@@ -2016,8 +2003,7 @@ pub fn process_merge_stake(
             if let Ok(stake_account) = rpc_client.get_account(stake_account_address) {
                 if stake_account.owner != stake::program::id() {
                     return Err(CliError::BadParameter(format!(
-                        "Account {} is not a stake account",
-                        stake_account_address
+                        "Account {stake_account_address} is not a stake account"
                     ))
                     .into());
                 }
@@ -2126,8 +2112,7 @@ pub fn process_stake_set_lockup(
             }
         } else {
             return Err(CliError::RpcRequestError(format!(
-                "{:?} is not an Initialized or Delegated stake account",
-                stake_account_pubkey,
+                "{stake_account_pubkey:?} is not an Initialized or Delegated stake account",
             ))
             .into());
         }
@@ -2287,19 +2272,17 @@ fn get_stake_account_state(
         .get_account_with_commitment(stake_account_pubkey, commitment_config)?
         .value
         .ok_or_else(|| {
-            CliError::RpcRequestError(format!("{:?} account does not exist", stake_account_pubkey))
+            CliError::RpcRequestError(format!("{stake_account_pubkey:?} account does not exist"))
         })?;
     if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a stake account",
-            stake_account_pubkey,
+            "{stake_account_pubkey:?} is not a stake account",
         ))
         .into());
     }
     stake_account.state().map_err(|err| {
         CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to stake state: {}",
-            err
+            "Account data could not be deserialized to stake state: {err}"
         ))
         .into()
     })
@@ -2311,8 +2294,7 @@ pub(crate) fn check_current_authority(
 ) -> Result<(), CliError> {
     if !permitted_authorities.contains(provided_current_authority) {
         Err(CliError::RpcRequestError(format!(
-            "Invalid authority provided: {:?}, expected {:?}",
-            provided_current_authority, permitted_authorities
+            "Invalid authority provided: {provided_current_authority:?}, expected {permitted_authorities:?}"
         )))
     } else {
         Ok(())
@@ -2396,7 +2378,7 @@ pub(crate) fn fetch_epoch_rewards(
         if let Ok(rewards) = rpc_client.get_inflation_reward(&[*address], Some(rewards_epoch)) {
             process_reward(&rewards[0])?;
         } else {
-            eprintln!("Rewards not available for epoch {}", rewards_epoch);
+            eprintln!("Rewards not available for epoch {rewards_epoch}");
         }
         num_epochs = num_epochs.saturating_sub(1);
     }
@@ -2414,8 +2396,7 @@ pub fn process_show_stake_account(
     let stake_account = rpc_client.get_account(stake_account_address)?;
     if stake_account.owner != stake::program::id() {
         return Err(CliError::RpcRequestError(format!(
-            "{:?} is not a stake account",
-            stake_account_address,
+            "{stake_account_address:?} is not a stake account",
         ))
         .into());
     }
@@ -2443,7 +2424,7 @@ pub fn process_show_stake_account(
                     match fetch_epoch_rewards(rpc_client, stake_account_address, num_epochs) {
                         Ok(rewards) => Some(rewards),
                         Err(error) => {
-                            eprintln!("Failed to fetch epoch rewards: {:?}", error);
+                            eprintln!("Failed to fetch epoch rewards: {error:?}");
                             None
                         }
                     }
@@ -2453,8 +2434,7 @@ pub fn process_show_stake_account(
             Ok(config.output_format.formatted_string(&state))
         }
         Err(err) => Err(CliError::RpcRequestError(format!(
-            "Account data could not be deserialized to stake state: {}",
-            err
+            "Account data could not be deserialized to stake state: {err}"
         ))
         .into()),
     }
@@ -2540,8 +2520,7 @@ pub fn process_delegate_stake(
             .get_account(vote_account_pubkey)
             .map_err(|err| {
                 CliError::RpcRequestError(format!(
-                    "Vote account not found: {}. error: {}",
-                    vote_account_pubkey, err,
+                    "Vote account not found: {vote_account_pubkey}. error: {err}",
                 ))
             })?
             .data;
@@ -2563,8 +2542,7 @@ pub fn process_delegate_stake(
                 if root_slot < min_root_slot {
                     Err(CliError::DynamicProgramError(format!(
                         "Unable to delegate.  Vote account appears delinquent \
-                                 because its current root slot, {}, is less than {}",
-                        root_slot, min_root_slot
+                                 because its current root slot, {root_slot}, is less than {min_root_slot}"
                     )))
                 } else {
                     Ok(())
@@ -2576,7 +2554,7 @@ pub fn process_delegate_stake(
             if !force {
                 sanity_check_result?;
             } else {
-                println!("--force supplied, ignoring: {}", err);
+                println!("--force supplied, ignoring: {err}");
             }
         }
     }
@@ -3469,7 +3447,7 @@ mod tests {
 
         // Test Authorize Subcommand w/ sign-only
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3744,7 +3722,7 @@ mod tests {
         );
         // Test Authorize Subcommand w/ absentee fee-payer
         let sig = fee_payer_keypair.sign_message(&[0u8]);
-        let signer = format!("{}={}", fee_payer_string, sig);
+        let signer = format!("{fee_payer_string}={sig}");
         let test_authorize = test_commands.clone().get_matches_from(vec![
             "test",
             "stake-authorize",
@@ -3792,9 +3770,9 @@ mod tests {
 
         // Test CreateStakeAccount SubCommand
         let custodian = solana_sdk::pubkey::new_rand();
-        let custodian_string = format!("{}", custodian);
+        let custodian_string = format!("{custodian}");
         let authorized = solana_sdk::pubkey::new_rand();
-        let authorized_string = format!("{}", authorized);
+        let authorized_string = format!("{authorized}");
         let test_create_stake_account = test_commands.clone().get_matches_from(vec![
             "test",
             "create-stake-account",
@@ -3942,7 +3920,7 @@ mod tests {
         let offline_pubkey = offline.pubkey();
         let offline_string = offline_pubkey.to_string();
         let offline_sig = offline.sign_message(&[3u8]);
-        let offline_signer = format!("{}={}", offline_pubkey, offline_sig);
+        let offline_signer = format!("{offline_pubkey}={offline_sig}");
         let nonce_hash = Hash::new(&[4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
         let test_create_stake_account2 = test_commands.clone().get_matches_from(vec![
@@ -4096,7 +4074,7 @@ mod tests {
 
         // Test Delegate Subcommand w/ Blockhash
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4164,7 +4142,7 @@ mod tests {
         // Test Delegate Subcommand w/ absent fee payer
         let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
-        let signer1 = format!("{}={}", key1, sig1);
+        let signer1 = format!("{key1}={sig1}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4208,7 +4186,7 @@ mod tests {
         // Test Delegate Subcommand w/ absent fee payer and absent nonce authority
         let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
-        let signer2 = format!("{}={}", key2, sig2);
+        let signer2 = format!("{key2}={sig2}");
         let test_delegate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "delegate-stake",
@@ -4624,7 +4602,7 @@ mod tests {
 
         // Test Deactivate Subcommand w/ Blockhash
         let blockhash = Hash::default();
-        let blockhash_string = format!("{}", blockhash);
+        let blockhash_string = format!("{blockhash}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4688,7 +4666,7 @@ mod tests {
         // Test Deactivate Subcommand w/ absent fee payer
         let key1 = solana_sdk::pubkey::new_rand();
         let sig1 = Keypair::new().sign_message(&[0u8]);
-        let signer1 = format!("{}={}", key1, sig1);
+        let signer1 = format!("{key1}={sig1}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4730,7 +4708,7 @@ mod tests {
         // Test Deactivate Subcommand w/ absent fee payer and nonce authority
         let key2 = solana_sdk::pubkey::new_rand();
         let sig2 = Keypair::new().sign_message(&[0u8]);
-        let signer2 = format!("{}={}", key2, sig2);
+        let signer2 = format!("{key2}={sig2}");
         let test_deactivate_stake = test_commands.clone().get_matches_from(vec![
             "test",
             "deactivate-stake",
@@ -4857,12 +4835,12 @@ mod tests {
         let nonce_auth_pubkey = nonce_auth.pubkey();
         let nonce_auth_string = nonce_auth_pubkey.to_string();
         let nonce_sig = nonce_auth.sign_message(&[0u8]);
-        let nonce_signer = format!("{}={}", nonce_auth_pubkey, nonce_sig);
+        let nonce_signer = format!("{nonce_auth_pubkey}={nonce_sig}");
         let stake_auth = keypair_from_seed(&[3u8; 32]).unwrap();
         let stake_auth_pubkey = stake_auth.pubkey();
         let stake_auth_string = stake_auth_pubkey.to_string();
         let stake_sig = stake_auth.sign_message(&[0u8]);
-        let stake_signer = format!("{}={}", stake_auth_pubkey, stake_sig);
+        let stake_signer = format!("{stake_auth_pubkey}={stake_sig}");
         let nonce_hash = Hash::new(&[4u8; 32]);
         let nonce_hash_string = nonce_hash.to_string();
 

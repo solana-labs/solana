@@ -195,7 +195,7 @@ fn get_rpc_peers(
         shred_version,
         retry_reason
             .as_ref()
-            .map(|s| format!(" (Retrying: {})", s))
+            .map(|s| format!(" (Retrying: {s})"))
             .unwrap_or_default()
     );
 
@@ -253,9 +253,9 @@ fn check_vote_account(
 ) -> Result<(), String> {
     let vote_account = rpc_client
         .get_account_with_commitment(vote_account_address, CommitmentConfig::confirmed())
-        .map_err(|err| format!("failed to fetch vote account: {}", err))?
+        .map_err(|err| format!("failed to fetch vote account: {err}"))?
         .value
-        .ok_or_else(|| format!("vote account does not exist: {}", vote_account_address))?;
+        .ok_or_else(|| format!("vote account does not exist: {vote_account_address}"))?;
 
     if vote_account.owner != solana_vote_program::id() {
         return Err(format!(
@@ -266,9 +266,9 @@ fn check_vote_account(
 
     let identity_account = rpc_client
         .get_account_with_commitment(identity_pubkey, CommitmentConfig::confirmed())
-        .map_err(|err| format!("failed to fetch identity account: {}", err))?
+        .map_err(|err| format!("failed to fetch identity account: {err}"))?
         .value
-        .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
+        .ok_or_else(|| format!("identity account does not exist: {identity_pubkey}"))?;
 
     let vote_state = solana_vote_program::vote_state::from(&vote_account);
     if let Some(vote_state) = vote_state {
@@ -286,15 +286,13 @@ fn check_vote_account(
         for (_, vote_account_authorized_voter_pubkey) in vote_state.authorized_voters().iter() {
             if !authorized_voter_pubkeys.contains(vote_account_authorized_voter_pubkey) {
                 return Err(format!(
-                    "authorized voter {} not available",
-                    vote_account_authorized_voter_pubkey
+                    "authorized voter {vote_account_authorized_voter_pubkey} not available"
                 ));
             }
         }
     } else {
         return Err(format!(
-            "invalid vote account data for {}",
-            vote_account_address
+            "invalid vote account data for {vote_account_address}"
         ));
     }
 
@@ -393,12 +391,11 @@ pub fn attempt_download_genesis_and_snapshot(
         // downloading a snapshot from it
         let rpc_genesis_hash = rpc_client
             .get_genesis_hash()
-            .map_err(|err| format!("Failed to get genesis hash: {}", err))?;
+            .map_err(|err| format!("Failed to get genesis hash: {err}"))?;
 
         if expected_genesis_hash != rpc_genesis_hash {
             return Err(format!(
-                "Genesis hash mismatch: expected {} but RPC node genesis hash is {}",
-                expected_genesis_hash, rpc_genesis_hash
+                "Genesis hash mismatch: expected {expected_genesis_hash} but RPC node genesis hash is {rpc_genesis_hash}"
             ));
         }
     }
@@ -410,7 +407,7 @@ pub fn attempt_download_genesis_and_snapshot(
 
     let rpc_client_slot = rpc_client
         .get_slot_with_commitment(CommitmentConfig::finalized())
-        .map_err(|err| format!("Failed to get RPC node slot: {}", err))?;
+        .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
     info!("RPC node root slot: {}", rpc_client_slot);
 
     download_snapshots(
@@ -555,7 +552,7 @@ pub fn rpc_bootstrap(
                         }
                         Err(err) => {
                             fail_rpc_node(
-                                format!("Failed to get RPC node version: {}", err),
+                                format!("Failed to get RPC node version: {err}"),
                                 &validator_config.known_validators,
                                 &rpc_contact_info.id,
                                 &mut blacklisted_rpc_nodes.write().unwrap(),

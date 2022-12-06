@@ -507,12 +507,9 @@ pub fn process_create_nonce_account(
 
     if let Ok(nonce_account) = get_account(rpc_client, &nonce_account_address) {
         let err_msg = if state_from_account(&nonce_account).is_ok() {
-            format!("Nonce account {} already exists", nonce_account_address)
+            format!("Nonce account {nonce_account_address} already exists")
         } else {
-            format!(
-                "Account {} already exists and is not a nonce account",
-                nonce_account_address
-            )
+            format!("Account {nonce_account_address} already exists and is not a nonce account")
         };
         return Err(CliError::BadParameter(err_msg).into());
     }
@@ -520,8 +517,7 @@ pub fn process_create_nonce_account(
     let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(State::size())?;
     if lamports < minimum_balance {
         return Err(CliError::BadParameter(format!(
-            "need at least {} lamports for nonce account to be rent exempt, provided lamports: {}",
-            minimum_balance, lamports
+            "need at least {minimum_balance} lamports for nonce account to be rent exempt, provided lamports: {lamports}"
         ))
         .into());
     }
@@ -593,8 +589,7 @@ pub fn process_new_nonce(
 
     if let Err(err) = rpc_client.get_account(nonce_account) {
         return Err(CliError::BadParameter(format!(
-            "Unable to advance nonce account {}. error: {}",
-            nonce_account, err
+            "Unable to advance nonce account {nonce_account}. error: {err}"
         ))
         .into());
     }

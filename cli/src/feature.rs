@@ -142,7 +142,7 @@ impl fmt::Display for CliFeatures {
                     }
                     CliFeatureStatus::Active(activation_slot) => {
                         let activation_epoch = self.epoch_schedule.get_epoch(activation_slot);
-                        style(format!("active since epoch {}", activation_epoch)).green()
+                        style(format!("active since epoch {activation_epoch}")).green()
                     }
                 },
                 match feature.status {
@@ -154,11 +154,11 @@ impl fmt::Display for CliFeatures {
         }
 
         if let Some(software_versions) = &self.cluster_software_versions {
-            write!(f, "{}", software_versions)?;
+            write!(f, "{software_versions}")?;
         }
 
         if let Some(feature_sets) = &self.cluster_feature_sets {
-            write!(f, "{}", feature_sets)?;
+            write!(f, "{feature_sets}")?;
         }
 
         if self.inactive && !self.feature_activation_allowed {
@@ -233,13 +233,7 @@ impl fmt::Display for CliClusterSoftwareVersions {
             f,
             "{}",
             style(format!(
-                "{1:<0$}  {3:>2$}  {5:>4$}",
-                max_software_version_len,
-                software_version_title,
-                max_stake_percent_len,
-                stake_percent_title,
-                max_rpc_percent_len,
-                rpc_percent_title,
+                "{software_version_title:<max_software_version_len$}  {stake_percent_title:>max_stake_percent_len$}  {rpc_percent_title:>max_rpc_percent_len$}",
             ))
             .bold(),
         )?;
@@ -348,15 +342,7 @@ impl fmt::Display for CliClusterFeatureSets {
             f,
             "{}",
             style(format!(
-                "{1:<0$}  {3:<2$}  {5:>4$}  {7:>6$}",
-                max_software_versions_len,
-                software_versions_title,
-                max_feature_set_len,
-                feature_set_title,
-                max_stake_percent_len,
-                stake_percent_title,
-                max_rpc_percent_len,
-                rpc_percent_title,
+                "{software_versions_title:<max_software_versions_len$}  {feature_set_title:<max_feature_set_len$}  {stake_percent_title:>max_stake_percent_len$}  {rpc_percent_title:>max_rpc_percent_len$}",
             ))
             .bold(),
         )?;
@@ -454,8 +440,7 @@ fn known_feature(feature: &Pubkey) -> Result<(), CliError> {
         Ok(())
     } else {
         Err(CliError::BadParameter(format!(
-            "Unknown feature: {}",
-            feature
+            "Unknown feature: {feature}"
         )))
     }
 }
@@ -867,7 +852,7 @@ fn process_activate(
 
     if let Some(account) = account {
         if feature::from_account(&account).is_some() {
-            return Err(format!("{} has already been activated", feature_id).into());
+            return Err(format!("{feature_id} has already been activated").into());
         }
     }
 

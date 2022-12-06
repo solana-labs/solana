@@ -343,7 +343,7 @@ impl fmt::Display for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(version) = self.solana_core.split_whitespace().next() {
             // Display just the semver if possible
-            write!(f, "{}", version)
+            write!(f, "{version}")
         } else {
             write!(f, "{}", self.solana_core)
         }

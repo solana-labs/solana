@@ -50,10 +50,7 @@ declare_syscall!(
 
         stable_log::program_log(
             &invoke_context.get_log_collector(),
-            &format!(
-                "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-                arg1, arg2, arg3, arg4, arg5
-            ),
+            &format!("{arg1:#x}, {arg2:#x}, {arg3:#x}, {arg4:#x}, {arg5:#x}"),
         );
         Ok(0)
     }

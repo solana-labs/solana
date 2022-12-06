@@ -250,7 +250,7 @@ before execting it in the virtual machine.",
     let syscall_registry = register_syscalls(&invoke_context.feature_set, true).unwrap();
     let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
         Executable::<InvokeContext>::from_elf(&contents, config, syscall_registry)
-            .map_err(|err| format!("Executable constructor failed: {:?}", err))
+            .map_err(|err| format!("Executable constructor failed: {err:?}"))
     } else {
         assemble::<InvokeContext>(
             std::str::from_utf8(contents.as_slice()).unwrap(),
@@ -262,7 +262,7 @@ before execting it in the virtual machine.",
 
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| format!("Executable verifier failed: {:?}", err))
+            .map_err(|err| format!("Executable verifier failed: {err:?}"))
             .unwrap();
 
     verified_executable.jit_compile().unwrap();
@@ -304,7 +304,7 @@ before execting it in the virtual machine.",
     drop(vm);
 
     let output = Output {
-        result: format!("{:?}", result),
+        result: format!("{result:?}"),
         instruction_count,
         execution_time: duration,
         log: invoke_context
@@ -323,7 +323,7 @@ before execting it in the virtual machine.",
         }
         _ => {
             println!("Program output:");
-            println!("{:?}", output);
+            println!("{output:?}");
         }
     }
 }
@@ -342,7 +342,7 @@ impl Debug for Output {
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
         for line in &self.log {
-            writeln!(f, "{}", line)?;
+            writeln!(f, "{line}")?;
         }
         Ok(())
     }

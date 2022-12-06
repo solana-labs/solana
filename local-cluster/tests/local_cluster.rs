@@ -1710,7 +1710,7 @@ fn test_optimistic_confirmation_violation_detection() {
                 }
                 sleep(Duration::from_millis(10));
             }
-            print!("{}", output);
+            print!("{output}");
             assert!(success);
         } else {
             panic!("dumped log and disabled testing");
@@ -2598,8 +2598,7 @@ fn test_votes_land_in_fork_during_long_partition() {
                 // refreshing to refresh the vote on blockhash expiration for the vote
                 // transaction.
                 start.elapsed() <= Duration::from_millis(max_wait),
-                "Went too long {} ms without a root",
-                max_wait,
+                "Went too long {max_wait} ms without a root",
             );
             let lighter_validator_blockstore = open_blockstore(&lighter_validator_ledger_path);
             if lighter_validator_blockstore.is_root(context.heavier_fork_slot) {

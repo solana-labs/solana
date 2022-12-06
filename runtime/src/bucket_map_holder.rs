@@ -418,7 +418,7 @@ pub mod tests {
             });
         });
         visited.iter().enumerate().for_each(|(bin, visited)| {
-            assert_eq!(visited.load(Ordering::Relaxed), expected, "bin: {}", bin)
+            assert_eq!(visited.load(Ordering::Relaxed), expected, "bin: {bin}")
         });
     }
 

@@ -50,9 +50,7 @@ impl CacheHashDataFile {
             let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
             assert!(
                 pubkey_to_bin_index >= start_bin_index,
-                "{}, {}",
-                pubkey_to_bin_index,
-                start_bin_index
+                "{pubkey_to_bin_index}, {start_bin_index}"
             ); // this would indicate we put a pubkey in too high of a bin
             pubkey_to_bin_index -= start_bin_index;
             accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
@@ -161,7 +159,7 @@ impl CacheHashData {
         let cache_folder = Self::get_cache_root_path(parent_folder);
 
         std::fs::create_dir_all(cache_folder.clone())
-            .unwrap_or_else(|_| panic!("error creating cache dir: {:?}", cache_folder));
+            .unwrap_or_else(|_| panic!("error creating cache dir: {cache_folder:?}"));
 
         let result = CacheHashData {
             cache_folder,
@@ -271,8 +269,7 @@ impl CacheHashData {
         cache_file.capacity = capacity;
         assert_eq!(
             capacity, file_len,
-            "expected: {}, len on disk: {} {:?}, entries: {}, cell_size: {}",
-            capacity, file_len, path, entries, cell_size
+            "expected: {capacity}, len on disk: {file_len} {path:?}, entries: {entries}, cell_size: {cell_size}"
         );
 
         stats.total_entries = entries;
@@ -420,8 +417,7 @@ pub mod tests {
                         }
                         assert_eq!(
                             accum, data_this_pass,
-                            "bins: {}, start_bin_this_pass: {}, pass: {}, flatten: {}, passes: {}",
-                            bins, start_bin_this_pass, pass, flatten_data, passes
+                            "bins: {bins}, start_bin_this_pass: {start_bin_this_pass}, pass: {pass}, flatten: {flatten_data}, passes: {passes}"
                         );
                     }
                 }
