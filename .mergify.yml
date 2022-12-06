@@ -41,8 +41,8 @@ pull_request_rules:
         - author≠@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
-          - status-success=docs-build
           - -files~=^docs/
+          - status-success=build & deploy docs
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -67,8 +67,8 @@ pull_request_rules:
         - author=@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
-          - status-success=docs-build
           - -files~=^docs/
+          - status-success=build & deploy docs
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
