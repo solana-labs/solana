@@ -11450,6 +11450,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
+        accounts.add_root_and_flush_write_cache(0);
         assert!(check_storage(&accounts, 0, 100));
     }
 
