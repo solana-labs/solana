@@ -9605,6 +9605,12 @@ impl AccountsDb {
             .get_slot_stores(slot)
             .map(|storages| storages.read().unwrap().values().map(|s| s.count()).sum())
             .unwrap_or(0)
+            .saturating_add(
+                self.accounts_cache
+                    .slot_cache(slot)
+                    .map(|slot_cache| slot_cache.len())
+                    .unwrap_or_default(),
+            )
     }
 }
 
@@ -12908,7 +12914,8 @@ pub mod tests {
     fn test_verify_bank_hash() {
         use BankHashVerificationError::*;
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
 
         let key = solana_sdk::pubkey::new_rand();
         let some_data_len = 0;
@@ -13144,21 +13151,32 @@ pub mod tests {
 
     #[test]
     fn test_get_snapshot_storages_only_non_empty() {
-        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
-        db.caching_enabled = true;
+        for pass in 0..2 {
+            let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+            db.caching_enabled = true;
 
-        let key = Pubkey::default();
-        let account = AccountSharedData::new(1, 0, &key);
-        let base_slot = 0;
-        let after_slot = base_slot + 1;
+            let key = Pubkey::default();
+            let account = AccountSharedData::new(1, 0, &key);
+            let base_slot = 0;
+            let after_slot = base_slot + 1;
 
-        db.store_for_tests(base_slot, &[(&key, &account)]);
-        // stored account is in write cache, so no storages yet
-        assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
+            db.store_for_tests(base_slot, &[(&key, &account)]);
+            if pass == 0 {
+                db.add_root_and_flush_write_cache(base_slot);
+                db.storage
+                    .get_slot_stores(base_slot)
+                    .unwrap()
+                    .write()
+                    .unwrap()
+                    .clear();
+                assert!(db.get_snapshot_storages(..=after_slot, None).0.is_empty());
+                continue;
+            }
 
-        db.store_for_tests(base_slot, &[(&key, &account)]);
-        db.add_root_and_flush_write_cache(base_slot);
-        assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+            db.store_for_tests(base_slot, &[(&key, &account)]);
+            db.add_root_and_flush_write_cache(base_slot);
+            assert_eq!(1, db.get_snapshot_storages(..=after_slot, None).0.len());
+        }
     }
 
     #[test]
@@ -13225,7 +13243,8 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "double remove of account in slot: 0/store: 0!!")]
     fn test_storage_remove_account_double_remove() {
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        accounts.caching_enabled = true;
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
@@ -13355,8 +13374,9 @@ pub mod tests {
         assert_eq!(1, accounts.alive_account_count_in_slot(current_slot));
         // Stores to same pubkey, same slot only count once towards the
         // ref count
-        assert_eq!(2, accounts.ref_count_for_pubkey(&pubkey1));
+        assert_eq!(1, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("Post-B pre-clean");
 
@@ -13371,9 +13391,9 @@ pub mod tests {
         accounts.store_for_tests(current_slot, &[(&pubkey1, &account3)]);
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account3)]);
         accounts.store_for_tests(current_slot, &[(&pubkey3, &account4)]);
-        accounts.add_root_and_flush_write_cache(current_slot);
         assert_eq!(3, accounts.ref_count_for_pubkey(&pubkey1));
         accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root(current_slot);
 
         info!("post C");
 
@@ -13751,7 +13771,8 @@ pub mod tests {
     fn test_shrink_candidate_slots() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
@@ -13772,7 +13793,7 @@ pub mod tests {
         }
         let shrink_slot = current_slot;
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         let pubkey_count_after_shrink = 25000;
@@ -13782,7 +13803,7 @@ pub mod tests {
             accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
         }
         accounts.get_accounts_delta_hash(current_slot);
-        accounts.add_root(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
         accounts.clean_accounts_for_tests();
 
         assert_eq!(
@@ -14265,7 +14286,8 @@ pub mod tests {
     #[test]
     fn test_store_overhead() {
         solana_logger::setup();
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
         let account = AccountSharedData::default();
         let pubkey = solana_sdk::pubkey::new_rand();
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
@@ -14390,7 +14412,9 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "We've run out of storage ids!")]
     fn test_wrapping_append_vec_id() {
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
+
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
@@ -14416,7 +14440,9 @@ pub mod tests {
     #[should_panic(expected = "We've run out of storage ids!")]
     fn test_reuse_append_vec_id() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
+
         let zero_lamport_account =
             AccountSharedData::new(0, 0, AccountSharedData::default().owner());
 
@@ -16311,7 +16337,6 @@ pub mod tests {
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let slot0 = 0;
         accounts.store_for_tests(slot0, &[(&shared_key, &account)]);
-        accounts.add_root_and_flush_write_cache(slot0);
 
         let storage_maps = accounts
             .storage
@@ -16384,7 +16409,8 @@ pub mod tests {
 
     #[test]
     fn test_set_storage_count_and_alive_bytes() {
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         // make sure we have storage 0
         let shared_key = solana_sdk::pubkey::new_rand();
