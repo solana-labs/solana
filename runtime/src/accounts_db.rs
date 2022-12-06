@@ -15520,7 +15520,8 @@ pub mod tests {
     #[test]
     fn test_partial_clean() {
         solana_logger::setup();
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
         let account_key1 = Pubkey::new_unique();
         let account_key2 = Pubkey::new_unique();
         let account1 = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
@@ -15550,7 +15551,7 @@ pub mod tests {
         assert!(!slot_stores(&db, 1).is_empty());
 
         // root slot 0
-        db.add_root(0);
+        db.add_root_and_flush_write_cache(0);
 
         // store into slot 2
         db.store_uncached(2, &[(&account_key2, &account3)]);
@@ -15561,14 +15562,14 @@ pub mod tests {
         db.print_accounts_stats("post-clean2");
 
         // root slots 1
-        db.add_root(1);
+        db.add_root_and_flush_write_cache(1);
         db.clean_accounts_for_tests();
 
         db.print_accounts_stats("post-clean3");
 
         db.store_uncached(3, &[(&account_key2, &account4)]);
         db.get_accounts_delta_hash(3);
-        db.add_root(3);
+        db.add_root_and_flush_write_cache(3);
 
         // Check that we can clean where max_root=3 and slot=2 is not rooted
         db.clean_accounts_for_tests();
