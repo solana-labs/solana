@@ -14373,7 +14373,7 @@ pub mod tests {
             let slot = slot as Slot;
             db.store_for_tests(slot, &[(key, &zero_lamport_account)]);
             db.get_accounts_delta_hash(slot);
-            db.add_root(slot);
+            db.add_root_and_flush_write_cache(slot);
         });
         assert_eq!(slots - 1, db.next_id.load(Ordering::Acquire));
         let ancestors = Ancestors::default();
