@@ -126,7 +126,7 @@ impl CacheHashDataFile {
         // expensive.
         data.seek(SeekFrom::Start(capacity - 1)).unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         data.flush().unwrap();
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }

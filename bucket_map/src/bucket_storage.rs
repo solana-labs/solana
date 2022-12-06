@@ -317,7 +317,7 @@ impl BucketStorage {
         data.seek(SeekFrom::Start(capacity * cell_size as u64 - 1))
             .unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         measure_new_file.stop();
         let mut measure_flush = Measure::start("measure_flush");
         data.flush().unwrap(); // can we skip this?

@@ -333,7 +333,7 @@ impl AppendVec {
         // expensive.
         data.seek(SeekFrom::Start((size - 1) as u64)).unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         data.flush().unwrap();
 
         //UNSAFE: Required to create a Mmap
