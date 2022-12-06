@@ -44,7 +44,7 @@ use {
         signature::{read_keypair, Keypair, Signer},
     },
     solana_send_transaction_service::send_transaction_service::{self},
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service,
@@ -1595,6 +1595,7 @@ pub fn main() {
     let identity_keypair = Arc::new(identity_keypair);
 
     let should_check_duplicate_instance = !matches.is_present("no_duplicate_instance_check");
+    let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
     if !cluster_entrypoints.is_empty() {
         bootstrap::rpc_bootstrap(
             &node,
@@ -1615,6 +1616,9 @@ pub fn main() {
             minimal_snapshot_download_speed,
             maximum_snapshot_download_abort,
             socket_addr_space,
+            tpu_use_quic,
+            identity_keypair.clone(),
+            staked_nodes.clone(),
         );
         *start_progress.write().unwrap() = ValidatorStartProgress::Initializing;
     }
@@ -1638,6 +1642,7 @@ pub fn main() {
         tpu_use_quic,
         tpu_connection_pool_size,
         tpu_enable_udp,
+        Some(staked_nodes)
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

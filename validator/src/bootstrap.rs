@@ -24,7 +24,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
     },
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     std::{
         collections::{hash_map::RandomState, HashMap, HashSet},
         net::{SocketAddr, TcpListener, UdpSocket},
@@ -136,6 +136,9 @@ fn start_gossip_node(
     gossip_validators: Option<HashSet<Pubkey>>,
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
+    use_quic: bool,
+    keypair: Arc<Keypair>,
+    staked_nodes: Arc<std::sync::RwLock<StakedNodes>>,
 ) -> (Arc<ClusterInfo>, Arc<AtomicBool>, GossipService) {
     let contact_info = ClusterInfo::gossip_contact_info(
         identity_keypair.pubkey(),
@@ -156,6 +159,9 @@ fn start_gossip_node(
         should_check_duplicate_instance,
         None,
         &gossip_exit_flag,
+        use_quic,
+        keypair,
+        staked_nodes,
     );
     (cluster_info, gossip_exit_flag, gossip_service)
 }
@@ -469,6 +475,9 @@ pub fn rpc_bootstrap(
     minimal_snapshot_download_speed: f32,
     maximum_snapshot_download_abort: u64,
     socket_addr_space: SocketAddrSpace,
+    use_quic: bool,
+    keypair: Arc<Keypair>,
+    staked_nodes: Arc<std::sync::RwLock<StakedNodes>>,
 ) {
     if do_port_check {
         let mut order: Vec<_> = (0..cluster_entrypoints.len()).collect();
@@ -507,6 +516,9 @@ pub fn rpc_bootstrap(
                 validator_config.gossip_validators.clone(),
                 should_check_duplicate_instance,
                 socket_addr_space,
+                use_quic,
+                keypair.clone(),
+                staked_nodes.clone(),
             ));
         }
 

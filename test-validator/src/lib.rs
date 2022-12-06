@@ -841,6 +841,7 @@ impl TestValidator {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             config.tpu_enable_udp,
+            None,
         )?);
 
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));

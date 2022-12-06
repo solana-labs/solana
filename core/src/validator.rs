@@ -379,6 +379,7 @@ impl Validator {
         use_quic: bool,
         tpu_connection_pool_size: usize,
         tpu_enable_udp: bool,
+        maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
     ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -738,7 +739,10 @@ impl Validator {
         };
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let staked_nodes = match maybe_staked_nodes {
+            Some(staked_nodes) => staked_nodes,
+            None => Arc::new(RwLock::new(StakedNodes::default()))
+        };
 
         let connection_cache = match use_quic {
             true => {
@@ -2095,6 +2099,7 @@ mod tests {
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
             DEFAULT_TPU_ENABLE_UDP,
+            None,
         )
         .expect("assume successful validator start");
         assert_eq!(
@@ -2187,6 +2192,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                     DEFAULT_TPU_ENABLE_UDP,
+                    None,
                 )
                 .expect("assume successful validator start")
             })
