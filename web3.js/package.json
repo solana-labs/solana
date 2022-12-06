@@ -62,6 +62,7 @@
     "@noble/hashes": "^1.1.2",
     "@noble/secp256k1": "^1.6.3",
     "@solana/buffer-layout": "^4.0.0",
+    "agentkeepalive": "^4.2.1",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.0.0",
     "borsh": "^0.7.0",

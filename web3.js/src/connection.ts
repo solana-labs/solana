@@ -1,3 +1,4 @@
+import Agent from 'agentkeepalive';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 // @ts-ignore
@@ -27,7 +28,6 @@ import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 import {JSONRPCError} from 'jayson';
 
-import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
@@ -1455,9 +1455,7 @@ function createRpcClient(
   httpAgent?: HttpAgent | HttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
-  let agentManager:
-    | {requestEnd(): void; requestStart(): HttpAgent | HttpsAgent}
-    | undefined;
+  let agent: HttpAgent | HttpsAgent | undefined;
   if (process.env.BROWSER) {
     if (httpAgent != null) {
       console.warn(
@@ -1468,9 +1466,10 @@ function createRpcClient(
   } else {
     if (httpAgent == null) {
       if (process.env.NODE_ENV !== 'test') {
-        agentManager = new AgentManager(
-          url.startsWith('https:') /* useHttps */,
-        );
+        agent = new Agent({
+          keepAlive: true,
+          maxSockets: 25,
+        });
       }
     } else {
       if (httpAgent !== false) {
@@ -1490,7 +1489,7 @@ function createRpcClient(
               '`https.Agent` through `httpAgent`.',
           );
         }
-        agentManager = {requestEnd() {}, requestStart: () => httpAgent};
+        agent = httpAgent;
       }
     }
   }
@@ -1515,7 +1514,6 @@ function createRpcClient(
   }
 
   const clientBrowser = new RpcClient(async (request, callback) => {
-    const agent = agentManager ? agentManager.requestStart() : undefined;
     const options = {
       method: 'POST',
       body: request,
@@ -1565,8 +1563,6 @@ function createRpcClient(
       }
     } catch (err) {
       if (err instanceof Error) callback(err);
-    } finally {
-      agentManager && agentManager.requestEnd();
     }
   }, {});
 
