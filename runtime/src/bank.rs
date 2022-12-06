@@ -1259,6 +1259,7 @@ impl StakeReward {
 
     #[cfg(test)]
     pub fn random() -> Self {
+        use rand::Rng;
         let mut rng = rand::thread_rng();
         Self {
             stake_pubkey: Pubkey::new_unique(),
@@ -1288,6 +1289,7 @@ pub struct VoteReward {
 impl VoteReward {
     #[cfg(test)]
     pub fn random() -> Self {
+        use rand::Rng;
         let mut rng = rand::thread_rng();
         Self {
             vote_pubkey: Pubkey::new_unique(),
@@ -1630,7 +1632,7 @@ impl Bank {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
-            (self.epoch_schedule.slots_per_epoch / 10).min(100).max(1)
+            (self.epoch_schedule.slots_per_epoch / 10).clamp(1, 100)
         }
     }
 
@@ -1638,7 +1640,7 @@ impl Bank {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
         } else {
-            (self.epoch_schedule.slots_per_epoch / 20).min(50).max(1)
+            (self.epoch_schedule.slots_per_epoch / 20).clamp(1, 50)
         }
     }
 
@@ -3311,7 +3313,7 @@ impl Bank {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards));
+        self.store_accounts((self.slot(), stake_rewards, self.include_slot_in_hash()));
         m.stop();
         metrics
             .store_stake_accounts_us
@@ -3342,7 +3344,11 @@ impl Bank {
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
-        self.store_accounts((self.slot(), &stake_rewards[begin..end]));
+        self.store_accounts((
+            self.slot(),
+            &stake_rewards[begin..end],
+            self.include_slot_in_hash(),
+        ));
         for a in &stake_rewards[begin..end] {
             total += a.stake_reward_info.lamports;
         }
@@ -21171,9 +21177,7 @@ pub(crate) mod tests {
             // set it up so the first epoch is a full year long
             poh_config: PohConfig {
                 target_tick_duration: Duration::from_secs(
-                    SECONDS_PER_YEAR as u64
-                        / MINIMUM_SLOTS_PER_EPOCH as u64
-                        / DEFAULT_TICKS_PER_SLOT,
+                    SECONDS_PER_YEAR as u64 / MINIMUM_SLOTS_PER_EPOCH / DEFAULT_TICKS_PER_SLOT,
                 ),
                 hashes_per_tick: None,
                 target_tick_count: None,

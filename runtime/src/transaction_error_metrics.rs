@@ -174,7 +174,11 @@ impl TransactionErrorMetrics {
                 self.invalid_loaded_accounts_data_size_limit as i64,
                 i64
             ),
-            ("locked_reward_account", self.locked_reward_account as i64,),
+            (
+                "locked_reward_account",
+                self.locked_reward_account as i64,
+                i64
+            ),
         );
     }
 }

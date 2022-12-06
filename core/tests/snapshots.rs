@@ -1056,7 +1056,7 @@ fn test_snapshots_with_background_services(
     let mint_keypair = &snapshot_test_config.genesis_config_info.mint_keypair;
     for slot in 1..=LAST_SLOT {
         // Make a new bank and process some transactions
-        {
+        let bank = {
             let bank = Bank::new_from_parent(
                 &bank_forks.read().unwrap().get(slot - 1).unwrap(),
                 &Pubkey::default(),
@@ -1075,8 +1075,8 @@ fn test_snapshots_with_background_services(
                 bank.register_tick(&Hash::new_unique());
             }
 
-            bank_forks.write().unwrap().insert(bank);
-        }
+            bank_forks.write().unwrap().insert(bank)
+        };
 
         // Call `BankForks::set_root()` to cause snapshots to be taken
         if slot % SET_ROOT_INTERVAL_SLOTS == 0 {
