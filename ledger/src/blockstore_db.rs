@@ -134,83 +134,179 @@ pub enum IteratorMode<Index> {
 
 pub mod columns {
     #[derive(Debug)]
-    /// The slot metadata column
+    /// The slot metadata column.
+    ///
+    /// This column family tracks the status of the received shred data for a
+    /// given slot.  Tracking the progress as the slot fills up allows us to
+    /// know if the slot (or pieces of the slot) are ready to be replayed.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::SlotMeta`
     pub struct SlotMeta;
 
     #[derive(Debug)]
-    /// The orphans column
+    /// The orphans column.
+    ///
+    /// This column family tracks whether a slot has a parent.  Slots without a
+    /// parent are by definition orphan slots.  Orphans will have an entry in
+    /// this column family with true value.  Once an orphan slot has a parent,
+    /// its entry in this column will be deleted.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Orphans;
 
     #[derive(Debug)]
-    /// The dead slots column
+    /// The dead slots column.
+    /// This column family tracks whether a slot is dead.
+    ///
+    /// A slot is marked as dead if the validator thinks it will never be able
+    /// to successfully replay this slot.  Example scenarios include errors
+    /// during the replay of a slot, or the validator believes it will never
+    /// receive all the shreds of a slot.
+    ///
+    /// If a slot has been mistakenly marked as dead, the ledger-tool's
+    /// --remove-dead-slot can unmark a dead slot.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct DeadSlots;
 
     #[derive(Debug)]
     /// The duplicate slots column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::DuplicateSlotProof`
     pub struct DuplicateSlots;
 
     #[derive(Debug)]
-    /// The erasure meta column
+    /// The erasure meta column.
+    ///
+    /// This column family stores ErasureMeta which includes metadata about
+    /// dropped network packets (or erasures) that can be used to recover
+    /// missing data shreds.
+    ///
+    /// Its index type is ErasureSetId, which consists of a Slot ID
+    /// and a FEC (Forward Error Correction) set index.
+    ///
+    /// index type: `ErasureSetId` (Slot, fec_set_index: u64)
+    /// value type: `blockstore_meta::ErasureMeta`
     pub struct ErasureMeta;
 
     #[derive(Debug)]
-    /// The bank hash column
+    /// The bank hash column.
+    ///
+    /// This column family persists the bank hash of a given slot.  Note that
+    /// not every slot has a bank hash (e.g., a dead slot.)
+    ///
+    /// The bank hash of a slot is derived from hashing the delta state of all
+    /// the accounts in a slot combined with the bank hash of its parent slot.
+    /// A bank hash of a slot essentially represents all the account states at
+    /// that slot.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::FrozenHashVersioned`
     pub struct BankHash;
 
     #[derive(Debug)]
-    /// The root column
+    /// The root column.
+    ///
+    /// This column family persists whether a slot is a root.  Slots on the
+    /// main fork will be inserted into this column when they are finalized.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: bool
     pub struct Root;
 
     #[derive(Debug)]
     /// The index column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::Index`
     pub struct Index;
 
     #[derive(Debug)]
     /// The shred data column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredData;
 
     #[derive(Debug)]
     /// The shred erasure code column
+    ///
+    /// index type: (u64, u64)
+    /// value type: Vec<u8>
     pub struct ShredCode;
 
     #[derive(Debug)]
     /// The transaction status column
+    ///
+    /// index type: (u64, Signature, Slot)
+    /// value type: `generated::TransactionStatusMeta`
     pub struct TransactionStatus;
 
     #[derive(Debug)]
     /// The address signatures column
+    ///
+    /// index type: (u64, Pubkey, Slot, Signature)
+    /// value type: `blockstore_meta::AddressSignatureMeta`
     pub struct AddressSignatures;
 
     #[derive(Debug)]
     /// The transaction memos column
+    ///
+    /// index type: Signature
+    /// value type: String
     pub struct TransactionMemos;
 
     #[derive(Debug)]
-    /// The transaction status index column
+    /// The transaction status index column.
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::TransactionStatusIndexMeta`
     pub struct TransactionStatusIndex;
 
     #[derive(Debug)]
     /// The rewards column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `generated::Rewards`
     pub struct Rewards;
 
     #[derive(Debug)]
     /// The blocktime column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `UnixTimestamp`
     pub struct Blocktime;
 
     #[derive(Debug)]
     /// The performance samples column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::PerfSample`
     pub struct PerfSamples;
 
     #[derive(Debug)]
     /// The block height column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: u64
     pub struct BlockHeight;
 
     #[derive(Debug)]
     /// The program costs column
+    ///
+    /// index type: `Pubkey`
+    /// value type: `blockstore_meta::ProgramCost`
     pub struct ProgramCosts;
 
     #[derive(Debug)]
     /// The optimistic slot column
+    ///
+    /// index type: u64 (see `SlotColumn`)
+    /// value type: `blockstore_meta::OptimisticSlotMetaVersioned`
     pub struct OptimisticSlots;
 
     // When adding a new column ...
@@ -541,26 +637,37 @@ pub trait ProtobufColumn: Column {
     type Type: prost::Message + Default;
 }
 
+/// SlotColumn is a trait for slot-based column families.  Its index is
+/// essentially Slot (or more generally speaking, has a 1:1 mapping to Slot).
+///
+/// The clean-up of any LedgerColumn that implements SlotColumn is managed by
+/// [`LedgerCleanupService`], which will periodically deprecate and purge
+/// oldest entries that are older than the latest root in order to maintain the
+/// configured --limit-ledger-size under the validator argument.
 pub trait SlotColumn<Index = u64> {}
 
 impl<T: SlotColumn> Column for T {
     type Index = u64;
 
+    /// Converts a u64 Index to its RocksDB key.
     fn key(slot: u64) -> Vec<u8> {
         let mut key = vec![0; 8];
         BigEndian::write_u64(&mut key[..], slot);
         key
     }
 
+    /// Converts a RocksDB key to its u64 Index.
     fn index(key: &[u8]) -> u64 {
         BigEndian::read_u64(&key[..8])
     }
 
+    /// Obtains the primary index from the specified index.
     fn primary_index(index: u64) -> Slot {
         index
     }
 
     #[allow(clippy::wrong_self_convention)]
+    /// Converts a Slot to its u64 Index.
     fn as_index(slot: Slot) -> u64 {
         slot
     }
@@ -1092,7 +1199,10 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    /// Adds a \[`from`, `to`\] range to delete to the given write batch
+    /// Adds a \[`from`, `to`\] range that deletes all entries between the `from` slot
+    /// and `to` slot inclusively.  If `from` slot and `to` slot are the same, then all
+    /// entries in that slot will be removed.
+    ///
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
@@ -1152,6 +1262,40 @@ where
             );
         }
         result
+    }
+
+    pub fn multi_get_bytes(&self, keys: Vec<C::Index>) -> Vec<Result<Option<Vec<u8>>>> {
+        let rocks_keys: Vec<_> = keys.into_iter().map(|key| C::key(key)).collect();
+        {
+            let ref_rocks_keys: Vec<_> = rocks_keys.iter().map(|k| &k[..]).collect();
+            let is_perf_enabled = maybe_enable_rocksdb_perf(
+                self.column_options.rocks_perf_sample_interval,
+                &self.read_perf_status,
+            );
+            let result = self
+                .backend
+                .multi_get_cf(self.handle(), ref_rocks_keys)
+                .into_iter()
+                .map(|r| match r {
+                    Ok(opt) => match opt {
+                        Some(pinnable_slice) => Ok(Some(pinnable_slice.as_ref().to_vec())),
+                        None => Ok(None),
+                    },
+                    Err(e) => Err(e),
+                })
+                .collect::<Vec<Result<Option<_>>>>();
+            if let Some(op_start_instant) = is_perf_enabled {
+                // use multi-get instead
+                report_rocksdb_read_perf(
+                    C::NAME,
+                    PERF_METRIC_OP_NAME_MULTI_GET,
+                    &op_start_instant.elapsed(),
+                    &self.column_options,
+                );
+            }
+
+            result
+        }
     }
 
     pub fn iter(

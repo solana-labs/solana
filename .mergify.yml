@@ -41,8 +41,8 @@ pull_request_rules:
         - author≠@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
-          - status-success=docs-build
           - -files~=^docs/
+          - status-success=build & deploy docs
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -67,8 +67,8 @@ pull_request_rules:
         - author=@dont-squash-my-commits
         - or:
           # only require docs checks if docs files changed
-          - status-success=docs-build
           - -files~=^docs/
+          - status-success=build & deploy docs
         - or:
           # only require explorer checks if explorer files changed
           - status-success=check-explorer
@@ -96,17 +96,6 @@ pull_request_rules:
     actions:
       dismiss_reviews:
         changes_requested: true
-  - name: set automerge label on mergify backport PRs
-    conditions:
-      - author=mergify[bot]
-      - head~=^mergify/bp/
-      - "#status-failure=0"
-      - "-merged"
-      - label!=no-automerge
-    actions:
-      label:
-        add:
-          - automerge
   - name: v1.13 feature-gate backport
     conditions:
       - label=v1.13
@@ -120,7 +109,6 @@ ubscribers')) }}"
         labels:
           - feature-gate
         branches:
-          - v1.10
           - v1.13
   - name: v1.13 non-feature-gate backport
     conditions:
@@ -131,7 +119,6 @@ ubscribers')) }}"
         assignees: *BackportAssignee
         ignore_conflicts: true
         branches:
-          - v1.10
           - v1.13
   - name: v1.14 feature-gate backport
     conditions:

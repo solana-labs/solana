@@ -10,8 +10,8 @@
 //! directly as a Pedersen commitment. Therefore, proof systems that are designed specifically for
 //! Pedersen commitments can be used on the twisted ElGamal ciphertexts.
 //!
-//! As the messages are encrypted as scalar elements (a.k.a. in the "exponent"), the encryption
-//! scheme requires solving discrete log to recover the original plaintext.
+//! As the messages are encrypted as scalar elements (a.k.a. in the "exponent"), one must solve the
+//! discrete log to recover the originally encrypted value.
 
 use {
     crate::encryption::{
@@ -57,7 +57,7 @@ impl ElGamal {
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen() -> ElGamalKeypair {
-        // secret scalar should be zero with negligible probability
+        // secret scalar should be non-zero except with negligible probability
         let mut s = Scalar::random(&mut OsRng);
         let keypair = Self::keygen_with_scalar(&s);
 
@@ -66,20 +66,18 @@ impl ElGamal {
     }
 
     /// Generates an ElGamal keypair from a scalar input that determines the ElGamal private key.
+    ///
+    /// This function panics if the input scalar is zero, which is not a valid key.
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     fn keygen_with_scalar(s: &Scalar) -> ElGamalKeypair {
-        assert!(s != &Scalar::zero());
+        let secret = ElGamalSecretKey(*s);
+        let public = ElGamalPubkey::new(&secret);
 
-        let P = s.invert() * &(*H);
-
-        ElGamalKeypair {
-            public: ElGamalPubkey(P),
-            secret: ElGamalSecretKey(*s),
-        }
+        ElGamalKeypair { public, secret }
     }
 
-    /// On input an ElGamal public key and a mesage to be encrypted, the function returns a
+    /// On input an ElGamal public key and an amount to be encrypted, the function returns a
     /// corresponding ElGamal ciphertext.
     ///
     /// This function is randomized. It internally samples a scalar element using `OsRng`.
@@ -91,8 +89,8 @@ impl ElGamal {
         ElGamalCiphertext { commitment, handle }
     }
 
-    /// On input a public key, message, and Pedersen opening, the function
-    /// returns the corresponding ElGamal ciphertext.
+    /// On input a public key, amount, and Pedersen opening, the function returns the corresponding
+    /// ElGamal ciphertext.
     #[cfg(not(target_os = "solana"))]
     fn encrypt_with<T: Into<Scalar>>(
         amount: T,
@@ -105,7 +103,7 @@ impl ElGamal {
         ElGamalCiphertext { commitment, handle }
     }
 
-    /// On input a message, the function returns a twisted ElGamal ciphertext where the associated
+    /// On input an amount, the function returns a twisted ElGamal ciphertext where the associated
     /// Pedersen opening is always zero. Since the opening is zero, any twisted ElGamal ciphertext
     /// of this form is a valid ciphertext under any ElGamal public key.
     #[cfg(not(target_os = "solana"))]
@@ -116,10 +114,11 @@ impl ElGamal {
         ElGamalCiphertext { commitment, handle }
     }
 
-    /// On input a secret key and a ciphertext, the function returns the decrypted message.
+    /// On input a secret key and a ciphertext, the function returns the discrete log encoding of
+    /// original amount.
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
-    /// message, use `DiscreteLog::decode`.
+    /// amount, use `DiscreteLog::decode`.
     #[cfg(not(target_os = "solana"))]
     fn decrypt(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> DiscreteLog {
         DiscreteLog::new(
@@ -128,8 +127,11 @@ impl ElGamal {
         )
     }
 
-    /// On input a secret key and a ciphertext, the function returns the decrypted message
-    /// interpretted as type `u32`.
+    /// On input a secret key and a ciphertext, the function returns the decrypted amount
+    /// interpretted as a positive 32-bit number (but still of type `u64`).
+    ///
+    /// If the originally encrypted amount is not a positive 32-bit number, then the function
+    /// returns `None`.
     #[cfg(not(target_os = "solana"))]
     fn decrypt_u32(secret: &ElGamalSecretKey, ciphertext: &ElGamalCiphertext) -> Option<u64> {
         let discrete_log_instance = Self::decrypt(secret, ciphertext);
@@ -149,32 +151,26 @@ pub struct ElGamalKeypair {
 }
 
 impl ElGamalKeypair {
-    /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana address.
+    /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana
+    /// address.
+    ///
+    /// This function exists for applications where a user may not wish to maintin a Solana
+    /// (Ed25519) keypair and an ElGamal keypair separately. A user may wish to solely maintain the
+    /// Solana keypair and then derive the ElGamal keypair on-the-fly whenever
+    /// encryption/decryption is needed.
+    ///
+    /// For the spl token-2022 confidential extension application, the ElGamal encryption public
+    /// key is specified in a token account address. A natural way to derive an ElGamal keypair is
+    /// then to define it from the hash of a Solana keypair and a Solana address. However, for
+    /// general hardware wallets, the signing key is not exposed in the API. Therefore, this
+    /// function uses a signer to sign a pre-specified message with respect to a Solana address.
+    /// The resulting signature is then hashed to derive an ElGamal keypair.
     #[cfg(not(target_os = "solana"))]
     #[allow(non_snake_case)]
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
-        let message = Message::new(
-            &[Instruction::new_with_bytes(
-                *address,
-                b"ElGamalSecretKey",
-                vec![],
-            )],
-            Some(&signer.try_pubkey()?),
-        );
-        let signature = signer.try_sign_message(&message.serialize())?;
-
-        // Some `Signer` implementations return the default signature, which is not suitable for
-        // use as key material
-        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
-            return Err(SignerError::Custom("Rejecting default signature".into()));
-        }
-
-        let mut scalar = Scalar::hash_from_bytes::<Sha3_512>(signature.as_ref());
-        let keypair = ElGamal::keygen_with_scalar(&scalar);
-
-        // TODO: zeroize signature?
-        scalar.zeroize();
-        Ok(keypair)
+        let secret = ElGamalSecretKey::new(signer, address)?;
+        let public = ElGamalPubkey::new(&secret);
+        Ok(ElGamalKeypair { public, secret })
     }
 
     /// Generates the public and secret keys for ElGamal encryption.
@@ -267,7 +263,10 @@ impl ElGamalPubkey {
     /// Derives the `ElGamalPubkey` that uniquely corresponds to an `ElGamalSecretKey`.
     #[allow(non_snake_case)]
     pub fn new(secret: &ElGamalSecretKey) -> Self {
-        ElGamalPubkey(&secret.0 * &(*H))
+        let s = &secret.0;
+        assert!(s != &Scalar::zero());
+
+        ElGamalPubkey(s.invert() * &(*H))
     }
 
     pub fn get_point(&self) -> &RistrettoPoint {
@@ -328,6 +327,8 @@ pub struct ElGamalSecretKey(Scalar);
 impl ElGamalSecretKey {
     /// Deterministically derives an ElGamal keypair from an Ed25519 signing key and a Solana
     /// address.
+    ///
+    /// See `ElGamalKeypair::new` for more context on the key derivation.
     pub fn new(signer: &dyn Signer, address: &Pubkey) -> Result<Self, SignerError> {
         let message = Message::new(
             &[Instruction::new_with_bytes(
@@ -341,13 +342,13 @@ impl ElGamalSecretKey {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
-            Err(SignerError::Custom("Rejecting default signature".into()))
-        } else {
-            Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(
-                signature.as_ref(),
-            )))
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
+            return Err(SignerError::Custom("Rejecting default signatures".into()));
         }
+
+        Ok(ElGamalSecretKey(Scalar::hash_from_bytes::<Sha3_512>(
+            signature.as_ref(),
+        )))
     }
 
     /// Randomly samples an ElGamal secret key.
@@ -454,12 +455,16 @@ impl ElGamalCiphertext {
     /// Decrypts the ciphertext using an ElGamal secret key.
     ///
     /// The output of this function is of type `DiscreteLog`. To recover, the originally encrypted
-    /// message, use `DiscreteLog::decode`.
+    /// amount, use `DiscreteLog::decode`.
     pub fn decrypt(&self, secret: &ElGamalSecretKey) -> DiscreteLog {
         ElGamal::decrypt(secret, self)
     }
 
-    /// Decrypts the ciphertext using an ElGamal secret key interpretting the message as type `u32`.
+    /// Decrypts the ciphertext using an ElGamal secret key assuming that the message is a positive
+    /// 32-bit number.
+    ///
+    /// If the originally encrypted amount is not a positive 32-bit number, then the function
+    /// returns `None`.
     pub fn decrypt_u32(&self, secret: &ElGamalSecretKey) -> Option<u64> {
         ElGamal::decrypt_u32(secret, self)
     }

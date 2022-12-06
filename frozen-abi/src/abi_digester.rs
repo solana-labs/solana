@@ -180,7 +180,7 @@ impl AbiDigester {
         v: &T,
     ) -> Result<(), DigestError> {
         let field_type_name = shorten_serialize_with(type_name::<T>());
-        self.update_with_string(format!("field {}: {}", key, field_type_name));
+        self.update_with_string(format!("field {key}: {field_type_name}"));
         self.create_child()?
             .digest_data(v)
             .map(|_| ())
@@ -198,7 +198,7 @@ impl AbiDigester {
         label: &'static str,
         variant: &'static str,
     ) -> Result<(), DigestError> {
-        assert!(self.for_enum, "derive AbiEnumVisitor or implement it for the enum, which contains a variant ({}) named {}", label, variant);
+        assert!(self.for_enum, "derive AbiEnumVisitor or implement it for the enum, which contains a variant ({label}) named {variant}");
         Ok(())
     }
 
@@ -220,7 +220,7 @@ impl AbiDigester {
                 error!("Bad thread name detected for dumping; Maybe, --test-threads=1? Sorry, SOLANA_ABI_DUMP_DIR doesn't work under 1; increase it");
             }
 
-            let path = format!("{}/{}_{}", dir, thread_name, hash,);
+            let path = format!("{dir}/{thread_name}_{hash}",);
             let mut file = std::fs::File::create(path).unwrap();
             for buf in (*self.data_types.borrow()).iter() {
                 file.write_all(buf.as_bytes()).unwrap();
@@ -337,7 +337,7 @@ impl Serializer for AbiDigester {
 
     fn serialize_unit_variant(mut self, _name: Sstr, index: u32, variant: Sstr) -> DigestResult {
         self.check_for_enum("unit_variant", variant)?;
-        self.update_with_string(format!("variant({}) {} (unit)", index, variant));
+        self.update_with_string(format!("variant({index}) {variant} (unit)"));
         Ok(self)
     }
 
@@ -379,17 +379,17 @@ impl Serializer for AbiDigester {
             len, 1,
             "Exactly 1 seq element is needed to generate the ABI digest precisely"
         );
-        self.update_with_string(format!("seq (elements = {})", len));
+        self.update_with_string(format!("seq (elements = {len})"));
         self.create_child()
     }
 
     fn serialize_tuple(mut self, len: usize) -> DigestResult {
-        self.update_with_string(format!("tuple (elements = {})", len));
+        self.update_with_string(format!("tuple (elements = {len})"));
         self.create_child()
     }
 
     fn serialize_tuple_struct(mut self, name: Sstr, len: usize) -> DigestResult {
-        self.update_with_string(format!("struct {} (fields = {}) (tuple)", name, len));
+        self.update_with_string(format!("struct {name} (fields = {len}) (tuple)"));
         self.create_child()
     }
 
@@ -401,7 +401,7 @@ impl Serializer for AbiDigester {
         len: usize,
     ) -> DigestResult {
         self.check_for_enum("tuple_variant", variant)?;
-        self.update_with_string(format!("variant({}) {} (fields = {})", i, variant, len));
+        self.update_with_string(format!("variant({i}) {variant} (fields = {len})"));
         self.create_child()
     }
 
@@ -411,12 +411,12 @@ impl Serializer for AbiDigester {
             len, 1,
             "Exactly 1 map entry is needed to generate the ABI digest precisely"
         );
-        self.update_with_string(format!("map (entries = {})", len));
+        self.update_with_string(format!("map (entries = {len})"));
         self.create_child()
     }
 
     fn serialize_struct(mut self, name: Sstr, len: usize) -> DigestResult {
-        self.update_with_string(format!("struct {} (fields = {})", name, len));
+        self.update_with_string(format!("struct {name} (fields = {len})"));
         self.create_child()
     }
 
@@ -428,10 +428,7 @@ impl Serializer for AbiDigester {
         len: usize,
     ) -> DigestResult {
         self.check_for_enum("struct_variant", variant)?;
-        self.update_with_string(format!(
-            "variant({}) struct {} (fields = {})",
-            i, variant, len
-        ));
+        self.update_with_string(format!("variant({i}) struct {variant} (fields = {len})"));
         self.create_child()
     }
 }

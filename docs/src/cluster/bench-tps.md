@@ -99,7 +99,7 @@ For example
   export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
-- To enable BPF program logging:
+- To enable SBF program logging:
 
   ```bash
   export RUST_LOG=solana_bpf_loader=trace

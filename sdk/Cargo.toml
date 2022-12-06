@@ -60,6 +60,7 @@ log = "0.4.17"
 memmap2 = { version = "0.5.3", optional = true }
 num-derive = "0.3"
 num-traits = "0.2"
+num_enum = "0.5.7"
 pbkdf2 = { version = "0.11.0", default-features = false }
 qstring = "0.7.2"
 rand = { version = "0.7.0", optional = true }

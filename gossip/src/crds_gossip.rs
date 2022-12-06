@@ -86,7 +86,11 @@ impl CrdsGossip {
         &self,
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
-    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+    ) -> (
+        HashMap<Pubkey, Vec<CrdsValue>>,
+        usize, // number of values
+        usize, // number of push messages
+    ) {
         {
             let mut crds = self.crds.write().unwrap();
             for entry in pending_push_messages {
@@ -184,10 +188,12 @@ impl CrdsGossip {
     /// Refresh the push active set.
     pub fn refresh_push_active_set(
         &self,
-        self_pubkey: &Pubkey,
+        self_keypair: &Keypair,
         self_shred_version: u16,
         stakes: &HashMap<Pubkey, u64>,
         gossip_validators: Option<&HashSet<Pubkey>>,
+        ping_cache: &Mutex<PingCache>,
+        pings: &mut Vec<(SocketAddr, Ping)>,
         socket_addr_space: &SocketAddrSpace,
     ) {
         let network_size = self.crds.read().unwrap().num_nodes();
@@ -195,10 +201,12 @@ impl CrdsGossip {
             &self.crds,
             stakes,
             gossip_validators,
-            self_pubkey,
+            self_keypair,
             self_shred_version,
             network_size,
             CRDS_GOSSIP_NUM_ACTIVE,
+            ping_cache,
+            pings,
             socket_addr_space,
         )
     }
@@ -378,7 +386,8 @@ mod test {
     #[test]
     fn test_prune_errors() {
         let crds_gossip = CrdsGossip::default();
-        let id = Pubkey::new(&[0; 32]);
+        let keypair = Keypair::new();
+        let id = keypair.pubkey();
         let ci = ContactInfo::new_localhost(&Pubkey::new(&[1; 32]), 0);
         let prune_pubkey = Pubkey::new(&[2; 32]);
         crds_gossip
@@ -391,11 +400,19 @@ mod test {
                 GossipRoute::LocalMessage,
             )
             .unwrap();
+        let ping_cache = PingCache::new(
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
+        );
+        let ping_cache = Mutex::new(ping_cache);
         crds_gossip.refresh_push_active_set(
-            &id,
+            &keypair,
             0,               // shred version
             &HashMap::new(), // stakes
             None,            // gossip validators
+            &ping_cache,
+            &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
         let now = timestamp();

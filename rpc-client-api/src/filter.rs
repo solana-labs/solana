@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 use {
+    crate::version_req::VersionReq,
     solana_sdk::account::{AccountSharedData, ReadableAccount},
     spl_token_2022::{generic_token_account::GenericTokenAccount, state::Account},
     std::borrow::Cow,
@@ -263,7 +264,11 @@ pub fn maybe_map_filters(
     node_version: Option<semver::Version>,
     filters: &mut [RpcFilterType],
 ) -> Result<(), String> {
-    if node_version.is_none() || node_version.unwrap() < semver::Version::new(1, 11, 2) {
+    let version_reqs = VersionReq::from_strs(&["<1.11.2", "~1.13"])?;
+    let needs_mapping = node_version
+        .map(|version| version_reqs.matches_any(&version))
+        .unwrap_or(true);
+    if needs_mapping {
         for filter in filters.iter_mut() {
             if let RpcFilterType::Memcmp(memcmp) = filter {
                 match &memcmp.bytes {

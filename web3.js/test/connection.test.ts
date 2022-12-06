@@ -3,7 +3,9 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
-import {useFakeTimers, SinonFakeTimers} from 'sinon';
+import {AbortController} from 'node-abort-controller';
+import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
+import sinonChai from 'sinon-chai';
 
 import {
   Authorized,
@@ -20,8 +22,10 @@ import {
   Message,
   AddressLookupTableProgram,
   SYSTEM_INSTRUCTION_LAYOUTS,
+  NONCE_ACCOUNT_LENGTH,
 } from '../src';
 import invariant from '../src/utils/assert';
+import {toBuffer} from '../src/utils/to-buffer';
 import {MOCK_PORT, url} from './url';
 import {
   AccountInfo,
@@ -52,10 +56,13 @@ import {
   mockRpcMessage,
 } from './mocks/rpc-websockets';
 import {
+  NonceInformation,
   TransactionInstruction,
   TransactionSignature,
   TransactionExpiredBlockheightExceededError,
+  TransactionExpiredNonceInvalidError,
   TransactionExpiredTimeoutError,
+  TransactionMessage,
 } from '../src/transaction';
 import type {
   SignatureStatus,
@@ -67,6 +74,34 @@ import {MessageV0} from '../src/message/v0';
 import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
+use(sinonChai);
+
+async function mockNonceAccountResponse(
+  nonceAccountPubkey: string,
+  nonceValue: string,
+  nonceAuthority: string,
+  slot?: number,
+) {
+  const mockNonceAccountData = Buffer.alloc(NONCE_ACCOUNT_LENGTH);
+  mockNonceAccountData.fill(0);
+  // Authority starts after 4 version bytes and 4 state bytes.
+  mockNonceAccountData.set(bs58.decode(nonceAuthority), 4 + 4);
+  // Nonce hash starts 32 bytes after the authority.
+  mockNonceAccountData.set(bs58.decode(nonceValue), 4 + 4 + 32);
+  await mockRpcResponse({
+    method: 'getAccountInfo',
+    params: [nonceAccountPubkey, {encoding: 'base64'}],
+    value: {
+      owner: SystemProgram.programId.toBase58(),
+      lamports: LAMPORTS_PER_SOL,
+      data: [mockNonceAccountData.toString('base64'), 'base64'],
+      executable: false,
+      rentEpoch: 20,
+    },
+    slot,
+    withContext: true,
+  });
+}
 
 const verifySignatureStatus = (
   status: SignatureStatus | null,
@@ -230,6 +265,7 @@ describe('Connection', function () {
         data: ['', 'base64'],
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
       {
         owner: '11111111111111111111111111111111',
@@ -237,6 +273,7 @@ describe('Connection', function () {
         data: ['', 'base64'],
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
     ];
 
@@ -262,6 +299,7 @@ describe('Connection', function () {
         data: Buffer.from([]),
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
       {
         owner: new PublicKey('11111111111111111111111111111111'),
@@ -269,6 +307,7 @@ describe('Connection', function () {
         data: Buffer.from([]),
         executable: false,
         rentEpoch: 0,
+        space: 0,
       },
     ];
 
@@ -971,6 +1010,128 @@ describe('Connection', function () {
           );
         }).timeout(60 * 1000);
       });
+
+      describe('nonce-based transaction confirmation', () => {
+        let keypair: Keypair;
+        let minContextSlot: number;
+        let nonceInfo: NonceInformation;
+        let nonceKeypair: Keypair;
+        let transaction: Transaction;
+
+        beforeEach(async function () {
+          this.timeout(60 * 1000);
+          keypair = Keypair.generate();
+          nonceKeypair = Keypair.generate();
+          const [
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            _,
+            blockhash,
+            minimumNonceAccountRentLamports,
+          ] = await Promise.all([
+            connection.confirmTransaction(
+              await connection.requestAirdrop(
+                keypair.publicKey,
+                LAMPORTS_PER_SOL,
+              ),
+            ),
+            helpers.latestBlockhash({connection}),
+            connection.getMinimumBalanceForRentExemption(NONCE_ACCOUNT_LENGTH),
+          ]);
+          const createNonceAccountTransaction =
+            SystemProgram.createNonceAccount({
+              authorizedPubkey: keypair.publicKey,
+              fromPubkey: keypair.publicKey,
+              lamports: minimumNonceAccountRentLamports,
+              noncePubkey: nonceKeypair.publicKey,
+            });
+          createNonceAccountTransaction.recentBlockhash = blockhash.blockhash;
+          createNonceAccountTransaction.feePayer = keypair.publicKey;
+          const createNonceAccountTransactionSignature =
+            await connection.sendTransaction(createNonceAccountTransaction, [
+              keypair,
+              nonceKeypair,
+            ]);
+          const {context} = await connection.confirmTransaction({
+            ...blockhash,
+            signature: createNonceAccountTransactionSignature,
+          });
+          minContextSlot = context.slot;
+          const nonceAccount = await connection.getNonce(
+            nonceKeypair.publicKey,
+            {minContextSlot},
+          );
+          nonceInfo = {
+            nonce: nonceAccount!.nonce,
+            nonceInstruction: SystemProgram.nonceAdvance({
+              authorizedPubkey: keypair.publicKey,
+              noncePubkey: nonceKeypair.publicKey,
+            }),
+          };
+          invariant(
+            nonceAccount,
+            'Expected a nonce account to have been created in the test setup',
+          );
+          const ix = new TransactionInstruction({
+            keys: [
+              {
+                pubkey: keypair.publicKey,
+                isSigner: true,
+                isWritable: true,
+              },
+            ],
+            programId: new PublicKey(
+              'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr',
+            ),
+            data: Buffer.from('Hello world', 'utf8'),
+          });
+          transaction = new Transaction({minContextSlot, nonceInfo});
+          transaction.add(ix);
+          transaction.sign(keypair);
+        });
+
+        it('confirms transactions using the durable nonce strategy', async () => {
+          const signature = await connection.sendTransaction(transaction, [
+            keypair,
+          ]);
+          const result = await connection.confirmTransaction(
+            {
+              minContextSlot,
+              nonceAccountPubkey: nonceKeypair.publicKey,
+              nonceValue: nonceInfo.nonce,
+              signature,
+            },
+            'processed',
+          );
+          expect(result.value).to.have.property('err', null);
+        }).timeout(60 * 1000);
+
+        it('throws when confirming using a nonce that is no longer valid', async () => {
+          // Advance the nonce.
+          const blockhash = await connection.getLatestBlockhash();
+          await sendAndConfirmTransaction(
+            connection,
+            new Transaction({feePayer: keypair.publicKey, ...blockhash}).add(
+              nonceInfo.nonceInstruction,
+            ),
+            [keypair],
+          );
+          const [currentSlot, signature] = await Promise.all([
+            connection.getSlot(),
+            connection.sendTransaction(transaction, [keypair], {
+              skipPreflight: true,
+            }),
+          ]);
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: currentSlot,
+            nonceAccountPubkey: nonceKeypair.publicKey,
+            nonceValue: nonceInfo.nonce, // The old nonce.
+            signature,
+          });
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
+        }).timeout(60 * 1000);
+      });
     });
   }
 
@@ -985,149 +1146,702 @@ describe('Connection', function () {
         clock.restore();
       });
 
-      it('confirm transaction - timeout expired', async () => {
+      describe('timeout strategy (deprecated)', () => {
+        it('throws a `TransactionExpiredTimeoutError` when the timer elapses without a signature confirmation', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}),
+          });
+          const timeoutPromise = connection.confirmTransaction(mockSignature);
+
+          // Advance the clock past all waiting timers, notably the expiry timer.
+          clock.runAllAsync();
+
+          await expect(timeoutPromise).to.be.rejectedWith(
+            TransactionExpiredTimeoutError,
+          );
+        });
+      });
+
+      describe('block height strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              blockhash: 'sampleBlockhash',
+              lastValidBlockHeight: 1,
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight: 1,
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
+        it('throws a `TransactionExpiredBlockheightExceededError` when the block height advances past the last valid one for this transaction without a signature confirmation', async () => {
+          const mockSignature =
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const lastValidBlockHeight = 3;
+
+          // Start the block height at `lastValidBlockHeight - 1`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight - 1,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Advance the block height to the `lastValidBlockHeight`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Advance the block height to `lastValidBlockHeight + 1`,
+          // past the last valid blockheight for this transaction.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight + 1,
+          });
+          clock.runAllAsync();
+          await expect(confirmationPromise).to.be.rejectedWith(
+            TransactionExpiredBlockheightExceededError,
+          );
+        });
+
+        it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          // Simulate a failure to fetch the block height.
+          let rejectBlockheightPromise: () => void;
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: (() => {
+              const p = new Promise((_, reject) => {
+                rejectBlockheightPromise = reject;
+              });
+              p.catch(() => {});
+              return p;
+            })(),
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight: 3,
+          });
+
+          rejectBlockheightPromise();
+          clock.runToLastAsync();
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          expect(confirmationPromise).not.to.eventually.be.rejected;
+        });
+
+        it('confirms the transaction if the signature confirmation is received before the block height is exceeded', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          const lastValidBlockHeight = 3;
+
+          // Advance the block height to the `lastValidBlockHeight`.
+          await mockRpcResponse({
+            method: 'getBlockHeight',
+            params: [],
+            value: lastValidBlockHeight,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            signature: mockSignature,
+            blockhash: 'sampleBlockhash',
+            lastValidBlockHeight,
+          });
+          clock.runAllAsync();
+
+          // Return a signature result in the nick of time.
+          resolveResultPromise({err: null});
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+      });
+
+      describe('nonce strategy', () => {
+        it('rejects if called with an already-aborted `abortSignal`', () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          abortController.abort();
+          expect(
+            connection.confirmTransaction({
+              abortSignal: abortController.signal,
+              minContextSlot: 1,
+              nonceAccountPubkey: new PublicKey(1),
+              nonceValue: 'fakenonce',
+              signature: mockSignature,
+            }),
+          ).to.eventually.be.rejectedWith('AbortError');
+        });
+
+        it('rejects upon receiving an abort signal', async () => {
+          const mockSignature =
+            'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+          const abortController = new AbortController();
+          // Keep the subscription from ever returning data.
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve.
+          });
+          clock.runAllAsync();
+          const confirmationPromise = connection.confirmTransaction({
+            abortSignal: abortController.signal,
+            minContextSlot: 1,
+            nonceAccountPubkey: new PublicKey(1),
+            nonceValue: 'fakenonce',
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+          expect(confirmationPromise).not.to.have.been.rejected;
+          abortController.abort();
+          await expect(confirmationPromise).to.eventually.be.rejected;
+        });
+
+        it('confirms the transaction if the signature confirmation is received before the nonce is advanced', async () => {
+          const mockSignature =
+            '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
+
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          // Start with the nonce account matching the nonce used to sign the transaction.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            nonceValue,
+            authority.toBase58(),
+          );
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+          clock.runAllAsync();
+
+          // Respond, a second time, with the same nonce hash.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            nonceValue,
+            authority.toBase58(),
+          );
+          clock.runAllAsync();
+
+          // Return a signature result in the nick of time.
+          resolveResultPromise({err: null});
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+
+        it('succeeds if double-checking the signature after the nonce-advances demonstrates that the transaction is confirmed', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'finalized', // Demonstrate that the transaction is, in fact, confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+
+        it('keeps double-checking the signature after the nonce-advances until a signature from the minimum allowable slot is obtained', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 11,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+
+          // Simulate getting a response from an old slot.
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // A non-finalized value from an old slot.
+                slot: 10,
+              },
+            ],
+            slot: 10,
+            withContext: true,
+          });
+
+          // Then obtain a response from the minimum allowable slot.
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 32,
+                confirmationStatus: 'finalized', // Demonstrate that the transaction is, in fact, confirmed.
+                slot: 11,
+              },
+            ],
+            slot: 11,
+            withContext: true,
+          });
+          clock.runAllAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+
+        it('throws a `TransactionExpiredNonceInvalidError` when the nonce is no longer the one with which this transaction was signed', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+          const authority = new PublicKey(3);
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate the nonce advancing but the double-check of the signature status succeeding.
+          await mockNonceAccountResponse(
+            nonceAccountPubkey.toBase58(),
+            new PublicKey(4).toBase58(), // A new nonce.
+            authority.toBase58(),
+          );
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // Demonstrate that the transaction is, in fact, not confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
+        });
+
+        it('when fetching the nonce account throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          // Simulate a failure to fetch the nonce account.
+          let rejectNonceAccountFetchPromise: () => void;
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [],
+            value: (() => {
+              const p = new Promise((_, reject) => {
+                rejectNonceAccountFetchPromise = reject;
+              });
+              p.catch(() => {});
+              return p;
+            })(),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          rejectNonceAccountFetchPromise();
+          clock.runToLastAsync();
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+
+        it('throws `TransactionExpiredNonceInvalidError` when the nonce account does not exist', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise(() => {}), // Never resolve this = never get a response.
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+
+          // Simulate a non-existent nonce account.
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [],
+            value: null,
+            withContext: true,
+          });
+          clock.runToLastAsync();
+          await mockRpcResponse({
+            method: 'getSignatureStatuses',
+            params: [[mockSignature]],
+            value: [
+              {
+                err: null,
+                confirmations: 0,
+                confirmationStatus: 'processed', // Demonstrate that the transaction is, in fact, not confirmed.
+                slot: 0,
+              },
+            ],
+            withContext: true,
+          });
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.be.rejectedWith(
+            TransactionExpiredNonceInvalidError,
+          );
+        });
+
+        it('when the nonce account data fails to deserialize', async () => {
+          const mockSignature =
+            'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
+
+          let resolveResultPromise: (result: SignatureResult) => void;
+          await mockRpcMessage({
+            method: 'signatureSubscribe',
+            params: [mockSignature, {commitment: 'finalized'}],
+            result: new Promise<SignatureResult>(resolve => {
+              resolveResultPromise = resolve;
+            }),
+          });
+
+          const nonceAccountPubkey = new PublicKey(1);
+          const nonceValue = new PublicKey(2).toBase58();
+
+          // Simulate a failure to deserialize the nonce.
+          await mockRpcResponse({
+            method: 'getAccountInfo',
+            params: [nonceAccountPubkey.toBase58(), {encoding: 'base64'}],
+            value: {
+              owner: SystemProgram.programId.toBase58(),
+              lamports: LAMPORTS_PER_SOL,
+              data: ['JUNK_DATA', 'base64'],
+              executable: false,
+              rentEpoch: 20,
+            },
+            withContext: true,
+          });
+
+          const confirmationPromise = connection.confirmTransaction({
+            minContextSlot: 0,
+            nonceAccountPubkey,
+            nonceValue,
+            signature: mockSignature,
+          });
+          clock.runToLastAsync();
+
+          resolveResultPromise({err: null});
+          clock.runToLastAsync();
+
+          await expect(confirmationPromise).to.eventually.deep.equal({
+            context: {slot: 11},
+            value: {err: null},
+          });
+        });
+      });
+
+      it('confirm transaction - does not check the signature status before the signature subscription comes alive', async () => {
         const mockSignature =
           'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
 
         await mockRpcMessage({
           method: 'signatureSubscribe',
           params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise(() => {}),
+          result: {err: null},
+          subscriptionEstablishmentPromise: new Promise(() => {}), // Never resolve.
         });
-        const timeoutPromise = connection.confirmTransaction(mockSignature);
-
-        // Advance the clock past all waiting timers, notably the expiry timer.
-        clock.runAllAsync();
-
-        await expect(timeoutPromise).to.be.rejectedWith(
-          TransactionExpiredTimeoutError,
-        );
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .never();
+        connection.confirmTransaction(mockSignature);
+        getSignatureStatusesExpectation.verify();
       });
 
-      it('confirm transaction - block height exceeded', async () => {
+      it('confirm transaction - checks the signature status once the signature subscription comes alive', async () => {
         const mockSignature =
-          '4oCEqwGrMdBeMxpzuWiukCYqSfV4DsSKXSiVVCh1iJ6pS772X7y219JZP3mgqBz5PhsvprpKyhzChjYc3VSBQXzG';
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
 
         await mockRpcMessage({
           method: 'signatureSubscribe',
           params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise(() => {}), // Never resolve this = never get a response.
+          result: {err: null},
         });
+        const getSignatureStatusesExpectation = mock(connection)
+          .expects('getSignatureStatuses')
+          .once();
 
-        const lastValidBlockHeight = 3;
-
-        // Start the block height at `lastValidBlockHeight - 1`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight - 1,
-        });
-
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight,
-        });
+        const confirmationPromise =
+          connection.confirmTransaction(mockSignature);
         clock.runAllAsync();
-
-        // Advance the block height to the `lastValidBlockHeight`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight,
-        });
-        clock.runAllAsync();
-
-        // Advance the block height to `lastValidBlockHeight + 1`,
-        // past the last valid blockheight for this transaction.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight + 1,
-        });
-        clock.runAllAsync();
-        await expect(confirmationPromise).to.be.rejectedWith(
-          TransactionExpiredBlockheightExceededError,
-        );
-      });
-
-      it('when the `getBlockHeight` method throws an error it does not timeout but rather keeps waiting for a confirmation', async () => {
-        const mockSignature =
-          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
-
-        let resolveResultPromise: (result: SignatureResult) => void;
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise<SignatureResult>(resolve => {
-            resolveResultPromise = resolve;
-          }),
-        });
-
-        // Simulate a failure to fetch the block height.
-        let rejectBlockheightPromise: () => void;
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: (() => {
-            const p = new Promise((_, reject) => {
-              rejectBlockheightPromise = reject;
-            });
-            p.catch(() => {});
-            return p;
-          })(),
-        });
-
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight: 3,
-        });
-
-        rejectBlockheightPromise();
-        clock.runToLastAsync();
-        resolveResultPromise({err: null});
-        clock.runToLastAsync();
-
-        expect(confirmationPromise).not.to.eventually.be.rejected;
-      });
-
-      it('confirm transaction - block height confirmed', async () => {
-        const mockSignature =
-          'LPJ18iiyfz3G1LpNNbcBnBtaS4dVBdPHKrnELqikjER2DcvB4iyTgz43nKQJH3JQAJHuZdM1xVh5Cnc5Hc7LrqC';
-
-        let resolveResultPromise: (result: SignatureResult) => void;
-        await mockRpcMessage({
-          method: 'signatureSubscribe',
-          params: [mockSignature, {commitment: 'finalized'}],
-          result: new Promise<SignatureResult>(resolve => {
-            resolveResultPromise = resolve;
-          }),
-        });
-
-        const lastValidBlockHeight = 3;
-
-        // Advance the block height to the `lastValidBlockHeight`.
-        await mockRpcResponse({
-          method: 'getBlockHeight',
-          params: [],
-          value: lastValidBlockHeight,
-        });
-
-        const confirmationPromise = connection.confirmTransaction({
-          signature: mockSignature,
-          blockhash: 'sampleBlockhash',
-          lastValidBlockHeight,
-        });
-        clock.runAllAsync();
-
-        // Return a signature result in the nick of time.
-        resolveResultPromise({err: null});
 
         await expect(confirmationPromise).to.eventually.deep.equal({
           context: {slot: 11},
           value: {err: null},
         });
+        getSignatureStatusesExpectation.verify();
+      });
+
+      // FIXME: This test does not work.
+      // it('confirm transaction - confirms transaction when signature status check yields confirmation before signature subscription does', async () => {
+      //   const mockSignature =
+      //     'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+      //   // Keep the subscription from ever returning data.
+      //   await mockRpcMessage({
+      //     method: 'signatureSubscribe',
+      //     params: [mockSignature, {commitment: 'finalized'}],
+      //     result: new Promise(() => {}), // Never resolve.
+      //   });
+      //   clock.runAllAsync();
+
+      //   const confirmationPromise =
+      //     connection.confirmTransaction(mockSignature);
+      //   clock.runAllAsync();
+
+      //   // Return a signature status through the RPC API.
+      //   await mockRpcResponse({
+      //     method: 'getSignatureStatuses',
+      //     params: [[mockSignature]],
+      //     value: [
+      //       {
+      //         slot: 0,
+      //         confirmations: 11,
+      //         status: {Ok: null},
+      //         err: null,
+      //       },
+      //     ],
+      //   });
+      //   clock.runAllAsync();
+
+      //   await expect(confirmationPromise).to.eventually.deep.equal({
+      //     context: {slot: 11},
+      //     value: {err: null},
+      //   });
+      // });
+
+      it('confirm transaction - does not confirm the transaction when signature status check yields confirmation for a lower commitment before signature subscription confirms the transaction', async () => {
+        const mockSignature =
+          'w2Zeq8YkpyB463DttvfzARD7k9ZxGEwbsEw4boEK7jDp3pfoxZbTdLFSsEPhzXhpCcjGi2kHtHFobgX49MMhbWt';
+
+        // Keep the subscription from ever returning data.
+        await mockRpcMessage({
+          method: 'signatureSubscribe',
+          params: [mockSignature, {commitment: 'finalized'}],
+          result: new Promise(() => {}), // Never resolve.
+        });
+        clock.runAllAsync();
+
+        const confirmationPromise =
+          connection.confirmTransaction(mockSignature);
+        clock.runAllAsync();
+
+        // Return a signature status with a lower finality through the RPC API.
+        await mockRpcResponse({
+          method: 'getSignatureStatuses',
+          params: [[mockSignature]],
+          value: [
+            {
+              slot: 0,
+              confirmations: null,
+              confirmationStatus: 'processed', // Lower than we expect
+              err: null,
+            },
+          ],
+        });
+        clock.runAllAsync();
+
+        await expect(confirmationPromise).to.be.rejectedWith(
+          TransactionExpiredTimeoutError,
+        );
       });
     });
   }
@@ -2436,6 +3150,229 @@ describe('Connection', function () {
     });
   }
 
+  describe('get parsed block', function () {
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [3712706991, 5765419239, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [3712711991, 5765419239, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    {
+                      pubkey: '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                      signer: true,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                      signer: false,
+                      source: 'transaction',
+                      writable: true,
+                    },
+                    {
+                      pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                    {
+                      pubkey: 'Vote111111111111111111111111111111111111111',
+                      signer: false,
+                      source: 'transaction',
+                      writable: false,
+                    },
+                  ],
+                  addressTableLookups: null,
+                  instructions: [
+                    {
+                      parsed: {
+                        info: {
+                          clockSysvar:
+                            'SysvarC1ock11111111111111111111111111111111',
+                          slotHashesSysvar:
+                            'SysvarS1otHashes111111111111111111111111111',
+                          vote: {
+                            hash: '2gmQ8xMjZaXn63kr8qzPAUjQAHi7xCDjSibPdJxhVYMm',
+                            slots: [164153060, 164153061],
+                            timestamp: 1669845645,
+                          },
+                          voteAccount:
+                            'AhcvnNdppGEcgdpK5gfcaZnAWz4ct8V4n7De5QiLiuzG',
+                          voteAuthority:
+                            '7v5fMKBqC9PuwjSdS9k9JU7efEXmq3bHTMF5fuSHnqrm',
+                        },
+                        type: 'vote',
+                      },
+                      program: 'vote',
+                      programId: 'Vote111111111111111111111111111111111111111',
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '5qDZ3nUUwp8VHFfAE5ydTQRULCoVLMGs16EprwdXsvyNCLe1NfckCkRE4BPi6wyEW9hXvG9iWU2prXfbM8SNPVEC',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            encoding: 'jsonParsed',
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [18237691394, 26858640, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [18237696394, 26858640, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: '914RFshndUeZaNPjf8UWDCyo49ahQ1XQ2w9BnEMwpHKF',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '4cCd4SGrMswhqboYBJ5AcCVvCjh5NtaeZNwWFJzsnUWY',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  '5ZDp1HfNZhNRHc75ncsiZ4sCq1fGJHMGf9u36M3foD5PMH4Xu5S4X2x7aryn4JinUdG11oSYCk7zxbNmLJzzqUft',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getParsedBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+  });
+
   describe('get block', function () {
     beforeEach(async function () {
       await mockRpcResponse({
@@ -2600,6 +3537,187 @@ describe('Connection', function () {
       ).to.be.rejectedWith(
         `Block not available for slot ${Number.MAX_SAFE_INTEGER}`,
       );
+    });
+
+    it('can deserialize a response when `transactionDetails` is `full`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "full"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'full',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                innerInstructions: [],
+                loadedAddresses: {readonly: [], writable: []},
+                logMessages: [
+                  'Program Vote111111111111111111111111111111111111111 invoke [1]',
+                  'Program Vote111111111111111111111111111111111111111 success',
+                ],
+                postBalances: [12278161908, 39995373, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [12278166908, 39995373, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                rewards: null,
+                status: {Ok: null},
+              },
+              transaction: {
+                message: {
+                  accountKeys: [
+                    'FTWuJ2tqjecNizCSE66z4BD1tBHomG6DVffGUwRuWUkM',
+                    'H2z3pBT62ByS4jpqsiEMtgN3NUFEuZHiTvoKCFjqCtD6',
+                    'SysvarC1ock11111111111111111111111111111111',
+                    'SysvarS1otHashes111111111111111111111111111',
+                    'Vote111111111111111111111111111111111111111',
+                  ],
+                  header: {
+                    numReadonlySignedAccounts: 0,
+                    numReadonlyUnsignedAccounts: 3,
+                    numRequiredSignatures: 1,
+                  },
+                  instructions: [
+                    {
+                      accounts: [1, 3, 2, 0],
+                      data: '29z5mr1JoRmJYQ6zG7p2F3mu68pWTNw9q49Tu7KrSEgoS6Jh1LMPGUK3HXs1N3Dody3icCcXxu6xPYoXLWnUTafEGm3knK',
+                      programIdIndex: 4,
+                    },
+                  ],
+                  recentBlockhash:
+                    'GLqYrN6AQxCGtFTQywkPj2WN5tafC3KerBhW4QkmAyD4',
+                },
+                signatures: [
+                  '4SZofEnXEVzCYvzk16z6ScR6F3iNtZ3FsCC1PEWegpzvGwTJR6x9cDi8VHRmCFGC5XFs2yEFms3j36Mj7XVyHXbb',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'full',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `none`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "none"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'none',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'none',
+        }),
+      ).not.to.eventually.be.rejected;
+    });
+
+    it('can deserialize a response when `transactionDetails` is `accounts`', async () => {
+      // Mock block with transaction, fetched using `"transactionDetails": "accounts"`.
+      await mockRpcResponse({
+        method: 'getBlock',
+        params: [
+          1,
+          {
+            maxSupportedTransactionVersion: 0,
+            transactionDetails: 'accounts',
+          },
+        ],
+        value: {
+          blockHeight: 0,
+          blockTime: 1614281964,
+          blockhash: '49d2UbduiZWjtR3Wvfv2t2QxmXvtZNWSPFRZxEDYAvQN',
+          parentSlot: 0,
+          previousBlockhash: 'mDd5yMLfuroS1JVZMHo2VZLTgKXXNBXrzPR5UkzFD4X',
+          transactions: [
+            {
+              meta: {
+                err: null,
+                fee: 5000,
+                postBalances: [2751549948, 11751747405, 1169280, 143487360, 1],
+                postTokenBalances: [],
+                preBalances: [2751554948, 11751747405, 1169280, 143487360, 1],
+                preTokenBalances: [],
+                status: {Ok: null},
+              },
+              transaction: {
+                accountKeys: [
+                  {
+                    pubkey: 'D7hwgGRTr1vaCxzmfEKCaf56SPgBJmjHh6UXHG3p12bB',
+                    signer: true,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: '8iLE53Y9k4sccy4gxrT936BHbhYS6J13kQT5vRXhXFMX',
+                    signer: false,
+                    source: 'transaction',
+                    writable: true,
+                  },
+                  {
+                    pubkey: 'SysvarC1ock11111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'SysvarS1otHashes111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                  {
+                    pubkey: 'Vote111111111111111111111111111111111111111',
+                    signer: false,
+                    source: 'transaction',
+                    writable: false,
+                  },
+                ],
+                signatures: [
+                  'uNKj2ogn8ZRRjyVWXLC7sLRWpKQyMUomm66RXoDuWLXikPSJN8C7ZZK95j8S2bzcjwH6MvrXKSHtCWEURPpEXMB',
+                ],
+              },
+              version: 'legacy',
+            },
+          ],
+        },
+      });
+      await expect(
+        connection.getBlock(1, {
+          maxSupportedTransactionVersion: 0,
+          transactionDetails: 'accounts',
+        }),
+      ).not.to.eventually.be.rejected;
     });
   });
 
@@ -3040,7 +4158,7 @@ describe('Connection', function () {
     expect(feeCalculator.lamportsPerSignature).to.eq(5000);
   });
 
-  it('get fee for message', async () => {
+  it('get fee for message (legacy)', async () => {
     const accountFrom = Keypair.generate();
     const accountTo = Keypair.generate();
 
@@ -3069,6 +4187,41 @@ describe('Connection', function () {
     });
 
     const fee = (await connection.getFeeForMessage(message, 'confirmed')).value;
+    expect(fee).to.eq(5000);
+  });
+
+  it('get fee for message (v0)', async () => {
+    const accountFrom = Keypair.generate();
+    const accountTo = Keypair.generate();
+
+    const recentBlockhash = (await helpers.latestBlockhash({connection}))
+      .blockhash;
+    const instructions = [
+      SystemProgram.transfer({
+        fromPubkey: accountFrom.publicKey,
+        toPubkey: accountTo.publicKey,
+        lamports: 10,
+      }),
+    ];
+
+    const messageV0 = new TransactionMessage({
+      payerKey: accountFrom.publicKey,
+      recentBlockhash,
+      instructions,
+    }).compileToV0Message();
+
+    await mockRpcResponse({
+      method: 'getFeeForMessage',
+      params: [
+        toBuffer(messageV0.serialize()).toString('base64'),
+        {commitment: 'confirmed'},
+      ],
+      value: 5000,
+      withContext: true,
+    });
+
+    const fee = (await connection.getFeeForMessage(messageV0, 'confirmed'))
+      .value;
     expect(fee).to.eq(5000);
   });
 
@@ -3214,8 +4367,9 @@ describe('Connection', function () {
   if (process.env.TEST_LIVE) {
     describe('token methods', () => {
       const connection = new Connection(url, 'confirmed');
-      const newAccount = Keypair.generate().publicKey;
+      const newAccount = PublicKey.unique();
 
+      let payerKeypair = new Keypair();
       let testTokenMintPubkey: PublicKey;
       let testOwnerKeypair: Keypair;
       let testTokenAccountPubkey: PublicKey;
@@ -3225,7 +4379,6 @@ describe('Connection', function () {
       before(async function () {
         this.timeout(30 * 1000);
 
-        const payerKeypair = new Keypair();
         await connection.confirmTransaction(
           await connection.requestAirdrop(payerKeypair.publicKey, 100000000000),
         );
@@ -3380,6 +4533,55 @@ describe('Connection', function () {
             expect(data.parsed).to.be.ok;
           }
         }
+      });
+
+      it('get multiple parsed token accounts', async () => {
+        const accounts = (
+          await connection.getMultipleParsedAccounts([
+            testTokenAccountPubkey,
+            testTokenMintPubkey,
+            payerKeypair.publicKey,
+            newAccount,
+          ])
+        ).value;
+        expect(accounts.length).to.eq(4);
+
+        const parsedTokenAccount = accounts[0];
+        if (parsedTokenAccount) {
+          const data = parsedTokenAccount.data;
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
+          } else {
+            expect(data.program).to.eq('spl-token');
+            expect(data.parsed).to.be.ok;
+          }
+        } else {
+          expect(parsedTokenAccount).to.be.ok;
+        }
+
+        const parsedTokenMint = accounts[1];
+        if (parsedTokenMint) {
+          const data = parsedTokenMint.data;
+          if (Buffer.isBuffer(data)) {
+            expect(Buffer.isBuffer(data)).to.eq(false);
+          } else {
+            expect(data.program).to.eq('spl-token');
+            expect(data.parsed).to.be.ok;
+          }
+        } else {
+          expect(parsedTokenMint).to.be.ok;
+        }
+
+        const unparsedPayerAccount = accounts[2];
+        if (unparsedPayerAccount) {
+          const data = unparsedPayerAccount.data;
+          expect(Buffer.isBuffer(data)).to.be.true;
+        } else {
+          expect(unparsedPayerAccount).to.be.ok;
+        }
+
+        const unknownAccount = accounts[3];
+        expect(unknownAccount).to.not.be.ok;
       });
 
       it('get parsed token program accounts', async () => {
@@ -3886,6 +5088,7 @@ describe('Connection', function () {
           lamports: LAMPORTS_PER_SOL - 5000,
           owner: SystemProgram.programId.toBase58(),
           rentEpoch: 0,
+          space: 0,
         },
       ]);
     });
@@ -4505,8 +5708,9 @@ describe('Connection', function () {
         const transferToKey = lookupTableAddresses[0];
         const transferToAccount = await connection.getAccountInfo(
           transferToKey,
-          'confirmed',
+          {commitment: 'confirmed', dataSlice: {length: 0, offset: 0}},
         );
+        expect(transferToAccount?.data.length).to.be.eq(0);
         expect(transferToAccount?.lamports).to.be.eq(LAMPORTS_PER_SOL);
       });
 
@@ -4606,6 +5810,24 @@ describe('Connection', function () {
 
       it('getBlock', async () => {
         const block = await connection.getBlock(transactionSlot, {
+          maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed',
+        });
+        expect(block).to.not.be.null;
+        if (block === null) throw new Error(); // unreachable
+
+        let foundTx = false;
+        for (const tx of block.transactions) {
+          if (tx.transaction.signatures[0] === signature) {
+            foundTx = true;
+            expect(tx.version).to.eq(0);
+          }
+        }
+        expect(foundTx).to.be.true;
+      });
+
+      it('getParsedBlock', async () => {
+        const block = await connection.getParsedBlock(transactionSlot, {
           maxSupportedTransactionVersion: 0,
           commitment: 'confirmed',
         });

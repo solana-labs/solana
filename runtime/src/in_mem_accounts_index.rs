@@ -8,7 +8,6 @@ use {
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
-    log::*,
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
     solana_measure::measure::Measure,
@@ -437,17 +436,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
-    pub fn unref(&self, pubkey: &Pubkey) {
-        self.get_internal(pubkey, |entry| {
-            if let Some(entry) = entry {
-                if entry.unref() {
-                    info!("refcount of item already at 0: {pubkey}");
-                }
-            }
-            (true, ())
-        })
-    }
-
     /// update 'entry' with 'new_value'
     fn update_slot_list_entry(
         &self,
@@ -607,10 +595,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let matched_other_slot = !matched_slot;
                     assert!(
                         !(found_slot && matched_slot || matched_other_slot && found_other_slot),
-                        "{:?}, slot: {}, other_slot: {:?}",
-                        slot_list,
-                        slot,
-                        other_slot
+                        "{slot_list:?}, slot: {slot}, other_slot: {other_slot:?}"
                     );
 
                     let is_cur_account_cached = cur_account_info.is_cached();
@@ -1053,7 +1038,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         // merge all items into the disk index now
         let disk = self.bucket.as_ref().unwrap();
-        let mut duplicate = vec![];
         let mut count = 0;
         insert.into_iter().for_each(|(slot, k, v)| {
             let entry = (slot, v);
@@ -1066,7 +1050,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         slot_list.extend_from_slice(current_slot_list);
                         slot_list.push(entry); // will never be from the same slot that already exists in the list
                         ref_count += new_ref_count;
-                        duplicate.push((slot, k));
+                        duplicates.push((slot, k));
                         Some((slot_list, ref_count))
                     }
                     None => {
@@ -1713,8 +1697,7 @@ mod tests {
                     &mut reclaims,
                     reclaim
                 ),
-                "other_slot: {:?}",
-                other_slot
+                "other_slot: {other_slot:?}"
             );
             assert_eq!(slot_list, vec![at_new_slot]);
             assert!(reclaims.is_empty());
@@ -1737,8 +1720,7 @@ mod tests {
                 &mut reclaims,
                 reclaim
             ),
-            "other_slot: {:?}",
-            other_slot
+            "other_slot: {other_slot:?}"
         );
         assert_eq!(slot_list, vec![at_new_slot]);
         assert_eq!(reclaims, expected_reclaims);
@@ -1758,8 +1740,7 @@ mod tests {
                 &mut reclaims,
                 reclaim
             ),
-            "other_slot: {:?}",
-            other_slot
+            "other_slot: {other_slot:?}"
         );
         assert_eq!(slot_list, vec![at_new_slot]);
         assert_eq!(
@@ -1851,24 +1832,21 @@ mod tests {
                     }
                     assert_eq!(
                         expected_result, result,
-                        "return value different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "return value different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                     // sort for easy comparison
                     expected_reclaims.sort_unstable();
                     reclaims.sort_unstable();
                     assert_eq!(
                         expected_reclaims, reclaims,
-                        "reclaims different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "reclaims different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                     // sort for easy comparison
                     slot_list.sort_unstable();
                     expected.sort_unstable();
                     assert_eq!(
                         slot_list, expected,
-                        "slot_list different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "slot_list different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                 }
             }

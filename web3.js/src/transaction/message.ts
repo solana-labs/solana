@@ -49,7 +49,9 @@ export class TransactionMessage {
     assert(numWritableSignedAccounts > 0, 'Message header is invalid');
 
     const numWritableUnsignedAccounts =
-      message.staticAccountKeys.length - numReadonlyUnsignedAccounts;
+      message.staticAccountKeys.length -
+      numRequiredSignatures -
+      numReadonlyUnsignedAccounts;
     assert(numWritableUnsignedAccounts >= 0, 'Message header is invalid');
 
     const accountKeys = message.getAccountKeys(args);

@@ -140,8 +140,7 @@ impl GeyserPluginService {
             Ok(file) => file,
             Err(err) => {
                 return Err(GeyserPluginServiceError::CannotOpenConfigFile(format!(
-                    "Failed to open the plugin config file {:?}, error: {:?}",
-                    geyser_plugin_config_file, err
+                    "Failed to open the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
                 )));
             }
         };
@@ -149,8 +148,7 @@ impl GeyserPluginService {
         let mut contents = String::new();
         if let Err(err) = file.read_to_string(&mut contents) {
             return Err(GeyserPluginServiceError::CannotReadConfigFile(format!(
-                "Failed to read the plugin config file {:?}, error: {:?}",
-                geyser_plugin_config_file, err
+                "Failed to read the plugin config file {geyser_plugin_config_file:?}, error: {err:?}"
             )));
         }
 
@@ -158,8 +156,7 @@ impl GeyserPluginService {
             Ok(value) => value,
             Err(err) => {
                 return Err(GeyserPluginServiceError::InvalidConfigFileFormat(format!(
-                    "The config file {:?} is not in a valid Json5 format, error: {:?}",
-                    geyser_plugin_config_file, err
+                    "The config file {geyser_plugin_config_file:?} is not in a valid Json5 format, error: {err:?}"
                 )));
             }
         };
@@ -171,8 +168,7 @@ impl GeyserPluginService {
         if libpath.is_relative() {
             let config_dir = geyser_plugin_config_file.parent().ok_or_else(|| {
                 GeyserPluginServiceError::CannotOpenConfigFile(format!(
-                    "Failed to resolve parent of {:?}",
-                    geyser_plugin_config_file,
+                    "Failed to resolve parent of {geyser_plugin_config_file:?}",
                 ))
             })?;
             libpath = config_dir.join(libpath);
@@ -186,10 +182,7 @@ impl GeyserPluginService {
         unsafe {
             let result = plugin_manager.load_plugin(libpath.to_str().unwrap(), config_file);
             if let Err(err) = result {
-                let msg = format!(
-                    "Failed to load the plugin library: {:?}, error: {:?}",
-                    libpath, err
-                );
+                let msg = format!("Failed to load the plugin library: {libpath:?}, error: {err:?}");
                 return Err(GeyserPluginServiceError::PluginLoadError(msg));
             }
         }

@@ -18,7 +18,7 @@ use {
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
-        accounts_background_service::AbsRequestSender,
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -31,6 +31,7 @@ use {
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
+        epoch_accounts_hash::EpochAccountsHash,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
@@ -56,7 +57,10 @@ use {
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering::Relaxed},
+            Arc, Mutex, RwLock,
+        },
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -106,7 +110,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
+        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
         .build()
         .unwrap();
 }
@@ -142,7 +146,7 @@ fn get_first_error(
                 "validator_process_entry_error",
                 (
                     "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    format!("error: {err:?}, transaction: {transaction:?}"),
                     String
                 )
             );
@@ -382,7 +386,6 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if batches.is_empty() {
@@ -412,7 +415,7 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
+            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
             let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
@@ -553,7 +556,6 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
-    let cost_model = CostModel::new();
 
     for ReplayEntry {
         entry,
@@ -575,7 +577,6 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         cost_capacity_meter.clone(),
-                        &cost_model,
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -625,8 +626,7 @@ fn process_entries_with_callback(
                             (
                                 "error",
                                 format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                                    transactions
+                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
                                 ),
                                 String
                             )
@@ -644,7 +644,6 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             cost_capacity_meter.clone(),
-                            &cost_model,
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -661,7 +660,6 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         cost_capacity_meter,
-        &cost_model,
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
@@ -716,6 +714,9 @@ pub struct ProcessOptions {
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
     pub on_halt_store_hash_raw_data_for_debug: bool,
+    /// true if after processing the contents of the blockstore at startup, we should run an accounts hash calc
+    /// This is useful for debugging.
+    pub run_final_accounts_hash_calc: bool,
 }
 
 pub fn test_process_blockstore(
@@ -724,6 +725,38 @@ pub fn test_process_blockstore(
     opts: &ProcessOptions,
     exit: &Arc<AtomicBool>,
 ) -> (Arc<RwLock<BankForks>>, LeaderScheduleCache) {
+    // Spin up a thread to be a fake Accounts Background Service.  Need to intercept and handle all
+    // EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze() waiting for
+    // an in-flight EAH calculation to complete.
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let bg_exit = Arc::new(AtomicBool::new(false));
+    let bg_thread = {
+        let exit = Arc::clone(&bg_exit);
+        std::thread::spawn(move || {
+            while !exit.load(Relaxed) {
+                snapshot_request_receiver
+                    .try_iter()
+                    .filter(|snapshot_request| {
+                        snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+                    })
+                    .for_each(|snapshot_request| {
+                        snapshot_request
+                            .snapshot_root_bank
+                            .rc
+                            .accounts
+                            .accounts_db
+                            .epoch_accounts_hash_manager
+                            .set_valid(
+                                EpochAccountsHash::new(Hash::new_unique()),
+                                snapshot_request.snapshot_root_bank.slot(),
+                            )
+                    });
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        })
+    };
+
     let (bank_forks, leader_schedule_cache, ..) = crate::bank_forks_utils::load_bank_forks(
         genesis_config,
         blockstore,
@@ -735,6 +768,7 @@ pub fn test_process_blockstore(
         None,
         exit,
     );
+
     process_blockstore_from_root(
         blockstore,
         &bank_forks,
@@ -742,9 +776,13 @@ pub fn test_process_blockstore(
         opts,
         None,
         None,
-        &AbsRequestSender::default(),
+        &abs_request_sender,
     )
     .unwrap();
+
+    bg_exit.store(true, Relaxed);
+    bg_thread.join().unwrap();
+
     (bank_forks, leader_schedule_cache)
 }
 
@@ -827,11 +865,12 @@ pub fn process_blockstore_from_root(
     let mut timing = ExecuteTimings::default();
 
     // Iterate and replay slots from blockstore starting from `start_slot`
+    let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
-        .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+        .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
-        load_frozen_forks(
+        num_slots_processed = load_frozen_forks(
             bank_forks,
             start_slot,
             &start_slot_meta,
@@ -866,6 +905,7 @@ pub fn process_blockstore_from_root(
             i64
         ),
         ("slot", bank_forks.read().unwrap().root(), i64),
+        ("num_slots_processed", num_slots_processed, i64),
         ("forks", bank_forks.read().unwrap().banks().len(), i64),
     );
 
@@ -1318,6 +1358,7 @@ fn process_next_slots(
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     pending_slots: &mut Vec<(SlotMeta, Bank, Hash)>,
+    halt_at_slot: Option<Slot>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     if bank.start_epoch_reward_calc() {
         let calc = bank.get_epoch_reward_calculator();
@@ -1338,6 +1379,13 @@ fn process_next_slots(
 
     // This is a fork point if there are multiple children, create a new child bank for each fork
     for next_slot in &meta.next_slots {
+        let skip_next_slot = halt_at_slot
+            .map(|halt_at_slot| *next_slot > halt_at_slot)
+            .unwrap_or(false);
+        if skip_next_slot {
+            continue;
+        }
+
         let next_meta = blockstore
             .meta(*next_slot)
             .map_err(|err| {
@@ -1384,11 +1432,14 @@ fn load_frozen_forks(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     timing: &mut ExecuteTimings,
     accounts_background_request_sender: &AbsRequestSender,
-) -> result::Result<(), BlockstoreProcessorError> {
+) -> result::Result<u64, BlockstoreProcessorError> {
     let recyclers = VerifyRecyclers::default();
     let mut all_banks = HashMap::new();
     let mut last_status_report = Instant::now();
     let mut pending_slots = vec![];
+    // The total number of slots processed
+    let mut total_slots_elapsed = 0;
+    // The number of slots processed between status report updates
     let mut slots_elapsed = 0;
     let mut txs = 0;
     let blockstore_max_root = blockstore.max_root();
@@ -1406,11 +1457,15 @@ fn load_frozen_forks(
         blockstore,
         leader_schedule_cache,
         &mut pending_slots,
+        opts.halt_at_slot,
     )?;
 
-    let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
     let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
-    if bank_forks.read().unwrap().root() != halt_at_slot {
+    if Some(bank_forks.read().unwrap().root()) != opts.halt_at_slot {
+        let mut set_root_us = 0;
+        let mut root_retain_us = 0;
+        let mut process_single_slot_us = 0;
+        let mut voting_us = 0;
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
             let (meta, bank, last_entry_hash) = pending_slots.pop().unwrap();
@@ -1419,7 +1474,7 @@ fn load_frozen_forks(
                 let secs = last_status_report.elapsed().as_secs() as f32;
                 last_status_report = Instant::now();
                 info!(
-                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}",
+                    "processing ledger: slot={}, last root slot={} slots={} slots/s={:?} txs/s={}, set_root_us={set_root_us}, root_retain_us={root_retain_us}, process_single_slot_us:{process_single_slot_us}, voting_us: {voting_us}",
                     slot,
                     root,
                     slots_elapsed,
@@ -1428,10 +1483,15 @@ fn load_frozen_forks(
                 );
                 slots_elapsed = 0;
                 txs = 0;
+                set_root_us = 0;
+                root_retain_us = 0;
+                process_single_slot_us = 0;
+                voting_us = 0;
             }
 
             let mut progress = ConfirmationProgress::new(last_entry_hash);
 
+            let mut m = Measure::start("process_single_slot");
             let bank = bank_forks.write().unwrap().insert(bank);
             if process_single_slot(
                 blockstore,
@@ -1455,6 +1515,10 @@ fn load_frozen_forks(
             // have errored above
             assert!(bank.is_frozen());
             all_banks.insert(bank.slot(), bank.clone());
+            m.stop();
+            process_single_slot_us += m.as_us();
+
+            let mut m = Measure::start("voting");
 
             // If we've reached the last known root in blockstore, start looking
             // for newer cluster confirmed roots
@@ -1509,7 +1573,11 @@ fn load_frozen_forks(
                 }
             };
 
+            m.stop();
+            voting_us += m.as_us();
+
             if let Some(new_root_bank) = new_root_bank {
+                let mut m = Measure::start("set_root");
                 root = new_root_bank.slot();
 
                 leader_schedule_cache.set_root(new_root_bank);
@@ -1518,14 +1586,20 @@ fn load_frozen_forks(
                     accounts_background_request_sender,
                     None,
                 );
+                m.stop();
+                set_root_us += m.as_us();
 
                 // Filter out all non descendants of the new root
+                let mut m = Measure::start("filter pending slots");
                 pending_slots
                     .retain(|(_, pending_bank, _)| pending_bank.ancestors.contains_key(&root));
                 all_banks.retain(|_, bank| bank.ancestors.contains_key(&root));
+                m.stop();
+                root_retain_us += m.as_us();
             }
 
             slots_elapsed += 1;
+            total_slots_elapsed += 1;
 
             trace!(
                 "Bank for {}slot {} is complete",
@@ -1533,18 +1607,25 @@ fn load_frozen_forks(
                 slot,
             );
 
+            let done_processing = opts
+                .halt_at_slot
+                .map(|halt_at_slot| slot >= halt_at_slot)
+                .unwrap_or(false);
+            if done_processing {
+                if opts.run_final_accounts_hash_calc {
+                    run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
+                }
+                break;
+            }
+
             process_next_slots(
                 &bank,
                 &meta,
                 blockstore,
                 leader_schedule_cache,
                 &mut pending_slots,
+                opts.halt_at_slot,
             )?;
-
-            if slot >= halt_at_slot {
-                run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
-                break;
-            }
         }
     } else if on_halt_store_hash_raw_data_for_debug {
         run_final_hash_calc(
@@ -1553,16 +1634,14 @@ fn load_frozen_forks(
         );
     }
 
-    Ok(())
+    Ok(total_slots_elapsed)
 }
 
 fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
     bank.force_flush_accounts_cache();
-    let can_cached_slot_be_unflushed = false;
     // note that this slot may not be a root
     let _ = bank.verify_bank_hash(VerifyBankHash {
         test_hash_calculation: false,
-        can_cached_slot_be_unflushed,
         ignore_mismatch: true,
         require_rooted_bank: false,
         run_in_background: false,
@@ -4485,10 +4564,7 @@ pub mod tests {
                     assert_eq!(err, expected_err);
                 }
                 (result, expected_result) => {
-                    panic!(
-                        "actual result {:?} != expected result {:?}",
-                        result, expected_result
-                    );
+                    panic!("actual result {result:?} != expected result {expected_result:?}");
                 }
             }
         }

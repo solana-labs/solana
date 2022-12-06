@@ -5,20 +5,31 @@ import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Address } from "components/common/Address";
 import { AddressLookupTableAccount } from "@solana/web3.js";
 import { Slot } from "components/common/Slot";
+import { AddressLookupTableAccountInfo } from "validators/accounts/address-lookup-table";
 
-export function AddressLookupTableAccountSection({
-  account,
-  data,
-}: {
-  account: Account;
-  data: Uint8Array;
-}) {
-  const lookupTableAccount = React.useMemo(() => {
-    return new AddressLookupTableAccount({
-      key: account.pubkey,
-      state: AddressLookupTableAccount.deserialize(data),
-    });
-  }, [account, data]);
+export function AddressLookupTableAccountSection(
+  params:
+    | {
+        account: Account;
+        data: Uint8Array;
+      }
+    | {
+        account: Account;
+        lookupTableAccount: AddressLookupTableAccountInfo;
+      }
+) {
+  const account = params.account;
+  const lookupTableState = React.useMemo(() => {
+    if ("data" in params) {
+      return AddressLookupTableAccount.deserialize(params.data);
+    } else {
+      return params.lookupTableAccount;
+    }
+  }, [params]);
+  const lookupTableAccount = new AddressLookupTableAccount({
+    key: account.pubkey,
+    state: lookupTableState,
+  });
   const refresh = useFetchAccountInfo();
   return (
     <div className="card">
@@ -28,7 +39,7 @@ export function AddressLookupTableAccountSection({
         </h3>
         <button
           className="btn btn-white btn-sm"
-          onClick={() => refresh(account.pubkey)}
+          onClick={() => refresh(account.pubkey, "parsed")}
         >
           <span className="fe fe-refresh-cw me-2"></span>
           Refresh
@@ -45,7 +56,7 @@ export function AddressLookupTableAccountSection({
         <tr>
           <td>Balance (SOL)</td>
           <td className="text-lg-end text-uppercase">
-            <SolBalance lamports={account.lamports || 0} />
+            <SolBalance lamports={account.lamports} />
           </td>
         </tr>
         <tr>

@@ -1,24 +1,12 @@
 //! Trait defining async send functions, to be used for UDP or QUIC sending
 
 use {
-    crate::nonblocking::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
     async_trait::async_trait,
-    enum_dispatch::enum_dispatch,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
     std::net::SocketAddr,
 };
 
-// Due to the existence of `crate::connection_cache::Connection`, if this is named
-// `Connection`, enum_dispatch gets confused between the two and throws errors when
-// trying to convert later.
-#[enum_dispatch]
-pub enum NonblockingConnection {
-    QuicTpuConnection,
-    UdpTpuConnection,
-}
-
 #[async_trait]
-#[enum_dispatch(NonblockingConnection)]
 pub trait TpuConnection {
     fn tpu_addr(&self) -> &SocketAddr;
 

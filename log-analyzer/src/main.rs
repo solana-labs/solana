@@ -113,7 +113,7 @@ fn process_iftop_logs(matches: &ArgMatches) {
     };
 
     let log_path = PathBuf::from(matches.value_of_t_or_exit::<String>("file"));
-    let mut log = fs::read_to_string(&log_path).expect("Unable to read log file");
+    let mut log = fs::read_to_string(log_path).expect("Unable to read log file");
     log.insert(0, '[');
     let terminate_at = log.rfind('}').expect("Didn't find a terminating '}'") + 1;
     let _ = log.split_off(terminate_at);
@@ -158,7 +158,7 @@ fn analyze_logs(matches: &ArgMatches) {
     let logs: Vec<_> = files
         .flat_map(|f| {
             if let Ok(f) = f {
-                let log_str = fs::read_to_string(&f.path()).expect("Unable to read log file");
+                let log_str = fs::read_to_string(f.path()).expect("Unable to read log file");
                 let log: Vec<LogLine> =
                     serde_json::from_str(log_str.as_str()).expect("Failed to deserialize log");
                 log
@@ -188,7 +188,7 @@ fn analyze_logs(matches: &ArgMatches) {
             })
             .unwrap_or_default();
         if !diff.is_empty() {
-            println!("{}", diff);
+            println!("{diff}");
         }
     });
 }

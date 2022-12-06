@@ -88,7 +88,7 @@ impl CrdsFilter {
     pub(crate) fn new_rand(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = Self::max_items(max_bits, FALSE_RATE, KEYS);
-        let mask_bits = Self::mask_bits(num_items as f64, max_items as f64);
+        let mask_bits = Self::mask_bits(num_items as f64, max_items);
         let filter = Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize);
         let seed: u64 = rand::thread_rng().gen_range(0, 2u64.pow(mask_bits));
         let mask = Self::compute_mask(seed, mask_bits);
@@ -102,7 +102,7 @@ impl CrdsFilter {
     fn compute_mask(seed: u64, mask_bits: u32) -> u64 {
         assert!(seed <= 2u64.pow(mask_bits));
         let seed: u64 = seed.checked_shl(64 - mask_bits).unwrap_or(0x0);
-        seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0) as u64
+        seed | (!0u64).checked_shr(mask_bits).unwrap_or(!0x0)
     }
     fn max_items(max_bits: f64, false_rate: f64, num_keys: f64) -> f64 {
         let m = max_bits;
@@ -152,7 +152,7 @@ impl CrdsFilterSet {
     fn new(num_items: usize, max_bytes: usize) -> Self {
         let max_bits = (max_bytes * 8) as f64;
         let max_items = CrdsFilter::max_items(max_bits, FALSE_RATE, KEYS);
-        let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items as f64);
+        let mask_bits = CrdsFilter::mask_bits(num_items as f64, max_items);
         let filters =
             repeat_with(|| Bloom::random(max_items as usize, FALSE_RATE, max_bits as usize).into())
                 .take(1 << mask_bits)
@@ -968,7 +968,7 @@ pub(crate) mod tests {
             }
         }
         let crds = RwLock::new(crds);
-        assert!(num_inserts > 30_000, "num inserts: {}", num_inserts);
+        assert!(num_inserts > 30_000, "num inserts: {num_inserts}");
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(32));
         let crds = crds.read().unwrap();
@@ -995,7 +995,7 @@ pub(crate) mod tests {
             }
             assert_eq!(num_hits, 1);
         }
-        assert!(false_positives < 150_000, "fp: {}", false_positives);
+        assert!(false_positives < 150_000, "fp: {false_positives}");
     }
 
     #[test]
@@ -1010,8 +1010,9 @@ pub(crate) mod tests {
         let node = CrdsGossipPull::default();
         let mut pings = Vec::new();
         let ping_cache = Mutex::new(PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         ));
         assert_eq!(
             node.new_pull_request(
@@ -1108,8 +1109,9 @@ pub(crate) mod tests {
         let now: u64 = 1_605_127_770_789;
         let thread_pool = ThreadPoolBuilder::new().build().unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let mut crds = Crds::default();
         let node_keypair = Keypair::new();
@@ -1162,7 +1164,7 @@ pub(crate) mod tests {
         .take(100)
         .filter(|peer| peer != old)
         .count();
-        assert!(count < 2, "count of peer != old: {}", count);
+        assert!(count < 2, "count of peer != old: {count}");
     }
 
     #[test]
@@ -1207,8 +1209,9 @@ pub(crate) mod tests {
         let node_keypair = Keypair::new();
         let mut node_crds = Crds::default();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let entry = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
             &node_keypair.pubkey(),
@@ -1319,8 +1322,9 @@ pub(crate) mod tests {
             .insert(entry, 0, GossipRoute::LocalMessage)
             .unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 0);
         ping_cache.mock_pong(new.id, new.gossip, Instant::now());
@@ -1379,8 +1383,9 @@ pub(crate) mod tests {
             .insert(entry, 0, GossipRoute::LocalMessage)
             .unwrap();
         let mut ping_cache = PingCache::new(
-            Duration::from_secs(20 * 60), // ttl
-            128,                          // capacity
+            Duration::from_secs(20 * 60),      // ttl
+            Duration::from_secs(20 * 60) / 64, // rate_limit_delay
+            128,                               // capacity
         );
         let new = ContactInfo::new_localhost(&solana_sdk::pubkey::new_rand(), 1);
         ping_cache.mock_pong(new.id, new.gossip, Instant::now());

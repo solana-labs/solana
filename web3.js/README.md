@@ -1,4 +1,3 @@
-[![Build status][travis-image]][travis-url]
 [![codecov][codecov-image]][codecov-url]
 <br>
 [![npm][npm-image]][npm-url]
@@ -7,8 +6,6 @@
 [![semantic-release][semantic-release-image]][semantic-release-url]
 [![code-style-prettier][code-style-prettier-image]][code-style-prettier-url]
 
-[travis-image]: https://api.travis-ci.org/solana-labs/solana-web3.js.svg?branch=master
-[travis-url]: https://travis-ci.org/solana-labs/solana-web3.js
 [codecov-image]: https://codecov.io/gh/solana-labs/solana-web3.js/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/solana-labs/solana-web3.js
 [npm-image]: https://img.shields.io/npm/v/@solana/web3.js.svg?style=flat
@@ -60,7 +57,7 @@ Install the latest Solana release from https://docs.solana.com/cli/install-solan
 
 **Use `solana-test-validator` from the latest Solana release**
 
-### BPF program development
+### SBF program development
 
 **Use `cargo build-bpf` from the latest Solana release**
 
@@ -104,19 +101,6 @@ This library requires a JavaScript runtime that supports [`BigInt`](https://deve
   - Node: >=10.4.0
 - React Native:
   - \>=0.7.0 using the [Hermes](https://reactnative.dev/blog/2022/07/08/hermes-as-the-default) engine ([integration guide](https://solanacookbook.com/integrations/react-native.html#how-to-use-solana-web3-js-in-a-react-native-app)):
-
-## Flow Support (Discontinued)
-
-Flow types are no longer supported in new releases. The last release with Flow support is v1.37.2 and its
-[Flow library definition](https://flow.org/en/docs/libdefs/) is provided at
-https://unpkg.com/@solana/web3.js@v1.37.2/module.flow.js.
-Download the file and add the following line under the [libs] section of your project's `.flowconfig` to
-activate it:
-
-```ini
-[libs]
-node_modules/@solana/web3.js/module.flow.js
-```
 
 ## Releases
 

@@ -6,6 +6,7 @@ use log::*;
 use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
@@ -31,8 +32,6 @@ use {
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::vote_transaction,
     std::{
         collections::{HashMap, HashSet},
@@ -227,9 +226,7 @@ pub fn kill_entry_and_spend_and_verify_rest(
     }
 
     info!("sleeping for 2 leader fortnights");
-    sleep(Duration::from_millis(
-        slot_millis * first_two_epoch_slots as u64,
-    ));
+    sleep(Duration::from_millis(slot_millis * first_two_epoch_slots));
     info!("done sleeping for first 2 warmup epochs");
     info!("killing entry point: {}", entry_point_info.id);
     entry_point_validator_exit.write().unwrap().exit();

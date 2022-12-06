@@ -1,11 +1,15 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, value_t, values_t_or_exit, App, Arg},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_clap_utils::input_parsers::pubkey_of,
-    solana_cli::{cli::CliConfig, program::process_deploy},
+    solana_cli::{
+        cli::{process_command, CliCommand, CliConfig},
+        program::ProgramCliCommand,
+    },
     solana_client::transaction_executor::TransactionExecutor,
     solana_faucet::faucet::{request_airdrop_transaction, FAUCET_PORT},
     solana_gossip::gossip_service::discover,
@@ -65,22 +69,20 @@ pub fn airdrop_lamports(
                     }
                     if tries >= 5 {
                         panic!(
-                            "Error requesting airdrop: to addr: {:?} amount: {} {:?}",
-                            faucet_addr, airdrop_amount, result
+                            "Error requesting airdrop: to addr: {faucet_addr:?} amount: {airdrop_amount} {result:?}"
                         )
                     }
                 }
             }
             Err(err) => {
                 panic!(
-                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                    err, faucet_addr, airdrop_amount
+                    "Error requesting airdrop: {err:?} to addr: {faucet_addr:?} amount: {airdrop_amount}"
                 );
             }
         };
 
         let current_balance = client.get_balance(&id.pubkey()).unwrap_or_else(|e| {
-            panic!("airdrop error {}", e);
+            panic!("airdrop error {e}");
         });
         info!("current balance {}...", current_balance);
 
@@ -228,24 +230,27 @@ fn run_transactions_dos(
     if program_account.is_err() {
         let mut config = CliConfig::default();
         let (program_keypair, program_location) = program_options
-            .as_ref()
             .expect("If the program doesn't exist, need to provide program keypair to deploy");
         info!(
             "processing deploy: {:?} key: {}",
             program_account,
             program_keypair.pubkey()
         );
-        config.signers = vec![payer_keypairs[0], program_keypair];
-        process_deploy(
-            client.clone(),
-            &config,
-            program_location,
-            Some(1),
-            false,
-            true,
-            true, /* skip_fee_check */
-        )
-        .expect("deploy didn't pass");
+        config.signers = vec![payer_keypairs[0], &program_keypair];
+        config.command = CliCommand::Program(ProgramCliCommand::Deploy {
+            program_location: Some(program_location),
+            program_signer_index: Some(1),
+            program_pubkey: None,
+            buffer_signer_index: None,
+            buffer_pubkey: None,
+            allow_excessive_balance: true,
+            upgrade_authority_signer_index: 0,
+            is_final: true,
+            max_len: None,
+            skip_fee_check: true, // skip_fee_check
+        });
+
+        process_command(&config).expect("deploy didn't pass");
     } else {
         info!("Found program account. Skipping deploy..");
         assert!(program_account.unwrap().executable);
@@ -537,14 +542,14 @@ fn main() {
     let mut entrypoint_addr = SocketAddr::from(([127, 0, 0, 1], port));
     if let Some(addr) = matches.value_of("entrypoint") {
         entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
     let mut faucet_addr = SocketAddr::from(([127, 0, 0, 1], FAUCET_PORT));
     if let Some(addr) = matches.value_of("faucet_addr") {
         faucet_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
@@ -556,7 +561,7 @@ fn main() {
     let num_program_iterations = value_t!(matches, "num_program_iterations", usize).unwrap_or(10);
     let num_instructions = value_t!(matches, "num_instructions", usize).unwrap_or(1);
     if num_instructions == 0 || num_instructions > 500 {
-        eprintln!("bad num_instructions: {}", num_instructions);
+        eprintln!("bad num_instructions: {num_instructions}");
         exit(1);
     }
     let batch_sleep_ms = value_t!(matches, "batch_sleep_ms", u64).unwrap_or(500);
@@ -567,7 +572,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
 
@@ -575,7 +580,7 @@ fn main() {
         .iter()
         .map(|keypair_string| {
             read_keypair_file(keypair_string)
-                .unwrap_or_else(|_| panic!("bad keypair {:?}", keypair_string))
+                .unwrap_or_else(|_| panic!("bad keypair {keypair_string:?}"))
         })
         .collect();
 
@@ -597,7 +602,7 @@ fn main() {
             SocketAddrSpace::Unspecified,
         )
         .unwrap_or_else(|err| {
-            eprintln!("Failed to discover {} node: {:?}", entrypoint_addr, err);
+            eprintln!("Failed to discover {entrypoint_addr} node: {err:?}");
             exit(1);
         });
 
@@ -722,7 +727,7 @@ pub mod test {
                 format!(
                     "{}{}",
                     env!("CARGO_MANIFEST_DIR"),
-                    "/../programs/bpf/c/out/tuner.so"
+                    "/../programs/sbf/c/out/tuner.so"
                 ),
             )),
             &account_keypair_refs,

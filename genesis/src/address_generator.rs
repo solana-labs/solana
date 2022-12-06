@@ -17,7 +17,7 @@ impl AddressGenerator {
     }
 
     pub fn nth(&self, nth: usize) -> Pubkey {
-        Pubkey::create_with_seed(&self.base_pubkey, &format!("{}", nth), &self.program_id).unwrap()
+        Pubkey::create_with_seed(&self.base_pubkey, &format!("{nth}"), &self.program_id).unwrap()
     }
 
     #[allow(clippy::should_implement_trait)]

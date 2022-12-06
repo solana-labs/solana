@@ -5,6 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::ConnectionCache,
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -16,25 +17,31 @@ use {
     solana_measure::measure::Measure,
     solana_perf::packet::{to_packet_batches, PacketBatch},
     solana_poh::poh_recorder::{create_test_recorder, PohRecorder, WorkingBankEntry},
-    solana_runtime::{
-        accounts_background_service::AbsRequestSender, bank::Bank, bank_forks::BankForks,
-        cost_model::CostModel,
-    },
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
+        compute_budget::ComputeBudgetInstruction,
         hash::Hash,
-        signature::{Keypair, Signature},
-        system_transaction,
+        message::Message,
+        pubkey::{self, Pubkey},
+        signature::{Keypair, Signature, Signer},
+        system_instruction, system_transaction,
         timing::{duration_as_us, timestamp},
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+    solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
     std::{
         sync::{atomic::Ordering, Arc, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
 };
+
+// transfer transaction cost = 1 * SIGNATURE_COST +
+//                             2 * WRITE_LOCK_UNITS +
+//                             1 * system_program
+//                           = 1470 CU
+const TRANSFER_TRANSACTION_COST: u32 = 1470;
 
 fn check_txs(
     receiver: &Arc<Receiver<WorkingBankEntry>>,
@@ -96,29 +103,79 @@ fn make_accounts_txs(
     packets_per_batch: usize,
     hash: Hash,
     contention: WriteLockContention,
+    simulate_mint: bool,
+    mint_txs_percentage: usize,
 ) -> Vec<Transaction> {
-    use solana_sdk::pubkey;
     let to_pubkey = pubkey::new_rand();
     let chunk_pubkeys: Vec<pubkey::Pubkey> = (0..total_num_transactions / packets_per_batch)
         .map(|_| pubkey::new_rand())
         .collect();
     let payer_key = Keypair::new();
-    let dummy = system_transaction::transfer(&payer_key, &to_pubkey, 1, hash);
     (0..total_num_transactions)
         .into_par_iter()
         .map(|i| {
-            let mut new = dummy.clone();
+            let is_simulated_mint = is_simulated_mint_transaction(
+                simulate_mint,
+                i,
+                packets_per_batch,
+                mint_txs_percentage,
+            );
+            // simulated mint transactions have higher compute-unit-price
+            let compute_unit_price = if is_simulated_mint { 5 } else { 1 };
+            let mut new = make_transfer_transaction_with_compute_unit_price(
+                &payer_key,
+                &to_pubkey,
+                1,
+                hash,
+                compute_unit_price,
+            );
             let sig: Vec<u8> = (0..64).map(|_| thread_rng().gen::<u8>()).collect();
             new.message.account_keys[0] = pubkey::new_rand();
             new.message.account_keys[1] = match contention {
                 WriteLockContention::None => pubkey::new_rand(),
-                WriteLockContention::SameBatchOnly => chunk_pubkeys[i / packets_per_batch],
+                WriteLockContention::SameBatchOnly => {
+                    // simulated mint transactions have conflict accounts
+                    if is_simulated_mint {
+                        chunk_pubkeys[i / packets_per_batch]
+                    } else {
+                        pubkey::new_rand()
+                    }
+                }
                 WriteLockContention::Full => to_pubkey,
             };
             new.signatures = vec![Signature::new(&sig[0..64])];
             new
         })
         .collect()
+}
+
+// In simulating mint, `mint_txs_percentage` transactions in a batch are mint transaction
+// (eg., have conflicting account and higher priority) and remaining percentage regular
+// transactions (eg., non-conflict and low priority)
+fn is_simulated_mint_transaction(
+    simulate_mint: bool,
+    index: usize,
+    packets_per_batch: usize,
+    mint_txs_percentage: usize,
+) -> bool {
+    simulate_mint && (index % packets_per_batch <= packets_per_batch * mint_txs_percentage / 100)
+}
+
+fn make_transfer_transaction_with_compute_unit_price(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    recent_blockhash: Hash,
+    compute_unit_price: u64,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+    let instructions = vec![
+        system_instruction::transfer(&from_pubkey, to, lamports),
+        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COST),
+    ];
+    let message = Message::new(&instructions, Some(&from_pubkey));
+    Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
 struct PacketsPerIteration {
@@ -133,6 +190,8 @@ impl PacketsPerIteration {
         batches_per_iteration: usize,
         genesis_hash: Hash,
         write_lock_contention: WriteLockContention,
+        simulate_mint: bool,
+        mint_txs_percentage: usize,
     ) -> Self {
         let total_num_transactions = packets_per_batch * batches_per_iteration;
         let transactions = make_accounts_txs(
@@ -140,6 +199,8 @@ impl PacketsPerIteration {
             packets_per_batch,
             genesis_hash,
             write_lock_contention,
+            simulate_mint,
+            mint_txs_percentage,
         );
 
         let packet_batches: Vec<PacketBatch> = to_packet_batches(&transactions, packets_per_batch);
@@ -219,6 +280,19 @@ fn main() {
                 .takes_value(false)
                 .help("Disable forwarding messages to TPU using QUIC"),
         )
+        .arg(
+            Arg::new("simulate_mint")
+                .long("simulate-mint")
+                .takes_value(false)
+                .help("Simulate mint transactions to have higher priority"),
+        )
+        .arg(
+            Arg::new("mint_txs_percentage")
+                .long("mint-txs-percentage")
+                .takes_value(true)
+                .requires("simulate_mint")
+                .help("In simulating mint, number of mint transactions out of 100."),
+        )
         .get_matches();
 
     let num_banking_threads = matches
@@ -236,6 +310,9 @@ fn main() {
     let write_lock_contention = matches
         .value_of_t::<WriteLockContention>("write_lock_contention")
         .unwrap_or(WriteLockContention::None);
+    let mint_txs_percentage = matches
+        .value_of_t::<usize>("mint_txs_percentage")
+        .unwrap_or(99);
 
     let mint_total = 1_000_000_000_000;
     let GenesisConfigInfo {
@@ -263,12 +340,13 @@ fn main() {
             batches_per_iteration,
             genesis_config.hash(),
             write_lock_contention,
+            matches.is_present("simulate_mint"),
+            mint_txs_percentage,
         ))
     })
     .take(num_chunks)
     .collect();
 
-    // fund all the accounts
     let total_num_transactions: u64 = all_packets
         .iter()
         .map(|packets_for_single_iteration| packets_for_single_iteration.transactions.len() as u64)
@@ -278,6 +356,7 @@ fn main() {
         num_banking_threads, total_num_transactions
     );
 
+    // fund all the accounts
     all_packets.iter().for_each(|packets_for_single_iteration| {
         packets_for_single_iteration
             .transactions
@@ -305,7 +384,7 @@ fn main() {
                 .iter()
                 .for_each(|tx| {
                     let res = bank.process_transaction(tx);
-                    assert!(res.is_ok(), "sanity test transactions error: {:?}", res);
+                    assert!(res.is_ok(), "sanity test transactions error: {res:?}");
                 });
         });
         bank.clear_signatures();
@@ -316,7 +395,7 @@ fn main() {
                 let res =
                     bank.process_transactions(packets_for_single_iteration.transactions.iter());
                 for r in res {
-                    assert!(r.is_ok(), "sanity parallel execution error: {:?}", r);
+                    assert!(r.is_ok(), "sanity parallel execution error: {r:?}");
                 }
                 bank.clear_signatures();
             });
@@ -329,12 +408,8 @@ fn main() {
             Blockstore::open(&ledger_path).expect("Expected to be able to open database ledger"),
         );
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let (exit, poh_recorder, poh_service, signal_receiver) = create_test_recorder(
-            &bank,
-            &blockstore,
-            None,
-            Some(leader_schedule_cache.clone()),
-        );
+        let (exit, poh_recorder, poh_service, signal_receiver) =
+            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
@@ -355,7 +430,6 @@ fn main() {
             num_banking_threads,
             None,
             replay_vote_sender,
-            Arc::new(RwLock::new(CostModel::default())),
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
@@ -370,7 +444,6 @@ fn main() {
         let mut tx_total_us = 0;
         let base_tx_count = bank.transaction_count();
         let mut txs_processed = 0;
-        let mut root = 1;
         let collector = solana_sdk::pubkey::new_rand();
         let mut total_sent = 0;
         for current_iteration_index in 0..iterations {
@@ -404,18 +477,22 @@ fn main() {
                     sleep(Duration::from_millis(5));
                 }
             }
+
+            // check if txs had been processed by bank. Returns when all transactions are
+            // processed, with `FALSE` indicate there is still bank. or returns TRUE indicate a
+            // bank has expired before receiving all txs.
             if check_txs(
                 &signal_receiver,
                 packets_for_this_iteration.transactions.len(),
                 &poh_recorder,
             ) {
-                debug!(
-                    "resetting bank {} tx count: {} txs_proc: {}",
+                eprintln!(
+                    "[iteration {}, tx sent {}, slot {} expired, bank tx count {}]",
+                    current_iteration_index,
+                    sent,
                     bank.slot(),
                     bank.transaction_count(),
-                    txs_processed
                 );
-                txs_processed = bank.transaction_count();
                 tx_total_us += duration_as_us(&now.elapsed());
 
                 let mut poh_time = Measure::start("poh_time");
@@ -443,14 +520,6 @@ fn main() {
 
                 poh_recorder.write().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.read().unwrap().bank().is_some());
-                if bank.slot() > 32 {
-                    leader_schedule_cache.set_root(&bank);
-                    bank_forks
-                        .write()
-                        .unwrap()
-                        .set_root(root, &AbsRequestSender::default(), None);
-                    root += 1;
-                }
                 debug!(
                     "new_bank_time: {}us insert_time: {}us poh_time: {}us",
                     new_bank_time.as_us(),
@@ -458,6 +527,13 @@ fn main() {
                     poh_time.as_us(),
                 );
             } else {
+                eprintln!(
+                    "[iteration {}, tx sent {}, slot {} active, bank tx count {}]",
+                    current_iteration_index,
+                    sent,
+                    bank.slot(),
+                    bank.transaction_count(),
+                );
                 tx_total_us += duration_as_us(&now.elapsed());
             }
 
@@ -466,27 +542,25 @@ fn main() {
             // we should clear them by the time we come around again to re-use that chunk.
             bank.clear_signatures();
             total_us += duration_as_us(&now.elapsed());
-            debug!(
-                "time: {} us checked: {} sent: {}",
-                duration_as_us(&now.elapsed()),
-                total_num_transactions / num_chunks as u64,
-                sent,
-            );
             total_sent += sent;
 
-            if current_iteration_index % 16 == 0 {
+            if current_iteration_index % num_chunks == 0 {
                 let last_blockhash = bank.last_blockhash();
                 for packets_for_single_iteration in all_packets.iter_mut() {
                     packets_for_single_iteration.refresh_blockhash(last_blockhash);
                 }
             }
         }
-        let txs_processed = bank_forks
+        txs_processed += bank_forks
             .read()
             .unwrap()
             .working_bank()
             .transaction_count();
         debug!("processed: {} base: {}", txs_processed, base_tx_count);
+
+        eprintln!("[total_sent: {}, base_tx_count: {}, txs_processed: {}, txs_landed: {}, total_us: {}, tx_total_us: {}]",
+            total_sent, base_tx_count, txs_processed, (txs_processed - base_tx_count), total_us, tx_total_us);
+
         eprintln!(
             "{{'name': 'banking_bench_total', 'median': '{:.2}'}}",
             (1000.0 * 1000.0 * total_sent as f64) / (total_us as f64),

@@ -87,7 +87,7 @@ pub enum ParsableAccount {
     Vote,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct AccountAdditionalData {
     pub spl_token_decimals: Option<u8>,
 }
@@ -119,7 +119,7 @@ pub fn parse_account_data(
         ParsableAccount::Vote => serde_json::to_value(parse_vote(data)?)?,
     };
     Ok(ParsedAccount {
-        program: format!("{:?}", program_name).to_kebab_case(),
+        program: format!("{program_name:?}").to_kebab_case(),
         parsed: parsed_json,
         space: data.len() as u64,
     })

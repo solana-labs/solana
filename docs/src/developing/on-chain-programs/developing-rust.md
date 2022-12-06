@@ -39,14 +39,14 @@ using the `no-entrypoint` feature.
 At a minimum, Solana Rust programs must pull in the
 [solana-program](https://crates.io/crates/solana-program) crate.
 
-Solana BPF programs have some [restrictions](#restrictions) that may prevent the
+Solana SBF programs have some [restrictions](#restrictions) that may prevent the
 inclusion of some crates as dependencies or require special handling.
 
 For example:
 
 - Crates that require the architecture be a subset of the ones supported by the
   official toolchain. There is no workaround for this unless that crate is
-  forked and BPF added to that those architecture checks.
+  forked and SBF added to that those architecture checks.
 - Crates may depend on `rand` which is not supported in Solana's deterministic
   program environment. To include a `rand` dependent crate refer to [Depending
   on Rand](#depending-on-rand).
@@ -68,7 +68,7 @@ machine which can be used for unit testing:
 $ cargo build
 ```
 
-To build a specific program, such as SPL Token, for the Solana BPF target which
+To build a specific program, such as SPL Token, for the Solana SBF target which
 can be deployed to the cluster:
 
 ```bash
@@ -305,12 +305,12 @@ Rust's `panic!`, `assert!`, and internal panic results are printed to the
 
 ```
 INFO  solana_runtime::message_processor] Finalized account CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
-INFO  solana_runtime::message_processor] Call BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
+INFO  solana_runtime::message_processor] Call SBF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ
 INFO  solana_runtime::message_processor] Program log: Panicked at: 'assertion failed: `(left == right)`
       left: `1`,
      right: `2`', rust/panic/src/lib.rs:22:5
-INFO  solana_runtime::message_processor] BPF program consumed 5453 of 200000 units
-INFO  solana_runtime::message_processor] BPF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
+INFO  solana_runtime::message_processor] SBF program consumed 5453 of 200000 units
+INFO  solana_runtime::message_processor] SBF program CGLhHSuWsp1gT4B7MY2KACqp9RUwQRhcUFfVSuxpSajZ failed: BPF program panicked
 ```
 
 ### Custom Panic Handler
@@ -369,7 +369,7 @@ for more information.
 
 ## ELF Dump
 
-The BPF shared object internals can be dumped to a text file to gain more
+The SBF shared object internals can be dumped to a text file to gain more
 insight into a program's composition and what it may be doing at runtime. The
 dump will contain both the ELF information as well as a list of all the symbols
 and the instructions that implement them. Some of the BPF loader's error log

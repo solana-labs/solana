@@ -21,7 +21,7 @@ pub async fn setup_test_context() -> ProgramTestContext {
 
 pub async fn assert_ix_error(
     context: &mut ProgramTestContext,
-    ix: Instruction,
+    ixs: &[Instruction],
     additional_payer_keypair: Option<&Keypair>,
     expected_err: InstructionError,
     assertion_failed_msg: &str,
@@ -36,7 +36,7 @@ pub async fn assert_ix_error(
     }
 
     let transaction = Transaction::new_signed_with_payer(
-        &[ix],
+        ixs,
         Some(&fee_payer.pubkey()),
         &signers,
         recent_blockhash,
@@ -49,8 +49,7 @@ pub async fn assert_ix_error(
             .unwrap_err()
             .unwrap(),
         TransactionError::InstructionError(0, expected_err),
-        "{}",
-        assertion_failed_msg,
+        "{assertion_failed_msg}",
     );
 }
 
@@ -59,6 +58,7 @@ pub async fn add_upgradeable_loader_account(
     account_address: &Pubkey,
     account_state: &UpgradeableLoaderState,
     account_data_len: usize,
+    account_callback: impl Fn(&mut AccountSharedData),
 ) {
     let rent = context.banks_client.get_rent().await.unwrap();
     let mut account = AccountSharedData::new(
@@ -69,5 +69,6 @@ pub async fn add_upgradeable_loader_account(
     account
         .set_state(account_state)
         .expect("state failed to serialize into account data");
+    account_callback(&mut account);
     context.set_account(account_address, &account);
 }

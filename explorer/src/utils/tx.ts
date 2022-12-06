@@ -20,6 +20,7 @@ import {
 import { Cluster } from "providers/cluster";
 import { SerumMarketRegistry } from "serumMarketRegistry";
 import { TokenInfoMap } from "@solana/spl-token-registry";
+import { OPEN_BOOK_PROGRAM_ID } from "components/instruction/serum/types";
 
 export enum PROGRAM_NAMES {
   // native built-ins
@@ -49,7 +50,6 @@ export enum PROGRAM_NAMES {
 
   // other
   ACUMEN = "Acumen Program",
-  BONFIDA_POOL = "Bonfida Pool Program",
   BREAK_SOLANA = "Break Solana Program",
   CHAINLINK_ORACLE = "Chainlink OCR2 Oracle Program",
   CHAINLINK_STORE = "Chainlink Store Program",
@@ -87,15 +87,20 @@ export enum PROGRAM_NAMES {
   SERUM_2 = "Serum Dex Program v2",
   SERUM_3 = "Serum Dex Program v3",
   SERUM_SWAP = "Serum Swap Program",
+  SERUM_POOL = "Serum Pool",
   SOLEND = "Solend Program",
   SOLIDO = "Lido for Solana Program",
   STEP_SWAP = "Step Finance Swap Program",
   SWIM_SWAP = "Swim Swap Program",
   SWITCHBOARD = "Switchboard Oracle Program",
   WORMHOLE = "Wormhole",
+  WORMHOLE_CORE = "Wormhole Core Bridge",
+  WORMHOLE_TOKEN = "Wormhole Token Bridge",
+  WORMHOLE_NFT = "Wormhole NFT Bridge",
   SOLANART = "Solanart",
   SOLANART_GO = "Solanart - Global offers",
   STEPN_DEX = "STEPN Dex",
+  OPENBOOK_DEX = "OpenBook Dex",
 }
 
 const ALL_CLUSTERS = [
@@ -201,7 +206,7 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     deployments: [Cluster.MainnetBeta],
   },
   WvmTNLpGMVbwJVYztYL4Hnsy82cJhQorxjnnXcRm3b6: {
-    name: PROGRAM_NAMES.BONFIDA_POOL,
+    name: PROGRAM_NAMES.SERUM_POOL,
     deployments: [Cluster.MainnetBeta],
   },
   BrEAK7zGZ6dM71zUDACDqJnekihmwF15noTddWTsknjC: {
@@ -376,6 +381,30 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
     name: PROGRAM_NAMES.WORMHOLE,
     deployments: [Cluster.MainnetBeta],
   },
+  worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth: {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "3u8hJUVTA4jH1wYAyUur7FFZVQ8H635K3tSHHF4ssjQ5": {
+    name: PROGRAM_NAMES.WORMHOLE_CORE,
+    deployments: [Cluster.Devnet],
+  },
+  wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.MainnetBeta],
+  },
+  DZnkkTmCiFWfYTfT41X3Rd1kDgozqzxWaHqsw6W4x2oe: {
+    name: PROGRAM_NAMES.WORMHOLE_TOKEN,
+    deployments: [Cluster.Devnet],
+  },
+  WnFt12ZrnzZrFZkt2xsNsaNWoQribnuQ5B5FrDbwDhD: {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.MainnetBeta],
+  },
+  "2rHhojZ7hpu1zA91nvZmT8TqWWvMcKmmNBCr2mKTtMq4": {
+    name: PROGRAM_NAMES.WORMHOLE_NFT,
+    deployments: [Cluster.Devnet],
+  },
   CJsLwbP1iu5DuUikHEJnLfANgKy6stB2uFgvBBHoyxwz: {
     name: PROGRAM_NAMES.SOLANART,
     deployments: [Cluster.MainnetBeta],
@@ -386,6 +415,10 @@ export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   },
   Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j: {
     name: PROGRAM_NAMES.STEPN_DEX,
+    deployments: [Cluster.MainnetBeta],
+  },
+  [OPEN_BOOK_PROGRAM_ID]: {
+    name: PROGRAM_NAMES.OPENBOOK_DEX,
     deployments: [Cluster.MainnetBeta],
   },
 };

@@ -786,7 +786,7 @@ pub mod tests {
 
         // bitfield sizes are powers of 2, cycle through values of 1, 2, 4, .. 2^9
         for power in 0..10 {
-            let max_bitfield_width = 2u64.pow(power) as u64;
+            let max_bitfield_width = 2u64.pow(power);
             let width_iteration_max = if max_bitfield_width > 1 {
                 // add up to 2 items so we can test out multiple items
                 3

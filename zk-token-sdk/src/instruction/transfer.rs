@@ -68,11 +68,7 @@ impl TransferData {
         (destination_pubkey, auditor_pubkey): (&ElGamalPubkey, &ElGamalPubkey),
     ) -> Result<Self, ProofError> {
         // split and encrypt transfer amount
-        let (amount_lo, amount_hi) = split_u64(
-            transfer_amount,
-            TRANSFER_AMOUNT_LO_BITS,
-            TRANSFER_AMOUNT_HI_BITS,
-        )?;
+        let (amount_lo, amount_hi) = split_u64(transfer_amount, TRANSFER_AMOUNT_LO_BITS);
 
         let (ciphertext_lo, opening_lo) = TransferAmountEncryption::new(
             amount_lo,
@@ -151,15 +147,20 @@ impl TransferData {
         let ciphertext_lo: TransferAmountEncryption = self.ciphertext_lo.try_into()?;
 
         let handle_lo = match role {
-            Role::Source => ciphertext_lo.source_handle,
-            Role::Dest => ciphertext_lo.destination_handle,
-            Role::Auditor => ciphertext_lo.auditor_handle,
+            Role::Source => Some(ciphertext_lo.source_handle),
+            Role::Destination => Some(ciphertext_lo.destination_handle),
+            Role::Auditor => Some(ciphertext_lo.auditor_handle),
+            Role::WithdrawWithheldAuthority => None,
         };
 
-        Ok(ElGamalCiphertext {
-            commitment: ciphertext_lo.commitment,
-            handle: handle_lo,
-        })
+        if let Some(handle) = handle_lo {
+            Ok(ElGamalCiphertext {
+                commitment: ciphertext_lo.commitment,
+                handle,
+            })
+        } else {
+            Err(ProofError::MissingCiphertext)
+        }
     }
 
     /// Extracts the lo ciphertexts associated with a transfer data
@@ -167,15 +168,20 @@ impl TransferData {
         let ciphertext_hi: TransferAmountEncryption = self.ciphertext_hi.try_into()?;
 
         let handle_hi = match role {
-            Role::Source => ciphertext_hi.source_handle,
-            Role::Dest => ciphertext_hi.destination_handle,
-            Role::Auditor => ciphertext_hi.auditor_handle,
+            Role::Source => Some(ciphertext_hi.source_handle),
+            Role::Destination => Some(ciphertext_hi.destination_handle),
+            Role::Auditor => Some(ciphertext_hi.auditor_handle),
+            Role::WithdrawWithheldAuthority => None,
         };
 
-        Ok(ElGamalCiphertext {
-            commitment: ciphertext_hi.commitment,
-            handle: handle_hi,
-        })
+        if let Some(handle) = handle_hi {
+            Ok(ElGamalCiphertext {
+                commitment: ciphertext_hi.commitment,
+                handle,
+            })
+        } else {
+            Err(ProofError::MissingCiphertext)
+        }
     }
 
     /// Decrypts transfer amount from transfer data
@@ -303,11 +309,7 @@ impl TransferProof {
         // generate the range proof
         let range_proof = if TRANSFER_AMOUNT_LO_BITS == 32 {
             RangeProof::new(
-                vec![
-                    source_new_balance,
-                    transfer_amount_lo as u64,
-                    transfer_amount_hi as u64,
-                ],
+                vec![source_new_balance, transfer_amount_lo, transfer_amount_hi],
                 vec![
                     TRANSFER_SOURCE_AMOUNT_BITS,
                     TRANSFER_AMOUNT_LO_BITS,
@@ -318,15 +320,15 @@ impl TransferProof {
             )
         } else {
             let transfer_amount_lo_negated =
-                (1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1 - transfer_amount_lo as u64;
+                (1 << TRANSFER_AMOUNT_LO_NEGATED_BITS) - 1 - transfer_amount_lo;
             let opening_lo_negated = &PedersenOpening::default() - opening_lo;
 
             RangeProof::new(
                 vec![
                     source_new_balance,
-                    transfer_amount_lo as u64,
+                    transfer_amount_lo,
                     transfer_amount_lo_negated,
-                    transfer_amount_hi as u64,
+                    transfer_amount_hi,
                 ],
                 vec![
                     TRANSFER_SOURCE_AMOUNT_BITS,
@@ -453,11 +455,11 @@ impl TransferPubkeys {
         let (source_pubkey, destination_pubkey, auditor_pubkey) = array_refs![bytes, 32, 32, 32];
 
         let source_pubkey =
-            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::Verification)?;
-        let destination_pubkey =
-            ElGamalPubkey::from_bytes(destination_pubkey).ok_or(ProofError::Verification)?;
+            ElGamalPubkey::from_bytes(source_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
+        let destination_pubkey = ElGamalPubkey::from_bytes(destination_pubkey)
+            .ok_or(ProofError::PubkeyDeserialization)?;
         let auditor_pubkey =
-            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::Verification)?;
+            ElGamalPubkey::from_bytes(auditor_pubkey).ok_or(ProofError::PubkeyDeserialization)?;
 
         Ok(Self {
             source_pubkey,
@@ -578,26 +580,7 @@ mod test {
 
         assert!(transfer_data.verify().is_ok());
 
-        // Case 4: transfer amount too big
-
-        // create source account spendable ciphertext
-        let spendable_balance: u64 = u64::max_value();
-        let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
-
-        // transfer amount
-        let transfer_amount: u64 = 1u64 << (TRANSFER_AMOUNT_LO_BITS + TRANSFER_AMOUNT_HI_BITS);
-
-        // create transfer data
-        let transfer_data = TransferData::new(
-            transfer_amount,
-            (spendable_balance, &spendable_ciphertext),
-            &source_keypair,
-            (&dest_pk, &auditor_pk),
-        );
-
-        assert!(transfer_data.is_err());
-
-        // Case 5: invalid destination or auditor pubkey
+        // Case 4: invalid destination or auditor pubkey
         let spendable_balance: u64 = 0;
         let spendable_ciphertext = source_keypair.public.encrypt(spendable_balance);
 
@@ -671,7 +654,9 @@ mod test {
         );
 
         assert_eq!(
-            transfer_data.decrypt_amount(Role::Dest, &dest_sk).unwrap(),
+            transfer_data
+                .decrypt_amount(Role::Destination, &dest_sk)
+                .unwrap(),
             550000_u64,
         );
 

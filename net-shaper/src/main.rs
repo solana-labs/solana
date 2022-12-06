@@ -49,7 +49,7 @@ impl NetworkTopology {
         println!("Configure partition map (must add up to 100, e.g. [70, 20, 10]):");
         let partitions_str = match io::stdin().read_line(&mut input) {
             Ok(_) => input,
-            Err(error) => panic!("error: {}", error),
+            Err(error) => panic!("error: {error}"),
         };
 
         let partitions: Vec<u8> = serde_json::from_str(&partitions_str)
@@ -59,11 +59,11 @@ impl NetworkTopology {
 
         for i in 0..partitions.len() - 1 {
             for j in i + 1..partitions.len() {
-                println!("Configure interconnect ({} <-> {}):", i, j);
+                println!("Configure interconnect ({i} <-> {j}):");
                 let mut input = String::new();
                 let mut interconnect_config = match io::stdin().read_line(&mut input) {
                     Ok(_) => input,
-                    Err(error) => panic!("error: {}", error),
+                    Err(error) => panic!("error: {error}"),
                 };
 
                 if interconnect_config.ends_with('\n') {
@@ -121,14 +121,14 @@ impl NetworkTopology {
             for j in i + 1..partitions.len() {
                 let drop_config = if max_packet_drop > 0 {
                     let packet_drop = rng.gen_range(0, max_packet_drop + 1);
-                    format!("loss {}% 25% ", packet_drop)
+                    format!("loss {packet_drop}% 25% ")
                 } else {
                     String::default()
                 };
 
                 let config = if max_packet_delay > 0 {
                     let packet_delay = rng.gen_range(0, max_packet_delay + 1);
-                    format!("{}delay {}ms 10ms", drop_config, packet_delay)
+                    format!("{drop_config}delay {packet_delay}ms 10ms")
                 } else {
                     drop_config
                 };
@@ -367,7 +367,7 @@ fn partition_id_to_tos(partition: usize) -> u8 {
 
 fn shape_network(matches: &ArgMatches) {
     let config_path = PathBuf::from(matches.value_of_t_or_exit::<String>("file"));
-    let config = fs::read_to_string(&config_path).expect("Unable to read config file");
+    let config = fs::read_to_string(config_path).expect("Unable to read config file");
     let topology: NetworkTopology =
         serde_json::from_str(&config).expect("Failed to parse log as JSON");
     let interface: String = matches.value_of_t_or_exit("iface");
@@ -397,7 +397,7 @@ fn shape_network_steps(
         "my_index: {}, network_size: {}, partitions: {:?}",
         my_index, network_size, topology.partitions
     );
-    println!("My partition is {}", my_partition);
+    println!("My partition is {my_partition}");
 
     cleanup_network(interface);
 
@@ -407,7 +407,7 @@ fn shape_network_steps(
     }
 
     let num_bands = topology.partitions.len() + 1;
-    let default_filter_class = format!("1:{}", num_bands);
+    let default_filter_class = format!("1:{num_bands}");
     if !topology.interconnects.is_empty() {
         let num_bands_str = num_bands.to_string();
         // Redirect ingress traffic to the virtual interface ifb0 so we can
@@ -426,7 +426,7 @@ fn shape_network_steps(
     println!("Setting up interconnects");
     for i in &topology.interconnects {
         if i.b as usize == my_partition {
-            println!("interconnects: {:#?}", i);
+            println!("interconnects: {i:#?}");
             let tos = partition_id_to_tos(i.a as usize);
             if tos == 0 {
                 println!("Incorrect value of TOS/Partition in config {}", i.a);
@@ -478,7 +478,7 @@ fn configure(matches: &ArgMatches) {
 
     let topology = serde_json::to_string(&config).expect("Failed to write as JSON");
 
-    println!("{}", topology);
+    println!("{topology}");
 }
 
 fn main() {

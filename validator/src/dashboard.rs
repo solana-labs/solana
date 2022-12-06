@@ -85,7 +85,7 @@ impl Dashboard {
             let mut identity = match rpc_client.get_identity() {
                 Ok(identity) => identity,
                 Err(err) => {
-                    println!("Failed to get validator identity over RPC: {}", err);
+                    println!("Failed to get validator identity over RPC: {err}");
                     continue;
                 }
             };
@@ -110,7 +110,7 @@ impl Dashboard {
                     println_name_value("TPU Address:", &tpu.to_string());
                 }
                 if let Some(rpc) = contact_info.rpc {
-                    println_name_value("JSON RPC URL:", &format!("http://{}", rpc));
+                    println_name_value("JSON RPC URL:", &format!("http://{rpc}"));
                 }
             }
 
@@ -127,7 +127,7 @@ impl Dashboard {
                 let new_identity = rpc_client.get_identity().unwrap_or(identity);
                 if identity != new_identity {
                     identity = new_identity;
-                    progress_bar.println(&format_name_value("Identity:", &identity.to_string()));
+                    progress_bar.println(format_name_value("Identity:", &identity.to_string()));
                 }
 
                 match get_validator_stats(&rpc_client, &identity) {
@@ -181,8 +181,7 @@ impl Dashboard {
                         thread::sleep(refresh_interval);
                     }
                     Err(err) => {
-                        progress_bar
-                            .abandon_with_message(format!("RPC connection failure: {}", err));
+                        progress_bar.abandon_with_message(format!("RPC connection failure: {err}"));
                         break;
                     }
                 }
@@ -207,7 +206,7 @@ async fn wait_for_validator_startup(
             match admin_rpc_service::connect(ledger_path).await {
                 Ok(new_admin_client) => admin_client = Some(new_admin_client),
                 Err(err) => {
-                    progress_bar.set_message(format!("Unable to connect to validator: {}", err));
+                    progress_bar.set_message(format!("Unable to connect to validator: {err}"));
                     thread::sleep(refresh_interval);
                     continue;
                 }
@@ -230,17 +229,16 @@ async fn wait_for_validator_startup(
                         Ok((Some(rpc_addr), start_time)) => return Some((rpc_addr, start_time)),
                         Err(err) => {
                             progress_bar
-                                .set_message(format!("Failed to get validator info: {}", err));
+                                .set_message(format!("Failed to get validator info: {err}"));
                         }
                     }
                 } else {
-                    progress_bar.set_message(format!("Validator startup: {:?}...", start_progress));
+                    progress_bar.set_message(format!("Validator startup: {start_progress:?}..."));
                 }
             }
             Err(err) => {
                 admin_client = None;
-                progress_bar
-                    .set_message(format!("Failed to get validator start progress: {}", err));
+                progress_bar.set_message(format!("Failed to get validator start progress: {err}"));
             }
         }
         thread::sleep(refresh_interval);
@@ -281,7 +279,7 @@ fn get_validator_stats(
                     },
             }) = &err.kind
             {
-                format!("{} slots behind", num_slots_behind)
+                format!("{num_slots_behind} slots behind")
             } else {
                 "health unknown".to_string()
             }

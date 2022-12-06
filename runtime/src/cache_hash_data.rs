@@ -1,10 +1,8 @@
 //! Cached data for hashing accounts
+#[cfg(test)]
+use crate::pubkey_bins::PubkeyBinCalculator24;
 use {
-    crate::{
-        accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats,
-        pubkey_bins::PubkeyBinCalculator24,
-    },
-    log::*,
+    crate::{accounts_hash::CalculateHashIntermediate, cache_hash_data_stats::CacheHashDataStats},
     memmap2::MmapMut,
     solana_measure::measure::Measure,
     std::{
@@ -25,35 +23,74 @@ pub struct Header {
     count: usize,
 }
 
-struct CacheHashDataFile {
+pub(crate) struct CacheHashDataFile {
     cell_size: u64,
     mmap: MmapMut,
     capacity: u64,
 }
 
 impl CacheHashDataFile {
-    /// get '&mut T' from cache file [ix]
-    fn get_mut<T: Sized>(&mut self, ix: u64) -> &mut T {
-        let item_slice = self.get_slice_internal::<T>(ix);
+    /// return a slice of a reference to all the cache hash data from the mmapped file
+    pub(crate) fn get_cache_hash_data(&self) -> &[EntryType] {
+        self.get_slice(0)
+    }
+
+    #[cfg(test)]
+    /// Populate 'accumulator' from entire contents of the cache file.
+    pub(crate) fn load_all(
+        &self,
+        accumulator: &mut SavedType,
+        start_bin_index: usize,
+        bin_calculator: &PubkeyBinCalculator24,
+        stats: &mut CacheHashDataStats,
+    ) {
+        let mut m2 = Measure::start("decode");
+        let slices = self.get_cache_hash_data();
+        for d in slices {
+            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
+            assert!(
+                pubkey_to_bin_index >= start_bin_index,
+                "{pubkey_to_bin_index}, {start_bin_index}"
+            ); // this would indicate we put a pubkey in too high of a bin
+            pubkey_to_bin_index -= start_bin_index;
+            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
+        }
+
+        m2.stop();
+        stats.decode_us += m2.as_us();
+    }
+
+    /// get '&mut EntryType' from cache file [ix]
+    fn get_mut(&mut self, ix: u64) -> &mut EntryType {
+        let item_slice = self.get_slice_internal(ix);
         unsafe {
-            let item = item_slice.as_ptr() as *mut T;
+            let item = item_slice.as_ptr() as *mut EntryType;
             &mut *item
         }
     }
 
-    /// get '&T' from cache file [ix]
-    fn get<T: Sized>(&self, ix: u64) -> &T {
-        let item_slice = self.get_slice_internal::<T>(ix);
+    /// get '&[EntryType]' from cache file [ix..]
+    fn get_slice(&self, ix: u64) -> &[EntryType] {
+        let start = self.get_element_offset_byte(ix);
+        let item_slice: &[u8] = &self.mmap[start..];
+        let remaining_elements = item_slice.len() / std::mem::size_of::<EntryType>();
         unsafe {
-            let item = item_slice.as_ptr() as *const T;
-            &*item
+            let item = item_slice.as_ptr() as *const EntryType;
+            std::slice::from_raw_parts(item, remaining_elements)
         }
     }
 
-    /// get the bytes representing cache file [ix]
-    fn get_slice_internal<T: Sized>(&self, ix: u64) -> &[u8] {
+    /// return byte offset of entry 'ix' into a slice which contains a header and at least ix elements
+    fn get_element_offset_byte(&self, ix: u64) -> usize {
         let start = (ix * self.cell_size) as usize + std::mem::size_of::<Header>();
-        let end = start + std::mem::size_of::<T>();
+        debug_assert_eq!(start % std::mem::align_of::<EntryType>(), 0);
+        start
+    }
+
+    /// get the bytes representing cache file [ix]
+    fn get_slice_internal(&self, ix: u64) -> &[u8] {
+        let start = self.get_element_offset_byte(ix);
+        let end = start + std::mem::size_of::<EntryType>();
         assert!(
             end <= self.capacity as usize,
             "end: {}, capacity: {}, ix: {}, cell size: {}",
@@ -87,7 +124,7 @@ impl CacheHashDataFile {
         // expensive.
         data.seek(SeekFrom::Start(capacity - 1)).unwrap();
         data.write_all(&[0]).unwrap();
-        data.seek(SeekFrom::Start(0)).unwrap();
+        data.rewind().unwrap();
         data.flush().unwrap();
         Ok(unsafe { MmapMut::map_mut(&data).unwrap() })
     }
@@ -122,7 +159,7 @@ impl CacheHashData {
         let cache_folder = Self::get_cache_root_path(parent_folder);
 
         std::fs::create_dir_all(cache_folder.clone())
-            .unwrap_or_else(|_| panic!("error creating cache dir: {:?}", cache_folder));
+            .unwrap_or_else(|_| panic!("error creating cache dir: {cache_folder:?}"));
 
         let result = CacheHashData {
             cache_folder,
@@ -162,35 +199,41 @@ impl CacheHashData {
         parent_folder.as_ref().join("calculate_accounts_hash_cache")
     }
 
+    #[cfg(test)]
     /// load from 'file_name' into 'accumulator'
-    pub fn load<P: AsRef<Path> + std::fmt::Debug>(
+    pub(crate) fn load<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
         accumulator: &mut SavedType,
         start_bin_index: usize,
         bin_calculator: &PubkeyBinCalculator24,
     ) -> Result<(), std::io::Error> {
+        let mut m = Measure::start("overall");
+        let cache_file = self.load_map(file_name)?;
         let mut stats = CacheHashDataStats::default();
-        let result = self.load_internal(
-            file_name,
-            accumulator,
-            start_bin_index,
-            bin_calculator,
-            &mut stats,
-        );
-        self.stats.lock().unwrap().merge(&stats);
+        cache_file.load_all(accumulator, start_bin_index, bin_calculator, &mut stats);
+        m.stop();
+        self.stats.lock().unwrap().load_us += m.as_us();
+        Ok(())
+    }
+
+    /// map 'file_name' into memory
+    pub(crate) fn load_map<P: AsRef<Path> + std::fmt::Debug>(
+        &self,
+        file_name: &P,
+    ) -> Result<CacheHashDataFile, std::io::Error> {
+        let mut stats = CacheHashDataStats::default();
+        let result = self.map(file_name, &mut stats);
+        self.stats.lock().unwrap().accumulate(&stats);
         result
     }
 
-    fn load_internal<P: AsRef<Path> + std::fmt::Debug>(
+    /// create and return a MappedCacheFile for a cache file path
+    fn map<P: AsRef<Path> + std::fmt::Debug>(
         &self,
         file_name: &P,
-        accumulator: &mut SavedType,
-        start_bin_index: usize,
-        bin_calculator: &PubkeyBinCalculator24,
         stats: &mut CacheHashDataStats,
-    ) -> Result<(), std::io::Error> {
-        let mut m = Measure::start("overall");
+    ) -> Result<CacheHashDataFile, std::io::Error> {
         let path = self.cache_folder.join(file_name);
         let file_len = std::fs::metadata(path.clone())?.len();
         let mut m1 = Measure::start("read_file");
@@ -203,6 +246,14 @@ impl CacheHashData {
         }
 
         let cell_size = std::mem::size_of::<EntryType>() as u64;
+        unsafe {
+            assert_eq!(
+                mmap.align_to::<EntryType>().0.len(),
+                0,
+                "mmap is not aligned"
+            );
+        }
+        assert_eq!((cell_size as usize) % std::mem::size_of::<u64>(), 0);
         let mut cache_file = CacheHashDataFile {
             mmap,
             cell_size,
@@ -218,55 +269,29 @@ impl CacheHashData {
         cache_file.capacity = capacity;
         assert_eq!(
             capacity, file_len,
-            "expected: {}, len on disk: {} {:?}, entries: {}, cell_size: {}",
-            capacity, file_len, path, entries, cell_size
+            "expected: {capacity}, len on disk: {file_len} {path:?}, entries: {entries}, cell_size: {cell_size}"
         );
 
         stats.total_entries = entries;
         stats.cache_file_size += capacity as usize;
 
         let file_name_lookup = file_name.as_ref().to_str().unwrap().to_string();
-        let found = self
-            .pre_existing_cache_files
+        self.pre_existing_cache_files
             .lock()
             .unwrap()
             .remove(&file_name_lookup);
-        if !found {
-            info!(
-                "tried to mark {:?} as used, but it wasn't in the set, one example: {:?}",
-                file_name_lookup,
-                self.pre_existing_cache_files.lock().unwrap().iter().next()
-            );
-        }
 
         stats.loaded_from_cache += 1;
         stats.entries_loaded_from_cache += entries;
-        let mut m2 = Measure::start("decode");
-        for i in 0..entries {
-            let d = cache_file.get::<EntryType>(i as u64);
-            let mut pubkey_to_bin_index = bin_calculator.bin_from_pubkey(&d.pubkey);
-            assert!(
-                pubkey_to_bin_index >= start_bin_index,
-                "{}, {}",
-                pubkey_to_bin_index,
-                start_bin_index
-            ); // this would indicate we put a pubkey in too high of a bin
-            pubkey_to_bin_index -= start_bin_index;
-            accumulator[pubkey_to_bin_index].push(d.clone()); // may want to avoid clone here
-        }
 
-        m2.stop();
-        stats.decode_us += m2.as_us();
-        m.stop();
-        stats.load_us += m.as_us();
-        Ok(())
+        Ok(cache_file)
     }
 
     /// save 'data' to 'file_name'
     pub fn save(&self, file_name: &Path, data: &SavedTypeSlice) -> Result<(), std::io::Error> {
         let mut stats = CacheHashDataStats::default();
         let result = self.save_internal(file_name, data, &mut stats);
-        self.stats.lock().unwrap().merge(&stats);
+        self.stats.lock().unwrap().accumulate(&stats);
         result
     }
 
@@ -310,7 +335,7 @@ impl CacheHashData {
         let mut i = 0;
         data.iter().for_each(|x| {
             x.iter().for_each(|item| {
-                let d = cache_file.get_mut::<EntryType>(i as u64);
+                let d = cache_file.get_mut(i as u64);
                 i += 1;
                 *d = item.clone();
             })
@@ -392,8 +417,7 @@ pub mod tests {
                         }
                         assert_eq!(
                             accum, data_this_pass,
-                            "bins: {}, start_bin_this_pass: {}, pass: {}, flatten: {}, passes: {}",
-                            bins, start_bin_this_pass, pass, flatten_data, passes
+                            "bins: {bins}, start_bin_this_pass: {start_bin_this_pass}, pass: {pass}, flatten: {flatten_data}, passes: {passes}"
                         );
                     }
                 }

@@ -81,10 +81,15 @@ pub(crate) fn configure_server(
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
-    const MAX_CONCURRENT_UNI_STREAMS: u32 = (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS * 2) as u32;
+    const MAX_CONCURRENT_UNI_STREAMS: u32 =
+        (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS.saturating_mul(2)) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
-    config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
+    config.receive_window(
+        (PACKET_DATA_SIZE as u32)
+            .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
+            .into(),
+    );
     let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
 
@@ -99,6 +104,7 @@ pub(crate) fn configure_server(
 fn rt() -> Runtime {
     Builder::new_multi_thread()
         .worker_threads(NUM_QUIC_STREAMER_WORKER_THREADS)
+        .thread_name("quic-server")
         .enable_all()
         .build()
         .unwrap()
@@ -306,6 +312,7 @@ pub fn spawn_server(
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
+    wait_for_chunk_timeout_ms: u64,
 ) -> Result<thread::JoinHandle<()>, QuicServerError> {
     let runtime = rt();
     let task = {
@@ -321,6 +328,7 @@ pub fn spawn_server(
             max_staked_connections,
             max_unstaked_connections,
             stats,
+            wait_for_chunk_timeout_ms,
         )
     }?;
     let handle = thread::Builder::new()
@@ -366,6 +374,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            100,
         )
         .unwrap();
         (t, exit, receiver, server_address)
@@ -421,6 +430,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats,
+            100,
         )
         .unwrap();
 
@@ -463,6 +473,7 @@ mod test {
             MAX_STAKED_CONNECTIONS,
             0, // Do not allow any connection from unstaked clients/nodes
             stats,
+            100,
         )
         .unwrap();
 

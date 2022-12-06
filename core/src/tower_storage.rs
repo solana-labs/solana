@@ -138,13 +138,13 @@ impl FileTowerStorage {
     // Old filename for towers pre 1.9 (VoteStateUpdate)
     pub fn old_filename(&self, node_pubkey: &Pubkey) -> PathBuf {
         self.tower_path
-            .join(format!("tower-{}", node_pubkey))
+            .join(format!("tower-{node_pubkey}"))
             .with_extension("bin")
     }
 
     pub fn filename(&self, node_pubkey: &Pubkey) -> PathBuf {
         self.tower_path
-            .join(format!("tower-1_9-{}", node_pubkey))
+            .join(format!("tower-1_9-{node_pubkey}"))
             .with_extension("bin")
     }
 
@@ -184,7 +184,7 @@ impl TowerStorage for FileTowerStorage {
                 .and_then(|t: SavedTowerVersions| t.try_into_tower(node_pubkey))
         } else {
             // Old format
-            let file = File::open(&self.old_filename(node_pubkey))?;
+            let file = File::open(self.old_filename(node_pubkey))?;
             let mut stream = BufReader::new(file);
             bincode::deserialize_from(&mut stream)
                 .map_err(|e| e.into())
@@ -266,8 +266,8 @@ impl EtcdTowerStorage {
     }
 
     fn get_keys(node_pubkey: &Pubkey) -> (String, String) {
-        let instance_key = format!("{}/instance", node_pubkey);
-        let tower_key = format!("{}/tower", node_pubkey);
+        let instance_key = format!("{node_pubkey}/instance");
+        let tower_key = format!("{node_pubkey}/tower");
         (instance_key, tower_key)
     }
 
@@ -311,7 +311,7 @@ impl TowerStorage for EtcdTowerStorage {
         if !response.succeeded() {
             return Err(TowerError::IoError(io::Error::new(
                 io::ErrorKind::Other,
-                format!("Lost etcd instance lock for {}", node_pubkey),
+                format!("Lost etcd instance lock for {node_pubkey}"),
             )));
         }
 

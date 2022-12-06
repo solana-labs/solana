@@ -17,6 +17,25 @@ use {
     thiserror::Error,
 };
 
+/// Wrapper for rpc return types of methods that provide responses both with and without context.
+/// Main purpose of this is to fix methods that lack context information in their return type,
+/// without breaking backwards compatibility.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OptionalContext<T> {
+    Context(Response<T>),
+    NoContext(T),
+}
+
+impl<T> OptionalContext<T> {
+    pub fn parse_value(self) -> T {
+        match self {
+            Self::Context(response) => response.value,
+            Self::NoContext(value) => value,
+        }
+    }
+}
+
 pub type RpcResult<T> = client_error::Result<Response<T>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -324,7 +343,7 @@ impl fmt::Display for RpcVersionInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(version) = self.solana_core.split_whitespace().next() {
             // Display just the semver if possible
-            write!(f, "{}", version)
+            write!(f, "{version}")
         } else {
             write!(f, "{}", self.solana_core)
         }
@@ -374,7 +393,7 @@ pub struct RpcVoteAccountInfo {
     /// Whether this account is staked for the current epoch
     pub epoch_vote_account: bool,
 
-    /// History of how many credits earned by the end of each epoch
+    /// Latest history of earned credits for up to `MAX_RPC_VOTE_ACCOUNT_INFO_EPOCH_CREDITS_HISTORY` epochs
     ///   each tuple is (Epoch, credits, prev_credits)
     pub epoch_credits: Vec<(Epoch, u64, u64)>,
 

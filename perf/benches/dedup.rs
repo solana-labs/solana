@@ -30,7 +30,7 @@ fn do_bench_dedup_packets(bencher: &mut Bencher, mut batches: Vec<PacketBatch>) 
         deduper.reset();
         batches
             .iter_mut()
-            .for_each(|b| b.iter_mut().for_each(|p| p.meta.set_discard(false)));
+            .for_each(|b| b.iter_mut().for_each(|p| p.meta_mut().set_discard(false)));
     });
 }
 

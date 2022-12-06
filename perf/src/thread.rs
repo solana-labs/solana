@@ -27,7 +27,7 @@ pub fn renice_this_thread(adjustment: i8) -> Result<(), String> {
     // is fixed to zero for SCHED_OTHER threads (which is the default).
     nice(adjustment)
         .map(|_| ())
-        .map_err(|err| format!("Failed to change thread's nice value: {}", err))
+        .map_err(|err| format!("Failed to change thread's nice value: {err}"))
 }
 
 /// Adds `adjustment` to the nice value of calling thread. Negative `adjustment` increases priority,

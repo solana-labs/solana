@@ -1,5 +1,5 @@
 use {
-    crate::inline_instruction_padding_program::{self, InstructionPaddingConfig},
+    crate::spl_convert::FromOtherSolana,
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
@@ -8,7 +8,9 @@ use {
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::tpu_connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+    },
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -29,6 +31,11 @@ impl Default for ExternalClientType {
     fn default() -> Self {
         Self::ThinClient
     }
+}
+
+pub struct InstructionPaddingConfig {
+    pub program_id: Pubkey,
+    pub data_size: u32,
 }
 
 /// Holds the configuration for a single run of the benchmark
@@ -393,7 +400,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if let Some(addr) = matches.value_of("entrypoint") {
         args.entrypoint_addr = solana_net_utils::parse_host_port(addr).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
+            eprintln!("failed to parse entrypoint address: {e}");
             exit(1)
         });
     }
@@ -477,7 +484,7 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         let program_id = matches
             .value_of("instruction_padding_program_id")
             .map(|target_str| target_str.parse().unwrap())
-            .unwrap_or(inline_instruction_padding_program::ID);
+            .unwrap_or_else(|| FromOtherSolana::from(spl_instruction_padding::ID));
         args.instruction_padding_config = Some(InstructionPaddingConfig {
             program_id,
             data_size: data_size

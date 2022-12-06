@@ -39,9 +39,8 @@ pub fn process_instruction(
 
     // Consume compute units since proof verification is an expensive operation
     {
-        let compute_meter = invoke_context.get_compute_meter();
         // TODO: Tune the number of units consumed.  The current value is just a rough estimate
-        compute_meter.borrow_mut().consume(100_000)?;
+        invoke_context.consume_checked(100_000)?;
     }
 
     let transaction_context = &invoke_context.transaction_context;
@@ -69,6 +68,10 @@ pub fn process_instruction(
         ProofInstruction::VerifyTransferWithFee => {
             ic_msg!(invoke_context, "VerifyTransferWithFee");
             verify::<TransferWithFeeData>(invoke_context)
+        }
+        ProofInstruction::VerifyPubkeyValidity => {
+            ic_msg!(invoke_context, "VerifyPubkeyValidity");
+            verify::<PubkeyValidityData>(invoke_context)
         }
     }
 }

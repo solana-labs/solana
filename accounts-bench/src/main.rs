@@ -10,7 +10,7 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             Accounts,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
@@ -60,13 +60,13 @@ fn main() {
     let num_accounts = value_t!(matches, "num_accounts", usize).unwrap_or(10_000);
     let iterations = value_t!(matches, "iterations", usize).unwrap_or(20);
     let clean = matches.is_present("clean");
-    println!("clean: {:?}", clean);
+    println!("clean: {clean:?}");
 
     let path = PathBuf::from(env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_owned()))
         .join("accounts-bench");
-    println!("cleaning file system: {:?}", path);
+    println!("cleaning file system: {path:?}");
     if fs::remove_dir_all(path.clone()).is_err() {
-        println!("Warning: Couldn't remove {:?}", path);
+        println!("Warning: Couldn't remove {path:?}");
     }
     let accounts = Accounts::new_with_config_for_benches(
         vec![path],
@@ -75,7 +75,7 @@ fn main() {
         false,
         AccountShrinkThreshold::default(),
     );
-    println!("Creating {} accounts", num_accounts);
+    println!("Creating {num_accounts} accounts");
     let mut create_time = Measure::start("create accounts");
     let pubkeys: Vec<_> = (0..num_slots)
         .into_par_iter()
@@ -112,7 +112,7 @@ fn main() {
             let mut time = Measure::start("clean");
             accounts.accounts_db.clean_accounts_for_tests();
             time.stop();
-            println!("{}", time);
+            println!("{time}");
             for slot in 0..num_slots {
                 update_accounts_bench(&accounts, &pubkeys, ((x + 1) * num_slots + slot) as u64);
                 accounts.add_root((x * num_slots + slot) as u64);
@@ -120,25 +120,19 @@ fn main() {
         } else {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
-            let results = accounts.accounts_db.update_accounts_hash(
-                0,
-                &ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-                true,
-            );
+            let results = accounts
+                .accounts_db
+                .update_accounts_hash_for_tests(0, &ancestors, false, false);
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
-                false,
+            let results_store = accounts.accounts_db.update_accounts_hash(
+                CalcAccountsHashDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
                 None,
-                false,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
-                false,
                 true,
             );
             time_store.stop();
@@ -147,7 +141,7 @@ fn main() {
             }
             println!(
                 "hash,{},{},{},{}%",
-                results.0,
+                results.0 .0,
                 time,
                 time_store,
                 (time_store.as_us() as f64 / time.as_us() as f64 * 100.0f64) as u32
@@ -162,6 +156,6 @@ fn main() {
         info!("update_accounts_hash(us),{}", x);
     }
     for x in elapsed_store {
-        info!("calculate_accounts_hash_without_index(us),{}", x);
+        info!("calculate_accounts_hash_from_storages(us),{}", x);
     }
 }

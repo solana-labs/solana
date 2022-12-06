@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "moduleResolution": "node",
+        "target": "es2020"
+    },
+    "include": ["internal", "src"]
+}

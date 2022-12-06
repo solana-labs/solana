@@ -1,14 +1,11 @@
-//! Implementations of syscalls used when `solana-program` is built for non-BPF targets.
+//! Implementations of syscalls used when `solana-program` is built for non-SBF targets.
 
 #![cfg(not(target_os = "solana"))]
 
 use {
     crate::{
-        account_info::AccountInfo,
-        entrypoint::ProgramResult,
-        instruction::{AccountPropertyUpdate, Instruction},
-        program_error::UNSUPPORTED_SYSVAR,
-        pubkey::Pubkey,
+        account_info::AccountInfo, entrypoint::ProgramResult, instruction::Instruction,
+        program_error::UNSUPPORTED_SYSVAR, pubkey::Pubkey,
     },
     itertools::Itertools,
     std::sync::{Arc, RwLock},
@@ -27,7 +24,7 @@ pub fn set_syscall_stubs(syscall_stubs: Box<dyn SyscallStubs>) -> Box<dyn Syscal
 #[allow(clippy::integer_arithmetic)]
 pub trait SyscallStubs: Sync + Send {
     fn sol_log(&self, message: &str) {
-        println!("{}", message);
+        println!("{message}");
     }
     fn sol_log_compute_units(&self) {
         sol_log("SyscallStubs: sol_log_compute_units() not available");
@@ -57,14 +54,14 @@ pub trait SyscallStubs: Sync + Send {
     unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
         // cannot be overlapping
         assert!(
-            is_nonoverlapping(src as usize, dst as usize, n),
+            is_nonoverlapping(src as usize, n, dst as usize, n),
             "memcpy does not support overlapping regions"
         );
-        std::ptr::copy_nonoverlapping(src, dst, n as usize);
+        std::ptr::copy_nonoverlapping(src, dst, n);
     }
     /// # Safety
     unsafe fn sol_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
-        std::ptr::copy(src, dst, n as usize);
+        std::ptr::copy(src, dst, n);
     }
     /// # Safety
     unsafe fn sol_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
@@ -100,7 +97,6 @@ pub trait SyscallStubs: Sync + Send {
     fn sol_get_stack_height(&self) -> u64 {
         0
     }
-    fn sol_set_account_properties(&self, _updates: &[AccountPropertyUpdate]) {}
 }
 
 struct DefaultSyscallStubs {}
@@ -112,8 +108,7 @@ pub(crate) fn sol_log(message: &str) {
 
 pub(crate) fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
     sol_log(&format!(
-        "{:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
-        arg1, arg2, arg3, arg4, arg5
+        "{arg1:#x}, {arg2:#x}, {arg3:#x}, {arg4:#x}, {arg5:#x}"
     ));
 }
 
@@ -198,27 +193,22 @@ pub(crate) fn sol_get_stack_height() -> u64 {
     SYSCALL_STUBS.read().unwrap().sol_get_stack_height()
 }
 
-pub(crate) fn sol_set_account_properties(updates: &[AccountPropertyUpdate]) {
-    SYSCALL_STUBS
-        .read()
-        .unwrap()
-        .sol_set_account_properties(updates)
-}
-
 /// Check that two regions do not overlap.
 ///
-/// Adapted from libcore, hidden to share with bpf_loader without being part of
-/// the API surface.
+/// Hidden to share with bpf_loader without being part of the API surface.
 #[doc(hidden)]
-pub fn is_nonoverlapping<N>(src: N, dst: N, count: N) -> bool
+pub fn is_nonoverlapping<N>(src: N, src_len: N, dst: N, dst_len: N) -> bool
 where
     N: Ord + std::ops::Sub<Output = N>,
     <N as std::ops::Sub>::Output: Ord,
 {
-    let diff = if src > dst { src - dst } else { dst - src };
-    // If the absolute distance between the ptrs is at least as big as the size of the buffer,
+    // If the absolute distance between the ptrs is at least as big as the size of the other,
     // they do not overlap.
-    diff >= count
+    if src > dst {
+        src - dst >= dst_len
+    } else {
+        dst - src >= src_len
+    }
 }
 
 #[cfg(test)]
@@ -227,12 +217,16 @@ mod tests {
 
     #[test]
     fn test_is_nonoverlapping() {
-        assert!(is_nonoverlapping(10, 7, 3));
-        assert!(!is_nonoverlapping(10, 8, 3));
-        assert!(!is_nonoverlapping(10, 9, 3));
-        assert!(!is_nonoverlapping(10, 10, 3));
-        assert!(!is_nonoverlapping(10, 11, 3));
-        assert!(!is_nonoverlapping(10, 12, 3));
-        assert!(is_nonoverlapping(10, 13, 3));
+        for dst in 0..8 {
+            assert!(is_nonoverlapping(10, 3, dst, 3));
+        }
+        for dst in 8..13 {
+            assert!(!is_nonoverlapping(10, 3, dst, 3));
+        }
+        for dst in 13..20 {
+            assert!(is_nonoverlapping(10, 3, dst, 3));
+        }
+        assert!(is_nonoverlapping::<u8>(255, 3, 254, 1));
+        assert!(!is_nonoverlapping::<u8>(255, 2, 254, 3));
     }
 }

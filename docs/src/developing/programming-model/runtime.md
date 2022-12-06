@@ -35,13 +35,19 @@ The policy is as follows:
   - And only if the data is zero-initialized or empty.
 - An account not assigned to the program cannot have its balance decrease.
 - The balance of read-only and executable accounts may not change.
-- Only the system program can change the size of the data and only if the system
-  program owns the account.
-- Only the owner may change account data.
+- Only the owner may change account size and data.
   - And if the account is writable.
   - And if the account is not executable.
 - Executable is one-way (false->true) and only the account owner may set it.
 - No one can make modifications to the rent_epoch associated with this account.
+
+## Balancing the balances
+
+Before and after each instruction, the sum of all account balances must stay the same.
+E.g. if one account's balance is increased, another's must be decreased by the same ammount.
+Because the runtime can not see changes to accounts which were not passed to it,
+all accounts for which the balances were modified must be passed,
+even if they are not needed in the called instruction.
 
 ## Compute Budget
 
@@ -52,14 +58,15 @@ the transaction may perform, and operational bounds the transaction must adhere
 to.
 
 As the transaction is processed compute units are consumed by its
-instruction's programs performing operations such as executing BPF instructions,
+instruction's programs performing operations such as executing SBF instructions,
 calling syscalls, etc... When the transaction consumes its entire budget, or
-exceeds a bound such as attempting a call stack that is too deep, the runtime
-halts the transaction processing and returns an error.
+exceeds a bound such as attempting a call stack that is too deep, or loaded
+account data exceeds limit, the runtime halts the transaction processing and
+returns an error.
 
 The following operations incur a compute cost:
 
-- Executing BPF instructions
+- Executing SBF instructions
 - Passing data between programs
 - Calling system calls
   - logging
@@ -84,7 +91,7 @@ max_units: 1,400,000,
 log_u64_units: 100,
 create_program address units: 1500,
 invoke_units: 1000,
-max_invoke_depth: 4,
+max_invoke_stack_height: 5,
 max_instruction_trace_length: 64,
 max_call_depth: 64,
 stack_frame_size: 4096,
@@ -94,10 +101,10 @@ log_pubkey_units: 100,
 
 Then any transaction:
 
-- Could execute 1,400,000 BPF instructions, if it did nothing else.
+- Could execute 1,400,000 SBF instructions, if it did nothing else.
 - Cannot exceed 4k of stack usage.
-- Cannot exceed a BPF call depth of 64.
-- Cannot exceed 4 levels of cross-program invocations.
+- Cannot exceed a SBF call depth of 64.
+- Cannot exceed invoke stack height of 5 (4 levels of cross-program invocations).
 
 > **NOTE:** Since the compute budget is consumed incrementally as the transaction executes,
 > the total budget consumption will be a combination of the various costs of the
@@ -142,6 +149,21 @@ let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
 
 ```rust
 let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
+```
+
+### Accounts data size limit
+
+A transaction should request the maximum bytes of accounts data it is
+allowed to load by including a `SetAccountsDataSizeLimit` instruction, requested
+limit is capped by `get_max_loaded_accounts_data_limit()`. If no
+`SetAccountsDataSizeLimit` is provided, the transaction is defaulted to
+have limit of `get_default_loaded_accounts_data_limit()`.
+
+The `ComputeBudgetInstruction::set_accounts_data_size_limit` function can be used
+to create this instruction:
+
+```rust
+let instruction = ComputeBudgetInstruction::set_accounts_data_size_limit(100_000);
 ```
 
 ## New Features

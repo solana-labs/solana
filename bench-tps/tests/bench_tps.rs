@@ -4,9 +4,14 @@ use {
     serial_test::serial,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
-        cli::Config,
-        inline_instruction_padding_program::{self, InstructionPaddingConfig},
+        cli::{Config, InstructionPaddingConfig},
         send_batch::generate_durable_nonce_accounts,
+        spl_convert::FromOtherSolana,
+    },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        thin_client::ThinClient,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
@@ -25,11 +30,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidatorGenesis,
-    solana_thin_client::thin_client::ThinClient,
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     std::{sync::Arc, time::Duration},
 };
 
@@ -46,7 +46,7 @@ fn program_account(program_data: &[u8]) -> AccountSharedData {
 fn test_bench_tps_local_cluster(config: Config) {
     let native_instruction_processors = vec![];
     let additional_accounts = vec![(
-        inline_instruction_padding_program::id(),
+        FromOtherSolana::from(spl_instruction_padding::ID),
         program_account(include_bytes!("fixtures/spl_instruction_padding.so")),
     )];
 
@@ -63,6 +63,7 @@ fn test_bench_tps_local_cluster(config: Config) {
             cluster_lamports: 200_000_000,
             validator_configs: make_identical_validator_configs(
                 &ValidatorConfig {
+                    accounts_db_caching_enabled: true,
                     rpc_config: JsonRpcConfig {
                         faucet_addr: Some(faucet_addr),
                         ..JsonRpcConfig::default_for_test()
@@ -121,7 +122,7 @@ fn test_bench_tps_test_validator(config: Config) {
         .faucet_addr(Some(faucet_addr))
         .add_program(
             "spl_instruction_padding",
-            inline_instruction_padding_program::id(),
+            FromOtherSolana::from(spl_instruction_padding::ID),
         )
         .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
@@ -203,7 +204,7 @@ fn test_bench_tps_local_cluster_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: inline_instruction_padding_program::id(),
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
             data_size: 0,
         }),
         ..Config::default()
@@ -217,7 +218,7 @@ fn test_bench_tps_tpu_client_with_padding() {
         tx_count: 100,
         duration: Duration::from_secs(10),
         instruction_padding_config: Some(InstructionPaddingConfig {
-            program_id: inline_instruction_padding_program::id(),
+            program_id: FromOtherSolana::from(spl_instruction_padding::ID),
             data_size: 0,
         }),
         ..Config::default()

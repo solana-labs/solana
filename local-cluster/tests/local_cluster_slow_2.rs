@@ -115,7 +115,7 @@ fn test_consistency_halt() {
     warn!("adding a validator");
     cluster.add_validator(
         &validator_snapshot_test_config.validator_config,
-        validator_stake as u64,
+        validator_stake,
         Arc::new(Keypair::new()),
         None,
         SocketAddrSpace::Unspecified,
@@ -238,7 +238,7 @@ fn test_ledger_cleanup_service() {
             .unwrap()
             .for_each(|_| slots += 1);
         // with 3 nodes up to 3 slots can be in progress and not complete so max slots in blockstore should be up to 103
-        assert!(slots <= 103, "got {}", slots);
+        assert!(slots <= 103, "got {slots}");
     }
 }
 

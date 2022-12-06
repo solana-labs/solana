@@ -1,4 +1,4 @@
-//! The solana-program-test provides a BanksClient-based test framework BPF programs
+//! The solana-program-test provides a BanksClient-based test framework SBF programs
 #![allow(clippy::integer_arithmetic)]
 
 // Export tokio for test clients
@@ -15,10 +15,12 @@ use {
         stable_log, timings::ExecuteTimings,
     },
     solana_runtime::{
+        accounts_background_service::{AbsRequestSender, SnapshotRequestType},
         bank::Bank,
         bank_forks::BankForks,
         builtins::Builtin,
         commitment::BlockCommitmentCache,
+        epoch_accounts_hash::EpochAccountsHash,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
         runtime_config::RuntimeConfig,
     },
@@ -34,7 +36,7 @@ use {
         instruction::{Instruction, InstructionError},
         native_token::sol_to_lamports,
         poh_config::PohConfig,
-        program_error::{ProgramError, ACCOUNT_BORROW_FAILED, UNSUPPORTED_SYSVAR},
+        program_error::{ProgramError, UNSUPPORTED_SYSVAR},
         pubkey::Pubkey,
         rent::Rent,
         signature::{Keypair, Signer},
@@ -61,6 +63,7 @@ use {
 // Export types so test clients can limit their solana crate dependencies
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
+    solana_banks_interface::BanksTransactionResultWithMetadata,
     solana_program_runtime::invoke_context::InvokeContext,
     solana_sdk::transaction_context::IndexOfAccount,
 };
@@ -116,8 +119,8 @@ pub fn builtin_process_instruction(
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
     let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
-    // Serialize entrypoint parameters with BPF ABI
-    let (mut parameter_bytes, _account_lengths) = serialize_parameters(
+    // Serialize entrypoint parameters with SBF ABI
+    let (mut parameter_bytes, _regions, _account_lengths) = serialize_parameters(
         invoke_context.transaction_context,
         invoke_context
             .transaction_context
@@ -196,11 +199,7 @@ fn get_sysvar<T: Default + Sysvar + Sized + serde::de::DeserializeOwned + Clone>
 ) -> u64 {
     let invoke_context = get_invoke_context();
     if invoke_context
-        .get_compute_meter()
-        .try_borrow_mut()
-        .map_err(|_| ACCOUNT_BORROW_FAILED)
-        .unwrap()
-        .consume(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
+        .consume_checked(invoke_context.get_compute_budget().sysvar_base_cost + T::size_of() as u64)
         .is_err()
     {
         panic!("Exceeded compute budget");
@@ -290,7 +289,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     .set_data_from_slice(&account_info_data)
                     .unwrap(),
                 Err(err) if borrowed_account.get_data() != *account_info_data => {
-                    panic!("{:?}", err);
+                    panic!("{err:?}");
                 }
                 _ => {}
             }
@@ -394,6 +393,11 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .set_return_data(caller, data.to_vec())
             .unwrap();
     }
+
+    fn sol_get_stack_height(&self) -> u64 {
+        let invoke_context = get_invoke_context();
+        invoke_context.get_stack_height().try_into().unwrap()
+    }
 }
 
 pub fn find_file(filename: &str) -> Option<PathBuf> {
@@ -417,7 +421,7 @@ fn default_shared_object_dirs() -> Vec<PathBuf> {
     if let Ok(dir) = std::env::current_dir() {
         search_path.push(dir);
     }
-    trace!("BPF .so search path: {:?}", search_path);
+    trace!("SBF .so search path: {:?}", search_path);
     search_path
 }
 
@@ -450,7 +454,7 @@ impl Default for ProgramTest {
     /// used to override this preference at runtime.  `cargo test-bpf` will set `BPF_OUT_DIR`
     /// automatically.
     ///
-    /// BPF program shared objects and account data files are searched for in
+    /// SBF program shared objects and account data files are searched for in
     /// * the value of the `BPF_OUT_DIR` environment variable
     /// * the `tests/fixtures` sub-directory
     /// * the current working directory
@@ -495,7 +499,7 @@ impl ProgramTest {
         me
     }
 
-    /// Override default BPF program selection
+    /// Override default SBF program selection
     pub fn prefer_bpf(&mut self, prefer_bpf: bool) {
         self.prefer_bpf = prefer_bpf;
     }
@@ -510,14 +514,14 @@ impl ProgramTest {
         self.transaction_account_lock_limit = Some(transaction_account_lock_limit);
     }
 
-    /// Override the BPF compute budget
+    /// Override the SBF compute budget
     #[allow(deprecated)]
     #[deprecated(since = "1.8.0", note = "please use `set_compute_max_units` instead")]
     pub fn set_bpf_compute_max_units(&mut self, bpf_compute_max_units: u64) {
         self.compute_max_units = Some(bpf_compute_max_units);
     }
 
-    /// Execute the BPF program with JIT if true, interpreted if false
+    /// Execute the SBF program with JIT if true, interpreted if false
     pub fn use_bpf_jit(&mut self, use_bpf_jit: bool) {
         self.use_bpf_jit = use_bpf_jit;
     }
@@ -541,7 +545,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: read_file(find_file(filename).unwrap_or_else(|| {
-                    panic!("Unable to locate {}", filename);
+                    panic!("Unable to locate {filename}");
                 })),
                 owner,
                 executable: false,
@@ -564,7 +568,7 @@ impl ProgramTest {
             Account {
                 lamports,
                 data: base64::decode(data_base64)
-                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {}", err)),
+                    .unwrap_or_else(|err| panic!("Failed to base64 decode: {err}")),
                 owner,
                 executable: false,
                 rent_epoch: 0,
@@ -572,13 +576,13 @@ impl ProgramTest {
         );
     }
 
-    /// Add a BPF program to the test environment.
+    /// Add a SBF program to the test environment.
     ///
-    /// `program_name` will also be used to locate the BPF shared object in the current or fixtures
+    /// `program_name` will also be used to locate the SBF shared object in the current or fixtures
     /// directory.
     ///
     /// If `process_instruction` is provided, the natively built-program may be used instead of the
-    /// BPF shared object depending on the `BPF_OUT_DIR` environment variable.
+    /// SBF shared object depending on the `BPF_OUT_DIR` environment variable.
     pub fn add_program(
         &mut self,
         program_name: &str,
@@ -588,7 +592,7 @@ impl ProgramTest {
         let add_bpf = |this: &mut ProgramTest, program_file: PathBuf| {
             let data = read_file(&program_file);
             info!(
-                "\"{}\" BPF program from {}{}",
+                "\"{}\" SBF program from {}{}",
                 program_name,
                 program_file.display(),
                 std::fs::metadata(&program_file)
@@ -648,7 +652,7 @@ impl ProgramTest {
             if valid_program_names.is_empty() {
                 // This should be unreachable as `test-bpf` should guarantee at least one shared
                 // object exists somewhere.
-                warn!("No BPF shared objects found.");
+                warn!("No SBF shared objects found.");
                 return;
             }
 
@@ -662,33 +666,27 @@ impl ProgramTest {
             }
         };
 
-        let program_file = find_file(&format!("{}.so", program_name));
+        let program_file = find_file(&format!("{program_name}.so"));
         match (self.prefer_bpf, program_file, process_instruction) {
-            // If BPF is preferred (i.e., `test-bpf` is invoked) and a BPF shared object exists,
+            // If SBF is preferred (i.e., `test-sbf` is invoked) and a BPF shared object exists,
             // use that as the program data.
             (true, Some(file), _) => add_bpf(self, file),
 
-            // If BPF is not required (i.e., we were invoked with `test`), use the provided
+            // If SBF is not required (i.e., we were invoked with `test`), use the provided
             // processor function as is.
             //
             // TODO: figure out why tests hang if a processor panics when running native code.
             (false, _, Some(process)) => add_native(self, process),
 
-            // Invalid: `test-bpf` invocation with no matching BPF shared object.
+            // Invalid: `test-sbf` invocation with no matching SBF shared object.
             (true, None, _) => {
                 warn_invalid_program_name();
-                panic!(
-                    "Program file data not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program file data not available for {program_name} ({program_id})");
             }
 
             // Invalid: regular `test` invocation without a processor.
             (false, _, None) => {
-                panic!(
-                    "Program processor not available for {} ({})",
-                    program_name, program_id
-                );
+                panic!("Program processor not available for {program_name} ({program_id})");
             }
         }
     }
@@ -870,7 +868,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         // Run a simulated PohService to provide the client with new blockhashes.  New blockhashes
         // are required when sending multiple otherwise identical transactions in series from a
@@ -904,7 +902,7 @@ impl ProgramTest {
         .await;
         let banks_client = start_client(transport)
             .await
-            .unwrap_or_else(|err| panic!("Failed to start banks client: {}", err));
+            .unwrap_or_else(|err| panic!("Failed to start banks client: {err}"));
 
         ProgramTestContext::new(
             bank_forks,
@@ -1129,11 +1127,32 @@ impl ProgramTestContext {
                 pre_warp_slot,
             ))
         };
-        bank_forks.set_root(
-            pre_warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(pre_warp_slot),
-        );
+
+        let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+        let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
+
+        bank_forks.set_root(pre_warp_slot, &abs_request_sender, Some(pre_warp_slot));
+
+        // The call to `set_root()` above will send an EAH request.  Need to intercept and handle
+        // all EpochAccountsHash requests so future rooted banks do not hang in Bank::freeze()
+        // waiting for an in-flight EAH calculation to complete.
+        snapshot_request_receiver
+            .try_iter()
+            .filter(|snapshot_request| {
+                snapshot_request.request_type == SnapshotRequestType::EpochAccountsHash
+            })
+            .for_each(|snapshot_request| {
+                snapshot_request
+                    .snapshot_root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .epoch_accounts_hash_manager
+                    .set_valid(
+                        EpochAccountsHash::new(Hash::new_unique()),
+                        snapshot_request.snapshot_root_bank.slot(),
+                    )
+            });
 
         // warp_bank is frozen so go forward to get unfrozen bank at warp_slot
         bank_forks.insert(Bank::new_from_parent(
@@ -1194,5 +1213,15 @@ impl ProgramTestContext {
         let bank = bank_forks.working_bank();
         self.last_blockhash = bank.last_blockhash();
         Ok(())
+    }
+
+    /// Get a new latest blockhash, similar in spirit to RpcClient::get_latest_blockhash()
+    pub async fn get_new_latest_blockhash(&mut self) -> io::Result<Hash> {
+        let blockhash = self
+            .banks_client
+            .get_new_latest_blockhash(&self.last_blockhash)
+            .await?;
+        self.last_blockhash = blockhash;
+        Ok(blockhash)
     }
 }

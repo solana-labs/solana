@@ -50,6 +50,10 @@ impl Vote {
             timestamp: None,
         }
     }
+
+    pub fn last_voted_slot(&self) -> Option<Slot> {
+        self.slots.last().copied()
+    }
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
@@ -760,7 +764,7 @@ mod tests {
 
         let credits = (MAX_EPOCH_CREDITS_HISTORY + 2) as u64;
         for i in 0..credits {
-            vote_state.increment_credits(i as u64, 1);
+            vote_state.increment_credits(i, 1);
         }
         assert_eq!(vote_state.credits(), credits);
         assert!(vote_state.epoch_credits().len() <= MAX_EPOCH_CREDITS_HISTORY);

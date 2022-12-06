@@ -139,10 +139,10 @@ impl BigTableConnection {
 
                 Ok(Self {
                     access_token: None,
-                    channel: tonic::transport::Channel::from_shared(format!("http://{}", endpoint))
+                    channel: tonic::transport::Channel::from_shared(format!("http://{endpoint}"))
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
                         .connect_lazy(),
-                    table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
+                    table_prefix: format!("projects/emulator/instances/{instance_name}/tables/"),
                     app_profile_id: app_profile_id.to_string(),
                     timeout,
                 })
@@ -456,6 +456,31 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
 
         let rows = self.decode_read_rows_response(response).await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    /// Check whether a row key exists in a `table`
+    pub async fn row_key_exists(&mut self, table_name: &str, row_key: RowKey) -> Result<bool> {
+        self.refresh_access_token().await;
+
+        let response = self
+            .client
+            .read_rows(ReadRowsRequest {
+                table_name: format!("{}{}", self.table_prefix, table_name),
+                app_profile_id: self.app_profile_id.clone(),
+                rows_limit: 1,
+                rows: Some(RowSet {
+                    row_keys: vec![row_key.into_bytes()],
+                    row_ranges: vec![],
+                }),
+                filter: Some(RowFilter {
+                    filter: Some(row_filter::Filter::StripValueTransformer(true)),
+                }),
+            })
+            .await?
+            .into_inner();
+
+        let rows = self.decode_read_rows_response(response).await?;
+        Ok(!rows.is_empty())
     }
 
     /// Get latest data from `table`.
@@ -813,13 +838,13 @@ where
     let value = &row_data
         .iter()
         .find(|(name, _)| name == "proto")
-        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .ok_or_else(|| Error::ObjectNotFound(format!("{table}/{key}")))?
         .1;
 
     let data = decompress(value)?;
     T::decode(&data[..]).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
-        Error::ObjectCorrupt(format!("{}/{}", table, key))
+        Error::ObjectCorrupt(format!("{table}/{key}"))
     })
 }
 
@@ -834,13 +859,13 @@ where
     let value = &row_data
         .iter()
         .find(|(name, _)| name == "bin")
-        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .ok_or_else(|| Error::ObjectNotFound(format!("{table}/{key}")))?
         .1;
 
     let data = decompress(value)?;
     bincode::deserialize(&data).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
-        Error::ObjectCorrupt(format!("{}/{}", table, key))
+        Error::ObjectCorrupt(format!("{table}/{key}"))
     })
 }
 

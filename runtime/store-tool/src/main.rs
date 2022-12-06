@@ -41,7 +41,7 @@ fn main() {
         }
         info!(
             "  account: {:?} version: {} lamports: {} data: {} hash: {:?}",
-            account.meta.pubkey,
+            account.pubkey(),
             account.meta.write_version,
             account.account_meta.lamports,
             account.meta.data_len,
@@ -60,7 +60,7 @@ fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
     account.hash == &Hash::default()
         && account.meta.data_len == 0
         && account.meta.write_version == 0
-        && account.meta.pubkey == Pubkey::default()
+        && account.pubkey() == &Pubkey::default()
         && account.clone_account() == AccountSharedData::default()
 }
 

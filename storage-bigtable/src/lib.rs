@@ -78,7 +78,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 // Convert a slot to its bucket representation whereby lower slots are always lexically ordered
 // before higher slots
 fn slot_to_key(slot: Slot) -> String {
-    format!("{:016x}", slot)
+    format!("{slot:016x}")
 }
 
 fn slot_to_blocks_key(slot: Slot) -> String {
@@ -535,6 +535,22 @@ impl LedgerStorage {
         })
     }
 
+    /// Does the confirmed block exist in the Bigtable
+    pub async fn confirmed_block_exists(&self, slot: Slot) -> Result<bool> {
+        debug!(
+            "LedgerStorage::confirmed_block_exists request received: {:?}",
+            slot
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        let block_exists = bigtable
+            .row_key_exists("blocks", slot_to_blocks_key(slot))
+            .await?;
+
+        Ok(block_exists)
+    }
+
     pub async fn get_signature_status(&self, signature: &Signature) -> Result<TransactionStatus> {
         debug!(
             "LedgerStorage::get_signature_status request received: {:?}",
@@ -685,7 +701,7 @@ impl LedgerStorage {
         );
         inc_new_counter_debug!("storage-bigtable-query", 1);
         let mut bigtable = self.connection.client();
-        let address_prefix = format!("{}/", address);
+        let address_prefix = format!("{address}/");
 
         // Figure out where to start listing from based on `before_signature`
         let (first_slot, before_transaction_index) = match before_signature {
@@ -749,8 +765,7 @@ impl LedgerStorage {
         'outer: for (row_key, data) in tx_by_addr_data {
             let slot = !key_to_slot(&row_key[address_prefix.len()..]).ok_or_else(|| {
                 bigtable::Error::ObjectCorrupt(format!(
-                    "Failed to convert key to slot: tx-by-addr/{}",
-                    row_key
+                    "Failed to convert key to slot: tx-by-addr/{row_key}"
                 ))
             })?;
 

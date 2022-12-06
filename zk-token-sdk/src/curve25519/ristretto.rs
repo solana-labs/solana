@@ -101,7 +101,7 @@ mod target_arch {
 
         #[cfg(not(target_os = "solana"))]
         fn multiply(scalar: &PodScalar, point: &Self) -> Option<Self> {
-            let scalar: Scalar = scalar.into();
+            let scalar: Scalar = scalar.try_into().ok()?;
             let point: RistrettoPoint = point.try_into().ok()?;
 
             let result = &scalar * &point;
@@ -114,8 +114,13 @@ mod target_arch {
         type Point = Self;
 
         fn multiscalar_multiply(scalars: &[PodScalar], points: &[Self]) -> Option<Self> {
+            let scalars = scalars
+                .iter()
+                .map(|scalar| Scalar::try_from(scalar).ok())
+                .collect::<Option<Vec<_>>>()?;
+
             RistrettoPoint::optional_multiscalar_mul(
-                scalars.iter().map(Scalar::from),
+                scalars,
                 points
                     .iter()
                     .map(|point| RistrettoPoint::try_from(point).ok()),
@@ -204,6 +209,28 @@ mod target_arch {
                 MUL,
                 &scalar.0 as *const u8,
                 &point.0 as *const u8,
+                &mut result_point.0 as *mut u8,
+            )
+        };
+
+        if result == 0 {
+            Some(result_point)
+        } else {
+            None
+        }
+    }
+
+    pub fn multiscalar_multiply_ristretto(
+        scalars: &[PodScalar],
+        points: &[PodRistrettoPoint],
+    ) -> Option<PodRistrettoPoint> {
+        let mut result_point = PodRistrettoPoint::zeroed();
+        let result = unsafe {
+            solana_program::syscalls::sol_curve_multiscalar_mul(
+                CURVE25519_RISTRETTO,
+                scalars.as_ptr() as *const u8,
+                points.as_ptr() as *const u8,
+                points.len() as u64,
                 &mut result_point.0 as *mut u8,
             )
         };

@@ -8,7 +8,6 @@ use {
         duplicate_repair_status::DuplicateSlotRepairStatus,
         outstanding_requests::OutstandingRequests,
         repair_weight::RepairWeight,
-        result::Result,
         serve_repair::{ServeRepair, ShredRepairType, REPAIR_PEERS_CACHE_CAPACITY},
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
@@ -272,9 +271,6 @@ impl RepairService {
             let mut add_votes_elapsed;
 
             let root_bank = repair_info.bank_forks.read().unwrap().root_bank();
-            let sign_repair_requests_feature_epoch =
-                ServeRepair::sign_repair_requests_activated_epoch(&root_bank);
-
             let repairs = {
                 let new_root = root_bank.slot();
 
@@ -331,16 +327,6 @@ impl RepairService {
                 repairs
                     .iter()
                     .filter_map(|repair_request| {
-                        let sign_repair_request = ServeRepair::should_sign_repair_request(
-                            repair_request.slot(),
-                            &root_bank,
-                            sign_repair_requests_feature_epoch,
-                        );
-                        let maybe_keypair = if sign_repair_request {
-                            Some(identity_keypair)
-                        } else {
-                            None
-                        };
                         let (to, req) = serve_repair
                             .repair_request(
                                 &repair_info.cluster_slots,
@@ -349,7 +335,7 @@ impl RepairService {
                                 &mut repair_stats,
                                 &repair_info.repair_validators,
                                 &mut outstanding_requests,
-                                maybe_keypair,
+                                identity_keypair,
                             )
                             .ok()?;
                         Some((req, to))
@@ -494,39 +480,7 @@ impl RepairService {
         }
     }
 
-    // Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
-    pub fn generate_repairs_in_range(
-        blockstore: &Blockstore,
-        max_repairs: usize,
-        repair_range: &RepairSlotRange,
-    ) -> Result<Vec<ShredRepairType>> {
-        // Slot height and shred indexes for shreds we want to repair
-        let mut repairs: Vec<ShredRepairType> = vec![];
-        for slot in repair_range.start..=repair_range.end {
-            if repairs.len() >= max_repairs {
-                break;
-            }
-
-            let meta = blockstore
-                .meta(slot)
-                .expect("Unable to lookup slot meta")
-                .unwrap_or(SlotMeta {
-                    slot,
-                    ..SlotMeta::default()
-                });
-
-            let new_repairs = Self::generate_repairs_for_slot(
-                blockstore,
-                slot,
-                &meta,
-                max_repairs - repairs.len(),
-            );
-            repairs.extend(new_repairs);
-        }
-
-        Ok(repairs)
-    }
-
+    /// If this slot is missing shreds generate repairs
     pub fn generate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -551,7 +505,7 @@ impl RepairService {
         }
     }
 
-    /// Repairs any fork starting at the input slot
+    /// Repairs any fork starting at the input slot (uses blockstore for fork info)
     pub fn generate_repairs_for_fork<'a>(
         blockstore: &Blockstore,
         repairs: &mut Vec<ShredRepairType>,
@@ -580,6 +534,40 @@ impl RepairService {
                 break;
             }
         }
+    }
+
+    /// Generate repairs for all slots `x` in the repair_range.start <= x <= repair_range.end
+    #[cfg(test)]
+    pub fn generate_repairs_in_range(
+        blockstore: &Blockstore,
+        max_repairs: usize,
+        repair_range: &RepairSlotRange,
+    ) -> crate::result::Result<Vec<ShredRepairType>> {
+        // Slot height and shred indexes for shreds we want to repair
+        let mut repairs: Vec<ShredRepairType> = vec![];
+        for slot in repair_range.start..=repair_range.end {
+            if repairs.len() >= max_repairs {
+                break;
+            }
+
+            let meta = blockstore
+                .meta(slot)
+                .expect("Unable to lookup slot meta")
+                .unwrap_or(SlotMeta {
+                    slot,
+                    ..SlotMeta::default()
+                });
+
+            let new_repairs = Self::generate_repairs_for_slot(
+                blockstore,
+                slot,
+                &meta,
+                max_repairs - repairs.len(),
+            );
+            repairs.extend(new_repairs);
+        }
+
+        Ok(repairs)
     }
 
     #[cfg(test)]
@@ -617,6 +605,7 @@ impl RepairService {
         repair_socket: &UdpSocket,
         repair_validators: &Option<HashSet<Pubkey>>,
         outstanding_requests: &RwLock<OutstandingShredRepairs>,
+        identity_keypair: &Keypair,
     ) {
         duplicate_slot_repair_statuses.retain(|slot, status| {
             Self::update_duplicate_slot_repair_addr(
@@ -641,6 +630,7 @@ impl RepairService {
                             serve_repair,
                             repair_stats,
                             nonce,
+                            identity_keypair,
                         ) {
                             info!(
                                 "repair req send_to {} ({}) error {:?}",
@@ -667,13 +657,14 @@ impl RepairService {
         serve_repair: &ServeRepair,
         repair_stats: &mut RepairStats,
         nonce: Nonce,
-    ) -> Result<()> {
+        identity_keypair: &Keypair,
+    ) -> crate::result::Result<()> {
         let req = serve_repair.map_repair_request(
             repair_type,
             repair_pubkey,
             repair_stats,
             nonce,
-            None,
+            identity_keypair,
         )?;
         repair_socket.send_to(&req, to)?;
         Ok(())
@@ -838,7 +829,7 @@ mod test {
             let num_slots = 2;
 
             // Create some shreds
-            let (mut shreds, _) = make_many_slot_entries(0, num_slots as u64, 150);
+            let (mut shreds, _) = make_many_slot_entries(0, num_slots, 150);
             let num_shreds = shreds.len() as u64;
             let num_shreds_per_slot = num_shreds / num_slots;
 
@@ -866,7 +857,7 @@ mod test {
                 .flat_map(|slot| {
                     missing_indexes_per_slot
                         .iter()
-                        .map(move |shred_index| ShredRepairType::Shred(slot as u64, *shred_index))
+                        .map(move |shred_index| ShredRepairType::Shred(slot, *shred_index))
                 })
                 .collect();
 
@@ -979,10 +970,10 @@ mod test {
                     let expected: Vec<ShredRepairType> = (repair_slot_range.start
                         ..=repair_slot_range.end)
                         .map(|slot_index| {
-                            if slots.contains(&(slot_index as u64)) {
-                                ShredRepairType::Shred(slot_index as u64, 0)
+                            if slots.contains(&slot_index) {
+                                ShredRepairType::Shred(slot_index, 0)
                             } else {
-                                ShredRepairType::HighestShred(slot_index as u64, 0)
+                                ShredRepairType::HighestShred(slot_index, 0)
                             }
                         })
                         .collect();
@@ -1091,10 +1082,9 @@ mod test {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
         let cluster_slots = ClusterSlots::default();
-        let serve_repair = ServeRepair::new(
-            Arc::new(new_test_cluster_info(Node::new_localhost().info)),
-            bank_forks,
-        );
+        let cluster_info = Arc::new(new_test_cluster_info(Node::new_localhost().info));
+        let identity_keypair = cluster_info.keypair().clone();
+        let serve_repair = ServeRepair::new(cluster_info, bank_forks);
         let mut duplicate_slot_repair_statuses = HashMap::new();
         let dead_slot = 9;
         let receive_socket = &UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1129,6 +1119,7 @@ mod test {
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
+            &identity_keypair,
         );
         assert!(duplicate_slot_repair_statuses
             .get(&dead_slot)
@@ -1154,6 +1145,7 @@ mod test {
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
+            &identity_keypair,
         );
         assert_eq!(duplicate_slot_repair_statuses.len(), 1);
         assert!(duplicate_slot_repair_statuses.get(&dead_slot).is_some());
@@ -1172,6 +1164,7 @@ mod test {
             &UdpSocket::bind("0.0.0.0:0").unwrap(),
             &None,
             &RwLock::new(OutstandingRequests::default()),
+            &identity_keypair,
         );
         assert!(duplicate_slot_repair_statuses.is_empty());
     }

@@ -14,7 +14,7 @@ fn run_cargo_build(crate_name: &str, extra_args: &[&str], fail: bool) {
         .join(crate_name)
         .join("Cargo.toml");
     let toml = format!("{}", toml.display());
-    let mut args = vec!["-v", "--sbf-sdk", "../bpf", "--manifest-path", &toml];
+    let mut args = vec!["-v", "--sbf-sdk", "../sbf", "--manifest-path", &toml];
     for arg in extra_args {
         args.push(arg);
     }
@@ -80,7 +80,7 @@ fn test_out_dir() {
 
 #[test]
 #[serial]
-fn test_generate_child_script_on_failre() {
+fn test_generate_child_script_on_failure() {
     run_cargo_build("fail", &["--generate-child-script-on-failure"], true);
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let scr = cwd
@@ -113,7 +113,7 @@ fn test_sbfv2() {
         .expect("Unable to get ../.. of current working dir");
     let readelf = root
         .join("sdk")
-        .join("bpf")
+        .join("sbf")
         .join("dependencies")
         .join("sbf-tools")
         .join("llvm")

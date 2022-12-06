@@ -10,12 +10,16 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
+    solana_bpf_loader_program::syscalls::register_syscalls,
     solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    },
+    solana_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -47,10 +51,6 @@ use {
         sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
-    },
-    solana_tpu_client::{
-        connection_cache::ConnectionCache,
-        tpu_client::{TpuClient, TpuClientConfig},
     },
     std::{
         fs::File,
@@ -405,43 +405,8 @@ impl ProgramSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("Deploy a non-upgradeable program. Use `solana program deploy` instead to deploy upgradeable programs")
+                .about("Deploy has been removed. Use `solana program deploy` instead to deploy upgradeable programs")
                 .setting(AppSettings::Hidden)
-                .arg(
-                    Arg::with_name("program_location")
-                        .index(1)
-                        .value_name("PROGRAM_FILEPATH")
-                        .takes_value(true)
-                        .required(true)
-                        .help("/path/to/program.o"),
-                )
-                .arg(
-                    Arg::with_name("address_signer")
-                        .index(2)
-                        .value_name("PROGRAM_ADDRESS_SIGNER")
-                        .takes_value(true)
-                        .validator(is_valid_signer)
-                        .help("The signer for the desired address of the program [default: new random address]")
-                )
-                .arg(
-                    Arg::with_name("use_deprecated_loader")
-                        .long("use-deprecated-loader")
-                        .takes_value(false)
-                        .hidden(true) // Don't document this argument to discourage its use
-                        .help("Use the deprecated BPF loader")
-                )
-                .arg(
-                    Arg::with_name("allow_excessive_balance")
-                        .long("allow-excessive-deploy-account-balance")
-                        .takes_value(false)
-                        .help("Use the designated program id, even if the account already holds a large balance of SOL")
-                )
-                .arg(
-                    Arg::with_name("skip_fee_check")
-                        .long("skip-fee-check")
-                        .hidden(true)
-                        .takes_value(false)
-                ),
         )
     }
 }
@@ -878,8 +843,7 @@ fn process_program_deploy(
     {
         if account.owner != bpf_loader_upgradeable::id() {
             return Err(format!(
-                "Account {} is not an upgradeable program or already in use",
-                program_pubkey
+                "Account {program_pubkey} is not an upgradeable program or already in use"
             )
             .into());
         }
@@ -902,7 +866,7 @@ fn process_program_deploy(
                 {
                     if program_authority_pubkey.is_none() {
                         return Err(
-                            format!("Program {} is no longer upgradeable", program_pubkey).into(),
+                            format!("Program {program_pubkey} is no longer upgradeable").into()
                         );
                     }
                     if program_authority_pubkey != Some(upgrade_authority_signer.pubkey()) {
@@ -917,20 +881,18 @@ fn process_program_deploy(
                     false
                 } else {
                     return Err(format!(
-                        "Program {} has been closed, use a new Program Id",
-                        program_pubkey
+                        "Program {program_pubkey} has been closed, use a new Program Id"
                     )
                     .into());
                 }
             } else {
                 return Err(format!(
-                    "Program {} has been closed, use a new Program Id",
-                    program_pubkey
+                    "Program {program_pubkey} has been closed, use a new Program Id"
                 )
                 .into());
             }
         } else {
-            return Err(format!("{} is not an upgradeable program", program_pubkey).into());
+            return Err(format!("{program_pubkey} is not an upgradeable program").into());
         }
     } else {
         // do new deploy
@@ -1091,7 +1053,7 @@ fn process_write_buffer(
     {
         if let Ok(UpgradeableLoaderState::Buffer { authority_address }) = account.state() {
             if authority_address.is_none() {
-                return Err(format!("Buffer {} is immutable", buffer_pubkey).into());
+                return Err(format!("Buffer {buffer_pubkey} is immutable").into());
             }
             if authority_address != Some(buffer_authority.pubkey()) {
                 return Err(format!(
@@ -1102,11 +1064,9 @@ fn process_write_buffer(
                 .into());
             }
         } else {
-            return Err(format!(
-                "{} is not an upgradeable loader buffer account",
-                buffer_pubkey
-            )
-            .into());
+            return Err(
+                format!("{buffer_pubkey} is not an upgradeable loader buffer account").into(),
+            );
         }
     }
 
@@ -1196,7 +1156,7 @@ fn process_set_authority(
                 ..RpcSendTransactionConfig::default()
             },
         )
-        .map_err(|e| format!("Setting authority failed: {}", e))?;
+        .map_err(|e| format!("Setting authority failed: {e}"))?;
 
     let authority = CliProgramAuthority {
         authority: new_authority
@@ -1255,7 +1215,7 @@ fn get_buffers(
                 use_lamports_unit,
             });
         } else {
-            return Err(format!("Error parsing Buffer account {}", address).into());
+            return Err(format!("Error parsing Buffer account {address}").into());
         }
     }
     Ok(CliUpgradeableBuffers {
@@ -1304,8 +1264,7 @@ fn get_programs(
             let results = get_accounts_with_filter(rpc_client, filters, 0)?;
             if results.len() != 1 {
                 return Err(format!(
-                    "Error: More than one Program associated with ProgramData account {}",
-                    programdata_address
+                    "Error: More than one Program associated with ProgramData account {programdata_address}"
                 )
                 .into());
             }
@@ -1323,9 +1282,7 @@ fn get_programs(
                 use_lamports_unit,
             });
         } else {
-            return Err(
-                format!("Error parsing ProgramData account {}", programdata_address).into(),
-            );
+            return Err(format!("Error parsing ProgramData account {programdata_address}").into());
         }
     }
     Ok(CliUpgradeablePrograms {
@@ -1405,10 +1362,10 @@ fn process_show(
                                     use_lamports_unit,
                                 }))
                         } else {
-                            Err(format!("Program {} has been closed", account_pubkey).into())
+                            Err(format!("Program {account_pubkey} has been closed").into())
                         }
                     } else {
-                        Err(format!("Program {} has been closed", account_pubkey).into())
+                        Err(format!("Program {account_pubkey} has been closed").into())
                     }
                 } else if let Ok(UpgradeableLoaderState::Buffer { authority_address }) =
                     account.state()
@@ -1427,16 +1384,15 @@ fn process_show(
                         }))
                 } else {
                     Err(format!(
-                        "{} is not an upgradeable loader Buffer or Program account",
-                        account_pubkey
+                        "{account_pubkey} is not an upgradeable loader Buffer or Program account"
                     )
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{account_pubkey} is not an SBF program").into())
             }
         } else {
-            Err(format!("Unable to find the account {}", account_pubkey).into())
+            Err(format!("Unable to find the account {account_pubkey}").into())
         }
     } else if programs {
         let authority_pubkey = if all { None } else { Some(authority_pubkey) };
@@ -1465,7 +1421,7 @@ fn process_dump(
             if account.owner == bpf_loader::id() || account.owner == bpf_loader_deprecated::id() {
                 let mut f = File::create(output_location)?;
                 f.write_all(&account.data)?;
-                Ok(format!("Wrote program to {}", output_location))
+                Ok(format!("Wrote program to {output_location}"))
             } else if account.owner == bpf_loader_upgradeable::id() {
                 if let Ok(UpgradeableLoaderState::Program {
                     programdata_address,
@@ -1482,31 +1438,30 @@ fn process_dump(
                             let program_data = &programdata_account.data[offset..];
                             let mut f = File::create(output_location)?;
                             f.write_all(program_data)?;
-                            Ok(format!("Wrote program to {}", output_location))
+                            Ok(format!("Wrote program to {output_location}"))
                         } else {
-                            Err(format!("Program {} has been closed", account_pubkey).into())
+                            Err(format!("Program {account_pubkey} has been closed").into())
                         }
                     } else {
-                        Err(format!("Program {} has been closed", account_pubkey).into())
+                        Err(format!("Program {account_pubkey} has been closed").into())
                     }
                 } else if let Ok(UpgradeableLoaderState::Buffer { .. }) = account.state() {
                     let offset = UpgradeableLoaderState::size_of_buffer_metadata();
                     let program_data = &account.data[offset..];
                     let mut f = File::create(output_location)?;
                     f.write_all(program_data)?;
-                    Ok(format!("Wrote program to {}", output_location))
+                    Ok(format!("Wrote program to {output_location}"))
                 } else {
                     Err(format!(
-                        "{} is not an upgradeable loader buffer or program account",
-                        account_pubkey
+                        "{account_pubkey} is not an upgradeable loader buffer or program account"
                     )
                     .into())
                 }
             } else {
-                Err(format!("{} is not a BPF program", account_pubkey).into())
+                Err(format!("{account_pubkey} is not an SBF program").into())
             }
         } else {
-            Err(format!("Unable to find the account {}", account_pubkey).into())
+            Err(format!("Unable to find the account {account_pubkey}").into())
         }
     } else {
         Err("No account specified".into())
@@ -1557,7 +1512,7 @@ fn close(
         {
             return Err("Closing a program account is not supported by the cluster".into());
         } else {
-            return Err(format!("Close failed: {}", err).into());
+            return Err(format!("Close failed: {err}").into());
         }
     }
     Ok(())
@@ -1653,16 +1608,16 @@ fn process_close(
                                 ))
                             }
                         } else {
-                            Err(format!("Program {} has been closed", account_pubkey).into())
+                            Err(format!("Program {account_pubkey} has been closed").into())
                         }
                     } else {
-                        Err(format!("Program {} has been closed", account_pubkey).into())
+                        Err(format!("Program {account_pubkey} has been closed").into())
                     }
                 }
-                _ => Err(format!("{} is not a Program or Buffer account", account_pubkey).into()),
+                _ => Err(format!("{account_pubkey} is not a Program or Buffer account").into()),
             }
         } else {
-            Err(format!("Unable to find the account {}", account_pubkey).into())
+            Err(format!("Unable to find the account {account_pubkey}").into())
         }
     } else {
         let buffers = get_buffers(
@@ -1693,53 +1648,6 @@ fn process_close(
                 use_lamports_unit,
             }))
     }
-}
-
-/// Deploy using non-upgradeable loader
-pub fn process_deploy(
-    rpc_client: Arc<RpcClient>,
-    config: &CliConfig,
-    program_location: &str,
-    buffer_signer_index: Option<SignerIndex>,
-    use_deprecated_loader: bool,
-    allow_excessive_balance: bool,
-    skip_fee_check: bool,
-) -> ProcessResult {
-    // Create ephemeral keypair to use for Buffer account, if not provided
-    let (words, mnemonic, buffer_keypair) = create_ephemeral_keypair()?;
-    let buffer_signer = if let Some(i) = buffer_signer_index {
-        config.signers[i]
-    } else {
-        &buffer_keypair
-    };
-
-    let program_data = read_and_verify_elf(program_location)?;
-    let minimum_balance = rpc_client.get_minimum_balance_for_rent_exemption(program_data.len())?;
-    let loader_id = if use_deprecated_loader {
-        bpf_loader_deprecated::id()
-    } else {
-        bpf_loader::id()
-    };
-
-    let result = do_process_program_write_and_deploy(
-        rpc_client,
-        config,
-        &program_data,
-        program_data.len(),
-        program_data.len(),
-        minimum_balance,
-        &loader_id,
-        Some(&[buffer_signer]),
-        Some(buffer_signer),
-        &buffer_signer.pubkey(),
-        Some(buffer_signer),
-        allow_excessive_balance,
-        skip_fee_check,
-    );
-    if result.is_err() && buffer_signer_index.is_none() {
-        report_ephemeral_mnemonic(words, mnemonic);
-    }
-    result
 }
 
 fn calculate_max_chunk_size<F>(create_msg: &F) -> usize
@@ -2078,29 +1986,26 @@ fn do_process_program_upgrade(
 
 fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut file = File::open(program_location)
-        .map_err(|err| format!("Unable to open program file: {}", err))?;
+        .map_err(|err| format!("Unable to open program file: {err}"))?;
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
-        .map_err(|err| format!("Unable to read program file: {}", err))?;
+        .map_err(|err| format!("Unable to read program file: {err}"))?;
     let mut transaction_context = TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
-    let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+    let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let executable = Executable::<BpfError, ThisInstructionMeter>::from_elf(
+    let executable = Executable::<InvokeContext>::from_elf(
         &program_data,
         Config {
             reject_broken_elfs: true,
             ..Config::default()
         },
-        register_syscalls(&mut invoke_context, true).unwrap(),
+        register_syscalls(&invoke_context.feature_set, true).unwrap(),
     )
-    .map_err(|err| format!("ELF error: {}", err))?;
+    .map_err(|err| format!("ELF error: {err}"))?;
 
-    let _ =
-        VerifiedExecutable::<RequisiteVerifier, BpfError, ThisInstructionMeter>::from_executable(
-            executable,
-        )
-        .map_err(|err| format!("ELF error: {}", err))?;
+    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+        .map_err(|err| format!("ELF error: {err}"))?;
 
     Ok(program_data)
 }
@@ -2217,7 +2122,7 @@ fn send_deploy_messages(
             }
             let result = rpc_client.send_and_confirm_transaction_with_spinner(&initial_transaction);
             log_instruction_custom_error::<SystemError>(result, config)
-                .map_err(|err| format!("Account allocation failed: {}", err))?;
+                .map_err(|err| format!("Account allocation failed: {err}"))?;
         } else {
             return Err("Buffer account not created yet, must provide a key pair".into());
         }
@@ -2242,7 +2147,7 @@ fn send_deploy_messages(
                     write_messages,
                     &[payer_signer, write_signer],
                 )
-                .map_err(|err| format!("Data writes to account failed: {}", err))?
+                .map_err(|err| format!("Data writes to account failed: {err}"))?
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>();
@@ -2277,7 +2182,7 @@ fn send_deploy_messages(
                         ..RpcSendTransactionConfig::default()
                     },
                 )
-                .map_err(|e| format!("Deploying program failed: {}", e))?;
+                .map_err(|e| format!("Deploying program failed: {e}"))?;
         }
     }
 
@@ -2297,22 +2202,13 @@ fn create_ephemeral_keypair(
 fn report_ephemeral_mnemonic(words: usize, mnemonic: bip39::Mnemonic) {
     let phrase: &str = mnemonic.phrase();
     let divider = String::from_utf8(vec![b'='; phrase.len()]).unwrap();
-    eprintln!(
-        "{}\nRecover the intermediate account's ephemeral keypair file with",
-        divider
-    );
-    eprintln!(
-        "`solana-keygen recover` and the following {}-word seed phrase:",
-        words
-    );
-    eprintln!("{}\n{}\n{}", divider, phrase, divider);
+    eprintln!("{divider}\nRecover the intermediate account's ephemeral keypair file with");
+    eprintln!("`solana-keygen recover` and the following {words}-word seed phrase:");
+    eprintln!("{divider}\n{phrase}\n{divider}");
     eprintln!("To resume a deploy, pass the recovered keypair as the");
     eprintln!("[BUFFER_SIGNER] to `solana program deploy` or `solana program write-buffer'.");
     eprintln!("Or to recover the account's lamports, pass it as the");
-    eprintln!(
-        "[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{}",
-        divider
-    );
+    eprintln!("[BUFFER_ACCOUNT_ADDRESS] argument to `solana program close`.\n{divider}");
 }
 
 #[cfg(test)]

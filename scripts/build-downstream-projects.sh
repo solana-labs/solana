@@ -13,8 +13,8 @@ source scripts/read-cargo-variable.sh
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
 cargo="$solana_dir"/cargo
-cargo_build_bpf="$solana_dir"/cargo-build-bpf
-cargo_test_bpf="$solana_dir"/cargo-test-bpf
+cargo_build_sbf="$solana_dir"/cargo-build-sbf
+cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
 mkdir -p target/downstream-projects
 cd target/downstream-projects
@@ -30,7 +30,7 @@ example_helloworld() {
     patch_crates_io_solana src/program-rust/Cargo.toml "$solana_dir"
     echo "[workspace]" >> src/program-rust/Cargo.toml
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path src/program-rust/Cargo.toml
 
     # TODO: Build src/program-c/...
@@ -41,6 +41,7 @@ spl() {
   (
     # Mind the order!
     PROGRAMS=(
+      instruction-padding/program
       token/program
       token/program-2022
       token/program-2022-test
@@ -68,7 +69,7 @@ spl() {
     ./patch.crates-io.sh "$solana_dir"
 
     for program in "${PROGRAMS[@]}"; do
-      $cargo_test_bpf --manifest-path "$program"/Cargo.toml
+      $cargo_test_sbf --manifest-path "$program"/Cargo.toml
     done
 
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
@@ -79,17 +80,21 @@ spl() {
   )
 }
 
-serum_dex() {
+openbook_dex() {
   (
     set -x
-    rm -rf serum-dex
-    git clone https://github.com/project-serum/serum-dex.git
-    cd serum-dex
+    rm -rf openbook-dex
+    git clone https://github.com/openbook-dex/program.git openbook-dex
+    cd openbook-dex
 
     update_solana_dependencies . "$solana_ver"
     patch_crates_io_solana Cargo.toml "$solana_dir"
+    cat >> Cargo.toml <<EOF
+anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", branch = "master" }
+EOF
     patch_crates_io_solana dex/Cargo.toml "$solana_dir"
     cat >> dex/Cargo.toml <<EOF
+anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", branch = "master" }
 [workspace]
 exclude = [
     "crank",
@@ -98,7 +103,7 @@ exclude = [
 EOF
     $cargo build
 
-    $cargo_build_bpf \
+    $cargo_build_sbf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
     $cargo test \
@@ -108,4 +113,4 @@ EOF
 
 _ example_helloworld
 _ spl
-_ serum_dex
+_ openbook_dex

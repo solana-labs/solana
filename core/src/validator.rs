@@ -18,13 +18,16 @@ use {
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
-        system_monitor_service::{verify_net_stats_access, SystemMonitorService},
+        system_monitor_service::{
+            verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
+        },
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -76,7 +79,6 @@ use {
         bank::{Bank, StakeVoteAccountRewardResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        cost_model::CostModel,
         epoch_reward_calc_service::{
             EpochRewardCalcRequestHandler, EpochRewardCalcRequestReceiver, EpochRewardCalcService,
             EpochRewardResult,
@@ -87,7 +89,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
-        snapshot_package::{PendingAccountsPackage, PendingSnapshotPackage},
+        snapshot_package::PendingSnapshotPackage,
         snapshot_utils,
     },
     solana_sdk::{
@@ -103,7 +105,6 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
@@ -146,9 +147,6 @@ pub struct ValidatorConfig {
     pub gossip_validators: Option<HashSet<Pubkey>>, // None = gossip with all
     pub halt_on_known_validators_accounts_hash_mismatch: bool,
     pub accounts_hash_fault_injection_slots: u64, // 0 = no fault injection
-    pub no_rocksdb_compaction: bool,
-    pub rocksdb_compaction_interval: Option<u64>,
-    pub rocksdb_max_compaction_jitter: Option<u64>,
     pub accounts_hash_interval_slots: u64,
     pub max_genesis_archive_unpacked_size: u64,
     pub wal_recovery_mode: Option<BlockstoreRecoveryMode>,
@@ -164,6 +162,7 @@ pub struct ValidatorConfig {
     pub no_os_network_stats_reporting: bool,
     pub no_os_cpu_stats_reporting: bool,
     pub no_os_disk_stats_reporting: bool,
+    pub no_os_open_fd_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
@@ -211,9 +210,6 @@ impl Default for ValidatorConfig {
             gossip_validators: None,
             halt_on_known_validators_accounts_hash_mismatch: false,
             accounts_hash_fault_injection_slots: 0,
-            no_rocksdb_compaction: false,
-            rocksdb_compaction_interval: None,
-            rocksdb_max_compaction_jitter: None,
             accounts_hash_interval_slots: std::u64::MAX,
             max_genesis_archive_unpacked_size: MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
             wal_recovery_mode: None,
@@ -229,6 +225,7 @@ impl Default for ValidatorConfig {
             no_os_network_stats_reporting: true,
             no_os_cpu_stats_reporting: true,
             no_os_disk_stats_reporting: true,
+            no_os_open_fd_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
@@ -254,6 +251,7 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
+            accounts_db_caching_enabled: true,
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
@@ -399,8 +397,7 @@ impl Validator {
         if !config.no_os_network_stats_reporting {
             if let Err(e) = verify_net_stats_access() {
                 return Err(format!(
-                    "Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.",
-                    e,
+                    "Failed to access Network stats: {e}. Bypass check with --no-os-network-stats-reporting.",
                 ));
             }
         }
@@ -416,7 +413,7 @@ impl Validator {
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {:?}", err));
+                        return Err(format!("Failed to load the Geyser plugin: {err:?}"));
                     }
                 }
             } else {
@@ -437,7 +434,7 @@ impl Validator {
         }
 
         if rayon::ThreadPoolBuilder::new()
-            .thread_name(|ix| format!("solRayonGlob{:02}", ix))
+            .thread_name(|ix| format!("solRayonGlob{ix:02}"))
             .build_global()
             .is_err()
         {
@@ -454,8 +451,7 @@ impl Validator {
 
         if !ledger_path.is_dir() {
             return Err(format!(
-                "ledger directory does not exist or is not accessible: {:?}",
-                ledger_path
+                "ledger directory does not exist or is not accessible: {ledger_path:?}"
             ));
         }
 
@@ -507,10 +503,13 @@ impl Validator {
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
-            !config.no_os_memory_stats_reporting,
-            !config.no_os_network_stats_reporting,
-            !config.no_os_cpu_stats_reporting,
-            !config.no_os_disk_stats_reporting,
+            SystemMonitorStatsReportConfig {
+                report_os_memory_stats: !config.no_os_memory_stats_reporting,
+                report_os_network_stats: !config.no_os_network_stats_reporting,
+                report_os_cpu_stats: !config.no_os_cpu_stats_reporting,
+                report_os_disk_stats: !config.no_os_disk_stats_reporting,
+                report_os_open_fd_stats: !config.no_os_open_fd_stats_reporting,
+            },
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
@@ -620,9 +619,10 @@ impl Validator {
                 (None, None)
             };
 
-        let pending_accounts_package = PendingAccountsPackage::default();
+        let (accounts_package_sender, accounts_package_receiver) = crossbeam_channel::unbounded();
         let accounts_hash_verifier = AccountsHashVerifier::new(
-            Arc::clone(&pending_accounts_package),
+            accounts_package_sender.clone(),
+            accounts_package_receiver,
             pending_snapshot_package,
             &exit,
             &cluster_info,
@@ -633,11 +633,13 @@ impl Validator {
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let accounts_background_request_sender =
+            AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
             snapshot_config,
+            snapshot_request_sender,
             snapshot_request_receiver,
-            pending_accounts_package,
+            accounts_package_sender,
         };
         let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
@@ -686,6 +688,7 @@ impl Validator {
             ledger_path,
             &bank_forks,
             &leader_schedule_cache,
+            &accounts_background_request_sender,
         )?;
 
         if config.process_ledger_before_services {
@@ -913,7 +916,7 @@ impl Validator {
             &start_progress,
         ) {
             Ok(waited) => waited,
-            Err(e) => return Err(format!("wait_for_supermajority failed: {:?}", e)),
+            Err(e) => return Err(format!("wait_for_supermajority failed: {e:?}")),
         };
 
         let ledger_metric_report_service =
@@ -938,10 +941,6 @@ impl Validator {
         );
 
         let vote_tracker = Arc::<VoteTracker>::default();
-        let mut cost_model = CostModel::default();
-        // initialize cost model with built-in instruction costs only
-        cost_model.initialize_cost_table(&[]);
-        let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
@@ -992,13 +991,10 @@ impl Validator {
                 max_ledger_shreds: config.max_ledger_shreds,
                 shred_version: node.info.shred_version,
                 repair_validators: config.repair_validators.clone(),
-                rocksdb_compaction_interval: config.rocksdb_compaction_interval,
-                rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
                 replay_slots_concurrently: config.replay_slots_concurrently,
             },
             &max_slots,
-            &cost_model,
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
@@ -1035,7 +1031,6 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
-            &cost_model,
             &connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
@@ -1254,9 +1249,8 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. \
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}. \
                 If you wish to continue, try --no-poh-speed-test",
-                my_ns_per_slot, target_ns_per_slot,
             ));
         }
     }
@@ -1295,10 +1289,8 @@ fn post_process_restored_tower(
             // intentionally fail to restore tower; we're supposedly in a new hard fork; past
             // out-of-chain vote state doesn't make sense at all
             // what if --wait-for-supermajority again if the validator restarted?
-            let message = format!(
-                "Hard fork is detected; discarding tower restoration result: {:?}",
-                tower
-            );
+            let message =
+                format!("Hard fork is detected; discarding tower restoration result: {tower:?}");
             datapoint_error!("tower_error", ("error", message, String),);
             error!("{}", message);
 
@@ -1328,15 +1320,14 @@ fn post_process_restored_tower(
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
-                    ("error", format!("Unable to restore tower: {}", err), String),
+                    ("error", format!("Unable to restore tower: {err}"), String),
                 );
             }
             if should_require_tower && voting_has_been_active {
                 return Err(format!(
-                    "Requested mandatory tower restore failed: {}. \
+                    "Requested mandatory tower restore failed: {err}. \
                      And there is an existing vote_account containing actual votes. \
-                     Aborting due to possible conflicting duplicate votes",
-                    err
+                     Aborting due to possible conflicting duplicate votes"
                 ));
             }
             if err.is_file_missing() && !voting_has_been_active {
@@ -1404,10 +1395,7 @@ fn load_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             return Err(format!(
-                "genesis hash mismatch: hash={} expected={}. Delete the ledger directory to continue: {:?}",
-                genesis_hash,
-                expected_genesis_hash,
-                ledger_path,
+                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. Delete the ledger directory to continue: {ledger_path:?}",
             ));
         }
     }
@@ -1431,7 +1419,6 @@ fn load_blockstore(
         },
     )
     .expect("Failed to open ledger database");
-    blockstore.set_no_compaction(config.no_rocksdb_compaction);
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
     // following boot sequence (esp BankForks) could set root. so stash the original value
     // of blockstore root away here as soon as possible.
@@ -1630,7 +1617,7 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 &self.accounts_background_request_sender,
             ) {
-                return Err(format!("Failed to load ledger: {:?}", e));
+                return Err(format!("Failed to load ledger: {e:?}"));
             }
 
             exit.store(true, Ordering::Relaxed);
@@ -1648,10 +1635,7 @@ impl<'a> ProcessBlockStore<'a> {
                         self.blockstore,
                         &mut self.original_blockstore_root,
                     ) {
-                        return Err(format!(
-                            "Failed to reconcile blockstore with tower: {:?}",
-                            e
-                        ));
+                        return Err(format!("Failed to reconcile blockstore with tower: {e:?}"));
                     }
                 }
 
@@ -1676,8 +1660,7 @@ impl<'a> ProcessBlockStore<'a> {
                     &mut self.original_blockstore_root,
                 ) {
                     return Err(format!(
-                        "Failed to reconcile blockstore with hard fork: {:?}",
-                        e
+                        "Failed to reconcile blockstore with hard fork: {e:?}"
                     ));
                 }
             }
@@ -1699,6 +1682,7 @@ fn maybe_warp_slot(
     ledger_path: &Path,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
+    accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
         let snapshot_config = match config.snapshot_config.as_ref() {
@@ -1729,7 +1713,7 @@ fn maybe_warp_slot(
         ));
         bank_forks.set_root(
             warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+            accounts_background_request_sender,
             Some(warp_slot),
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
@@ -1745,7 +1729,7 @@ fn maybe_warp_slot(
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
         ) {
             Ok(archive_info) => archive_info,
-            Err(e) => return Err(format!("Unable to create snapshot: {}", e)),
+            Err(e) => return Err(format!("Unable to create snapshot: {e}")),
         };
         info!(
             "created snapshot: {}",
@@ -2028,6 +2012,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake has the wrong shred version in gossip",
                 (wrong_shred_stake as f64 / total_activated_stake as f64) * 100.,
             );
+            wrong_shred_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in wrong_shred_nodes {
                 info!(
                     "    {:.3}% - {}",
@@ -2042,6 +2027,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
                 "{:.3}% of active stake is not visible in gossip",
                 (offline_stake as f64 / total_activated_stake as f64) * 100.
             );
+            offline_nodes.sort_by(|b, a| a.0.cmp(&b.0)); // sort by reverse stake weight
             for (stake, identity) in offline_nodes {
                 info!(
                     "    {:.3}% - {}",
@@ -2090,7 +2076,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
-            std::fs::remove_dir_all(&path_delete).unwrap();
+            std::fs::remove_dir_all(path_delete).unwrap();
         })
         .unwrap();
 }
@@ -2184,7 +2170,7 @@ mod tests {
         crossbeam_channel::{bounded, RecvTimeoutError},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
-        solana_tpu_client::connection_cache::{
+        solana_tpu_client::tpu_connection_cache::{
             DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
         },
         std::{fs::remove_dir_all, thread, time::Duration},

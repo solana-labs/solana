@@ -69,14 +69,14 @@ export class PublicKey extends Struct {
         this._bn = new BN(value);
       }
 
-      if (this._bn.byteLength() > 32) {
+      if (this._bn.byteLength() > PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
     }
   }
 
   /**
-   * Returns a unique PublicKey for tests and benchmarks using acounter
+   * Returns a unique PublicKey for tests and benchmarks using a counter
    */
   static unique(): PublicKey {
     const key = new PublicKey(uniquePublicKeyCounter);
@@ -85,7 +85,8 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Default public key value. (All zeros)
+   * Default public key value. The base58-encoded string representation is all ones (as seen below)
+   * The underlying BN number is 32 bytes that are all zeros
    */
   static default: PublicKey = new PublicKey('11111111111111111111111111111111');
 
@@ -185,6 +186,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of createProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link createProgramAddressSync} instead
    */
   /* eslint-disable require-await */
   static async createProgramAddress(
@@ -226,6 +229,8 @@ export class PublicKey extends Struct {
   /**
    * Async version of findProgramAddressSync
    * For backwards compatibility
+   *
+   * @deprecated Use {@link findProgramAddressSync} instead
    */
   static async findProgramAddress(
     seeds: Array<Buffer | Uint8Array>,

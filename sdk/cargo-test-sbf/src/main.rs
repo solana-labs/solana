@@ -1,5 +1,6 @@
 use {
     clap::{crate_description, crate_name, crate_version, Arg},
+    log::*,
     std::{
         env,
         ffi::OsStr,
@@ -17,6 +18,7 @@ struct Config<'a> {
     cargo_build_sbf: PathBuf,
     extra_cargo_test_args: Vec<String>,
     features: Vec<String>,
+    packages: Vec<String>,
     generate_child_script_on_failure: bool,
     test_name: Option<String>,
     no_default_features: bool,
@@ -37,6 +39,7 @@ impl Default for Config<'_> {
             cargo_build_sbf: PathBuf::from("cargo-build-sbf"),
             extra_cargo_test_args: vec![],
             features: vec![],
+            packages: vec![],
             generate_child_script_on_failure: false,
             test_name: None,
             no_default_features: false,
@@ -56,17 +59,17 @@ where
     S: AsRef<OsStr>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    print!("cargo-test-sbf child: {}", program.display());
+    let mut msg = format!("spawn: {}", program.display());
     for arg in args.iter() {
-        print!(" {}", arg.as_ref().to_str().unwrap_or("?"));
+        msg = msg + &format!(" {}", arg.as_ref().to_str().unwrap_or("?")).to_string();
     }
-    println!();
+    info!("{}", msg);
 
     let mut child = Command::new(program)
         .args(&args)
         .spawn()
         .unwrap_or_else(|err| {
-            eprintln!("Failed to execute {}: {}", program.display(), err);
+            error!("Failed to execute {}: {}", program.display(), err);
             exit(1);
         });
 
@@ -75,7 +78,7 @@ where
         if !generate_child_script_on_failure {
             exit(1);
         }
-        eprintln!("cargo-test-sbf exited on command execution failure");
+        error!("cargo-test-sbf exited on command execution failure");
         let script_name = format!(
             "cargo-test-sbf-child-script-{}.sh",
             program.file_name().unwrap().to_str().unwrap(),
@@ -83,7 +86,7 @@ where
         let file = File::create(&script_name).unwrap();
         let mut out = BufWriter::new(file);
         for (key, value) in env::vars() {
-            writeln!(out, "{}=\"{}\" \\", key, value).unwrap();
+            writeln!(out, "{key}=\"{value}\" \\").unwrap();
         }
         write!(out, "{}", program.display()).unwrap();
         for arg in args.iter() {
@@ -91,7 +94,7 @@ where
         }
         writeln!(out).unwrap();
         out.flush().unwrap();
-        eprintln!(
+        error!(
             "To rerun the failed command for debugging use {}",
             script_name,
         );
@@ -134,6 +137,14 @@ fn test_sbf_package(config: &Config, target_directory: &Path, package: &cargo_me
     build_sbf_args.push("--arch");
     build_sbf_args.push(config.arch);
 
+    if !config.packages.is_empty() {
+        build_sbf_args.push("--");
+        for package in &config.packages {
+            build_sbf_args.push("-p");
+            build_sbf_args.push(package);
+        }
+    }
+
     spawn(
         &config.cargo_build_sbf,
         &build_sbf_args,
@@ -145,6 +156,12 @@ fn test_sbf_package(config: &Config, target_directory: &Path, package: &cargo_me
 
     cargo_args.insert(0, "test");
 
+    if !config.packages.is_empty() {
+        for package in &config.packages {
+            cargo_args.push("-p");
+            cargo_args.push(package);
+        }
+    }
     if let Some(test_name) = &config.test_name {
         cargo_args.push("--test");
         cargo_args.push(test_name);
@@ -184,12 +201,19 @@ fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
     }
 
     let metadata = metadata_command.exec().unwrap_or_else(|err| {
-        eprintln!("Failed to obtain package metadata: {}", err);
+        error!("Failed to obtain package metadata: {}", err);
         exit(1);
     });
 
     if let Some(root_package) = metadata.root_package() {
-        if !config.workspace {
+        if !config.workspace
+            && (config.packages.is_empty()
+                || config
+                    .packages
+                    .iter()
+                    .any(|p| root_package.id.repr.contains(p)))
+        {
+            debug!("test root package {:?}", root_package.id);
             test_sbf_package(&config, metadata.target_directory.as_ref(), root_package);
             return;
         }
@@ -211,11 +235,16 @@ fn test_sbf(config: Config, manifest_path: Option<PathBuf>) {
         .collect::<Vec<_>>();
 
     for package in all_sbf_packages {
-        test_sbf_package(&config, metadata.target_directory.as_ref(), package);
+        if config.packages.is_empty() || config.packages.iter().any(|p| package.id.repr.contains(p))
+        {
+            debug!("test package {:?}", package.id);
+            test_sbf_package(&config, metadata.target_directory.as_ref(), package);
+        }
     }
 }
 
 fn main() {
+    solana_logger::setup();
     let mut args = env::args().collect::<Vec<_>>();
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
@@ -267,6 +296,16 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Path to Cargo.toml"),
+        )
+        .arg(
+            Arg::new("packages")
+                .long("package")
+                .short('p')
+                .value_name("SPEC")
+                .takes_value(true)
+                .multiple_occurrences(true)
+                .multiple_values(true)
+                .help("Package to run tests for"),
         )
         .arg(
             Arg::new("sbf_out_dir")
@@ -341,6 +380,7 @@ fn main() {
             .ok()
             .unwrap_or_default(),
         features: matches.values_of_t("features").ok().unwrap_or_default(),
+        packages: matches.values_of_t("packages").ok().unwrap_or_default(),
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         test_name: matches.value_of_t("test").ok(),
         no_default_features: matches.is_present("no_default_features"),

@@ -41,7 +41,7 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        message::Message,
+        message::{v0, Message as LegacyMessage},
         pubkey::Pubkey,
         signature::Signature,
         transaction::{self, uses_durable_nonce, Transaction, VersionedTransaction},
@@ -67,6 +67,12 @@ impl RpcClientConfig {
         }
     }
 }
+
+/// Trait used to add support for versioned messages to RPC APIs while
+/// retaining backwards compatibility
+pub trait SerializableMessage: Serialize {}
+impl SerializableMessage for LegacyMessage {}
+impl SerializableMessage for v0::Message {}
 
 /// Trait used to add support for versioned transactions to RPC APIs while
 /// retaining backwards compatibility
@@ -4000,7 +4006,7 @@ impl RpcClient {
     }
 
     #[allow(deprecated)]
-    pub fn get_fee_for_message(&self, message: &Message) -> ClientResult<u64> {
+    pub fn get_fee_for_message(&self, message: &impl SerializableMessage) -> ClientResult<u64> {
         self.invoke((self.rpc_client.as_ref()).get_fee_for_message(message))
     }
 
@@ -4309,6 +4315,85 @@ mod tests {
                 .get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())
                 .unwrap();
             assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+        }
+    }
+
+    #[test]
+    fn test_get_program_accounts_with_config() {
+        let program_id = Pubkey::new_unique();
+        let pubkey = Pubkey::new_unique();
+        let account = Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: program_id,
+            executable: false,
+            rent_epoch: 0,
+        };
+        let keyed_account = RpcKeyedAccount {
+            pubkey: pubkey.to_string(),
+            account: UiAccount::encode(&pubkey, &account, UiAccountEncoding::Base64, None, None),
+        };
+        let expected_result = vec![(pubkey, account)];
+        // Test: without context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::NoContext(vec![keyed_account.clone()]))
+                    .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: None,
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
+        }
+
+        // Test: with context
+        {
+            let mocks: Mocks = [(
+                RpcRequest::GetProgramAccounts,
+                serde_json::to_value(OptionalContext::Context(Response {
+                    context: RpcResponseContext {
+                        slot: 1,
+                        api_version: None,
+                    },
+                    value: vec![keyed_account],
+                }))
+                .unwrap(),
+            )]
+            .into_iter()
+            .collect();
+            let rpc_client = RpcClient::new_mock_with_mocks("mock_client".to_string(), mocks);
+            let result = rpc_client
+                .get_program_accounts_with_config(
+                    &program_id,
+                    RpcProgramAccountsConfig {
+                        filters: None,
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64),
+                            data_slice: None,
+                            commitment: None,
+                            min_context_slot: None,
+                        },
+                        with_context: Some(true),
+                    },
+                )
+                .unwrap();
+            assert_eq!(expected_result, result);
         }
     }
 }

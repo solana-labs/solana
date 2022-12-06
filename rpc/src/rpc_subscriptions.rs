@@ -105,24 +105,24 @@ pub enum NotificationEntry {
 impl std::fmt::Debug for NotificationEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            NotificationEntry::Root(root) => write!(f, "Root({})", root),
-            NotificationEntry::Vote(vote) => write!(f, "Vote({:?})", vote),
-            NotificationEntry::Slot(slot_info) => write!(f, "Slot({:?})", slot_info),
+            NotificationEntry::Root(root) => write!(f, "Root({root})"),
+            NotificationEntry::Vote(vote) => write!(f, "Vote({vote:?})"),
+            NotificationEntry::Slot(slot_info) => write!(f, "Slot({slot_info:?})"),
             NotificationEntry::SlotUpdate(slot_update) => {
-                write!(f, "SlotUpdate({:?})", slot_update)
+                write!(f, "SlotUpdate({slot_update:?})")
             }
             NotificationEntry::Bank(commitment_slots) => {
                 write!(f, "Bank({{slot: {:?}}})", commitment_slots.slot)
             }
             NotificationEntry::SignaturesReceived(slot_signatures) => {
-                write!(f, "SignaturesReceived({:?})", slot_signatures)
+                write!(f, "SignaturesReceived({slot_signatures:?})")
             }
-            NotificationEntry::Gossip(slot) => write!(f, "Gossip({:?})", slot),
+            NotificationEntry::Gossip(slot) => write!(f, "Gossip({slot:?})"),
             NotificationEntry::Subscribed(params, id) => {
-                write!(f, "Subscribed({:?}, {:?})", params, id)
+                write!(f, "Subscribed({params:?}, {id:?})")
             }
             NotificationEntry::Unsubscribed(params, id) => {
-                write!(f, "Unsubscribed({:?}, {:?})", params, id)
+                write!(f, "Unsubscribed({params:?}, {id:?})")
             }
         }
     }
@@ -652,7 +652,7 @@ impl RpcSubscriptions {
                     .spawn(move || {
                         let pool = rayon::ThreadPoolBuilder::new()
                             .num_threads(notification_threads)
-                            .thread_name(|i| format!("solRpcNotify{:02}", i))
+                            .thread_name(|i| format!("solRpcNotify{i:02}"))
                             .build()
                             .unwrap();
                         pool.install(|| {
@@ -827,7 +827,7 @@ impl RpcSubscriptions {
                                 .get(&SubscriptionParams::SlotsUpdates)
                             {
                                 inc_new_counter_info!("rpc-subscription-notify-slots-updates", 1);
-                                notifier.notify(&slot_update, sub, false);
+                                notifier.notify(slot_update, sub, false);
                             }
                         }
                         // These notifications are only triggered by votes observed on gossip,
@@ -1282,7 +1282,14 @@ pub(crate) mod tests {
         },
     };
 
-    fn make_account_result(lamports: u64, subscription: u64, data: &str) -> serde_json::Value {
+    struct AccountResult {
+        lamports: u64,
+        subscription: u64,
+        data: &'static str,
+        space: usize,
+    }
+
+    fn make_account_result(account_result: AccountResult) -> serde_json::Value {
         json!({
            "jsonrpc": "2.0",
            "method": "accountNotification",
@@ -1290,14 +1297,15 @@ pub(crate) mod tests {
                "result": {
                    "context": { "slot": 1 },
                    "value": {
-                       "data": data,
+                       "data": account_result.data,
                        "executable": false,
-                       "lamports": lamports,
+                       "lamports": account_result.lamports,
                        "owner": "11111111111111111111111111111111",
                        "rentEpoch": 0,
+                       "space": account_result.space,
                     },
                },
-               "subscription": subscription,
+               "subscription": account_result.subscription,
            }
         })
     }
@@ -1338,7 +1346,12 @@ pub(crate) mod tests {
             0,
             &system_program::id(),
         );
-        let expected0 = make_account_result(1, 0, "");
+        let expected0 = make_account_result(AccountResult {
+            lamports: 1,
+            subscription: 0,
+            space: 0,
+            data: "",
+        });
 
         let tx1 = {
             let instruction =
@@ -1346,7 +1359,12 @@ pub(crate) mod tests {
             let message = Message::new(&[instruction], Some(&mint_keypair.pubkey()));
             Transaction::new(&[&alice, &mint_keypair], message, blockhash)
         };
-        let expected1 = make_account_result(0, 1, "");
+        let expected1 = make_account_result(AccountResult {
+            lamports: 0,
+            subscription: 1,
+            space: 0,
+            data: "",
+        });
 
         let tx2 = system_transaction::create_account(
             &mint_keypair,
@@ -1356,7 +1374,12 @@ pub(crate) mod tests {
             1024,
             &system_program::id(),
         );
-        let expected2 = make_account_result(1, 2, "error: data too large for bs58 encoding");
+        let expected2 = make_account_result(AccountResult {
+            lamports: 1,
+            subscription: 2,
+            space: 1024,
+            data: "error: data too large for bs58 encoding",
+        });
 
         let subscribe_cases = vec![
             (alice.pubkey(), tx0, expected0),
@@ -1387,6 +1410,12 @@ pub(crate) mod tests {
                     data_slice: None,
                     encoding: UiAccountEncoding::Binary,
                 }));
+
+            // Sleep here to ensure adequate time for the async thread to fully process the
+            // subscribed notification before the bank transaction is processed. Without this
+            // sleep, the bank transaction ocassionally completes first and we hang forever
+            // waiting to receive a bank notification.
+            std::thread::sleep(Duration::from_millis(100));
 
             bank_forks
                 .read()
@@ -1849,6 +1878,7 @@ pub(crate) mod tests {
                           "lamports": 1,
                           "owner": "Stake11111111111111111111111111111111111111",
                           "rentEpoch": 0,
+                          "space": 16,
                        },
                        "pubkey": alice.pubkey().to_string(),
                     },
@@ -2015,6 +2045,7 @@ pub(crate) mod tests {
                               "lamports": lamports,
                               "owner": "Stake11111111111111111111111111111111111111",
                               "rentEpoch": 0,
+                              "space": 16,
                            },
                            "pubkey": pubkey,
                         },
@@ -2295,6 +2326,7 @@ pub(crate) mod tests {
                               "lamports": lamports,
                               "owner": "Stake11111111111111111111111111111111111111",
                               "rentEpoch": 0,
+                              "space": 16,
                            },
                            "pubkey": pubkey,
                         },
@@ -2616,8 +2648,7 @@ pub(crate) mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
 
@@ -2659,8 +2690,7 @@ pub(crate) mod tests {
             let expected_res_str =
                 serde_json::to_string(&serde_json::to_value(expected_root).unwrap()).unwrap();
             let expected = format!(
-                r#"{{"jsonrpc":"2.0","method":"rootNotification","params":{{"result":{},"subscription":0}}}}"#,
-                expected_res_str
+                r#"{{"jsonrpc":"2.0","method":"rootNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
             );
             assert_eq!(expected, response);
         }
@@ -2783,6 +2813,7 @@ pub(crate) mod tests {
                        "lamports": 1,
                        "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 0,
+                       "space": 16,
                     },
                },
                "subscription": 0,
@@ -2832,6 +2863,7 @@ pub(crate) mod tests {
                        "lamports": 1,
                        "owner": "Stake11111111111111111111111111111111111111",
                        "rentEpoch": 0,
+                       "space": 16,
                     },
                },
                "subscription": 1,
@@ -2923,13 +2955,13 @@ pub(crate) mod tests {
             &system_program::id(),
         );
 
-        bank_forks
+        assert!(bank_forks
             .read()
             .unwrap()
             .get(0)
             .unwrap()
-            .process_transaction_with_logs(&tx)
-            .unwrap();
+            .process_transaction_with_metadata(tx.clone())
+            .was_executed());
 
         subscriptions.notify_subscribers(CommitmentSlots::new_from_slot(0));
 

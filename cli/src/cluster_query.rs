@@ -680,7 +680,7 @@ pub fn parse_transaction_history(
         Some(signature) => Some(
             signature
                 .parse()
-                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {}", err)))?,
+                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {err}")))?,
         ),
         None => None,
     };
@@ -688,7 +688,7 @@ pub fn parse_transaction_history(
         Some(signature) => Some(
             signature
                 .parse()
-                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {}", err)))?,
+                .map_err(|err| CliError::BadParameter(format!("Invalid signature: {err}")))?,
         ),
         None => None,
     };
@@ -722,7 +722,7 @@ pub fn process_catchup(
     progress_bar.set_message("Connecting...");
 
     if let Some(our_localhost_port) = our_localhost_port {
-        let gussed_default = Some(format!("http://localhost:{}", our_localhost_port));
+        let gussed_default = Some(format!("http://localhost:{our_localhost_port}"));
         if node_json_rpc_url.is_some() && node_json_rpc_url != gussed_default {
             // go to new line to leave this message on console
             println!(
@@ -766,10 +766,10 @@ pub fn process_catchup(
                     if let Some(rpc_addr) = contact_info.rpc {
                         break rpc_addr;
                     }
-                    progress_bar.set_message(format!("RPC service not found for {}", node_pubkey));
+                    progress_bar.set_message(format!("RPC service not found for {node_pubkey}"));
                 } else {
                     progress_bar
-                        .set_message(format!("Contact information not found for {}", node_pubkey));
+                        .set_message(format!("Contact information not found for {node_pubkey}"));
                 }
                 sleep(Duration::from_secs(sleep_interval as u64));
             };
@@ -785,7 +785,7 @@ pub fn process_catchup(
             Ok(reported_node_pubkey) => break reported_node_pubkey,
             Err(err) => {
                 if let ClientErrorKind::Reqwest(err) = err.kind() {
-                    progress_bar.set_message(format!("Connection failed: {}", err));
+                    progress_bar.set_message(format!("Connection failed: {err}"));
                     sleep(Duration::from_secs(sleep_interval as u64));
                     continue;
                 }
@@ -796,8 +796,7 @@ pub fn process_catchup(
 
     if reported_node_pubkey != node_pubkey {
         return Err(format!(
-            "The identity reported by node RPC URL does not match.  Expected: {:?}.  Reported: {:?}",
-            node_pubkey, reported_node_pubkey
+            "The identity reported by node RPC URL does not match.  Expected: {node_pubkey:?}.  Reported: {reported_node_pubkey:?}"
         )
         .into());
     }
@@ -824,7 +823,7 @@ pub fn process_catchup(
                     retry_count += 1;
                     if log {
                         // go to new line to leave this message on console
-                        println!("Retrying({}/{}): {}\n", retry_count, max_retry_count, e);
+                        println!("Retrying({retry_count}/{max_retry_count}): {e}\n");
                     }
                     sleep(Duration::from_secs(1));
                 }
@@ -844,8 +843,7 @@ pub fn process_catchup(
         if !follow && node_slot > std::cmp::min(previous_rpc_slot, rpc_slot) {
             progress_bar.finish_and_clear();
             return Ok(format!(
-                "{} has caught up (us:{} them:{})",
-                node_pubkey, node_slot, rpc_slot,
+                "{node_pubkey} has caught up (us:{node_slot} them:{rpc_slot})",
             ));
         }
 
@@ -856,7 +854,7 @@ pub fn process_catchup(
         let average_time_remaining = if slot_distance == 0 || total_sleep_interval == 0 {
             "".to_string()
         } else {
-            let distance_delta = start_slot_distance as i64 - slot_distance as i64;
+            let distance_delta = start_slot_distance - slot_distance;
             let average_catchup_slots_per_second =
                 distance_delta as f64 / f64::from(total_sleep_interval);
             let average_time_remaining =
@@ -864,17 +862,14 @@ pub fn process_catchup(
             if !average_time_remaining.is_normal() {
                 "".to_string()
             } else if average_time_remaining < 0.0 {
-                format!(
-                    " (AVG: {:.1} slots/second (falling))",
-                    average_catchup_slots_per_second
-                )
+                format!(" (AVG: {average_catchup_slots_per_second:.1} slots/second (falling))")
             } else {
                 // important not to miss next scheduled lead slots
                 let total_node_slot_delta = node_slot as i64 - start_node_slot as i64;
                 let average_node_slots_per_second =
                     total_node_slot_delta as f64 / f64::from(total_sleep_interval);
                 let expected_finish_slot = (node_slot as f64
-                    + average_time_remaining as f64 * average_node_slots_per_second as f64)
+                    + average_time_remaining * average_node_slots_per_second)
                     .round();
                 format!(
                     " (AVG: {:.1} slots/second, ETA: slot {} in {})",
@@ -942,7 +937,7 @@ pub fn process_cluster_version(rpc_client: &RpcClient, config: &CliConfig) -> Pr
     let remote_version = rpc_client.get_version()?;
 
     if config.verbose {
-        Ok(format!("{:?}", remote_version))
+        Ok(format!("{remote_version:?}"))
     } else {
         Ok(remote_version.to_string())
     }
@@ -986,7 +981,7 @@ pub fn process_fees(
 
 pub fn process_first_available_block(rpc_client: &RpcClient) -> ProcessResult {
     let first_available_block = rpc_client.get_first_available_block()?;
-    Ok(format!("{}", first_available_block))
+    Ok(format!("{first_available_block}"))
 }
 
 pub fn parse_leader_schedule(matches: &ArgMatches<'_>) -> Result<CliCommandInfo, CliError> {
@@ -1005,7 +1000,7 @@ pub fn process_leader_schedule(
     let epoch_info = rpc_client.get_epoch_info()?;
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
-        return Err(format!("Epoch {} is in the future", epoch).into());
+        return Err(format!("Epoch {epoch} is in the future").into());
     }
 
     let epoch_schedule = rpc_client.get_epoch_schedule()?;
@@ -1013,11 +1008,9 @@ pub fn process_leader_schedule(
 
     let leader_schedule = rpc_client.get_leader_schedule(Some(first_slot_in_epoch))?;
     if leader_schedule.is_none() {
-        return Err(format!(
-            "Unable to fetch leader schedule for slot {}",
-            first_slot_in_epoch
-        )
-        .into());
+        return Err(
+            format!("Unable to fetch leader schedule for slot {first_slot_in_epoch}").into(),
+        );
     }
     let leader_schedule = leader_schedule.unwrap();
 
@@ -1180,7 +1173,7 @@ pub fn process_show_block_production(
 
     let epoch = epoch.unwrap_or(epoch_info.epoch);
     if epoch > epoch_info.epoch {
-        return Err(format!("Epoch {} is in the future", epoch).into());
+        return Err(format!("Epoch {epoch} is in the future").into());
     }
 
     let first_slot_in_epoch = epoch_schedule.get_first_slot_in_epoch(epoch);
@@ -1197,8 +1190,7 @@ pub fn process_show_block_production(
 
     let progress_bar = new_spinner_progress_bar();
     progress_bar.set_message(format!(
-        "Fetching confirmed blocks between slots {} and {}...",
-        start_slot, end_slot
+        "Fetching confirmed blocks between slots {start_slot} and {end_slot}..."
     ));
 
     let slot_history_account = rpc_client
@@ -1210,45 +1202,44 @@ pub fn process_show_block_production(
         CliError::RpcRequestError("Failed to deserialize slot history".to_string())
     })?;
 
-    let (confirmed_blocks, start_slot) =
-        if start_slot >= slot_history.oldest() && end_slot <= slot_history.newest() {
-            // Fast, more reliable path using the SlotHistory sysvar
+    let (confirmed_blocks, start_slot) = if start_slot >= slot_history.oldest()
+        && end_slot <= slot_history.newest()
+    {
+        // Fast, more reliable path using the SlotHistory sysvar
 
-            let confirmed_blocks: Vec<_> = (start_slot..=end_slot)
-                .filter(|slot| slot_history.check(*slot) == slot_history::Check::Found)
-                .collect();
-            (confirmed_blocks, start_slot)
-        } else {
-            // Slow, less reliable path using `getBlocks`.
-            //
-            // "less reliable" because if the RPC node has holds in its ledger then the block production data will be
-            // incorrect.  This condition currently can't be detected over RPC
-            //
+        let confirmed_blocks: Vec<_> = (start_slot..=end_slot)
+            .filter(|slot| slot_history.check(*slot) == slot_history::Check::Found)
+            .collect();
+        (confirmed_blocks, start_slot)
+    } else {
+        // Slow, less reliable path using `getBlocks`.
+        //
+        // "less reliable" because if the RPC node has holds in its ledger then the block production data will be
+        // incorrect.  This condition currently can't be detected over RPC
+        //
 
-            let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
-            if minimum_ledger_slot > end_slot {
-                return Err(format!(
-                    "Ledger data not available for slots {} to {} (minimum ledger slot is {})",
-                    start_slot, end_slot, minimum_ledger_slot
+        let minimum_ledger_slot = rpc_client.minimum_ledger_slot()?;
+        if minimum_ledger_slot > end_slot {
+            return Err(format!(
+                    "Ledger data not available for slots {start_slot} to {end_slot} (minimum ledger slot is {minimum_ledger_slot})"
                 )
                 .into());
-            }
+        }
 
-            if minimum_ledger_slot > start_slot {
-                progress_bar.println(format!(
+        if minimum_ledger_slot > start_slot {
+            progress_bar.println(format!(
                     "{}",
                     style(format!(
-                        "Note: Requested start slot was {} but minimum ledger slot is {}",
-                        start_slot, minimum_ledger_slot
+                        "Note: Requested start slot was {start_slot} but minimum ledger slot is {minimum_ledger_slot}"
                     ))
                     .italic(),
                 ));
-                start_slot = minimum_ledger_slot;
-            }
+            start_slot = minimum_ledger_slot;
+        }
 
-            let confirmed_blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
-            (confirmed_blocks, start_slot)
-        };
+        let confirmed_blocks = rpc_client.get_blocks(start_slot, Some(end_slot))?;
+        (confirmed_blocks, start_slot)
+    };
 
     let start_slot_index = (start_slot - first_slot_in_epoch) as usize;
     let end_slot_index = (end_slot - first_slot_in_epoch) as usize;
@@ -1259,11 +1250,11 @@ pub fn process_show_block_production(
     let mut leader_slot_count = HashMap::new();
     let mut leader_skipped_slots = HashMap::new();
 
-    progress_bar.set_message(format!("Fetching leader schedule for epoch {}...", epoch));
+    progress_bar.set_message(format!("Fetching leader schedule for epoch {epoch}..."));
     let leader_schedule = rpc_client
         .get_leader_schedule_with_commitment(Some(start_slot), CommitmentConfig::finalized())?;
     if leader_schedule.is_none() {
-        return Err(format!("Unable to fetch leader schedule for slot {}", start_slot).into());
+        return Err(format!("Unable to fetch leader schedule for slot {start_slot}").into());
     }
     let leader_schedule = leader_schedule.unwrap();
 
@@ -1279,8 +1270,7 @@ pub fn process_show_block_production(
     }
 
     progress_bar.set_message(format!(
-        "Processing {} slots containing {} blocks and {} empty slots...",
-        total_slots, total_blocks_produced, total_slots_skipped
+        "Processing {total_slots} slots containing {total_blocks_produced} blocks and {total_slots_skipped} empty slots..."
     ));
 
     let mut confirmed_blocks_index = 0;
@@ -1480,7 +1470,7 @@ pub fn process_ping(
                                     sequence: seq,
                                     lamports: Some(lamports),
                                 };
-                                eprint!("{}", cli_ping_data);
+                                eprint!("{cli_ping_data}");
                                 cli_pings.push(cli_ping_data);
                                 confirmed_count += 1;
                             }
@@ -1495,7 +1485,7 @@ pub fn process_ping(
                                     sequence: seq,
                                     lamports: None,
                                 };
-                                eprint!("{}", cli_ping_data);
+                                eprint!("{cli_ping_data}");
                                 cli_pings.push(cli_ping_data);
                             }
                         }
@@ -1513,7 +1503,7 @@ pub fn process_ping(
                             sequence: seq,
                             lamports: None,
                         };
-                        eprint!("{}", cli_ping_data);
+                        eprint!("{cli_ping_data}");
                         cli_pings.push(cli_ping_data);
                         break;
                     }
@@ -1538,7 +1528,7 @@ pub fn process_ping(
                     sequence: seq,
                     lamports: None,
                 };
-                eprint!("{}", cli_ping_data);
+                eprint!("{cli_ping_data}");
                 cli_pings.push(cli_ping_data);
             }
         }
@@ -1637,11 +1627,11 @@ pub fn process_logs(config: &CliConfig, filter: &RpcTransactionLogsFilter) -> Pr
                 );
                 println!("  Log Messages:");
                 for log in logs.value.logs {
-                    println!("    {}", log);
+                    println!("    {log}");
                 }
             }
             Err(err) => {
-                return Ok(format!("Disconnected: {}", err));
+                return Ok(format!("Disconnected: {err}"));
             }
         }
     }
@@ -1666,7 +1656,7 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
     let mut slots_per_second = std::f64::NAN;
     loop {
         if exit.load(Ordering::Relaxed) {
-            eprintln!("{}", message);
+            eprintln!("{message}");
             client.shutdown().unwrap();
             break;
         }
@@ -1686,11 +1676,10 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                 }
 
                 message = if slots_per_second.is_nan() {
-                    format!("{:?}", new_info)
+                    format!("{new_info:?}")
                 } else {
                     format!(
-                        "{:?} | root slot advancing at {:.2} slots/second",
-                        new_info, slots_per_second
+                        "{new_info:?} | root slot advancing at {slots_per_second:.2} slots/second"
                     )
                 };
                 slot_progress.set_message(message.clone());
@@ -1723,7 +1712,7 @@ pub fn process_live_slots(config: &CliConfig) -> ProcessResult {
                 current = Some(new_info);
             }
             Err(err) => {
-                eprintln!("disconnected: {}", err);
+                eprintln!("disconnected: {err}");
                 break;
             }
         }
@@ -2051,11 +2040,11 @@ pub fn process_transaction_history(
                         format!("timestamp={} ", unix_timestamp_to_string(block_time)),
                 },
                 if let Some(err) = result.err {
-                    format!("Failed: {:?}", err)
+                    format!("Failed: {err:?}")
                 } else {
                     match result.confirmation_status {
                         None => "Finalized".to_string(),
-                        Some(status) => format!("{:?}", status),
+                        Some(status) => format!("{status:?}"),
                     }
                 },
                 result.memo.unwrap_or_default(),
@@ -2087,7 +2076,7 @@ pub fn process_transaction_history(
                             None,
                         );
                     }
-                    Err(err) => println!("  Unable to get confirmed transaction details: {}", err),
+                    Err(err) => println!("  Unable to get confirmed transaction details: {err}"),
                 }
             }
             println!();
@@ -2214,7 +2203,7 @@ mod tests {
         let default_keypair = Keypair::new();
         let (default_keypair_file, mut tmp_file) = make_tmp_file();
         write_keypair(&default_keypair, tmp_file.as_file_mut()).unwrap();
-        let default_signer = DefaultSigner::new("", &default_keypair_file);
+        let default_signer = DefaultSigner::new("", default_keypair_file);
 
         let test_cluster_version = test_commands
             .clone()

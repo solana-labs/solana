@@ -24,6 +24,12 @@ annotate() {
   fi
 }
 
+# Assume everyting needs to be tested when this file or any Dockerfile changes
+mandatory_affected_files=()
+mandatory_affected_files+=(^ci/buildkite-pipeline.sh)
+mandatory_affected_files+=(^ci/docker-rust/Dockerfile)
+mandatory_affected_files+=(^ci/docker-rust-nightly/Dockerfile)
+
 # Checks if a CI pull request affects one or more path patterns.  Each
 # pattern argument is checked in series. If one of them found to be affected,
 # return immediately as such.
@@ -42,8 +48,7 @@ affects() {
     # the worse (affected)
     return 0
   fi
-  # Assume everyting needs to be tested when any Dockerfile changes
-  for pattern in ^ci/docker-rust/Dockerfile ^ci/docker-rust-nightly/Dockerfile "$@"; do
+  for pattern in "${mandatory_affected_files[@]}" "$@"; do
     if [[ ${pattern:0:1} = "!" ]]; then
       for file in "${affected_files[@]}"; do
         if [[ ! $file =~ ${pattern:1} ]]; then
@@ -163,13 +168,13 @@ all_test_steps() {
   fi
   wait_step
 
-  # BPF test suite
+  # SBF test suite
   if affects \
              .rs$ \
              Cargo.lock$ \
              Cargo.toml$ \
              ^ci/rust-version.sh \
-             ^ci/test-stable-bpf.sh \
+             ^ci/test-stable-sbf.sh \
              ^ci/test-stable.sh \
              ^ci/test-local-cluster.sh \
              ^core/build.rs \
@@ -178,16 +183,16 @@ all_test_steps() {
              ^sdk/ \
       ; then
     cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-bpf.sh"
-    name: "stable-bpf"
+  - command: "ci/test-stable-sbf.sh"
+    name: "stable-sbf"
     timeout_in_minutes: 35
-    artifact_paths: "bpf-dumps.tar.bz2"
+    artifact_paths: "sbf-dumps.tar.bz2"
     agents:
-      queue: "gcp"
+      queue: "solana"
 EOF
   else
     annotate --style info \
-      "Stable-BPF skipped as no relevant files were modified"
+      "Stable-SBF skipped as no relevant files were modified"
   fi
 
   # Perf test suite
