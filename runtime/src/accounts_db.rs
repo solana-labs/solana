@@ -13208,6 +13208,7 @@ pub mod tests {
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 0, AccountSharedData::default().owner());
         accounts.store_for_tests(0, &[(&pubkey, &account)]);
+        accounts.add_root_and_flush_write_cache(0);
         let storage_entry = accounts
             .storage
             .get_slot_stores(0)
