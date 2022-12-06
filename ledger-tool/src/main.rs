@@ -25,8 +25,7 @@ use {
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
-        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
-        validator::move_and_async_delete_path,
+        system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -2691,13 +2690,10 @@ fn main() {
                     arg_matches.is_present("no_os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
-                    SystemMonitorStatsReportConfig {
-                        report_os_memory_stats: !no_os_memory_stats_reporting,
-                        report_os_network_stats: false,
-                        report_os_cpu_stats: false,
-                        report_os_disk_stats: false,
-                        report_os_open_fd_stats: false,
-                    },
+                    !no_os_memory_stats_reporting,
+                    false,
+                    false,
+                    false,
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =

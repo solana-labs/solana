@@ -18,9 +18,7 @@ use {
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
-        system_monitor_service::{
-            verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
-        },
+        system_monitor_service::{verify_net_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
@@ -158,7 +156,6 @@ pub struct ValidatorConfig {
     pub no_os_network_stats_reporting: bool,
     pub no_os_cpu_stats_reporting: bool,
     pub no_os_disk_stats_reporting: bool,
-    pub no_os_open_fd_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
@@ -221,7 +218,6 @@ impl Default for ValidatorConfig {
             no_os_network_stats_reporting: true,
             no_os_cpu_stats_reporting: true,
             no_os_disk_stats_reporting: true,
-            no_os_open_fd_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
@@ -498,13 +494,10 @@ impl Validator {
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
-            SystemMonitorStatsReportConfig {
-                report_os_memory_stats: !config.no_os_memory_stats_reporting,
-                report_os_network_stats: !config.no_os_network_stats_reporting,
-                report_os_cpu_stats: !config.no_os_cpu_stats_reporting,
-                report_os_disk_stats: !config.no_os_disk_stats_reporting,
-                report_os_open_fd_stats: !config.no_os_open_fd_stats_reporting,
-            },
+            !config.no_os_memory_stats_reporting,
+            !config.no_os_network_stats_reporting,
+            !config.no_os_cpu_stats_reporting,
+            !config.no_os_disk_stats_reporting,
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
