@@ -231,7 +231,7 @@ fn run_bank_forks_snapshot_n<F>(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -745,7 +745,7 @@ fn test_bank_forks_incremental_snapshot(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -1036,7 +1036,7 @@ fn test_snapshots_with_background_services(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let accounts_background_service = AccountsBackgroundService::new(

@@ -48,7 +48,7 @@ impl AccountsHashVerifier {
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_config: SnapshotConfig,
     ) -> Self {
         // If there are no accounts packages to process, limit how often we re-check
         const LOOP_LIMITER: Duration = Duration::from_millis(SLOT_MS);
@@ -83,7 +83,7 @@ impl AccountsHashVerifier {
                             &mut hashes,
                             &exit,
                             fault_injection_rate_slots,
-                            snapshot_config.as_ref(),
+                            &snapshot_config,
                         ));
 
                         datapoint_info!(
@@ -184,7 +184,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
-        snapshot_config: Option<&SnapshotConfig>,
+        snapshot_config: &SnapshotConfig,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -377,13 +377,11 @@ impl AccountsHashVerifier {
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
-        snapshot_config: Option<&SnapshotConfig>,
+        snapshot_config: &SnapshotConfig,
         accounts_hash: AccountsHash,
     ) {
         if pending_snapshot_package.is_none()
-            || !snapshot_config
-                .map(|snapshot_config| snapshot_config.should_generate_snapshots())
-                .unwrap_or(false)
+            || !snapshot_config.should_generate_snapshots()
             || !matches!(
                 accounts_package.package_type,
                 AccountsPackageType::Snapshot(_)
@@ -555,7 +553,7 @@ mod tests {
                 &mut hashes,
                 &exit,
                 0,
-                Some(&snapshot_config),
+                &snapshot_config,
             );
 
             // sleep for 1ms to create a newer timestamp for gossip entry

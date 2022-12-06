@@ -130,7 +130,7 @@ pub struct ValidatorConfig {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
-    pub snapshot_config: Option<SnapshotConfig>,
+    pub snapshot_config: SnapshotConfig,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub turbine_disabled: Arc<AtomicBool>,
@@ -194,7 +194,7 @@ impl Default for ValidatorConfig {
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
-            snapshot_config: Some(SnapshotConfig::new_load_only()),
+            snapshot_config: SnapshotConfig::new_load_only(),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
             enforce_ulimit_nofile: true,
@@ -577,17 +577,13 @@ impl Validator {
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
 
-        // A snapshot config is required.  Remove the Option<> wrapper in the future.
-        assert!(config.snapshot_config.is_some());
-        let snapshot_config = config.snapshot_config.clone().unwrap();
-
         assert!(is_snapshot_config_valid(
-            &snapshot_config,
+            &config.snapshot_config,
             config.accounts_hash_interval_slots,
         ));
 
         let (pending_snapshot_package, snapshot_packager_service) =
-            if snapshot_config.should_generate_snapshots() {
+            if config.snapshot_config.should_generate_snapshots() {
                 // filler accounts make snapshots invalid for use
                 // so, do not publish that we have snapshots
                 let enable_gossip_push = config
@@ -601,7 +597,7 @@ impl Validator {
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
-                    snapshot_config.clone(),
+                    config.snapshot_config.clone(),
                     enable_gossip_push,
                 );
                 (
@@ -629,7 +625,7 @@ impl Validator {
         let accounts_background_request_sender =
             AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
-            snapshot_config,
+            snapshot_config: config.snapshot_config.clone(),
             snapshot_request_sender,
             snapshot_request_receiver,
             accounts_package_sender,
@@ -795,7 +791,7 @@ impl Validator {
             let json_rpc_service = JsonRpcService::new(
                 rpc_addr,
                 config.rpc_config.clone(),
-                config.snapshot_config.clone(),
+                Some(config.snapshot_config.clone()),
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 blockstore.clone(),
@@ -1446,7 +1442,7 @@ fn load_blockstore(
             &blockstore,
             config.account_paths.clone(),
             config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
+            Some(&config.snapshot_config),
             &process_options,
             transaction_history_services
                 .cache_block_meta_sender
@@ -1481,7 +1477,7 @@ fn load_blockstore(
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
         let mut bank_forks = bank_forks.write().unwrap();
-        bank_forks.set_snapshot_config(config.snapshot_config.clone());
+        bank_forks.set_snapshot_config(Some(config.snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
         if let Some(ref shrink_paths) = config.account_shrink_paths {
             bank_forks
@@ -1658,11 +1654,6 @@ fn maybe_warp_slot(
     accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        let snapshot_config = match config.snapshot_config.as_ref() {
-            Some(config) => config,
-            None => return Err("warp slot requires a snapshot config".to_owned()),
-        };
-
         process_blockstore.process()?;
 
         let mut bank_forks = bank_forks.write().unwrap();
@@ -1695,11 +1686,15 @@ fn maybe_warp_slot(
             ledger_path,
             &bank_forks.root_bank(),
             None,
-            &snapshot_config.full_snapshot_archives_dir,
-            &snapshot_config.incremental_snapshot_archives_dir,
-            snapshot_config.archive_format,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+            &config.snapshot_config.full_snapshot_archives_dir,
+            &config.snapshot_config.incremental_snapshot_archives_dir,
+            config.snapshot_config.archive_format,
+            config
+                .snapshot_config
+                .maximum_full_snapshot_archives_to_retain,
+            config
+                .snapshot_config
+                .maximum_incremental_snapshot_archives_to_retain,
         ) {
             Ok(archive_info) => archive_info,
             Err(e) => return Err(format!("Unable to create snapshot: {e}")),
