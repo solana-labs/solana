@@ -488,14 +488,10 @@ fn test_snapshot_download() {
     let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .full_snapshot_archives_dir;
     let incremental_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .incremental_snapshot_archives_dir;
 
     trace!("Waiting for snapshot");
@@ -518,14 +514,10 @@ fn test_snapshot_download() {
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_full_snapshot_archives_to_retain,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_incremental_snapshot_archives_to_retain,
         false,
         &mut None,
@@ -580,14 +572,10 @@ fn test_incremental_snapshot_download() {
     let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .full_snapshot_archives_dir;
     let incremental_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .incremental_snapshot_archives_dir;
 
     debug!("snapshot config:\n\tfull snapshot interval: {}\n\tincremental snapshot interval: {}\n\taccounts hash interval: {}",
@@ -651,14 +639,10 @@ fn test_incremental_snapshot_download() {
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_full_snapshot_archives_to_retain,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_incremental_snapshot_archives_to_retain,
         false,
         &mut None,
@@ -677,14 +661,10 @@ fn test_incremental_snapshot_download() {
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_full_snapshot_archives_to_retain,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_incremental_snapshot_archives_to_retain,
         false,
         &mut None,
@@ -824,14 +804,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_full_snapshot_archives_to_retain,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_incremental_snapshot_archives_to_retain,
         false,
         &mut None,
@@ -865,14 +841,10 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_full_snapshot_archives_to_retain,
         validator_snapshot_test_config
             .validator_config
             .snapshot_config
-            .as_ref()
-            .unwrap()
             .maximum_incremental_snapshot_archives_to_retain,
         false,
         &mut None,
@@ -1259,8 +1231,6 @@ fn test_snapshot_restart_tower() {
     let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .full_snapshot_archives_dir;
 
     let full_snapshot_archive_info = cluster.wait_for_next_full_snapshot(
@@ -1313,8 +1283,6 @@ fn test_snapshots_blockstore_floor() {
     let full_snapshot_archives_dir = &leader_snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .full_snapshot_archives_dir;
 
     let mut config = ClusterConfig {
@@ -1415,8 +1383,6 @@ fn test_snapshots_restart_validity() {
     let full_snapshot_archives_dir = &snapshot_test_config
         .validator_config
         .snapshot_config
-        .as_ref()
-        .unwrap()
         .full_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
@@ -2228,7 +2194,7 @@ fn test_hard_fork_with_gap_in_roots() {
     let validator_b_pubkey = validators[1];
 
     let validator_config = ValidatorConfig {
-        snapshot_config: Some(LocalCluster::create_dummy_load_only_snapshot_config()),
+        snapshot_config: LocalCluster::create_dummy_load_only_snapshot_config(),
         accounts_db_caching_enabled: true,
         ..ValidatorConfig::default()
     };
