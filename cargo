@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-# TODO(klykov): this file is depricated and will be deleted. It is left to split changes on the scripts and github workflow sides (see PR#27018)
+
+echo "Notice: please run `cargo` directly. This cargo wrapper script will be removed in the future"
+
+# The code below will be simplified to `exec cargo "$@"` after github workflow changes, see #29105
 # shellcheck source=ci/rust-version.sh
 here=$(dirname "$0")
 
