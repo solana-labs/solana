@@ -11440,6 +11440,7 @@ pub mod tests {
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
         update_accounts(&accounts, &pubkeys, 0, 99);
+        accounts.add_root_and_flush_write_cache(0);
         assert!(check_storage(&accounts, 0, 100));
     }
 
@@ -12240,8 +12241,10 @@ pub mod tests {
 
         let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
 
-        let accounts = AccountsDb::new_single_for_tests();
-        accounts.add_root(0);
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
+        accounts.get_accounts_delta_hash(0);
+        accounts.add_root_and_flush_write_cache(0);
 
         // Step A
         let mut current_slot = 1;
@@ -12249,7 +12252,8 @@ pub mod tests {
         // Store another live account to slot 1 which will prevent any purge
         // since the store count will not be zero
         accounts.store_for_tests(current_slot, &[(&pubkey2, &account2)]);
-        accounts.add_root(current_slot);
+        accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
         let (slot1, account_info1) = accounts
             .accounts_index
             .get_for_tests(&pubkey, None, None)
@@ -12268,12 +12272,14 @@ pub mod tests {
         current_slot += 1;
         let zero_lamport_slot = current_slot;
         accounts.store_for_tests(current_slot, &[(&pubkey, &zero_lamport_account)]);
-        accounts.add_root(current_slot);
+        accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         assert_load_account(&accounts, current_slot, pubkey, zero_lamport);
 
         current_slot += 1;
-        accounts.add_root(current_slot);
+        accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         accounts.print_accounts_stats("pre_purge");
 
