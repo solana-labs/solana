@@ -1468,7 +1468,7 @@ function createRpcClient(
       if (process.env.NODE_ENV !== 'test') {
         agent = new Agent({
           // One second fewer than the Solana RPC's keepalive timeout.
-          // Read more: https://github.com/solana-labs/solana/issues/27859
+          // Read more: https://github.com/solana-labs/solana/issues/27859#issuecomment-1340097889
           freeSocketTimeout: 19000,
           keepAlive: true,
           maxSockets: 25,
