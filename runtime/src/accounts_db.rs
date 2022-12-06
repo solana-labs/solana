@@ -11874,7 +11874,7 @@ pub mod tests {
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
-            false,
+            true,
             AccountShrinkThreshold::default(),
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -11901,11 +11901,11 @@ pub mod tests {
 
         //simulate slots are rooted after while
         accounts.get_accounts_delta_hash(0);
-        accounts.add_root(0);
+        accounts.add_root_and_flush_write_cache(0);
         accounts.get_accounts_delta_hash(1);
-        accounts.add_root(1);
+        accounts.add_root_and_flush_write_cache(1);
         accounts.get_accounts_delta_hash(2);
-        accounts.add_root(2);
+        accounts.add_root_and_flush_write_cache(2);
 
         //even if rooted, old state isn't cleaned up
         assert_eq!(accounts.alive_account_count_in_slot(0), 2);
