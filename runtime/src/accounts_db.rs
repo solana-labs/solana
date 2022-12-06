@@ -11252,7 +11252,8 @@ pub mod tests {
         solana_logger::setup();
         let unrooted_slot = 9;
         let unrooted_bank_id = 9;
-        let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
         let key = solana_sdk::pubkey::new_rand();
         let account0 = AccountSharedData::new(1, 0, &key);
         db.store_for_tests(unrooted_slot, &[(&key, &account0)]);
@@ -11264,7 +11265,7 @@ pub mod tests {
         let key2 = solana_sdk::pubkey::new_rand();
         let new_root = unrooted_slot + 1;
         db.store_for_tests(new_root, &[(&key2, &account0)]);
-        db.add_root(new_root);
+        db.add_root_and_flush_write_cache(new_root);
 
         // Simulate reconstruction from snapshot
         let db = reconstruct_accounts_db_via_serialization(&db, new_root);
