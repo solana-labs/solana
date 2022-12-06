@@ -22,7 +22,7 @@ use {
     std::{
         fmt::{Debug, Formatter},
         fs::File,
-        io::{Read, Seek, SeekFrom},
+        io::{Read, Seek},
         path::Path,
         time::{Duration, Instant},
     },
@@ -244,7 +244,7 @@ before execting it in the virtual machine.",
     let mut file = File::open(Path::new(program)).unwrap();
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic).unwrap();
-    file.seek(SeekFrom::Start(0)).unwrap();
+    file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
     let syscall_registry = register_syscalls(&invoke_context.feature_set, true).unwrap();
