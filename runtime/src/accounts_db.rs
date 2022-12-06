@@ -12077,101 +12077,110 @@ pub mod tests {
 
     #[test]
     fn test_accounts_db_serialize1() {
-        solana_logger::setup();
-        let accounts = AccountsDb::new_single_for_tests();
-        let mut pubkeys: Vec<Pubkey> = vec![];
+        for pass in 0..2 {
+            solana_logger::setup();
+            let mut accounts = AccountsDb::new_single_for_tests();
+            accounts.caching_enabled = true;
+            let mut pubkeys: Vec<Pubkey> = vec![];
 
-        // Create 100 accounts in slot 0
-        create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
-        accounts.clean_accounts_for_tests();
-        check_accounts(&accounts, &pubkeys, 0, 100, 1);
+            // Create 100 accounts in slot 0
+            create_account(&accounts, &mut pubkeys, 0, 100, 0, 0);
+            if pass == 0 {
+                accounts.add_root_and_flush_write_cache(0);
+                assert!(check_storage(&accounts, 0, 100));
+                accounts.clean_accounts_for_tests();
+                check_accounts(&accounts, &pubkeys, 0, 100, 1);
+                // clean should have done nothing
+                continue;
+            }
 
-        // do some updates to those accounts and re-check
-        modify_accounts(&accounts, &pubkeys, 0, 100, 2);
-        assert!(check_storage(&accounts, 0, 100));
-        check_accounts(&accounts, &pubkeys, 0, 100, 2);
-        accounts.get_accounts_delta_hash(0);
-        accounts.add_root(0);
+            // do some updates to those accounts and re-check
+            modify_accounts(&accounts, &pubkeys, 0, 100, 2);
+            accounts.add_root_and_flush_write_cache(0);
+            assert!(check_storage(&accounts, 0, 100));
+            check_accounts(&accounts, &pubkeys, 0, 100, 2);
+            accounts.get_accounts_delta_hash(0);
 
-        let mut pubkeys1: Vec<Pubkey> = vec![];
+            let mut pubkeys1: Vec<Pubkey> = vec![];
 
-        // CREATE SLOT 1
-        let latest_slot = 1;
+            // CREATE SLOT 1
+            let latest_slot = 1;
 
-        // Modify the first 10 of the accounts from slot 0 in slot 1
-        modify_accounts(&accounts, &pubkeys, latest_slot, 10, 3);
-        // Overwrite account 30 from slot 0 with lamports=0 into slot 1.
-        // Slot 1 should now have 10 + 1 = 11 accounts
-        let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
-        accounts.store_for_tests(latest_slot, &[(&pubkeys[30], &account)]);
+            // Modify the first 10 of the accounts from slot 0 in slot 1
+            modify_accounts(&accounts, &pubkeys, latest_slot, 10, 3);
+            // Overwrite account 30 from slot 0 with lamports=0 into slot 1.
+            // Slot 1 should now have 10 + 1 = 11 accounts
+            let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            accounts.store_for_tests(latest_slot, &[(&pubkeys[30], &account)]);
 
-        // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
-        // accounts
-        create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
+            // Create 10 new accounts in slot 1, should now have 11 + 10 = 21
+            // accounts
+            create_account(&accounts, &mut pubkeys1, latest_slot, 10, 0, 0);
 
-        accounts.get_accounts_delta_hash(latest_slot);
-        accounts.add_root(latest_slot);
-        assert!(check_storage(&accounts, 1, 21));
+            accounts.get_accounts_delta_hash(latest_slot);
+            accounts.add_root_and_flush_write_cache(latest_slot);
+            assert!(check_storage(&accounts, 1, 21));
 
-        // CREATE SLOT 2
-        let latest_slot = 2;
-        let mut pubkeys2: Vec<Pubkey> = vec![];
+            // CREATE SLOT 2
+            let latest_slot = 2;
+            let mut pubkeys2: Vec<Pubkey> = vec![];
 
-        // Modify first 20 of the accounts from slot 0 in slot 2
-        modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
-        accounts.clean_accounts_for_tests();
-        // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
-        // Slot 2 should now have 20 + 1 = 21 accounts
-        let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
-        accounts.store_for_tests(latest_slot, &[(&pubkeys[31], &account)]);
+            // Modify first 20 of the accounts from slot 0 in slot 2
+            modify_accounts(&accounts, &pubkeys, latest_slot, 20, 4);
+            accounts.clean_accounts_for_tests();
+            // Overwrite account 31 from slot 0 with lamports=0 into slot 2.
+            // Slot 2 should now have 20 + 1 = 21 accounts
+            let account = AccountSharedData::new(0, 0, AccountSharedData::default().owner());
+            accounts.store_for_tests(latest_slot, &[(&pubkeys[31], &account)]);
 
-        // Create 10 new accounts in slot 2. Slot 2 should now have
-        // 21 + 10 = 31 accounts
-        create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
+            // Create 10 new accounts in slot 2. Slot 2 should now have
+            // 21 + 10 = 31 accounts
+            create_account(&accounts, &mut pubkeys2, latest_slot, 10, 0, 0);
 
-        accounts.get_accounts_delta_hash(latest_slot);
-        accounts.add_root(latest_slot);
-        assert!(check_storage(&accounts, 2, 31));
+            accounts.get_accounts_delta_hash(latest_slot);
+            accounts.add_root_and_flush_write_cache(latest_slot);
+            assert!(check_storage(&accounts, 2, 31));
 
-        accounts.clean_accounts_for_tests();
-        // The first 20 accounts of slot 0 have been updated in slot 2, as well as
-        // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
-        // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
-        assert!(check_storage(&accounts, 0, 78));
-        // 10 of the 21 accounts have been modified in slot 2, so only 11
-        // accounts left in slot 1.
-        assert!(check_storage(&accounts, 1, 11));
-        assert!(check_storage(&accounts, 2, 31));
+            accounts.clean_accounts_for_tests();
+            // The first 20 accounts of slot 0 have been updated in slot 2, as well as
+            // accounts 30 and  31 (overwritten with zero-lamport accounts in slot 1 and
+            // slot 2 respectively), so only 78 accounts are left in slot 0's storage entries.
+            assert!(check_storage(&accounts, 0, 78));
+            // 10 of the 21 accounts have been modified in slot 2, so only 11
+            // accounts left in slot 1.
+            assert!(check_storage(&accounts, 1, 11));
+            assert!(check_storage(&accounts, 2, 31));
 
-        let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
+            let daccounts = reconstruct_accounts_db_via_serialization(&accounts, latest_slot);
 
-        assert_eq!(
-            daccounts.write_version.load(Ordering::Acquire),
-            accounts.write_version.load(Ordering::Acquire)
-        );
+            assert_eq!(
+                daccounts.write_version.load(Ordering::Acquire),
+                accounts.write_version.load(Ordering::Acquire)
+            );
 
-        // Get the hash for the latest slot, which should be the only hash in the
-        // bank_hashes map on the deserialized AccountsDb
-        assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);
-        assert_eq!(
-            daccounts.bank_hashes.read().unwrap().get(&latest_slot),
-            accounts.bank_hashes.read().unwrap().get(&latest_slot)
-        );
+            // Get the hash for the latest slot, which should be the only hash in the
+            // bank_hashes map on the deserialized AccountsDb
+            assert_eq!(daccounts.bank_hashes.read().unwrap().len(), 2);
+            assert_eq!(
+                daccounts.bank_hashes.read().unwrap().get(&latest_slot),
+                accounts.bank_hashes.read().unwrap().get(&latest_slot)
+            );
 
-        daccounts.print_count_and_status("daccounts");
+            daccounts.print_count_and_status("daccounts");
 
-        // Don't check the first 35 accounts which have not been modified on slot 0
-        check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
-        check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
-        assert!(check_storage(&daccounts, 0, 100));
-        assert!(check_storage(&daccounts, 1, 21));
-        assert!(check_storage(&daccounts, 2, 31));
+            // Don't check the first 35 accounts which have not been modified on slot 0
+            check_accounts(&daccounts, &pubkeys[35..], 0, 65, 37);
+            check_accounts(&daccounts, &pubkeys1, 1, 10, 1);
+            assert!(check_storage(&daccounts, 0, 100));
+            assert!(check_storage(&daccounts, 1, 21));
+            assert!(check_storage(&daccounts, 2, 31));
 
-        let ancestors = linear_ancestors(latest_slot);
-        assert_eq!(
-            daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
-            accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
-        );
+            let ancestors = linear_ancestors(latest_slot);
+            assert_eq!(
+                daccounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,),
+                accounts.update_accounts_hash_for_tests(latest_slot, &ancestors, false, false,)
+            );
+        }
     }
 
     fn assert_load_account(
