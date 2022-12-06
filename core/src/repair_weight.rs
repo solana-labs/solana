@@ -690,6 +690,7 @@ impl RepairWeight {
 mod test {
     use {
         super::*,
+        itertools::Itertools,
         solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
         solana_runtime::{bank::Bank, bank_utils},
         solana_sdk::hash::Hash,
@@ -1423,6 +1424,76 @@ mod test {
             repair_weight.find_ancestor_subtree_of_slot(&blockstore, 8),
             (vec![4].into_iter().collect::<VecDeque<_>>(), None)
         );
+    }
+
+    #[test]
+    fn test_orphan_slot_copy_weight() {
+        let (blockstore, _, mut repair_weight) = setup_orphan_repair_weight();
+        let stake = 100;
+        let (bank, vote_pubkeys) = bank_utils::setup_bank_and_vote_pubkeys_for_tests(1, stake);
+        repair_weight.add_votes(
+            &blockstore,
+            vec![(6, vote_pubkeys)].into_iter(),
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+        );
+
+        // Simulate dump from replay
+        blockstore.clear_unconfirmed_slot(3);
+        repair_weight.orphan_slot(3);
+        blockstore.clear_unconfirmed_slot(10);
+        repair_weight.orphan_slot(10);
+
+        // Verify orphans
+        let mut orphans = repair_weight.trees.keys().copied().collect_vec();
+        orphans.sort();
+        assert_eq!(vec![0, 3, 8, 10, 20], orphans);
+
+        // Verify weighting
+        assert_eq!(
+            0,
+            repair_weight
+                .trees
+                .get(&8)
+                .unwrap()
+                .stake_voted_subtree(&(8, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            stake,
+            repair_weight
+                .trees
+                .get(&3)
+                .unwrap()
+                .stake_voted_subtree(&(3, Hash::default()))
+                .unwrap()
+        );
+        assert_eq!(
+            2 * stake,
+            repair_weight
+                .trees
+                .get(&10)
+                .unwrap()
+                .stake_voted_subtree(&(10, Hash::default()))
+                .unwrap()
+        );
+
+        // Get best orphans works as usual
+        let mut repairs = vec![];
+        let mut processed_slots = vec![repair_weight.root].into_iter().collect();
+        repair_weight.get_best_orphans(
+            &blockstore,
+            &mut processed_slots,
+            &mut repairs,
+            bank.epoch_stakes_map(),
+            bank.epoch_schedule(),
+            4,
+        );
+        assert_eq!(repairs.len(), 4);
+        assert_eq!(repairs[0].slot(), 10);
+        assert_eq!(repairs[1].slot(), 20);
+        assert_eq!(repairs[2].slot(), 3);
+        assert_eq!(repairs[3].slot(), 8);
     }
 
     fn setup_orphan_repair_weight() -> (Blockstore, Bank, RepairWeight) {
