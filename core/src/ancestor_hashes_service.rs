@@ -523,6 +523,7 @@ impl AncestorHashesService {
         let serve_repair = ServeRepair::new(
             repair_info.cluster_info.clone(),
             repair_info.bank_forks.clone(),
+            repair_info.repair_whitelist.clone(),
         );
         let mut repair_stats = AncestorRepairRequestsStats::default();
 
@@ -970,7 +971,7 @@ mod test {
                 SocketAddrSpace::Unspecified,
             );
             let responder_serve_repair =
-                ServeRepair::new(Arc::new(cluster_info), vote_simulator.bank_forks);
+                ServeRepair::new(Arc::new(cluster_info), vote_simulator.bank_forks, None);
 
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
@@ -1055,7 +1056,7 @@ mod test {
                 SocketAddrSpace::Unspecified,
             ));
             let requester_serve_repair =
-                ServeRepair::new(requester_cluster_info.clone(), bank_forks.clone());
+                ServeRepair::new(requester_cluster_info.clone(), bank_forks.clone(), None);
             let (duplicate_slots_reset_sender, _duplicate_slots_reset_receiver) = unbounded();
             let repair_info = RepairInfo {
                 bank_forks,
@@ -1064,6 +1065,7 @@ mod test {
                 epoch_schedule,
                 duplicate_slots_reset_sender,
                 repair_validators: None,
+                repair_whitelist: None,
             };
 
             let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =

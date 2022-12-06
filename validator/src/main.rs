@@ -800,6 +800,13 @@ pub fn main() {
         "repair_validators",
         "--repair-validator",
     );
+    let repair_whitelist = validators_set(
+        &identity_keypair.pubkey(),
+        &matches,
+        "repair_whitelist",
+        "--repair-whitelist",
+    )
+    .map(Arc::new);
     let gossip_validators = validators_set(
         &identity_keypair.pubkey(),
         &matches,
@@ -1110,6 +1117,7 @@ pub fn main() {
         wait_for_supermajority: value_t!(matches, "wait_for_supermajority", Slot).ok(),
         known_validators,
         repair_validators,
+        repair_whitelist,
         gossip_validators,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),

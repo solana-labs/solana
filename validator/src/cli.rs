@@ -715,6 +715,17 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                        request from validators outside this set [default: all validators]")
         )
         .arg(
+            Arg::with_name("repair_whitelist")
+                .hidden(true)
+                .long("repair-whitelist")
+                .validator(is_pubkey)
+                .value_name("VALIDATOR IDENTITY")
+                .multiple(true)
+                .takes_value(true)
+                .help("A list of validators to prioritize repairs from. If specified, repair will \
+                       prioritize repair requests from validators in this set [default: all validators]")
+        )
+        .arg(
             Arg::with_name("gossip_validators")
                 .long("gossip-validator")
                 .validator(is_pubkey)
