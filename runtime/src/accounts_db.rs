@@ -16428,7 +16428,8 @@ pub mod tests {
     #[test]
     fn test_clean_accounts_with_last_full_snapshot_slot() {
         solana_logger::setup();
-        let accounts_db = AccountsDb::new_single_for_tests();
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
         let pubkey = solana_sdk::pubkey::new_rand();
         let owner = solana_sdk::pubkey::new_rand();
         let space = 0;
@@ -16437,19 +16438,19 @@ pub mod tests {
         let account = AccountSharedData::new(111, space, &owner);
         accounts_db.store_cached((slot1, &[(&pubkey, &account)][..]), None);
         accounts_db.get_accounts_delta_hash(slot1);
-        accounts_db.add_root(slot1);
+        accounts_db.add_root_and_flush_write_cache(slot1);
 
         let slot2: Slot = 2;
         let account = AccountSharedData::new(222, space, &owner);
         accounts_db.store_cached((slot2, &[(&pubkey, &account)][..]), None);
         accounts_db.get_accounts_delta_hash(slot2);
-        accounts_db.add_root(slot2);
+        accounts_db.add_root_and_flush_write_cache(slot2);
 
         let slot3: Slot = 3;
         let account = AccountSharedData::new(0, space, &owner);
         accounts_db.store_cached((slot3, &[(&pubkey, &account)][..]), None);
         accounts_db.get_accounts_delta_hash(slot3);
-        accounts_db.add_root(slot3);
+        accounts_db.add_root_and_flush_write_cache(slot3);
 
         assert_eq!(accounts_db.ref_count_for_pubkey(&pubkey), 3);
 
