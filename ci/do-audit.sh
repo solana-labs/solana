@@ -13,4 +13,4 @@ cargo_audit_ignores=(
   # Blocked on chrono updating `time` to >= 0.2.23
   --ignore RUSTSEC-2020-0071
 )
-scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
+scripts/cargo-for-all-lock-files.sh audit "${cargo_audit_ignores[@]}"

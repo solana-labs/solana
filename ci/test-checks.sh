@@ -33,14 +33,14 @@ echo --- build environment
   rustup run "$rust_stable" rustc --version --verbose
   rustup run "$rust_nightly" rustc --version --verbose
 
-  cargo stable --version --verbose
+  cargo --version --verbose
   "$cargoNightly" --version --verbose
 
-  cargo stable clippy --version --verbose
+  cargo clippy --version --verbose
   "$cargoNightly" clippy --version --verbose
 
-  # audit is done only with "$cargo stable"
-  cargo stable audit --version
+  # audit is done only with cargo "+${rust_stable}"
+  cargo audit --version
 
   grcov --version
 )
@@ -51,7 +51,7 @@ export RUSTFLAGS="-D warnings -A incomplete_features"
 # Only force up-to-date lock files on edge
 if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   # Exclude --benches as it's not available in rust stable yet
-  if _ scripts/cargo-for-all-lock-files.sh stable check --locked --tests --bins --examples; then
+  if _ scripts/cargo-for-all-lock-files.sh check --locked --tests --bins --examples; then
     true
   else
     check_status=$?
@@ -62,7 +62,7 @@ if [[ $CI_BASE_BRANCH = "$EDGE_CHANNEL" ]]; then
   fi
 
    # Ensure nightly and --benches
-  _ scripts/cargo-for-all-lock-files.sh nightly check --locked --all-targets
+  _ scripts/cargo-for-all-lock-files.sh "+${rust_nightly}" check --locked --all-targets
 else
   echo "Note: cargo-for-all-lock-files.sh skipped because $CI_BASE_BRANCH != $EDGE_CHANNEL"
 fi
@@ -73,13 +73,13 @@ nightly_clippy_allows=()
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- \
+ _ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" clippy -Zunstable-options --all-targets -- \
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
    "${nightly_clippy_allows[@]}"
 
-_ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check
-_ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
+_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" sort --workspace --check
+_ scripts/cargo-for-all-lock-files.sh -- "+${rust_nightly}" fmt --all -- --check
 
  _ ci/do-audit.sh
 

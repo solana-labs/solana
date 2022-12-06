@@ -16,8 +16,6 @@ if [[ $OSTYPE == darwin* ]]; then
   fi
 fi
 
-cargo="cargo"
-
 set -e
 
 usage() {
@@ -138,12 +136,12 @@ mkdir -p "$installDir/bin"
 (
   set -x
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  "$cargo" $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
+  cargo $maybeRustVersion build $maybeReleaseFlag "${binArgs[@]}"
 
   # Exclude `spl-token` binary for net.sh builds
   if [[ -z "$validatorOnly" ]]; then
     # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-    "$cargo" $maybeRustVersion install --locked spl-token-cli --root "$installDir"
+    cargo $maybeRustVersion install --locked spl-token-cli --root "$installDir"
   fi
 )
 
@@ -157,9 +155,9 @@ fi
 
 if [[ -z "$validatorOnly" ]]; then
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  "$cargo" $maybeRustVersion build --manifest-path programs/bpf_loader/gen-syscall-list/Cargo.toml
+  cargo $maybeRustVersion build --manifest-path programs/bpf_loader/gen-syscall-list/Cargo.toml
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
-  "$cargo" $maybeRustVersion run --bin gen-headers
+  cargo $maybeRustVersion run --bin gen-headers
   mkdir -p "$installDir"/bin/sdk/sbf
   cp -a sdk/sbf/* "$installDir"/bin/sdk/sbf
 fi
