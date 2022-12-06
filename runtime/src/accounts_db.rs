@@ -12236,7 +12236,8 @@ pub mod tests {
 
         let zero_lamport_account = AccountSharedData::new(zero_lamport, no_data, &owner);
 
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
         accounts.get_accounts_delta_hash(0);
         accounts.add_root_and_flush_write_cache(0);
 
