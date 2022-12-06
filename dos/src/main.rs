@@ -104,7 +104,9 @@ impl TransactionGenerator {
     fn new(transaction_params: TransactionParams) -> Self {
         TransactionGenerator {
             blockhash: Hash::default(),
-            last_generated: (Instant::now() - Duration::from_secs(100)), //to force generation when generate is called
+            last_generated: Instant::now()
+                .checked_sub(Duration::from_secs(100))
+                .unwrap(), //to force generation when generate is called
             transaction_params,
         }
     }
