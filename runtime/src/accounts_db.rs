@@ -16339,7 +16339,8 @@ pub mod tests {
 
     #[test]
     fn test_calculate_storage_count_and_alive_bytes_2_accounts() {
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
         let keys = [
             solana_sdk::pubkey::Pubkey::new(&[0; 32]),
             solana_sdk::pubkey::Pubkey::new(&[255; 32]),
@@ -16361,6 +16362,7 @@ pub mod tests {
         let slot0 = 0;
         accounts.store_for_tests(slot0, &[(&keys[0], &account)]);
         accounts.store_for_tests(slot0, &[(&keys[1], &account_big)]);
+        accounts.add_root_and_flush_write_cache(slot0);
 
         let storage_maps = accounts
             .storage
