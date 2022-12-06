@@ -1467,7 +1467,11 @@ function createRpcClient(
     }
   } else {
     if (agentOverride == null) {
-      agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
+      if (process.env.NODE_ENV !== 'test') {
+        agentManager = new AgentManager(
+          url.startsWith('https:') /* useHttps */,
+        );
+      }
     } else {
       if (agentOverride !== false) {
         const isHttps = url.startsWith('https:');
