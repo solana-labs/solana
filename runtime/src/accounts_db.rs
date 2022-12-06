@@ -11122,32 +11122,21 @@ pub mod tests {
     #[test]
     fn test_accountsdb_count_stores() {
         solana_logger::setup();
-        let db = AccountsDb::new_single_for_tests();
+        let mut db = AccountsDb::new_single_for_tests();
+        db.caching_enabled = true;
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 0, 2, DEFAULT_FILE_SIZE as usize / 3, 0);
+        db.add_root_and_flush_write_cache(0);
         assert!(check_storage(&db, 0, 2));
 
         let pubkey = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 3, &pubkey);
         db.store_for_tests(1, &[(&pubkey, &account)]);
         db.store_for_tests(1, &[(&pubkeys[0], &account)]);
-        {
-            let slot_0_stores = &db.storage.get_slot_stores(0).unwrap();
-            let slot_1_stores = &db.storage.get_slot_stores(1).unwrap();
-            let r_slot_0_stores = slot_0_stores.read().unwrap();
-            let r_slot_1_stores = slot_1_stores.read().unwrap();
-            assert_eq!(r_slot_0_stores.len(), 1);
-            assert_eq!(r_slot_1_stores.len(), 1);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().count(), 2);
-            assert_eq!(r_slot_1_stores[&1].count(), 2);
-            assert_eq!(r_slot_0_stores.get(&0).unwrap().approx_stored_count(), 2);
-            assert_eq!(r_slot_1_stores[&1].approx_stored_count(), 2);
-        }
-
         // adding root doesn't change anything
         db.get_accounts_delta_hash(1);
-        db.add_root(1);
+        db.add_root_and_flush_write_cache(1);
         {
             let slot_0_stores = &db.storage.get_slot_stores(0).unwrap();
             let slot_1_stores = &db.storage.get_slot_stores(1).unwrap();
@@ -11163,6 +11152,7 @@ pub mod tests {
 
         // overwrite old rooted account version; only the r_slot_0_stores.count() should be
         // decremented
+        // slot 2 is not a root and should be ignored by clean
         db.store_for_tests(2, &[(&pubkeys[0], &account)]);
         db.clean_accounts_for_tests();
         {
