@@ -16348,6 +16348,7 @@ pub mod tests {
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
         let slot0 = 0;
         accounts.store_for_tests(slot0, &[(&shared_key, &account)]);
+        accounts.add_root_and_flush_write_cache(slot0);
 
         // fake out the store count to avoid the assert
         for slot_stores in accounts.storage.map.iter() {
