@@ -96,7 +96,7 @@ impl PohTiming {
 impl PohService {
     pub fn new(
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        poh_config: &Arc<PohConfig>,
+        poh_config: &PohConfig,
         poh_exit: &Arc<AtomicBool>,
         ticks_per_slot: u64,
         pinned_cpu_core: usize,
@@ -414,11 +414,11 @@ mod tests {
             let default_target_tick_duration =
                 timing::duration_as_us(&PohConfig::default().target_tick_duration);
             let target_tick_duration = Duration::from_micros(default_target_tick_duration);
-            let poh_config = Arc::new(PohConfig {
+            let poh_config = PohConfig {
                 hashes_per_tick: Some(clock::DEFAULT_HASHES_PER_TICK),
                 target_tick_duration,
                 target_tick_count: None,
-            });
+            };
             let exit = Arc::new(AtomicBool::new(false));
 
             let ticks_per_slot = bank.ticks_per_slot();
