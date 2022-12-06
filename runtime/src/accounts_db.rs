@@ -11642,7 +11642,8 @@ pub mod tests {
     fn test_clean_zero_lamport_and_dead_slot() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        let mut accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        accounts.caching_enabled = true;
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
         let account = AccountSharedData::new(1, 1, AccountSharedData::default().owner());
@@ -11669,7 +11670,11 @@ pub mod tests {
             .unwrap();
         assert_eq!(slot1, 0);
         assert_eq!(slot1, slot2);
-        assert_eq!(account_info1.store_id(), account_info2.store_id());
+        assert_eq!(account_info1.storage_location(), StorageLocation::Cached);
+        assert_eq!(
+            account_info1.storage_location(),
+            account_info2.storage_location()
+        );
 
         // Update account 1 in slot 1
         accounts.store_for_tests(1, &[(&pubkey1, &account)]);
@@ -11679,9 +11684,12 @@ pub mod tests {
 
         // Pubkey 1 was the only account in slot 1, and it was updated in slot 2, so
         // slot 1 should be purged
-        accounts.add_root(0);
-        accounts.add_root(1);
-        accounts.add_root(2);
+        accounts.get_accounts_delta_hash(0);
+        accounts.add_root_and_flush_write_cache(0);
+        accounts.get_accounts_delta_hash(1);
+        accounts.add_root_and_flush_write_cache(1);
+        accounts.get_accounts_delta_hash(2);
+        accounts.add_root_and_flush_write_cache(2);
 
         // Slot 1 should be removed, slot 0 cannot be removed because it still has
         // the latest update for pubkey 2
