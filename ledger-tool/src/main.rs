@@ -3018,6 +3018,7 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
+                        accounts_db_caching_enabled: true,
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
@@ -3218,6 +3219,8 @@ fn main() {
                             }
                         }
 
+                        bank.accounts().accounts_db.add_root(bank.slot());
+                        bank.force_flush_accounts_cache();
                         bank.set_capitalization();
 
                         let bank = if let Some(warp_slot) = warp_slot {
