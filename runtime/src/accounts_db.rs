@@ -17607,7 +17607,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_shrink_collect_simple() {
         solana_logger::setup();
         let account_counts = [
@@ -17648,16 +17647,15 @@ pub mod tests {
                                     account_count += 1;
                                 }
                                 debug!("space: {space}, lamports: {lamports}, alive: {alive}, account_count: {account_count}, append_opposite_alive_account: {append_opposite_alive_account}, append_opposite_zero_lamport_account: {append_opposite_zero_lamport_account}, normal_account_count: {normal_account_count}");
-                                let size = 100000;
-                                let db = AccountsDb::new_single_for_tests();
+                                let mut db = AccountsDb::new_single_for_tests();
+                                db.caching_enabled = true;
                                 let slot5 = 5;
-                                let inserted_store =
-                                    db.create_and_insert_store(slot5, size, "test");
                                 let mut account = AccountSharedData::new(
                                     lamports,
                                     space,
                                     AccountSharedData::default().owner(),
                                 );
+                                let mut to_purge = Vec::default();
                                 for pubkey in pubkeys.iter().take(account_count) {
                                     // store in append vec and index
                                     let old_lamports = account.lamports();
@@ -17676,14 +17674,19 @@ pub mod tests {
                                     }
                                     if !alive {
                                         // remove from index so pubkey is 'dead'
-                                        db.accounts_index.purge_exact(
-                                            pubkey,
-                                            &([slot5].into_iter().collect::<HashSet<_>>()),
-                                            &mut Vec::default(),
-                                        );
+                                        to_purge.push(*pubkey);
                                     }
                                 }
-                                let storages = vec![inserted_store];
+                                db.add_root_and_flush_write_cache(slot5);
+                                to_purge.iter().for_each(|pubkey| {
+                                    db.accounts_index.purge_exact(
+                                        pubkey,
+                                        &([slot5].into_iter().collect::<HashSet<_>>()),
+                                        &mut Vec::default(),
+                                    );
+                                });
+
+                                let storages = db.get_storages_for_slot(slot5).unwrap().to_vec();
                                 let mut stored_accounts = Vec::default();
                                 assert_eq!(storages.len(), 1);
                                 let shrink_collect = db.shrink_collect(
@@ -17772,7 +17775,14 @@ pub mod tests {
                                     assert_eq!(shrink_collect.aligned_total_bytes, 0);
                                     assert_eq!(shrink_collect.alive_total_bytes, 0);
                                 }
-                                assert_eq!(shrink_collect.original_bytes, 102400);
+                                let expected_original_bytes = if account_count >= 100 {
+                                    28672
+                                } else if account_count >= 50 {
+                                    16384
+                                } else {
+                                    4096
+                                };
+                                assert_eq!(shrink_collect.original_bytes, expected_original_bytes);
                                 assert_eq!(
                                     shrink_collect.store_ids,
                                     vec![storages[0].append_vec_id()]
