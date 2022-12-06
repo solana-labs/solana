@@ -110,8 +110,6 @@ lazy_static! {
         Mutex::new(TransactionDetails::new());
 }
 
-lazy_static! {}
-
 pub fn get_hash_from_transaction(transaction: &Transaction, index: usize) -> String {
     // First, we generate a hash of all the account keys (deduped, sorted) in the transaction
     let account_key_hash = hashv(
