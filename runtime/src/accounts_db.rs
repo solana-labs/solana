@@ -11482,58 +11482,37 @@ pub mod tests {
 
     #[test]
     fn test_account_grow() {
-        let accounts = AccountsDb::new_single_for_tests();
+        for pass in 0..27 {
+            let mut accounts = AccountsDb::new_single_for_tests();
+            accounts.caching_enabled = true;
 
-        let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
-        let pubkey1 = solana_sdk::pubkey::new_rand();
-        let account1 = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
-        accounts.store_for_tests(0, &[(&pubkey1, &account1)]);
-        {
-            let stores = &accounts.storage.get_slot_stores(0).unwrap();
-            let r_stores = stores.read().unwrap();
-            assert_eq!(r_stores.len(), 1);
-            assert_eq!(r_stores[&0].count(), 1);
-            assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
-        }
-
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-        let account2 = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
-        accounts.store_for_tests(0, &[(&pubkey2, &account2)]);
-        {
-            assert_eq!(accounts.storage.map.len(), 1);
-            let stores = &accounts.storage.get_slot_stores(0).unwrap();
-            let r_stores = stores.read().unwrap();
-            assert_eq!(r_stores.len(), 2);
-            assert_eq!(r_stores[&0].count(), 1);
-            assert_eq!(r_stores[&0].status(), AccountStorageStatus::Full);
-            assert_eq!(r_stores[&1].count(), 1);
-            assert_eq!(r_stores[&1].status(), AccountStorageStatus::Available);
-        }
-        let ancestors = vec![(0, 0)].into_iter().collect();
-        assert_eq!(
-            accounts
-                .load_without_fixed_root(&ancestors, &pubkey1)
-                .unwrap()
-                .0,
-            account1
-        );
-        assert_eq!(
-            accounts
-                .load_without_fixed_root(&ancestors, &pubkey2)
-                .unwrap()
-                .0,
-            account2
-        );
-
-        // lots of stores, but 7 storages should be enough for everything
-        for _ in 0..25 {
+            let status = [AccountStorageStatus::Available, AccountStorageStatus::Full];
+            let pubkey1 = solana_sdk::pubkey::new_rand();
+            let account1 = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey1);
             accounts.store_for_tests(0, &[(&pubkey1, &account1)]);
-            {
+            if pass == 0 {
+                accounts.add_root_and_flush_write_cache(0);
+                let stores = &accounts.storage.get_slot_stores(0).unwrap();
+                let r_stores = stores.read().unwrap();
+                assert_eq!(r_stores.len(), 1);
+                assert_eq!(r_stores[&0].count(), 1);
+                assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
+                continue;
+            }
+
+            let pubkey2 = solana_sdk::pubkey::new_rand();
+            let account2 = AccountSharedData::new(1, DEFAULT_FILE_SIZE as usize / 2, &pubkey2);
+            accounts.store_for_tests(0, &[(&pubkey2, &account2)]);
+
+            if pass == 1 {
+                accounts.add_root_and_flush_write_cache(0);
                 assert_eq!(accounts.storage.map.len(), 1);
                 let stores = &accounts.storage.get_slot_stores(0).unwrap();
                 let r_stores = stores.read().unwrap();
-                assert!(r_stores.len() <= 7);
-                assert_eq!(r_stores[&0].status(), status[0]);
+                assert_eq!(r_stores.len(), 1);
+                assert_eq!(r_stores[&0].count(), 2);
+                assert_eq!(r_stores[&0].status(), AccountStorageStatus::Available);
+                continue;
             }
             let ancestors = vec![(0, 0)].into_iter().collect();
             assert_eq!(
@@ -11550,6 +11529,38 @@ pub mod tests {
                     .0,
                 account2
             );
+
+            // lots of stores, but 7 storages should be enough for everything
+            for i in 0..25 {
+                accounts.store_for_tests(0, &[(&pubkey1, &account1)]);
+                let flush = pass == i + 2;
+                if flush {
+                    accounts.add_root_and_flush_write_cache(0);
+                    assert_eq!(accounts.storage.map.len(), 1);
+                    let stores = &accounts.storage.get_slot_stores(0).unwrap();
+                    let r_stores = stores.read().unwrap();
+                    assert_eq!(r_stores.len(), 1);
+                    assert_eq!(r_stores[&0].status(), status[0]);
+                }
+                let ancestors = vec![(0, 0)].into_iter().collect();
+                assert_eq!(
+                    accounts
+                        .load_without_fixed_root(&ancestors, &pubkey1)
+                        .unwrap()
+                        .0,
+                    account1
+                );
+                assert_eq!(
+                    accounts
+                        .load_without_fixed_root(&ancestors, &pubkey2)
+                        .unwrap()
+                        .0,
+                    account2
+                );
+                if flush {
+                    break;
+                }
+            }
         }
     }
 
