@@ -433,11 +433,7 @@ impl ReplayStage {
             block_commitment_cache.clone(),
             rpc_subscriptions.clone(),
         );
-
-        #[allow(clippy::cognitive_complexity)]
-        let t_replay = Builder::new()
-            .name("solReplayStage".to_string())
-            .spawn(move || {
+        let run_replay = move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
                 let mut identity_keypair = cluster_info.keypair().clone();
@@ -937,7 +933,10 @@ impl ReplayStage {
                         retransmit_not_propagated_time.as_us(),
                     );
                 }
-            })
+        };
+        let t_replay = Builder::new()
+            .name("solReplayStage".to_string())
+            .spawn(run_replay)
             .unwrap();
 
         Self {
@@ -2077,10 +2076,11 @@ impl ReplayStage {
         }
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
-                .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
+                .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE) || {
             // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
             // include the last voted blockhash
-            || last_vote_refresh_time.last_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
+            last_vote_refresh_time.last_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
+        }
         {
             return;
         }
@@ -3130,12 +3130,12 @@ impl ReplayStage {
             // all its ancestor banks have also reached propagation
             // threshold as well (Validators can't have voted for a
             // descendant without also getting the ancestor block)
-            if leader_propagated_stats.is_propagated ||
+            if leader_propagated_stats.is_propagated || {
                 // If there's no new validators to record, and there's no
                 // newly achieved threshold, then there's no further
                 // information to propagate backwards to past leader blocks
-                (newly_voted_pubkeys.is_empty() && cluster_slot_pubkeys.is_empty() &&
-                !did_newly_reach_threshold)
+                newly_voted_pubkeys.is_empty() && cluster_slot_pubkeys.is_empty() &&
+                !did_newly_reach_threshold }
             {
                 break;
             }
