@@ -1233,7 +1233,7 @@ impl Bank {
         Self::new_with_config_for_tests(
             genesis_config,
             test_config.secondary_indexes,
-            test_config.accounts_db_caching_enabled,
+            true,
             AccountShrinkThreshold::default(),
         )
     }
@@ -11766,6 +11766,7 @@ pub(crate) mod tests {
         )
         .unwrap();
         bank.freeze();
+        add_root_and_flush_write_cache(&bank);
         bank.update_accounts_hash_for_tests();
         assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
 
@@ -14981,7 +14982,17 @@ pub(crate) mod tests {
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
 
-        let mut bank = create_simple_test_arc_bank(1_000_000_000);
+        // this test only tests non-write cache code
+        // Tests need to default to use write cache by default for all tests.
+        // Once that happens, the code this test tests can be deleted, along with this test.
+        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
+        let mut bank = Arc::new(Bank::new_with_config_for_tests(
+            &genesis_config,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        ));
+
         bank.restore_old_behavior_for_fragile_tests();
         assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
         assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);

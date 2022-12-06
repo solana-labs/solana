@@ -207,7 +207,7 @@ fn main() {
 
                     programs_to_load.push(ProgramInfo {
                         program_id: address,
-                        loader: solana_sdk::bpf_loader::id(),
+                        loader: solana_sdk::bpf_loader_upgradeable::id(),
                         program_path,
                     });
                 }
