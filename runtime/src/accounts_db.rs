@@ -14420,9 +14420,9 @@ pub mod tests {
         db.store_for_tests(0, &[(&account_key, &zero_lamport_account)]);
         db.store_for_tests(1, &[(&account_key, &zero_lamport_account)]);
         db.get_accounts_delta_hash(0);
-        db.add_root(0);
+        db.add_root_and_flush_write_cache(0);
         db.get_accounts_delta_hash(1);
-        db.add_root(1);
+        db.add_root_and_flush_write_cache(1);
 
         // Only clean zero lamport accounts up to slot 0
         db.clean_accounts(Some(0), false, None);
