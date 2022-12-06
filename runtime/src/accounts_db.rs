@@ -16397,7 +16397,8 @@ pub mod tests {
 
     #[test]
     fn test_purge_alive_unrooted_slots_after_clean() {
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         // Key shared between rooted and nonrooted slot
         let shared_key = solana_sdk::pubkey::new_rand();
@@ -16422,7 +16423,7 @@ pub mod tests {
 
         // Simulate adding dirty pubkeys on bank freeze, set root
         accounts.get_accounts_delta_hash(slot1);
-        accounts.add_root(slot1);
+        accounts.add_root_and_flush_write_cache(slot1);
 
         // The later rooted zero-lamport update to `shared_key` cannot be cleaned
         // because it is kept alive by the unrooted slot.
