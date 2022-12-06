@@ -7,7 +7,6 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 #[cfg(target_os = "linux")]
 use std::{fs::File, io::BufReader};
 use {
-    solana_bucket_map::bucket_map::{get_mmap_count, get_num_open_fd},
     solana_sdk::timing::AtomicInterval,
     std::{
         collections::HashMap,
@@ -30,7 +29,6 @@ const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = 5 * MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = 10 * MS_PER_S;
 const SAMPLE_INTERVAL_DISK_MS: u64 = 5 * MS_PER_S;
-const SAMPLE_INTERVAL_OPEN_FD_MS: u64 = 60 * MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -387,21 +385,25 @@ fn parse_disk_stats(reader_diskstats: &mut impl BufRead) -> Result<DiskStats, St
     Ok(stats)
 }
 
-pub struct SystemMonitorStatsReportConfig {
-    pub report_os_memory_stats: bool,
-    pub report_os_network_stats: bool,
-    pub report_os_cpu_stats: bool,
-    pub report_os_disk_stats: bool,
-    pub report_os_open_fd_stats: bool,
-}
-
 impl SystemMonitorService {
-    pub fn new(exit: Arc<AtomicBool>, config: SystemMonitorStatsReportConfig) -> Self {
+    pub fn new(
+        exit: Arc<AtomicBool>,
+        report_os_memory_stats: bool,
+        report_os_network_stats: bool,
+        report_os_cpu_stats: bool,
+        report_os_disk_stats: bool,
+    ) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
             .name("solSystemMonitr".to_string())
             .spawn(move || {
-                Self::run(exit, config);
+                Self::run(
+                    exit,
+                    report_os_memory_stats,
+                    report_os_network_stats,
+                    report_os_cpu_stats,
+                    report_os_disk_stats,
+                );
             })
             .unwrap();
 
@@ -831,22 +833,6 @@ impl SystemMonitorService {
     }
 
     #[cfg(target_os = "linux")]
-    fn report_open_fd_stats() {
-        if let Some(curr_mmap_count) = get_mmap_count() {
-            if let Some(curr_open_fd) = get_num_open_fd() {
-                datapoint_info!(
-                    "open-mmap-stats",
-                    ("number_mmap_files", curr_mmap_count, i64),
-                    ("number_open_fd", curr_open_fd, i64),
-                );
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    fn report_open_fd_stats() {}
-
-    #[cfg(target_os = "linux")]
     fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
         match read_disk_stats() {
             Ok(new_stats) => {
@@ -981,7 +967,13 @@ impl SystemMonitorService {
         )
     }
 
-    pub fn run(exit: Arc<AtomicBool>, config: SystemMonitorStatsReportConfig) {
+    pub fn run(
+        exit: Arc<AtomicBool>,
+        report_os_memory_stats: bool,
+        report_os_network_stats: bool,
+        report_os_cpu_stats: bool,
+        report_os_disk_stats: bool,
+    ) {
         let mut udp_stats = None;
         let mut disk_stats = None;
         let network_limits_timer = AtomicInterval::default();
@@ -989,13 +981,12 @@ impl SystemMonitorService {
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
         let disk_timer = AtomicInterval::default();
-        let open_fd_timer = AtomicInterval::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
                 break;
             }
-            if config.report_os_network_stats {
+            if report_os_network_stats {
                 if network_limits_timer.should_update(SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS) {
                     Self::check_os_network_limits();
                 }
@@ -1003,19 +994,14 @@ impl SystemMonitorService {
                     Self::process_net_stats(&mut udp_stats);
                 }
             }
-            if config.report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
+            if report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
                 Self::report_mem_stats();
             }
-            if config.report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
+            if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                 Self::report_cpu_stats();
             }
-            if config.report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
+            if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
                 Self::process_disk_stats(&mut disk_stats);
-            }
-            if config.report_os_open_fd_stats
-                && open_fd_timer.should_update(SAMPLE_INTERVAL_OPEN_FD_MS)
-            {
-                Self::report_open_fd_stats();
             }
             sleep(SLEEP_INTERVAL);
         }
