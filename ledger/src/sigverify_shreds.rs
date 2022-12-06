@@ -224,14 +224,13 @@ pub fn verify_shreds_gpu(
     let mut out = recycler_cache.buffer().allocate("out_buffer");
     out.set_pinnable();
     elems.push(perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pubkeys.as_ptr() as *const solana_sdk::packet::Packet,
+        elems: pubkeys.as_ptr().cast::<u8>(),
         num: num_packets as u32,
     });
 
     for batch in batches {
         elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
+            elems: batch.as_ptr().cast::<u8>(),
             num: batch.len() as u32,
         });
         let mut v = Vec::new();
@@ -352,14 +351,13 @@ pub fn sign_shreds_gpu(
     signatures_out.set_pinnable();
     signatures_out.resize(total_sigs * sig_size, 0);
     elems.push(perf_libs::Elems {
-        #[allow(clippy::cast_ptr_alignment)]
-        elems: pinned_keypair.as_ptr() as *const solana_sdk::packet::Packet,
+        elems: pinned_keypair.as_ptr().cast::<u8>(),
         num: num_keypair_packets as u32,
     });
 
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
+            elems: batch.as_ptr().cast::<u8>(),
             num: batch.len() as u32,
         });
         let mut v = Vec::new();
