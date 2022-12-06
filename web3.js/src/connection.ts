@@ -1452,45 +1452,45 @@ function createRpcClient(
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
-  agentOverride?: HttpAgent | HttpsAgent | false,
+  httpAgent?: HttpAgent | HttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager:
     | {requestEnd(): void; requestStart(): HttpAgent | HttpsAgent}
     | undefined;
   if (process.env.BROWSER) {
-    if (agentOverride != null) {
+    if (httpAgent != null) {
       console.warn(
-        'You have supplied an `agentOverride` when creating a `Connection` in a browser ' +
-          'environment. It has been ignored; `agentOverride` is only used in Node environments.',
+        'You have supplied an `httpAgent` when creating a `Connection` in a browser environment.' +
+          'It has been ignored; `httpAgent` is only used in Node environments.',
       );
     }
   } else {
-    if (agentOverride == null) {
+    if (httpAgent == null) {
       if (process.env.NODE_ENV !== 'test') {
         agentManager = new AgentManager(
           url.startsWith('https:') /* useHttps */,
         );
       }
     } else {
-      if (agentOverride !== false) {
+      if (httpAgent !== false) {
         const isHttps = url.startsWith('https:');
-        if (isHttps && !(agentOverride instanceof HttpsAgent)) {
+        if (isHttps && !(httpAgent instanceof HttpsAgent)) {
           throw new Error(
             'The endpoint `' +
               url +
               '` can only be paired with an `https.Agent`. You have, instead, supplied an ' +
-              '`http.Agent` through `agentOverride`.',
+              '`http.Agent` through `httpAgent`.',
           );
-        } else if (!isHttps && agentOverride instanceof HttpsAgent) {
+        } else if (!isHttps && httpAgent instanceof HttpsAgent) {
           throw new Error(
             'The endpoint `' +
               url +
               '` can only be paired with an `http.Agent`. You have, instead, supplied an ' +
-              '`https.Agent` through `agentOverride`.',
+              '`https.Agent` through `httpAgent`.',
           );
         }
-        agentManager = {requestEnd() {}, requestStart: () => agentOverride};
+        agentManager = {requestEnd() {}, requestStart: () => httpAgent};
       }
     }
   }
@@ -2898,7 +2898,7 @@ export type ConnectionConfig = {
    * persistence). Set this to `false` to create a connection that uses no agent. This applies to
    * Node environments only.
    */
-  agentOverride?: HttpAgent | HttpsAgent | false;
+  httpAgent?: HttpAgent | HttpsAgent | false;
   /** Optional commitment level */
   commitment?: Commitment;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
@@ -3016,7 +3016,7 @@ export class Connection {
     let fetch;
     let fetchMiddleware;
     let disableRetryOnRateLimit;
-    let agentOverride;
+    let httpAgent;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
@@ -3028,7 +3028,7 @@ export class Connection {
       fetch = commitmentOrConfig.fetch;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
-      agentOverride = commitmentOrConfig.agentOverride;
+      httpAgent = commitmentOrConfig.httpAgent;
     }
 
     this._rpcEndpoint = assertEndpointUrl(endpoint);
@@ -3040,7 +3040,7 @@ export class Connection {
       fetch,
       fetchMiddleware,
       disableRetryOnRateLimit,
-      agentOverride,
+      httpAgent,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);

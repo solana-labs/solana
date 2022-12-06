@@ -202,7 +202,7 @@ describe('Connection', function () {
 
     it('uses no agent with fetch when `overrideAgent` is `false`', () => {
       const fetch = spy();
-      const c = new Connection(url, {agentOverride: false, fetch});
+      const c = new Connection(url, {httpAgent: false, fetch});
       c.getBlock(0);
       expect(fetch).to.have.been.calledWith(
         match.any,
@@ -212,24 +212,24 @@ describe('Connection', function () {
 
     it('uses the supplied `overrideAgent` with fetch', () => {
       const fetch = spy();
-      const agentOverride = new HttpsAgent();
-      const c = new Connection('https://example.com', {agentOverride, fetch});
+      const httpAgent = new HttpsAgent();
+      const c = new Connection('https://example.com', {httpAgent, fetch});
       c.getBlock(0);
       expect(fetch).to.have.been.calledWith(
         match.any,
-        match({agent: agentOverride}),
+        match({agent: httpAgent}),
       );
     });
 
     it('throws when the supplied `overrideAgent` is http but the endpoint is https', () => {
       expect(() => {
-        new Connection('https://example.com', {agentOverride: new HttpAgent()});
+        new Connection('https://example.com', {httpAgent: new HttpAgent()});
       }).to.throw;
     });
 
     it('throws when the supplied `overrideAgent` is https but the endpoint is http', () => {
       expect(() => {
-        new Connection('http://example.com', {agentOverride: new HttpsAgent()});
+        new Connection('http://example.com', {httpAgent: new HttpsAgent()});
       }).to.throw;
     });
   });
