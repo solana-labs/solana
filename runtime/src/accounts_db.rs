@@ -10261,7 +10261,7 @@ pub mod tests {
             .collect::<Vec<_>>();
 
         accounts.store_for_tests(slot, &to_store[..]);
-        accounts.add_root(slot);
+        accounts.add_root_and_flush_write_cache(slot);
 
         let (storages, slots) = accounts.get_snapshot_storages(..=slot, None);
         assert_eq!(storages.len(), slots.len());
