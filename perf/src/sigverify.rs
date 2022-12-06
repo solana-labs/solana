@@ -768,7 +768,7 @@ pub fn ed25519_verify(
     let mut num_packets: usize = 0;
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
+            elems: batch.as_ptr().cast::<u8>(),
             num: batch.len() as u32,
         });
         let v = vec![0u8; batch.len()];
