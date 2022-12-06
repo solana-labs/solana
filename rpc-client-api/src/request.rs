@@ -190,7 +190,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SignVote => "signVote",
         };
 
-        write!(f, "{}", method)
+        write!(f, "{method}")
     }
 }
 
@@ -217,7 +217,7 @@ impl RpcRequest {
         json!({
            "jsonrpc": jsonrpc,
            "id": id,
-           "method": format!("{}", self),
+           "method": format!("{self}"),
            "params": params,
         })
     }

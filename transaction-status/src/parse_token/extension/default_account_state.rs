@@ -19,7 +19,7 @@ pub(in crate::parse_token) fn parse_default_account_state_instruction(
         DefaultAccountStateInstruction::Initialize => {
             check_num_token_accounts(account_indexes, 1)?;
             Ok(ParsedInstructionEnum {
-                instruction_type: format!("initialize{}", instruction_type),
+                instruction_type: format!("initialize{instruction_type}"),
                 info: json!({
                     "mint": account_keys[account_indexes[0] as usize].to_string(),
                     "accountState": UiAccountState::from(account_state),
@@ -42,7 +42,7 @@ pub(in crate::parse_token) fn parse_default_account_state_instruction(
                 "multisigFreezeAuthority",
             );
             Ok(ParsedInstructionEnum {
-                instruction_type: format!("update{}", instruction_type),
+                instruction_type: format!("update{instruction_type}"),
                 info: value,
             })
         }

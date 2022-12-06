@@ -308,7 +308,7 @@ mod test {
         let mut b: Bloom<Hash> = Bloom::new(3, vec![100]);
         b.add(&Hash::default());
         assert_eq!(
-            format!("{:?}", b),
+            format!("{b:?}"),
             "Bloom { keys.len: 1 bits.len: 3 num_set: 1 bits: 001 }"
         );
 
@@ -316,7 +316,7 @@ mod test {
         b.add(&Hash::default());
         b.add(&hash(&[1, 2]));
         assert_eq!(
-            format!("{:?}", b),
+            format!("{b:?}"),
             "Bloom { keys.len: 1 bits.len: 1000 num_set: 2 bits: 0000000000.. }"
         );
     }
@@ -345,7 +345,7 @@ mod test {
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
-        assert!(false_positive < 2_000, "false_positive: {}", false_positive);
+        assert!(false_positive < 2_000, "false_positive: {false_positive}");
     }
 
     #[test]
@@ -360,7 +360,7 @@ mod test {
             bloom.add(hash_value);
         }
         let num_bits_set = bloom.num_bits_set;
-        assert!(num_bits_set > 2000, "# bits set: {}", num_bits_set);
+        assert!(num_bits_set > 2000, "# bits set: {num_bits_set}");
         // Round-trip with no inserts.
         let bloom: AtomicBloom<_> = bloom.into();
         assert_eq!(bloom.num_bits, 9731);
@@ -408,7 +408,7 @@ mod test {
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
-        assert!(false_positive < 2000, "false_positive: {}", false_positive);
+        assert!(false_positive < 2000, "false_positive: {false_positive}");
         let bloom: Bloom<_> = bloom.into();
         assert_eq!(bloom.bits.len(), 9731);
         assert!(bloom.num_bits_set > num_bits_set);
@@ -427,7 +427,7 @@ mod test {
             .take(10_000)
             .filter(|hash_value| bloom.contains(hash_value))
             .count();
-        assert!(false_positive < 2000, "false_positive: {}", false_positive);
+        assert!(false_positive < 2000, "false_positive: {false_positive}");
         // Assert that the bits vector precisely match if no atomic ops were
         // used.
         let bits = bloom.bits;

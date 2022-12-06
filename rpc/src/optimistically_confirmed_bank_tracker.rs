@@ -42,7 +42,7 @@ impl std::fmt::Debug for BankNotification {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BankNotification::OptimisticallyConfirmed(slot) => {
-                write!(f, "OptimisticallyConfirmed({:?})", slot)
+                write!(f, "OptimisticallyConfirmed({slot:?})")
             }
             BankNotification::Frozen(bank) => write!(f, "Frozen({})", bank.slot()),
             BankNotification::Root(bank) => write!(f, "Root({})", bank.slot()),

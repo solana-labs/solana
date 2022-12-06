@@ -607,7 +607,7 @@ fn network_run_pull(
 fn build_gossip_thread_pool() -> ThreadPool {
     ThreadPoolBuilder::new()
         .num_threads(get_thread_count().min(2))
-        .thread_name(|i| format!("gossipTest{:02}", i))
+        .thread_name(|i| format!("gossipTest{i:02}"))
         .build()
         .unwrap()
 }

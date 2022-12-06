@@ -136,7 +136,7 @@ pub fn parse(
         ParsableProgram::Vote => serde_json::to_value(parse_vote(instruction, account_keys)?)?,
     };
     Ok(ParsedInstruction {
-        program: format!("{:?}", program_name).to_kebab_case(),
+        program: format!("{program_name:?}").to_kebab_case(),
         program_id: program_id.to_string(),
         parsed: parsed_json,
         stack_height,

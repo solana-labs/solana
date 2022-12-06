@@ -243,7 +243,7 @@ mod tests {
     // Create temporary placeholder directory for all test files
     fn make_tmp_dir_path() -> PathBuf {
         let out_dir = std::env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
-        let path = PathBuf::from(format!("{}/tmp/test_package_snapshots", out_dir));
+        let path = PathBuf::from(format!("{out_dir}/tmp/test_package_snapshots"));
 
         // whack any possible collision
         let _ignored = std::fs::remove_dir_all(&path);
@@ -282,7 +282,7 @@ mod tests {
         // Create some fake snapshot
         let snapshots_paths: Vec<_> = (0..5)
             .map(|i| {
-                let snapshot_file_name = format!("{}", i);
+                let snapshot_file_name = format!("{i}");
                 let snapshots_dir = snapshots_dir.join(&snapshot_file_name);
                 fs::create_dir_all(&snapshots_dir).unwrap();
                 let fake_snapshot_path = snapshots_dir.join(&snapshot_file_name);

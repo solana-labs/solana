@@ -33,10 +33,7 @@ fn pin<T>(_mem: &mut Vec<T>) {
         };
         assert!(
             err == CUDA_SUCCESS,
-            "cudaHostRegister error: {} ptr: {:?} bytes: {}",
-            err,
-            ptr,
-            size
+            "cudaHostRegister error: {err} ptr: {ptr:?} bytes: {size}"
         );
     }
 }
@@ -48,9 +45,7 @@ fn unpin<T>(_mem: *mut T) {
         let err = unsafe { (api.cuda_host_unregister)(_mem as *mut c_void) };
         assert!(
             err == CUDA_SUCCESS,
-            "cudaHostUnregister returned: {} ptr: {:?}",
-            err,
-            _mem
+            "cudaHostUnregister returned: {err} ptr: {_mem:?}"
         );
     }
 }

@@ -538,7 +538,7 @@ fn create_payers<T: 'static + BenchTpsClient + Send + Sync>(
         let res =
             generate_and_fund_keypairs(client.unwrap().clone(), &funding_key, size, 1_000_000)
                 .unwrap_or_else(|e| {
-                    eprintln!("Error could not fund keys: {:?}", e);
+                    eprintln!("Error could not fund keys: {e:?}");
                     exit(1);
                 });
         res.into_iter().map(Some).collect()
@@ -591,11 +591,11 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         })
         .collect();
     if let Err(err) = sender_thread.join() {
-        println!("join() failed with: {:?}", err);
+        println!("join() failed with: {err:?}");
     }
     for t_generator in tx_generator_threads {
         if let Err(err) = t_generator.join() {
-            println!("join() failed with: {:?}", err);
+            println!("join() failed with: {err:?}");
         }
     }
 }

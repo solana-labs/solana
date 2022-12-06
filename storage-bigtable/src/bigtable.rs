@@ -139,10 +139,10 @@ impl BigTableConnection {
 
                 Ok(Self {
                     access_token: None,
-                    channel: tonic::transport::Channel::from_shared(format!("http://{}", endpoint))
+                    channel: tonic::transport::Channel::from_shared(format!("http://{endpoint}"))
                         .map_err(|err| Error::InvalidUri(endpoint, err.to_string()))?
                         .connect_lazy(),
-                    table_prefix: format!("projects/emulator/instances/{}/tables/", instance_name),
+                    table_prefix: format!("projects/emulator/instances/{instance_name}/tables/"),
                     app_profile_id: app_profile_id.to_string(),
                     timeout,
                 })
@@ -838,13 +838,13 @@ where
     let value = &row_data
         .iter()
         .find(|(name, _)| name == "proto")
-        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .ok_or_else(|| Error::ObjectNotFound(format!("{table}/{key}")))?
         .1;
 
     let data = decompress(value)?;
     T::decode(&data[..]).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
-        Error::ObjectCorrupt(format!("{}/{}", table, key))
+        Error::ObjectCorrupt(format!("{table}/{key}"))
     })
 }
 
@@ -859,13 +859,13 @@ where
     let value = &row_data
         .iter()
         .find(|(name, _)| name == "bin")
-        .ok_or_else(|| Error::ObjectNotFound(format!("{}/{}", table, key)))?
+        .ok_or_else(|| Error::ObjectNotFound(format!("{table}/{key}")))?
         .1;
 
     let data = decompress(value)?;
     bincode::deserialize(&data).map_err(|err| {
         warn!("Failed to deserialize {}/{}: {}", table, key, err);
-        Error::ObjectCorrupt(format!("{}/{}", table, key))
+        Error::ObjectCorrupt(format!("{table}/{key}"))
     })
 }
 

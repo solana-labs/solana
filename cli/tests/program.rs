@@ -148,7 +148,7 @@ fn test_cli_program_deploy_non_upgradeable() {
             "Program {} is no longer upgradeable",
             custom_address_keypair.pubkey()
         ),
-        format!("{}", err)
+        format!("{err}")
     );
 
     // Attempt to deploy to account with excess balance
@@ -178,7 +178,7 @@ fn test_cli_program_deploy_non_upgradeable() {
             "Account {} is not an upgradeable program or already in use",
             custom_address_keypair.pubkey()
         ),
-        format!("{}", err)
+        format!("{err}")
     );
 
     // Use forcing parameter to deploy to account with excess balance

@@ -260,10 +260,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "single thread discrete log computation secs: {:?} sec",
-            computation_secs
-        );
+        println!("single thread discrete log computation secs: {computation_secs:?} sec");
     }
 
     #[test]
@@ -281,10 +278,7 @@ mod tests {
 
         assert_eq!(amount, decoded.unwrap());
 
-        println!(
-            "4 thread discrete log computation: {:?} sec",
-            computation_secs
-        );
+        println!("4 thread discrete log computation: {computation_secs:?} sec");
 
         // amount 0
         let amount: u64 = 0;

@@ -27,9 +27,9 @@ pub fn get_append_vec_path(path: &str) -> TempFile {
         .sample_iter(&Alphanumeric)
         .take(30)
         .collect();
-    let dir = format!("{}/{}", out_dir, rand_string);
+    let dir = format!("{out_dir}/{rand_string}");
     let mut buf = PathBuf::new();
-    buf.push(&format!("{}/{}", dir, path));
+    buf.push(&format!("{dir}/{path}"));
     std::fs::create_dir_all(dir).expect("Create directory failed");
     TempFile { path: buf }
 }

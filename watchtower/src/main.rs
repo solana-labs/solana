@@ -286,8 +286,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     failures.push((
                         "transaction-count",
                         format!(
-                            "Transaction count is not advancing: {} <= {}",
-                            transaction_count, last_transaction_count
+                            "Transaction count is not advancing: {transaction_count} <= {last_transaction_count}"
                         ),
                     ));
                 }
@@ -297,14 +296,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 } else {
                     failures.push((
                         "recent-blockhash",
-                        format!("Unable to get new blockhash: {}", recent_blockhash),
+                        format!("Unable to get new blockhash: {recent_blockhash}"),
                     ));
                 }
 
                 if config.monitor_active_stake && current_stake_percent < 80. {
                     failures.push((
                         "current-stake",
-                        format!("Current stake is {:.2}%", current_stake_percent),
+                        format!("Current stake is {current_stake_percent:.2}%"),
                     ));
                 }
 
@@ -319,14 +318,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .iter()
                         .any(|vai| vai.node_pubkey == *validator_identity.to_string())
                     {
-                        validator_errors
-                            .push(format!("{} delinquent", formatted_validator_identity));
+                        validator_errors.push(format!("{formatted_validator_identity} delinquent"));
                     } else if !vote_accounts
                         .current
                         .iter()
                         .any(|vai| vai.node_pubkey == *validator_identity.to_string())
                     {
-                        validator_errors.push(format!("{} missing", formatted_validator_identity));
+                        validator_errors.push(format!("{formatted_validator_identity} missing"));
                     }
 
                     if let Some(balance) = validator_balances.get(validator_identity) {

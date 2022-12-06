@@ -238,7 +238,7 @@ fn test_ledger_cleanup_service() {
             .unwrap()
             .for_each(|_| slots += 1);
         // with 3 nodes up to 3 slots can be in progress and not complete so max slots in blockstore should be up to 103
-        assert!(slots <= 103, "got {}", slots);
+        assert!(slots <= 103, "got {slots}");
     }
 }
 

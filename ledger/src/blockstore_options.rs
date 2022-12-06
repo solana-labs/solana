@@ -56,7 +56,7 @@ impl From<&str> for BlockstoreRecoveryMode {
             "absolute_consistency" => BlockstoreRecoveryMode::AbsoluteConsistency,
             "point_in_time" => BlockstoreRecoveryMode::PointInTime,
             "skip_any_corrupted_record" => BlockstoreRecoveryMode::SkipAnyCorruptedRecord,
-            bad_mode => panic!("Invalid recovery mode: {}", bad_mode),
+            bad_mode => panic!("Invalid recovery mode: {bad_mode}"),
         }
     }
 }

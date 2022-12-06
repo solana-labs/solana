@@ -141,7 +141,7 @@ impl StakesCache {
             datapoint_warn!(
                 "bank-stake_delegation_accounts-invalid-account",
                 ("slot", current_slot as i64, i64),
-                ("stake-address", format!("{:?}", stake_pubkey), String),
+                ("stake-address", format!("{stake_pubkey:?}"), String),
                 ("reason", reason.to_i64().unwrap_or_default(), i64),
             );
         }
@@ -151,7 +151,7 @@ impl StakesCache {
             datapoint_warn!(
                 "bank-stake_delegation_accounts-invalid-account",
                 ("slot", current_slot as i64, i64),
-                ("vote-address", format!("{:?}", vote_pubkey), String),
+                ("vote-address", format!("{vote_pubkey:?}"), String),
                 ("reason", reason.to_i64().unwrap_or_default(), i64),
             );
         }

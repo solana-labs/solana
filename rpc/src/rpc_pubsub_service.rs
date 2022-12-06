@@ -194,7 +194,7 @@ pub struct TestBroadcastReceiver {
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
         match self.recv_timeout(std::time::Duration::from_secs(10)) {
-            Err(err) => panic!("broadcast receiver error: {}", err),
+            Err(err) => panic!("broadcast receiver error: {err}"),
             Ok(str) => str,
         }
     }

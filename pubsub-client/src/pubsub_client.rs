@@ -183,8 +183,7 @@ where
         }
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{:?}",
-            json_msg
+            "{json_msg:?}"
         )))
     }
 
@@ -232,18 +231,14 @@ where
                     node_version.as_str().unwrap_or_default(),
                 )
                 .map_err(|e| {
-                    PubsubClientError::RequestError(format!(
-                        "failed to parse cluster version: {}",
-                        e
-                    ))
+                    PubsubClientError::RequestError(format!("failed to parse cluster version: {e}"))
                 })?;
                 return Ok(node_version);
             }
         }
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{:?}",
-            json_msg
+            "{json_msg:?}"
         )))
     }
 
@@ -263,8 +258,7 @@ where
 
         // TODO: Add proper JSON RPC response/error handling...
         Err(PubsubClientError::UnexpectedMessageError(format!(
-            "{:?}",
-            json_msg
+            "{json_msg:?}"
         )))
     }
 

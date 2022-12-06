@@ -83,7 +83,7 @@ where
 {
     let file = File::open(config_file)?;
     let config = serde_yaml::from_reader(file)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
     Ok(config)
 }
 
@@ -106,7 +106,7 @@ where
     P: AsRef<Path>,
 {
     let serialized = serde_yaml::to_string(config)
-        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{:?}", err)))?;
+        .map_err(|err| io::Error::new(io::ErrorKind::Other, format!("{err:?}")))?;
 
     if let Some(outdir) = config_file.as_ref().parent() {
         create_dir_all(outdir)?;

@@ -24,9 +24,9 @@ pub enum PohTimingPoint {
 impl fmt::Display for PohTimingPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PohTimingPoint::PohSlotStart(t) => write!(f, "poh_start={}", t),
-            PohTimingPoint::PohSlotEnd(t) => write!(f, "poh_end  ={}", t),
-            PohTimingPoint::FullSlotReceived(t) => write!(f, "poh_full ={}", t),
+            PohTimingPoint::PohSlotStart(t) => write!(f, "poh_start={t}"),
+            PohTimingPoint::PohSlotEnd(t) => write!(f, "poh_end  ={t}"),
+            PohTimingPoint::FullSlotReceived(t) => write!(f, "poh_full ={t}"),
         }
     }
 }
@@ -115,7 +115,7 @@ mod test {
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_start=100, slot=100, root_slot=101"
         );
 
@@ -125,7 +125,7 @@ mod test {
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotStart(100));
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_start=100, slot=100, root_slot=0"
         );
 
@@ -135,7 +135,7 @@ mod test {
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_end  =100, slot=100, root_slot=101"
         );
 
@@ -145,7 +145,7 @@ mod test {
         assert_eq!(p.root_slot, None);
         assert_eq!(p.timing_point, PohTimingPoint::PohSlotEnd(100));
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_end  =100, slot=100, root_slot=0"
         );
 
@@ -155,7 +155,7 @@ mod test {
         assert_eq!(p.root_slot, Some(101));
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_full =100, slot=100, root_slot=101"
         );
 
@@ -166,7 +166,7 @@ mod test {
         assert_eq!(p.timing_point, PohTimingPoint::FullSlotReceived(100));
 
         assert_eq!(
-            format!("{}", p),
+            format!("{p}"),
             "PohTimingPoint: poh_full =100, slot=100, root_slot=0"
         );
     }

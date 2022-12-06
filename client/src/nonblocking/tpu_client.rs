@@ -259,10 +259,7 @@ impl TpuClient {
                     total_transactions,
                     Some(block_height),
                     last_valid_block_height,
-                    &format!(
-                        "Waiting for next block, {} transactions pending...",
-                        num_transactions
-                    ),
+                    &format!("Waiting for next block, {num_transactions} transactions pending..."),
                 );
                 let mut new_block_height = block_height;
                 while block_height == new_block_height && block_height_refreshes > 0 {
@@ -291,10 +288,8 @@ impl TpuClient {
                                     if let Some((i, _)) = pending_transactions.remove(signature) {
                                         confirmed_transactions += 1;
                                         if status.err.is_some() {
-                                            progress_bar.println(format!(
-                                                "Failed transaction: {:?}",
-                                                status
-                                            ));
+                                            progress_bar
+                                                .println(format!("Failed transaction: {status:?}"));
                                         }
                                         transaction_errors[i] = status.err;
                                     }
@@ -319,8 +314,7 @@ impl TpuClient {
 
             transactions = pending_transactions.into_values().collect();
             progress_bar.println(format!(
-                "Blockhash expired. {} retries remaining",
-                expired_blockhash_retries
+                "Blockhash expired. {expired_blockhash_retries} retries remaining"
             ));
             expired_blockhash_retries -= 1;
         }

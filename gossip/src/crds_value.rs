@@ -504,8 +504,8 @@ impl fmt::Display for CrdsValueLabel {
             CrdsValueLabel::AccountsHashes(_) => write!(f, "AccountsHashes({})", self.pubkey()),
             CrdsValueLabel::LegacyVersion(_) => write!(f, "LegacyVersion({})", self.pubkey()),
             CrdsValueLabel::Version(_) => write!(f, "Version({})", self.pubkey()),
-            CrdsValueLabel::NodeInstance(pk) => write!(f, "NodeInstance({})", pk),
-            CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({}, {})", ix, pk),
+            CrdsValueLabel::NodeInstance(pk) => write!(f, "NodeInstance({pk})"),
+            CrdsValueLabel::DuplicateShred(ix, pk) => write!(f, "DuplicateShred({ix}, {pk})"),
             CrdsValueLabel::IncrementalSnapshotHashes(_) => {
                 write!(f, "IncrementalSnapshotHashes({})", self.pubkey())
             }
