@@ -12893,7 +12893,7 @@ pub mod tests {
         let ancestors = vec![(some_slot, 0)].into_iter().collect();
 
         db.store_for_tests(some_slot, &[(&key, &account)]);
-        db.add_root(some_slot);
+        db.add_root_and_flush_write_cache(some_slot);
         db.update_accounts_hash_for_tests(some_slot, &ancestors, true, true);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
