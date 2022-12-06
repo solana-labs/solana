@@ -941,7 +941,7 @@ impl ThreadLocalUnprocessedPackets {
             .filter_map(|immutable_deserialized_packet| {
                 let is_tracer_packet = immutable_deserialized_packet
                     .original_packet()
-                    .meta
+                    .meta()
                     .is_tracer_packet();
                 if is_tracer_packet {
                     saturating_add_assign!(*total_tracer_packets_in_buffer, 1);
@@ -1060,8 +1060,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta.port = packets_id as u16;
-                p.meta.set_tracer(true);
+                p.meta_mut().port = packets_id as u16;
+                p.meta_mut().set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
@@ -1099,7 +1099,7 @@ mod tests {
                     batch
                         .get_forwardable_packets()
                         .into_iter()
-                        .map(|p| p.meta.port)
+                        .map(|p| p.meta().port)
                 })
                 .collect();
             forwarded_ports.sort_unstable();
@@ -1196,7 +1196,7 @@ mod tests {
                 None,
             ),
         )?;
-        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         let big_transfer = Packet::from_data(
             None,
             system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
@@ -1269,8 +1269,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta.port = packets_id as u16;
-                p.meta.set_tracer(true);
+                p.meta_mut().port = packets_id as u16;
+                p.meta_mut().set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();

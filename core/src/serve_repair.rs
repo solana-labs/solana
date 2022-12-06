@@ -485,7 +485,7 @@ impl ServeRepair {
                 }
             };
 
-            let from_addr = packet.meta.socket_addr();
+            let from_addr = packet.meta().socket_addr();
             if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
                 stats.err_malformed += 1;
                 continue;
@@ -807,7 +807,7 @@ impl ServeRepair {
                 Some(rsp) => rsp,
             };
             let num_response_packets = rsp.len();
-            let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
+            let num_response_bytes = rsp.iter().map(|p| p.meta().size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
                 stats.total_response_packets += num_response_packets;
                 match stake > 0 {
@@ -984,7 +984,7 @@ impl ServeRepair {
     ) {
         let mut pending_pongs = Vec::default();
         for packet in packet_batch.iter_mut() {
-            if packet.meta.size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
+            if packet.meta().size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
                 continue;
             }
             if let Ok(RepairResponse::Ping(ping)) = packet.deserialize_slice(..) {
@@ -998,12 +998,12 @@ impl ServeRepair {
                     stats.ping_err_verify_count += 1;
                     continue;
                 }
-                packet.meta.set_discard(true);
+                packet.meta_mut().set_discard(true);
                 stats.ping_count += 1;
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
                     if let Ok(pong_bytes) = serialize(&pong) {
-                        let from_addr = packet.meta.socket_addr();
+                        let from_addr = packet.meta().socket_addr();
                         pending_pongs.push((pong_bytes, from_addr));
                     }
                 }
@@ -1210,7 +1210,7 @@ mod tests {
         let ping = Ping::new_rand(&mut rng, &keypair).unwrap();
         let ping = RepairResponse::Ping(ping);
         let pkt = Packet::from_data(None, ping).unwrap();
-        assert_eq!(pkt.meta.size, REPAIR_RESPONSE_SERIALIZED_PING_BYTES);
+        assert_eq!(pkt.meta().size, REPAIR_RESPONSE_SERIALIZED_PING_BYTES);
     }
 
     #[test]
@@ -1230,7 +1230,7 @@ mod tests {
         shred.sign(&keypair);
         let mut pkt = Packet::default();
         shred.copy_to_packet(&mut pkt);
-        pkt.meta.size = REPAIR_RESPONSE_SERIALIZED_PING_BYTES;
+        pkt.meta_mut().size = REPAIR_RESPONSE_SERIALIZED_PING_BYTES;
         let res = pkt.deserialize_slice::<RepairResponse, _>(..);
         if let Ok(RepairResponse::Ping(ping)) = res {
             assert!(!ping.verify());
@@ -1870,7 +1870,7 @@ mod tests {
     fn test_run_ancestor_hashes() {
         fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponse {
             packet
-                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
+                .deserialize_slice(..packet.meta().size - SIZE_OF_NONCE)
                 .unwrap()
         }
 

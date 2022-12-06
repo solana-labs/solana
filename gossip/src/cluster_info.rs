@@ -1947,7 +1947,7 @@ impl ClusterInfo {
             }
             check
         };
-        // Because pull-responses are sent back to packet.meta.socket_addr() of
+        // Because pull-responses are sent back to packet.meta().socket_addr() of
         // incoming pull-requests, pings are also sent to request.from_addr (as
         // opposed to caller.gossip address).
         move |request| {
@@ -2041,8 +2041,8 @@ impl ClusterInfo {
             match Packet::from_data(Some(addr), response) {
                 Err(err) => error!("failed to write pull-response packet: {:?}", err),
                 Ok(packet) => {
-                    if self.outbound_budget.take(packet.meta.size) {
-                        total_bytes += packet.meta.size;
+                    if self.outbound_budget.take(packet.meta().size) {
+                        total_bytes += packet.meta().size;
                         packet_batch.push(packet);
                         sent += 1;
                     } else {
@@ -2520,7 +2520,7 @@ impl ClusterInfo {
             let protocol: Protocol = packet.deserialize_slice(..).ok()?;
             protocol.sanitize().ok()?;
             let protocol = protocol.par_verify(&self.stats)?;
-            Some((packet.meta.socket_addr(), protocol))
+            Some((packet.meta().socket_addr(), protocol))
         };
         let packets: Vec<_> = {
             let _st = ScopedTimer::from(&self.stats.verify_gossip_packets_time);
@@ -3412,7 +3412,7 @@ RPC Enabled Nodes: 1"#;
             remote_nodes.into_iter(),
             pongs.into_iter()
         ) {
-            assert_eq!(packet.meta.socket_addr(), socket);
+            assert_eq!(packet.meta().socket_addr(), socket);
             let bytes = serialize(&pong).unwrap();
             match packet.deserialize_slice(..).unwrap() {
                 Protocol::PongMessage(pong) => assert_eq!(serialize(&pong).unwrap(), bytes),
