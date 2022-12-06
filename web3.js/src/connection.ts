@@ -2,6 +2,8 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
+import type {Agent as HttpAgent} from 'http';
+import {Agent as HttpsAgent} from 'https';
 import {
   type as pick,
   number,
@@ -1450,11 +1452,47 @@ function createRpcClient(
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
+  httpAgent?: HttpAgent | HttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
-  let agentManager: AgentManager | undefined;
-  if (!process.env.BROWSER) {
-    agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
+  let agentManager:
+    | {requestEnd(): void; requestStart(): HttpAgent | HttpsAgent}
+    | undefined;
+  if (process.env.BROWSER) {
+    if (httpAgent != null) {
+      console.warn(
+        'You have supplied an `httpAgent` when creating a `Connection` in a browser environment.' +
+          'It has been ignored; `httpAgent` is only used in Node environments.',
+      );
+    }
+  } else {
+    if (httpAgent == null) {
+      if (process.env.NODE_ENV !== 'test') {
+        agentManager = new AgentManager(
+          url.startsWith('https:') /* useHttps */,
+        );
+      }
+    } else {
+      if (httpAgent !== false) {
+        const isHttps = url.startsWith('https:');
+        if (isHttps && !(httpAgent instanceof HttpsAgent)) {
+          throw new Error(
+            'The endpoint `' +
+              url +
+              '` can only be paired with an `https.Agent`. You have, instead, supplied an ' +
+              '`http.Agent` through `httpAgent`.',
+          );
+        } else if (!isHttps && httpAgent instanceof HttpsAgent) {
+          throw new Error(
+            'The endpoint `' +
+              url +
+              '` can only be paired with an `http.Agent`. You have, instead, supplied an ' +
+              '`https.Agent` through `httpAgent`.',
+          );
+        }
+        agentManager = {requestEnd() {}, requestStart: () => httpAgent};
+      }
+    }
   }
 
   let fetchWithMiddleware: FetchFn | undefined;
@@ -2855,6 +2893,12 @@ export type FetchMiddleware = (
  * Configuration for instantiating a Connection
  */
 export type ConnectionConfig = {
+  /**
+   * An `http.Agent` that will be used to manage socket connections (eg. to implement connection
+   * persistence). Set this to `false` to create a connection that uses no agent. This applies to
+   * Node environments only.
+   */
+  httpAgent?: HttpAgent | HttpsAgent | false;
   /** Optional commitment level */
   commitment?: Commitment;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
@@ -2972,6 +3016,7 @@ export class Connection {
     let fetch;
     let fetchMiddleware;
     let disableRetryOnRateLimit;
+    let httpAgent;
     if (commitmentOrConfig && typeof commitmentOrConfig === 'string') {
       this._commitment = commitmentOrConfig;
     } else if (commitmentOrConfig) {
@@ -2983,6 +3028,7 @@ export class Connection {
       fetch = commitmentOrConfig.fetch;
       fetchMiddleware = commitmentOrConfig.fetchMiddleware;
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
+      httpAgent = commitmentOrConfig.httpAgent;
     }
 
     this._rpcEndpoint = assertEndpointUrl(endpoint);
@@ -2994,6 +3040,7 @@ export class Connection {
       fetch,
       fetchMiddleware,
       disableRetryOnRateLimit,
+      httpAgent,
     );
     this._rpcRequest = createRpcRequest(this._rpcClient);
     this._rpcBatchRequest = createRpcBatchRequest(this._rpcClient);

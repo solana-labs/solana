@@ -3,8 +3,10 @@ import {Buffer} from 'buffer';
 import * as splToken from '@solana/spl-token';
 import {expect, use} from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import {Agent as HttpAgent} from 'http';
+import {Agent as HttpsAgent} from 'https';
 import {AbortController} from 'node-abort-controller';
-import {mock, useFakeTimers, SinonFakeTimers} from 'sinon';
+import {match, mock, spy, useFakeTimers, SinonFakeTimers} from 'sinon';
 import sinonChai from 'sinon-chai';
 
 import {
@@ -187,6 +189,50 @@ describe('Connection', function () {
       expect(await connection.getVersion()).to.be.not.null;
     });
   }
+
+  describe('override HTTP agent', () => {
+    let previousBrowserEnv;
+    beforeEach(() => {
+      previousBrowserEnv = process.env.BROWSER;
+      delete process.env.BROWSER;
+    });
+    afterEach(() => {
+      process.env.BROWSER = previousBrowserEnv;
+    });
+
+    it('uses no agent with fetch when `overrideAgent` is `false`', () => {
+      const fetch = spy();
+      const c = new Connection(url, {httpAgent: false, fetch});
+      c.getBlock(0);
+      expect(fetch).to.have.been.calledWith(
+        match.any,
+        match({agent: undefined}),
+      );
+    });
+
+    it('uses the supplied `overrideAgent` with fetch', () => {
+      const fetch = spy();
+      const httpAgent = new HttpsAgent();
+      const c = new Connection('https://example.com', {httpAgent, fetch});
+      c.getBlock(0);
+      expect(fetch).to.have.been.calledWith(
+        match.any,
+        match({agent: httpAgent}),
+      );
+    });
+
+    it('throws when the supplied `overrideAgent` is http but the endpoint is https', () => {
+      expect(() => {
+        new Connection('https://example.com', {httpAgent: new HttpAgent()});
+      }).to.throw;
+    });
+
+    it('throws when the supplied `overrideAgent` is https but the endpoint is http', () => {
+      expect(() => {
+        new Connection('http://example.com', {httpAgent: new HttpsAgent()});
+      }).to.throw;
+    });
+  });
 
   it('should attribute middleware fatals to the middleware', async () => {
     let connection = new Connection(url, {
