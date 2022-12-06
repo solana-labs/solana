@@ -25,7 +25,7 @@ declare -A verified_crate_owners=(
 )
 
 # get Cargo.toml from git diff
-readarray -t files <<<"$(git diff "$COMMIT_RANGE" --name-only | grep Cargo.toml)"
+readarray -t files <<<"$(git diff "$COMMIT_RANGE" --diff-filter=AM --name-only | grep Cargo.toml)"
 printf "%s\n" "${files[@]}"
 
 error_count=0
