@@ -15657,8 +15657,9 @@ pub mod tests {
         assert_eq!(recycle_stores.total_bytes(), store_file_size * 2);
 
         // expiration for only too old entries
-        recycle_stores.entries[0].0 =
-            Instant::now() - Duration::from_secs(EXPIRATION_TTL_SECONDS + 1);
+        recycle_stores.entries[0].0 = Instant::now()
+            .checked_sub(Duration::from_secs(EXPIRATION_TTL_SECONDS + 1))
+            .unwrap();
         let expired = recycle_stores.expire_old_entries();
         assert_eq!(
             expired
