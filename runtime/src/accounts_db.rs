@@ -13997,6 +13997,7 @@ pub mod tests {
         solana_logger::setup();
 
         let mut accounts = AccountsDb::new_single_for_tests();
+        // this test tests v1 code, which can not use the write cache.
         accounts.caching_enabled = false;
 
         let pubkey_count = 30000;
@@ -14038,6 +14039,8 @@ pub mod tests {
         );
 
         // Only, try to shrink stale slots.
+        // This is the point of this v1 test, which does not use the write cache.
+        // The ultimate function it calls, do_shrink_slot_v1, says to delete it as soon as everyone uses the write cache.
         accounts.shrink_all_stale_slots_v1();
         assert_eq!(
             pubkey_count,
