@@ -10213,8 +10213,8 @@ pub mod tests {
 
     fn sample_storages_and_account_in_slot(
         slot: Slot,
+        accounts: &AccountsDb,
     ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
-        let accounts = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let pubkey0 = Pubkey::new(&[0u8; 32]);
         let pubkey127 = Pubkey::new(&[0x7fu8; 32]);
         let pubkey128 = Pubkey::new(&[0x80u8; 32]);
@@ -10276,8 +10276,10 @@ pub mod tests {
         (storages, raw_expected)
     }
 
-    fn sample_storages_and_accounts() -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
-        sample_storages_and_account_in_slot(1)
+    fn sample_storages_and_accounts(
+        accounts: &AccountsDb,
+    ) -> (SnapshotStorages, Vec<CalculateHashIntermediate>) {
+        sample_storages_and_account_in_slot(1, accounts)
     }
 
     fn get_storage_refs(input: &[SnapshotStorage]) -> SortedStorages {
@@ -10318,13 +10320,13 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_snapshot_stores() {
         solana_logger::setup();
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&accounts_db);
 
         let bins = 1;
         let mut stats = HashStats::default();
 
-        let mut accounts_db = AccountsDb::new_single_for_tests();
-        accounts_db.caching_enabled = true;
         let result = accounts_db
             .scan_snapshot_stores(
                 &get_storage_refs(&storages),
@@ -10405,18 +10407,18 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores_2nd_chunk() {
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
         // enough stores to get to 2nd chunk
         let bins = 1;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
-        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
+        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
             SortedStorages::new_debug(&storage_data[..], 0, MAX_ITEMS_PER_CHUNK as usize + 1);
 
         let mut stats = HashStats::default();
-        let mut accounts_db = AccountsDb::new_single_for_tests();
-        accounts_db.caching_enabled = true;
         let result = accounts_db
             .scan_snapshot_stores(
                 &sorted_storages,
@@ -10436,13 +10438,13 @@ pub mod tests {
     #[test]
     fn test_accountsdb_scan_snapshot_stores_binning() {
         let mut stats = HashStats::default();
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&accounts_db);
 
         // just the first bin of 2
         let bins = 2;
         let half_bins = bins / 2;
-        let mut accounts_db = AccountsDb::new_single_for_tests();
-        accounts_db.caching_enabled = true;
         let result = accounts_db
             .scan_snapshot_stores(
                 &get_storage_refs(&storages),
@@ -10543,11 +10545,13 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_scan_snapshot_stores_binning_2nd_chunk() {
+        let mut accounts_db = AccountsDb::new_single_for_tests();
+        accounts_db.caching_enabled = true;
         // enough stores to get to 2nd chunk
         // range is for only 1 bin out of 256.
         let bins = 256;
         let slot = MAX_ITEMS_PER_CHUNK as Slot;
-        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot);
+        let (storages, raw_expected) = sample_storages_and_account_in_slot(slot, &accounts_db);
         let storage_data = vec![(&storages[0], slot)];
 
         let sorted_storages =
@@ -10556,8 +10560,6 @@ pub mod tests {
         let mut stats = HashStats::default();
         let range = 1;
         let start = 127;
-        let mut accounts_db = AccountsDb::new_single_for_tests();
-        accounts_db.caching_enabled = true;
         let result = accounts_db
             .scan_snapshot_stores(
                 &sorted_storages,
@@ -10606,14 +10608,14 @@ pub mod tests {
     fn test_accountsdb_calculate_accounts_hash_from_storages() {
         solana_logger::setup();
 
-        let (storages, raw_expected) = sample_storages_and_accounts();
+        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
+        db.caching_enabled = true;
+        let (storages, raw_expected) = sample_storages_and_accounts(&db);
         let expected_hash =
             AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
                 item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
-        let mut db = AccountsDb::new(Vec::new(), &ClusterType::Development);
-        db.caching_enabled = true;
         let result = db
             .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig::default(),
