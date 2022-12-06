@@ -5809,6 +5809,7 @@ dependencies = [
  "log",
  "rand 0.7.3",
  "rayon",
+ "scopeguard",
  "serial_test",
  "solana-client",
  "solana-config-program",

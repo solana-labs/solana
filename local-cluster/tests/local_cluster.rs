@@ -1,10 +1,12 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     assert_matches::assert_matches,
     common::*,
-    crossbeam_channel::{unbounded, Receiver},
+    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError},
     gag::BufferRedirect,
     log::*,
+    scopeguard::defer,
     serial_test::serial,
     solana_client::thin_client::ThinClient,
     solana_core::{
@@ -30,11 +32,12 @@ use {
     solana_pubsub_client::pubsub_client::PubsubClient,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
+        self,
         config::{
             RpcBlockSubscribeConfig, RpcBlockSubscribeFilter, RpcProgramAccountsConfig,
             RpcSignatureSubscribeConfig,
         },
-        response::RpcSignatureResult,
+        response::{ProcessedSignatureResult, ReceivedSignatureResult, RpcSignatureResult},
     },
     solana_runtime::{
         commitment::VOTE_THRESHOLD_SIZE,
@@ -180,17 +183,33 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
+
     let num_nodes = 2;
-    let cluster = LocalCluster::new_with_equal_stakes(
+    let mut cluster = LocalCluster::new_with_equal_stakes(
         num_nodes,
         DEFAULT_CLUSTER_LAMPORTS,
         DEFAULT_NODE_STAKE,
         SocketAddrSpace::Unspecified,
     );
+    let funding_keypair = cluster.funding_keypair.insecure_clone();
     let nodes = cluster.get_node_pubkeys();
+
+    /*
+     * `RpcSignatureResult::ReceivedSignature` is not sent by a TPU, only by TVUs.  But as the
+     * leader role is rotating, we can not know which validator are we talking to: the TPU or a TVU.
+     *
+     * In real setups, RPC subscription is not accepted by validators at all, so we deploy a
+     * listener, in order to avoid a race condition as well as to make sure that
+     * `RpcSignatureResult::ReceivedSignature` is indeed properly generated.
+     */
+    let listener_pubkey = cluster.add_validator_listener(
+        &ValidatorConfig::default_for_test(),
+        Arc::new(Keypair::new()),
+        SocketAddrSpace::Unspecified,
+    );
+    let listener_info = cluster.get_contact_info(&listener_pubkey).unwrap();
 
     // Get non leader
     let non_bootstrap_id = nodes
@@ -209,7 +228,7 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
 
     let mut transaction = system_transaction::transfer(
-        &cluster.funding_keypair,
+        &funding_keypair,
         &solana_sdk::pubkey::new_rand(),
         10,
         blockhash,
@@ -218,7 +237,7 @@ fn test_local_cluster_signature_subscribe() {
     let (mut sig_subscribe_client, receiver) = PubsubClient::signature_subscribe(
         &format!(
             "ws://{}",
-            &non_bootstrap_info.rpc_pubsub().unwrap().to_string()
+            &listener_info.rpc_pubsub().unwrap().to_string()
         ),
         &transaction.signatures[0],
         Some(RpcSignatureSubscribeConfig {
@@ -228,37 +247,70 @@ fn test_local_cluster_signature_subscribe() {
     )
     .unwrap();
 
-    tx_client
-        .retry_transfer(&cluster.funding_keypair, &mut transaction, 5)
-        .unwrap();
+    defer! {
+        // If we don't drop the cluster, the blocking web socket service
+        // won't return, and the `sig_subscribe_client` won't shut down
+        drop(cluster);
 
-    let mut got_received_notification = false;
-    loop {
-        let responses: Vec<_> = receiver.try_iter().collect();
-        let mut should_break = false;
-        for response in responses {
-            match response.value {
-                RpcSignatureResult::ProcessedSignature(_) => {
-                    should_break = true;
-                    break;
-                }
-                RpcSignatureResult::ReceivedSignature(_) => {
-                    got_received_notification = true;
-                }
+        if let Err(_err) = sig_subscribe_client.shutdown() {
+            if std::thread::panicking() {
+                // Do not hide the original problem that failed the test.
+            } else {
+                // `_err` is `Box<dyn Any + Send + 'static>`, so there is no
+                // point in printing it.
+                panic!("`sig_subscribe_client.shutdown() failed");
             }
         }
-
-        if should_break {
-            break;
-        }
-        sleep(Duration::from_millis(100));
     }
 
-    // If we don't drop the cluster, the blocking web socket service
-    // won't return, and the `sig_subscribe_client` won't shut down
-    drop(cluster);
-    sig_subscribe_client.shutdown().unwrap();
-    assert!(got_received_notification);
+    tx_client
+        .retry_transfer(&funding_keypair, &mut transaction, 5)
+        .unwrap();
+
+    let timeout = Duration::from_secs(60);
+    let check_start = Instant::now();
+    let deadline = check_start + timeout;
+    let mut got_received_notification = false;
+    loop {
+        let value = match receiver.recv_deadline(deadline) {
+            Ok(solana_rpc_client_api::response::Response { context: _, value }) => value,
+            Err(RecvTimeoutError::Timeout) => {
+                assert!(
+                    got_received_notification,
+                    "No RpcSignatureResult::ReceivedSignature in {:?}",
+                    check_start.elapsed()
+                );
+                panic!(
+                    "No RpcSignatureResult::ProcessedSignature in {:?}",
+                    check_start.elapsed()
+                );
+            }
+            Err(RecvTimeoutError::Disconnected) => panic!("Client disconnected"),
+        };
+
+        use RpcSignatureResult::{ProcessedSignature, ReceivedSignature};
+        match value {
+            ReceivedSignature(ReceivedSignatureResult::ReceivedSignature) => {
+                assert!(
+                    !got_received_notification,
+                    "Second RpcSignatureResult::ReceivedSignature before \
+                    RpcSignatureResult::ProcessedSignature"
+                );
+                got_received_notification = true;
+            }
+            ProcessedSignature(ProcessedSignatureResult { err: None }) => {
+                assert!(
+                    got_received_notification,
+                    "No RpcSignatureResult::ReceivedSignature before \
+                    RpcSignatureResult::ProcessedSignature"
+                );
+                break;
+            }
+            ProcessedSignature(ProcessedSignatureResult { err: Some(err) }) => {
+                panic!("ProcessedSignature() failed: {:?}", err);
+            }
+        }
+    }
 }
 
 #[test]
