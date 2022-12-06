@@ -1,6 +1,10 @@
 //! The solana-program-test provides a BanksClient-based test framework SBF programs
 #![allow(clippy::integer_arithmetic)]
 
+use std::{collections::BTreeMap, sync::Mutex, vec};
+
+use itertools::Itertools;
+use solana_sdk::{keccak::hashv, transaction::Transaction};
 // Export tokio for test clients
 pub use tokio;
 use {
@@ -73,6 +77,97 @@ pub mod programs;
 #[macro_use]
 extern crate solana_bpf_loader_program;
 
+#[macro_use]
+extern crate lazy_static;
+
+#[derive(Debug, Clone)]
+pub struct ExecutedInstruction {
+    pub stack_depth: usize,
+    pub program_id: Pubkey,
+    pub accounts: Vec<Pubkey>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TransactionDetails {
+    pub hash_candidates: BTreeMap<String, usize>,
+    pub executed_instructions: Vec<Vec<ExecutedInstruction>>,
+    pub index_to_hash: Vec<Vec<String>>,
+}
+
+impl TransactionDetails {
+    pub fn new() -> Self {
+        Self {
+            hash_candidates: BTreeMap::new(),
+            executed_instructions: vec![],
+            index_to_hash: vec![],
+        }
+    }
+}
+
+lazy_static! {
+    static ref TRANSACTION_DETAILS: Mutex<TransactionDetails> =
+        Mutex::new(TransactionDetails::new());
+}
+
+lazy_static! {}
+
+pub fn get_hash_from_transaction(transaction: &Transaction, index: usize) -> String {
+    let account_key_hash = hashv(
+        transaction
+            .message
+            .account_keys
+            .iter()
+            .map(|k| *k)
+            .sorted()
+            .unique_by(|k| *k)
+            .map(|k| k.to_bytes())
+            .collect::<Vec<[u8; 32]>>()
+            .iter()
+            .map(|k| k.as_slice())
+            .collect::<Vec<&[u8]>>()
+            .as_slice(),
+    );
+    let data = transaction.message.instructions[index].data.clone();
+    let blockhash = transaction.message.recent_blockhash;
+    let res = hashv(&[&data, account_key_hash.as_ref(), blockhash.as_ref()]).to_string();
+    res
+}
+
+pub fn get_all_hashes_from_invoke_context(invoke_context: &InvokeContext) -> Vec<String> {
+    let tx_context = &invoke_context.transaction_context;
+    let invoke_stack_len = tx_context.get_instruction_trace_length();
+    let stack_height = invoke_context.get_stack_height();
+    let starting_context = tx_context
+        .get_instruction_context_at_index_in_trace(invoke_stack_len - stack_height)
+        .unwrap();
+    let num_accounts = tx_context.get_number_of_accounts() as usize;
+    let account_key_hash = hashv(
+        (0..num_accounts)
+            .map(|i| *tx_context.get_key_of_account_at_index(i as u16).unwrap())
+            .sorted()
+            .unique_by(|k| *k)
+            .map(|k| k.to_bytes())
+            .collect::<Vec<[u8; 32]>>()
+            .iter()
+            .map(|k| k.as_slice())
+            .collect::<Vec<&[u8]>>()
+            .as_slice(),
+    );
+    let data = starting_context.get_instruction_data().to_vec();
+    #[allow(deprecated)]
+    let hashes = invoke_context
+        .sysvar_cache
+        .get_recent_blockhashes()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            hashv(&[&data, account_key_hash.as_ref(), entry.blockhash.as_ref()]).to_string()
+        })
+        .collect::<Vec<String>>();
+    hashes
+}
+
 /// Errors from the program test environment
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProgramTestError {
@@ -131,6 +226,24 @@ pub fn builtin_process_instruction(
     // Deserialize data back into instruction params
     let (program_id, account_infos, _input) =
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
+
+    if invoke_context.get_stack_height() == 1 {
+        let mut map = TRANSACTION_DETAILS.lock().unwrap();
+        // This should always be a new entry
+        let index = map.executed_instructions.len();
+        map.executed_instructions.push(vec![]);
+        map.executed_instructions[index].push(ExecutedInstruction {
+            stack_depth: invoke_context.get_stack_height(),
+            program_id: *program_id,
+            accounts: account_infos.iter().map(|a| *a.key).collect(),
+            data: instruction_data.to_vec(),
+        });
+        let hashes = get_all_hashes_from_invoke_context(invoke_context);
+        map.index_to_hash.push(hashes.clone());
+        for hash in hashes {
+            map.hash_candidates.insert(hash, index);
+        }
+    }
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
@@ -302,6 +415,19 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             if instruction_account.is_writable {
                 account_indices.push((instruction_account.index_in_caller, account_info_index));
             }
+        }
+
+        {
+            let hashes = get_all_hashes_from_invoke_context(invoke_context);
+            let hash = hashes.iter().next().unwrap();
+            let mut map = TRANSACTION_DETAILS.lock().unwrap();
+            let index = *map.hash_candidates.get_mut(hash).unwrap();
+            map.executed_instructions[index].push(ExecutedInstruction {
+                stack_depth: invoke_context.get_stack_height() + 1,
+                program_id: instruction.program_id,
+                accounts: account_infos.iter().map(|a| *a.key).collect(),
+                data: instruction.data.to_vec(),
+            });
         }
 
         let mut compute_units_consumed = 0;
@@ -1189,5 +1315,22 @@ impl ProgramTestContext {
             .await?;
         self.last_blockhash = blockhash;
         Ok(blockhash)
+    }
+
+    pub fn get_transaction_details(
+        &self,
+        transaction: &Transaction, // Executed transaction
+        tx_index: usize,           // Index of top level instruction in transaction
+    ) -> Vec<ExecutedInstruction> {
+        let mut map = TRANSACTION_DETAILS.lock().unwrap();
+        let hash = get_hash_from_transaction(transaction, tx_index);
+        let index = *map.hash_candidates.get(&hash).unwrap();
+        let res = map.executed_instructions[index].clone();
+        map.executed_instructions[index].drain(..);
+        for key in map.index_to_hash[index].clone().iter() {
+            map.hash_candidates.remove(key);
+        }
+        map.index_to_hash[index].clear();
+        res
     }
 }

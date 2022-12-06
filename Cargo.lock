@@ -6045,6 +6045,8 @@ dependencies = [
  "bincode",
  "chrono-humanize",
  "crossbeam-channel",
+ "itertools",
+ "lazy_static",
  "log",
  "serde",
  "solana-banks-client",

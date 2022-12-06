@@ -146,9 +146,15 @@ async fn cpi() {
 
     context
         .banks_client
-        .process_transaction(transaction)
+        .process_transaction(transaction.clone())
         .await
         .unwrap();
+
+    let execution_stack = context.get_transaction_details(&transaction, 0);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(execution_stack[0].program_id, invoker_program_id);
+    assert_eq!(execution_stack[1].stack_depth, 2);
+    assert_eq!(execution_stack[1].program_id, invoked_program_id);
 }
 
 #[tokio::test]
@@ -187,9 +193,14 @@ async fn cpi_dupes() {
 
     context
         .banks_client
-        .process_transaction(transaction)
+        .process_transaction(transaction.clone())
         .await
         .unwrap();
+    let execution_stack = context.get_transaction_details(&transaction, 0);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(execution_stack[0].program_id, invoker_program_id);
+    assert_eq!(execution_stack[1].stack_depth, 2);
+    assert_eq!(execution_stack[1].program_id, invoked_program_id);
 }
 
 #[tokio::test]
@@ -222,9 +233,14 @@ async fn cpi_create_account() {
 
     context
         .banks_client
-        .process_transaction(transaction)
+        .process_transaction(transaction.clone())
         .await
         .unwrap();
+    let execution_stack = context.get_transaction_details(&transaction, 0);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(execution_stack[0].program_id, create_account_program_id);
+    assert_eq!(execution_stack[1].stack_depth, 2);
+    assert_eq!(execution_stack[1].program_id, system_program::id());
 }
 
 // Process instruction to invoke into another program
@@ -260,7 +276,7 @@ fn invoked_stack_height(
 }
 
 #[tokio::test]
-async fn stack_height() {
+async fn cpi_stack_height() {
     let invoker_stack_height_program_id = Pubkey::new_unique();
     let invoked_stack_height_program_id = Pubkey::new_unique();
     let mut program_test = ProgramTest::new(
@@ -292,7 +308,75 @@ async fn stack_height() {
 
     context
         .banks_client
-        .process_transaction(transaction)
+        .process_transaction(transaction.clone())
         .await
         .unwrap();
+
+    let execution_stack = context.get_transaction_details(&transaction, 0);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(
+        execution_stack[0].program_id,
+        invoker_stack_height_program_id
+    );
+    assert_eq!(execution_stack[1].stack_depth, 2);
+    assert_eq!(
+        execution_stack[1].program_id,
+        invoked_stack_height_program_id
+    );
+}
+
+#[tokio::test]
+async fn cpi_multiple_top_level_insturctions() {
+    let invoker_program_id = Pubkey::new_unique();
+    let invoked_program_id = Pubkey::new_unique();
+    let mut program_test = ProgramTest::new(
+        "invoker",
+        invoker_program_id,
+        processor!(invoker_process_instruction),
+    );
+    program_test.add_program(
+        "invoked",
+        invoked_program_id,
+        processor!(invoked_process_instruction),
+    );
+
+    let mut context = program_test.start_with_context().await;
+
+    let instructions = vec![
+        Instruction::new_with_bytes(
+            invoker_program_id,
+            &[],
+            vec![AccountMeta::new_readonly(invoked_program_id, false)],
+        ),
+        Instruction::new_with_bytes(
+            invoked_program_id,
+            &"hello world".as_bytes(),
+            vec![AccountMeta::new_readonly(invoked_program_id, false)],
+        ),
+    ];
+    let transaction = Transaction::new_signed_with_payer(
+        &instructions,
+        Some(&context.payer.pubkey()),
+        &[&context.payer],
+        context.last_blockhash,
+    );
+
+    context
+        .banks_client
+        .process_transaction(transaction.clone())
+        .await
+        .unwrap();
+
+    let execution_stack = context.get_transaction_details(&transaction, 0);
+    assert_eq!(execution_stack.len(), 2);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(execution_stack[0].program_id, invoker_program_id);
+    assert_eq!(execution_stack[1].stack_depth, 2);
+    assert_eq!(execution_stack[1].program_id, invoked_program_id);
+
+    let execution_stack = context.get_transaction_details(&transaction, 1);
+    assert_eq!(execution_stack.len(), 1);
+    assert_eq!(execution_stack[0].stack_depth, 1);
+    assert_eq!(execution_stack[0].program_id, invoked_program_id);
+    assert_eq!(execution_stack[0].data, "hello world".as_bytes());
 }

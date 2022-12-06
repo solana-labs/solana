@@ -27,3 +27,5 @@ solana-sdk = { path = "../sdk", version = "=1.15.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.15.0" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
+lazy_static = "1.1.1"
+itertools = "0.10.5"
