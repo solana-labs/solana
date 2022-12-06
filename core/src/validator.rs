@@ -1579,6 +1579,7 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 &self.accounts_background_request_sender,
             ) {
+                exit.store(true, Ordering::Relaxed);
                 return Err(format!("Failed to load ledger: {e:?}"));
             }
 
