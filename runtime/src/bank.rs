@@ -7981,7 +7981,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
-            rent_collector::TEST_SET_EXEMPT_RENT_EPOCH_MAX,
+            rent_collector::{RENT_EXEMPT_RENT_EPOCH, TEST_SET_EXEMPT_RENT_EPOCH_MAX},
             rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
@@ -11937,159 +11937,177 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bank_update_sysvar_account() {
-        solana_logger::setup();
-        // flushing the write cache is destructive, so test has to restart each time we flush and want to do 'illegal' operations once flushed
-        for pass in 0..5 {
-            use sysvar::clock::Clock;
+        let initial_rent_epoch = 1;
+        for (_expected_rent_epoch, set_exempt_rent_epoch_max) in
+            [(RENT_EXEMPT_RENT_EPOCH, true), (initial_rent_epoch, false)]
+        {
+            solana_logger::setup();
+            // flushing the write cache is destructive, so test has to restart each time we flush and want to do 'illegal' operations once flushed
+            for pass in 0..5 {
+                use sysvar::clock::Clock;
 
-            let dummy_clock_id = solana_sdk::pubkey::new_rand();
-            let dummy_rent_epoch = 44;
-            let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
+                let dummy_clock_id = solana_sdk::pubkey::new_rand();
+                let dummy_rent_epoch = 44;
+                let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
 
-            let expected_previous_slot = 3;
-            let mut expected_next_slot = expected_previous_slot + 1;
+                let expected_previous_slot = 3;
+                let mut expected_next_slot = expected_previous_slot + 1;
 
-            // First, initialize the clock sysvar
-            activate_all_features(&mut genesis_config);
-            let bank1 = Arc::new(Bank::new_for_tests_with_config(
-                &genesis_config,
-                BankTestConfig::default(),
-            ));
-            if pass == 0 {
-                add_root_and_flush_write_cache(&bank1);
-                assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
-                continue;
-            }
+                // First, initialize the clock sysvar
+                for feature_id in FeatureSet::default().inactive {
+                    if !set_exempt_rent_epoch_max
+                        && feature_id == solana_sdk::feature_set::set_exempt_rent_epoch_max::id()
+                    {
+                        continue;
+                    }
+                    activate_feature(&mut genesis_config, feature_id);
+                }
+                let bank1 = Arc::new(Bank::new_for_tests_with_config(
+                    &genesis_config,
+                    BankTestConfig::default(),
+                ));
+                if pass == 0 {
+                    add_root_and_flush_write_cache(&bank1);
+                    assert_eq!(bank1.calculate_capitalization(true), bank1.capitalization());
+                    continue;
+                }
 
-            assert_capitalization_diff(
-                &bank1,
-                || {
-                    bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                        assert!(optional_account.is_none());
+                assert_capitalization_diff(
+                    &bank1,
+                    || {
+                        bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                            assert!(optional_account.is_none());
 
-                        let mut account = create_account(
-                            &Clock {
-                                slot: expected_previous_slot,
-                                ..Clock::default()
-                            },
-                            bank1.inherit_specially_retained_account_fields(optional_account),
+                            let mut account = create_account(
+                                &Clock {
+                                    slot: expected_previous_slot,
+                                    ..Clock::default()
+                                },
+                                bank1.inherit_specially_retained_account_fields(optional_account),
+                            );
+                            account.set_rent_epoch(dummy_rent_epoch);
+                            account
+                        });
+                        let current_account = bank1.get_account(&dummy_clock_id).unwrap();
+                        assert_eq!(
+                            expected_previous_slot,
+                            from_account::<Clock, _>(&current_account).unwrap().slot
                         );
-                        account.set_rent_epoch(dummy_rent_epoch);
-                        account
-                    });
-                    let current_account = bank1.get_account(&dummy_clock_id).unwrap();
-                    assert_eq!(
-                        expected_previous_slot,
-                        from_account::<Clock, _>(&current_account).unwrap().slot
-                    );
-                    assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
-                },
-                |old, new| {
-                    assert_eq!(
-                        old + min_rent_exempt_balance_for_sysvars(&bank1, &[sysvar::clock::id()]),
-                        new
-                    );
-                    pass == 1
-                },
-            );
-            if pass == 1 {
-                continue;
+                        assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
+                    },
+                    |old, new| {
+                        assert_eq!(
+                            old + min_rent_exempt_balance_for_sysvars(
+                                &bank1,
+                                &[sysvar::clock::id()]
+                            ),
+                            new
+                        );
+                        pass == 1
+                    },
+                );
+                if pass == 1 {
+                    continue;
+                }
+
+                assert_capitalization_diff(
+                    &bank1,
+                    || {
+                        bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                            assert!(optional_account.is_some());
+
+                            create_account(
+                                &Clock {
+                                    slot: expected_previous_slot,
+                                    ..Clock::default()
+                                },
+                                bank1.inherit_specially_retained_account_fields(optional_account),
+                            )
+                        })
+                    },
+                    |old, new| {
+                        // creating new sysvar twice in a slot shouldn't increment capitalization twice
+                        assert_eq!(old, new);
+                        pass == 2
+                    },
+                );
+                if pass == 2 {
+                    continue;
+                }
+
+                // Updating should increment the clock's slot
+                let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
+                add_root_and_flush_write_cache(&bank1);
+                assert_capitalization_diff(
+                    &bank2,
+                    || {
+                        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                            let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                                .unwrap()
+                                .slot
+                                + 1;
+
+                            create_account(
+                                &Clock {
+                                    slot,
+                                    ..Clock::default()
+                                },
+                                bank2.inherit_specially_retained_account_fields(optional_account),
+                            )
+                        });
+                        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                        assert_eq!(
+                            expected_next_slot,
+                            from_account::<Clock, _>(&current_account).unwrap().slot
+                        );
+                        assert_eq!(
+                            /*expected_rent_epoch*/ dummy_rent_epoch,
+                            current_account.rent_epoch()
+                        );
+                    },
+                    |old, new| {
+                        // if existing, capitalization shouldn't change
+                        assert_eq!(old, new);
+                        pass == 3
+                    },
+                );
+                if pass == 3 {
+                    continue;
+                }
+
+                // Updating again should give bank2's sysvar to the closure not bank1's.
+                // Thus, increment expected_next_slot accordingly
+                expected_next_slot += 1;
+                assert_capitalization_diff(
+                    &bank2,
+                    || {
+                        bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
+                            let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
+                                .unwrap()
+                                .slot
+                                + 1;
+
+                            create_account(
+                                &Clock {
+                                    slot,
+                                    ..Clock::default()
+                                },
+                                bank2.inherit_specially_retained_account_fields(optional_account),
+                            )
+                        });
+                        let current_account = bank2.get_account(&dummy_clock_id).unwrap();
+                        assert_eq!(
+                            expected_next_slot,
+                            from_account::<Clock, _>(&current_account).unwrap().slot
+                        );
+                    },
+                    |old, new| {
+                        // updating twice in a slot shouldn't increment capitalization twice
+                        assert_eq!(old, new);
+                        true
+                    },
+                );
             }
-
-            assert_capitalization_diff(
-                &bank1,
-                || {
-                    bank1.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                        assert!(optional_account.is_some());
-
-                        create_account(
-                            &Clock {
-                                slot: expected_previous_slot,
-                                ..Clock::default()
-                            },
-                            bank1.inherit_specially_retained_account_fields(optional_account),
-                        )
-                    })
-                },
-                |old, new| {
-                    // creating new sysvar twice in a slot shouldn't increment capitalization twice
-                    assert_eq!(old, new);
-                    pass == 2
-                },
-            );
-            if pass == 2 {
-                continue;
-            }
-
-            // Updating should increment the clock's slot
-            let bank2 = Arc::new(Bank::new_from_parent(&bank1, &Pubkey::default(), 1));
-            add_root_and_flush_write_cache(&bank1);
-            assert_capitalization_diff(
-                &bank2,
-                || {
-                    bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                        let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
-                            .unwrap()
-                            .slot
-                            + 1;
-
-                        create_account(
-                            &Clock {
-                                slot,
-                                ..Clock::default()
-                            },
-                            bank2.inherit_specially_retained_account_fields(optional_account),
-                        )
-                    });
-                    let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-                    assert_eq!(
-                        expected_next_slot,
-                        from_account::<Clock, _>(&current_account).unwrap().slot
-                    );
-                    assert_eq!(dummy_rent_epoch, current_account.rent_epoch());
-                },
-                |old, new| {
-                    // if existing, capitalization shouldn't change
-                    assert_eq!(old, new);
-                    pass == 3
-                },
-            );
-            if pass == 3 {
-                continue;
-            }
-
-            // Updating again should give bank2's sysvar to the closure not bank1's.
-            // Thus, increment expected_next_slot accordingly
-            expected_next_slot += 1;
-            assert_capitalization_diff(
-                &bank2,
-                || {
-                    bank2.update_sysvar_account(&dummy_clock_id, |optional_account| {
-                        let slot = from_account::<Clock, _>(optional_account.as_ref().unwrap())
-                            .unwrap()
-                            .slot
-                            + 1;
-
-                        create_account(
-                            &Clock {
-                                slot,
-                                ..Clock::default()
-                            },
-                            bank2.inherit_specially_retained_account_fields(optional_account),
-                        )
-                    });
-                    let current_account = bank2.get_account(&dummy_clock_id).unwrap();
-                    assert_eq!(
-                        expected_next_slot,
-                        from_account::<Clock, _>(&current_account).unwrap().slot
-                    );
-                },
-                |old, new| {
-                    // updating twice in a slot shouldn't increment capitalization twice
-                    assert_eq!(old, new);
-                    true
-                },
-            );
         }
     }
 
