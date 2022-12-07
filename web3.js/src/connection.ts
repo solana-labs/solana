@@ -1,10 +1,12 @@
-import Agent from 'agentkeepalive';
+import HttpKeepAliveAgent, {
+  HttpsAgent as HttpsKeepAliveAgent,
+} from 'agentkeepalive';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 // @ts-ignore
 import fastStableStringify from 'fast-stable-stringify';
-import type {Agent as HttpAgent} from 'http';
-import {Agent as HttpsAgent} from 'https';
+import type {Agent as NodeHttpAgent} from 'http';
+import {Agent as NodeHttpsAgent} from 'https';
 import {
   type as pick,
   number,
@@ -1452,10 +1454,10 @@ function createRpcClient(
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
   disableRetryOnRateLimit?: boolean,
-  httpAgent?: HttpAgent | HttpsAgent | false,
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false,
 ): RpcClient {
   const fetch = customFetch ? customFetch : fetchImpl;
-  let agent: HttpAgent | HttpsAgent | undefined;
+  let agent: NodeHttpAgent | NodeHttpsAgent | undefined;
   if (process.env.BROWSER) {
     if (httpAgent != null) {
       console.warn(
@@ -1466,25 +1468,30 @@ function createRpcClient(
   } else {
     if (httpAgent == null) {
       if (process.env.NODE_ENV !== 'test') {
-        agent = new Agent({
+        const agentOptions = {
           // One second fewer than the Solana RPC's keepalive timeout.
           // Read more: https://github.com/solana-labs/solana/issues/27859#issuecomment-1340097889
           freeSocketTimeout: 19000,
           keepAlive: true,
           maxSockets: 25,
-        });
+        };
+        if (url.startsWith('https:')) {
+          agent = new HttpsKeepAliveAgent(agentOptions);
+        } else {
+          agent = new HttpKeepAliveAgent(agentOptions);
+        }
       }
     } else {
       if (httpAgent !== false) {
         const isHttps = url.startsWith('https:');
-        if (isHttps && !(httpAgent instanceof HttpsAgent)) {
+        if (isHttps && !(httpAgent instanceof NodeHttpsAgent)) {
           throw new Error(
             'The endpoint `' +
               url +
               '` can only be paired with an `https.Agent`. You have, instead, supplied an ' +
               '`http.Agent` through `httpAgent`.',
           );
-        } else if (!isHttps && httpAgent instanceof HttpsAgent) {
+        } else if (!isHttps && httpAgent instanceof NodeHttpsAgent) {
           throw new Error(
             'The endpoint `' +
               url +
@@ -2897,7 +2904,7 @@ export type ConnectionConfig = {
    * persistence). Set this to `false` to create a connection that uses no agent. This applies to
    * Node environments only.
    */
-  httpAgent?: HttpAgent | HttpsAgent | false;
+  httpAgent?: NodeHttpAgent | NodeHttpsAgent | false;
   /** Optional commitment level */
   commitment?: Commitment;
   /** Optional endpoint URL to the fullnode JSON RPC PubSub WebSocket Endpoint */
