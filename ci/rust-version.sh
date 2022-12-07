@@ -20,6 +20,8 @@ if [[ -n $RUST_STABLE_VERSION ]]; then
 else
   # read rust version from rust-toolchain.toml file
   base="$(dirname "${BASH_SOURCE[0]}")"
+  # pacify shellcheck: cannot follow dynamic path
+  # shellcheck disable=SC1090,SC1091
   source "$base/../scripts/read-cargo-variable.sh"
   stable_version=$(readCargoVariable channel "$base/../rust-toolchain.toml")
 fi
