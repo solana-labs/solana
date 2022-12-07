@@ -1617,6 +1617,17 @@ impl Bank {
             .is_active(&enable_partitioned_epoch_reward::id())
     }
 
+    // For testing only
+    pub fn set_partitioned_rewards_enable(&mut self, enable: bool) {
+        let mut fea = (*self.feature_set).clone();
+        if enable {
+            fea.activate(&enable_partitioned_epoch_reward::id(), 0)
+        } else {
+            fea.deactivate(&enable_partitioned_epoch_reward::id())
+        }
+        self.feature_set = Arc::new(fea);
+    }
+
     pub fn get_reward_calculation_interval(&self) -> u64 {
         if self.epoch_schedule.warmup && self.epoch < self.first_normal_epoch() {
             1
@@ -21258,7 +21269,11 @@ pub(crate) mod tests {
     fn test_partitioned_reward_enable() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
 
-        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.set_partitioned_rewards_enable(true);
         assert!(bank.partitioned_rewards_enabled());
+
+        bank.set_partitioned_rewards_enable(false);
+        assert!(!bank.partitioned_rewards_enabled());
     }
 }
