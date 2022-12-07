@@ -66,20 +66,20 @@ or
 
 2. make a dummy publication with these steps:
 
-	a. Create a empty crate locally with this template
+  a. Create a empty crate locally with this template
 
-		[package]
-		name = \"<PACKAGE_NAME>\"
-		version = \"0.0.1\"
-		description = \"<PACKAGE_DESC>\"
-		authors = [\"Solana Maintainers <maintainers@solana.foundation>\"]
-		repository = \"https://github.com/solana-labs/solana\"
-		license = \"Apache-2.0\"
-		homepage = \"https://solana.com/\"
-		documentation = \"https://docs.rs/<PACKAGE_NAME>\"
-		edition = \"2021\"
+    [package]
+    name = \"<PACKAGE_NAME>\"
+    version = \"0.0.1\"
+    description = \"<PACKAGE_DESC>\"
+    authors = [\"Solana Maintainers <maintainers@solana.foundation>\"]
+    repository = \"https://github.com/solana-labs/solana\"
+    license = \"Apache-2.0\"
+    homepage = \"https://solana.com/\"
+    documentation = \"https://docs.rs/<PACKAGE_NAME>\"
+    edition = \"2021\"
 
-	b. cargo publish --token <GRIMES_CRATES_IO_TOKEN>
+  b. cargo publish --token <GRIMES_CRATES_IO_TOKEN>
 "
     else
       ((error_count++))
