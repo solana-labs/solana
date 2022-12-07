@@ -97,90 +97,82 @@ pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
     }
 }
 
-macro_rules! impl_packet {
-    ($P:ident, $S:ident) => {
-        #[derive(Clone, Eq)]
-        #[repr(C)]
-        pub struct $P {
-            // Bytes past Packet.meta.size are not valid to read from.
-            // Use Packet.data(index) to read from the buffer.
-            buffer: [u8; $S],
-            meta: Meta,
-        }
-
-        impl $P {
-            pub fn new(buffer: [u8; $S], meta: Meta) -> Self {
-                Self { buffer, meta }
-            }
-        }
-
-        impl BasePacket for $P {
-            const DATA_SIZE: usize = $S;
-
-            fn populate_packet<T: Serialize>(
-                &mut self,
-                dest: Option<&SocketAddr>,
-                data: &T,
-            ) -> Result<()> {
-                debug_assert!(!self.meta.discard());
-                let mut wr = io::Cursor::new(self.buffer_mut());
-                bincode::serialize_into(&mut wr, data)?;
-                self.meta.size = wr.position() as usize;
-                if let Some(dest) = dest {
-                    self.meta.set_socket_addr(dest);
-                }
-                Ok(())
-            }
-
-            fn meta(&self) -> &Meta {
-                &self.meta
-            }
-
-            fn meta_mut(&mut self) -> &mut Meta {
-                &mut self.meta
-            }
-
-            fn buffer(&self) -> &[u8] {
-                &self.buffer
-            }
-
-            fn buffer_mut(&mut self) -> &mut [u8] {
-                debug_assert!(!self.meta.discard());
-                &mut self.buffer[..]
-            }
-        }
-
-        impl fmt::Debug for $P {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(
-                    f,
-                    "Packet {{ size: {:?}, addr: {:?} }}",
-                    self.meta.size,
-                    self.meta.socket_addr()
-                )
-            }
-        }
-
-        #[allow(clippy::uninit_assumed_init)]
-        impl Default for $P {
-            fn default() -> Self {
-                let buffer = std::mem::MaybeUninit::<[u8; Self::DATA_SIZE]>::uninit();
-                Self {
-                    buffer: unsafe { buffer.assume_init() },
-                    meta: Meta::default(),
-                }
-            }
-        }
-
-        impl PartialEq for $P {
-            fn eq(&self, other: &Self) -> bool {
-                self.meta == other.meta && self.data(..) == other.data(..)
-            }
-        }
-    };
+#[derive(Clone, Eq)]
+#[repr(C)]
+pub struct GenericPacket<const N: usize> {
+    // Bytes past Packet.meta.size are not valid to read from.
+    // Use Packet.data(index) to read from the buffer.
+    buffer: [u8; N],
+    meta: Meta,
 }
-impl_packet!(Packet, PACKET_DATA_SIZE);
-impl_packet!(TransactionPacket, TRANSACTION_DATA_SIZE);
+
+impl<const N: usize> GenericPacket<N> {
+    pub fn new(buffer: [u8; N], meta: Meta) -> Self {
+        Self { buffer, meta }
+    }
+}
+
+impl<const N: usize> BasePacket for GenericPacket<N> {
+    const DATA_SIZE: usize = N;
+
+    fn populate_packet<T: Serialize>(&mut self, dest: Option<&SocketAddr>, data: &T) -> Result<()> {
+        debug_assert!(!self.meta.discard());
+        let mut wr = io::Cursor::new(self.buffer_mut());
+        bincode::serialize_into(&mut wr, data)?;
+        self.meta.size = wr.position() as usize;
+        if let Some(dest) = dest {
+            self.meta.set_socket_addr(dest);
+        }
+        Ok(())
+    }
+
+    fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    fn buffer(&self) -> &[u8] {
+        &self.buffer
+    }
+
+    fn buffer_mut(&mut self) -> &mut [u8] {
+        debug_assert!(!self.meta.discard());
+        &mut self.buffer[..]
+    }
+}
+
+impl<const N: usize> fmt::Debug for GenericPacket<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Packet {{ size: {:?}, addr: {:?} }}",
+            self.meta.size,
+            self.meta.socket_addr()
+        )
+    }
+}
+
+#[allow(clippy::uninit_assumed_init)]
+impl<const N: usize> Default for GenericPacket<N> {
+    fn default() -> Self {
+        let buffer = std::mem::MaybeUninit::<[u8; N]>::uninit();
+        Self {
+            buffer: unsafe { buffer.assume_init() },
+            meta: Meta::default(),
+        }
+    }
+}
+
+impl<const N: usize> PartialEq for GenericPacket<N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.meta == other.meta && self.data(..) == other.data(..)
+    }
+}
+pub type Packet = GenericPacket<PACKET_DATA_SIZE>;
+pub type TransactionPacket = GenericPacket<TRANSACTION_DATA_SIZE>;
 
 impl Meta {
     pub fn socket_addr(&self) -> SocketAddr {
