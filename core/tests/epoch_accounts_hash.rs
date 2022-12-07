@@ -427,7 +427,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
         // - Wait until the snapshot archive has been generated
         // - Deserialize the bank from the snapshot archive
         // - Ensure the EAHs match
-        if bank.slot() % FULL_SNAPSHOT_INTERVAL == 0 {
+        if bank.slot() % FULL_SNAPSHOT_INTERVAL == 0 && !bank.in_reward_calc_interval() {
             let snapshot_config = &test_environment.snapshot_config;
             let full_snapshot_archive_info = loop {
                 if let Some(full_snapshot_archive_info) =
