@@ -11,7 +11,6 @@ source scripts/read-cargo-variable.sh
 
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
-cargo="$solana_dir"/cargo
 cargo_build_sbf="$solana_dir"/cargo-build-sbf
 cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
@@ -49,8 +48,8 @@ anchor() {
   update_solana_dependencies . "$solana_ver"
   patch_crates_io_solana Cargo.toml "$solana_dir"
 
-  $cargo build
-  $cargo test
+  cargo build
+  cargo test
 
   anchor_dir=$PWD
   anchor_ver=$(readCargoVariable version "$anchor_dir"/lang/Cargo.toml)
@@ -70,8 +69,8 @@ mango() {
     patch_crates_io_solana Cargo.toml "$solana_dir"
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
-    $cargo build
-    $cargo test
+    cargo build
+    cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )
@@ -89,8 +88,8 @@ metaplex() {
     patch_crates_io_solana Cargo.toml "$solana_dir"
     patch_crates_io_anchor Cargo.toml "$anchor_dir"
 
-    $cargo build
-    $cargo test
+    cargo build
+    cargo test
     $cargo_build_sbf
     $cargo_test_sbf
   )

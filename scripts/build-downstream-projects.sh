@@ -12,7 +12,6 @@ source scripts/read-cargo-variable.sh
 
 solana_ver=$(readCargoVariable version sdk/Cargo.toml)
 solana_dir=$PWD
-cargo="$solana_dir"/cargo
 cargo_build_sbf="$solana_dir"/cargo-build-sbf
 cargo_test_sbf="$solana_dir"/cargo-test-sbf
 
@@ -75,8 +74,8 @@ spl() {
     # TODO better: `build.rs` for spl-token-cli doesn't seem to properly build
     # the required programs to run the tests, so instead we run the tests
     # after we know programs have been built
-    $cargo build
-    $cargo test
+    cargo build
+    cargo test
   )
 }
 
@@ -101,12 +100,12 @@ exclude = [
     "permissioned",
 ]
 EOF
-    $cargo build
+    cargo build
 
     $cargo_build_sbf \
       --manifest-path dex/Cargo.toml --no-default-features --features program
 
-    $cargo test \
+    cargo test \
       --manifest-path dex/Cargo.toml --no-default-features --features program
   )
 }

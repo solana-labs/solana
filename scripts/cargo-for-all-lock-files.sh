@@ -44,7 +44,7 @@ for lock_file in $files; do
     echo "--- [$lock_file]: cargo " "${shifted_args[@]}" "$@"
   fi
 
-  if (set -x && cd "$(dirname "$lock_file")" && "$cargo" "${shifted_args[@]}" "$@"); then
+  if (set -x && cd "$(dirname "$lock_file")" && cargo "${shifted_args[@]}" "$@"); then
     # noop
     true
   else
