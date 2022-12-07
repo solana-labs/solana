@@ -21126,6 +21126,7 @@ pub(crate) mod tests {
         assert_eq!(t2, n);
     }
 
+    /// Test get_reward_interval during normal epoch
     #[test]
     fn test_reward_interval_normal() {
         let (mut genesis_config, _mint_keypair) =
@@ -21137,6 +21138,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_reward_credit_interval(), 50);
     }
 
+    /// Test get_reward_interval during small epoch
     #[test]
     fn test_reward_interval_cap() {
         let (mut genesis_config, _mint_keypair) =
@@ -21148,6 +21150,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_reward_credit_interval(), 1);
     }
 
+    /// Test get_reward_interval during warm up epoch
     #[test]
     fn test_reward_interval_warmup() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
@@ -21157,6 +21160,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_reward_credit_interval(), 1);
     }
 
+    /// Test reward calculation process
     #[test]
     fn test_reward_calculation() {
         solana_logger::setup();
@@ -21265,6 +21269,7 @@ pub(crate) mod tests {
         assert_eq!(result.1.len(), 1);
     }
 
+    /// Test partitioned_reward_enable feature
     #[test]
     fn test_partitioned_reward_enable() {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
