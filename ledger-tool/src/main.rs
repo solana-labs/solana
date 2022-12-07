@@ -3219,8 +3219,6 @@ fn main() {
                             }
                         }
 
-                        bank.accounts().accounts_db.add_root(bank.slot());
-                        bank.force_flush_accounts_cache();
                         bank.set_capitalization();
 
                         let bank = if let Some(warp_slot) = warp_slot {
