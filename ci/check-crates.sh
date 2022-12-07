@@ -56,7 +56,11 @@ for file in "${files[@]}"; do
       ((error_count++))
       echo "❌ new crate $crate_name not found on crates.io. you can either
 
-1. mark it as not for publication with 'package.publish = false' in its Cargo.toml
+1. mark it as not for publication in its Cargo.toml
+
+    [package]
+    ...
+    publish = false
 
 or
 
