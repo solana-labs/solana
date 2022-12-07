@@ -14,10 +14,9 @@ import sys;
 
 real_file = os.path.realpath(__file__)
 ci_path = os.path.dirname(real_file)
-src_root = os.path.dirname(ci_path)
 
 def load_metadata():
-    cmd = f'{src_root}/cargo metadata --no-deps --format-version=1'
+    cmd = f'cargo metadata --no-deps --format-version=1'
     return json.loads(subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE).communicate()[0])
 
