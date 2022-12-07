@@ -63,7 +63,8 @@ export const DEVNET_URL = clusterApiUrl("devnet");
 export function clusterUrl(cluster: Cluster, customUrl: string): string {
   const modifyUrl = (url: string): string => {
     if (window.location.hostname === "localhost") {
-      return url;
+      return "https://newest-intensive-choice.solana-mainnet.discover.quiknode.pro/b14717fce4a4f1e59e7287e5ac9bdf40fdada346/";
+      // return url;
     } else {
       return url.replace("api", "explorer-api");
     }
