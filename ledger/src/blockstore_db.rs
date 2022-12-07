@@ -69,7 +69,7 @@ const ROOT_CF: &str = "root";
 /// Column family for indexes
 const INDEX_CF: &str = "index";
 /// Column family for Data Shreds
-const DATA_SHRED_CF: &str = "data_shred";
+pub const DATA_SHRED_CF: &str = "data_shred";
 /// Column family for Code Shreds
 const CODE_SHRED_CF: &str = "code_shred";
 /// Column family for Transaction Status
