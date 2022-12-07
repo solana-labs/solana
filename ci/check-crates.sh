@@ -99,7 +99,7 @@ or
         echo "❌ $owner"
       fi
     done
-    if (("$unverified_owner_count" != 0)) || (("$verified_owner_count" == 0)); then
+    if [[ ($unverified_owner_count -gt 0) || ($verified_owner_count -le 0) ]]; then
       ((error_count++))
     fi
   fi
