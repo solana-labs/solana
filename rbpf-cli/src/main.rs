@@ -261,13 +261,15 @@ before execting it in the virtual machine.",
     }
     .unwrap();
 
-    let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| format!("Executable verifier failed: {:?}", err))
-            .unwrap();
+    let verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
+            executable,
+        ))
+        .map_err(|err| format!("Executable verifier failed: {:?}", err))
+        .unwrap();
 
     verified_executable.jit_compile().unwrap();
-    let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
+    let mut analysis = LazyAnalysis::new(Arc::clone(verified_executable.get_executable()));
 
     match matches.value_of("use") {
         Some("cfg") => {
@@ -351,24 +353,24 @@ impl Debug for Output {
 
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
-struct LazyAnalysis<'a, 'b> {
-    analysis: Option<Analysis<'a, InvokeContext<'b>>>,
-    executable: &'a Executable<InvokeContext<'b>>,
+struct LazyAnalysis<'a> {
+    analysis: Option<Analysis>,
+    executable: Arc<Executable<InvokeContext<'a>>>,
 }
 
-impl<'a, 'b> LazyAnalysis<'a, 'b> {
-    fn new(executable: &'a Executable<InvokeContext<'b>>) -> Self {
+impl<'a> LazyAnalysis<'a> {
+    fn new(executable: Arc<Executable<InvokeContext<'a>>>) -> Self {
         Self {
             analysis: None,
             executable,
         }
     }
 
-    fn analyze(&mut self) -> &Analysis<InvokeContext<'b>> {
+    fn analyze(&mut self) -> &Analysis {
         if let Some(ref analysis) = self.analysis {
             return analysis;
         }
         self.analysis
-            .insert(Analysis::from_executable(self.executable).unwrap())
+            .insert(Analysis::from_executable(Arc::clone(&self.executable)).unwrap())
     }
 }

@@ -2020,8 +2020,10 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     )
     .map_err(|err| format!("ELF error: {}", err))?;
 
-    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-        .map_err(|err| format!("ELF error: {}", err))?;
+    let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
+        executable,
+    ))
+    .map_err(|err| format!("ELF error: {}", err))?;
 
     Ok(program_data)
 }

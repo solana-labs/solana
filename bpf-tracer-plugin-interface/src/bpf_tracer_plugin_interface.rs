@@ -1,5 +1,5 @@
 use {
-    solana_rbpf::vm::{TraceAnalyzer, TraceItem},
+    solana_rbpf::static_analysis::Analysis,
     solana_sdk::{hash::Hash, pubkey::Pubkey},
     std::{
         any::Any,
@@ -62,7 +62,7 @@ pub trait BpfTracerPlugin: Any + Send + Sync + std::fmt::Debug {
         program_id: &Pubkey,
         block_hash: &Hash,
         transaction_id: &[u8],
-        trace_analyzer: &TraceAnalyzer,
-        trace: &[TraceItem],
+        trace: &[[u64; 12]],
+        make_analysis: Box<dyn Fn() -> Analysis + Send + Sync>,
     ) -> Result<()>;
 }

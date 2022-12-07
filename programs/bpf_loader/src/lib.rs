@@ -36,7 +36,7 @@ use {
         memory_region::MemoryRegion,
         static_analysis::Analysis,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, ContextObject, EbpfVm, ProgramResult, TraceAnalyzer, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -46,9 +46,8 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix,
-            error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
-            reject_callx_r10, FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, limit_max_instruction_trace_length,
+            FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, InstructionError},
@@ -180,12 +179,14 @@ fn create_executor_from_bytes(
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
-    let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| {
-                ic_logger_msg!(log_collector, "{}", err);
-                InstructionError::InvalidAccountData
-            })?;
+    let verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(Arc::new(
+            executable,
+        ))
+        .map_err(|err| {
+            ic_logger_msg!(log_collector, "{}", err);
+            InstructionError::InvalidAccountData
+        })?;
     verify_code_time.stop();
     create_executor_metrics.verify_code_us = verify_code_time.as_us();
     if use_jit {
@@ -1380,8 +1381,8 @@ fn process_loader_instruction(
 }
 
 fn trace_bpf<'a, 'b>(
-    vm: &mut EbpfVm<'a, RequisiteVerifier, InvokeContext<'b>>,
-    executable: &Executable<InvokeContext<'static>>,
+    trace_log: &[[u64; 12]],
+    bpf_executor: Arc<BpfExecutor>,
     bpf_tracer_plugin_manager: Option<Arc<RwLock<dyn BpfTracerPluginManager>>>,
     block_hash: &Hash,
     transaction_id: &[u8],
@@ -1404,16 +1405,19 @@ fn trace_bpf<'a, 'b>(
         return;
     }
 
-    let analysis = Analysis::from_executable(executable).unwrap();
-    let trace_analyzer = TraceAnalyzer::new(&analysis);
-
     for plugin in bpf_tracing_plugins.into_iter() {
+        let bpf_executor = Arc::clone(&bpf_executor);
         if let Err(err) = plugin.trace_bpf(
             program_id,
             block_hash,
             transaction_id,
-            &trace_analyzer,
-            &vm.context_object.trace_log,
+            trace_log,
+            Box::new(move || {
+                Analysis::from_executable(Arc::clone(
+                    bpf_executor.verified_executable.get_executable(),
+                ))
+                .unwrap()
+            }),
         ) {
             error!(
                 "Error running BPF tracing plugin: {} for program ID: {}. Error: {:?}",
@@ -1439,7 +1443,10 @@ impl Debug for BpfExecutor {
 }
 
 impl Executor for BpfExecutor {
-    fn execute(&self, invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {
+    fn execute(
+        self: Arc<Self>,
+        invoke_context: &mut InvokeContext,
+    ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
         let stack_height = invoke_context.get_stack_height();
         let transaction_context = &invoke_context.transaction_context;
@@ -1483,6 +1490,8 @@ impl Executor for BpfExecutor {
             stable_log::program_invoke(&log_collector, &program_id, stack_height);
             let (compute_units_consumed, result) = vm.execute_program(!self.use_jit);
 
+            drop(vm);
+
             ic_logger_msg!(
                 log_collector,
                 "Program {} consumed {} of {} compute units",
@@ -1492,15 +1501,13 @@ impl Executor for BpfExecutor {
             );
 
             trace_bpf(
-                &mut vm,
-                self.verified_executable.get_executable(),
+                &invoke_context.trace_log,
+                Arc::clone(&self),
                 bpf_tracer_plugin_manager,
                 &blockhash,
                 transaction_id.as_ref(),
                 &program_id,
             );
-
-            drop(vm);
 
             let (_returned_from_program_id, return_data) =
                 invoke_context.transaction_context.get_return_data();
@@ -1694,8 +1701,10 @@ mod tests {
         )
         .unwrap();
         let verified_executable =
-            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(executable)
-                .unwrap();
+            VerifiedExecutable::<TautologyVerifier, TestContextObject>::from_executable(Arc::new(
+                executable,
+            ))
+            .unwrap();
         let input_region = MemoryRegion::new_writable(&mut input_mem, MM_INPUT_START);
         let mut context_object = TestContextObject { remaining: 10 };
         let mut vm = EbpfVm::new(

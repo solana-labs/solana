@@ -15524,7 +15524,7 @@ pub(crate) mod tests {
     struct TestExecutor {}
     impl Executor for TestExecutor {
         fn execute(
-            &self,
+            self: Arc<Self>,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
