@@ -15,11 +15,12 @@ use {
     crate::{
         cluster_info::{Ping, CRDS_UNIQUE_PUBKEY_CAPACITY},
         contact_info::ContactInfo,
-        crds::{Crds, Cursor, GossipRoute},
+        crds::{Crds, CrdsError, Cursor, GossipRoute},
         crds_gossip::{get_stake, get_weight},
         crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
+        received_cache::ReceivedCache,
         weighted_shuffle::WeightedShuffle,
     },
     bincode::serialized_size,
@@ -49,15 +50,15 @@ use {
     },
 };
 
-pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
-pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
+pub(crate) const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
+const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 // With a fanout of 6, a 1000 node cluster should only take ~4 hops to converge.
 // However since pushes are stake weighed, some trailing nodes
 // might need more time to receive values. 30 seconds should be plenty.
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 30000;
-pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
-pub const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
-pub const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
+const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
+const CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT: f64 = 0.15;
+const CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES: usize = 3;
 // Do not push to peers which have not been updated for this long.
 const PUSH_ACTIVE_TIMEOUT_MS: u64 = 60_000;
 
@@ -69,17 +70,9 @@ pub struct CrdsGossipPush {
     /// Cursor into the crds table for values to push.
     crds_cursor: Mutex<Cursor>,
     /// Cache that tracks which validators a message was received from
-    /// bool indicates it has been pruned.
-    ///
     /// This cache represents a lagging view of which validators
     /// currently have this node in their `active_set`
-    #[allow(clippy::type_complexity)]
-    received_cache: Mutex<
-        HashMap<
-            Pubkey, // origin/owner
-            HashMap</*gossip peer:*/ Pubkey, (/*pruned:*/ bool, /*timestamp:*/ u64)>,
-        >,
-    >,
+    received_cache: Mutex<ReceivedCache>,
     last_pushed_to: RwLock<LruCache</*node:*/ Pubkey, /*timestamp:*/ u64>>,
     num_active: usize,
     push_fanout: usize,
@@ -97,7 +90,7 @@ impl Default for CrdsGossipPush {
             max_bytes: PACKET_DATA_SIZE * 64,
             active_set: RwLock::default(),
             crds_cursor: Mutex::default(),
-            received_cache: Mutex::default(),
+            received_cache: Mutex::new(ReceivedCache::new(2 * CRDS_UNIQUE_PUBKEY_CAPACITY)),
             last_pushed_to: RwLock::new(LruCache::new(CRDS_UNIQUE_PUBKEY_CAPACITY)),
             num_active: CRDS_GOSSIP_NUM_ACTIVE,
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
@@ -115,12 +108,7 @@ impl CrdsGossipPush {
         crds.read().unwrap().get_entries(&mut cursor).count()
     }
 
-    fn prune_stake_threshold(self_stake: u64, origin_stake: u64) -> u64 {
-        let min_path_stake = self_stake.min(origin_stake);
-        ((CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT * min_path_stake as f64).round() as u64).max(1)
-    }
-
-    pub(crate) fn prune_received_cache_many<I>(
+    pub(crate) fn prune_received_cache<I>(
         &self,
         self_pubkey: &Pubkey,
         origins: I, // Unique pubkeys of crds values' owners.
@@ -133,79 +121,17 @@ impl CrdsGossipPush {
         origins
             .into_iter()
             .flat_map(|origin| {
-                let peers = Self::prune_received_cache(
-                    self_pubkey,
-                    &origin,
-                    stakes,
-                    received_cache.deref_mut(),
-                );
-                peers.into_iter().zip(repeat(origin))
+                received_cache
+                    .prune(
+                        self_pubkey,
+                        origin,
+                        CRDS_GOSSIP_PRUNE_STAKE_THRESHOLD_PCT,
+                        CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES,
+                        stakes,
+                    )
+                    .zip(repeat(origin))
             })
             .into_group_map()
-    }
-
-    fn prune_received_cache(
-        self_pubkey: &Pubkey,
-        origin: &Pubkey,
-        stakes: &HashMap<Pubkey, u64>,
-        received_cache: &mut HashMap<
-            Pubkey, // origin/owner
-            HashMap</*gossip peer:*/ Pubkey, (/*pruned:*/ bool, /*timestamp:*/ u64)>,
-        >,
-    ) -> Vec<Pubkey> {
-        let origin_stake = stakes.get(origin).unwrap_or(&0);
-        let self_stake = stakes.get(self_pubkey).unwrap_or(&0);
-        let peers = match received_cache.get_mut(origin) {
-            None => return Vec::default(),
-            Some(peers) => peers,
-        };
-        let peer_stake_total: u64 = peers
-            .iter()
-            .filter(|(_, (pruned, _))| !pruned)
-            .filter_map(|(peer, _)| stakes.get(peer))
-            .sum();
-        let prune_stake_threshold = Self::prune_stake_threshold(*self_stake, *origin_stake);
-        if peer_stake_total < prune_stake_threshold {
-            return Vec::new();
-        }
-        let mut rng = rand::thread_rng();
-        let shuffled_staked_peers = {
-            let peers: Vec<_> = peers
-                .iter()
-                .filter(|(_, (pruned, _))| !pruned)
-                .filter_map(|(peer, _)| Some((*peer, *stakes.get(peer)?)))
-                .filter(|(_, stake)| *stake > 0)
-                .collect();
-            let weights: Vec<_> = peers.iter().map(|(_, stake)| *stake).collect();
-            WeightedShuffle::new("prune-received-cache", &weights)
-                .shuffle(&mut rng)
-                .map(move |i| peers[i])
-        };
-        let mut keep = HashSet::new();
-        let mut peer_stake_sum = 0;
-        keep.insert(*origin);
-        for (peer, stake) in shuffled_staked_peers {
-            if peer == *origin {
-                continue;
-            }
-            keep.insert(peer);
-            peer_stake_sum += stake;
-            if peer_stake_sum >= prune_stake_threshold
-                && keep.len() >= CRDS_GOSSIP_PRUNE_MIN_INGRESS_NODES
-            {
-                break;
-            }
-        }
-        for (peer, (pruned, _)) in peers.iter_mut() {
-            if !*pruned && !keep.contains(peer) {
-                *pruned = true;
-            }
-        }
-        peers
-            .keys()
-            .filter(|peer| !keep.contains(peer))
-            .copied()
-            .collect()
     }
 
     fn wallclock_window(&self, now: u64) -> impl RangeBounds<u64> {
@@ -223,33 +149,26 @@ impl CrdsGossipPush {
         now: u64,
     ) -> Vec<Result<Pubkey, CrdsGossipError>> {
         self.num_total.fetch_add(values.len(), Ordering::Relaxed);
-        let values: Vec<_> = {
-            let wallclock_window = self.wallclock_window(now);
-            let mut received_cache = self.received_cache.lock().unwrap();
-            values
-                .into_iter()
-                .map(|value| {
-                    if !wallclock_window.contains(&value.wallclock()) {
-                        return Err(CrdsGossipError::PushMessageTimeout);
-                    }
-                    let origin = value.pubkey();
-                    let peers = received_cache.entry(origin).or_default();
-                    peers
-                        .entry(*from)
-                        .and_modify(|(_pruned, timestamp)| *timestamp = now)
-                        .or_insert((/*pruned:*/ false, now));
-                    Ok(value)
-                })
-                .collect()
-        };
+        let mut received_cache = self.received_cache.lock().unwrap();
         let mut crds = crds.write().unwrap();
+        let wallclock_window = self.wallclock_window(now);
         values
             .into_iter()
             .map(|value| {
-                let value = value?;
+                if !wallclock_window.contains(&value.wallclock()) {
+                    return Err(CrdsGossipError::PushMessageTimeout);
+                }
                 let origin = value.pubkey();
                 match crds.insert(value, now, GossipRoute::PushMessage) {
-                    Ok(()) => Ok(origin),
+                    Ok(()) => {
+                        received_cache.record(origin, *from, /*num_dups:*/ 0);
+                        Ok(origin)
+                    }
+                    Err(CrdsError::DuplicatePush(num_dups)) => {
+                        received_cache.record(origin, *from, usize::from(num_dups));
+                        self.num_old.fetch_add(1, Ordering::Relaxed);
+                        Err(CrdsGossipError::PushMessageOldVersion)
+                    }
                     Err(_) => {
                         self.num_old.fetch_add(1, Ordering::Relaxed);
                         Err(CrdsGossipError::PushMessageOldVersion)
@@ -477,14 +396,6 @@ impl CrdsGossipPush {
             .collect()
     }
 
-    /// Purge received push message cache
-    pub(crate) fn purge_old_received_cache(&self, min_time: u64) {
-        self.received_cache.lock().unwrap().retain(|_, v| {
-            v.retain(|_, (_, t)| *t > min_time);
-            !v.is_empty()
-        });
-    }
-
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
         let active_set = {
@@ -502,7 +413,7 @@ impl CrdsGossipPush {
             }
             clone
         };
-        let received_cache = self.received_cache.lock().unwrap().clone();
+        let received_cache = self.received_cache.lock().unwrap().mock_clone();
         let crds_cursor = *self.crds_cursor.lock().unwrap();
         Self {
             active_set: RwLock::new(active_set),
@@ -531,68 +442,6 @@ mod tests {
             Duration::from_secs(20 * 60) / 64, // rate_limit_delay
             128,                               // capacity
         )
-    }
-
-    #[test]
-    fn test_prune() {
-        let crds = RwLock::<Crds>::default();
-        let push = CrdsGossipPush::default();
-        let mut stakes = HashMap::new();
-
-        let self_id = solana_sdk::pubkey::new_rand();
-        let origin = solana_sdk::pubkey::new_rand();
-        stakes.insert(self_id, 100);
-        stakes.insert(origin, 100);
-
-        let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ContactInfo::new_localhost(
-            &origin, 0,
-        )));
-        let low_staked_peers = (0..10).map(|_| solana_sdk::pubkey::new_rand());
-        let mut low_staked_set = HashSet::new();
-        low_staked_peers.for_each(|p| {
-            push.process_push_message(&crds, &p, vec![value.clone()], 0);
-            low_staked_set.insert(p);
-            stakes.insert(p, 1);
-        });
-
-        let pruned = {
-            let mut received_cache = push.received_cache.lock().unwrap();
-            CrdsGossipPush::prune_received_cache(
-                &self_id,
-                &origin,
-                &stakes,
-                received_cache.deref_mut(),
-            )
-        };
-        assert!(
-            pruned.is_empty(),
-            "should not prune if min threshold has not been reached"
-        );
-
-        let high_staked_peer = solana_sdk::pubkey::new_rand();
-        let high_stake = CrdsGossipPush::prune_stake_threshold(100, 100) + 10;
-        stakes.insert(high_staked_peer, high_stake);
-        push.process_push_message(&crds, &high_staked_peer, vec![value], 0);
-
-        let pruned = {
-            let mut received_cache = push.received_cache.lock().unwrap();
-            CrdsGossipPush::prune_received_cache(
-                &self_id,
-                &origin,
-                &stakes,
-                received_cache.deref_mut(),
-            )
-        };
-        assert!(
-            pruned.len() < low_staked_set.len() + 1,
-            "should not prune all peers"
-        );
-        pruned.iter().for_each(|p| {
-            assert!(
-                low_staked_set.contains(p),
-                "only low staked peers should be pruned"
-            );
-        });
     }
 
     #[test]
@@ -1161,9 +1010,6 @@ mod tests {
             push.process_push_message(&crds, &Pubkey::default(), vec![value.clone()], 0),
             [Err(CrdsGossipError::PushMessageOldVersion)],
         );
-
-        // purge the old pushed
-        push.purge_old_received_cache(1);
 
         // push it again
         assert_eq!(

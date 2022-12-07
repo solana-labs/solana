@@ -2294,7 +2294,6 @@ impl ClusterInfo {
         let prune_messages: Vec<_> = {
             let gossip_crds = self.gossip.crds.read().unwrap();
             let wallclock = timestamp();
-            let self_pubkey = self.id();
             thread_pool.install(|| {
                 prunes
                     .into_par_iter()
