@@ -118,9 +118,7 @@ impl LocalCluster {
             if let Some(max_wait_duration) = max_wait_duration {
                 assert!(
                     timer.elapsed() < max_wait_duration,
-                    "Waiting for next {:?} snapshot exceeded the {:?} maximum wait duration!",
-                    next_snapshot_type,
-                    max_wait_duration,
+                    "Waiting for next {next_snapshot_type:?} snapshot exceeded the {max_wait_duration:?} maximum wait duration!",
                 );
             }
             sleep(Duration::from_secs(5));

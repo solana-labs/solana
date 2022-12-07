@@ -450,7 +450,7 @@ mod tests {
         let data_str = format!("{:?}", Hex(&data[..MAX_DEBUG_ACCOUNT_DATA]));
         let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
         assert_eq!(
-            format!("{:?}", info),
+            format!("{info:?}"),
             format!(
                 "AccountInfo {{ \
                 key: {}, \
@@ -478,7 +478,7 @@ mod tests {
         let data_str = format!("{:?}", Hex(&data));
         let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
         assert_eq!(
-            format!("{:?}", info),
+            format!("{info:?}"),
             format!(
                 "AccountInfo {{ \
                 key: {}, \
@@ -505,7 +505,7 @@ mod tests {
         let mut data = vec![];
         let info = AccountInfo::new(&key, false, false, &mut lamports, &mut data, &key, false, 0);
         assert_eq!(
-            format!("{:?}", info),
+            format!("{info:?}"),
             format!(
                 "AccountInfo {{ \
                 key: {}, \

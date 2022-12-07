@@ -45,25 +45,25 @@ pub fn stop_process(process: &mut Child) -> Result<(), io::Error> {
             }
         }
         Err(EINVAL) => {
-            println!("Invalid signal. Killing process {}", pid);
+            println!("Invalid signal. Killing process {pid}");
             kill_process(process)?;
         }
         Err(EPERM) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
-                format!("Insufficient permissions to signal process {}", pid),
+                format!("Insufficient permissions to signal process {pid}"),
             ));
         }
         Err(ESRCH) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
-                format!("Process {} does not exist", pid),
+                format!("Process {pid} does not exist"),
             ));
         }
         Err(e) => {
             return Err(io::Error::new(
                 ErrorKind::InvalidInput,
-                format!("Unexpected error {}", e),
+                format!("Unexpected error {e}"),
             ));
         }
     };

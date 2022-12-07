@@ -405,7 +405,7 @@ impl RpcSolPubSubImpl {
 fn param<T: FromStr>(param_str: &str, thing: &str) -> Result<T> {
     param_str.parse::<T>().map_err(|_e| Error {
         code: ErrorCode::InvalidParams,
-        message: format!("Invalid Request: Invalid {} provided", thing),
+        message: format!("Invalid Request: Invalid {thing} provided"),
         data: None,
     })
 }
@@ -1095,8 +1095,7 @@ mod tests {
         io.extend_with(rpc.to_delegate());
 
         let req = format!(
-            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{}"]}}"#,
-            bob_pubkey
+            r#"{{"jsonrpc":"2.0","id":1,"method":"accountSubscribe","params":["{bob_pubkey}"]}}"#
         );
         let _res = io.handle_request_sync(&req);
 
@@ -1280,8 +1279,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
     }
@@ -1310,8 +1308,7 @@ mod tests {
         let expected_res_str = serde_json::to_string(&expected_res).unwrap();
 
         let expected = format!(
-            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{},"subscription":0}}}}"#,
-            expected_res_str
+            r#"{{"jsonrpc":"2.0","method":"slotNotification","params":{{"result":{expected_res_str},"subscription":0}}}}"#
         );
         assert_eq!(expected, response);
 

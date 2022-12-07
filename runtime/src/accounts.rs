@@ -1668,8 +1668,7 @@ mod tests {
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
                 expected,
-                "bin: {}",
-                bin
+                "bin: {bin}"
             );
         });
         accts.hold_range_in_memory(&range, false, &test_thread_pool());

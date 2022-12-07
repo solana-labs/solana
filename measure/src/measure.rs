@@ -88,30 +88,30 @@ mod tests {
             start: Instant::now(),
             duration: 1,
         };
-        assert_eq!(format!("{}", measure), "test_ns took 1ns");
+        assert_eq!(format!("{measure}"), "test_ns took 1ns");
 
         let measure = Measure {
             name: "test_us",
             start: Instant::now(),
             duration: 1000,
         };
-        assert_eq!(format!("{}", measure), "test_us took 1us");
+        assert_eq!(format!("{measure}"), "test_us took 1us");
 
         let measure = Measure {
             name: "test_ms",
             start: Instant::now(),
             duration: 1000 * 1000,
         };
-        assert_eq!(format!("{}", measure), "test_ms took 1ms");
+        assert_eq!(format!("{measure}"), "test_ms took 1ms");
 
         let measure = Measure {
             name: "test_s",
             start: Instant::now(),
             duration: 1000 * 1000 * 1000,
         };
-        assert_eq!(format!("{}", measure), "test_s took 1.0s");
+        assert_eq!(format!("{measure}"), "test_s took 1.0s");
 
         let measure = Measure::start("test_not_stopped");
-        assert_eq!(format!("{}", measure), "test_not_stopped running");
+        assert_eq!(format!("{measure}"), "test_not_stopped running");
     }
 }

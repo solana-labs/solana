@@ -55,8 +55,7 @@ fn checked_total_size_sum(total_size: u64, entry_size: u64, limit_size: u64) -> 
     let total_size = total_size.saturating_add(entry_size);
     if total_size > limit_size {
         return Err(UnpackError::Archive(format!(
-            "too large archive: {} than limit: {}",
-            total_size, limit_size,
+            "too large archive: {total_size} than limit: {limit_size}",
         )));
     }
     Ok(total_size)
@@ -66,8 +65,7 @@ fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u
     let total_count = total_count + 1;
     if total_count > limit_count {
         return Err(UnpackError::Archive(format!(
-            "too many files in snapshot: {:?}",
-            total_count
+            "too many files in snapshot: {total_count:?}"
         )));
     }
     Ok(total_count)
@@ -75,10 +73,7 @@ fn checked_total_count_increment(total_count: u64, limit_count: u64) -> Result<u
 
 fn check_unpack_result(unpack_result: bool, path: String) -> Result<()> {
     if !unpack_result {
-        return Err(UnpackError::Archive(format!(
-            "failed to unpack: {:?}",
-            path
-        )));
+        return Err(UnpackError::Archive(format!("failed to unpack: {path:?}")));
     }
     Ok(())
 }
@@ -132,8 +127,7 @@ where
 
         if parts.clone().any(|p| p.is_none()) || reject_legacy_dir_entry {
             return Err(UnpackError::Archive(format!(
-                "invalid path found: {:?}",
-                path_str
+                "invalid path found: {path_str:?}"
             )));
         }
 
@@ -982,7 +976,7 @@ mod tests {
             result,
             Err(UnpackError::Archive(ref message))
                 if message == &format!(
-                    "too large archive: 1125899906842624 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE
+                    "too large archive: 1125899906842624 than limit: {MAX_SNAPSHOT_ARCHIVE_UNPACKED_APPARENT_SIZE}"
                 )
         );
     }
@@ -1007,7 +1001,7 @@ mod tests {
             result,
             Err(UnpackError::Archive(ref message))
                 if message == &format!(
-                    "too large archive: 18446744073709551615 than limit: {}", MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE
+                    "too large archive: 18446744073709551615 than limit: {MAX_SNAPSHOT_ARCHIVE_UNPACKED_ACTUAL_SIZE}"
                 )
         );
     }

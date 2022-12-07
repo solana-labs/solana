@@ -45,7 +45,7 @@ pub const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("solSigVerify{:02}", ix))
+        .thread_name(|ix| format!("solSigVerify{ix:02}"))
         .build()
         .unwrap();
 }
@@ -768,7 +768,7 @@ pub fn ed25519_verify(
     let mut num_packets: usize = 0;
     for batch in batches.iter() {
         elems.push(perf_libs::Elems {
-            elems: batch.as_ptr(),
+            elems: batch.as_ptr().cast::<u8>(),
             num: batch.len() as u32,
         });
         let v = vec![0u8; batch.len()];

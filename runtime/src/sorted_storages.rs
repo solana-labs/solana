@@ -267,9 +267,7 @@ pub mod tests {
         let check = |(slot, storages): (Slot, Option<&SnapshotStorage>)| {
             assert!(
                 (slot != 3) ^ storages.is_some(),
-                "slot: {}, storages: {:?}",
-                slot,
-                storages
+                "slot: {slot}, storages: {storages:?}"
             );
             slot
         };
@@ -307,9 +305,7 @@ pub mod tests {
                     ^ storages
                         .map(|storages| storages.capacity() == (slot as usize))
                         .unwrap_or(false),
-                "slot: {}, storages: {:?}",
-                slot,
-                storages
+                "slot: {slot}, storages: {storages:?}"
             );
             slot
         };

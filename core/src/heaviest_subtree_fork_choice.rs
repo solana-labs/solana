@@ -302,7 +302,7 @@ impl HeaviestSubtreeForkChoice {
         let root_fork_info = self.fork_infos.get_mut(&new_root);
 
         root_fork_info
-            .unwrap_or_else(|| panic!("New root: {:?}, didn't exist in fork choice", new_root))
+            .unwrap_or_else(|| panic!("New root: {new_root:?}, didn't exist in fork choice"))
             .parent = None;
         self.tree_root = new_root;
         self.last_root_time = Instant::now();
@@ -929,9 +929,8 @@ impl HeaviestSubtreeForkChoice {
                             // validator has been running, so we must be able to fetch best_slots for all of
                             // them.
                             panic!(
-                                "a bank at last_voted_slot({:?}) is a frozen bank so must have been \
+                                "a bank at last_voted_slot({last_voted_slot_hash:?}) is a frozen bank so must have been \
                                         added to heaviest_subtree_fork_choice at time of freezing",
-                                last_voted_slot_hash,
                             )
                         } else {
                             // fork_infos doesn't have corresponding data for the stale stray last vote,

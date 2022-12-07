@@ -246,7 +246,7 @@ impl<P: ConnectionPool> ThinClient<P> {
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("retry_transfer failed in {} retries", tries),
+            format!("retry_transfer failed in {tries} retries"),
         )
         .into())
     }
@@ -454,7 +454,7 @@ impl<P: ConnectionPool> SyncClient for ThinClient<P> {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("send_transaction failed with error {:?}", err),
+                    format!("send_transaction failed with error {err:?}"),
                 )
             })?;
         Ok(status)
@@ -471,7 +471,7 @@ impl<P: ConnectionPool> SyncClient for ThinClient<P> {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("send_transaction failed with error {:?}", err),
+                    format!("send_transaction failed with error {err:?}"),
                 )
             })?;
         Ok(status)
@@ -491,7 +491,7 @@ impl<P: ConnectionPool> SyncClient for ThinClient<P> {
             .map_err(|err| {
                 io::Error::new(
                     io::ErrorKind::Other,
-                    format!("send_transaction failed with error {:?}", err),
+                    format!("send_transaction failed with error {err:?}"),
                 )
             })?;
         Ok(slot)

@@ -89,7 +89,7 @@ impl fmt::Debug for Version {
             self.patch,
             match self.commit {
                 None => "devbuild".to_string(),
-                Some(commit) => format!("{:08x}", commit),
+                Some(commit) => format!("{commit:08x}"),
             },
             self.feature_set,
         )

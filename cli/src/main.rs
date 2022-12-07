@@ -63,7 +63,7 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                             ),
                             _ => unreachable!(),
                         };
-                        println_name_value_or(&format!("{}:", field_name), &value, setting_type);
+                        println_name_value_or(&format!("{field_name}:"), &value, setting_type);
                     } else {
                         println_name_value("Config File:", config_file);
                         println_name_value_or("RPC URL:", &json_rpc_url, url_setting_type);
@@ -123,12 +123,12 @@ fn parse_settings(matches: &ArgMatches<'_>) -> Result<bool, Box<dyn error::Error
                     let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);
                     config.import_address_labels(&filename)?;
                     config.save(config_file)?;
-                    println!("Address labels imported from {:?}", filename);
+                    println!("Address labels imported from {filename:?}");
                 }
                 ("export-address-labels", Some(subcommand_matches)) => {
                     let filename = value_t_or_exit!(subcommand_matches, "filename", PathBuf);
                     config.export_address_labels(&filename)?;
-                    println!("Address labels exported to {:?}", filename);
+                    println!("Address labels exported to {filename:?}");
                 }
                 _ => unreachable!(),
             }
@@ -247,7 +247,7 @@ fn do_main(matches: &ArgMatches<'_>) -> Result<(), Box<dyn error::Error>> {
         let (mut config, signers) = parse_args(matches, &mut wallet_manager)?;
         config.signers = signers.iter().map(|s| s.as_ref()).collect();
         let result = process_command(&config)?;
-        println!("{}", result);
+        println!("{result}");
     };
     Ok(())
 }

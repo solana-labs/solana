@@ -231,7 +231,7 @@ fn run_bank_forks_snapshot_n<F>(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -745,7 +745,7 @@ fn test_bank_forks_incremental_snapshot(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -1036,7 +1036,7 @@ fn test_snapshots_with_background_services(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let accounts_background_service = AccountsBackgroundService::new(
@@ -1094,9 +1094,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for full snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for full snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }
@@ -1114,9 +1112,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for incremental snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for incremental snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }

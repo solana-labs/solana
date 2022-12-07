@@ -37,7 +37,7 @@ fn main() {
     args.insert(index, "--arch".to_string());
     print!("cargo-test-bpf child: {}", program.display());
     for a in &args {
-        print!(" {}", a);
+        print!(" {a}");
     }
     println!();
     let child = Command::new(&program)

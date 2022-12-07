@@ -239,7 +239,7 @@ impl AdminRpc for AdminRpcImpl {
         debug!("add_authorized_voter request received");
 
         let authorized_voter = read_keypair_file(keypair_file)
-            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{}", err)))?;
+            .map_err(|err| jsonrpc_core::error::Error::invalid_params(format!("{err}")))?;
 
         AdminRpcImpl::add_authorized_voter_keypair(meta, authorized_voter)
     }
@@ -253,8 +253,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let authorized_voter = Keypair::from_bytes(&keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read authorized voter keypair from provided byte array: {}",
-                err
+                "Failed to read authorized voter keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -277,8 +276,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = read_keypair_file(&keypair_file).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from {}: {}",
-                keypair_file, err
+                "Failed to read identity keypair from {keypair_file}: {err}"
             ))
         })?;
 
@@ -295,8 +293,7 @@ impl AdminRpc for AdminRpcImpl {
 
         let identity_keypair = Keypair::from_bytes(&identity_keypair).map_err(|err| {
             jsonrpc_core::error::Error::invalid_params(format!(
-                "Failed to read identity keypair from provided byte array: {}",
-                err
+                "Failed to read identity keypair from provided byte array: {err}"
             ))
         })?;
 
@@ -482,10 +479,6 @@ pub fn load_staked_nodes_overrides(
         let file = std::fs::File::open(path)?;
         Ok(serde_yaml::from_reader(file)?)
     } else {
-        Err(format!(
-            "Staked nodes overrides provided '{}' a non-existing file path.",
-            path
-        )
-        .into())
+        Err(format!("Staked nodes overrides provided '{path}' a non-existing file path.").into())
     }
 }

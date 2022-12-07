@@ -77,7 +77,7 @@ impl EpochStakes {
                             "parse_epoch_vote_accounts",
                             (
                                 "warn",
-                                format!("Unable to get vote_state from account {}", key),
+                                format!("Unable to get vote_state from account {key}"),
                                 String
                             ),
                         );
