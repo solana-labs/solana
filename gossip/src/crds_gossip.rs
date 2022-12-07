@@ -68,8 +68,7 @@ impl CrdsGossip {
     where
         I: IntoIterator<Item = Pubkey>,
     {
-        self.push
-            .prune_received_cache_many(self_pubkey, origins, stakes)
+        self.push.prune_received_cache(self_pubkey, origins, stakes)
     }
 
     pub fn new_push_messages(
@@ -318,10 +317,6 @@ impl CrdsGossip {
         timeouts: &HashMap<Pubkey, u64>,
     ) -> usize {
         let mut rv = 0;
-        if now > 5 * self.push.msg_timeout {
-            let min = now - 5 * self.push.msg_timeout;
-            self.push.purge_old_received_cache(min);
-        }
         if now > self.pull.crds_timeout {
             //sanity check
             assert_eq!(timeouts[self_pubkey], std::u64::MAX);
