@@ -12,7 +12,9 @@ See [Developing with Rust - Restrictions](./developing-rust.md#restrictions) for
 
 ## Computational constraints
 
-See [computational constraints](../programming-model/runtime.md#compute-budget)
+To prevent abuse of the blockchain's computational resources, each transaction is allocated a compute budget. Exceeding this compute budget will result in the transaction failing.
+
+See [computational constraints](../programming-model/runtime.md#compute-budget) in the Runtime for more specific details.
 
 ## Call stack depth - `CallDepthExceeded` error
 
