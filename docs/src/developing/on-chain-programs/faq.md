@@ -8,32 +8,40 @@ questions.
 
 If not addressed here, ask on [StackOverflow](https://stackoverflow.com/questions/tagged/solana) with the `solana` tag or check out the Solana [#developer-support](https://discord.gg/RxeGBH)
 
-## `CallDepth` error
+## Limitations
 
-This error means that that cross-program invocation exceeded the allowed
-invocation call depth.
+Developing programs on the Solana blockchain have some inherent limitation associated with them. Below is a list of common limitation that you may run into.
 
-See [cross-program invocation Call
-Depth](developing/programming-model/calling-between-programs.md#call-depth)
+See [Limitations of developing programs](./limitations.md) for more details
 
-## `CallDepthExceeded` error
+## Memory map
 
-This error means the SBF stack depth was exceeded.
+The virtual address memory map used by Solana SBF programs is fixed and laid out
+as follows
 
-See [call depth](overview.md#call-depth)
+- Program code starts at 0x100000000
+- Stack data starts at 0x200000000
+- Heap data starts at 0x300000000
+- Program input parameters start at 0x400000000
 
-## Computational constraints
-
-See [computational
-constraints](developing/programming-model/runtime.md#compute-budget)
-
-## Float Rust types
-
-See [float support](overview.md#float-support)
+The above virtual addresses are start addresses but programs are given access to
+a subset of the memory map. The program will panic if it attempts to read or
+write to a virtual address that it was not granted access to, and an
+`AccessViolation` error will be returned that contains the address and size of
+the attempted violation.
 
 ## Heap size
 
-See [heap](overview.md#heap)
+Programs have access to a runtime heap either directly in C or via the Rust
+`alloc` APIs. To facilitate fast allocations, a simple 32KB bump heap is
+utilized. The heap does not support `free` or `realloc` so use it wisely.
+
+Internally, programs have access to the 32KB memory region starting at virtual
+address 0x300000000 and may implement a custom heap based on the program's
+specific needs.
+
+- [Rust program heap usage](developing-rust.md#heap)
+- [C program heap usage](developing-c.md#heap)
 
 ## InvalidAccountData
 
@@ -75,6 +83,31 @@ See [Rust Project Dependencies](developing-rust.md#project-dependencies)
 
 See [Rust restrictions](developing-rust.md#restrictions)
 
-## Stack size
+## Stack
 
-See [stack](overview.md#stack)
+SBF uses stack frames instead of a variable stack pointer. Each stack frame is
+4KB in size.
+
+If a program violates that stack frame size, the compiler will report the
+overrun as a warning.
+
+For example: `Error: Function _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please minimize large stack variables`
+
+The message identifies which symbol is exceeding its stack frame but the name
+might be mangled if it is a Rust or C++ symbol. To demangle a Rust symbol use
+[rustfilt](https://github.com/luser/rustfilt). The above warning came from a
+Rust program, so the demangled symbol name is:
+
+```bash
+$ rustfilt _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
+curve25519_dalek::edwards::EdwardsBasepointTable::create
+```
+
+To demangle a C++ symbol use `c++filt` from binutils.
+
+The reason a warning is reported rather than an error is because some dependent
+crates may include functionality that violates the stack frame restrictions even
+if the program doesn't use that functionality. If the program violates the stack
+size at runtime, an `AccessViolation` error will be reported.
+
+SBF stack frames occupy a virtual address range starting at 0x200000000.

@@ -52,7 +52,7 @@ For example:
   on Rand](#depending-on-rand).
 - Crates may overflow the stack even if the stack overflowing code isn't
   included in the program itself. For more information refer to
-  [Stack](overview.md#stack).
+  [Stack](./faq.md#stack).
 
 ## How to Build
 
@@ -211,7 +211,7 @@ On-chain Rust programs support most of Rust's libstd, libcore, and liballoc, as
 well as many 3rd party crates.
 
 There are some limitations since these programs run in a resource-constrained,
-single-threaded environment, and must be deterministic:
+single-threaded environment, as well as being deterministic:
 
 - No access to
   - `rand`
