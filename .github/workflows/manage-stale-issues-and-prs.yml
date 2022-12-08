@@ -24,7 +24,7 @@ jobs:
           ascending: true # Spend API operations budget on older, more-likely-to-get-closed issues first
           close-issue-message: "" # Leave no comment when closing
           close-pr-message: "" # Leave no comment when closing
-          days-before-issue-stale: 7
+          days-before-issue-stale: 365
           days-before-pr-stale: 14
           days-before-close: 7
           debug-only: ${{ github.event_name == 'pull_request' }} # Dry-run when true.
