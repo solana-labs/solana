@@ -2225,10 +2225,14 @@ fn optimize_filters(filters: &mut [RpcFilterType]) {
             match &compare.bytes {
                 #[allow(deprecated)]
                 Binary(bytes) | Base58(bytes) => {
-                    compare.bytes = Bytes(bs58::decode(bytes).into_vec().unwrap());
+                    if let Ok(bytes) = bs58::decode(bytes).into_vec() {
+                        compare.bytes = Bytes(bytes);
+                    }
                 }
                 Base64(bytes) => {
-                    compare.bytes = Bytes(base64::decode(bytes).unwrap());
+                    if let Ok(bytes) = base64::decode(bytes) {
+                        compare.bytes = Bytes(bytes);
+                    }
                 }
                 _ => {}
             }
