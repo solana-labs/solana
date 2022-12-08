@@ -10,8 +10,10 @@ export function DomainsCard({ pubkey }: { pubkey: PublicKey }) {
   const [domains, domainsLoading] = useUserDomains(pubkey);
   const [domainsANS, domainsANSLoading] = useUserANSDomains(pubkey);
 
-
-  if ((domainsLoading && (!domains || domains.length === 0)) || (domainsANSLoading && (!domainsANS || domainsANS.length === 0))) {
+  if (
+    (domainsLoading && (!domains || domains.length === 0)) ||
+    (domainsANSLoading && (!domainsANS || domainsANS.length === 0))
+  ) {
     return <LoadingCard message="Loading domains" />;
   } else if (!domains || !domainsANS) {
     return <ErrorCard text="Failed to fetch domains" />;
@@ -22,7 +24,7 @@ export function DomainsCard({ pubkey }: { pubkey: PublicKey }) {
   }
   let allDomains = domains;
   if (domainsANS) {
-    allDomains = [...allDomains, ...domainsANS]
+    allDomains = [...allDomains, ...domainsANS];
   }
   allDomains.sort((a, b) => a.name.localeCompare(b.name));
 

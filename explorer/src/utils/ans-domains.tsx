@@ -1,8 +1,38 @@
 import { PublicKey, Connection } from "@solana/web3.js";
 import { useState, useEffect } from "react";
 import { Cluster, useCluster } from "providers/cluster";
-import { TldParser, NameRecordHeader } from '@onsol/tldparser';
-import { DomainInfo } from './name-service';
+import {
+  TldParser,
+  NameRecordHeader,
+  getDomainKey,
+  getNameOwner,
+} from "@onsol/tldparser";
+import { DomainInfo } from "./name-service";
+import pLimit from "p-limit";
+
+export const hasANSDomainSyntax = (value: string) => {
+  return value.length > 4 && value.split(".").length === 2;
+};
+
+// returns owner address and name account address.
+export async function getANSDomainOwnerAndAddress(
+  domainTld: string,
+  connection: Connection
+) {
+  const derivedDomainKey = await getDomainKey(domainTld.toLowerCase());
+  try {
+    // returns only non expired domains,
+    const owner = await getNameOwner(connection, derivedDomainKey.pubkey);
+    return owner
+      ? {
+          owner: owner.toString(),
+          address: derivedDomainKey.pubkey.toString(),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export const useUserANSDomains = (
   userAddress: PublicKey
@@ -25,51 +55,55 @@ export const useUserANSDomains = (
         if (!allDomains) {
           return;
         }
-
-        let userDomains = await Promise.all(
-          allDomains.map(async (address) => {
-
+        let userDomains: DomainInfo[] = [];
+        const limit = pLimit(5);
+        let promises = allDomains.map((address) =>
+          limit(async () => {
             const domainRecord = await NameRecordHeader.fromAccountAddress(
               connection,
-              address,
+              address
             );
 
             // expired or not found
             if (!domainRecord?.owner) return;
 
-            const domainParentNameAccount = await NameRecordHeader.fromAccountAddress(
-              connection,
-              domainRecord?.parentName,
-            );
-
-            const tldRaw = await parser.getTldFromParentAccount(
-              domainRecord?.parentName,
-            );
+            const domainParentNameAccount =
+              await NameRecordHeader.fromAccountAddress(
+                connection,
+                domainRecord?.parentName
+              );
 
             // not found
             if (!domainParentNameAccount?.owner) return;
 
+            const tldRaw = await parser.getTldFromParentAccount(
+              domainRecord?.parentName
+            );
+
             const domainRaw = await parser.reverseLookupNameAccount(
               address,
-              domainParentNameAccount?.owner,
+              domainParentNameAccount?.owner
             );
+            // domain not found or might be a subdomain.
             if (!domainRaw) return;
-            const tld = Buffer.from(Array.from(tldRaw.split(',')).map(i => Number(i))).toString()
-            const domain = Buffer.from(Array.from(domainRaw?.split(',')).map(i => Number(i)))
-            const indexof00 = tld.indexOf('\x00')
 
-            return {
+            const tld = Buffer.from(
+              Array.from(tldRaw.split(",")).map((i) => Number(i))
+            ).toString();
+
+            const domain = Buffer.from(
+              Array.from(domainRaw?.split(",")).map((i) => Number(i))
+            );
+
+            const indexof00 = tld.indexOf("\x00");
+            userDomains.push({
               name: `${domain}${tld.substring(0, indexof00)}`,
               address,
-            };
+            });
           })
         );
 
-        userDomains = userDomains.filter(element => {
-          return element !== undefined;
-        });
-        // console.log('ans domains', userDomains)
-        // @ts-ignore since undefined values will be filtered above.
+        await Promise.all(promises);
         setResult(userDomains);
       } catch (err) {
         console.log(`Error fetching user domains ${err}`);
