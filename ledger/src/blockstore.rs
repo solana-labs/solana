@@ -561,12 +561,17 @@ impl Blockstore {
     fn get_recovery_data_shreds<'a>(
         slot: Slot,
         erasure_meta: &'a ErasureRecoverMeta,
+        prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         data_cf: &'a LedgerColumn<cf::ShredData>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta
             .erasure_meta
             .data_shreds_indices()
             .filter_map(move |i| {
+                let key = ShredId::new(slot, u32::try_from(i).unwrap(), ShredType::Data);
+                if let Some(shred) = prev_inserted_shreds.get(&key) {
+                    return Some(shred.clone());
+                }
                 if !erasure_meta.data.contains(&i) {
                     return None;
                 }
@@ -583,12 +588,17 @@ impl Blockstore {
     fn get_recovery_coding_shreds<'a>(
         slot: Slot,
         erasure_meta: &'a ErasureRecoverMeta,
+        prev_inserted_shreds: &'a HashMap<ShredId, Shred>,
         code_cf: &'a LedgerColumn<cf::ShredCode>,
     ) -> impl Iterator<Item = Shred> + 'a {
         erasure_meta
             .erasure_meta
             .coding_shreds_indices()
             .filter_map(move |i| {
+                let key = ShredId::new(slot, u32::try_from(i).unwrap(), ShredType::Code);
+                if let Some(shred) = prev_inserted_shreds.get(&key) {
+                    return Some(shred.clone());
+                }
                 if !erasure_meta.coding.contains(&i) {
                     return None;
                 }
@@ -605,19 +615,22 @@ impl Blockstore {
     fn recover_shreds(
         slot: u64,
         erasure_meta: &ErasureRecoverMeta,
+        prev_inserted_shreds: &HashMap<ShredId, Shred>,
         recovered_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
         reed_solomon_cache: &ReedSolomonCache,
     ) {
         // Find shreds for this erasure set and try recovery
-        let available_shreds: Vec<_> = Self::get_recovery_data_shreds(slot, erasure_meta, data_cf)
-            .chain(Self::get_recovery_coding_shreds(
-                slot,
-                erasure_meta,
-                code_cf,
-            ))
-            .collect();
+        let available_shreds: Vec<_> =
+            Self::get_recovery_data_shreds(slot, erasure_meta, prev_inserted_shreds, data_cf)
+                .chain(Self::get_recovery_coding_shreds(
+                    slot,
+                    erasure_meta,
+                    prev_inserted_shreds,
+                    code_cf,
+                ))
+                .collect();
         if let Ok(mut result) = shred::recover(available_shreds, reed_solomon_cache) {
             Self::submit_metrics(
                 slot,
@@ -702,6 +715,7 @@ impl Blockstore {
                     db,
                     esid.slot(),
                     &erasure_meta,
+                    &HashMap::new(),
                     reed_solomon_cache,
                     metrics,
                 ));
@@ -723,6 +737,7 @@ impl Blockstore {
         db: &Database,
         slot: u64,
         erasure_meta: &ErasureRecoverMeta,
+        prev_inserted_shreds: &HashMap<ShredId, Shred>,
         reed_solomon_cache: &ReedSolomonCache,
         metrics: &mut BlockstoreRecoveryMetrics,
     ) -> Vec<Shred> {
@@ -740,6 +755,7 @@ impl Blockstore {
                 Self::recover_shreds(
                     slot,
                     erasure_meta,
+                    prev_inserted_shreds,
                     &mut recovered_shreds,
                     &data_cf,
                     &code_cf,
@@ -971,6 +987,7 @@ impl Blockstore {
                         db,
                         esid.slot(),
                         &erasure_meta,
+                        &just_inserted_shreds,
                         reed_solomon_cache,
                         &mut BlockstoreRecoveryMetrics::default(),
                     ));
