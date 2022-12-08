@@ -7471,11 +7471,11 @@ impl AccountsDb {
         bank_hash_info.accounts_hash = accounts_hash;
     }
 
-    /// scan 'storage', return a vec of 'CacheHashDataFile', one per pass
+    /// scan 'storages', return a vec of 'CacheHashDataFile', one per pass
     fn scan_snapshot_stores_with_cache(
         &self,
         cache_hash_data: &CacheHashData,
-        storage: &SortedStorages,
+        storages: &SortedStorages,
         mut stats: &mut crate::accounts_hash::HashStats,
         bins: usize,
         bin_range: &Range<usize>,
@@ -7485,8 +7485,8 @@ impl AccountsDb {
         let bin_calculator = PubkeyBinCalculator24::new(bins);
         assert!(bin_range.start < bins && bin_range.end <= bins && bin_range.start < bin_range.end);
         let mut time = Measure::start("scan all accounts");
-        stats.num_snapshot_storage = storage.storage_count();
-        stats.num_slots = storage.slot_count();
+        stats.num_snapshot_storage = storages.storage_count();
+        stats.num_slots = storages.slot_count();
         let mismatch_found = Arc::new(AtomicU64::new(0));
         let range = bin_range.end - bin_range.start;
         let sort_time = Arc::new(AtomicU64::new(0));
@@ -7507,7 +7507,7 @@ impl AccountsDb {
         let result = self.scan_account_storage_no_bank(
             cache_hash_data,
             config,
-            storage,
+            storages,
             scanner,
             bin_range,
             stats,
