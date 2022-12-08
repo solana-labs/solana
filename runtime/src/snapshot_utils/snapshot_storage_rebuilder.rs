@@ -85,7 +85,7 @@ impl SnapshotStorageRebuilder {
             snapshot_storage_lengths,
             append_vec_files,
         )
-        .map_err(|err| get_io_error(&format!("Failed to rebuild snapshot storages: {err:?}")))?;
+        .map_err(|err| SnapshotError::IoWithSource(err, "rebuild snapshot storages"))?;
 
         Ok(RebuiltSnapshotStorage {
             snapshot_version,
