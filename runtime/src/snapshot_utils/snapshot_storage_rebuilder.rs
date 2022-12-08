@@ -235,7 +235,7 @@ impl SnapshotStorageRebuilder {
                     Err(err) => {
                         exit_sender
                             .send(Err(err))
-                            .expect("Failed to send error to exit_sender");
+                            .expect("sender should be connected");
                         return;
                     }
                 }
@@ -243,7 +243,7 @@ impl SnapshotStorageRebuilder {
 
             exit_sender
                 .send(Ok(()))
-                .expect("Failed to send success to exit_sender");
+                .expect("sender should be connected");
         })
     }
 
