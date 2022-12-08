@@ -493,6 +493,7 @@ mod test {
             index.coding_mut().insert(ix);
         }
 
+        let mut to_recover = 1;
         for &idx in data_indexes
             .clone()
             .collect::<Vec<_>>()
@@ -500,7 +501,8 @@ mod test {
         {
             index.data_mut().index.remove(&idx);
 
-            assert_eq!(e_meta.status(&index), CanRecover(_));
+            assert_eq!(e_meta.status(&index), CanRecover(to_recover));
+            to_recover += 1;
         }
 
         for ix in data_indexes {
