@@ -233,17 +233,17 @@ impl SnapshotStorageRebuilder {
                 match rebuilder.process_append_vec_file(path) {
                     Ok(_) => {}
                     Err(err) => {
-                        if let Err(err) = exit_sender.send(Err(err)) {
-                            error!("Failed to send error to exit_sender: {err:?}");
-                        }
+                        exit_sender
+                            .send(Err(err))
+                            .expect("Failed to send error to exit_sender");
                         return;
                     }
                 }
             }
 
-            if let Err(err) = exit_sender.send(Ok(())) {
-                error!("Failed to send success to exit_sender: {err:?}");
-            }
+            exit_sender
+                .send(Ok(()))
+                .expect("Failed to send success to exit_sender");
         })
     }
 
