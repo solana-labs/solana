@@ -1,13 +1,13 @@
 [package]
 name = "solana-ledger"
-version = "1.16.0"
 description = "Solana ledger"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-ledger"
-edition = "2021"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 assert_matches = "1.5.0"
@@ -71,8 +71,8 @@ features = ["lz4"]
 [dev-dependencies]
 bs58 = "0.4.0"
 matches = "0.1.9"
-solana-account-decoder = { path = "../account-decoder", version = "=1.16.0" }
-solana-logger = { path = "../logger", version = "=1.16.0" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.15.0" }
+solana-logger = { path = "../logger", version = "=1.15.0" }
 test-case = "2.2.2"
 
 [build-dependencies]

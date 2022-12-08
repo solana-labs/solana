@@ -1,18 +1,18 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-edition = "2021"
 name = "solana-geyser-plugin-interface"
 description = "The Solana Geyser plugin interface."
-version = "1.16.0"
-repository = "https://github.com/solana-labs/solana"
-license = "Apache-2.0"
-homepage = "https://solanalabs.com/"
 documentation = "https://docs.rs/solana-geyser-plugin-interface"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 log = "0.4.17"
-solana-sdk = { path = "../sdk", version = "=1.16.0" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.16.0" }
+solana-sdk = { path = "../sdk", version = "=1.15.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.15.0" }
 thiserror = "1.0.31"
 
 [package.metadata.docs.rs]

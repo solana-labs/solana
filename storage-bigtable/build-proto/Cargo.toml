@@ -1,13 +1,13 @@
 [package]
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
 description = "Blockchain, Rebuilt for Scale"
-edition = "2021"
-homepage = "https://solanalabs.com/"
-license = "Apache-2.0"
 name = "proto"
 publish = false
-repository = "https://github.com/solana-labs/solana"
-version = "1.16.0"
+version = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+edition = { workspace = true }
 
 [dependencies]
 tonic-build = "0.8.4"
