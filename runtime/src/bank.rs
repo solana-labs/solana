@@ -14791,6 +14791,7 @@ pub(crate) mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank0).unwrap());
         bank0.freeze();
         bank0.squash();
+        add_root_and_flush_write_cache(&bank0);
 
         let sizes = bank0
             .rc
