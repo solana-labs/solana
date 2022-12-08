@@ -43,7 +43,7 @@ operations: https://github.com/solana-labs/solana-program-library/tree/master/li
 To run the test: sync the repo and run:
 
 ```sh
-cargo test-bpf -- --nocapture --test-threads=1
+cargo test-sbf -- --nocapture --test-threads=1
 ```
 
 Recent results show the float operations take more instructions compared to
