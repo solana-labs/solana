@@ -884,6 +884,7 @@ impl Accounts {
         debug_verify: bool,
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
+        data_source: CalcAccountsHashDataSource,
     ) -> u64 {
         let is_startup = true;
         self.accounts_db
@@ -891,7 +892,7 @@ impl Accounts {
             .wait_for_complete();
         self.accounts_db
             .update_accounts_hash(
-                CalcAccountsHashDataSource::Storages,
+                data_source,
                 debug_verify,
                 slot,
                 ancestors,
