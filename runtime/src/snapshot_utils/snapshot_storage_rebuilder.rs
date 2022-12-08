@@ -84,7 +84,8 @@ impl SnapshotStorageRebuilder {
             next_append_vec_id,
             snapshot_storage_lengths,
             append_vec_files,
-        );
+        )
+        .map_err(|err| get_io_error(&format!("Failed to rebuild snapshot storages: {err:?}")))?;
 
         Ok(RebuiltSnapshotStorage {
             snapshot_version,
@@ -188,7 +189,7 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
-    ) -> AccountStorageMap {
+    ) -> Result<AccountStorageMap, std::io::Error> {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
             num_threads,
@@ -199,9 +200,7 @@ impl SnapshotStorageRebuilder {
         let thread_pool = rebuilder.build_thread_pool();
 
         // Synchronously process buffered append_vec_files
-        thread_pool.install(|| {
-            rebuilder.process_buffered_files(append_vec_files).unwrap();
-        });
+        thread_pool.install(|| rebuilder.process_buffered_files(append_vec_files))?;
 
         // Asynchronously spawn threads to process received append_vec_files
         let (exit_sender, exit_receiver) = unbounded();
@@ -211,8 +210,8 @@ impl SnapshotStorageRebuilder {
         drop(exit_sender); // drop otherwise loop below will never end
 
         // wait for asynchronous threads to complete
-        rebuilder.wait_for_completion(exit_receiver);
-        Arc::try_unwrap(rebuilder).unwrap().storage
+        rebuilder.wait_for_completion(exit_receiver)?;
+        Ok(Arc::try_unwrap(rebuilder).unwrap().storage)
     }
 
     /// Processes buffered append_vec_files
@@ -226,7 +225,7 @@ impl SnapshotStorageRebuilder {
     /// Spawn a single thread to process received append_vec_files
     fn spawn_receiver_thread(
         thread_pool: &ThreadPool,
-        exit_sender: Sender<()>,
+        exit_sender: Sender<Result<(), std::io::Error>>,
         rebuilder: Arc<SnapshotStorageRebuilder>,
     ) {
         thread_pool.spawn(move || {
@@ -234,12 +233,17 @@ impl SnapshotStorageRebuilder {
                 match rebuilder.process_append_vec_file(path) {
                     Ok(_) => {}
                     Err(err) => {
-                        error!("Error processing append_vec file: {err:?}");
-                        break;
+                        if let Err(err) = exit_sender.send(Err(err)) {
+                            error!("Failed to send error to exit_sender: {err:?}");
+                        }
+                        return;
                     }
                 }
             }
-            exit_sender.send(()).unwrap();
+
+            if let Err(err) = exit_sender.send(Ok(())) {
+                error!("Failed to send success to exit_sender: {err:?}");
+            }
         })
     }
 
@@ -312,15 +316,21 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Wait for the completion of the rebuilding threads
-    fn wait_for_completion(&self, exit_receiver: Receiver<()>) {
+    fn wait_for_completion(
+        &self,
+        exit_receiver: Receiver<Result<(), std::io::Error>>,
+    ) -> Result<(), std::io::Error> {
         let num_slots = self.snapshot_storage_lengths.len();
         let mut last_log_time = Instant::now();
         loop {
             select! {
-                recv(exit_receiver) -> maybe_thread_accounts_data_len => {
-                    match maybe_thread_accounts_data_len {
-                        Ok(_) => continue,
-                        Err(_) => break,
+                recv(exit_receiver) -> maybe_exit_signal => {
+                    match maybe_exit_signal {
+                        Ok(Ok(_)) => continue, // thread exited successfully
+                        Ok(Err(err)) => { // thread exited with error
+                            return Err(err);
+                        }
+                        Err(_) => break, // all threads have exited - channel disconnected
                     }
                 }
                 default(std::time::Duration::from_millis(100)) => {
@@ -334,6 +344,8 @@ impl SnapshotStorageRebuilder {
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Builds thread pool to rebuild with
