@@ -41,6 +41,17 @@ macro_rules! u64_align {
     };
 }
 
+/// size of the fixed sized fields in an append vec
+/// we need to add data len and align it to get the actual stored size
+pub const STORE_META_OVERHEAD: usize = 136;
+
+/// Returns the size this item will take to store plus possible alignment padding bytes before the next entry.
+/// fixed-size portion of per-account data written
+/// plus 'data_len', aligned to next boundary
+pub fn aligned_stored_size(data_len: usize) -> usize {
+    u64_align!(STORE_META_OVERHEAD + data_len)
+}
+
 pub const MAXIMUM_APPEND_VEC_FILE_SIZE: u64 = 16 * 1024 * 1024 * 1024; // 16 GiB
 
 pub type StoredMetaWriteVersion = u64;
@@ -738,6 +749,16 @@ pub mod tests {
         }
     }
 
+    static_assertions::const_assert_eq!(
+        STORE_META_OVERHEAD,
+        std::mem::size_of::<StoredMeta>()
+            + std::mem::size_of::<AccountMeta>()
+            + std::mem::size_of::<Hash>()
+    );
+
+    // Hash is [u8; 32], which has no alignment
+    static_assertions::assert_eq_align!(u64, StoredMeta, AccountMeta);
+
     #[test]
     #[should_panic(expected = "assertion failed: accounts.has_hash_and_write_version()")]
     fn test_storable_accounts_with_hashes_and_write_versions_new() {
@@ -999,10 +1020,9 @@ pub mod tests {
         assert_eq!(av.capacity(), sz64);
         assert_eq!(av.remaining_bytes(), sz64);
         let account = create_test_account(0);
-        let acct_size = 136;
         av.append_account_test(&account).unwrap();
         assert_eq!(av.capacity(), sz64);
-        assert_eq!(av.remaining_bytes(), sz64 - acct_size);
+        assert_eq!(av.remaining_bytes(), sz64 - (STORE_META_OVERHEAD as u64));
     }
 
     #[test]
