@@ -106,7 +106,7 @@ or
 
     if [[ ($unverified_owner_count -gt 0) ]]; then
       ((error_count++))
-      echo "error: including unverified owners"
+      echo "error: found unverified owner(s)"
     elif [[ ($verified_owner_count -le 0) ]]; then
       ((error_count++))
       echo "error: there are no verified owners"
