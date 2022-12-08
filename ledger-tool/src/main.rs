@@ -3018,6 +3018,7 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
+                        accounts_db_caching_enabled: true,
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
