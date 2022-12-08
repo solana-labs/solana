@@ -9,6 +9,7 @@ import {
 } from "@onsol/tldparser";
 import { DomainInfo } from "./name-service";
 import pLimit from "p-limit";
+import * as BufferLayout from "@solana/buffer-layout";
 
 export const hasANSDomainSyntax = (value: string) => {
   return value.length > 4 && value.split(".").length === 2;
@@ -25,14 +26,21 @@ export async function getANSDomainOwnerAndAddress(
     const owner = await getNameOwner(connection, derivedDomainKey.pubkey);
     return owner
       ? {
-          owner: owner.toString(),
-          address: derivedDomainKey.pubkey.toString(),
-        }
+        owner: owner.toString(),
+        address: derivedDomainKey.pubkey.toString(),
+      }
       : null;
   } catch {
     return null;
   }
 }
+
+const stringToBuffer = (str: string) =>
+  Buffer.from(Array.from(str.split(",")).map((i) => Number(i)));
+
+const tldLayout = BufferLayout.utf8(10, "tld");
+
+const domainLayout = BufferLayout.utf8(32, "domain");
 
 export const useUserANSDomains = (
   userAddress: PublicKey
@@ -76,28 +84,31 @@ export const useUserANSDomains = (
             // not found
             if (!domainParentNameAccount?.owner) return;
 
-            const tldRaw = await parser.getTldFromParentAccount(
+            const tldStringBuffer = await parser.getTldFromParentAccount(
               domainRecord?.parentName
             );
 
-            const domainRaw = await parser.reverseLookupNameAccount(
+            const domainStringBuffer = await parser.reverseLookupNameAccount(
               address,
               domainParentNameAccount?.owner
             );
             // domain not found or might be a subdomain.
-            if (!domainRaw) return;
+            if (!domainStringBuffer) return;
 
-            const tld = Buffer.from(
-              Array.from(tldRaw.split(",")).map((i) => Number(i))
-            ).toString();
+            // remove 0x00 bytes
+            const indexof00 = tldStringBuffer.indexOf(',0');
+            const tldStringBufferClean = tldStringBuffer.substring(0, indexof00);
 
-            const domain = Buffer.from(
-              Array.from(domainRaw?.split(",")).map((i) => Number(i))
+            // decodes strings from string buffers.
+            // a sentient bug. perhaps due to node version (?)
+            const tld = tldLayout.decode(
+              stringToBuffer(tldStringBufferClean)
             );
-
-            const indexof00 = tld.indexOf("\x00");
+            const domain = domainLayout.decode(
+              stringToBuffer(domainStringBuffer)
+            );
             userDomains.push({
-              name: `${domain}${tld.substring(0, indexof00)}`,
+              name: `${domain}${tld}`,
               address,
             });
           })
