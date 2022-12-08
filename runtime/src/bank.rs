@@ -1619,13 +1619,11 @@ impl Bank {
 
     // For testing only
     pub fn set_partitioned_rewards_enable(&mut self, enable: bool) {
-        let mut fea = (*self.feature_set).clone();
         if enable {
-            fea.activate(&enable_partitioned_epoch_reward::id(), 0)
+            self.activate_feature(&enable_partitioned_epoch_reward::id())
         } else {
-            fea.deactivate(&enable_partitioned_epoch_reward::id())
+            self.deactivate_feature(&enable_partitioned_epoch_reward::id())
         }
-        self.feature_set = Arc::new(fea);
     }
 
     pub fn get_reward_calculation_interval(&self) -> u64 {
@@ -1844,8 +1842,6 @@ impl Bank {
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
 
-        let enable_partitioned_rewards = new.partitioned_rewards_enabled();
-
         let (_, update_epoch_time) = measure!(
             {
                 if parent_epoch < new.epoch() {
@@ -1880,7 +1876,7 @@ impl Bank {
 
                     let mut metrics = RewardsMetrics::default();
                     let mut update_rewards_with_thread_pool_us = 0;
-                    if enable_partitioned_rewards {
+                    if new.partitioned_rewards_enabled() {
                         info!(
                             "set epoch calc start: {} {}",
                             parent.slot, parent.block_height
@@ -1974,7 +1970,7 @@ impl Bank {
 
                     assert!(new.epoch_schedule.slots_per_epoch > new.get_reward_interval());
 
-                    if enable_partitioned_rewards {
+                    if new.partitioned_rewards_enabled() {
                         if let Some((start_slot, start_height)) = new.epoch_reward_calc_start {
                             let height = new.block_height();
                             let credit_start =
@@ -2848,7 +2844,7 @@ impl Bank {
 
         let stake_history = self.stakes_cache.stakes().history().clone();
 
-        let (stake_rewards, vote_rewards_map) = self.compute_epoch_stake_rewards(
+        let (mut stake_rewards, vote_rewards_map) = self.compute_epoch_stake_rewards(
             stake_history,
             rewarded_epoch,
             rewards,
@@ -2869,7 +2865,13 @@ impl Bank {
             ("pre_capitalization", capitalization, i64),
         );
 
-        let vote_rewards = self.convert_to_vote_reward_vec(vote_rewards_map);
+        let mut vote_rewards = self.convert_to_vote_reward_vec(vote_rewards_map);
+
+        // sort the reward results by pubkey so that later on, the partition stores are consistent
+        // on different nodes.
+        stake_rewards.sort_by(|a, b| a.stake_pubkey.partial_cmp(&b.stake_pubkey).unwrap());
+        vote_rewards.sort_by(|a, b| a.vote_pubkey.partial_cmp(&b.vote_pubkey).unwrap());
+
         (stake_rewards, vote_rewards)
     }
 
@@ -3752,7 +3754,11 @@ impl Bank {
             hasher.update(hash.as_ref());
         }
         let result = crate::accounts_db::AccountsDb::to_hash(hasher);
-        info!("rewards_calc_request_signature: {}", result);
+        info!(
+            "rewards_calc_request_signature: {}, slot {}",
+            result,
+            self.slot()
+        );
         result
     }
 
