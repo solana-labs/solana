@@ -13752,7 +13752,8 @@ pub mod tests {
     fn test_shrink_candidate_slots() {
         solana_logger::setup();
 
-        let accounts = AccountsDb::new_single_for_tests();
+        let mut accounts = AccountsDb::new_single_for_tests();
+        accounts.caching_enabled = true;
 
         let pubkey_count = 30000;
         let pubkeys: Vec<_> = (0..pubkey_count)
@@ -13772,7 +13773,8 @@ pub mod tests {
             accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
         }
         let shrink_slot = current_slot;
-        accounts.add_root(current_slot);
+        accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
 
         current_slot += 1;
         let pubkey_count_after_shrink = 25000;
@@ -13781,7 +13783,8 @@ pub mod tests {
         for pubkey in updated_pubkeys {
             accounts.store_for_tests(current_slot, &[(pubkey, &account)]);
         }
-        accounts.add_root(current_slot);
+        accounts.get_accounts_delta_hash(current_slot);
+        accounts.add_root_and_flush_write_cache(current_slot);
         accounts.clean_accounts_for_tests();
 
         assert_eq!(
@@ -13789,8 +13792,10 @@ pub mod tests {
             accounts.all_account_count_in_append_vec(shrink_slot)
         );
 
-        // Only, try to shrink stale slots, nothing happens because 90/100
+        // Only, try to shrink stale slots, nothing happens because shrink ratio
         // is not small enough to do a shrink
+        // Note this shrink ratio had to change because we are WAY over-allocating append vecs when we flush the write cache at the moment.
+        accounts.shrink_ratio = AccountShrinkThreshold::TotalSpace { shrink_ratio: 0.4 };
         accounts.shrink_candidate_slots();
         assert_eq!(
             pubkey_count,
