@@ -1279,6 +1279,10 @@ impl StakeReward {
 pub struct VoteReward {
     pub vote_pubkey: Pubkey,
     pub vote_reward_info: Option<RewardInfo>,
+
+    // vote_account should only be used if the calculation and credit of the rewards are happening
+    // on the same slot. For partitioned rewards, in which the calculation and credit are happening
+    // on different slots, vote_account is stale and should not be used.
     pub vote_account: Option<AccountSharedData>,
 }
 
@@ -3455,12 +3459,33 @@ impl Bank {
         let mut c = 0;
         let mut total: i64 = 0;
         for vote_reward in vote_account_rewards.iter().take(end).skip(begin) {
-            if let Some(vote_account) = &vote_reward.vote_account {
-                self.store_account(&vote_reward.vote_pubkey, vote_account);
-                c += 1;
-            }
-            if let Some(vote_reward_info) = &vote_reward.vote_reward_info {
-                total += vote_reward_info.lamports;
+            if let Some(info) = &vote_reward.vote_reward_info {
+                let vote_pubkey = vote_reward.vote_pubkey;
+                let vote_reward = info.lamports;
+
+                // Because vote_account may have been updated during the reward calculation
+                // interval, the cached vote_account inside `VoteReward` is obsolete. Here, we have
+                // to reload the vote account and add the vote reward to the current account.
+                if let Some(mut vote_account) = self.get_account_with_fixed_root(&vote_pubkey) {
+                    if let Err(err) =
+                        vote_account.checked_add_lamports(vote_reward.try_into().unwrap())
+                    {
+                        debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
+                    } else {
+                        info!(
+                            "store_haha vote {}, {}, {}, vote_reward={:?}",
+                            self.slot, n, partition_index, &vote_reward
+                        );
+
+                        let v = vote_state::from(&vote_account).unwrap();
+                        info!("store_haha vote {} {:?}", vote_pubkey, v);
+                        self.store_account(&vote_pubkey, &vote_account);
+                        total += vote_reward;
+                        c += 1;
+                    }
+                } else {
+                    debug!("vote account not found in accounts_db for {}", vote_pubkey);
+                }
             }
         }
         (c, total)

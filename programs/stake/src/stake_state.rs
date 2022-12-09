@@ -261,7 +261,6 @@ fn calculate_stake_points_and_credits(
         new_vote_state.credits()
     };
 
-    println!("hoho credit get {} {}", credits_in_stake, credits_in_vote);
     // if there is no newer credits since observed, return no point
     if credits_in_vote <= credits_in_stake {
         if credits_auto_rewind && credits_in_vote < credits_in_stake {
