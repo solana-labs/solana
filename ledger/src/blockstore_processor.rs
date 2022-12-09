@@ -206,7 +206,7 @@ struct ExecuteBatchesInternalMetrics {
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
+    entry_callback: Option<&ProcessEntryCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     log_messages_bytes_limit: Option<usize>,
@@ -302,7 +302,7 @@ fn rebatch_transactions<'a>(
 fn execute_batches(
     bank: &Arc<Bank>,
     batches: &[TransactionBatchWithIndexes],
-    entry_callback: Option<&ProcessCallback>,
+    entry_callback: Option<&ProcessEntryCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -445,7 +445,7 @@ fn process_entries_with_callback(
     bank: &Arc<Bank>,
     entries: &mut [ReplayEntry],
     randomize: bool,
-    entry_callback: Option<&ProcessCallback>,
+    entry_callback: Option<&ProcessEntryCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
@@ -590,14 +590,14 @@ pub enum BlockstoreProcessorError {
 }
 
 /// Callback for accessing bank state while processing the blockstore
-pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
+pub type ProcessEntryCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
-    pub entry_callback: Option<ProcessCallback>,
+    pub entry_callback: Option<ProcessEntryCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -1019,7 +1019,7 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
+    entry_callback: Option<&ProcessEntryCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
@@ -1065,7 +1065,7 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    entry_callback: Option<&ProcessCallback>,
+    entry_callback: Option<&ProcessEntryCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
