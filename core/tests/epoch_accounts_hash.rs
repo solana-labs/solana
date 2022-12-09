@@ -453,7 +453,6 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 None,
                 None,
                 AccountSecondaryIndexes::default(),
-                false,
                 None,
                 AccountShrinkThreshold::default(),
                 true,

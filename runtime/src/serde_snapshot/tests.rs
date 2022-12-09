@@ -609,7 +609,6 @@ fn test_extra_fields_full_snapshot_archive() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
