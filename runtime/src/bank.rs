@@ -1154,13 +1154,6 @@ pub struct BankTestConfig {
     pub accounts_db_caching_enabled: bool,
 }
 
-pub fn bank_test_config_caching_enabled() -> BankTestConfig {
-    BankTestConfig {
-        accounts_db_caching_enabled: true,
-        ..BankTestConfig::default()
-    }
-}
-
 #[derive(Debug)]
 struct PrevEpochInflationRewards {
     validator_rewards: u64,
@@ -10471,7 +10464,7 @@ pub(crate) mod tests {
             let amount = genesis_config.rent.minimum_balance(0);
             let parent = Arc::new(Bank::new_for_tests_with_config(
                 &genesis_config,
-                bank_test_config_caching_enabled(),
+                BankTestConfig::default(),
             ));
             let mut bank = parent;
             for _ in 0..10 {
@@ -12053,7 +12046,7 @@ pub(crate) mod tests {
             activate_all_features(&mut genesis_config);
             let bank1 = Arc::new(Bank::new_for_tests_with_config(
                 &genesis_config,
-                bank_test_config_caching_enabled(),
+                BankTestConfig::default(),
             ));
             if pass == 0 {
                 add_root_and_flush_write_cache(&bank1);
@@ -15301,7 +15294,7 @@ pub(crate) mod tests {
             let bank = Arc::new(Bank::new_from_parent(
                 &Arc::new(Bank::new_for_tests_with_config(
                     &genesis_config,
-                    bank_test_config_caching_enabled(),
+                    BankTestConfig::default(),
                 )),
                 &Pubkey::default(),
                 slot,
@@ -15344,10 +15337,7 @@ pub(crate) mod tests {
         // and then want to continue modifying the bank
         for pass in 0..4 {
             let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-            let bank = Bank::new_for_tests_with_config(
-                &genesis_config,
-                bank_test_config_caching_enabled(),
-            );
+            let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
             let program_id = solana_sdk::pubkey::new_rand();
 
             bank.add_precompiled_account(&program_id);
@@ -15381,10 +15371,7 @@ pub(crate) mod tests {
     fn test_add_precompiled_account_squatted_while_not_replacing() {
         for pass in 0..3 {
             let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-            let bank = Bank::new_for_tests_with_config(
-                &genesis_config,
-                bank_test_config_caching_enabled(),
-            );
+            let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
             let program_id = solana_sdk::pubkey::new_rand();
 
             // someone managed to squat at program_id!
