@@ -157,14 +157,13 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
+            true,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
@@ -1579,7 +1578,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         for ka in ka.iter() {
@@ -2171,7 +2169,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2199,7 +2196,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2231,7 +2227,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2263,7 +2258,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2309,7 +2303,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2603,7 +2596,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -2635,7 +2627,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.bank_hash_info_at(1, &Rewrites::default());
@@ -2647,7 +2638,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2672,7 +2662,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -2738,7 +2727,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2848,7 +2836,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2934,7 +2921,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -2997,7 +2983,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         accounts.store_slow_uncached(0, &keypair0.pubkey(), &account0);
@@ -3159,7 +3144,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         {
@@ -3215,7 +3199,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut old_pubkey = Pubkey::default();
@@ -3268,7 +3251,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -3295,7 +3277,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut account_overrides = AccountOverrides::default();
@@ -3642,7 +3623,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3756,7 +3736,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let txs = vec![tx];
@@ -3798,7 +3777,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
 
@@ -4107,7 +4085,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
@@ -4190,7 +4167,6 @@ mod tests {
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         let mut error_counters = TransactionErrorMetrics::default();
