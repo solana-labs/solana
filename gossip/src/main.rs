@@ -211,7 +211,7 @@ fn process_spy_results(
     }
 }
 
-fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std::io::Result<()> {
+fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace, use_quic: bool) -> std::io::Result<()> {
     let num_nodes_exactly = matches
         .value_of("num_nodes_exactly")
         .map(|num| num.to_string().parse().unwrap());
@@ -254,7 +254,8 @@ fn process_spy(matches: &ArgMatches, socket_addr_space: SocketAddrSpace) -> std:
         Some(&gossip_addr), // my_gossip_addr
         shred_version,
         socket_addr_space,
-        staked_nodes
+        staked_nodes,
+        use_quic,
     )?;
 
     process_spy_results(timeout, validators, num_nodes, num_nodes_exactly, pubkey);
@@ -274,6 +275,7 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
 fn process_rpc_url(
     matches: &ArgMatches,
     socket_addr_space: SocketAddrSpace,
+    use_quic: bool
 ) -> std::io::Result<()> {
     let any = matches.is_present("any");
     let all = matches.is_present("all");
@@ -291,7 +293,8 @@ fn process_rpc_url(
         None,                     // my_gossip_addr
         shred_version,
         socket_addr_space,
-        staked_nodes
+        staked_nodes,
+        use_quic
     )?;
 
     let rpc_addrs: Vec<_> = validators
@@ -328,10 +331,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
     match matches.subcommand() {
         ("spy", Some(matches)) => {
-            process_spy(matches, socket_addr_space)?;
+            process_spy(matches, socket_addr_space, false)?;
         }
         ("rpc-url", Some(matches)) => {
-            process_rpc_url(matches, socket_addr_space)?;
+            process_rpc_url(matches, socket_addr_space, false)?;
         }
         _ => unreachable!(),
     }

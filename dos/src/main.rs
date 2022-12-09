@@ -748,7 +748,8 @@ fn main() {
             None,                              // my_gossip_addr
             0,                                 // my_shred_version
             socket_addr_space,
-            staked_nodes
+            staked_nodes,
+            false
         )
         .unwrap_or_else(|err| {
             eprintln!(

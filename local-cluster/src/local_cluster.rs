@@ -349,7 +349,8 @@ impl LocalCluster {
             &cluster.entry_point_info.gossip,
             config.node_stakes.len() + config.num_listeners as usize,
             socket_addr_space,
-            staked_nodes.clone()
+            staked_nodes.clone(),
+            config.tpu_use_quic
         )
         .unwrap();
 
@@ -357,7 +358,8 @@ impl LocalCluster {
             &cluster.entry_point_info.gossip,
             config.node_stakes.len(),
             socket_addr_space,
-            staked_nodes
+            staked_nodes,
+            config.tpu_use_quic
         )
         .unwrap();
 
@@ -540,7 +542,8 @@ impl LocalCluster {
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
             socket_addr_space,
-            staked_nodes
+            staked_nodes,
+            false
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());
@@ -572,7 +575,8 @@ impl LocalCluster {
             &alive_node_contact_infos[0].gossip,
             alive_node_contact_infos.len(),
             socket_addr_space,
-            staked_nodes
+            staked_nodes,
+            false
         )
         .unwrap();
         info!("{} discovered {} nodes", test_name, cluster_nodes.len());

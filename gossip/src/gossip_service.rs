@@ -136,6 +136,7 @@ pub fn discover_cluster(
     num_nodes: usize,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
+    use_quic: bool
 ) -> std::io::Result<Vec<ContactInfo>> {
     const DISCOVER_CLUSTER_TIMEOUT: Duration = Duration::from_secs(120);
     let (_all_peers, validators) = discover(
@@ -148,7 +149,8 @@ pub fn discover_cluster(
         None, // my_gossip_addr
         0,    // my_shred_version
         socket_addr_space,
-        staked_nodes
+        staked_nodes,
+        use_quic
     )?;
     Ok(validators)
 }
@@ -164,6 +166,7 @@ pub fn discover(
     my_shred_version: u16,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
+    use_quic: bool
 ) -> std::io::Result<(
     Vec<ContactInfo>, // all gossip peers
     Vec<ContactInfo>, // tvu peers (validators)
@@ -178,7 +181,8 @@ pub fn discover(
         my_shred_version,
         true, // should_check_duplicate_instance,
         socket_addr_space,
-        staked_nodes
+        staked_nodes,
+        use_quic
     );
 
     let id = spy_ref.id();
@@ -335,6 +339,7 @@ pub fn make_gossip_node(
     should_check_duplicate_instance: bool,
     socket_addr_space: SocketAddrSpace,
     staked_nodes: Arc<RwLock<StakedNodes>>,
+    use_quic: bool
 ) -> (GossipService, Option<TcpListener>, Arc<ClusterInfo>) {
     let keypair = Arc::new(keypair);
     let (node, gossip_socket, ip_echo) = if let Some(gossip_addr) = gossip_addr {
@@ -355,7 +360,7 @@ pub fn make_gossip_node(
         should_check_duplicate_instance,
         None,
         exit,
-        false,
+        use_quic,
         keypair,
         staked_nodes
     );
@@ -391,7 +396,7 @@ mod tests {
             None,
             &exit,
             //todo: fix
-            true,
+            false,
             //keypair
             //staked_nodes
         );

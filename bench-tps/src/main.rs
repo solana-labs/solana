@@ -61,7 +61,7 @@ fn create_client(
             } else {
                 let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
                 let nodes =
-                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified, staked_nodes)
+                    discover_cluster(entrypoint_addr, num_nodes, SocketAddrSpace::Unspecified, staked_nodes, use_quic)
                         .unwrap_or_else(|err| {
                             eprintln!("Failed to discover {num_nodes} nodes: {err:?}");
                             exit(1);

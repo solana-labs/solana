@@ -847,7 +847,7 @@ impl TestValidator {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
-        discover_cluster(&gossip, 1, socket_addr_space, staked_nodes)
+        discover_cluster(&gossip, 1, socket_addr_space, staked_nodes, DEFAULT_TPU_USE_QUIC)
             .map_err(|err| format!("TestValidator startup failed: {:?}", err))?;
 
         let test_validator = TestValidator {
