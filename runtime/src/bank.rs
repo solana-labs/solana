@@ -7430,22 +7430,14 @@ impl Bank {
         self.rc.accounts.accounts_db.print_accounts_stats("");
     }
 
+    /// This is part of the code path executed when the write cache is disabled.
+    /// It is no longer possible to disable the write cache.
     pub fn process_stale_slot_with_budget(
         &self,
-        mut consumed_budget: usize,
-        budget_recovery_delta: usize,
+        mut _consumed_budget: usize,
+        _budget_recovery_delta: usize,
     ) -> usize {
-        if consumed_budget == 0 {
-            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot_v1();
-            if shrunken_account_count > 0 {
-                datapoint_info!(
-                    "stale_slot_shrink",
-                    ("accounts", shrunken_account_count, i64)
-                );
-                consumed_budget += shrunken_account_count;
-            }
-        }
-        consumed_budget.saturating_sub(budget_recovery_delta)
+        unimplemented!("");
     }
 
     pub fn bank_tranaction_count_fix_enabled(&self) -> bool {
@@ -14959,6 +14951,8 @@ pub(crate) mod tests {
         assert_eq!(alive_counts, vec![11, 1, 7]);
     }
 
+    // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
+    #[ignore]
     #[test]
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
