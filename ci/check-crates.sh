@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 # input:
-# 	env:
-#  	 	- CRATE_TOKEN
-#   	- COMMIT_RANGE
+#   env:
+#     - CRATE_TOKEN
+#     - COMMIT_RANGE
 
 if [[ -z $COMMIT_RANGE ]]; then
   echo "COMMIT_RANGE should be provided"
