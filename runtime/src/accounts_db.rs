@@ -3067,9 +3067,6 @@ impl AccountsDb {
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root_inclusive = self.max_clean_root(max_clean_root_inclusive);
 
-        // hold a lock to prevent slot shrinking from running because it might modify some rooted
-        // slot storages which can not happen as long as we're cleaning accounts because we're also
-        // modifying the rooted slot storages!
         let mut candidates_v1 = self.shrink_candidate_slots_v1.lock().unwrap();
         self.report_store_stats();
 
