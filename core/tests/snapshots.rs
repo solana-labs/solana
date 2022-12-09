@@ -252,7 +252,7 @@ fn run_bank_forks_snapshot_n<F>(
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
-            snapshot_request_handler.handle_snapshot_requests(true, false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(false, 0, &mut None);
         }
     }
 
@@ -785,7 +785,6 @@ fn test_bank_forks_incremental_snapshot(
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
-                true,
                 false,
                 0,
                 &mut last_full_snapshot_slot,
