@@ -74,10 +74,8 @@ pub use archive_format::*;
 pub enum SnapshotFrom {
     /// Build from the snapshot archive
     Archive,
-    /// Build directly from the files in the snapshots/ and anccounts/
+    /// Build directly from the files in the snapshots/ and accounts/
     File,
-    /// No snapshot.  Genesis should be used
-    None,
 }
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
@@ -213,7 +211,7 @@ struct UnarchivedSnapshot {
 struct UnpackedSnapshotsDirAndVersion {
     unpacked_snapshots_dir: PathBuf,
     snapshot_version: SnapshotVersion,
-    snapshot_from: SnapshotFrom,
+    snapshot_from: Option<SnapshotFrom>,
     snapshot_file_path: PathBuf,
     status_cache_file_path: PathBuf,
 }
@@ -1490,8 +1488,6 @@ pub fn bank_from_latest_snapshot_files(
     FullSnapshotArchiveInfo,
     Option<IncrementalSnapshotArchiveInfo>,
 )> {
-    // return Err(SnapshotError::NoSnapshotSlotDir);
-
     let full_snapshot_file_info = get_highest_full_snapshot_file_info(bank_snapshots_dir.as_ref())?;
 
     let incremental_snapshot_file_info = get_highest_incremental_snapshot_file_info(
@@ -1686,7 +1682,7 @@ where
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id,
-            SnapshotFrom::Archive,
+            Some(SnapshotFrom::Archive),
         )?,
         measure_name
     );
@@ -1703,7 +1699,7 @@ where
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir,
             snapshot_version,
-            snapshot_from: SnapshotFrom::Archive,
+            snapshot_from: Some(SnapshotFrom::Archive),
             snapshot_file_path: PathBuf::new(), // unused in archive mode
             status_cache_file_path,
         },
@@ -1738,7 +1734,6 @@ fn streaming_snapshot_and_account_files<P>(
 
 /// Perform the common tasks when deserialize a snapshot.  Handles reading snapshot file, reading the version file,
 /// and then returning those fields plus the rebuilt storage
-//fn unarchive_snapshot<P, Q>(
 fn build_storage_from_snapshot_file<Q>(
     bank_snapshots_dir: Q,
     snapshot_file_path: Q,
@@ -1796,7 +1791,7 @@ where
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id,
-            SnapshotFrom::File,
+            Some(SnapshotFrom::File),
         )?,
         measure_name
     );
@@ -1812,7 +1807,7 @@ where
         unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion {
             unpacked_snapshots_dir: bank_snapshots_dir.as_ref().to_path_buf(),
             snapshot_version,
-            snapshot_from: SnapshotFrom::File,
+            snapshot_from: Some(SnapshotFrom::File),
             snapshot_file_path: snapshot_file_path.as_ref().to_path_buf(),
             status_cache_file_path: snapshot_file_path
                 .as_ref()
@@ -2196,7 +2191,7 @@ pub fn get_highest_incremental_snapshot_archive_info(
     incremental_snapshot_archives.into_iter().rev().next()
 }
 
-pub fn get_highest_full_snapshot_file_info(
+fn get_highest_full_snapshot_file_info(
     snapshots_dir: impl AsRef<Path>,
 ) -> Result<FullSnapshotArchiveInfo> {
     let (slot, path) = get_highest_full_snapshot_slot_and_path(snapshots_dir.as_ref())?;
@@ -2381,7 +2376,7 @@ fn verify_unpacked_snapshots_dir_and_version(
 
     let snapshot_version = unpacked_snapshots_dir_and_version.snapshot_version;
     let root_paths = match unpacked_snapshots_dir_and_version.snapshot_from {
-        SnapshotFrom::Archive => {
+        Some(SnapshotFrom::Archive) => {
             let mut bank_snapshots =
                 get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
             if bank_snapshots.len() > 1 {
@@ -2391,7 +2386,7 @@ fn verify_unpacked_snapshots_dir_and_version(
                 .pop()
                 .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?
         }
-        SnapshotFrom::File => {
+        Some(SnapshotFrom::File) => {
             let snapshot_file_path = &unpacked_snapshots_dir_and_version.snapshot_file_path;
             let (slot, _) =
                 parse_snapshot_filename(snapshot_file_path.file_name().unwrap().to_str().unwrap())
@@ -2412,7 +2407,7 @@ fn verify_unpacked_snapshots_dir_and_version(
                     .join(SNAPSHOT_STATUS_CACHE_FILENAME),
             }
         }
-        SnapshotFrom::None => {
+        None => {
             error!("Should never reach here.");
             return Err(SnapshotError::InvalidOperation);
         }
@@ -2955,7 +2950,6 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
-    // let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new_for_snapshot(
         AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
             incremental_snapshot_base_slot,

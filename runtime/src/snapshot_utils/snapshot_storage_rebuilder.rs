@@ -61,7 +61,7 @@ pub(crate) struct SnapshotStorageRebuilder {
     /// Tracks the number of collisions in AppendVecId
     num_collisions: AtomicUsize,
     /// Rebuild from the snapshot files or archives
-    snapshot_from: SnapshotFrom,
+    snapshot_from: Option<SnapshotFrom>,
 }
 
 impl SnapshotStorageRebuilder {
@@ -70,7 +70,7 @@ impl SnapshotStorageRebuilder {
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-        snapshot_from: SnapshotFrom,
+        snapshot_from: Option<SnapshotFrom>,
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
@@ -83,7 +83,7 @@ impl SnapshotStorageRebuilder {
         let snapshot_storage_lengths =
             Self::process_snapshot_file(snapshot_version, snapshot_file_path)?;
 
-        match Self::spawn_rebuilder_threads(
+        let account_storage_map = Self::spawn_rebuilder_threads(
             file_receiver,
             num_threads,
             next_append_vec_id,
@@ -106,7 +106,7 @@ impl SnapshotStorageRebuilder {
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
-        snapshot_from: SnapshotFrom,
+        snapshot_from: Option<SnapshotFrom>,
     ) -> Self {
         let storage = DashMap::with_capacity(snapshot_storage_lengths.len());
         let storage_paths: DashMap<_, _> = snapshot_storage_lengths
@@ -265,7 +265,7 @@ impl SnapshotStorageRebuilder {
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), SnapshotError> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
-            if self.snapshot_from == SnapshotFrom::File {
+            if self.snapshot_from == Some(SnapshotFrom::File) {
                 if let Some(appendvec_entry) = parse_appendvec_filename(&filename) {
                     let (_slot, appendvec_id) = appendvec_entry;
                     let next_appendvec_id = appendvec_id + 1;
@@ -322,7 +322,7 @@ impl SnapshotStorageRebuilder {
                     .unwrap();
 
                 let storage_entry = match &self.snapshot_from {
-                    SnapshotFrom::Archive => remap_and_reconstruct_single_storage(
+                    Some(SnapshotFrom::Archive) => remap_and_reconstruct_single_storage(
                         slot,
                         old_append_vec_id,
                         current_len,
@@ -330,13 +330,13 @@ impl SnapshotStorageRebuilder {
                         &self.next_append_vec_id,
                         &self.num_collisions,
                     )?,
-                    SnapshotFrom::File => reconstruct_single_storage(
+                    Some(SnapshotFrom::File) => reconstruct_single_storage(
                         &slot,
                         path.as_path(),
                         current_len,
                         old_append_vec_id as u32,
                     )?,
-                    SnapshotFrom::None => {return Err(std::io::Error::new(
+                    None => {return Err(std::io::Error::new(
                         std::io::ErrorKind::Other,
                             "Error does not support none type in this function.  should not be here".to_string(),
                     ));}

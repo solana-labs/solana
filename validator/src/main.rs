@@ -1287,9 +1287,9 @@ pub fn main() {
         };
 
     let snapshot_from = if matches.is_present("snapshot_from_file") {
-        SnapshotFrom::File
+        Some(SnapshotFrom::File)
     } else {
-        SnapshotFrom::Archive
+        Some(SnapshotFrom::Archive)
     };
     validator_config.snapshot_config = Some(SnapshotConfig {
         usage: if full_snapshot_archive_interval_slots == Slot::MAX {

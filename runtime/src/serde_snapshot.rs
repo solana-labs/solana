@@ -728,7 +728,7 @@ where
     let next_append_vec_id = next_append_vec_id.load(Ordering::Acquire);
     assert!(
         next_append_vec_id >= 1,
-        "The value {} would cuase the error of substraction overflow",
+        "The value {} would cause the error of subtraction overflow",
         next_append_vec_id
     );
     let max_append_vec_id = next_append_vec_id - 1;

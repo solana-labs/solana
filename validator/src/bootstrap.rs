@@ -411,7 +411,7 @@ pub fn attempt_download_genesis_and_snapshot(
     info!("RPC node root slot: {}", rpc_client_slot);
 
     let snapshot_from_file = if let Some(snapshot_config) = &validator_config.snapshot_config {
-        snapshot_config.snapshot_from == SnapshotFrom::File
+        snapshot_config.snapshot_from == Some(SnapshotFrom::File)
     } else {
         false
     };

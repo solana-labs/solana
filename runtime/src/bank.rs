@@ -3185,7 +3185,6 @@ impl Bank {
     }
 
     pub fn freeze(&self) {
-        debug!("freeze slot {}", self.slot);
         let builtins = builtins::get();
         if !self.check_builtins_exist(&builtins) {
             warn!("builtins missing when freezing the bank");
@@ -6400,15 +6399,13 @@ impl Bank {
 
     ///  Check builtins all exist.
     pub fn check_builtins_exist(&self, builtins: &Builtins) -> bool {
-        let mut all_exist = true;
-        for builtin in &builtins.genesis_builtins {
-            if let Some(_account) = self.get_account_with_fixed_root(&builtin.id) {
-            } else {
-                all_exist = false;
-                break;
-            }
-        }
-        all_exist
+        builtins
+            .genesis_builtins
+            .iter()
+            .all(|b| self.get_account_with_fixed_root(&b.id).is_some())
+            && get_precompiles()
+                .iter()
+                .all(|p| self.get_account_with_fixed_root(&p.program_id).is_some())
     }
 
     pub fn add_builtins(&mut self, builtins: &Builtins) {

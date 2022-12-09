@@ -1309,7 +1309,7 @@ fn main() {
     let snapshot_from_file = Arg::with_name("snapshot_from_file")
         .long("snapshot-from-file")
         .takes_value(false)
-        .help("construct initial bank state from files instead of archives");
+        .help("Construct initial bank state from files instead of archives");
     let no_bpf_jit_arg = Arg::with_name("no_bpf_jit")
         .long("no-bpf-jit")
         .takes_value(false)

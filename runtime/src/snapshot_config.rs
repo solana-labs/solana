@@ -45,7 +45,7 @@ pub struct SnapshotConfig {
     pub packager_thread_niceness_adj: i8,
 
     /// The snapshot source
-    pub snapshot_from: SnapshotFrom,
+    pub snapshot_from: Option<SnapshotFrom>,
 }
 
 impl Default for SnapshotConfig {
@@ -67,7 +67,7 @@ impl Default for SnapshotConfig {
                 snapshot_utils::DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             accounts_hash_debug_verify: false,
             packager_thread_niceness_adj: 0,
-            snapshot_from: SnapshotFrom::Archive,
+            snapshot_from: Some(SnapshotFrom::Archive),
         }
     }
 }
@@ -86,7 +86,7 @@ impl SnapshotConfig {
     pub fn new_from_file(bank_snapshots_dir: PathBuf) -> Self {
         Self {
             bank_snapshots_dir,
-            snapshot_from: SnapshotFrom::File,
+            snapshot_from: Some(SnapshotFrom::File),
             archive_format: ArchiveFormat::None,
             // The archive related fields are not used.  The clean way is to make all the related
             // fields optional, set them to None in the from_file case.  But that would require

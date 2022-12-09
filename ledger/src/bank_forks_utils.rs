@@ -97,7 +97,7 @@ pub fn load_bank_forks(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
         );
-        if snapshot_config.snapshot_from == SnapshotFrom::File {
+        if snapshot_config.snapshot_from == Some(SnapshotFrom::File) {
             true
         } else {
             let _ = fs::remove_dir_all(&snapshot_config.bank_snapshots_dir);
@@ -206,7 +206,7 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let file_ret = if snapshot_config.snapshot_from == SnapshotFrom::File {
+    let file_ret = if snapshot_config.snapshot_from == Some(SnapshotFrom::File) {
         match snapshot_utils::bank_from_latest_snapshot_files(
             &snapshot_config.bank_snapshots_dir,
             &account_paths,
