@@ -585,7 +585,7 @@ impl ThreadLocalUnprocessedPackets {
                 .chunks(batch_size)
                 .into_iter()
                 .flat_map(|packets_to_process| {
-                    // Only prcoess packets not yet forwarded
+                    // Only process packets not yet forwarded
                     let (forwarded_packets, packets_to_forward, is_tracer_packet) = self
                         .prepare_packets_to_forward(
                             packets_to_process,
