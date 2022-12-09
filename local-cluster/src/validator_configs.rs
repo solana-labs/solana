@@ -48,7 +48,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         no_os_disk_stats_reporting: config.no_os_disk_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: config.accounts_db_caching_enabled,
         warp_slot: config.warp_slot,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
