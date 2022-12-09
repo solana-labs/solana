@@ -172,7 +172,6 @@ fn restore_from_snapshot(
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         accounts_db::AccountShrinkThreshold::default(),
         check_hash_calculation,
