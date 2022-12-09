@@ -594,8 +594,6 @@ pub fn parse_program_subcommand(
                 signers.push(new_upgrade_authority_signer);
             }
 
-            println!("{:?}", new_upgrade_authority);
-            println!("{:?}", signers);
             let signer_info =
                 default_signer.generate_unique_signers(signers, matches, wallet_manager)?;
 
