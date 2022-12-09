@@ -109,7 +109,6 @@ mod tests {
         check_packets(receiver, num_bytes, num_expected_packets);
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
-        info!("Passed test_quic_client_multiple_writes");
     }
 
     #[tokio::test]
