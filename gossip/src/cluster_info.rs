@@ -1144,6 +1144,25 @@ impl ClusterInfo {
         txs
     }
 
+    /// Returns entries inserted since the given cursor.
+    pub fn get_entries(&self, cursor: &mut Cursor) -> Vec<CrdsData> {
+        let entries: Vec<CrdsData> = self
+            .time_gossip_read_lock("get_entries", &self.stats.get_entries)
+            .get_entries(cursor)
+            .filter_map(|entry| {
+                if let CrdsData::DuplicateShred(..) = entry.value.data {
+                    Some(entry.value.data.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.stats
+            .get_entries_count
+            .add_relaxed(entries.len() as u64);
+        entries
+    }
+
     /// Returns votes and the associated labels inserted since the given cursor.
     pub fn get_votes_with_labels(
         &self,
@@ -4715,5 +4734,62 @@ RPC Enabled Nodes: 1"#;
             epoch_duration.as_millis() as u64,
             DEFAULT_SLOTS_PER_EPOCH * DEFAULT_MS_PER_SLOT // 48 hours
         );
+    }
+
+    #[test]
+    fn test_get_entries() {
+        let node = Node::new_localhost();
+        let host1_key = Arc::new(Keypair::new());
+        let cluster_info = Arc::new(ClusterInfo::new(
+            node.info,
+            host1_key.clone(),
+            SocketAddrSpace::Unspecified,
+        ));
+        let mut cursor = Cursor::default();
+        assert!(cluster_info.get_entries(&mut cursor).is_empty());
+
+        let mut rng = rand::thread_rng();
+        let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = 353;
+        let leader = Arc::new(Keypair::new());
+        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        assert!(cluster_info.push_duplicate_shred(&shred1, shred2.payload()).is_ok());
+        cluster_info.flush_push_queue();
+        let entries = cluster_info.get_entries(&mut cursor);
+        // One duplicate shred proof is split into 3 chunks.
+        assert_eq!(3, entries.len());
+        for i in 0..3 {
+            if let CrdsData::DuplicateShred(shred_index, shred_data) = &entries[i] {
+                assert_eq!(*shred_index as usize, i);
+                assert_eq!(shred_data.from, host1_key.pubkey());
+                assert_eq!(shred_data.slot, 53084024);
+                assert_eq!(shred_data.chunk_index as usize, i);
+            } else {
+                panic!("unknown type of data {:?}", entries[i]);
+            }
+        }
+
+        let slot = 53084025;
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = 354;
+        let shred3= new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        let shred4 = new_rand_shred(&mut rng, next_shred_index, &shredder, &leader);
+        assert!(cluster_info.push_duplicate_shred(&shred3, shred4.payload()).is_ok());
+        cluster_info.flush_push_queue();
+        let entries1 = cluster_info.get_entries(&mut cursor);
+        // One duplicate shred proof is split into 3 chunks.
+        assert_eq!(3, entries1.len());
+        for i in 0..3 {
+            if let CrdsData::DuplicateShred(shred_index, shred_data) = &entries1[i] {
+                assert_eq!(*shred_index as usize, i+3);
+                assert_eq!(shred_data.from, host1_key.pubkey());
+                assert_eq!(shred_data.slot, 53084025);
+                assert_eq!(shred_data.chunk_index as usize, i);
+            } else {
+                panic!("unknown type of data {:?}", entries1[i]);
+            }
+        }
     }
 }

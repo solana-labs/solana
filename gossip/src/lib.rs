@@ -2,6 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 pub mod cluster_info;
+pub mod cluster_info_entry_listener;
 pub mod cluster_info_metrics;
 #[macro_use]
 pub mod contact_info;
@@ -15,6 +16,7 @@ pub mod crds_shards;
 pub mod crds_value;
 mod deprecated;
 pub mod duplicate_shred;
+pub mod duplicate_shred_handler;
 pub mod epoch_slots;
 pub mod gossip_error;
 pub mod gossip_service;

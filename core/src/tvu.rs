@@ -30,7 +30,10 @@ use {
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
-    solana_gossip::cluster_info::ClusterInfo,
+    solana_gossip::{
+        cluster_info::ClusterInfo, cluster_info_entry_listener::ClusterInfoEntryListener,
+        duplicate_shred_handler::DuplicateShredHandler,
+    },
     solana_ledger::{
         blockstore::Blockstore, blockstore_processor::TransactionStatusSender,
         leader_schedule_cache::LeaderScheduleCache,
@@ -66,6 +69,7 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
+    cluster_info_entry_listener: ClusterInfoEntryListener,
 }
 
 pub struct TvuSockets {
@@ -299,6 +303,12 @@ impl Tvu {
             )
         });
 
+        let cluster_info_entry_listener = ClusterInfoEntryListener::new(
+            exit.clone(),
+            cluster_info.clone(),
+            DuplicateShredHandler::new(blockstore, leader_schedule_cache.clone()),
+        );
+
         Ok(Tvu {
             fetch_stage,
             shred_sigverify,
@@ -311,6 +321,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
+            cluster_info_entry_listener,
         })
     }
 
@@ -330,6 +341,7 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
+        self.cluster_info_entry_listener.join()?;
         Ok(())
     }
 }

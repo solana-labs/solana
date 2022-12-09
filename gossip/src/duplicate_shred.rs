@@ -2,6 +2,7 @@ use {
     crate::crds_value::sanitize_wallclock,
     itertools::Itertools,
     solana_ledger::{
+        blockstore::BlockstoreError,
         blockstore_meta::DuplicateSlotProof,
         shred::{self, Shred, ShredType},
     },
@@ -35,10 +36,10 @@ pub struct DuplicateShred {
     shred_index: u32,
     shred_type: ShredType,
     // Serialized DuplicateSlotProof split into chunks.
-    num_chunks: u8,
-    chunk_index: u8,
+    pub(crate) num_chunks: u8,
+    pub(crate) chunk_index: u8,
     #[serde(with = "serde_bytes")]
-    chunk: Vec<u8>,
+    pub(crate) chunk: Vec<u8>,
 }
 
 #[derive(Debug, Error)]
@@ -73,6 +74,8 @@ pub enum Error {
     TryFromIntError(#[from] TryFromIntError),
     #[error("unknown slot leader")]
     UnknownSlotLeader,
+    #[error("block store save error")]
+    BlockstoreInsertFailed(#[from] BlockstoreError),
 }
 
 // Asserts that the two shreds can indicate duplicate proof for
