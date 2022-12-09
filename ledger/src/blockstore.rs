@@ -105,7 +105,6 @@ pub const MAX_REPLAY_WAKE_UP_SIGNALS: usize = 1;
 pub const MAX_COMPLETED_SLOTS_IN_CHANNEL: usize = 100_000;
 pub const MAX_TURBINE_PROPAGATION_IN_MS: u64 = 100;
 pub const MAX_TURBINE_DELAY_IN_TICKS: u64 = MAX_TURBINE_PROPAGATION_IN_MS / MS_PER_TICK;
-pub const MIN_RECOVERY_DELAY_IN_MS: u64 = 10;
 
 // An upper bound on maximum number of data shreds we can handle in a slot
 // 32K shreds would allow ~320K peak TPS
@@ -706,28 +705,18 @@ impl Blockstore {
         metrics: &mut BlockstoreRecoveryMetrics,
     ) {
         let db = &*self.db;
-        let mut shreds = vec![];
-        erasure_metas.retain(|esid, erasure_meta| {
-            if timestamp() - erasure_meta.timestamp > MIN_RECOVERY_DELAY_IN_MS {
-                // Haven't received new shreds in a while. Recover!
-                metrics.erasure_sets_num += 1;
-                shreds.extend(Self::try_shred_recovery(
+        for (esid, erasure_meta) in erasure_metas {
+            metrics.erasure_sets_num += 1;
+            recovered_shred_sender
+                .send(Self::try_shred_recovery(
                     db,
                     esid.slot(),
                     erasure_meta,
                     &HashMap::new(),
                     reed_solomon_cache,
                     metrics,
-                ));
-                false
-            } else {
-                // If we received all the shreds, no need to track anymore
-                erasure_meta.status() != ErasureMetaStatus::DataFull
-            }
-        });
-
-        if !shreds.is_empty() {
-            recovered_shred_sender.send(shreds).unwrap();
+                ))
+                .unwrap();
         }
     }
 
