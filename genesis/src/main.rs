@@ -445,14 +445,15 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
     fee_rate_governor.burn_percent = value_t_or_exit!(matches, "fee_burn_percentage", u8);
 
-    let mut poh_config = PohConfig {
-        target_tick_duration: if matches.is_present("target_tick_duration") {
+    let mut poh_config = PohConfig::new(
+        if matches.is_present("target_tick_duration") {
             Duration::from_micros(value_t_or_exit!(matches, "target_tick_duration", u64))
         } else {
             Duration::from_micros(default_target_tick_duration)
         },
-        ..PohConfig::default()
-    };
+        None,
+        None,
+    );
 
     let cluster_type = cluster_type_of(&matches, "cluster_type").unwrap();
 
@@ -461,17 +462,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             ClusterType::Development => {
                 let hashes_per_tick =
                     compute_hashes_per_tick(poh_config.target_tick_duration, 1_000_000);
-                poh_config.hashes_per_tick = Some(hashes_per_tick / 2); // use 50% of peak ability
+                poh_config.set_hashes_per_tick(Some(hashes_per_tick / 2)); // use 50% of peak ability
             }
             ClusterType::Devnet | ClusterType::Testnet | ClusterType::MainnetBeta => {
-                poh_config.hashes_per_tick = Some(clock::DEFAULT_HASHES_PER_TICK);
+                poh_config.set_hashes_per_tick(Some(clock::DEFAULT_HASHES_PER_TICK));
             }
         },
         "sleep" => {
-            poh_config.hashes_per_tick = None;
+            poh_config.set_hashes_per_tick(None);
         }
         _ => {
-            poh_config.hashes_per_tick = Some(value_t_or_exit!(matches, "hashes_per_tick", u64));
+            poh_config.set_hashes_per_tick(Some(value_t_or_exit!(matches, "hashes_per_tick", u64)));
         }
     }
 

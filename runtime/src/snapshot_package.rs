@@ -246,11 +246,20 @@ pub struct SnapshotPackage {
 
 impl SnapshotPackage {
     pub fn new(accounts_package: AccountsPackage, accounts_hash: AccountsHash) -> Self {
-        let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type else {
-            panic!("The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!");
-        };
-        let Some(snapshot_info) = accounts_package.snapshot_info else {
-            panic!("The AccountsPackage must have snapshot info in order to make a SnapshotPackage!");
+        let snapshot_type =
+            if let AccountsPackageType::Snapshot(snapshot_type) = accounts_package.package_type {
+                snapshot_type
+            } else {
+                panic!(
+                "The AccountsPackage must be of type Snapshot in order to make a SnapshotPackage!"
+            );
+            };
+        let snapshot_info = if let Some(snapshot_info) = accounts_package.snapshot_info {
+            snapshot_info
+        } else {
+            panic!(
+                "The AccountsPackage must have snapshot info in order to make a SnapshotPackage!"
+            );
         };
         let snapshot_hash =
             SnapshotHash::new(&accounts_hash, snapshot_info.epoch_accounts_hash.as_ref());

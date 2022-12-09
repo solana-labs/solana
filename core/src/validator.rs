@@ -2463,12 +2463,12 @@ mod tests {
     #[test]
     fn test_poh_speed() {
         solana_logger::setup();
-        let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+        let poh_config = PohConfig::new(
+            Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            None,
             // make PoH rate really fast to cause the panic condition
-            hashes_per_tick: Some(100 * solana_sdk::clock::DEFAULT_HASHES_PER_TICK),
-            ..PohConfig::default()
-        };
+            Some(100 * solana_sdk::clock::DEFAULT_HASHES_PER_TICK),
+        );
         let genesis_config = GenesisConfig {
             poh_config,
             ..GenesisConfig::default()
@@ -2478,11 +2478,11 @@ mod tests {
 
     #[test]
     fn test_poh_speed_no_hashes_per_tick() {
-        let poh_config = PohConfig {
-            target_tick_duration: Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
-            hashes_per_tick: None,
-            ..PohConfig::default()
-        };
+        let poh_config = PohConfig::new(
+            Duration::from_millis(solana_sdk::clock::MS_PER_TICK),
+            None,
+            None,
+        );
         let genesis_config = GenesisConfig {
             poh_config,
             ..GenesisConfig::default()

@@ -239,7 +239,7 @@ impl LocalCluster {
             config.stakers_slot_offset,
             !config.skip_warmup_slots,
         );
-        genesis_config.poh_config = config.poh_config.clone();
+        genesis_config.poh_config = config.poh_config;
         genesis_config
             .native_instruction_processors
             .extend_from_slice(&config.native_instruction_processors);

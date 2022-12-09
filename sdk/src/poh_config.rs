@@ -15,10 +15,30 @@ pub struct PohConfig {
     /// None enables "Low power mode", which implies:
     /// * sleep for `target_tick_duration` instead of hashing
     /// * the number of hashes per tick will be variable
-    pub hashes_per_tick: Option<u64>,
+    hashes_per_tick: Option<u64>,
 }
 
 impl PohConfig {
+    pub fn set_hashes_per_tick(&mut self, hashes: Option<u64>) {
+        self.hashes_per_tick = hashes;
+    }
+
+    pub fn get_hashes_per_tick(&self) -> Option<u64> {
+        self.hashes_per_tick
+    }
+
+    pub fn new(
+        target_tick_duration: Duration,
+        target_tick_count: Option<u64>,
+        hashes_per_tick: Option<u64>,
+    ) -> Self {
+        PohConfig {
+            target_tick_duration,
+            target_tick_count,
+            hashes_per_tick,
+        }
+    }
+
     pub fn new_sleep(target_tick_duration: Duration) -> Self {
         Self {
             target_tick_duration,

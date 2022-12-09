@@ -350,7 +350,7 @@ pub fn initialize_state(
         vec![stake; validator_keypairs.len()],
     );
 
-    genesis_config.poh_config.hashes_per_tick = Some(2);
+    genesis_config.poh_config.set_hashes_per_tick(Some(2));
     let bank0 = Bank::new_for_tests(&genesis_config);
 
     for pubkey in validator_keypairs_map.keys() {

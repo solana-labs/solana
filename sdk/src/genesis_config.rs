@@ -212,7 +212,11 @@ impl GenesisConfig {
     }
 
     pub fn hashes_per_tick(&self) -> Option<u64> {
-        self.poh_config.hashes_per_tick
+        self.poh_config.get_hashes_per_tick()
+    }
+
+    pub fn set_hashes_per_tick(&mut self, hashes: Option<u64>) {
+        self.poh_config.set_hashes_per_tick(hashes)
     }
 
     pub fn ticks_per_slot(&self) -> u64 {
@@ -262,7 +266,7 @@ impl fmt::Display for GenesisConfig {
             self.hash(),
             compute_shred_version(&self.hash(), None),
             self.ticks_per_slot,
-            self.poh_config.hashes_per_tick,
+            self.hashes_per_tick(),
             self.poh_config.target_tick_duration,
             self.epoch_schedule.slots_per_epoch,
             if self.epoch_schedule.warmup {

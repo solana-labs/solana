@@ -109,7 +109,7 @@ impl PohService {
             .name("solPohTickProd".to_string())
             .spawn(move || {
                 solana_sys_tuner::request_realtime_poh();
-                if poh_config.hashes_per_tick.is_none() {
+                if poh_config.get_hashes_per_tick().is_none() {
                     if poh_config.target_tick_count.is_none() {
                         Self::sleepy_tick_producer(
                             poh_recorder,
@@ -516,13 +516,13 @@ mod tests {
                 if entry.is_tick() {
                     num_ticks += 1;
                     assert!(
-                        entry.num_hashes <= poh_config.hashes_per_tick.unwrap(),
+                        entry.num_hashes <= poh_config.get_hashes_per_tick().unwrap(),
                         "{} <= {}",
                         entry.num_hashes,
-                        poh_config.hashes_per_tick.unwrap()
+                        poh_config.get_hashes_per_tick().unwrap()
                     );
 
-                    if entry.num_hashes == poh_config.hashes_per_tick.unwrap() {
+                    if entry.num_hashes == poh_config.get_hashes_per_tick().unwrap() {
                         need_tick = false;
                     } else {
                         need_partial = false;
@@ -530,7 +530,7 @@ mod tests {
 
                     hashes += entry.num_hashes;
 
-                    assert_eq!(hashes, poh_config.hashes_per_tick.unwrap());
+                    assert_eq!(hashes, poh_config.get_hashes_per_tick().unwrap());
 
                     hashes = 0;
                 } else {
