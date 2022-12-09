@@ -9538,14 +9538,13 @@ impl AccountsDb {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
+            true, // caching_enabled
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
@@ -11866,7 +11865,6 @@ pub mod tests {
             Vec::new(),
             &ClusterType::Development,
             spl_token_mint_index_enabled(),
-            true,
             AccountShrinkThreshold::default(),
         );
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -14292,7 +14290,6 @@ pub mod tests {
             vec![],
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            true,
             AccountShrinkThreshold::default(),
         );
 
@@ -14673,12 +14670,10 @@ pub mod tests {
 
     #[test]
     fn test_read_only_accounts_cache() {
-        let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         ));
 
@@ -14723,12 +14718,10 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_clean() {
-        let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         ));
 
@@ -14774,12 +14767,10 @@ pub mod tests {
 
     #[test]
     fn test_flush_cache_dont_clean_zero_lamport_account() {
-        let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         ));
 
@@ -14920,12 +14911,10 @@ pub mod tests {
 
     #[test]
     fn test_scan_flush_accounts_cache_then_clean_drop() {
-        let caching_enabled = true;
         let db = Arc::new(AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         ));
         let account_key = Pubkey::new_unique();
@@ -15031,12 +15020,10 @@ pub mod tests {
 
     #[test]
     fn test_alive_bytes() {
-        let caching_enabled = true;
         let accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         let slot: Slot = 0;
@@ -15087,12 +15074,10 @@ pub mod tests {
         scan_slot: Option<Slot>,
         write_cache_limit_bytes: Option<u64>,
     ) -> (Arc<AccountsDb>, Vec<Pubkey>, Vec<Slot>, Option<ScanTracker>) {
-        let caching_enabled = true;
         let mut accounts_db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         accounts_db.write_cache_limit_bytes = write_cache_limit_bytes;
@@ -15500,14 +15485,10 @@ pub mod tests {
     }
 
     fn run_test_shrink_unref(do_intra_cache_clean: bool) {
-        // Enable caching so that we use the straightforward implementation
-        // of shrink that will shrink all candidate slots
-        let caching_enabled = true;
         let db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         let account_key1 = Pubkey::new_unique();
@@ -15775,12 +15756,10 @@ pub mod tests {
     fn do_test_load_account_and_cache_flush_race(with_retry: bool) {
         solana_logger::setup();
 
-        let caching_enabled = true;
         let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -15850,12 +15829,10 @@ pub mod tests {
     }
 
     fn do_test_load_account_and_shrink_race(with_retry: bool) {
-        let caching_enabled = true;
         let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -15926,12 +15903,10 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_delayed_remove_unrooted_race() {
-        let caching_enabled = true;
         let mut db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         db.load_delay = RACY_SLEEP_MS;
@@ -15998,12 +15973,10 @@ pub mod tests {
 
     #[test]
     fn test_cache_flush_remove_unrooted_race_multiple_slots() {
-        let caching_enabled = true;
         let db = AccountsDb::new_with_config_for_tests(
             Vec::new(),
             &ClusterType::Development,
             AccountSecondaryIndexes::default(),
-            caching_enabled,
             AccountShrinkThreshold::default(),
         );
         let db = Arc::new(db);
