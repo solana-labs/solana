@@ -444,6 +444,23 @@ impl VoteState {
         }
     }
 
+    /// Number of "credits" owed to this account from the mining pool from given epoch. Submit
+    /// this VoteState to the Rewards program to trade credits for lamports.
+    pub fn credits_before_epoch(&self, epoch: Epoch) -> u64 {
+        let credits: Vec<(Epoch, u64, u64)> = self
+            .epoch_credits
+            .iter()
+            .copied()
+            .filter(|c| c.0 < epoch)
+            .collect();
+
+        if credits.is_empty() {
+            0
+        } else {
+            credits.last().unwrap().1
+        }
+    }
+
     /// Number of "credits" owed to this account from the mining pool on a per-epoch basis,
     ///  starting from credits observed.
     /// Each tuple of (Epoch, u64, u64) is read as (epoch, credits, prev_credits), where
@@ -451,6 +468,22 @@ impl VoteState {
     ///   calculating rewards over partial epochs nice and simple
     pub fn epoch_credits(&self) -> &Vec<(Epoch, u64, u64)> {
         &self.epoch_credits
+    }
+
+    /// Number of "credits" owed to this account from the mining pool on a per-epoch basis before
+    /// given epoch,
+    ///  starting from credits observed.
+    /// Each tuple of (Epoch, u64, u64) is read as (epoch, credits, prev_credits), where
+    ///   credits for each epoch is credits - prev_credits; while redundant this makes
+    ///   calculating rewards over partial epochs nice and simple
+    pub fn epoch_credits_before(&self, epoch: Epoch) -> Vec<(Epoch, u64, u64)> {
+        let credits: Vec<(Epoch, u64, u64)> = self
+            .epoch_credits
+            .iter()
+            .copied()
+            .filter(|c| c.0 < epoch)
+            .collect();
+        credits
     }
 
     pub fn set_new_authorized_voter<F>(

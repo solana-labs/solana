@@ -184,6 +184,7 @@ fn redeem_stake_rewards(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
+    epoch: Option<Epoch>,
 ) -> Option<(u64, u64)> {
     if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
         inflation_point_calc_tracer(&InflationPointCalculationEvent::CreditsObserved(
@@ -199,6 +200,7 @@ fn redeem_stake_rewards(
         stake_history,
         inflation_point_calc_tracer.as_ref(),
         credits_auto_rewind,
+        epoch,
     )
     .map(|calculated_stake_rewards| {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer {
@@ -221,14 +223,15 @@ fn calculate_stake_points(
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
+    epoch: Option<Epoch>,
 ) -> u128 {
     calculate_stake_points_and_credits(
         stake,
         vote_state,
         stake_history,
         inflation_point_calc_tracer,
-        true, // this is safe because this flag shouldn't affect the
-              // `points` field of the returned struct in any way
+        true, // this is safe because this flag shouldn't affect the `points` field of the returned struct in any way
+        epoch,
     )
     .points
 }
@@ -249,9 +252,16 @@ fn calculate_stake_points_and_credits(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
+    epoch: Option<Epoch>,
 ) -> CalculatedStakePoints {
     let credits_in_stake = stake.credits_observed;
-    let credits_in_vote = new_vote_state.credits();
+    let credits_in_vote = if let Some(epoch) = epoch {
+        new_vote_state.credits_before_epoch(epoch)
+    } else {
+        new_vote_state.credits()
+    };
+
+    println!("hoho credit get {} {}", credits_in_stake, credits_in_vote);
     // if there is no newer credits since observed, return no point
     if credits_in_vote <= credits_in_stake {
         if credits_auto_rewind && credits_in_vote < credits_in_stake {
@@ -302,9 +312,13 @@ fn calculate_stake_points_and_credits(
     let mut points = 0;
     let mut new_credits_observed = credits_in_stake;
 
-    for (epoch, final_epoch_credits, initial_epoch_credits) in
-        new_vote_state.epoch_credits().iter().copied()
-    {
+    let epoch_credits = if let Some(epoch) = epoch {
+        new_vote_state.epoch_credits_before(epoch)
+    } else {
+        new_vote_state.epoch_credits().iter().copied().collect()
+    };
+
+    for (epoch, final_epoch_credits, initial_epoch_credits) in epoch_credits {
         let stake_amount = u128::from(stake.delegation.stake(epoch, stake_history));
 
         // figure out how much this stake has seen that
@@ -367,6 +381,7 @@ fn calculate_stake_rewards(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
+    epoch: Option<Epoch>,
 ) -> Option<CalculatedStakeRewards> {
     // ensure to run to trigger (optional) inflation_point_calc_tracer
     let CalculatedStakePoints {
@@ -379,6 +394,7 @@ fn calculate_stake_rewards(
         stake_history,
         inflation_point_calc_tracer.as_ref(),
         credits_auto_rewind,
+        epoch,
     );
 
     // Drive credits_observed forward unconditionally when rewards are disabled
@@ -1562,6 +1578,7 @@ pub fn redeem_rewards(
     stake_history: Option<&StakeHistory>,
     inflation_point_calc_tracer: Option<impl Fn(&InflationPointCalculationEvent)>,
     credits_auto_rewind: bool,
+    epoch: Option<Epoch>,
 ) -> Result<(u64, u64), InstructionError> {
     if let StakeState::Stake(meta, mut stake) = stake_state {
         if let Some(inflation_point_calc_tracer) = inflation_point_calc_tracer.as_ref() {
@@ -1586,6 +1603,7 @@ pub fn redeem_rewards(
             stake_history,
             inflation_point_calc_tracer,
             credits_auto_rewind,
+            epoch,
         ) {
             stake_account.checked_add_lamports(stakers_reward)?;
             stake_account.set_state(&StakeState::Stake(meta, stake))?;
@@ -1605,6 +1623,7 @@ pub fn calculate_points(
     stake_state: &StakeState,
     vote_state: &VoteState,
     stake_history: Option<&StakeHistory>,
+    epoch: Option<Epoch>,
 ) -> Result<u128, InstructionError> {
     if let StakeState::Stake(_meta, stake) = stake_state {
         Ok(calculate_stake_points(
@@ -1612,6 +1631,7 @@ pub fn calculate_points(
             vote_state,
             stake_history,
             null_tracer(),
+            epoch,
         ))
     } else {
         Err(InstructionError::InvalidAccountData)
@@ -2519,6 +2539,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2540,6 +2561,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2578,6 +2600,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2591,7 +2614,7 @@ mod tests {
         // no overflow on points
         assert_eq!(
             u128::from(stake.delegation.stake) * epoch_slots,
-            calculate_stake_points(&stake, &vote_state, None, null_tracer())
+            calculate_stake_points(&stake, &vote_state, None, null_tracer(), None)
         );
     }
 
@@ -2622,6 +2645,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2647,6 +2671,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2669,6 +2694,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2694,6 +2720,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2717,6 +2744,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2742,6 +2770,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2761,6 +2790,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
         vote_state.commission = 99;
@@ -2777,6 +2807,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2800,6 +2831,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2823,6 +2855,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
 
@@ -2832,7 +2865,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None,
+            )
         );
 
         // credits_observed is auto-rewinded when vote_state credits are assumed to have been
@@ -2845,7 +2885,14 @@ mod tests {
                 new_credits_observed: 1000,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), false)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                false,
+                None,
+            )
         );
         // this is new behavior 1; return the post-recreation rewinded credits from the vote account
         assert_eq!(
@@ -2854,7 +2901,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: true,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None
+            )
         );
         // this is new behavior 2; don't hint when credits both from stake and vote are identical
         stake.credits_observed = 4;
@@ -2864,7 +2918,14 @@ mod tests {
                 new_credits_observed: 4,
                 force_credits_update_with_skipped_reward: false,
             },
-            calculate_stake_points_and_credits(&stake, &vote_state, None, null_tracer(), true)
+            calculate_stake_points_and_credits(
+                &stake,
+                &vote_state,
+                None,
+                null_tracer(),
+                true,
+                None
+            )
         );
 
         // get rewards and credits observed when not the activation epoch
@@ -2888,6 +2949,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None
             )
         );
 
@@ -2912,6 +2974,7 @@ mod tests {
                 None,
                 null_tracer(),
                 true,
+                None,
             )
         );
     }

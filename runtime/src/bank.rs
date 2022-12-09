@@ -2842,6 +2842,12 @@ impl Bank {
         let rewards = validator_rewards;
         let credits_auto_rewind = self.credits_auto_rewind();
 
+        let epoch = if self.partitioned_rewards_enabled() {
+            Some(self.epoch())
+        } else {
+            None
+        };
+
         let stake_history = self.stakes_cache.stakes().history().clone();
 
         let (mut stake_rewards, vote_rewards_map) = self.compute_epoch_stake_rewards(
@@ -2853,6 +2859,7 @@ impl Bank {
             thread_pool,
             metrics,
             vote_with_stake_delegations_map,
+            epoch,
         );
 
         datapoint_warn!(
@@ -3302,6 +3309,7 @@ impl Bank {
             thread_pool,
             metrics,
             vote_with_stake_delegations_map,
+            None,
         );
 
         self.store_stake_accounts(&stake_rewards, metrics);
@@ -3586,6 +3594,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         vote_with_stake_delegations_map: DashMap<Pubkey, VoteWithStakeDelegations>,
+        epoch: Option<Epoch>,
     ) -> StakeVoteRewardCalcResult {
         let mut m = Measure::start("calculate_points");
         let points: u128 = thread_pool.install(|| {
@@ -3605,6 +3614,7 @@ impl Bank {
                                 stake_account.stake_state(),
                                 vote_state,
                                 Some(&stake_history),
+                                epoch,
                             )
                             .unwrap_or(0)
                         })
@@ -3665,6 +3675,7 @@ impl Bank {
                         Some(&stake_history),
                         reward_calc_tracer.as_ref(),
                         credits_auto_rewind,
+                        epoch,
                     );
                     if let Ok((stakers_reward, voters_reward)) = redeemed {
                         // track voter rewards
