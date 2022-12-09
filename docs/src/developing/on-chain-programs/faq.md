@@ -30,19 +30,6 @@ write to a virtual address that it was not granted access to, and an
 `AccessViolation` error will be returned that contains the address and size of
 the attempted violation.
 
-## Heap size
-
-Programs have access to a runtime heap either directly in C or via the Rust
-`alloc` APIs. To facilitate fast allocations, a simple 32KB bump heap is
-utilized. The heap does not support `free` or `realloc` so use it wisely.
-
-Internally, programs have access to the 32KB memory region starting at virtual
-address 0x300000000 and may implement a custom heap based on the program's
-specific needs.
-
-- [Rust program heap usage](developing-rust.md#heap)
-- [C program heap usage](developing-c.md#heap)
-
 ## InvalidAccountData
 
 This program error can happen for a lot of reasons. Usually, it's caused by
@@ -93,13 +80,15 @@ overrun as a warning.
 
 For example: `Error: Function _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E Stack offset of -30728 exceeded max offset of -4096 by 26632 bytes, please minimize large stack variables`
 
-The message identifies which symbol is exceeding its stack frame but the name
-might be mangled if it is a Rust or C++ symbol. To demangle a Rust symbol use
-[rustfilt](https://github.com/luser/rustfilt). The above warning came from a
-Rust program, so the demangled symbol name is:
+The message identifies which symbol is exceeding its stack frame, but the name
+might be mangled if it is a Rust or C++ symbol.
+
+> To demangle a Rust symbol use [rustfilt](https://github.com/luser/rustfilt).
+
+The above warning came from a Rust program, so the demangled symbol name is:
 
 ```bash
-$ rustfilt _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
+rustfilt _ZN16curve25519_dalek7edwards21EdwardsBasepointTable6create17h178b3d2411f7f082E
 curve25519_dalek::edwards::EdwardsBasepointTable::create
 ```
 
@@ -110,4 +99,17 @@ crates may include functionality that violates the stack frame restrictions even
 if the program doesn't use that functionality. If the program violates the stack
 size at runtime, an `AccessViolation` error will be reported.
 
-SBF stack frames occupy a virtual address range starting at 0x200000000.
+SBF stack frames occupy a virtual address range starting at `0x200000000`.
+
+## Heap size
+
+Programs have access to a runtime heap either directly in C or via the Rust
+`alloc` APIs. To facilitate fast allocations, a simple 32KB bump heap is
+utilized. The heap does not support `free` or `realloc` so use it wisely.
+
+Internally, programs have access to the 32KB memory region starting at virtual
+address 0x300000000 and may implement a custom heap based on the program's
+specific needs.
+
+- [Rust program heap usage](developing-rust.md#heap)
+- [C program heap usage](developing-c.md#heap)
