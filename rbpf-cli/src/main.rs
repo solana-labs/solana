@@ -294,6 +294,9 @@ before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
+    if matches.value_of("use").unwrap() == "debugger" {
+        vm.debug_port = Some(matches.value_of("port").unwrap().parse::<u16>().unwrap());
+    }
     let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     drop(vm);
