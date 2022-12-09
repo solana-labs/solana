@@ -96,9 +96,9 @@ impl AccountsDb {
             accounts.for_each(|account| {
                 account_len += 1;
                 if let Some(previous_write_version) = previous_write_version {
-                    assert!(previous_write_version < account.meta.write_version);
+                    assert!(previous_write_version < account.meta.write_version_obsolete);
                 }
-                previous_write_version = Some(account.meta.write_version);
+                previous_write_version = Some(account.meta.write_version_obsolete);
                 if notified_accounts.contains(&account.meta.pubkey) {
                     notify_stats.skipped_accounts += 1;
                     return;
