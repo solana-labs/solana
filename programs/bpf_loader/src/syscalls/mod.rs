@@ -328,7 +328,7 @@ fn translate(
     vm_addr: u64,
     len: u64,
 ) -> Result<u64, EbpfError> {
-    memory_mapping.map(access_type, vm_addr, len).into()
+    memory_mapping.map(access_type, vm_addr, len, 0).into()
 }
 
 fn translate_type_inner<'a, T>(
