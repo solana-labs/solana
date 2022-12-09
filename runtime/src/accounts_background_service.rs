@@ -148,7 +148,6 @@ impl SnapshotRequestHandler {
     // Returns the latest requested snapshot slot, if one exists
     pub fn handle_snapshot_requests(
         &self,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
@@ -180,7 +179,7 @@ impl SnapshotRequestHandler {
         );
 
         Some(self.handle_snapshot_request(
-            accounts_db_caching_enabled,
+            true,
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
@@ -520,13 +519,12 @@ impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
         &self,
-        accounts_db_caching_enabled: bool,
+        _accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
-            accounts_db_caching_enabled,
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
