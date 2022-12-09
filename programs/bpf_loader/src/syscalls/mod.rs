@@ -13,12 +13,13 @@ pub use self::{
 use {
     crate::BpfError,
     solana_program_runtime::{
-        ic_logger_msg, ic_msg, invoke_context::InvokeContext, stable_log, timings::ExecuteTimings,
+        compute_budget::ComputeBudget, ic_logger_msg, ic_msg, invoke_context::InvokeContext,
+        stable_log, timings::ExecuteTimings,
     },
     solana_rbpf::{
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
-        vm::{ProgramResult, SyscallRegistry},
+        vm::{Config, ProgramResult, SyscallRegistry},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -36,7 +37,8 @@ use {
             check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
             disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
             enable_alt_bn128_syscall, enable_early_verification_of_account_modifications,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            error_on_syscall_bpf_function_hash_collisions, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, reject_callx_r10,
             stop_sibling_instruction_search_at_parent,
         },
         hash::{Hasher, HASH_BYTES},
@@ -146,10 +148,39 @@ macro_rules! register_feature_gated_syscall {
     };
 }
 
-pub fn register_syscalls<'a>(
+pub fn create_loader<'a>(
     feature_set: &FeatureSet,
+    compute_budget: &ComputeBudget,
+    reject_deployment_of_broken_elfs: bool,
     disable_deploy_of_alloc_free_syscall: bool,
-) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
+    debugging_features: bool,
+) -> Result<(Config, SyscallRegistry<InvokeContext<'a>>), EbpfError> {
+    let config = Config {
+        max_call_depth: compute_budget.max_call_depth,
+        stack_frame_size: compute_budget.stack_frame_size,
+        enable_stack_frame_gaps: true,
+        instruction_meter_checkpoint_distance: 10000,
+        enable_instruction_meter: true,
+        enable_instruction_tracing: debugging_features,
+        enable_symbol_and_section_labels: debugging_features,
+        reject_broken_elfs: reject_deployment_of_broken_elfs,
+        noop_instruction_rate: 256,
+        sanitize_user_provided_values: true,
+        encrypt_environment_registers: true,
+        syscall_bpf_function_hash_collision: feature_set
+            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
+        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
+        dynamic_stack_frames: false,
+        enable_sdiv: false,
+        optimize_rodata: false,
+        static_syscalls: false,
+        enable_elf_vaddr: false,
+        reject_rodata_stack_overlap: false,
+        new_elf_parser: false,
+        aligned_memory_mapping: true,
+        // Warning, do not use `Config::default()` so that configuration here is explicit.
+    };
+
     let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
@@ -284,7 +315,7 @@ pub fn register_syscalls<'a>(
     // Log data
     syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
 
-    Ok(syscall_registry)
+    Ok((config, syscall_registry))
 }
 
 fn translate(
