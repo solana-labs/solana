@@ -592,12 +592,17 @@ pub enum BlockstoreProcessorError {
 /// Callback for accessing bank state while processing the blockstore
 pub type ProcessEntryCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
+/// Callback for accessing bank state after each slot is confirmed while
+/// processing the blockstore
+pub type ProcessSlotCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
+
 #[derive(Default, Clone)]
 pub struct ProcessOptions {
     pub poh_verify: bool,
     pub full_leader_cache: bool,
     pub halt_at_slot: Option<Slot>,
     pub entry_callback: Option<ProcessEntryCallback>,
+    pub slot_callback: Option<ProcessSlotCallback>,
     pub new_hard_forks: Option<Vec<Slot>>,
     pub debug_keys: Option<Arc<HashSet<Pubkey>>>,
     pub account_indexes: AccountSecondaryIndexes,
@@ -1624,6 +1629,11 @@ fn process_single_slot(
     })?;
 
     bank.freeze(); // all banks handled by this routine are created from complete slots
+
+    if let Some(slot_callback) = &opts.slot_callback {
+        slot_callback(bank);
+    }
+
     if blockstore.is_primary_access() {
         blockstore.insert_bank_hash(bank.slot(), bank.hash(), false);
     }

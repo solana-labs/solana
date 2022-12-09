@@ -1353,6 +1353,11 @@ fn assert_capitalization(bank: &Bank) {
 }
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use {
+    serde::Deserialize,
+    solana_ledger::blockstore_processor::ProcessSlotCallback,
+    std::{collections::VecDeque, sync::Mutex},
+};
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -1882,6 +1887,22 @@ fn main() {
                     .long("print-accounts-stats")
                     .takes_value(false)
                     .help("After verifying the ledger, print some information about the account stores"),
+            )
+            .arg(
+                Arg::with_name("record_slot_hashes")
+                    .long("record-slot-hashes")
+                    .takes_value(true)
+                    .value_name("FILENAME")
+                    .conflicts_with("check_slot_hashes")
+                    .help("Record slot hashes to file so they can be used as reference in future runs. See --check-slot-hashes.")
+            )
+            .arg(
+                Arg::with_name("check_slot_hashes")
+                    .long("check-slot-hashes")
+                    .takes_value(true)
+                    .value_name("FILENAME")
+                    .help("Check that slot hashes match expected reference values. See --record-slot-hashes.")
+
             )
         ).subcommand(
             SubCommand::with_name("graph")
@@ -2761,6 +2782,68 @@ fn main() {
                 let debug_keys = pubkeys_of(arg_matches, "debug_key")
                     .map(|pubkeys| Arc::new(pubkeys.into_iter().collect::<HashSet<_>>()));
 
+                #[derive(Serialize, Deserialize)]
+                struct SlotHash {
+                    slot: Slot,
+                    hash: String,
+                }
+
+                let (slot_callback, record_slot_hashes_file, recorded_slot_hashes) = if let Some(
+                    filename,
+                ) =
+                    arg_matches.value_of("record_slot_hashes")
+                {
+                    let file = File::create(filename).unwrap_or_else(|err| {
+                        eprintln!("Unable to write to file: {}: {:#}", filename, err);
+                        exit(1);
+                    });
+
+                    let slot_hashes = Arc::new(Mutex::new(Vec::new()));
+
+                    let slot_callback = Arc::new({
+                        let slot_hashes = Arc::clone(&slot_hashes);
+                        move |bank: &Bank| {
+                            slot_hashes.lock().unwrap().push(SlotHash {
+                                slot: bank.slot(),
+                                hash: bank.hash().to_string(),
+                            });
+                        }
+                    });
+                    (
+                        Some(slot_callback as ProcessSlotCallback),
+                        Some(file),
+                        Some(slot_hashes),
+                    )
+                } else if let Some(filename) = arg_matches.value_of("check_slot_hashes") {
+                    let file = File::open(filename).unwrap_or_else(|err| {
+                        eprintln!("Unable to read file: {filename}: {err:#}");
+                        exit(1);
+                    });
+
+                    let slot_hashes: Arc<Mutex<VecDeque<SlotHash>>> = Arc::new(Mutex::new(
+                        serde_json::from_reader(file).unwrap_or_else(|err| {
+                            eprintln!("Error loading slot hashes file: {err:#}");
+                            exit(1);
+                        }),
+                    ));
+
+                    let slot_callback = Arc::new(move |bank: &Bank| {
+                        let SlotHash {
+                            slot: expected_slot,
+                            hash: expected_hash,
+                        } = slot_hashes.lock().unwrap().pop_front().unwrap();
+                        if bank.slot() != expected_slot || bank.hash().to_string() != expected_hash
+                        {
+                            error!("Expected slot: {expected_slot} hash: {expected_hash} got slot: {} hash: {}",
+                                bank.slot(), bank.hash());
+                        }
+                    });
+
+                    (Some(slot_callback as ProcessSlotCallback), None, None)
+                } else {
+                    (None, None, None)
+                };
+
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
@@ -2786,6 +2869,7 @@ fn main() {
                         bpf_jit: !arg_matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
                     },
+                    slot_callback,
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
@@ -2814,6 +2898,15 @@ fn main() {
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
                 }
+
+                if let Some(recorded_slot_hashes_file) = record_slot_hashes_file {
+                    serde_json::to_writer(
+                        recorded_slot_hashes_file,
+                        &recorded_slot_hashes.unwrap(),
+                    )
+                    .unwrap();
+                }
+
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
             }
