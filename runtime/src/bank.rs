@@ -8699,9 +8699,7 @@ pub(crate) mod tests {
         updater();
         let new = bank.capitalization();
         if asserter(old, new) {
-            if bank.rc.accounts.accounts_db.caching_enabled {
-                add_root_and_flush_write_cache(bank);
-            }
+            add_root_and_flush_write_cache(bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
         }
     }
@@ -14957,6 +14955,7 @@ pub(crate) mod tests {
     // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
     #[ignore]
     #[test]
+    #[ignore] // this test only works when not using the write cache
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -15173,10 +15172,8 @@ pub(crate) mod tests {
     /// useful to adapt tests written prior to introduction of the write cache
     /// to use the write cache
     fn add_root_and_flush_write_cache(bank: &Bank) {
-        if bank.rc.accounts.accounts_db.caching_enabled {
-            bank.rc.accounts.add_root(bank.slot());
-            bank.flush_accounts_cache_slot_for_tests()
-        }
+        bank.rc.accounts.add_root(bank.slot());
+        bank.flush_accounts_cache_slot_for_tests()
     }
 
     #[test]
