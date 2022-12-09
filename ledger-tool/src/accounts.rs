@@ -51,14 +51,19 @@ impl<V: std::cmp::Ord> PartialEq for TopAccountsStatsEntry<V> {
 }
 
 #[derive(PartialEq)]
+#[allow(clippy::enum_variant_names)]
 enum TopAccountsRankingField {
-    AccountDataSize,
+    DataSize,
+    ExecutableDataSize,
+    NonExecutableDataSize,
 }
 
 impl TopAccountsRankingField {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "data_size" => Some(Self::AccountDataSize),
+            "data_size" => Some(Self::DataSize),
+            "exec_data_size" => Some(Self::ExecutableDataSize),
+            "non_exec_data_size" => Some(Self::NonExecutableDataSize),
             _ => None,
         }
     }
@@ -157,11 +162,13 @@ impl<'a> AccountsSubCommand<'a> for App<'a, '_> {
                         .long("field")
                         .takes_value(true)
                         .value_name("FIELD")
-                        .possible_values(&["data_size"])
+                        .possible_values(&["data_size", "exec_data_size", "non_exec_data_size"])
                         .default_value("data_size")
                         .help("Determine which stats to print. \
                                Possible values are: \
-                               'data_size': print the top N accounts with the largest account data size.")
+                               'data_size': print the top N accounts ranked by the account data size. \
+                               'exec_data_size': print the top N accounts ranked by the executable account data size. \
+                               'non_exec_data_size': print the top N accounts ranked by the non-executable account data size.")
                 )
                 .arg(
                     Arg::with_name("limit")
@@ -212,7 +219,21 @@ pub fn accounts_process_command(
                         min_heap.push(Reverse(TopAccountsStatsEntry {
                             key: *account.pubkey(),
                             value: match field {
-                                TopAccountsRankingField::AccountDataSize => account.data_len(),
+                                TopAccountsRankingField::DataSize => account.data_len(),
+                                TopAccountsRankingField::ExecutableDataSize => {
+                                    if account.executable() {
+                                        account.data_len()
+                                    } else {
+                                        0
+                                    }
+                                }
+                                TopAccountsRankingField::NonExecutableDataSize => {
+                                    if account.executable() {
+                                        0
+                                    } else {
+                                        account.data_len()
+                                    }
+                                }
                             },
                         }));
                         if min_heap.len() > heap_size {
