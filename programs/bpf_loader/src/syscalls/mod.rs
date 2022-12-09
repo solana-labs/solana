@@ -19,7 +19,7 @@ use {
     solana_rbpf::{
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
-        vm::{Config, ProgramResult, SyscallRegistry},
+        vm::{Config, ProgramResult, SyscallRegistry, PROGRAM_ENVIRONMENT_KEY_SHIFT},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -155,6 +155,7 @@ pub fn create_loader<'a>(
     disable_deploy_of_alloc_free_syscall: bool,
     debugging_features: bool,
 ) -> Result<(Config, SyscallRegistry<InvokeContext<'a>>), EbpfError> {
+    use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
         stack_frame_size: compute_budget.stack_frame_size,
@@ -166,7 +167,10 @@ pub fn create_loader<'a>(
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
-        encrypt_environment_registers: true,
+        runtime_environment_key: rand::thread_rng()
+            .gen::<i32>()
+            .checked_shr(PROGRAM_ENVIRONMENT_KEY_SHIFT)
+            .unwrap_or(0),
         syscall_bpf_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
         reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
