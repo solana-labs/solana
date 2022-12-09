@@ -229,9 +229,12 @@ fn run_insert<F>(
 where
     F: Fn(Shred),
 {
-    const RECV_TIMEOUT: Duration = Duration::from_millis(200);
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
-    let mut packets = verified_receiver.recv_timeout(RECV_TIMEOUT)?;
+
+    let mut packets = vec![];
+    while verified_receiver.is_empty() && recover_shred_receiver.is_empty() {
+        thread::sleep(Duration::from_micros(100));
+    }
     packets.extend(verified_receiver.try_iter().flatten());
     shred_receiver_elapsed.stop();
     ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
