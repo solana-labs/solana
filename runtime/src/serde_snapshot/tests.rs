@@ -7,7 +7,7 @@ use {
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         accounts_hash::AccountsHash,
         append_vec::AppendVec,
-        bank::{bank_test_config_caching_enabled, Bank, Rewrites},
+        bank::{Bank, BankTestConfig, Rewrites},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
@@ -171,7 +171,6 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
 
@@ -507,7 +506,7 @@ fn test_extra_fields_eof() {
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
-        bank_test_config_caching_enabled(),
+        BankTestConfig::default(),
     ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -610,7 +609,6 @@ fn test_extra_fields_full_snapshot_archive() {
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
@@ -636,7 +634,7 @@ fn test_blank_extra_fields() {
 
     let bank0 = Arc::new(Bank::new_for_tests_with_config(
         &genesis_config,
-        bank_test_config_caching_enabled(),
+        BankTestConfig::default(),
     ));
     bank0.squash();
     let mut bank = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);

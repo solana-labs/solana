@@ -1151,14 +1151,6 @@ pub struct NewBankOptions {
 #[derive(Debug, Default)]
 pub struct BankTestConfig {
     pub secondary_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
-}
-
-pub fn bank_test_config_caching_enabled() -> BankTestConfig {
-    BankTestConfig {
-        accounts_db_caching_enabled: true,
-        ..BankTestConfig::default()
-    }
 }
 
 #[derive(Debug)]
@@ -1889,7 +1881,12 @@ impl Bank {
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     /// * Calculates and sets the epoch accounts hash from the parent
-    pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+    pub fn warp_from_parent(
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+        data_source: CalcAccountsHashDataSource,
+    ) -> Self {
         parent.freeze();
         parent
             .rc
@@ -1897,9 +1894,7 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
-        parent.force_flush_accounts_cache();
-        let accounts_hash =
-            parent.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, true);
+        let accounts_hash = parent.update_accounts_hash(data_source, false, true);
         let epoch_accounts_hash = accounts_hash.into();
         parent
             .rc
@@ -7438,22 +7433,14 @@ impl Bank {
         self.rc.accounts.accounts_db.print_accounts_stats("");
     }
 
+    /// This is part of the code path executed when the write cache is disabled.
+    /// It is no longer possible to disable the write cache.
     pub fn process_stale_slot_with_budget(
         &self,
-        mut consumed_budget: usize,
-        budget_recovery_delta: usize,
+        mut _consumed_budget: usize,
+        _budget_recovery_delta: usize,
     ) -> usize {
-        if consumed_budget == 0 {
-            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot_v1();
-            if shrunken_account_count > 0 {
-                datapoint_info!(
-                    "stale_slot_shrink",
-                    ("accounts", shrunken_account_count, i64)
-                );
-                consumed_budget += shrunken_account_count;
-            }
-        }
-        consumed_budget.saturating_sub(budget_recovery_delta)
+        unimplemented!("");
     }
 
     pub fn bank_tranaction_count_fix_enabled(&self) -> bool {
@@ -8712,9 +8699,7 @@ pub(crate) mod tests {
         updater();
         let new = bank.capitalization();
         if asserter(old, new) {
-            if bank.rc.accounts.accounts_db.caching_enabled {
-                add_root_and_flush_write_cache(bank);
-            }
+            add_root_and_flush_write_cache(bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
         }
     }
@@ -10471,7 +10456,7 @@ pub(crate) mod tests {
             let amount = genesis_config.rent.minimum_balance(0);
             let parent = Arc::new(Bank::new_for_tests_with_config(
                 &genesis_config,
-                bank_test_config_caching_enabled(),
+                BankTestConfig::default(),
             ));
             let mut bank = parent;
             for _ in 0..10 {
@@ -12053,7 +12038,7 @@ pub(crate) mod tests {
             activate_all_features(&mut genesis_config);
             let bank1 = Arc::new(Bank::new_for_tests_with_config(
                 &genesis_config,
-                bank_test_config_caching_enabled(),
+                BankTestConfig::default(),
             ));
             if pass == 0 {
                 add_root_and_flush_write_cache(&bank1);
@@ -14967,7 +14952,10 @@ pub(crate) mod tests {
         assert_eq!(alive_counts, vec![11, 1, 7]);
     }
 
+    // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
+    #[ignore]
     #[test]
+    #[ignore] // this test only works when not using the write cache
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -15184,10 +15172,8 @@ pub(crate) mod tests {
     /// useful to adapt tests written prior to introduction of the write cache
     /// to use the write cache
     fn add_root_and_flush_write_cache(bank: &Bank) {
-        if bank.rc.accounts.accounts_db.caching_enabled {
-            bank.rc.accounts.add_root(bank.slot());
-            bank.flush_accounts_cache_slot_for_tests()
-        }
+        bank.rc.accounts.add_root(bank.slot());
+        bank.flush_accounts_cache_slot_for_tests()
     }
 
     #[test]
@@ -15301,7 +15287,7 @@ pub(crate) mod tests {
             let bank = Arc::new(Bank::new_from_parent(
                 &Arc::new(Bank::new_for_tests_with_config(
                     &genesis_config,
-                    bank_test_config_caching_enabled(),
+                    BankTestConfig::default(),
                 )),
                 &Pubkey::default(),
                 slot,
@@ -15344,10 +15330,7 @@ pub(crate) mod tests {
         // and then want to continue modifying the bank
         for pass in 0..4 {
             let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-            let bank = Bank::new_for_tests_with_config(
-                &genesis_config,
-                bank_test_config_caching_enabled(),
-            );
+            let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
             let program_id = solana_sdk::pubkey::new_rand();
 
             bank.add_precompiled_account(&program_id);
@@ -15381,10 +15364,7 @@ pub(crate) mod tests {
     fn test_add_precompiled_account_squatted_while_not_replacing() {
         for pass in 0..3 {
             let (genesis_config, mint_keypair) = create_genesis_config(100_000);
-            let bank = Bank::new_for_tests_with_config(
-                &genesis_config,
-                bank_test_config_caching_enabled(),
-            );
+            let bank = Bank::new_for_tests_with_config(&genesis_config, BankTestConfig::default());
             let program_id = solana_sdk::pubkey::new_rand();
 
             // someone managed to squat at program_id!

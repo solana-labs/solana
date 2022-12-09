@@ -117,6 +117,7 @@ impl QuicConfig {
     fn create_endpoint(&self) -> Arc<QuicLazyInitializedEndpoint> {
         Arc::new(QuicLazyInitializedEndpoint::new(
             self.client_certificate.clone(),
+            None,
         ))
     }
 
