@@ -171,7 +171,7 @@ pub fn create_loader<'a>(
             .gen::<i32>()
             .checked_shr(PROGRAM_ENVIRONMENT_KEY_SHIFT)
             .unwrap_or(0),
-        syscall_bpf_function_hash_collision: feature_set
+        external_internal_function_hash_collision: feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
         reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
         dynamic_stack_frames: false,
