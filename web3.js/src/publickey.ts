@@ -129,6 +129,10 @@ export class PublicKey extends Struct {
     return zeroPad;
   }
 
+  get [Symbol.toStringTag](): string {
+    return `PublicKey(${this.toString()})`;
+  }
+
   /**
    * Return the base-58 representation of the public key
    */

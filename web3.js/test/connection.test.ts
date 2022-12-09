@@ -4518,7 +4518,8 @@ describe('Connection', function () {
 
         expect(largestAccounts).to.have.length(2);
         const largestAccount = largestAccounts[0];
-        expect(largestAccount.address).to.eql(testTokenAccountPubkey);
+        expect(largestAccount.address.equals(testTokenAccountPubkey)).to.be
+          .true;
         expect(largestAccount.amount).to.eq('11110');
         expect(largestAccount.decimals).to.eq(2);
         expect(largestAccount.uiAmount).to.eq(111.1);
