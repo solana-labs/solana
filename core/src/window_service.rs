@@ -462,6 +462,7 @@ impl WindowService {
             .unwrap()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start_window_insert_thread(
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,

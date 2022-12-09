@@ -714,17 +714,15 @@ impl Blockstore {
                 shreds.extend(Self::try_shred_recovery(
                     db,
                     esid.slot(),
-                    &erasure_meta,
+                    erasure_meta,
                     &HashMap::new(),
                     reed_solomon_cache,
                     metrics,
                 ));
                 false
-            } else if erasure_meta.status() == ErasureMetaStatus::DataFull {
-                // Received all the shreds! Don't need to track this erasure set anymore
-                false
             } else {
-                true
+                // If we received all the shreds, no need to track anymore
+                erasure_meta.status() != ErasureMetaStatus::DataFull
             }
         });
 
@@ -835,6 +833,7 @@ impl Blockstore {
     /// On success, the function returns an Ok result with a vector of
     /// `CompletedDataSetInfo` and a vector of its corresponding index in the
     /// input `shreds` vector.
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_shreds_handle_duplicate<F>(
         &self,
         shreds: Vec<Shred>,
@@ -948,12 +947,12 @@ impl Blockstore {
                     let erasure_index_data: Vec<u64> = index
                         .data()
                         .range(erasure_meta.data_shreds_indices())
-                        .map(|bit| *bit)
+                        .copied()
                         .collect();
                     let erasure_index_coding: Vec<u64> = index
                         .coding()
                         .range(erasure_meta.coding_shreds_indices())
-                        .map(|bit| *bit)
+                        .copied()
                         .collect();
                     let erasure_recover_meta = ErasureRecoverMeta {
                         erasure_meta,
