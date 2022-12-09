@@ -41,8 +41,9 @@ use {
             get_ancient_append_vec_capacity, is_ancient, AccountsToStore, StorageSelector,
         },
         append_vec::{
-            AppendVec, StorableAccountsWithHashesAndWriteVersions, StoredAccountMeta, StoredMeta,
-            StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
+            aligned_stored_size, AppendVec, StorableAccountsWithHashesAndWriteVersions,
+            StoredAccountMeta, StoredMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
+            STORE_META_OVERHEAD,
         },
         bank::Rewrites,
         cache_hash_data::{CacheHashData, CacheHashDataFile},
@@ -101,7 +102,6 @@ use {
 
 const PAGE_SIZE: u64 = 4 * 1024;
 const MAX_RECYCLE_STORES: usize = 1000;
-const STORE_META_OVERHEAD: usize = 256;
 // when the accounts write cache exceeds this many bytes, we will flush it
 // this can be specified on the command line, too (--accounts-db-cache-limit-mb)
 const WRITE_CACHE_LIMIT_BYTES_DEFAULT: u64 = 15_000_000_000;
@@ -6177,6 +6177,7 @@ impl AccountsDb {
             let data_len = account
                 .map(|account| account.data().len())
                 .unwrap_or_default();
+            // ok if storage can't hold data + alignment at end - we just need the unaligned data to fit
             let storage = storage_finder(slot, data_len + STORE_META_OVERHEAD);
             storage_find.stop();
             total_storage_find_us += storage_find.as_us();
@@ -6471,7 +6472,7 @@ impl AccountsDb {
 
                     // keep space for filler accounts
                     let addl_size = filler_accounts
-                        * ((self.filler_accounts_config.size + STORE_META_OVERHEAD) as u64);
+                        * (aligned_stored_size(self.filler_accounts_config.size) as u64);
                     total_size += addl_size;
                 }
             }
@@ -6488,7 +6489,7 @@ impl AccountsDb {
                     .unwrap_or(true);
                 if should_flush {
                     let hash = iter_item.value().hash();
-                    total_size += (account.data().len() + STORE_META_OVERHEAD) as u64;
+                    total_size += aligned_stored_size(account.data().len()) as u64;
                     num_flushed += 1;
                     Some(((key, account), hash))
                 } else {
@@ -14281,7 +14282,7 @@ pub mod tests {
             total_len += store.accounts.len();
         }
         info!("total: {}", total_len);
-        assert!(total_len < STORE_META_OVERHEAD);
+        assert_eq!(total_len, STORE_META_OVERHEAD);
     }
 
     #[test]
@@ -14347,13 +14348,20 @@ pub mod tests {
             accounts.store_cached((0 as Slot, &[(&pubkey, &account)][..]), None);
             keys.push(pubkey);
         }
+        // get delta hash to feed these accounts to clean
+        accounts.get_accounts_delta_hash(0);
         accounts.add_root(0);
+        // we have to flush just slot 0
+        // if we slot 0 and 1 together, then they are cleaned and slot 0 doesn't contain the accounts
+        // this test wants to clean and then allow us to shrink
+        accounts.flush_accounts_cache(true, None);
 
         for (i, key) in keys[1..].iter().enumerate() {
             let account =
                 AccountSharedData::new((1 + i + num_accounts) as u64, size, &Pubkey::default());
             accounts.store_cached((1 as Slot, &[(key, &account)][..]), None);
         }
+        accounts.get_accounts_delta_hash(1);
         accounts.add_root(1);
         accounts.flush_accounts_cache(true, None);
         accounts.clean_accounts_for_tests();
@@ -17757,9 +17765,9 @@ pub mod tests {
                                 // Thus, they are dependent on the # of accounts that are written. They were identified by hitting the asserts and noting the value
                                 // for shrink_collect.original_bytes at each account_count and then encoding it here.
                                 let expected_original_bytes = if account_count >= 100 {
-                                    28672
-                                } else if account_count >= 50 {
                                     16384
+                                } else if account_count >= 50 {
+                                    8192
                                 } else {
                                     4096
                                 };
