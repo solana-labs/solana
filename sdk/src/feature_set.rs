@@ -522,6 +522,10 @@ pub mod remove_deprecated_request_unit_ix {
     solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
 }
 
+pub mod disable_rehash_for_rent_epoch {
+    solana_sdk::declare_id!("DTVTkmw3JSofd8CJVJte8PXEbxNQ2yZijvVr3pe2APPj");
+}
+
 pub mod increase_tx_account_lock_limit {
     solana_sdk::declare_id!("9LZdXeKGeBV6hRLdxS1rHbHoEUsKqesCC2ZAPTPKJAbK");
 }
@@ -542,11 +546,11 @@ pub mod cap_transaction_accounts_data_size {
     solana_sdk::declare_id!("DdLwVYuvDz26JohmgSbA7mjpJFgX5zP2dkp8qsF2C33V");
 }
 
-pub mod alt_bn128_syscall_enabled {
-    solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128");
+pub mod enable_alt_bn128_syscall {
+    solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
 
-pub mod big_mod_exp_syscall_enabled {
+pub mod enable_big_mod_exp_syscall {
     solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBGMDEXP");
 }
 
@@ -660,6 +664,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_ix::id(), "enable bpf upgradeable loader ExtendProgram instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
+        (disable_rehash_for_rent_epoch::id(), "on accounts hash calculation, do not try to rehash accounts #28934"),
         (account_hash_ignore_slot::id(), "ignore slot when calculating an account hash #28420"),
         (on_load_preserve_rent_epoch_for_rent_exempt_accounts::id(), "on bank load account, do not try to fix up rent_epoch #28541"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
@@ -680,8 +685,8 @@ lazy_static! {
         (check_syscall_outputs_do_not_overlap::id(), "check syscall outputs do_not overlap #28600"),
         (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
-        (alt_bn128_syscall_enabled::id(), "add alt_bn128 syscalls"),
-        (big_mod_exp_syscall_enabled::id(), "add big_mod_exp syscall"),
+        (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
+        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

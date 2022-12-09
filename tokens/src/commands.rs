@@ -76,7 +76,7 @@ impl std::fmt::Debug for FundingSources {
             if i > 0 {
                 write!(f, "/")?;
             }
-            write!(f, "{:?}", source)?;
+            write!(f, "{source:?}")?;
         }
         Ok(())
     }
@@ -1581,7 +1581,7 @@ mod tests {
         use std::env;
         let out_dir = env::var("FARF_DIR").unwrap_or_else(|_| "farf".to_string());
 
-        format!("{}/tmp/{}-{}", out_dir, name, pubkey)
+        format!("{out_dir}/tmp/{name}-{pubkey}")
     }
 
     fn initialize_check_payer_balances_inputs(

@@ -210,7 +210,7 @@ pub fn generate_seed_from_seed_phrase_and_passphrase(
     const PBKDF2_ROUNDS: u32 = 2048;
     const PBKDF2_BYTES: usize = 64;
 
-    let salt = format!("mnemonic{}", passphrase);
+    let salt = format!("mnemonic{passphrase}");
 
     let mut seed = vec![0u8; PBKDF2_BYTES];
     pbkdf2::pbkdf2::<Hmac<sha2::Sha512>>(

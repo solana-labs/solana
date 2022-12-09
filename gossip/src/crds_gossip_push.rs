@@ -269,12 +269,16 @@ impl CrdsGossipPush {
         &self,
         crds: &RwLock<Crds>,
         now: u64,
-    ) -> HashMap<Pubkey, Vec<CrdsValue>> {
+    ) -> (
+        HashMap<Pubkey, Vec<CrdsValue>>,
+        usize, // number of values
+        usize, // number of push messages
+    ) {
         let active_set = self.active_set.read().unwrap();
         let active_set_len = active_set.len();
         let push_fanout = self.push_fanout.min(active_set_len);
         if push_fanout == 0 {
-            return HashMap::default();
+            return (HashMap::default(), 0, 0);
         }
         let mut num_pushes = 0;
         let mut num_values = 0;
@@ -318,7 +322,7 @@ impl CrdsGossipPush {
         for target_pubkey in push_messages.keys().copied() {
             last_pushed_to.put(target_pubkey, now);
         }
-        push_messages
+        (push_messages, num_values, num_pushes)
     }
 
     /// Add the `from` to the peer's filter of nodes.
@@ -997,7 +1001,7 @@ mod tests {
             [Ok(origin)]
         );
         assert_eq!(push.active_set.read().unwrap().len(), 1);
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
     }
     #[test]
     fn test_personalized_push_messages() {
@@ -1051,7 +1055,7 @@ mod tests {
         .into_iter()
         .collect();
         assert_eq!(push.active_set.read().unwrap().len(), 3);
-        assert_eq!(push.new_push_messages(&crds, now), expected);
+        assert_eq!(push.new_push_messages(&crds, now).0, expected);
     }
     #[test]
     fn test_process_prune() {
@@ -1096,7 +1100,7 @@ mod tests {
             &peer.label().pubkey(),
             &[new_msg.label().pubkey()],
         );
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
     }
     #[test]
     fn test_purge_old_pending_push_messages() {
@@ -1131,7 +1135,7 @@ mod tests {
             push.process_push_message(&crds, &Pubkey::default(), vec![new_msg], 1),
             [Ok(origin)],
         );
-        assert_eq!(push.new_push_messages(&crds, 0), expected);
+        assert_eq!(push.new_push_messages(&crds, 0).0, expected);
     }
 
     #[test]

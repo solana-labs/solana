@@ -108,7 +108,7 @@ mod test {
                 &Pubkey::default(),
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
-                &Arc::new(PohConfig::default()),
+                &PohConfig::default(),
                 Arc::new(AtomicBool::default()),
             );
 

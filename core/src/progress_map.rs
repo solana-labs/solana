@@ -399,7 +399,7 @@ impl ProgressMap {
 
     pub fn get_propagated_stats_must_exist(&self, slot: Slot) -> &PropagatedStats {
         self.get_propagated_stats(slot)
-            .unwrap_or_else(|| panic!("slot={} must exist in ProgressMap", slot))
+            .unwrap_or_else(|| panic!("slot={slot} must exist in ProgressMap"))
     }
 
     pub fn get_fork_stats(&self, slot: Slot) -> Option<&ForkStats> {

@@ -188,7 +188,7 @@ fn analyze_logs(matches: &ArgMatches) {
             })
             .unwrap_or_default();
         if !diff.is_empty() {
-            println!("{}", diff);
+            println!("{diff}");
         }
     });
 }

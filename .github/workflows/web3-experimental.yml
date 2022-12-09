@@ -5,10 +5,12 @@ on:
     branches: ["master"]
     paths:
       - "web3.js-experimental/**"
+      - ".github/workflows/web3-experimental.yml"
   pull_request:
     types: [opened, synchronize]
     paths:
       - "web3.js-experimental/**"
+      - ".github/workflows/web3-experimental.yml"
 
 jobs:
   build:
@@ -31,7 +33,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: pnpm/action-setup@v2.0.1
+      - uses: pnpm/action-setup@v2.2.4
         with:
           version: 7
 

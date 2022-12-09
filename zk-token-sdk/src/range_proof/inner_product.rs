@@ -1,5 +1,6 @@
 use {
     crate::{
+        errors::ProofVerificationError,
         range_proof::{errors::RangeProofError, util},
         transcript::TranscriptProtocol,
     },
@@ -208,10 +209,10 @@ impl InnerProductProof {
         if lg_n >= 32 {
             // 4 billion multiplications should be enough for anyone
             // and this check prevents overflow in 1<<lg_n below.
-            return Err(RangeProofError::InvalidBitsize);
+            return Err(ProofVerificationError::InvalidBitSize.into());
         }
         if n != (1 << lg_n) {
-            return Err(RangeProofError::InvalidBitsize);
+            return Err(ProofVerificationError::InvalidBitSize.into());
         }
 
         transcript.innerproduct_domain_sep(n as u64);
@@ -298,13 +299,19 @@ impl InnerProductProof {
         let Ls = self
             .L_vec
             .iter()
-            .map(|p| p.decompress().ok_or(RangeProofError::Format))
+            .map(|p| {
+                p.decompress()
+                    .ok_or(ProofVerificationError::Deserialization)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let Rs = self
             .R_vec
             .iter()
-            .map(|p| p.decompress().ok_or(RangeProofError::Format))
+            .map(|p| {
+                p.decompress()
+                    .ok_or(ProofVerificationError::Deserialization)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let expect_P = RistrettoPoint::vartime_multiscalar_mul(
@@ -323,7 +330,7 @@ impl InnerProductProof {
         if expect_P == *P {
             Ok(())
         } else {
-            Err(RangeProofError::AlgebraicRelation)
+            Err(ProofVerificationError::AlgebraicRelation.into())
         }
     }
 
@@ -360,18 +367,18 @@ impl InnerProductProof {
     pub fn from_bytes(slice: &[u8]) -> Result<InnerProductProof, RangeProofError> {
         let b = slice.len();
         if b % 32 != 0 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         let num_elements = b / 32;
         if num_elements < 2 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         if (num_elements - 2) % 2 != 0 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
         let lg_n = (num_elements - 2) / 2;
         if lg_n >= 32 {
-            return Err(RangeProofError::Format);
+            return Err(ProofVerificationError::Deserialization.into());
         }
 
         let mut L_vec: Vec<CompressedRistretto> = Vec::with_capacity(lg_n);
@@ -384,9 +391,9 @@ impl InnerProductProof {
 
         let pos = 2 * lg_n * 32;
         let a = Scalar::from_canonical_bytes(util::read32(&slice[pos..]))
-            .ok_or(RangeProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
         let b = Scalar::from_canonical_bytes(util::read32(&slice[pos + 32..]))
-            .ok_or(RangeProofError::Format)?;
+            .ok_or(ProofVerificationError::Deserialization)?;
 
         Ok(InnerProductProof { L_vec, R_vec, a, b })
     }

@@ -595,10 +595,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let matched_other_slot = !matched_slot;
                     assert!(
                         !(found_slot && matched_slot || matched_other_slot && found_other_slot),
-                        "{:?}, slot: {}, other_slot: {:?}",
-                        slot_list,
-                        slot,
-                        other_slot
+                        "{slot_list:?}, slot: {slot}, other_slot: {other_slot:?}"
                     );
 
                     let is_cur_account_cached = cur_account_info.is_cached();
@@ -1700,8 +1697,7 @@ mod tests {
                     &mut reclaims,
                     reclaim
                 ),
-                "other_slot: {:?}",
-                other_slot
+                "other_slot: {other_slot:?}"
             );
             assert_eq!(slot_list, vec![at_new_slot]);
             assert!(reclaims.is_empty());
@@ -1724,8 +1720,7 @@ mod tests {
                 &mut reclaims,
                 reclaim
             ),
-            "other_slot: {:?}",
-            other_slot
+            "other_slot: {other_slot:?}"
         );
         assert_eq!(slot_list, vec![at_new_slot]);
         assert_eq!(reclaims, expected_reclaims);
@@ -1745,8 +1740,7 @@ mod tests {
                 &mut reclaims,
                 reclaim
             ),
-            "other_slot: {:?}",
-            other_slot
+            "other_slot: {other_slot:?}"
         );
         assert_eq!(slot_list, vec![at_new_slot]);
         assert_eq!(
@@ -1838,24 +1832,21 @@ mod tests {
                     }
                     assert_eq!(
                         expected_result, result,
-                        "return value different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "return value different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                     // sort for easy comparison
                     expected_reclaims.sort_unstable();
                     reclaims.sort_unstable();
                     assert_eq!(
                         expected_reclaims, reclaims,
-                        "reclaims different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "reclaims different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                     // sort for easy comparison
                     slot_list.sort_unstable();
                     expected.sort_unstable();
                     assert_eq!(
                         slot_list, expected,
-                        "slot_list different. other: {:?}, {:?}, {:?}, original: {:?}",
-                        other_slot, expected, slot_list, original
+                        "slot_list different. other: {other_slot:?}, {expected:?}, {slot_list:?}, original: {original:?}"
                     );
                 }
             }

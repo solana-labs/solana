@@ -23,7 +23,7 @@ solana-address-lookup-table-program = { path = "../programs/address-lookup-table
 solana-config-program = { path = "../programs/config", version = "=1.15.0" }
 solana-sdk = { path = "../sdk", version = "=1.15.0" }
 spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.4.3", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.5.0", features = ["no-entrypoint"] }
 thiserror = "1.0"
 zstd = "0.11.2"
 

@@ -71,10 +71,11 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
-) -> Result<JoinHandle<()>, QuicServerError> {
+) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
+    info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let (_, incoming) = {
+    let (endpoint, incoming) = {
         Endpoint::new(EndpointConfig::default(), Some(config), sock)
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
@@ -90,7 +91,7 @@ pub fn spawn_server(
         stats,
         wait_for_chunk_timeout_ms,
     ));
-    Ok(handle)
+    Ok((endpoint, handle))
 }
 
 pub async fn run_server(
@@ -126,6 +127,7 @@ pub async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
+            info!("Got a connection {:?}", connection.remote_address());
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -139,6 +141,8 @@ pub async fn run_server(
                 wait_for_chunk_timeout_ms,
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+        } else {
+            info!("Timed out waiting for connection");
         }
     }
 }
@@ -653,8 +657,8 @@ fn handle_chunk(
                 if maybe_batch.is_none() {
                     let mut batch = PacketBatch::with_capacity(1);
                     let mut packet = Packet::default();
-                    packet.meta.set_socket_addr(remote_addr);
-                    packet.meta.sender_stake = stake;
+                    packet.meta_mut().set_socket_addr(remote_addr);
+                    packet.meta_mut().sender_stake = stake;
                     batch.push(packet);
                     *maybe_batch = Some(batch);
                     stats
@@ -670,7 +674,7 @@ fn handle_chunk(
                     };
                     batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
                         .copy_from_slice(&chunk.bytes);
-                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
+                    batch[0].meta_mut().size = std::cmp::max(batch[0].meta().size, end_of_chunk);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                     match peer_type {
                         ConnectionPeerType::Staked => {
@@ -689,7 +693,7 @@ fn handle_chunk(
                 trace!("chunk is none");
                 // done receiving chunks
                 if let Some(batch) = maybe_batch.take() {
-                    let len = batch[0].meta.size;
+                    let len = batch[0].meta().size;
                     if let Err(e) = packet_sender.send(batch) {
                         stats
                             .total_packet_batch_send_err
@@ -1005,7 +1009,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1016,7 +1020,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            100,
+            1000,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
@@ -1116,7 +1120,7 @@ pub mod test {
         }
         for batch in all_packets {
             for p in batch.iter() {
-                assert_eq!(p.meta.size, 1);
+                assert_eq!(p.meta().size, 1);
             }
         }
         assert_eq!(total_packets, num_expected_packets);
@@ -1152,7 +1156,7 @@ pub mod test {
         }
         for batch in all_packets {
             for p in batch.iter() {
-                assert_eq!(p.meta.size, num_bytes);
+                assert_eq!(p.meta().size, num_bytes);
             }
         }
         assert_eq!(total_packets, num_expected_packets);
@@ -1317,7 +1321,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1348,7 +1352,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,

@@ -118,6 +118,7 @@ impl ConnectionCache {
         if self.use_quic() && !force_use_udp {
             Some(Arc::new(QuicLazyInitializedEndpoint::new(
                 self.client_certificate.clone(),
+                None,
             )))
         } else {
             None
@@ -466,7 +467,7 @@ mod tests {
         let c = rng.gen_range(1, 255);
         let d = rng.gen_range(1, 255);
 
-        let addr_str = format!("{}.{}.{}.{}:80", a, b, c, d);
+        let addr_str = format!("{a}.{b}.{c}.{d}:80");
 
         addr_str.parse().expect("Invalid address")
     }

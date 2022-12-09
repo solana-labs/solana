@@ -110,7 +110,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
+        .thread_name(|ix| format!("solBstoreProc{ix:02}"))
         .build()
         .unwrap();
 }
@@ -146,7 +146,7 @@ fn get_first_error(
                 "validator_process_entry_error",
                 (
                     "error",
-                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    format!("error: {err:?}, transaction: {transaction:?}"),
                     String
                 )
             );
@@ -386,7 +386,6 @@ fn execute_batches(
     replay_vote_sender: Option<&ReplayVoteSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
-    cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     if batches.is_empty() {
@@ -416,7 +415,7 @@ fn execute_batches(
     let tx_costs = sanitized_txs
         .iter()
         .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
+            let tx_cost = CostModel::calculate_cost(tx, &bank.feature_set);
             let cost = tx_cost.sum();
             let cost_without_bpf = tx_cost.sum_without_bpf();
             minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
@@ -557,7 +556,6 @@ fn process_entries_with_callback(
     let mut batches = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
-    let cost_model = CostModel::new();
 
     for ReplayEntry {
         entry,
@@ -579,7 +577,6 @@ fn process_entries_with_callback(
                         replay_vote_sender,
                         confirmation_timing,
                         cost_capacity_meter.clone(),
-                        &cost_model,
                         log_messages_bytes_limit,
                     )?;
                     batches.clear();
@@ -629,8 +626,7 @@ fn process_entries_with_callback(
                             (
                                 "error",
                                 format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                                    transactions
+                                    "Lock accounts error, entry conflicts with itself, txs: {transactions:?}"
                                 ),
                                 String
                             )
@@ -648,7 +644,6 @@ fn process_entries_with_callback(
                             replay_vote_sender,
                             confirmation_timing,
                             cost_capacity_meter.clone(),
-                            &cost_model,
                             log_messages_bytes_limit,
                         )?;
                         batches.clear();
@@ -665,7 +660,6 @@ fn process_entries_with_callback(
         replay_vote_sender,
         confirmation_timing,
         cost_capacity_meter,
-        &cost_model,
         log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
@@ -874,7 +868,7 @@ pub fn process_blockstore_from_root(
     let mut num_slots_processed = 0;
     if let Some(start_slot_meta) = blockstore
         .meta(start_slot)
-        .unwrap_or_else(|_| panic!("Failed to get meta for slot {}", start_slot))
+        .unwrap_or_else(|_| panic!("Failed to get meta for slot {start_slot}"))
     {
         num_slots_processed = load_frozen_forks(
             bank_forks,
@@ -4557,10 +4551,7 @@ pub mod tests {
                     assert_eq!(err, expected_err);
                 }
                 (result, expected_result) => {
-                    panic!(
-                        "actual result {:?} != expected result {:?}",
-                        result, expected_result
-                    );
+                    panic!("actual result {result:?} != expected result {expected_result:?}");
                 }
             }
         }

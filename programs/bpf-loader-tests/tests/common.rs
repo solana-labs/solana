@@ -49,8 +49,7 @@ pub async fn assert_ix_error(
             .unwrap_err()
             .unwrap(),
         TransactionError::InstructionError(0, expected_err),
-        "{}",
-        assertion_failed_msg,
+        "{assertion_failed_msg}",
     );
 }
 

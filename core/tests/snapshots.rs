@@ -17,6 +17,7 @@ use {
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
+        accounts_hash::AccountsHash,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
@@ -171,7 +172,6 @@ fn restore_from_snapshot(
         None,
         None,
         AccountSecondaryIndexes::default(),
-        false,
         None,
         accounts_db::AccountShrinkThreshold::default(),
         check_hash_calculation,
@@ -230,7 +230,7 @@ fn run_bank_forks_snapshot_n<F>(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -252,7 +252,7 @@ fn run_bank_forks_snapshot_n<F>(
             // set_root should send a snapshot request
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
-            snapshot_request_handler.handle_snapshot_requests(true, false, 0, &mut None);
+            snapshot_request_handler.handle_snapshot_requests(false, 0, &mut None);
         }
     }
 
@@ -277,13 +277,14 @@ fn run_bank_forks_snapshot_n<F>(
         None,
     )
     .unwrap();
+    let accounts_hash = last_bank.get_accounts_hash();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links_dir(),
         accounts_package.slot,
-        &last_bank.get_accounts_hash(),
+        &accounts_hash,
         None,
     );
-    let snapshot_package = SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
+    let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
     snapshot_utils::archive_snapshot_package(
         &snapshot_package,
         &snapshot_config.full_snapshot_archives_dir,
@@ -527,10 +528,10 @@ fn test_concurrent_snapshot_packaging(
             solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
                 accounts_package.snapshot_links_dir(),
                 accounts_package.slot,
-                &Hash::default(),
+                &AccountsHash::default(),
                 None,
             );
-            let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
+            let snapshot_package = SnapshotPackage::new(accounts_package, AccountsHash::default());
             pending_snapshot_package
                 .lock()
                 .unwrap()
@@ -571,7 +572,7 @@ fn test_concurrent_snapshot_packaging(
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         saved_snapshots_dir.path(),
         saved_slot,
-        &Hash::default(),
+        &AccountsHash::default(),
         None,
     );
 
@@ -743,7 +744,7 @@ fn test_bank_forks_incremental_snapshot(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
@@ -784,7 +785,6 @@ fn test_bank_forks_incremental_snapshot(
             bank_forks.set_root(bank.slot(), &request_sender, None);
             bank.update_accounts_hash_for_tests();
             snapshot_request_handler.handle_snapshot_requests(
-                true,
                 false,
                 0,
                 &mut last_full_snapshot_slot,
@@ -1034,7 +1034,7 @@ fn test_snapshots_with_background_services(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let accounts_background_service = AccountsBackgroundService::new(
@@ -1092,9 +1092,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for full snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for full snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }
@@ -1112,9 +1110,7 @@ fn test_snapshots_with_background_services(
             {
                 assert!(
                     timer.elapsed() < MAX_WAIT_DURATION,
-                    "Waiting for incremental snapshot {} exceeded the {:?} maximum wait duration!",
-                    slot,
-                    MAX_WAIT_DURATION,
+                    "Waiting for incremental snapshot {slot} exceeded the {MAX_WAIT_DURATION:?} maximum wait duration!",
                 );
                 std::thread::sleep(Duration::from_secs(1));
             }

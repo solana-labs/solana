@@ -33,7 +33,7 @@ fn redirect_stderr(filename: &str) {
         Ok(file) => unsafe {
             libc::dup2(file.as_raw_fd(), libc::STDERR_FILENO);
         },
-        Err(err) => eprintln!("Unable to open {}: {}", filename, err),
+        Err(err) => eprintln!("Unable to open {filename}: {err}"),
     }
 }
 
@@ -59,7 +59,7 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
                 let mut signals =
                     signal_hook::iterator::Signals::new([signal_hook::consts::SIGUSR1])
                         .unwrap_or_else(|err| {
-                            eprintln!("Unable to register SIGUSR1 handler: {:?}", err);
+                            eprintln!("Unable to register SIGUSR1 handler: {err:?}");
                             exit(1);
                         });
 
@@ -125,7 +125,7 @@ impl ProgressBar {
         if self.is_term {
             self.progress_bar.set_message(msg);
         } else {
-            println!("{}", msg);
+            println!("{msg}");
         }
     }
 
@@ -137,7 +137,7 @@ impl ProgressBar {
         if self.is_term {
             self.progress_bar.abandon_with_message(msg);
         } else {
-            println!("{}", msg);
+            println!("{msg}");
         }
     }
 }

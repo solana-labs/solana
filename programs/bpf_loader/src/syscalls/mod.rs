@@ -33,12 +33,12 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
         feature_set::{
-            self, alt_bn128_syscall_enabled, big_mod_exp_syscall_enabled, blake3_syscall_enabled,
-            check_physical_overlapping, check_syscall_outputs_do_not_overlap,
-            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
-            disable_fees_sysvar, enable_early_verification_of_account_modifications,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
+            self, blake3_syscall_enabled, check_physical_overlapping,
+            check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
+            disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
+            enable_alt_bn128_syscall, enable_big_mod_exp_syscall,
+            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -151,8 +151,8 @@ pub fn register_syscalls<'a>(
     feature_set: &FeatureSet,
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
-    let alt_bn128_syscall_enabled = feature_set.is_active(&alt_bn128_syscall_enabled::id());
-    let big_mod_exp_syscall_enabled = feature_set.is_active(&big_mod_exp_syscall_enabled::id());
+    let enable_alt_bn128_syscall = feature_set.is_active(&enable_alt_bn128_syscall::id());
+    let enable_big_mod_exp_syscall = feature_set.is_active(&enable_big_mod_exp_syscall::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -277,7 +277,7 @@ pub fn register_syscalls<'a>(
         // Alt_bn128
         register_feature_gated_syscall!(
             syscall_registry,
-            alt_bn128_syscall_enabled,
+            enable_alt_bn128_syscall,
             b"sol_alt_bn128_group_op",
             SyscallAltBn128::call,
         )?;
@@ -285,7 +285,7 @@ pub fn register_syscalls<'a>(
         // Big_mod_exp
         register_feature_gated_syscall!(
             syscall_registry,
-            big_mod_exp_syscall_enabled,
+            enable_big_mod_exp_syscall,
             b"sol_big_mod_exp",
             SyscallBigModExp::call,
         )?;
@@ -348,7 +348,7 @@ fn translate_slice_inner<'a, T>(
     }
 
     let total_size = len.saturating_mul(size_of::<T>() as u64);
-    if check_size & isize::try_from(total_size).is_err() {
+    if check_size && isize::try_from(total_size).is_err() {
         return Err(SyscallError::InvalidLength.into());
     }
 
@@ -1340,18 +1340,9 @@ declare_syscall!(
     ) -> Result<u64, EbpfError> {
         let budget = invoke_context.get_compute_budget();
 
-        let cost = if invoke_context
-            .feature_set
-            .is_active(&syscall_saturated_math::id())
-        {
-            len.saturating_div(budget.cpi_bytes_per_unit)
-                .saturating_add(budget.syscall_base_cost)
-        } else {
-            #[allow(clippy::integer_arithmetic)]
-            {
-                len / budget.cpi_bytes_per_unit + budget.syscall_base_cost
-            }
-        };
+        let cost = len
+            .saturating_div(budget.cpi_bytes_per_unit)
+            .saturating_add(budget.syscall_base_cost);
         consume_compute_meter(invoke_context, cost)?;
 
         if len > MAX_RETURN_DATA as u64 {
@@ -1405,19 +1396,9 @@ declare_syscall!(
         let (program_id, return_data) = invoke_context.transaction_context.get_return_data();
         length = length.min(return_data.len() as u64);
         if length != 0 {
-            let cost = if invoke_context
-                .feature_set
-                .is_active(&syscall_saturated_math::id())
-            {
-                length
-                    .saturating_add(size_of::<Pubkey>() as u64)
-                    .saturating_div(budget.cpi_bytes_per_unit)
-            } else {
-                #[allow(clippy::integer_arithmetic)]
-                {
-                    (length + size_of::<Pubkey>() as u64) / budget.cpi_bytes_per_unit
-                }
-            };
+            let cost = length
+                .saturating_add(size_of::<Pubkey>() as u64)
+                .saturating_div(budget.cpi_bytes_per_unit);
             consume_compute_meter(invoke_context, cost)?;
 
             let return_data_result = translate_slice_mut::<u8>(

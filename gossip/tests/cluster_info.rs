@@ -227,8 +227,7 @@ fn run_simulation(stakes: &[u64], fanout: usize) {
             for (id, (layer1_done, recv, r)) in batch.iter_mut() {
                 assert!(
                     now.elapsed().as_secs() < timeout,
-                    "Timed out with {:?} remaining nodes",
-                    remaining
+                    "Timed out with {remaining:?} remaining nodes"
                 );
                 let cluster = c_info.clone_with_id(id);
                 if !*layer1_done {

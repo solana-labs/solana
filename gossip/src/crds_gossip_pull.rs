@@ -968,7 +968,7 @@ pub(crate) mod tests {
             }
         }
         let crds = RwLock::new(crds);
-        assert!(num_inserts > 30_000, "num inserts: {}", num_inserts);
+        assert!(num_inserts > 30_000, "num inserts: {num_inserts}");
         let filters = crds_gossip_pull.build_crds_filters(&thread_pool, &crds, MAX_BLOOM_SIZE);
         assert_eq!(filters.len(), MIN_NUM_BLOOM_FILTERS.max(32));
         let crds = crds.read().unwrap();
@@ -995,7 +995,7 @@ pub(crate) mod tests {
             }
             assert_eq!(num_hits, 1);
         }
-        assert!(false_positives < 150_000, "fp: {}", false_positives);
+        assert!(false_positives < 150_000, "fp: {false_positives}");
     }
 
     #[test]
@@ -1164,7 +1164,7 @@ pub(crate) mod tests {
         .take(100)
         .filter(|peer| peer != old)
         .count();
-        assert!(count < 2, "count of peer != old: {}", count);
+        assert!(count < 2, "count of peer != old: {count}");
     }
 
     #[test]

@@ -91,6 +91,13 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .help("Use QUIC when sending transactions."),
         )
         .arg(
+            Arg::with_name("use_udp")
+                .long("use-udp")
+                .global(true)
+                .conflicts_with("use_quic")
+                .help("Use UDP when sending transactions."),
+        )
+        .arg(
             Arg::with_name("no_address_labels")
                 .long("no-address-labels")
                 .global(true)

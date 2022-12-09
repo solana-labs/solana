@@ -50,7 +50,7 @@ fn tune_poh_service_priority(uid: u32) {
         })
     }) {
         info!("PoH thread PID is {}", pid);
-        let pid = format!("{}", pid);
+        let pid = format!("{pid}");
         let output = Command::new("chrt")
             .args(["-r", "-p", "99", pid.as_str()])
             .output()
@@ -136,7 +136,7 @@ fn main() {
     unsafe { libc::umask(0o077) };
     if let Err(e) = std::fs::remove_file(solana_sys_tuner::SOLANA_SYS_TUNER_PATH) {
         if e.kind() != std::io::ErrorKind::NotFound {
-            panic!("Failed to remove stale socket file: {:?}", e)
+            panic!("Failed to remove stale socket file: {e:?}")
         }
     }
 
@@ -156,7 +156,7 @@ fn main() {
         )
         .expect("Expected to change UID of the socket file");
     } else {
-        panic!("Could not find UID for {:?} user", user);
+        panic!("Could not find UID for {user:?} user");
     }
 
     info!("Waiting for tuning requests");

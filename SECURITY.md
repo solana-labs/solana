@@ -116,6 +116,7 @@ The following components are out of scope for the bounty program
 * Any encrypted credentials, auth tokens, etc. checked into the repo
 * Bugs in dependencies. Please take them upstream!
 * Attacks that require social engineering
+* Any undeveloped automated tooling (scanners, etc) results. (OK with developed PoC)
 
 ### Eligibility:
 * The participant submitting the bug report shall follow the process outlined within this document

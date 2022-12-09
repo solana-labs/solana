@@ -14,7 +14,7 @@ use {
         accounts_db::AccountShrinkThreshold,
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
-        bank::{bank_test_config_caching_enabled, Bank},
+        bank::{Bank, BankTestConfig},
         bank_forks::BankForks,
         epoch_accounts_hash::{self, EpochAccountsHash},
         genesis_utils::{self, GenesisConfigInfo},
@@ -109,7 +109,7 @@ impl TestEnvironment {
 
         let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
             &genesis_config_info.genesis_config,
-            bank_test_config_caching_enabled(),
+            BankTestConfig::default(),
         ));
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
@@ -199,7 +199,7 @@ impl BackgroundServices {
             None,
             false,
             0,
-            Some(snapshot_config.clone()),
+            snapshot_config.clone(),
         );
 
         let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
@@ -326,7 +326,7 @@ fn test_epoch_accounts_hash_basic(test_environment: TestEnvironment) {
                     },
                 )
                 .unwrap();
-            expected_epoch_accounts_hash = Some(EpochAccountsHash::new(accounts_hash));
+            expected_epoch_accounts_hash = Some(EpochAccountsHash::from(accounts_hash));
             debug!(
                 "slot {}, expected epoch accounts hash: {:?}",
                 bank.slot(),
@@ -453,7 +453,6 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 None,
                 None,
                 AccountSecondaryIndexes::default(),
-                false,
                 None,
                 AccountShrinkThreshold::default(),
                 true,
@@ -483,7 +482,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 /// Given the scenario where two banks are rooted back-to-back, where the first bank sends an
 /// EAH request and the second bank sends a snapshot request, both requests should be handled.
 #[test]
-fn test_background_services_request_handling() {
+fn test_background_services_request_handling_for_epoch_accounts_hash() {
     solana_logger::setup();
 
     const NUM_EPOCHS_TO_TEST: u64 = 2;

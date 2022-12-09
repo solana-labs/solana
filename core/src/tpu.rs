@@ -26,7 +26,6 @@ use {
     },
     solana_runtime::{
         bank_forks::BankForks,
-        cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
     solana_sdk::{pubkey::Pubkey, signature::Keypair},
@@ -94,7 +93,6 @@ impl Tpu {
         bank_notification_sender: Option<BankNotificationSender>,
         tpu_coalesce_ms: u64,
         cluster_confirmed_slot_sender: GossipDuplicateConfirmedSlotsSender,
-        cost_model: &Arc<RwLock<CostModel>>,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
@@ -159,7 +157,7 @@ impl Tpu {
         let (verified_sender, verified_receiver) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
-        let tpu_quic_t = spawn_server(
+        let (_, tpu_quic_t) = spawn_server(
             transactions_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu.ip(),
@@ -174,7 +172,7 @@ impl Tpu {
         )
         .unwrap();
 
-        let tpu_forwards_quic_t = spawn_server(
+        let (_, tpu_forwards_quic_t) = spawn_server(
             transactions_forwards_quic_sockets,
             keypair,
             cluster_info.my_contact_info().tpu_forwards.ip(),
@@ -232,7 +230,6 @@ impl Tpu {
             verified_gossip_vote_packets_receiver,
             transaction_status_sender,
             replay_vote_sender,
-            cost_model.clone(),
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),

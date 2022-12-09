@@ -18,7 +18,9 @@ use {
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
-        system_monitor_service::{verify_net_stats_access, SystemMonitorService},
+        system_monitor_service::{
+            verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
+        },
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
@@ -77,7 +79,6 @@ use {
         bank::Bank,
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
-        cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
@@ -129,7 +130,7 @@ pub struct ValidatorConfig {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
-    pub snapshot_config: Option<SnapshotConfig>,
+    pub snapshot_config: SnapshotConfig,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub turbine_disabled: Arc<AtomicBool>,
@@ -161,7 +162,6 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
@@ -192,7 +192,7 @@ impl Default for ValidatorConfig {
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
-            snapshot_config: Some(SnapshotConfig::new_load_only()),
+            snapshot_config: SnapshotConfig::new_load_only(),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
             enforce_ulimit_nofile: true,
@@ -223,7 +223,6 @@ impl Default for ValidatorConfig {
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
@@ -244,7 +243,6 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
-            accounts_db_caching_enabled: true,
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
@@ -389,8 +387,7 @@ impl Validator {
         if !config.no_os_network_stats_reporting {
             if let Err(e) = verify_net_stats_access() {
                 return Err(format!(
-                    "Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.",
-                    e,
+                    "Failed to access Network stats: {e}. Bypass check with --no-os-network-stats-reporting.",
                 ));
             }
         }
@@ -406,7 +403,7 @@ impl Validator {
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        return Err(format!("Failed to load the Geyser plugin: {:?}", err));
+                        return Err(format!("Failed to load the Geyser plugin: {err:?}"));
                     }
                 }
             } else {
@@ -427,7 +424,7 @@ impl Validator {
         }
 
         if rayon::ThreadPoolBuilder::new()
-            .thread_name(|ix| format!("solRayonGlob{:02}", ix))
+            .thread_name(|ix| format!("solRayonGlob{ix:02}"))
             .build_global()
             .is_err()
         {
@@ -444,8 +441,7 @@ impl Validator {
 
         if !ledger_path.is_dir() {
             return Err(format!(
-                "ledger directory does not exist or is not accessible: {:?}",
-                ledger_path
+                "ledger directory does not exist or is not accessible: {ledger_path:?}"
             ));
         }
 
@@ -497,10 +493,12 @@ impl Validator {
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
-            !config.no_os_memory_stats_reporting,
-            !config.no_os_network_stats_reporting,
-            !config.no_os_cpu_stats_reporting,
-            !config.no_os_disk_stats_reporting,
+            SystemMonitorStatsReportConfig {
+                report_os_memory_stats: !config.no_os_memory_stats_reporting,
+                report_os_network_stats: !config.no_os_network_stats_reporting,
+                report_os_cpu_stats: !config.no_os_cpu_stats_reporting,
+                report_os_disk_stats: !config.no_os_disk_stats_reporting,
+            },
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
@@ -573,17 +571,13 @@ impl Validator {
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
 
-        // A snapshot config is required.  Remove the Option<> wrapper in the future.
-        assert!(config.snapshot_config.is_some());
-        let snapshot_config = config.snapshot_config.clone().unwrap();
-
         assert!(is_snapshot_config_valid(
-            &snapshot_config,
+            &config.snapshot_config,
             config.accounts_hash_interval_slots,
         ));
 
         let (pending_snapshot_package, snapshot_packager_service) =
-            if snapshot_config.should_generate_snapshots() {
+            if config.snapshot_config.should_generate_snapshots() {
                 // filler accounts make snapshots invalid for use
                 // so, do not publish that we have snapshots
                 let enable_gossip_push = config
@@ -597,7 +591,7 @@ impl Validator {
                     starting_snapshot_hashes,
                     &exit,
                     &cluster_info,
-                    snapshot_config.clone(),
+                    config.snapshot_config.clone(),
                     enable_gossip_push,
                 );
                 (
@@ -625,7 +619,7 @@ impl Validator {
         let accounts_background_request_sender =
             AbsRequestSender::new(snapshot_request_sender.clone());
         let snapshot_request_handler = SnapshotRequestHandler {
-            snapshot_config,
+            snapshot_config: config.snapshot_config.clone(),
             snapshot_request_sender,
             snapshot_request_receiver,
             accounts_package_sender,
@@ -641,7 +635,7 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            config.accounts_db_caching_enabled,
+            true, // caching_enabled
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
@@ -722,7 +716,6 @@ impl Validator {
             max_slots.clone(),
         );
 
-        let poh_config = Arc::new(genesis_config.poh_config.clone());
         let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
             let bank = &bank_forks.read().unwrap().working_bank();
@@ -737,7 +730,7 @@ impl Validator {
                 &blockstore,
                 blockstore.get_new_shred_signal(0),
                 &leader_schedule_cache,
-                &poh_config,
+                &genesis_config.poh_config,
                 Some(poh_timing_point_sender),
                 exit.clone(),
             )
@@ -791,7 +784,7 @@ impl Validator {
             let json_rpc_service = JsonRpcService::new(
                 rpc_addr,
                 config.rpc_config.clone(),
-                config.snapshot_config.clone(),
+                Some(config.snapshot_config.clone()),
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 blockstore.clone(),
@@ -897,7 +890,7 @@ impl Validator {
             &start_progress,
         ) {
             Ok(waited) => waited,
-            Err(e) => return Err(format!("wait_for_supermajority failed: {:?}", e)),
+            Err(e) => return Err(format!("wait_for_supermajority failed: {e:?}")),
         };
 
         let ledger_metric_report_service =
@@ -908,7 +901,7 @@ impl Validator {
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
-            &poh_config,
+            &genesis_config.poh_config,
             &exit,
             bank_forks.read().unwrap().root_bank().ticks_per_slot(),
             config.poh_pinned_cpu_core,
@@ -922,10 +915,6 @@ impl Validator {
         );
 
         let vote_tracker = Arc::<VoteTracker>::default();
-        let mut cost_model = CostModel::default();
-        // initialize cost model with built-in instruction costs only
-        cost_model.initialize_cost_table(&[]);
-        let cost_model = Arc::new(RwLock::new(cost_model));
 
         let (retransmit_slots_sender, retransmit_slots_receiver) = unbounded();
         let (verified_vote_sender, verified_vote_receiver) = unbounded();
@@ -980,7 +969,6 @@ impl Validator {
                 replay_slots_concurrently: config.replay_slots_concurrently,
             },
             &max_slots,
-            &cost_model,
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
@@ -1017,7 +1005,6 @@ impl Validator {
             bank_notification_sender,
             config.tpu_coalesce_ms,
             cluster_confirmed_slot_sender,
-            &cost_model,
             &connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
@@ -1232,9 +1219,8 @@ fn check_poh_speed(
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
             return Err(format!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. \
+                "PoH is slower than cluster target tick rate! mine: {my_ns_per_slot} cluster: {target_ns_per_slot}. \
                 If you wish to continue, try --no-poh-speed-test",
-                my_ns_per_slot, target_ns_per_slot,
             ));
         }
     }
@@ -1273,10 +1259,8 @@ fn post_process_restored_tower(
             // intentionally fail to restore tower; we're supposedly in a new hard fork; past
             // out-of-chain vote state doesn't make sense at all
             // what if --wait-for-supermajority again if the validator restarted?
-            let message = format!(
-                "Hard fork is detected; discarding tower restoration result: {:?}",
-                tower
-            );
+            let message =
+                format!("Hard fork is detected; discarding tower restoration result: {tower:?}");
             datapoint_error!("tower_error", ("error", message, String),);
             error!("{}", message);
 
@@ -1306,15 +1290,14 @@ fn post_process_restored_tower(
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
-                    ("error", format!("Unable to restore tower: {}", err), String),
+                    ("error", format!("Unable to restore tower: {err}"), String),
                 );
             }
             if should_require_tower && voting_has_been_active {
                 return Err(format!(
-                    "Requested mandatory tower restore failed: {}. \
+                    "Requested mandatory tower restore failed: {err}. \
                      And there is an existing vote_account containing actual votes. \
-                     Aborting due to possible conflicting duplicate votes",
-                    err
+                     Aborting due to possible conflicting duplicate votes"
                 ));
             }
             if err.is_file_missing() && !voting_has_been_active {
@@ -1380,10 +1363,7 @@ fn load_blockstore(
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
             return Err(format!(
-                "genesis hash mismatch: hash={} expected={}. Delete the ledger directory to continue: {:?}",
-                genesis_hash,
-                expected_genesis_hash,
-                ledger_path,
+                "genesis hash mismatch: hash={genesis_hash} expected={expected_genesis_hash}. Delete the ledger directory to continue: {ledger_path:?}",
             ));
         }
     }
@@ -1424,7 +1404,7 @@ fn load_blockstore(
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: config.accounts_db_caching_enabled,
+        accounts_db_caching_enabled: true,
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
@@ -1455,7 +1435,7 @@ fn load_blockstore(
             &blockstore,
             config.account_paths.clone(),
             config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
+            Some(&config.snapshot_config),
             &process_options,
             transaction_history_services
                 .cache_block_meta_sender
@@ -1490,7 +1470,7 @@ fn load_blockstore(
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
     {
         let mut bank_forks = bank_forks.write().unwrap();
-        bank_forks.set_snapshot_config(config.snapshot_config.clone());
+        bank_forks.set_snapshot_config(Some(config.snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(config.accounts_hash_interval_slots);
         if let Some(ref shrink_paths) = config.account_shrink_paths {
             bank_forks
@@ -1599,7 +1579,8 @@ impl<'a> ProcessBlockStore<'a> {
                 self.cache_block_meta_sender.as_ref(),
                 &self.accounts_background_request_sender,
             ) {
-                return Err(format!("Failed to load ledger: {:?}", e));
+                exit.store(true, Ordering::Relaxed);
+                return Err(format!("Failed to load ledger: {e:?}"));
             }
 
             exit.store(true, Ordering::Relaxed);
@@ -1617,10 +1598,7 @@ impl<'a> ProcessBlockStore<'a> {
                         self.blockstore,
                         &mut self.original_blockstore_root,
                     ) {
-                        return Err(format!(
-                            "Failed to reconcile blockstore with tower: {:?}",
-                            e
-                        ));
+                        return Err(format!("Failed to reconcile blockstore with tower: {e:?}"));
                     }
                 }
 
@@ -1645,8 +1623,7 @@ impl<'a> ProcessBlockStore<'a> {
                     &mut self.original_blockstore_root,
                 ) {
                     return Err(format!(
-                        "Failed to reconcile blockstore with hard fork: {:?}",
-                        e
+                        "Failed to reconcile blockstore with hard fork: {e:?}"
                     ));
                 }
             }
@@ -1671,11 +1648,6 @@ fn maybe_warp_slot(
     accounts_background_request_sender: &AbsRequestSender,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        let snapshot_config = match config.snapshot_config.as_ref() {
-            Some(config) => config,
-            None => return Err("warp slot requires a snapshot config".to_owned()),
-        };
-
         process_blockstore.process()?;
 
         let mut bank_forks = bank_forks.write().unwrap();
@@ -1708,14 +1680,18 @@ fn maybe_warp_slot(
             ledger_path,
             &bank_forks.root_bank(),
             None,
-            &snapshot_config.full_snapshot_archives_dir,
-            &snapshot_config.incremental_snapshot_archives_dir,
-            snapshot_config.archive_format,
-            snapshot_config.maximum_full_snapshot_archives_to_retain,
-            snapshot_config.maximum_incremental_snapshot_archives_to_retain,
+            &config.snapshot_config.full_snapshot_archives_dir,
+            &config.snapshot_config.incremental_snapshot_archives_dir,
+            config.snapshot_config.archive_format,
+            config
+                .snapshot_config
+                .maximum_full_snapshot_archives_to_retain,
+            config
+                .snapshot_config
+                .maximum_incremental_snapshot_archives_to_retain,
         ) {
             Ok(archive_info) => archive_info,
-            Err(e) => return Err(format!("Unable to create snapshot: {}", e)),
+            Err(e) => return Err(format!("Unable to create snapshot: {e}")),
         };
         info!(
             "created snapshot: {}",
