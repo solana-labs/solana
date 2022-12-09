@@ -71,6 +71,7 @@ pub struct QuicClientCertificate {
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
     client_certificate: Arc<QuicClientCertificate>,
+    client_endpoint: Option<Endpoint>,
 }
 
 #[derive(Error, Debug)]
@@ -90,19 +91,30 @@ impl From<QuicError> for ClientErrorKind {
 }
 
 impl QuicLazyInitializedEndpoint {
-    pub fn new(client_certificate: Arc<QuicClientCertificate>) -> Self {
+    pub fn new(
+        client_certificate: Arc<QuicClientCertificate>,
+        client_endpoint: Option<Endpoint>,
+    ) -> Self {
         Self {
             endpoint: RwLock::new(None),
             client_certificate,
+            client_endpoint,
         }
     }
 
     fn create_endpoint(&self) -> Endpoint {
-        let (_, client_socket) = solana_net_utils::bind_in_range(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            VALIDATOR_PORT_RANGE,
-        )
-        .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
+        let mut endpoint = if let Some(endpoint) = &self.client_endpoint {
+            endpoint.clone()
+        } else {
+            let client_socket = solana_net_utils::bind_in_range(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                VALIDATOR_PORT_RANGE,
+            )
+            .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range")
+            .1;
+
+            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket)
+        };
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -115,9 +127,6 @@ impl QuicLazyInitializedEndpoint {
         crypto.enable_early_data = true;
         crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
-        let mut endpoint =
-            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
-
         let mut config = ClientConfig::new(Arc::new(crypto));
         let transport_config = Arc::get_mut(&mut config.transport)
             .expect("QuicLazyInitializedEndpoint::create_endpoint Arc::get_mut");
@@ -126,6 +135,7 @@ impl QuicLazyInitializedEndpoint {
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
         endpoint.set_default_client_config(config);
+
         endpoint
     }
 
@@ -160,10 +170,13 @@ impl Default for QuicLazyInitializedEndpoint {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         )
         .expect("Failed to create QUIC client certificate");
-        Self::new(Arc::new(QuicClientCertificate {
-            certificates: certs,
-            key: priv_key,
-        }))
+        Self::new(
+            Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
+            }),
+            None,
+        )
     }
 }
 
