@@ -1155,7 +1155,6 @@ fn load_bank_forks(
         bank_forks.clone(),
         &exit,
         abs_request_handler,
-        process_options.accounts_db_caching_enabled,
         process_options.accounts_db_test_hash_calculation,
         None,
     );
@@ -2757,7 +2756,6 @@ fn main() {
                     run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
-                    accounts_db_caching_enabled: true,
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
                         "limit_load_slot_count_from_snapshot",
@@ -3018,7 +3016,6 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
-                        accounts_db_caching_enabled: true,
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,

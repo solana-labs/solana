@@ -1817,7 +1817,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .contains(&slot)
     }
 
-    pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
+    pub fn add_root(&self, slot: Slot) {
         self.roots_added.fetch_add(1, Ordering::Relaxed);
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
@@ -1825,10 +1825,6 @@ impl<T: IndexValue> AccountsIndex<T> {
         // 'slot' is a root, so it is both 'root' and 'original'
         w_roots_tracker.alive_roots.insert(slot);
         w_roots_tracker.historical_roots.insert(slot);
-        // we delay cleaning until flushing!
-        if !caching_enabled {
-            w_roots_tracker.uncleaned_roots.insert(slot);
-        }
     }
 
     pub fn add_uncleaned_roots<I>(&self, roots: I)

@@ -160,7 +160,6 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
@@ -222,7 +221,6 @@ impl Default for ValidatorConfig {
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
@@ -243,7 +241,6 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
-            accounts_db_caching_enabled: true,
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
@@ -634,7 +631,6 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            config.accounts_db_caching_enabled,
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
@@ -1403,7 +1399,6 @@ fn load_blockstore(
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: config.accounts_db_caching_enabled,
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
