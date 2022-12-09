@@ -1881,7 +1881,12 @@ impl Bank {
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     /// * Calculates and sets the epoch accounts hash from the parent
-    pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+    pub fn warp_from_parent(
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+        data_source: CalcAccountsHashDataSource,
+    ) -> Self {
         parent.freeze();
         parent
             .rc
@@ -1889,9 +1894,7 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
-        parent.force_flush_accounts_cache();
-        let accounts_hash =
-            parent.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, true);
+        let accounts_hash = parent.update_accounts_hash(data_source, false, true);
         let epoch_accounts_hash = accounts_hash.into();
         parent
             .rc

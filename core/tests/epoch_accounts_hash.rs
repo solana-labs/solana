@@ -594,6 +594,7 @@ fn test_epoch_accounts_hash_and_warping() {
         &bank,
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
+        solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
@@ -625,6 +626,7 @@ fn test_epoch_accounts_hash_and_warping() {
         &bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
+        solana_runtime::accounts_db::CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
