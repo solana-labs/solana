@@ -425,12 +425,12 @@ impl WindowService {
         Builder::new()
             .name("solShrRecov".to_string())
             .spawn(move || {
+                let mut erasure_metas = HashMap::new();
                 let mut metrics = BlockstoreRecoveryMetrics::default();
                 let mut last_print = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
                     // Collect all the new recovery requests
                     let mut start = Measure::start("receive erasures elapsed");
-                    let mut erasure_metas = HashMap::new();
                     while let Ok(new_erasure_metas) = erasure_meta_receiver.try_recv() {
                         erasure_metas.extend(new_erasure_metas);
                     }
@@ -457,9 +457,9 @@ impl WindowService {
                         last_print = Instant::now();
                     }
 
-                    while erasure_meta_receiver.is_empty() {
-                        thread::sleep(Duration::from_millis(1));
-                    }
+                    // No sense spinning indefinitely waiting for erasure sets to be ready
+                    // for recovery. Save some CPU cycles
+                    thread::sleep(Duration::from_millis(1));
                 }
             })
             .unwrap()
