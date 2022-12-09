@@ -3208,7 +3208,7 @@ impl Bank {
         let mut hash = self.hash.write().unwrap();
         if *hash == Hash::default() {
             // finish up any deferred changes to account state
-            self.collect_rent_eagerly(false);
+            self.collect_rent_eagerly();
             self.collect_fees();
             self.distribute_rent();
             self.update_slot_history();
@@ -5188,11 +5188,6 @@ impl Bank {
         }
     }
 
-    /// after deserialize, populate rewrites with accounts that would normally have had their data rewritten in this slot due to rent collection (but didn't)
-    pub fn prepare_rewrites_for_hash(&self) {
-        self.collect_rent_eagerly(true);
-    }
-
     /// Get stake and stake node accounts
     pub(crate) fn get_stake_accounts(&self, minimized_account_set: &DashSet<Pubkey>) {
         self.stakes_cache
@@ -5234,7 +5229,7 @@ impl Bank {
         }
     }
 
-    fn collect_rent_eagerly(&self, just_rewrites: bool) {
+    fn collect_rent_eagerly(&self) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
         }
@@ -5274,16 +5269,16 @@ impl Bank {
                 let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
                 thread_pool.install(|| {
                     ranges.into_par_iter().for_each(|range| {
-                        self.collect_rent_in_range(range.0, range.1, just_rewrites, &rent_metrics)
+                        self.collect_rent_in_range(range.0, range.1, &rent_metrics)
                     });
                 });
             }
         }
         if !parallel {
             // collect serially
-            partitions.into_iter().for_each(|partition| {
-                self.collect_rent_in_partition(partition, just_rewrites, &rent_metrics)
-            });
+            partitions
+                .into_iter()
+                .for_each(|partition| self.collect_rent_in_partition(partition, &rent_metrics));
         }
         measure.stop();
         datapoint_info!(
@@ -5340,7 +5335,6 @@ impl Bank {
     fn collect_rent_from_accounts(
         &self,
         mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
-        just_rewrites: bool,
         rent_paying_pubkeys: Option<&HashSet<Pubkey>>,
         partition_index: PartitionIndex,
     ) -> CollectRentFromAccountsInfo {
@@ -5352,7 +5346,7 @@ impl Bank {
         let mut time_collecting_rent_us = 0;
         let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
-        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
+        let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites;
         for (pubkey, account, _loaded_slot) in accounts.iter_mut() {
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
@@ -5380,7 +5374,7 @@ impl Bank {
                 time_hashing_skipped_rewrites_us += measure.as_us();
                 rewrites_skipped.push((*pubkey, hash));
                 assert_eq!(rent_collected_info, CollectedInfo::default());
-            } else if !just_rewrites {
+            } else {
                 if rent_collected_info.rent_amount > 0 {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
                         if !rent_paying_pubkeys.contains(pubkey) {
@@ -5437,14 +5431,9 @@ impl Bank {
     }
 
     /// convert 'partition' to a pubkey range and 'collect_rent_in_range'
-    fn collect_rent_in_partition(
-        &self,
-        partition: Partition,
-        just_rewrites: bool,
-        metrics: &RentMetrics,
-    ) {
+    fn collect_rent_in_partition(&self, partition: Partition, metrics: &RentMetrics) {
         let subrange_full = Self::pubkey_range_from_partition(partition);
-        self.collect_rent_in_range(partition, subrange_full, just_rewrites, metrics)
+        self.collect_rent_in_range(partition, subrange_full, metrics)
     }
 
     /// get all pubkeys that we expect to be rent-paying or None, if this was not initialized at load time (that should only exist in test cases)
@@ -5478,7 +5467,6 @@ impl Bank {
         &self,
         partition: Partition,
         subrange_full: RangeInclusive<Pubkey>,
-        just_rewrites: bool,
         metrics: &RentMetrics,
     ) {
         let mut hold_range = Measure::start("hold_range");
@@ -5527,12 +5515,7 @@ impl Bank {
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
                     });
                     CollectRentInPartitionInfo::new(
-                        self.collect_rent_from_accounts(
-                            accounts,
-                            just_rewrites,
-                            rent_paying_pubkeys,
-                            partition.1,
-                        ),
+                        self.collect_rent_from_accounts(accounts, rent_paying_pubkeys, partition.1),
                         Duration::from_nanos(measure_load_accounts.as_ns()),
                     )
                 })
@@ -9991,10 +9974,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        bank.collect_rent_in_partition((0, 0, 1), true, &RentMetrics::default());
-
-        assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        bank.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all range
+        bank.collect_rent_in_partition((0, 0, 1), &RentMetrics::default()); // all range
 
         assert_eq!(bank.collected_rent.load(Relaxed), rent_collected);
         assert_eq!(
@@ -10061,11 +10041,9 @@ pub(crate) mod tests {
         let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
         account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
 
-        let just_rewrites = true;
         // loaded from previous slot, so we skip rent collection on it
         let _result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
-            just_rewrites,
             None,
             PartitionIndex::default(),
         );
@@ -10121,8 +10099,8 @@ pub(crate) mod tests {
         assert_eq!(hash1_with_zero, hash1_without_zero);
         assert_ne!(hash1_with_zero, Hash::default());
 
-        bank2_with_zero.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all
-        bank2_without_zero.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all
+        bank2_with_zero.collect_rent_in_partition((0, 0, 1), &RentMetrics::default()); // all
+        bank2_without_zero.collect_rent_in_partition((0, 0, 1), &RentMetrics::default()); // all
 
         bank2_with_zero.freeze();
         let hash2_with_zero = bank2_with_zero.hash();
@@ -20162,7 +20140,7 @@ pub(crate) mod tests {
 
         // Collect rent for real
         let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
-        bank.collect_rent_eagerly(false);
+        bank.collect_rent_eagerly();
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
         let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent
