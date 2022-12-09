@@ -11,7 +11,6 @@ use {
         serde_snapshot::{
             self, reconstruct_single_storage, remap_and_reconstruct_single_storage,
             snapshot_storage_lengths_from_fields, SerdeStyle, SerializedAppendVecId,
-            SlotAppendVecIdSet,
         },
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
@@ -63,10 +62,6 @@ pub(crate) struct SnapshotStorageRebuilder {
     num_collisions: AtomicUsize,
     /// Rebuild from the snapshot files or archives
     snapshot_from: SnapshotFrom,
-    /// The accounts/ files, unused files for deletion in SnapshotFrom::File
-    unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
-    /// The appendvecs in snapshot/, used for comparison with account_files in SnapshotFrom::File
-    snapshot_appendvecs: Option<SlotAppendVecIdSet>,
 }
 
 impl SnapshotStorageRebuilder {
@@ -76,14 +71,7 @@ impl SnapshotStorageRebuilder {
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_from: SnapshotFrom,
-        unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
-        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
-        if snapshot_from == SnapshotFrom::File {
-            assert!(unused_account_files.is_some());
-            assert!(snapshot_appendvecs.is_some());
-        }
-
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
         let snapshot_version_str = snapshot_version_from_file(snapshot_version_path)?;
@@ -92,13 +80,8 @@ impl SnapshotStorageRebuilder {
                 "unsupported snapshot version: {snapshot_version_str}",
             ))
         })?;
-        let snapshot_storage_lengths = Self::process_snapshot_file(
-            snapshot_version,
-            snapshot_file_path,
-            snapshot_appendvecs.clone(),
-        )?;
-
-        info!("snapshot_appendvecs has entries {:?}", snapshot_appendvecs);
+        let snapshot_storage_lengths =
+            Self::process_snapshot_file(snapshot_version, snapshot_file_path)?;
 
         match Self::spawn_rebuilder_threads(
             file_receiver,
@@ -124,8 +107,6 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         snapshot_from: SnapshotFrom,
-        unused_account_files: Option<Arc<Mutex<Vec<PathBuf>>>>,
-        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Self {
         let storage = DashMap::with_capacity(snapshot_storage_lengths.len());
         let storage_paths: DashMap<_, _> = snapshot_storage_lengths
@@ -144,8 +125,6 @@ impl SnapshotStorageRebuilder {
             processed_slot_count: AtomicUsize::new(0),
             num_collisions: AtomicUsize::new(0),
             snapshot_from,
-            unused_account_files,
-            snapshot_appendvecs,
         }
     }
 
@@ -198,7 +177,6 @@ impl SnapshotStorageRebuilder {
     fn process_snapshot_file(
         snapshot_version: SnapshotVersion,
         snapshot_file_path: PathBuf,
-        snapshot_appendvecs: Option<SlotAppendVecIdSet>,
     ) -> Result<HashMap<Slot, HashMap<usize, usize>>, bincode::Error> {
         let snapshot_file = File::open(snapshot_file_path).unwrap();
         let mut snapshot_stream = BufReader::new(snapshot_file);
@@ -207,10 +185,7 @@ impl SnapshotStorageRebuilder {
                 let (_bank_fields, accounts_fields) =
                     serde_snapshot::fields_from_stream(SerdeStyle::Newer, &mut snapshot_stream)?;
 
-                Ok(snapshot_storage_lengths_from_fields(
-                    &accounts_fields,
-                    snapshot_appendvecs,
-                ))
+                Ok(snapshot_storage_lengths_from_fields(&accounts_fields))
             }
         }
     }
@@ -288,13 +263,9 @@ impl SnapshotStorageRebuilder {
 
     /// Process an append_vec_file
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), SnapshotError> {
-        info!("process_append_vec_file path {}", path.display());
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
             if self.snapshot_from == SnapshotFrom::File {
-                let mut found_matching_appendvec = false;
-                let snapshot_appendvecs = self.snapshot_appendvecs.as_ref().unwrap();
-                let unused_account_files = self.unused_account_files.as_ref().unwrap();
                 if let Some(appendvec_entry) = parse_appendvec_filename(&filename) {
                     let (_slot, appendvec_id) = appendvec_entry;
                     let next_appendvec_id = appendvec_id + 1;
@@ -302,20 +273,6 @@ impl SnapshotStorageRebuilder {
                     let _ = &self
                         .next_append_vec_id
                         .fetch_max(next_appendvec_id, Ordering::Relaxed);
-
-                    let mut set = snapshot_appendvecs.lock().unwrap();
-                    if set.contains(&appendvec_entry) {
-                        set.remove(&appendvec_entry);
-                        found_matching_appendvec = true;
-                    }
-                }
-
-                if !found_matching_appendvec {
-                    // path not passed parsing or no matching snapshot appendvec found should be saved
-                    // for later deletion
-                    let mut vec = unused_account_files.lock().unwrap();
-                    vec.push(path);
-                    return Ok(()); // not a snapshot appendvec, done.
                 }
             }
             let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
@@ -341,11 +298,6 @@ impl SnapshotStorageRebuilder {
 
     /// Insert storage path into slot and return the number of storage files for the slot
     fn insert_storage_file(&self, slot: &Slot, path: PathBuf) -> usize {
-        info!(
-            "insert_storage_file, slot {}, path {}",
-            &slot,
-            path.display()
-        );
         let slot_paths = self.storage_paths.get(slot).unwrap();
         let mut lock = slot_paths.lock().unwrap();
         lock.push(path);

@@ -364,8 +364,14 @@ fn test_concurrent_snapshot_packaging(
     // Take snapshot of zeroth bank
     let bank0 = bank_forks.get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
-    snapshot_utils::add_bank_snapshot(bank_snapshots_dir, &bank0, &storages, snapshot_version)
-        .unwrap();
+    snapshot_utils::add_bank_snapshot(
+        bank_snapshots_dir,
+        &bank0,
+        &storages,
+        snapshot_version,
+        None,
+    )
+    .unwrap();
 
     // Set up snapshotting channels
     let (real_accounts_package_sender, real_accounts_package_receiver) =
@@ -414,6 +420,7 @@ fn test_concurrent_snapshot_packaging(
             &bank,
             &snapshot_storages,
             snapshot_config.snapshot_version,
+            None,
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(

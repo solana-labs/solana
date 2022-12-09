@@ -235,7 +235,6 @@ pub(crate) fn compare_two_serialized_banks(
 /// Get snapshot storage lengths from accounts_db_fields
 pub(crate) fn snapshot_storage_lengths_from_fields(
     accounts_db_fields: &AccountsDbFields<SerializableAccountStorageEntry>,
-    snapshot_appendvecs: Option<SlotAppendVecIdSet>,
 ) -> HashMap<Slot, HashMap<SerializedAppendVecId, usize>> {
     let AccountsDbFields(snapshot_storage, ..) = &accounts_db_fields;
     snapshot_storage
@@ -247,11 +246,6 @@ pub(crate) fn snapshot_storage_lengths_from_fields(
                     .iter()
                     .map(|storage_entry| {
                         let id = storage_entry.id();
-                        if let Some(snapshot_appendvecs) = &snapshot_appendvecs {
-                            let mut vec = snapshot_appendvecs.lock().unwrap();
-                            vec.insert((*slot, id as AppendVecId));
-                            info!("snapshot_appendvecs, insert entry ({}, {})", *slot, id);
-                        }
                         (id, storage_entry.current_len())
                     })
                     .collect(),

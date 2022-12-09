@@ -228,7 +228,7 @@ fn bank_forks_from_snapshot(
         ) {
             Ok(good_ret) => Some(good_ret),
             Err(err) => {
-                info!("Failed to constuct the bank from the snaphot files.  Error: {err}.  Fall back to using the archives.");
+                warn!("Failed to construct the bank from the snaphot files.  Error: {err}.  Fall back to using the archives.");
                 None
             }
         }

@@ -1179,7 +1179,10 @@ pub fn main() {
         .into_iter()
         .map(|account_path| {
             match fs::create_dir_all(&account_path).and_then(|_| fs::canonicalize(&account_path)) {
-                Ok(account_path) => account_path,
+                Ok(account_path) => {
+                    info!("Created account_path {}", account_path.display());
+                    account_path
+                }
                 Err(err) => {
                     eprintln!("Unable to access account path: {account_path:?}, err: {err:?}");
                     exit(1);
@@ -1283,7 +1286,12 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
-    validator_config.snapshot_config = SnapshotConfig {
+    let snapshot_from = if matches.is_present("snapshot_from_file") {
+        SnapshotFrom::File
+    } else {
+        SnapshotFrom::Archive
+    };
+    validator_config.snapshot_config = Some(SnapshotConfig {
         usage: if full_snapshot_archive_interval_slots == Slot::MAX {
             SnapshotUsage::LoadOnly
         } else {

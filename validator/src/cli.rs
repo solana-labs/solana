@@ -288,6 +288,12 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .help("Use DIR as separate location for incremental snapshot archives [default: --snapshots value]"),
         )
         .arg(
+            Arg::with_name("snapshot_from_file")
+            .long("snapshot-from-file")
+            .takes_value(false)
+            .help("Construct initial bank state from files instead of archives"),
+        )
+        .arg(
             Arg::with_name("tower")
                 .long("tower")
                 .value_name("DIR")

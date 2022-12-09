@@ -15,7 +15,10 @@ use {
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self},
+        snapshot_utils::{
+            self, SnapshotFrom, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+        },
     },
     solana_sdk::{
         clock::Slot,
@@ -407,20 +410,28 @@ pub fn attempt_download_genesis_and_snapshot(
         .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
     info!("RPC node root slot: {}", rpc_client_slot);
 
-    download_snapshots(
-        full_snapshot_archives_dir,
-        incremental_snapshot_archives_dir,
-        validator_config,
-        bootstrap_config,
-        use_progress_bar,
-        maximum_local_snapshot_age,
-        start_progress,
-        minimal_snapshot_download_speed,
-        maximum_snapshot_download_abort,
-        download_abort_count,
-        snapshot_hash,
-        rpc_contact_info,
-    )?;
+    let snapshot_from_file = if let Some(snapshot_config) = &validator_config.snapshot_config {
+        snapshot_config.snapshot_from == SnapshotFrom::File
+    } else {
+        false
+    };
+
+    if !snapshot_from_file {
+        download_snapshots(
+            full_snapshot_archives_dir,
+            incremental_snapshot_archives_dir,
+            validator_config,
+            bootstrap_config,
+            use_progress_bar,
+            maximum_local_snapshot_age,
+            start_progress,
+            minimal_snapshot_download_speed,
+            maximum_snapshot_download_abort,
+            download_abort_count,
+            snapshot_hash,
+            rpc_contact_info,
+        )?;
+    }
 
     if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
         let rpc_client = RpcClient::new(url);
@@ -1169,8 +1180,8 @@ fn download_snapshots(
         })
     {
         info!(
-            "Full snapshot archive already exists locally. Skipping download. slot: {}, hash: {}",
-            full_snapshot_hash.0, full_snapshot_hash.1
+            "Full snapshot archive already exists locally at {}. Skipping download. slot: {}, hash: {}",
+            full_snapshot_archives_dir.display(), full_snapshot_hash.0, full_snapshot_hash.1
         );
     } else {
         download_snapshot(

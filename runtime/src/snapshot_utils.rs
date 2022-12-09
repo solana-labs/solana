@@ -56,7 +56,7 @@ use {
         str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicU32},
-            Arc, Mutex,
+            Arc,
         },
         thread::{Builder, JoinHandle},
     },
@@ -313,6 +313,91 @@ pub enum VerifySlotDeltasError {
 
     #[error("slot history is bad and cannot be used to verify slot deltas")]
     BadSlotHistory,
+}
+
+/// Delete the files and subdirectories in a directory.
+/// This is useful if the process does not have permission
+/// to delete the top level directory it might be able to
+/// delete the contents of that directory.
+fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
+    if let Ok(dir_entries) = std::fs::read_dir(path) {
+        for entry in dir_entries.flatten() {
+            let sub_path = entry.path();
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    warn!(
+                        "Failed to get metadata for {}. Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                    break;
+                }
+            };
+            if metadata.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                    warn!(
+                        "Failed to remove sub directory {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            } else if metadata.is_file() {
+                if let Err(err) = std::fs::remove_file(&sub_path) {
+                    warn!(
+                        "Failed to remove file {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            }
+        }
+    } else {
+        warn!(
+            "Failed to read the sub paths of {}",
+            path.as_ref().display()
+        );
+    }
+}
+
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
+pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
+
+    if path_delete.exists() {
+        std::fs::remove_dir_all(&path_delete).unwrap();
+    }
+
+    if !path.as_ref().exists() {
+        return;
+    }
+
+    if let Err(err) = std::fs::rename(&path, &path_delete) {
+        warn!(
+            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
+            err.to_string()
+        );
+        delete_contents_of_path(path);
+        return;
+    }
+
+    Builder::new()
+        .name("solDeletePath".to_string())
+        .spawn(move || {
+            std::fs::remove_dir_all(path_delete).unwrap();
+        })
+        .unwrap();
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
@@ -783,6 +868,44 @@ where
     Ok(())
 }
 
+/// Hard-link the file from accounts/ to snapshot/<slot>/accounts/
+/// This keep-alives the appendvec files to stay with the bank snapshot files.  The slot and id
+/// in the file names are also updated in case its file is a recycled one with inconsistent slot
+/// and id.
+fn hard_link_appendvec_files_to_snapshot(
+    bank_snapshots_dir: impl AsRef<Path>,
+    snapshot_storages: &[SnapshotStorage],
+) -> Result<()> {
+    let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
+    fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
+        error!(
+            "Failed when creating hard-link dir {}",
+            dir_accounts_hard_links.display()
+        );
+        SnapshotError::IoWithSource(e, "hard-link failed")
+    })?;
+
+    for slot_storages in snapshot_storages {
+        for storage in slot_storages {
+            storage.flush()?;
+            let path = storage.accounts.get_path();
+            let hard_link_path = dir_accounts_hard_links
+                .clone()
+                .join(format!("{:?}.{:?}", storage.slot, storage.id));
+            fs::hard_link(&path, &hard_link_path).map_err(|e| {
+                let err_str = format!(
+                    "hard-link appendvec file {} to {}",
+                    path.display(),
+                    hard_link_path.display()
+                );
+                info!("{}", &err_str);
+                SnapshotError::IoWithSource(e, "hard-link failed")
+            })?;
+        }
+    }
+    Ok(())
+}
+
 /// Serialize a bank to a snapshot
 ///
 /// **DEVELOPER NOTE** Any error that is returned from this function may bring down the node!  This
@@ -794,15 +917,20 @@ pub fn add_bank_snapshot(
     bank: &Bank,
     snapshot_storages: &[SnapshotStorage],
     snapshot_version: SnapshotVersion,
+    slot_deltas: Option<Vec<BankSlotDelta>>,
 ) -> Result<BankSnapshotInfo> {
     let mut add_snapshot_time = Measure::start("add-snapshot-ms");
     let slot = bank.slot();
     // bank_snapshots_dir/slot
-    let bank_snapshots_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
-    fs::create_dir_all(&bank_snapshots_dir)?;
+    let bank_snapshot_dir = get_bank_snapshots_dir(bank_snapshots_dir, slot);
+    if fs::metadata(&bank_snapshot_dir).is_ok() {
+        // Could be left over by the previous process in an incomplete state.  If found, remove it.
+        move_and_async_delete_path(&bank_snapshot_dir);
+    }
+    fs::create_dir_all(&bank_snapshot_dir)?;
 
     // the bank snapshot is stored as bank_snapshots_dir/slot/slot.BANK_SNAPSHOT_PRE_FILENAME_EXTENSION
-    let mut bank_snapshot_path = bank_snapshots_dir.join(get_snapshot_file_name(slot));
+    let mut bank_snapshot_path = bank_snapshot_dir.join(get_snapshot_file_name(slot));
     bank_snapshot_path.set_extension(BANK_SNAPSHOT_PRE_FILENAME_EXTENSION);
 
     info!(
@@ -813,6 +941,8 @@ pub fn add_bank_snapshot(
 
     let builtins = builtins::get();
     assert!(bank.check_builtins_exist(&builtins));
+
+    hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, &snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -827,9 +957,14 @@ pub fn add_bank_snapshot(
     bank_serialize.stop();
     add_snapshot_time.stop();
 
-    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
-    let status_cache_path = bank_snapshots_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
-    serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+    let status_cache_path = bank_snapshot_dir.join(SNAPSHOT_STATUS_CACHE_FILENAME);
+    if let Some(slot_deltas) = slot_deltas {
+        serialize_status_cache(slot, &slot_deltas, &status_cache_path)?;
+    }
+
+    // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
+    let state_complete_path = bank_snapshot_dir.clone().join("state_complete");
+    fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
     datapoint_info!(
@@ -1552,8 +1687,6 @@ where
             num_rebuilder_threads,
             next_append_vec_id,
             SnapshotFrom::Archive,
-            None,
-            None,
         )?,
         measure_name
     );
@@ -1619,20 +1752,42 @@ where
 {
     let (file_sender, file_receiver) = crossbeam_channel::unbounded();
 
-    // The account files found in accounts/ but not used by the snapshot
-    let unused_account_files = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+    let snapshot_local_account_path = snapshot_file_path
+        .as_ref()
+        .clone()
+        .parent()
+        .unwrap()
+        .join("accounts");
+    info!(
+        "The snapshot local hard-link path {}",
+        snapshot_local_account_path.display()
+    );
 
-    // This hashset is created when parsing the snapshot.  Its entries matching the found account
-    // files are deleted.  When the rebuild is done, if there is any leftover, then some account file is
-    // missing.  The process of constructing from the snapshot directory should be aborted.  It will fall
-    // back to the unarchiving case.
-    let snapshot_appendvecs = Arc::new(Mutex::new(HashSet::<(Slot, AppendVecId)>::new()));
+    let account_paths = account_paths.to_vec();
+
+    let dest_account_path = &account_paths[0];
+
+    // Generate hard-links to make the account files available in the main accounts/, and let the new appendvec
+    // paths be in accounts/
+    for file in fs::read_dir(snapshot_local_account_path).unwrap() {
+        let file_path = file.unwrap().path().to_path_buf();
+        let file_name = file_path.file_name().unwrap();
+        let dest_path = dest_account_path.clone().join(file_name);
+        fs::hard_link(&file_path, &dest_path).map_err(|e| {
+            error!(
+                "Failed to hard-link {} to {}",
+                file_path.display(),
+                dest_path.display()
+            );
+            SnapshotError::IoWithSource(e, "hard-link failed")
+        })?;
+    }
 
     streaming_snapshot_and_account_files(
         file_sender,
         &snapshot_file_path.as_ref(),
         &snapshot_version_path.as_ref(),
-        account_paths.to_vec(),
+        account_paths,
     );
 
     let num_rebuilder_threads = num_cpus::get_physical().saturating_sub(1).max(1);
@@ -1642,33 +1797,10 @@ where
             num_rebuilder_threads,
             next_append_vec_id,
             SnapshotFrom::File,
-            Some(unused_account_files.clone()),
-            Some(snapshot_appendvecs.clone()),
         )?,
         measure_name
     );
     info!("{}", measure_deserialize);
-
-    let set = snapshot_appendvecs.lock().unwrap();
-
-    if !set.is_empty() {
-        // Not all snapshot appendvec entries have been matched with the accounts files.  So, the accounts/ files
-        // are not consistent with the snapshot state.  Abort with the error.
-        error!(
-            "Error: Snapshot appendvec entries missing matching accounts files: {:?}",
-            set
-        );
-        return Err(SnapshotError::MissingAccountFile);
-    }
-
-    let vec = unused_account_files.lock().unwrap();
-    if !vec.is_empty() {
-        info!("Some account files are not in snapshot.  Delete them.");
-        for account_file in vec.iter() {
-            info!("{}", account_file.display());
-            let _ = fs::remove_file(account_file.as_path());
-        }
-    }
 
     let RebuiltSnapshotStorage {
         snapshot_version,
@@ -1959,16 +2091,30 @@ pub fn get_highest_incremental_snapshot_archive_slot(
     .map(|incremental_snapshot_archive_info| incremental_snapshot_archive_info.slot())
 }
 
+/// There is a time window from the slot directory being created, and the content being completely
+/// filled.  Check the completion to avoid using a highest found slot directory with missing content.
+pub fn snapshot_slot_dir_check_complete(path: &PathBuf) -> bool {
+    let completion_flag_file = path.clone().join("state_complete");
+    fs::metadata(completion_flag_file).is_ok()
+}
+
 /// Get the path (and metadata) for the full snapshot archive with the highest slot in a directory
 pub fn get_highest_full_snapshot_slot_and_path(
     snapshot_dir: impl AsRef<Path>,
 ) -> Result<(Slot, PathBuf)> {
+    lazy_static! {
+        static ref RE_SLOT_DIR: Regex = Regex::new(r"^\d+$").unwrap();
+    }
     // Under snapshot/, find the slot directories (for example, 100/, 200/, 300, ...)
     let mut snapshot_slot_dirs: Vec<_> = std::fs::read_dir(&snapshot_dir)
         .unwrap()
         .filter(|r| r.is_ok())
         .map(|r| r.unwrap().path())
-        .filter(|r| r.is_dir())
+        .filter(|r| {
+            r.is_dir()
+                && RE_SLOT_DIR.is_match(r.file_name().unwrap().to_str().unwrap())
+                && snapshot_slot_dir_check_complete(r)
+        })
         .map(|r| r.file_name().unwrap().to_os_string())
         .collect();
     if snapshot_slot_dirs.is_empty() {
@@ -1979,7 +2125,6 @@ pub fn get_highest_full_snapshot_slot_and_path(
         return Err(SnapshotError::NoSnapshotSlotDir);
     }
     // Find the highest slot directory
-    // snapshot_slot_dirs.sort_by_key(|dir| dir.path());
     snapshot_slot_dirs.sort();
     let highest_dir_name = snapshot_slot_dirs.into_iter().rev().next().unwrap();
 
@@ -1997,7 +2142,7 @@ pub fn get_highest_full_snapshot_slot_and_path(
     let highest_dir_path = snapshot_dir.as_ref().join(highest_dir_name);
 
     // Get the snapshot file.  Could be 600/600 or 600/600.pre
-    let snapshot_files_in_slot_dir: Vec<_> = std::fs::read_dir(highest_dir_path)?
+    let snapshot_files_in_slot_dir: Vec<_> = std::fs::read_dir(&highest_dir_path)?
         .into_iter()
         .filter(|r| r.is_ok())
         .map(|f| f.unwrap().path())
@@ -2009,6 +2154,11 @@ pub fn get_highest_full_snapshot_slot_and_path(
     if snapshot_files_in_slot_dir.len() != 1 {
         // We expect there is only one file here.  If the files structure is changed to something unexpected,
         // bail out here.
+        info!(
+            "highest_dir_path {}, snapshot_files_in_slot_dir: {:?}",
+            highest_dir_path.display(),
+            snapshot_files_in_slot_dir
+        );
         error!("The number of snapshot files should be 1 in the slot directory");
         return Err(SnapshotError::UnknownSnapshotFile);
     }
@@ -2676,7 +2826,7 @@ pub fn bank_to_full_snapshot_archive(
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(None);
     let bank_snapshot_info =
-        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
+        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version, None)?;
 
     package_and_archive_full_snapshot(
         bank,
@@ -2723,7 +2873,7 @@ pub fn bank_to_incremental_snapshot_archive(
     let temp_dir = tempfile::tempdir_in(bank_snapshots_dir)?;
     let snapshot_storages = bank.get_snapshot_storages(Some(full_snapshot_slot));
     let bank_snapshot_info =
-        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version)?;
+        add_bank_snapshot(&temp_dir, bank, &snapshot_storages, snapshot_version, None)?;
 
     package_and_archive_incremental_snapshot(
         bank,
