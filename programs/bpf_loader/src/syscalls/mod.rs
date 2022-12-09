@@ -12,8 +12,6 @@ pub use self::{
 #[allow(deprecated)]
 use {
     crate::BpfError,
-    num_bigint::BigUint,
-    num_traits::{One, Zero},
     solana_program_runtime::{
         ic_logger_msg, ic_msg, invoke_context::InvokeContext, stable_log, timings::ExecuteTimings,
     },
@@ -30,17 +28,17 @@ use {
             ALT_BN128_ADDITION_OUTPUT_LEN, ALT_BN128_MULTIPLICATION_OUTPUT_LEN,
             ALT_BN128_PAIRING_ELEMENT_LEN, ALT_BN128_PAIRING_OUTPUT_LEN,
         },
-        big_mod_exp::BigModExpParams,
+        big_mod_exp::{big_mod_exp, BigModExpParams},
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::FeatureSet,
         feature_set::{
-            self, alt_bn128_syscall_enabled, blake3_syscall_enabled, check_physical_overlapping,
-            check_syscall_outputs_do_not_overlap, curve25519_syscall_enabled,
-            disable_cpi_setting_executable_and_rent_epoch, disable_fees_sysvar,
-            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, stop_sibling_instruction_search_at_parent,
-            syscall_saturated_math,
+            self, alt_bn128_syscall_enabled, big_mod_exp_syscall_enabled, blake3_syscall_enabled,
+            check_physical_overlapping, check_syscall_outputs_do_not_overlap,
+            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
+            disable_fees_sysvar, enable_early_verification_of_account_modifications,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -154,6 +152,7 @@ pub fn register_syscalls<'a>(
     disable_deploy_of_alloc_free_syscall: bool,
 ) -> Result<SyscallRegistry<InvokeContext<'a>>, EbpfError> {
     let alt_bn128_syscall_enabled = feature_set.is_active(&alt_bn128_syscall_enabled::id());
+    let big_mod_exp_syscall_enabled = feature_set.is_active(&big_mod_exp_syscall_enabled::id());
     let blake3_syscall_enabled = feature_set.is_active(&blake3_syscall_enabled::id());
     let curve25519_syscall_enabled = feature_set.is_active(&curve25519_syscall_enabled::id());
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
@@ -282,13 +281,18 @@ pub fn register_syscalls<'a>(
             b"sol_alt_bn128_group_op",
             SyscallAltBn128::call,
         )?;
+
+        // Big_mod_exp
+        register_feature_gated_syscall!(
+            syscall_registry,
+            big_mod_exp_syscall_enabled,
+            b"sol_big_mod_exp",
+            SyscallBigModExp::call,
+        )?;
     }
 
     // Log data
     syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
-
-    // Big mod exp
-    syscall_registry.register_syscall_by_name(b"sol_big_mod_exp", SyscallBigModExp::call)?;
 
     Ok(syscall_registry)
 }
@@ -1775,19 +1779,7 @@ declare_syscall!(
             invoke_context.get_check_size(),
         )?;
 
-        let base = BigUint::from_bytes_be(base);
-        let exponent = BigUint::from_bytes_be(exponent);
-        let modulus = BigUint::from_bytes_be(modulus);
-
-        let value = if modulus.is_zero() || modulus.is_one() {
-            vec![0_u8; params.modulus_len as usize]
-        } else {
-            let res = base.modpow(&exponent, &modulus);
-            let res = res.to_bytes_be();
-            let mut value = vec![0_u8; (params.modulus_len as usize).saturating_sub(res.len())];
-            value.extend(res);
-            value
-        };
+        let value = big_mod_exp(base, exponent, modulus);
 
         let return_value = translate_slice_mut::<u8>(
             memory_mapping,

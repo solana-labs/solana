@@ -4873,8 +4873,6 @@ dependencies = [
  "byteorder",
  "libsecp256k1",
  "log",
- "num-bigint 0.4.3",
- "num-traits",
  "rand 0.7.3",
  "solana-measure",
  "solana-program-runtime",
