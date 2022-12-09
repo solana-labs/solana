@@ -345,7 +345,7 @@ impl Debug for Output {
 // Replace with std::lazy::Lazy when stabilized.
 // https://github.com/rust-lang/rust/issues/74465
 struct LazyAnalysis<'a, 'b> {
-    analysis: Option<Analysis<'a, InvokeContext<'b>>>,
+    analysis: Option<Analysis<'a>>,
     executable: &'a Executable<InvokeContext<'b>>,
 }
 
@@ -357,7 +357,7 @@ impl<'a, 'b> LazyAnalysis<'a, 'b> {
         }
     }
 
-    fn analyze(&mut self) -> &Analysis<InvokeContext<'b>> {
+    fn analyze(&mut self) -> &Analysis {
         if let Some(ref analysis) = self.analysis {
             return analysis;
         }
