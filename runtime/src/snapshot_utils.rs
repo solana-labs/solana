@@ -268,22 +268,16 @@ pub enum SnapshotError {
     #[error("no snapshot slot directory")]
     NoSnapshotSlotDir,
 
-    #[error("Unknown snapshot file")]
+    #[error("unknown snapshot file")]
     UnknownSnapshotFile,
 
-    #[error("Invalid account appendvec filename")]
+    #[error("invalid account appendvec filename")]
     InvalidAccountAppendvecFile,
 
-    #[error("Missing snapshot appendvec entry")]
-    MissingSnapshotAppendvec,
-
-    #[error("Missing account appendvec file")]
-    MissingAccountFile,
-
-    #[error("Missing status cache file")]
+    #[error("missing status cache file")]
     MissingStatusCacheFile,
 
-    #[error("Invalid operation")]
+    #[error("invalid operation")]
     InvalidOperation,
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
