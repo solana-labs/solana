@@ -195,8 +195,13 @@ mod tests {
 
         drop(request_recv_endpoint);
         // Response Receiver:
-        let (response_recv_socket, response_recv_exit, keypair2, response_recv_ip, response_recv_stats) =
-            server_args();
+        let (
+            response_recv_socket,
+            response_recv_exit,
+            keypair2,
+            response_recv_ip,
+            response_recv_stats,
+        ) = server_args();
         let (sender2, receiver2) = unbounded();
 
         let addr = response_recv_socket.local_addr().unwrap().ip();
@@ -233,14 +238,18 @@ mod tests {
             key: priv_key,
         });
 
-        let endpoint = QuicLazyInitializedEndpoint::new(client_certificate, Some(response_recv_endpoint));
-        let request_sender = QuicTpuConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
+        let endpoint =
+            QuicLazyInitializedEndpoint::new(client_certificate, Some(response_recv_endpoint));
+        let request_sender =
+            QuicTpuConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
         // Send a full size packet with single byte writes as a request.
         let num_bytes = PACKET_DATA_SIZE;
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        assert!(request_sender.send_wire_transaction_batch_async(packets).is_ok());
+        assert!(request_sender
+            .send_wire_transaction_batch_async(packets)
+            .is_ok());
         check_packets(receiver, num_bytes, num_expected_packets);
         info!("Received requests!");
 
@@ -266,7 +275,9 @@ mod tests {
         let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
-        assert!(response_sender.send_wire_transaction_batch_async(packets).is_ok());
+        assert!(response_sender
+            .send_wire_transaction_batch_async(packets)
+            .is_ok());
         check_packets(receiver2, num_bytes, num_expected_packets);
         info!("Received responses!");
 

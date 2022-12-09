@@ -104,8 +104,7 @@ impl QuicLazyInitializedEndpoint {
 
     fn create_endpoint(&self) -> Endpoint {
         let mut endpoint = if let Some(endpoint) = &self.client_endpoint {
-            let endpoint = endpoint.clone();
-            endpoint
+            endpoint.clone()
         } else {
             let client_socket = solana_net_utils::bind_in_range(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
