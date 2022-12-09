@@ -10,8 +10,8 @@ use {
         invoke_context::{prepare_mock_invoke_context, InvokeContext},
     },
     solana_rbpf::{
-        assembler::assemble, debugger, elf::Executable, interpreter::Interpreter,
-        static_analysis::Analysis, verifier::RequisiteVerifier, vm::VerifiedExecutable,
+        assembler::assemble, elf::Executable, static_analysis::Analysis,
+        verifier::RequisiteVerifier, vm::VerifiedExecutable,
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
@@ -294,13 +294,7 @@ before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
-    let (instruction_count, result) = if matches.value_of("use").unwrap() == "debugger" {
-        let mut interpreter = Interpreter::new(&mut vm).unwrap();
-        let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
-        debugger::execute(&mut interpreter, port)
-    } else {
-        vm.execute_program(matches.value_of("use").unwrap() == "interpreter")
-    };
+    let (instruction_count, result) = vm.execute_program(matches.value_of("use").unwrap() != "jit");
     let duration = Instant::now() - start_time;
     drop(vm);
 
