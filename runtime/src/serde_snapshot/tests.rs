@@ -171,7 +171,6 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         paths,
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
 
