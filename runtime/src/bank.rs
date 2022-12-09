@@ -1151,7 +1151,6 @@ pub struct NewBankOptions {
 #[derive(Debug, Default)]
 pub struct BankTestConfig {
     pub secondary_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
 }
 
 #[derive(Debug)]
