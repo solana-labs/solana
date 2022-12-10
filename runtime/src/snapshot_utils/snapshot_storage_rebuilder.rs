@@ -198,7 +198,7 @@ impl SnapshotStorageRebuilder {
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
         snapshot_from: Option<SnapshotFrom>,
-    ) -> Result<AccountStorageMap, SnapshotError> {
+    ) -> Result<AccountStorageMap, std::io::Error> {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
             num_threads,
@@ -211,9 +211,7 @@ impl SnapshotStorageRebuilder {
 
         if snapshot_from == Some(SnapshotFrom::Archive) {
             // Synchronously process buffered append_vec_files
-            thread_pool.install(|| 
-                rebuilder.process_buffered_files(append_vec_files))?;
-            };
+            thread_pool.install(|| rebuilder.process_buffered_files(append_vec_files))?;
         }
 
         // Asynchronously spawn threads to process received append_vec_files
@@ -229,11 +227,11 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Processes buffered append_vec_files
-    fn process_buffered_files(&self, append_vec_files: Vec<PathBuf>) -> Result<(), SnapshotError> {
+    fn process_buffered_files(&self, append_vec_files: Vec<PathBuf>) -> Result<(), std::io::Error> {
         append_vec_files
             .into_par_iter()
             .map(|path| self.process_append_vec_file(path))
-            .collect::<Result<(), SnapshotError>>()
+            .collect::<Result<(), std::io::Error>>()
     }
 
     /// Spawn a single thread to process received append_vec_files
@@ -262,7 +260,7 @@ impl SnapshotStorageRebuilder {
     }
 
     /// Process an append_vec_file
-    fn process_append_vec_file(&self, path: PathBuf) -> Result<(), SnapshotError> {
+    fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
             if self.snapshot_from == Some(SnapshotFrom::File) {

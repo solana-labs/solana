@@ -15,10 +15,7 @@ use {
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, SnapshotFrom, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        },
+        snapshot_utils::{self, SnapshotFrom},
     },
     solana_sdk::{
         clock::Slot,
@@ -410,11 +407,8 @@ pub fn attempt_download_genesis_and_snapshot(
         .map_err(|err| format!("Failed to get RPC node slot: {err}"))?;
     info!("RPC node root slot: {}", rpc_client_slot);
 
-    let snapshot_from_file = if let Some(snapshot_config) = &validator_config.snapshot_config {
-        snapshot_config.snapshot_from == Some(SnapshotFrom::File)
-    } else {
-        false
-    };
+    let snapshot_from_file =
+        validator_config.snapshot_config.snapshot_from == Some(SnapshotFrom::File);
 
     if !snapshot_from_file {
         download_snapshots(
