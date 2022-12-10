@@ -72,12 +72,14 @@ impl TopAccountsRankingField {
 #[derive(PartialEq)]
 enum TopCommonValueRankingField {
     Owner,
+    RentEpoch,
 }
 
 impl TopCommonValueRankingField {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "owner" => Some(Self::Owner),
+            "rent_epoch" => Some(Self::RentEpoch),
             _ => None,
         }
     }
@@ -208,12 +210,13 @@ impl<'a> AccountsSubCommand<'a> for App<'a, '_> {
                             .long("field")
                             .takes_value(true)
                             .value_name("FIELD")
-                            .possible_values(&["owner"])
+                            .possible_values(&["owner", "rent_epoch"])
                             .default_value("owner")
                             .required(true)
                             .help("Determine which stats to print. \
                                    Possible values are: \
-                                   'owner': print the top N common owners from all accounts.")
+                                   'owner': print the top N common owners from all accounts. \
+                                   'rent_epoch': print the top N common rent epochs.")
                     )
                     .arg(
                         Arg::with_name("n")
@@ -330,6 +333,9 @@ pub fn accounts_process_command(
                         offset = next_offset;
                         let key = match field {
                             TopCommonValueRankingField::Owner => account.owner().to_string(),
+                            TopCommonValueRankingField::RentEpoch => {
+                                account.rent_epoch().to_string()
+                            }
                         };
                         if let Some(count_entry) = hash_map.get_mut(&key) {
                             *count_entry += 1;
