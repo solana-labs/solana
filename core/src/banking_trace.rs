@@ -151,7 +151,6 @@ pub fn sender_overhead_minimized_receiver_loop<T, E, const SLEEP_MS: u64>(
                 Ok(message) => on_recv(message)?,
                 Err(TryRecvError::Empty) => break 'inner,
                 Err(TryRecvError::Disconnected) => {
-                    assert_eq!(receiver.len(), 0);
                     break 'outer;
                 }
             };
