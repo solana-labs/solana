@@ -576,3 +576,172 @@ mod tests {
         for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
     }
 }
+
+pub struct BankingTraceReplayer {
+    path: PathBuf,
+    non_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
+    tpu_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
+    gossip_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
+}
+
+impl BankingTraceReplayer {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            non_vote_channel: unbounded(),
+            tpu_vote_channel: unbounded(),
+            gossip_vote_channel: unbounded(),
+        }
+    }
+
+    pub fn prepare_receivers(
+        &self,
+    ) -> (
+        Receiver<BankingPacketBatch>,
+        Receiver<BankingPacketBatch>,
+        Receiver<BankingPacketBatch>,
+    ) {
+        (
+            self.non_vote_channel.1.clone(),
+            self.tpu_vote_channel.1.clone(),
+            self.gossip_vote_channel.1.clone(),
+        )
+    }
+
+    pub fn replay(
+        &self,
+        bank_forks: Arc<std::sync::RwLock<solana_runtime::bank_forks::BankForks>>,
+        blockstore: Arc<solana_ledger::blockstore::Blockstore>,
+    ) {
+        use {
+            crate::banking_stage::BankingStage, log::*,
+            solana_client::connection_cache::ConnectionCache, solana_gossip::cluster_info::Node,
+            solana_ledger::leader_schedule_cache::LeaderScheduleCache,
+            solana_poh::poh_recorder::create_test_recorder, solana_runtime::bank::Bank,
+            solana_sdk::signature::Keypair, solana_streamer::socket::SocketAddrSpace,
+            solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        };
+        use std::io::BufReader;
+        use std::fs::File;
+
+        let mut bank = bank_forks.read().unwrap().working_bank();
+        let mut stream = BufReader::new(File::open(&self.path).unwrap());
+        let mut bank_starts_by_slot = std::collections::BTreeMap::new();
+        let mut packet_batches_by_time = std::collections::BTreeMap::new();
+
+        loop {
+            let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
+            let Ok(event) = d else {
+                dbg!(&d);
+                break;
+            };
+            //dbg!(&event);
+            let s = event.0;
+            match event.1 {
+                TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
+                    bank_starts_by_slot.insert(slot, s);
+                }
+                TracedEvent::PacketBatch(label, batch) => {
+                    packet_batches_by_time.insert(s, (label, batch));
+                }
+                _ => {}
+            }
+        }
+
+        let (non_vote_sender, tpu_vote_sender, gossip_vote_sender) = (
+            self.non_vote_channel.0.clone(),
+            self.tpu_vote_channel.0.clone(),
+            self.gossip_vote_channel.0.clone(),
+        );
+        let bank_slot = bank.slot();
+
+        std::thread::spawn(move || {
+            let range_iter = if let Some(start) = &bank_starts_by_slot.get(&bank_slot) {
+                packet_batches_by_time.range(*start..)
+            } else {
+                packet_batches_by_time.range(..)
+            };
+            info!(
+                "replaying events: {} out of {}",
+                range_iter.clone().count(),
+                packet_batches_by_time.len()
+            );
+
+            loop {
+                for (&_key, ref value) in range_iter.clone() {
+                    let (label, batch) = &value;
+                    debug!("sent {:?} {} batches", label, batch.0.len());
+
+                    match label {
+                        ChannelLabel::NonVote => non_vote_sender.send(batch.clone()).unwrap(),
+                        ChannelLabel::TpuVote => tpu_vote_sender.send(batch.clone()).unwrap(),
+                        ChannelLabel::GossipVote => gossip_vote_sender.send(batch.clone()).unwrap(),
+                        ChannelLabel::Dummy => unreachable!(),
+                    }
+                }
+            }
+        });
+
+        let (non_vote_receiver, tpu_vote_receiver, gossip_vote_receiver) = self.prepare_receivers();
+
+        let collector = solana_sdk::pubkey::new_rand();
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let (exit, poh_recorder, poh_service, _signal_receiver) =
+            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+
+        let banking_tracer = BankingTracer::new_disabled();
+        let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
+            Node::new_localhost().info,
+            Arc::new(Keypair::new()),
+            SocketAddrSpace::Unspecified,
+        );
+        let cluster_info = Arc::new(cluster_info);
+        let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
+        let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+        let banking_stage = BankingStage::new_num_threads(
+            &cluster_info,
+            &poh_recorder,
+            non_vote_receiver,
+            tpu_vote_receiver,
+            gossip_vote_receiver,
+            4,
+            None,
+            replay_vote_sender,
+            None,
+            Arc::new(connection_cache),
+            bank_forks.clone(),
+            banking_tracer,
+        );
+
+        bank.skip_check_age();
+
+        bank.clear_signatures();
+        poh_recorder.write().unwrap().set_bank(&bank, false);
+
+        for _ in 0..200 {
+            if poh_recorder.read().unwrap().bank().is_none() {
+                poh_recorder
+                    .write()
+                    .unwrap()
+                    .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
+                let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                bank_forks.write().unwrap().insert(new_bank);
+                bank = bank_forks.read().unwrap().working_bank();
+            }
+            // set cost tracker limits to MAX so it will not filter out TXs
+            bank.write_cost_tracker().unwrap().set_limits(
+                std::u64::MAX,
+                std::u64::MAX,
+                std::u64::MAX,
+            );
+
+            bank.clear_signatures();
+            poh_recorder.write().unwrap().set_bank(&bank, false);
+
+            sleep(std::time::Duration::from_millis(100));
+        }
+        exit.store(true, Ordering::Relaxed);
+        banking_stage.join().unwrap();
+        poh_service.join().unwrap();
+    }
+}

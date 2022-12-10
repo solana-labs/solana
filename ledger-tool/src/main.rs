@@ -25,6 +25,7 @@ use {
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
+        banking_trace::BankingTraceReplayer,
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::move_and_async_delete_path,
     },
@@ -2244,6 +2245,11 @@ fn main() {
                     .conflicts_with("no_snapshot")
             )
         ).subcommand(
+            SubCommand::with_name("simulate-leader-blocks")
+            .about("Simulate recreating blocks with banking trace as if a leader")
+            .arg(&halt_at_slot_arg)
+            .arg(&max_genesis_archive_unpacked_size_arg)
+        ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -3572,6 +3578,84 @@ fn main() {
                         exit(1);
                     }
                 }
+            }
+            ("simulate-leader-blocks", Some(arg_matches)) => {
+                let mut accounts_index_config = AccountsIndexConfig::default();
+                if let Some(bins) = value_t!(arg_matches, "accounts_index_bins", usize).ok() {
+                    accounts_index_config.bins = Some(bins);
+                }
+
+                accounts_index_config.index_limit_mb = if let Some(limit) =
+                    value_t!(arg_matches, "accounts_index_memory_limit_mb", usize).ok()
+                {
+                    IndexLimitMb::Limit(limit)
+                } else if arg_matches.is_present("disable_accounts_disk_index") {
+                    IndexLimitMb::InMemOnly
+                } else {
+                    IndexLimitMb::Unspecified
+                };
+
+                {
+                    let mut accounts_index_paths: Vec<PathBuf> =
+                        if arg_matches.is_present("accounts_index_path") {
+                            values_t_or_exit!(arg_matches, "accounts_index_path", String)
+                                .into_iter()
+                                .map(PathBuf::from)
+                                .collect()
+                        } else {
+                            vec![]
+                        };
+                    if accounts_index_paths.is_empty() {
+                        accounts_index_paths = vec![ledger_path.join("accounts_index")];
+                    }
+                    accounts_index_config.drives = Some(accounts_index_paths);
+                }
+
+                let accounts_db_config = Some(AccountsDbConfig {
+                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vec_offset: value_t!(
+                        matches,
+                        "accounts_db_ancient_append_vecs",
+                        u64
+                    )
+                    .ok(),
+                    skip_initial_hash_calc: arg_matches
+                        .is_present("accounts_db_skip_initial_hash_calculation"),
+                    ..AccountsDbConfig::default()
+                });
+
+                let process_options = ProcessOptions {
+                    poh_verify: false,
+                    halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
+                    accounts_db_config,
+                    ..ProcessOptions::default()
+                };
+
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                    force_update_to_open,
+                );
+                let (bank_forks, ..) = load_bank_forks(
+                    arg_matches,
+                    &open_genesis_config_by(&ledger_path, arg_matches),
+                    &blockstore,
+                    process_options,
+                    snapshot_archive_path,
+                    incremental_snapshot_archive_path,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Ledger verification failed: {:?}", err);
+                    exit(1);
+                });
+
+                let runner = BankingTraceReplayer::new(PathBuf::new().join("/dev/stdin"));
+                //runner.seek(bank); => Ok or Err("no BankStart")
+                runner.replay(bank_forks, Arc::new(blockstore));
+
+                println!("Ok");
             }
             ("accounts", Some(arg_matches)) => {
                 let halt_at_slot = value_t!(arg_matches, "halt_at_slot", Slot).ok();
