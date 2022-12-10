@@ -351,33 +351,37 @@ impl TracedSender {
     }
 }
 
-pub fn sample_packet_batch() -> BankingPacketBatch {
-    BankingPacketBatch::new((to_packet_batches(&vec![test_tx(); 4], 10), None))
-}
+pub mod for_test {
+    use super::*;
 
-pub fn drop_and_clean_temp_dir_unless_suppressed(temp_dir: TempDir) {
-    std::env::var("BANKING_TRACE_LEAVE_FILES_FROM_LAST_ITERATION")
-        .is_ok()
-        .then(|| {
-            warn!("prevented to remove {:?}", temp_dir.path());
-            drop(temp_dir.into_path());
-        });
-}
-
-pub fn terminate_tracer(
-    tracer: BankingTracer,
-    main_thread: JoinHandle<TracerThreadResult>,
-    sender: TracedSender,
-    exit: Option<Arc<AtomicBool>>,
-) {
-    if let Some(exit) = exit {
-        exit.store(true, Ordering::Relaxed);
+    pub fn sample_packet_batch() -> BankingPacketBatch {
+        BankingPacketBatch::new((to_packet_batches(&vec![test_tx(); 4], 10), None))
     }
-    let (tracer_thread, tracer) = tracer.finalize_under_arc();
-    drop((sender, tracer));
-    main_thread.join().unwrap().unwrap();
-    if let Some(tracer_thread) = tracer_thread {
-        tracer_thread.join().unwrap().unwrap();
+
+    pub fn drop_and_clean_temp_dir_unless_suppressed(temp_dir: TempDir) {
+        std::env::var("BANKING_TRACE_LEAVE_FILES_FROM_LAST_ITERATION")
+            .is_ok()
+            .then(|| {
+                warn!("prevented to remove {:?}", temp_dir.path());
+                drop(temp_dir.into_path());
+            });
+    }
+
+    pub fn terminate_tracer(
+        tracer: BankingTracer,
+        main_thread: JoinHandle<TracerThreadResult>,
+        sender: TracedSender,
+        exit: Option<Arc<AtomicBool>>,
+    ) {
+        if let Some(exit) = exit {
+            exit.store(true, Ordering::Relaxed);
+        }
+        let (tracer_thread, tracer) = tracer.finalize_under_arc();
+        drop((sender, tracer));
+        main_thread.join().unwrap().unwrap();
+        if let Some(tracer_thread) = tracer_thread {
+            tracer_thread.join().unwrap().unwrap();
+        }
     }
 }
 
@@ -406,7 +410,7 @@ mod tests {
         non_vote_sender
             .send(BankingPacketBatch::new((vec![], None)))
             .unwrap();
-        terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
+        for_test::terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
     }
 
     #[test]
@@ -438,7 +442,9 @@ mod tests {
         drop(tracer);
 
         // shouldn't panic
-        non_vote_sender.send(sample_packet_batch()).unwrap();
+        non_vote_sender
+            .send(for_test::sample_packet_batch())
+            .unwrap();
 
         // finally terminate and join the main thread
         exit_for_dummy_thread2.store(true, Ordering::Relaxed);
@@ -462,10 +468,12 @@ mod tests {
             )
         });
 
-        non_vote_sender.send(sample_packet_batch()).unwrap();
+        non_vote_sender
+            .send(for_test::sample_packet_batch())
+            .unwrap();
         tracer.bank_start(1, 2, 3);
 
-        terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
+        for_test::terminate_tracer(tracer, dummy_main_thread, non_vote_sender, None);
 
         let mut stream = BufReader::new(File::open(path.join(BASENAME)).unwrap());
         let results = (0..3)
@@ -491,6 +499,6 @@ mod tests {
             Err(_) // in this way, rustfmt formats this line like the above
         );
 
-        drop_and_clean_temp_dir_unless_suppressed(temp_dir);
+        for_test::drop_and_clean_temp_dir_unless_suppressed(temp_dir);
     }
 }
