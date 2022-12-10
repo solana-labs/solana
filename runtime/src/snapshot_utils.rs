@@ -375,7 +375,7 @@ pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
         return;
     }
 
-    if let Err(err) = std::fs::rename(&path, &path_delete) {
+    if let Err(err) = std::fs::rename(path, &path_delete) {
         warn!(
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
@@ -934,7 +934,7 @@ pub fn add_bank_snapshot(
     let builtins = builtins::get();
     assert!(bank.check_builtins_exist(&builtins));
 
-    hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, &snapshot_storages)?;
+    hard_link_appendvec_files_to_snapshot(&bank_snapshot_dir, snapshot_storages)?;
 
     let mut bank_serialize = Measure::start("bank-serialize-ms");
     let bank_snapshot_serializer = move |stream: &mut BufWriter<File>| -> Result<()> {
@@ -955,7 +955,7 @@ pub fn add_bank_snapshot(
     }
 
     // Mark this directory complete so it can be used.  Check this flag first before selecting for deserialization.
-    let state_complete_path = bank_snapshot_dir.clone().join("state_complete");
+    let state_complete_path = bank_snapshot_dir.join("state_complete");
     fs::File::create(state_complete_path)?;
 
     // Monitor sizes because they're capped to MAX_SNAPSHOT_DATA_FILE_SIZE
@@ -1743,7 +1743,6 @@ where
 
     let snapshot_local_account_path = snapshot_file_path
         .as_ref()
-        .clone()
         .parent()
         .unwrap()
         .join("accounts");
@@ -2082,8 +2081,8 @@ pub fn get_highest_incremental_snapshot_archive_slot(
 
 /// There is a time window from the slot directory being created, and the content being completely
 /// filled.  Check the completion to avoid using a highest found slot directory with missing content.
-pub fn snapshot_slot_dir_check_complete(path: &PathBuf) -> bool {
-    let completion_flag_file = path.clone().join("state_complete");
+pub fn snapshot_slot_dir_check_complete(path: &Path) -> bool {
+    let completion_flag_file = path.to_path_buf().join("state_complete");
     fs::metadata(completion_flag_file).is_ok()
 }
 
