@@ -131,7 +131,7 @@ fn create_executor_from_bytes(
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let (config, syscall_registry) = syscalls::create_loader(
+    let loader = syscalls::create_loader(
         feature_set,
         compute_budget,
         reject_deployment_of_broken_elfs,
@@ -145,11 +145,10 @@ fn create_executor_from_bytes(
     register_syscalls_time.stop();
     create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let mut load_elf_time = Measure::start("load_elf_time");
-    let executable = Executable::<InvokeContext>::from_elf(programdata, config, syscall_registry)
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "{}", err);
-            InstructionError::InvalidAccountData
-        });
+    let executable = Executable::<InvokeContext>::from_elf(programdata, loader).map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    });
     load_elf_time.stop();
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
@@ -1506,7 +1505,7 @@ mod tests {
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             verifier::Verifier,
-            vm::{Config, ContextObject, FunctionRegistry, SyscallRegistry},
+            vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
             account::{
@@ -1590,13 +1589,10 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let mut input_mem = [0x00];
-        let config = Config::default();
-        let syscall_registry = SyscallRegistry::default();
         let bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
         let executable = Executable::<TestContextObject>::from_text_bytes(
             program,
-            config,
-            syscall_registry,
+            Arc::new(BuiltInProgram::new_loader(Config::default())),
             bpf_functions,
         )
         .unwrap();

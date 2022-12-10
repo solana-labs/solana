@@ -20,7 +20,7 @@ use {
         elf::Executable,
         memory_region::MemoryRegion,
         verifier::RequisiteVerifier,
-        vm::{Config, ContextObject, SyscallRegistry, VerifiedExecutable},
+        vm::{ContextObject, VerifiedExecutable},
     },
     solana_runtime::{
         bank::Bank,
@@ -84,16 +84,16 @@ const ARMSTRONG_EXPECTED: u64 = 5;
 fn bench_program_create_executable(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
 
+    let loader = create_loader(
+        &FeatureSet::default(),
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
+    )
+    .unwrap();
     bencher.iter(|| {
-        let (config, syscall_registry) = create_loader(
-            &FeatureSet::default(),
-            &ComputeBudget::default(),
-            true,
-            true,
-            false,
-        )
-        .unwrap();
-        let _ = Executable::<InvokeContext>::from_elf(&elf, config, syscall_registry).unwrap();
+        let _ = Executable::<InvokeContext>::from_elf(&elf, loader.clone()).unwrap();
     });
 }
 
@@ -109,7 +109,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let elf = load_elf("bench_alu").unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 10000001, false, |invoke_context| {
-        let (config, syscall_registry) = create_loader(
+        let loader = create_loader(
             &invoke_context.feature_set,
             &ComputeBudget::default(),
             true,
@@ -117,8 +117,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
             false,
         )
         .unwrap();
-        let executable =
-            Executable::<InvokeContext>::from_elf(&elf, config, syscall_registry).unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let mut verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
@@ -237,7 +236,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let (config, syscall_registry) = create_loader(
+        let loader = create_loader(
             &invoke_context.feature_set,
             &ComputeBudget::default(),
             true,
@@ -245,8 +244,7 @@ fn bench_create_vm(bencher: &mut Bencher) {
             false,
         )
         .unwrap();
-        let executable =
-            Executable::<InvokeContext>::from_elf(&elf, config, syscall_registry).unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
@@ -283,7 +281,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
         )
         .unwrap();
 
-        let (config, syscall_registry) = create_loader(
+        let loader = create_loader(
             &invoke_context.feature_set,
             &ComputeBudget::default(),
             true,
@@ -291,8 +289,7 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
             false,
         )
         .unwrap();
-        let executable =
-            Executable::<InvokeContext>::from_elf(&elf, config, syscall_registry).unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&elf, loader).unwrap();
 
         let verified_executable =
             VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)

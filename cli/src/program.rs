@@ -1990,7 +1990,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let (config, syscall_registry) = create_loader(
+    let loader = create_loader(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -1998,7 +1998,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
         false,
     )
     .unwrap();
-    let executable = Executable::<InvokeContext>::from_elf(&program_data, config, syscall_registry)
+    let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
         .map_err(|err| format!("ELF error: {err}"))?;
 
     let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)

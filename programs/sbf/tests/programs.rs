@@ -220,7 +220,7 @@ fn run_program(name: &str) -> u64 {
     file.read_to_end(&mut data).unwrap();
     let loader_id = bpf_loader::id();
     with_mock_invoke_context(loader_id, 0, false, |invoke_context| {
-        let (config, syscall_registry) = create_loader(
+        let loader = create_loader(
             &invoke_context.feature_set,
             &ComputeBudget::default(),
             true,
@@ -228,8 +228,7 @@ fn run_program(name: &str) -> u64 {
             true,
         )
         .unwrap();
-        let executable =
-            Executable::<InvokeContext>::from_elf(&data, config, syscall_registry).unwrap();
+        let executable = Executable::<InvokeContext>::from_elf(&data, loader).unwrap();
 
         #[allow(unused_mut)]
         let mut verified_executable =

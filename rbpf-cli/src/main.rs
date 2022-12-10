@@ -241,7 +241,7 @@ before execting it in the virtual machine.",
     file.rewind().unwrap();
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).unwrap();
-    let (config, syscall_registry) = create_loader(
+    let loader = create_loader(
         &invoke_context.feature_set,
         &ComputeBudget::default(),
         true,
@@ -250,14 +250,10 @@ before execting it in the virtual machine.",
     )
     .unwrap();
     let executable = if magic == [0x7f, 0x45, 0x4c, 0x46] {
-        Executable::<InvokeContext>::from_elf(&contents, config, syscall_registry)
+        Executable::<InvokeContext>::from_elf(&contents, loader)
             .map_err(|err| format!("Executable constructor failed: {err:?}"))
     } else {
-        assemble::<InvokeContext>(
-            std::str::from_utf8(contents.as_slice()).unwrap(),
-            config,
-            syscall_registry,
-        )
+        assemble::<InvokeContext>(std::str::from_utf8(contents.as_slice()).unwrap(), loader)
     }
     .unwrap();
 

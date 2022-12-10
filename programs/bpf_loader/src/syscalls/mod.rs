@@ -19,7 +19,7 @@ use {
     solana_rbpf::{
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
-        vm::{Config, ProgramResult, SyscallRegistry, PROGRAM_ENVIRONMENT_KEY_SHIFT},
+        vm::{BuiltInProgram, Config, ProgramResult, PROGRAM_ENVIRONMENT_KEY_SHIFT},
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
@@ -138,10 +138,10 @@ fn consume_compute_meter(invoke_context: &InvokeContext, amount: u64) -> Result<
     Ok(())
 }
 
-macro_rules! register_feature_gated_syscall {
-    ($syscall_registry:expr, $is_feature_active:expr, $name:expr, $call:expr $(,)?) => {
+macro_rules! register_feature_gated_function {
+    ($result:expr, $is_feature_active:expr, $name:expr, $call:expr $(,)?) => {
         if $is_feature_active {
-            $syscall_registry.register_syscall_by_name($name, $call)
+            $result.register_function_by_name($name, $call)
         } else {
             Ok(())
         }
@@ -154,7 +154,7 @@ pub fn create_loader<'a>(
     reject_deployment_of_broken_elfs: bool,
     disable_deploy_of_alloc_free_syscall: bool,
     debugging_features: bool,
-) -> Result<(Config, SyscallRegistry<InvokeContext<'a>>), EbpfError> {
+) -> Result<Arc<BuiltInProgram<InvokeContext<'a>>>, EbpfError> {
     use rand::Rng;
     let config = Config {
         max_call_depth: compute_budget.max_call_depth,
@@ -191,135 +191,127 @@ pub fn create_loader<'a>(
     let disable_fees_sysvar = feature_set.is_active(&disable_fees_sysvar::id());
     let is_abi_v2 = false;
 
-    let mut syscall_registry = SyscallRegistry::default();
+    let mut result = BuiltInProgram::new_loader(config);
 
     // Abort
-    syscall_registry.register_syscall_by_name(b"abort", SyscallAbort::call)?;
+    result.register_function_by_name("abort", SyscallAbort::call)?;
 
     // Panic
-    syscall_registry.register_syscall_by_name(b"sol_panic_", SyscallPanic::call)?;
+    result.register_function_by_name("sol_panic_", SyscallPanic::call)?;
 
     // Logging
-    syscall_registry.register_syscall_by_name(b"sol_log_", SyscallLog::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_log_64_", SyscallLogU64::call)?;
-    syscall_registry
-        .register_syscall_by_name(b"sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_log_pubkey", SyscallLogPubkey::call)?;
+    result.register_function_by_name("sol_log_", SyscallLog::call)?;
+    result.register_function_by_name("sol_log_64_", SyscallLogU64::call)?;
+    result.register_function_by_name("sol_log_compute_units_", SyscallLogBpfComputeUnits::call)?;
+    result.register_function_by_name("sol_log_pubkey", SyscallLogPubkey::call)?;
 
     // Program defined addresses (PDA)
-    syscall_registry.register_syscall_by_name(
-        b"sol_create_program_address",
+    result.register_function_by_name(
+        "sol_create_program_address",
         SyscallCreateProgramAddress::call,
     )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_try_find_program_address",
+    result.register_function_by_name(
+        "sol_try_find_program_address",
         SyscallTryFindProgramAddress::call,
     )?;
 
     // Sha256
-    syscall_registry.register_syscall_by_name(b"sol_sha256", SyscallSha256::call)?;
+    result.register_function_by_name("sol_sha256", SyscallSha256::call)?;
 
     // Keccak256
-    syscall_registry.register_syscall_by_name(b"sol_keccak256", SyscallKeccak256::call)?;
+    result.register_function_by_name("sol_keccak256", SyscallKeccak256::call)?;
 
     // Secp256k1 Recover
-    syscall_registry
-        .register_syscall_by_name(b"sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
+    result.register_function_by_name("sol_secp256k1_recover", SyscallSecp256k1Recover::call)?;
 
     // Blake3
-    register_feature_gated_syscall!(
-        syscall_registry,
+    register_feature_gated_function!(
+        result,
         blake3_syscall_enabled,
-        b"sol_blake3",
+        "sol_blake3",
         SyscallBlake3::call,
     )?;
 
     // Elliptic Curve Operations
-    register_feature_gated_syscall!(
-        syscall_registry,
+    register_feature_gated_function!(
+        result,
         curve25519_syscall_enabled,
-        b"sol_curve_validate_point",
+        "sol_curve_validate_point",
         SyscallCurvePointValidation::call,
     )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
+    register_feature_gated_function!(
+        result,
         curve25519_syscall_enabled,
-        b"sol_curve_group_op",
+        "sol_curve_group_op",
         SyscallCurveGroupOps::call,
     )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
+    register_feature_gated_function!(
+        result,
         curve25519_syscall_enabled,
-        b"sol_curve_multiscalar_mul",
+        "sol_curve_multiscalar_mul",
         SyscallCurveMultiscalarMultiplication::call,
     )?;
 
     // Sysvars
-    syscall_registry
-        .register_syscall_by_name(b"sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_epoch_schedule_sysvar",
+    result.register_function_by_name("sol_get_clock_sysvar", SyscallGetClockSysvar::call)?;
+    result.register_function_by_name(
+        "sol_get_epoch_schedule_sysvar",
         SyscallGetEpochScheduleSysvar::call,
     )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
+    register_feature_gated_function!(
+        result,
         !disable_fees_sysvar,
-        b"sol_get_fees_sysvar",
+        "sol_get_fees_sysvar",
         SyscallGetFeesSysvar::call,
     )?;
-    syscall_registry
-        .register_syscall_by_name(b"sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
+    result.register_function_by_name("sol_get_rent_sysvar", SyscallGetRentSysvar::call)?;
 
     // Memory ops
-    syscall_registry.register_syscall_by_name(b"sol_memcpy_", SyscallMemcpy::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memmove_", SyscallMemmove::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memcmp_", SyscallMemcmp::call)?;
-    syscall_registry.register_syscall_by_name(b"sol_memset_", SyscallMemset::call)?;
+    result.register_function_by_name("sol_memcpy_", SyscallMemcpy::call)?;
+    result.register_function_by_name("sol_memmove_", SyscallMemmove::call)?;
+    result.register_function_by_name("sol_memcmp_", SyscallMemcmp::call)?;
+    result.register_function_by_name("sol_memset_", SyscallMemset::call)?;
 
     if !is_abi_v2 {
         // Processed sibling instructions
-        syscall_registry.register_syscall_by_name(
-            b"sol_get_processed_sibling_instruction",
+        result.register_function_by_name(
+            "sol_get_processed_sibling_instruction",
             SyscallGetProcessedSiblingInstruction::call,
         )?;
 
         // Stack height
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_stack_height", SyscallGetStackHeight::call)?;
+        result.register_function_by_name("sol_get_stack_height", SyscallGetStackHeight::call)?;
 
         // Return data
-        syscall_registry
-            .register_syscall_by_name(b"sol_set_return_data", SyscallSetReturnData::call)?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_get_return_data", SyscallGetReturnData::call)?;
+        result.register_function_by_name("sol_set_return_data", SyscallSetReturnData::call)?;
+        result.register_function_by_name("sol_get_return_data", SyscallGetReturnData::call)?;
 
         // Cross-program invocation
-        syscall_registry
-            .register_syscall_by_name(b"sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
-        syscall_registry
-            .register_syscall_by_name(b"sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
+        result.register_function_by_name("sol_invoke_signed_c", SyscallInvokeSignedC::call)?;
+        result
+            .register_function_by_name("sol_invoke_signed_rust", SyscallInvokeSignedRust::call)?;
 
         // Memory allocator
-        register_feature_gated_syscall!(
-            syscall_registry,
+        register_feature_gated_function!(
+            result,
             !disable_deploy_of_alloc_free_syscall,
-            b"sol_alloc_free_",
+            "sol_alloc_free_",
             SyscallAllocFree::call,
         )?;
 
         // Alt_bn128
-        register_feature_gated_syscall!(
-            syscall_registry,
+        register_feature_gated_function!(
+            result,
             enable_alt_bn128_syscall,
-            b"sol_alt_bn128_group_op",
+            "sol_alt_bn128_group_op",
             SyscallAltBn128::call,
         )?;
     }
 
     // Log data
-    syscall_registry.register_syscall_by_name(b"sol_log_data", SyscallLogData::call)?;
+    result.register_function_by_name("sol_log_data", SyscallLogData::call)?;
 
-    Ok((config, syscall_registry))
+    Ok(Arc::new(result))
 }
 
 fn translate(
@@ -1738,7 +1730,7 @@ mod tests {
             aligned_memory::AlignedMemory,
             ebpf::{self, HOST_ALIGN},
             memory_region::MemoryRegion,
-            vm::{Config, SyscallFunction},
+            vm::{BuiltInFunction, Config},
         },
         solana_sdk::{
             account::AccountSharedData,
@@ -3662,7 +3654,7 @@ mod tests {
         seeds: &[&[u8]],
         program_id: &Pubkey,
         overlap_outputs: bool,
-        syscall: SyscallFunction<InvokeContext<'b>>,
+        syscall: BuiltInFunction<InvokeContext<'b>>,
     ) -> Result<(Pubkey, u8), EbpfError> {
         const SEEDS_VA: u64 = 0x100000000;
         const PROGRAM_ID_VA: u64 = 0x200000000;
