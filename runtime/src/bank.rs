@@ -160,7 +160,7 @@ use {
     solana_stake_program::stake_state::{
         self, InflationPointCalculationEvent, PointValue, StakeState,
     },
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
     std::{
         borrow::Cow,
         cell::RefCell,
@@ -3472,13 +3472,13 @@ impl Bank {
                     {
                         debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
                     } else {
-                        info!(
-                            "store_haha vote {}, {}, {}, vote_reward={:?}",
-                            self.slot, n, partition_index, &vote_reward
+                        let v = vote_state::from(&vote_account).unwrap();
+
+                        assert!(
+                            v.commission == info.commission.unwrap(),
+                            "vote account commision shouldn't change during reward interval"
                         );
 
-                        let v = vote_state::from(&vote_account).unwrap();
-                        info!("store_haha vote {} {:?}", vote_pubkey, v);
                         self.store_account(&vote_pubkey, &vote_account);
                         total += vote_reward;
                         c += 1;
