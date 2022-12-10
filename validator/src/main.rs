@@ -1286,6 +1286,12 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
+    let snapshot_from = if matches.is_present("snapshot_from_file") {
+        Some(SnapshotFrom::File)
+    } else {
+        Some(SnapshotFrom::Archive)
+    };
+
     validator_config.snapshot_config = SnapshotConfig {
         usage: if full_snapshot_archive_interval_slots == Slot::MAX {
             SnapshotUsage::LoadOnly
@@ -1303,7 +1309,7 @@ pub fn main() {
         maximum_incremental_snapshot_archives_to_retain,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
-        snapshot_from: Some(SnapshotFrom::Archive),
+        snapshot_from,
     };
 
     validator_config.accounts_hash_interval_slots =

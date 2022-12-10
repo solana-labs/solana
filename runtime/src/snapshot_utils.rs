@@ -1301,7 +1301,7 @@ pub fn bank_from_latest_snapshot_archives(
     );
 
     info!(
-        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        "Loading bank from full snapshot archive: {}, and incremental snapshot: {:?}",
         full_snapshot_archive_info.path().display(),
         incremental_snapshot_archive_info
             .as_ref()
@@ -1490,7 +1490,7 @@ pub fn bank_from_latest_snapshot_files(
     );
 
     info!(
-        "Loading bank from full snapshot: {}, and incremental snapshot: {:?}",
+        "Loading bank from full bank snapshot: {}, and incremental snapshot: {:?}",
         full_snapshot_file_info.path().display(),
         incremental_snapshot_file_info
             .as_ref()
@@ -2432,7 +2432,7 @@ fn bank_fields_from_snapshots(
             (None, None)
         };
     info!(
-        "Loading bank from full snapshot {} and incremental snapshot {:?}",
+        "Loading bank fields from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path.display(),
         incremental_snapshot_root_paths
             .as_ref()
@@ -2491,7 +2491,7 @@ fn rebuild_bank_from_snapshots(
             (None, None)
         };
     info!(
-        "Loading bank from full snapshot {} and incremental snapshot {:?}",
+        "Rebuild bank from full snapshot {} and incremental snapshot {:?}",
         full_snapshot_root_paths.snapshot_path.display(),
         incremental_snapshot_root_paths
             .as_ref()
