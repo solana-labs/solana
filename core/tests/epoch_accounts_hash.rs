@@ -11,7 +11,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
         bank::{Bank, BankTestConfig},
@@ -590,11 +590,17 @@ fn test_epoch_accounts_hash_and_warping() {
             .accounts_background_request_sender,
         None,
     );
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank_forks
+        .read()
+        .unwrap()
+        .working_bank()
+        .force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
-        solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
@@ -626,7 +632,7 @@ fn test_epoch_accounts_hash_and_warping() {
         &bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
-        solana_runtime::accounts_db::CalcAccountsHashDataSource::Storages,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
