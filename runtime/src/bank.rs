@@ -14953,7 +14953,6 @@ pub(crate) mod tests {
     }
 
     // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
-    #[ignore]
     #[test]
     #[ignore] // this test only works when not using the write cache
     fn test_process_stale_slot_with_budget() {
