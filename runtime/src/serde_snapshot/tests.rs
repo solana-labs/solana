@@ -7,7 +7,7 @@ use {
         accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         accounts_hash::AccountsHash,
         append_vec::AppendVec,
-        bank::{Bank, BankTestConfig, Rewrites},
+        bank::{Bank, BankTestConfig},
         epoch_accounts_hash,
         genesis_utils::{self, activate_all_features, activate_feature},
         snapshot_utils::ArchiveFormat,
@@ -209,12 +209,8 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     );
     check_accounts(&daccounts, &pubkeys, 100);
     assert_eq!(
-        accounts
-            .bank_hash_info_at(0, &Rewrites::default())
-            .accounts_delta_hash,
-        daccounts
-            .bank_hash_info_at(0, &Rewrites::default())
-            .accounts_delta_hash
+        accounts.bank_hash_info_at(0).accounts_delta_hash,
+        daccounts.bank_hash_info_at(0).accounts_delta_hash
     );
 }
 
