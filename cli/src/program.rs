@@ -281,11 +281,13 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("Upgrade authority [default: the default configured keypair]")
                         )
                         .arg(
-                            pubkey!(Arg::with_name("new_upgrade_authority")
+                            Arg::with_name("new_upgrade_authority")
                                 .long("new-upgrade-authority")
+                                .value_name("NEW_UPGRADE_AUTHORITY")
                                 .required_unless("final")
-                                .value_name("NEW_UPGRADE_AUTHORITY"),
-                                "Address of the new upgrade authority"),
+                                .takes_value(true)
+                                .help("New upgrade authority (keypair or pubkey). It is strongly recommended to pass in a keypair to prevent mistakes in setting the upgrade authority. You can opt out of this behavior by passing --skip-new-upgrade-authority-signer-check if you are really confident that you are setting the correct authority. Alternatively, If you wish to make the program immutable, you should ignore this arg and pass the --final flag."
+                        )
                         )
                         .arg(
                             Arg::with_name("final")
@@ -294,9 +296,9 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .help("The program will not be upgradeable")
                         )
                         .arg(
-                            Arg::with_name("no_sign_with_new_authority")
-                                .long("no-sign-with-new-authority")
-                                .conflicts_with("final")
+                            Arg::with_name("skip_new_upgrade_authority_signer_check")
+                                .long("skip-new-upgrade-authority-signer-check")
+                                .requires("new_upgrade_authority")
                                 .takes_value(false)
                                 .help("Set this flag if you don't want the new authority to sign the set-upgrade-authority transaction."),
                         ),
@@ -588,7 +590,7 @@ pub fn parse_program_subcommand(
                 upgrade_authority_signer,
             ];
 
-            if !is_final && !matches.is_present("no_sign_with_new_authority") {
+            if !is_final && !matches.is_present("skip_new_upgrade_authority_signer_check") {
                 let (new_upgrade_authority_signer, _) =
                     signer_of(matches, "new_upgrade_authority", wallet_manager)?;
                 signers.push(new_upgrade_authority_signer);
@@ -597,7 +599,7 @@ pub fn parse_program_subcommand(
             let signer_info =
                 default_signer.generate_unique_signers(signers, matches, wallet_manager)?;
 
-            if matches.is_present("no_sign_with_new_authority") || is_final {
+            if matches.is_present("skip_new_upgrade_authority_signer_check") || is_final {
                 CliCommandInfo {
                     command: CliCommand::Program(ProgramCliCommand::SetUpgradeAuthority {
                         program_pubkey,
@@ -612,10 +614,10 @@ pub fn parse_program_subcommand(
                         program_pubkey,
                         upgrade_authority_index: signer_info
                             .index_of(upgrade_authority_pubkey)
-                            .unwrap(),
+                            .expect("upgrade authority is missing from signers"),
                         new_upgrade_authority_index: signer_info
                             .index_of(new_upgrade_authority)
-                            .unwrap(),
+                            .expect("new upgrade authority is missing from signers"),
                     }),
                     signers: signer_info.signers,
                 }
@@ -1246,7 +1248,7 @@ fn process_set_authority_checked(
             &tx,
             config.commitment,
             RpcSendTransactionConfig {
-                skip_preflight: true,
+                skip_preflight: false,
                 preflight_commitment: Some(config.commitment.commitment),
                 ..RpcSendTransactionConfig::default()
             },
@@ -2714,7 +2716,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey.to_string(),
-            "--no-sign-with-new-authority",
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
@@ -2739,7 +2741,7 @@ mod tests {
             &program_pubkey.to_string(),
             "--new-upgrade-authority",
             &new_authority_pubkey_file,
-            "--no-sign-with-new-authority",
+            "--skip-new-upgrade-authority-signer-check",
         ]);
         assert_eq!(
             parse_command(&test_command, &default_signer, &mut None).unwrap(),
