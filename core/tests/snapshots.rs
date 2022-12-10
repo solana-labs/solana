@@ -370,12 +370,13 @@ fn test_concurrent_snapshot_packaging(
     // Take snapshot of zeroth bank
     let bank0 = bank_forks.get(0).unwrap();
     let storages = bank0.get_snapshot_storages(None);
+    let slot_deltas = bank0.status_cache.read().unwrap().root_slot_deltas();
     snapshot_utils::add_bank_snapshot(
         bank_snapshots_dir,
         &bank0,
         &storages,
         snapshot_version,
-        None,
+        slot_deltas,
     )
     .unwrap();
 
@@ -421,12 +422,13 @@ fn test_concurrent_snapshot_packaging(
         };
 
         let snapshot_storages = bank.get_snapshot_storages(None);
+        let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
         let bank_snapshot_info = snapshot_utils::add_bank_snapshot(
             bank_snapshots_dir,
             &bank,
             &snapshot_storages,
             snapshot_config.snapshot_version,
-            None,
+            slot_deltas,
         )
         .unwrap();
         let accounts_package = AccountsPackage::new_for_snapshot(

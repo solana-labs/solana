@@ -361,7 +361,7 @@ impl SnapshotRequestHandler {
                     &snapshot_root_bank,
                     &snapshot_storages,
                     self.snapshot_config.snapshot_version,
-                    Some(status_cache_slot_deltas),
+                    status_cache_slot_deltas,
                 )
                 .expect("snapshot bank");
                 let ret = AccountsPackage::new_for_snapshot(
