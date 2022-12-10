@@ -447,17 +447,17 @@ impl VoteState {
     /// Number of "credits" owed to this account from the mining pool from given epoch. Submit
     /// this VoteState to the Rewards program to trade credits for lamports.
     pub fn credits_before_epoch(&self, epoch: Epoch) -> u64 {
-        let credits: Vec<(Epoch, u64, u64)> = self
+        let c = self
             .epoch_credits
             .iter()
-            .copied()
+            .rev()
             .filter(|c| c.0 < epoch)
-            .collect();
+            .next();
 
-        if credits.is_empty() {
+        if c.is_none() {
             0
         } else {
-            credits.last().unwrap().1
+            c.unwrap().1
         }
     }
 
