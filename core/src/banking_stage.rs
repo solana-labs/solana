@@ -8,6 +8,7 @@ use {
         packet_receiver::PacketReceiver,
     },
     crate::{
+        banking_trace::{BankingPacketReceiver, BankingTracer, TracerThreadResult},
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
@@ -18,7 +19,6 @@ use {
         next_leader::{next_leader_tpu_forwards, next_leader_tpu_vote},
         packet_deserializer::PacketDeserializer,
         qos_service::QosService,
-        sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::*,
         unprocessed_transaction_storage::{
@@ -26,9 +26,7 @@ use {
         },
     },
     core::iter::repeat,
-    crossbeam_channel::{
-        Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
-    },
+    crossbeam_channel::RecvTimeoutError,
     histogram::Histogram,
     itertools::Itertools,
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
@@ -41,7 +39,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::{
         data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PACKETS_PER_BATCH},
+        packet::{Packet, PACKETS_PER_BATCH},
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
     solana_program_runtime::timings::ExecuteTimings,
@@ -100,9 +98,6 @@ const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
 
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
-pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
-pub type BankingPacketSender = CrossbeamSender<BankingPacketBatch>;
-pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -354,6 +349,7 @@ pub struct BatchedTransactionErrorDetails {
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<()>>,
+    tracer_thread_hdl: Option<JoinHandle<TracerThreadResult>>,
 }
 
 #[derive(Debug, Clone)]
@@ -386,6 +382,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        banking_tracer: BankingTracer,
     ) -> Self {
         Self::new_num_threads(
             cluster_info,
@@ -399,6 +396,7 @@ impl BankingStage {
             log_messages_bytes_limit,
             connection_cache,
             bank_forks,
+            banking_tracer,
         )
     }
 
@@ -415,6 +413,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
+        banking_tracer: BankingTracer,
     ) -> Self {
         assert!(num_threads >= MIN_TOTAL_THREADS);
         // Single thread to generate entries from many banks.
@@ -433,6 +432,7 @@ impl BankingStage {
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
             })
             .unwrap_or(false);
+        let (tracer_thread_hdl, banking_tracer) = banking_tracer.finalize_under_arc();
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -484,6 +484,7 @@ impl BankingStage {
                 let data_budget = data_budget.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
+                let banking_tracer = banking_tracer.clone();
                 Builder::new()
                     .name(format!("solBanknStgTx{i:02}"))
                     .spawn(move || {
@@ -500,12 +501,16 @@ impl BankingStage {
                             connection_cache,
                             &bank_forks,
                             unprocessed_transaction_storage,
+                            banking_tracer,
                         );
                     })
                     .unwrap()
             })
             .collect();
-        Self { bank_thread_hdls }
+        Self {
+            bank_thread_hdls,
+            tracer_thread_hdl,
+        }
     }
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
@@ -765,6 +770,7 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
+        unreceived_batch_count: usize,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -960,6 +966,7 @@ impl BankingStage {
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
         mut unprocessed_transaction_storage: UnprocessedTransactionStorage,
+        banking_tracer: Arc<BankingTracer>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -967,7 +974,7 @@ impl BankingStage {
         let mut tracer_packet_stats = TracerPacketStats::new(id);
         let qos_service = QosService::new(id);
 
-        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
+        let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id, banking_tracer);
         let mut last_metrics_update = Instant::now();
 
         loop {
@@ -993,6 +1000,7 @@ impl BankingStage {
                         &connection_cache,
                         &mut tracer_packet_stats,
                         bank_forks,
+                        packet_deserializer.unreceived_batch_count(),
                     ),
                     "process_buffered_packets",
                 );
@@ -1740,6 +1748,11 @@ impl BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
+        if let Some(tracer_thread_hdl) = self.tracer_thread_hdl {
+            if let Err(tracer_result) = tracer_thread_hdl.join()? {
+                error!("tracer thread error: {:?}", tracer_result);
+            }
+        }
         Ok(())
     }
 }
@@ -1748,7 +1761,7 @@ impl BankingStage {
 mod tests {
     use {
         super::*,
-        crate::unprocessed_packet_batches,
+        crate::{banking_trace::BankingPacketBatch, unprocessed_packet_batches},
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
@@ -1761,7 +1774,7 @@ mod tests {
             get_tmp_ledger_path_auto_delete,
             leader_schedule_cache::LeaderScheduleCache,
         },
-        solana_perf::packet::{to_packet_batches, PacketFlags},
+        solana_perf::packet::{to_packet_batches, PacketBatch, PacketFlags},
         solana_poh::{
             poh_recorder::{create_test_recorder, Record, WorkingBankEntry},
             poh_service::PohService,
@@ -1812,9 +1825,11 @@ mod tests {
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
-        let (non_vote_sender, non_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let banking_tracer = BankingTracer::new_disabled();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -1838,6 +1853,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                banking_tracer,
             );
             drop(non_vote_sender);
             drop(tpu_vote_sender);
@@ -1861,9 +1877,11 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
         let start_hash = bank.last_blockhash();
-        let (non_vote_sender, non_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let banking_tracer = BankingTracer::new_disabled();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -1891,6 +1909,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                banking_tracer,
             );
             trace!("sending bank");
             drop(non_vote_sender);
@@ -1937,9 +1956,11 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
         let start_hash = bank.last_blockhash();
-        let (non_vote_sender, non_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let banking_tracer = BankingTracer::new_disabled();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -1969,6 +1990,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                banking_tracer,
             );
 
             // fund another account so we can send 2 good transactions in a single batch.
@@ -2002,7 +2024,7 @@ mod tests {
                 .collect();
             let packet_batches = convert_from_old_verified(packet_batches);
             non_vote_sender // no_ver, anf, tx
-                .send((packet_batches, None))
+                .send(BankingPacketBatch::new((packet_batches, None)))
                 .unwrap();
 
             drop(non_vote_sender);
@@ -2061,7 +2083,8 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(2);
-        let (non_vote_sender, non_vote_receiver) = unbounded();
+        let banking_tracer = BankingTracer::new_disabled();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
         // Process a batch that includes a transaction that receives two lamports.
         let alice = Keypair::new();
@@ -2074,7 +2097,9 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        non_vote_sender.send((packet_batches, None)).unwrap();
+        non_vote_sender
+            .send(BankingPacketBatch::new((packet_batches, None)))
+            .unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
@@ -2085,10 +2110,13 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        non_vote_sender.send((packet_batches, None)).unwrap();
+        non_vote_sender
+            .send(BankingPacketBatch::new((packet_batches, None)))
+            .unwrap();
 
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let (replay_vote_sender, _replay_vote_receiver) = unbounded();
@@ -2124,6 +2152,7 @@ mod tests {
                     None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
+                    banking_tracer,
                 );
 
                 // wait for banking_stage to eat the packets
@@ -2651,7 +2680,7 @@ mod tests {
     }
 
     fn simulate_poh(
-        record_receiver: CrossbeamReceiver<Record>,
+        record_receiver: Receiver<Record>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
     ) -> JoinHandle<()> {
         let poh_recorder = poh_recorder.clone();
@@ -3392,7 +3421,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new(0),
+                &mut LeaderSlotMetricsTracker::new_for_test(),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3450,7 +3479,7 @@ mod tests {
                 &BankingStageStats::default(),
                 &recorder,
                 &QosService::new(1),
-                &mut LeaderSlotMetricsTracker::new(0),
+                &mut LeaderSlotMetricsTracker::new_for_test(),
                 None,
             );
             assert!(buffered_packet_batches.is_empty());
@@ -3512,7 +3541,7 @@ mod tests {
                         &BankingStageStats::default(),
                         &recorder,
                         &QosService::new(1),
-                        &mut LeaderSlotMetricsTracker::new(0),
+                        &mut LeaderSlotMetricsTracker::new_for_test(),
                         None,
                     );
 
@@ -3605,7 +3634,7 @@ mod tests {
                     &socket,
                     true,
                     &data_budget,
-                    &mut LeaderSlotMetricsTracker::new(0),
+                    &mut LeaderSlotMetricsTracker::new_for_test(),
                     &stats,
                     &connection_cache,
                     &mut TracerPacketStats::new(0),
@@ -3702,7 +3731,7 @@ mod tests {
                     &socket,
                     hold,
                     &DataBudget::default(),
-                    &mut LeaderSlotMetricsTracker::new(0),
+                    &mut LeaderSlotMetricsTracker::new_for_test(),
                     &stats,
                     &connection_cache,
                     &mut TracerPacketStats::new(0),
@@ -3780,9 +3809,11 @@ mod tests {
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
         let start_hash = bank.last_blockhash();
-        let (non_vote_sender, non_vote_receiver) = unbounded();
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let banking_tracer = BankingTracer::new_disabled();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         {
             let blockstore = Arc::new(
@@ -3812,6 +3843,7 @@ mod tests {
                 None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
+                banking_tracer,
             );
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
@@ -3885,7 +3917,11 @@ mod tests {
             .into_iter()
             .map(|(packet_batches, sender)| {
                 Builder::new()
-                    .spawn(move || sender.send((packet_batches, None)).unwrap())
+                    .spawn(move || {
+                        sender
+                            .send(BankingPacketBatch::new((packet_batches, None)))
+                            .unwrap()
+                    })
                     .unwrap()
             })
             .for_each(|handle| handle.join().unwrap());

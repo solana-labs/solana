@@ -4,6 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
+        banking_trace::BankingTracer,
         broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
@@ -176,6 +177,7 @@ pub struct ValidatorConfig {
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
     pub replay_slots_concurrently: bool,
+    pub banking_trace_size: u64,
 }
 
 impl Default for ValidatorConfig {
@@ -238,6 +240,7 @@ impl Default for ValidatorConfig {
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
             replay_slots_concurrently: false,
+            banking_trace_size: 0,
         }
     }
 }
@@ -983,6 +986,13 @@ impl Validator {
             &prioritization_fee_cache,
         )?;
 
+        let banking_tracer = BankingTracer::new((config.banking_trace_size > 0).then_some((
+            blockstore.banking_tracer_path(),
+            exit.clone(),
+            config.banking_trace_size,
+        )))
+        .map_err(|err| format!("{} [{:?}]", &err, &err))?;
+
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1017,6 +1027,7 @@ impl Validator {
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
             tpu_enable_udp,
+            banking_tracer,
         );
 
         datapoint_info!(

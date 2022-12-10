@@ -4,6 +4,7 @@
 use {
     crate::{
         banking_stage::BankingStage,
+        banking_trace::BankingTracer,
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -99,6 +100,7 @@ impl Tpu {
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
         tpu_enable_udp: bool,
+        banking_tracer: BankingTracer,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -154,7 +156,7 @@ impl Tpu {
             "Vote",
         );
 
-        let (non_vote_sender, non_vote_receiver) = unbounded();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
 
         let stats = Arc::new(StreamStats::default());
         let (_, tpu_quic_t) = spawn_server(
@@ -192,7 +194,7 @@ impl Tpu {
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
-        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
 
         let vote_sigverify_stage = {
             let verifier = TransactionSigVerifier::new_reject_non_vote(tpu_vote_sender);
@@ -203,7 +205,8 @@ impl Tpu {
             )
         };
 
-        let (gossip_vote_sender, gossip_vote_receiver) = unbounded();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let cluster_info_vote_listener = ClusterInfoVoteListener::new(
             exit.clone(),
             cluster_info.clone(),
@@ -231,6 +234,7 @@ impl Tpu {
             log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
+            banking_tracer,
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(
