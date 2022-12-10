@@ -758,6 +758,7 @@ mod tests {
         let mut vote_state = VoteState::default();
 
         assert_eq!(vote_state.credits(), 0);
+        assert_eq!(vote_state.credits_before_epoch(0), 0);
         assert_eq!(vote_state.epoch_credits().clone(), vec![]);
 
         let mut expected = vec![];
@@ -777,6 +778,13 @@ mod tests {
 
         assert_eq!(vote_state.credits(), credits);
         assert_eq!(vote_state.epoch_credits().clone(), expected);
+
+        assert_eq!(vote_state.credits_before_epoch(2), 0);
+        for e in 3..epochs {
+            let i: usize = (e - 3).try_into().unwrap();
+            assert_eq!(vote_state.credits_before_epoch(e), expected[i].1);
+            assert_eq!(vote_state.epoch_credits_before(e), expected[..i + 1]);
+        }
     }
 
     #[test]
