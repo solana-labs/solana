@@ -18,7 +18,7 @@ use {
     },
     std::{
         cmp::Reverse,
-        collections::BinaryHeap,
+        collections::{BinaryHeap, HashMap},
         io::stdout,
         path::{Path, PathBuf},
         process::exit,
@@ -27,24 +27,24 @@ use {
 };
 
 #[derive(Debug, Eq)]
-struct TopAccountsStatsEntry<V: std::cmp::Ord> {
-    key: Pubkey,
+struct TopAccountsStatsEntry<K, V: std::cmp::Ord> {
+    key: K,
     value: V,
 }
 
-impl<V: std::cmp::Ord> Ord for TopAccountsStatsEntry<V> {
+impl<K: std::cmp::Eq, V: std::cmp::Ord> Ord for TopAccountsStatsEntry<K, V> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.value.cmp(&other.value)
     }
 }
 
-impl<V: std::cmp::Ord> PartialOrd for TopAccountsStatsEntry<V> {
+impl<K: std::cmp::Eq, V: std::cmp::Ord> PartialOrd for TopAccountsStatsEntry<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<V: std::cmp::Ord> PartialEq for TopAccountsStatsEntry<V> {
+impl<K: std::cmp::Eq, V: std::cmp::Ord> PartialEq for TopAccountsStatsEntry<K, V> {
     fn eq(&self, other: &Self) -> bool {
         self.value == other.value
     }
@@ -64,6 +64,20 @@ impl TopAccountsRankingField {
             "data_size" => Some(Self::DataSize),
             "exec_data_size" => Some(Self::ExecutableDataSize),
             "non_exec_data_size" => Some(Self::NonExecutableDataSize),
+            _ => None,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum TopCommonValueRankingField {
+    Owner,
+}
+
+impl TopCommonValueRankingField {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "owner" => Some(Self::Owner),
             _ => None,
         }
     }
@@ -178,6 +192,45 @@ impl<'a> AccountsSubCommand<'a> for App<'a, '_> {
                         .default_value(default_top_accounts_file_count_limit)
                         .help("Collect stats from up to LIMIT accounts db files.")
                 )
+                .subcommand(
+                    SubCommand::with_name("top-values")
+                    .about("Print the top N common values in the account db.")
+                    .arg(
+                        Arg::with_name("path")
+                            .long("path")
+                            .takes_value(true)
+                            .value_name("ACCOUNTS_DB_PATH")
+                            .required(true)
+                            .help("Path to the accounts_db.")
+                    )
+                    .arg(
+                        Arg::with_name("field")
+                            .long("field")
+                            .takes_value(true)
+                            .value_name("FIELD")
+                            .possible_values(&["owner"])
+                            .default_value("owner")
+                            .required(true)
+                            .help("Determine which stats to print. \
+                                   Possible values are: \
+                                   'owner': print the top N common owners from all accounts.")
+                    )
+                    .arg(
+                        Arg::with_name("n")
+                            .takes_value(true)
+                            .value_name("N")
+                            .default_value("30")
+                            .help("Collect the top N entries of the specified --stats")
+                    )
+                    .arg(
+                        Arg::with_name("limit")
+                            .long("limit")
+                            .takes_value(true)
+                            .value_name("LIMIT")
+                            .default_value(default_top_accounts_file_count_limit)
+                            .help("Collect stats from up to LIMIT accounts db files.")
+                    )
+                )
             )
         )
     }
@@ -250,6 +303,58 @@ pub fn accounts_process_command(
             while !min_heap.is_empty() {
                 if let Some(Reverse(entry)) = min_heap.pop() {
                     println!("account: {:?}, {}: {:?}", entry.key, field_str, entry.value);
+                }
+            }
+        }
+        ("top-values", Some(arg_matches)) => {
+            let accounts_db_path = value_t_or_exit!(arg_matches, "path", String);
+            let acc_file_paths = std::fs::read_dir(accounts_db_path).unwrap();
+            let heap_size = value_t_or_exit!(arg_matches, "n", usize);
+            let limit = value_t_or_exit!(arg_matches, "limit", usize);
+            let field_str = &value_t_or_exit!(arg_matches, "field", String);
+            let field = TopCommonValueRankingField::from_str(field_str).unwrap();
+
+            let mut file_count = 0;
+            let mut hash_map: HashMap<String, usize> = HashMap::new();
+            debug!("paths = {:?}", acc_file_paths);
+            for path in acc_file_paths {
+                debug!("Collecting stats from {:?}", path);
+                let av_path = path.expect("success").path();
+                let av_len = std::fs::metadata(&av_path).unwrap().len() as usize;
+                if let Ok((mut acc_file, _)) = AccountsFile::new_from_file(av_path, av_len) {
+                    acc_file.set_no_remove_on_drop();
+
+                    // read append-vec
+                    let mut offset = 0;
+                    while let Some((account, next_offset)) = acc_file.get_account(offset) {
+                        offset = next_offset;
+                        let key = match field {
+                            TopCommonValueRankingField::Owner => account.owner().to_string(),
+                        };
+                        if let Some(count_entry) = hash_map.get_mut(&key) {
+                            *count_entry += 1;
+                        } else {
+                            hash_map.insert(key, 1);
+                        }
+                    }
+                    file_count += 1;
+                    if file_count >= limit {
+                        break;
+                    }
+                }
+            }
+
+            let mut min_heap = BinaryHeap::new();
+            for (k, v) in hash_map {
+                min_heap.push(Reverse(TopAccountsStatsEntry { key: k, value: v }));
+                if min_heap.len() > heap_size {
+                    min_heap.pop();
+                }
+            }
+            println!("Collected top {:?} samples", min_heap.len());
+            while !min_heap.is_empty() {
+                if let Some(Reverse(entry)) = min_heap.pop() {
+                    println!("{}: {:?}, count: {:?}", field_str, entry.key, entry.value);
                 }
             }
         }
