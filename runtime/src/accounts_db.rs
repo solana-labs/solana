@@ -45,7 +45,6 @@ use {
             StoredAccountMeta, StoredMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
-        bank::Rewrites,
         cache_hash_data::{CacheHashData, CacheHashDataFile},
         contains::Contains,
         epoch_accounts_hash::EpochAccountsHashManager,
@@ -7733,10 +7732,6 @@ impl AccountsDb {
         }
     }
 
-    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
-        self.get_accounts_delta_hash_with_rewrites(slot, &Rewrites::default())
-    }
-
     /// helper to return
     /// 1. pubkey, hash pairs for the slot
     /// 2. us spent scanning
@@ -7781,11 +7776,7 @@ impl AccountsDb {
         (hashes, scan.as_us(), accumulate)
     }
 
-    pub fn get_accounts_delta_hash_with_rewrites(
-        &self,
-        slot: Slot,
-        skipped_rewrites: &Rewrites,
-    ) -> Hash {
+    pub fn get_accounts_delta_hash(&self, slot: Slot) -> Hash {
         let (mut hashes, scan_us, mut accumulate) = self.get_pubkey_hash_for_slot(slot);
         let dirty_keys = hashes.iter().map(|(pubkey, _hash)| *pubkey).collect();
 
@@ -7793,8 +7784,6 @@ impl AccountsDb {
             // filler accounts must be added to 'dirty_keys' above but cannot be used to calculate hash
             hashes.retain(|(pubkey, _hash)| !self.is_filler_account(pubkey));
         }
-
-        self.extend_hashes_with_skipped_rewrites(&mut hashes, skipped_rewrites);
 
         let ret = AccountsHasher::accumulate_account_hashes(hashes);
         accumulate.stop();
@@ -7813,38 +7802,6 @@ impl AccountsDb {
             .fetch_add(accumulate.as_us(), Ordering::Relaxed);
         self.stats.delta_hash_num.fetch_add(1, Ordering::Relaxed);
         ret
-    }
-
-    /// add all items from 'skipped_rewrites' to 'hashes' where the pubkey doesn't already exist in 'hashes'
-    fn extend_hashes_with_skipped_rewrites(
-        &self,
-        hashes: &mut Vec<(Pubkey, Hash)>,
-        skipped_rewrites: &Rewrites,
-    ) {
-        let mut skipped_rewrites = skipped_rewrites.read().unwrap().clone();
-        if skipped_rewrites.is_empty() {
-            // if there are no skipped rewrites, then there is nothing futher to do
-            return;
-        }
-        hashes.iter().for_each(|(key, _)| {
-            skipped_rewrites.remove(key);
-        });
-
-        if self.filler_accounts_enabled() {
-            // simulate the time we would normally spend hashing the filler accounts
-            // this is an over approximation but at least takes a stab at simulating what the validator would spend time doing
-            let _ = AccountsHasher::accumulate_account_hashes(
-                skipped_rewrites
-                    .iter()
-                    .map(|(k, v)| (*k, *v))
-                    .collect::<Vec<_>>(),
-            );
-
-            // filler accounts do not get their updated hash values hashed into the delta hash
-            skipped_rewrites.retain(|key, _| !self.is_filler_account(key));
-        }
-
-        hashes.extend(skipped_rewrites.into_iter());
     }
 
     fn update_index<'a, T: ReadableAccount + Sync>(
@@ -16546,28 +16503,6 @@ pub mod tests {
                 should_contain: false,
             });
         }
-    }
-
-    #[test]
-    fn test_extend_hashes_with_skipped_rewrites() {
-        let db = AccountsDb::new_single_for_tests();
-        let mut hashes = Vec::default();
-        let rewrites = Rewrites::default();
-        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
-        assert!(hashes.is_empty());
-        let pubkey = Pubkey::new(&[1; 32]);
-        let hash = Hash::new(&[2; 32]);
-        rewrites.write().unwrap().insert(pubkey, hash);
-        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
-        assert_eq!(hashes, vec![(pubkey, hash)]);
-        // pubkey is already in hashes, will not be added a second time
-        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
-        assert_eq!(hashes, vec![(pubkey, hash)]);
-        let pubkey2 = Pubkey::new(&[2; 32]);
-        let hash2 = Hash::new(&[3; 32]);
-        rewrites.write().unwrap().insert(pubkey2, hash2);
-        db.extend_hashes_with_skipped_rewrites(&mut hashes, &rewrites);
-        assert_eq!(hashes, vec![(pubkey, hash), (pubkey2, hash2)]);
     }
 
     #[test]
