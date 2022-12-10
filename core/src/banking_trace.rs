@@ -360,7 +360,7 @@ pub fn drop_and_clean_temp_dir_unless_suppressed(temp_dir: TempDir) {
     std::env::var("BANKING_TRACE_LEAVE_FILES_FROM_LAST_ITERATION")
         .is_ok()
         .then(|| {
-            eprintln!("prevented to remove {:?}", temp_dir.path());
+            warn!("prevented to remove {:?}", temp_dir.path());
             drop(temp_dir.into_path());
         });
 }
