@@ -134,7 +134,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         .unwrap();
 
         println!("Interpreted:");
-        vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+        vm.env
+            .context_object_pointer
+            .mock_set_remaining(std::i64::MAX as u64);
         let (instructions, result) = vm.execute_program(true);
         assert_eq!(SUCCESS, result.unwrap());
         assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
@@ -144,7 +146,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         );
 
         bencher.iter(|| {
-            vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+            vm.env
+                .context_object_pointer
+                .mock_set_remaining(std::i64::MAX as u64);
             vm.execute_program(true).1.unwrap();
         });
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
@@ -164,7 +168,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
         );
 
         bencher.iter(|| {
-            vm.context_object.mock_set_remaining(std::i64::MAX as u64);
+            vm.env
+                .context_object_pointer
+                .mock_set_remaining(std::i64::MAX as u64);
             vm.execute_program(false).1.unwrap();
         });
         let summary = bencher.bench(|_bencher| Ok(())).unwrap().unwrap();
@@ -306,12 +312,12 @@ fn bench_instruction_count_tuner(_bencher: &mut Bencher) {
 
         assert_eq!(
             0,
-            vm.context_object.get_remaining(),
+            vm.env.context_object_pointer.get_remaining(),
             "Tuner must consume the whole budget"
         );
         println!(
             "{:?} compute units took {:?} us ({:?} instructions)",
-            BUDGET - vm.context_object.get_remaining(),
+            BUDGET - vm.env.context_object_pointer.get_remaining(),
             measure.as_us(),
             instructions,
         );
