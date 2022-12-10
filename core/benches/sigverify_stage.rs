@@ -12,6 +12,7 @@ use {
         thread_rng, Rng,
     },
     solana_core::{
+        banking_trace::BankingTracer,
         sigverify::TransactionSigVerifier,
         sigverify_stage::{SigVerifier, SigVerifyStage},
     },
@@ -148,7 +149,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     solana_logger::setup();
     trace!("start");
     let (packet_s, packet_r) = unbounded();
-    let (verified_s, verified_r) = unbounded();
+    let (verified_s, verified_r) = BankingTracer::channel_for_test();
     let verifier = TransactionSigVerifier::new(verified_s);
     let stage = SigVerifyStage::new(packet_r, verifier, "bench");
 
@@ -171,18 +172,21 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
         }
         let mut received = 0;
         trace!("sent: {}", sent_len);
+        let mut messages = vec![];
         loop {
-            if let Ok((mut verifieds, _)) = verified_r.recv_timeout(Duration::from_millis(10)) {
-                while let Some(v) = verifieds.pop() {
+            if let Ok(message) = verified_r.recv_timeout(Duration::from_millis(10)) {
+                let (verifieds, _) = &*message;
+                for v in verifieds.iter().rev() {
                     received += v.len();
-                    batches.push(v);
                 }
+                messages.push(message);
                 if use_same_tx || received >= sent_len {
                     break;
                 }
             }
         }
         trace!("received: {}", received);
+        test::black_box(messages);
     });
     stage.join().unwrap();
 }
@@ -225,8 +229,8 @@ fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch>, usize) {
 
 fn bench_shrink_sigverify_stage_core(bencher: &mut Bencher, discard_factor: i32) {
     let (batches0, num_valid_packets) = prepare_batches(discard_factor);
-    let (_verified_s, _verified_r) = unbounded();
-    let verifier = TransactionSigVerifier::new(_verified_s);
+    let (verified_s, _verified_r) = BankingTracer::channel_for_test();
+    let verifier = TransactionSigVerifier::new(verified_s);
 
     let mut c = 0;
     let mut total_shrink_time = 0;

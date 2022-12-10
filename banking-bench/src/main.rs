@@ -6,7 +6,10 @@ use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
     solana_client::connection_cache::ConnectionCache,
-    solana_core::banking_stage::BankingStage,
+    solana_core::{
+        banking_stage::BankingStage,
+        banking_trace::{BankingPacketBatch, BankingTracer, DEFAULT_BANKING_TRACE_SIZE},
+    },
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -256,6 +259,12 @@ fn main() {
                 .help("Skip transaction sanity execution"),
         )
         .arg(
+            Arg::new("trace_banking")
+                .long("trace-banking")
+                .takes_value(false)
+                .help("Enable banking tracing"),
+        )
+        .arg(
             Arg::new("write_lock_contention")
                 .long("write-lock-contention")
                 .takes_value(true)
@@ -321,9 +330,6 @@ fn main() {
         ..
     } = create_genesis_config(mint_total);
 
-    let (verified_sender, verified_receiver) = unbounded();
-    let (vote_sender, vote_receiver) = unbounded();
-    let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let bank0 = Bank::new_for_benches(&genesis_config);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
@@ -410,6 +416,16 @@ fn main() {
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+        let banking_tracer = BankingTracer::new(matches.is_present("trace_banking").then_some((
+            blockstore.banking_tracer_path(),
+            exit.clone(),
+            DEFAULT_BANKING_TRACE_SIZE,
+        )))
+        .unwrap();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
         let cluster_info = ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
@@ -424,15 +440,16 @@ fn main() {
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
-            verified_receiver,
+            non_vote_receiver,
             tpu_vote_receiver,
-            vote_receiver,
+            gossip_vote_receiver,
             num_banking_threads,
             None,
             replay_vote_sender,
             None,
             Arc::new(connection_cache),
             bank_forks.clone(),
+            banking_tracer,
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
@@ -461,8 +478,8 @@ fn main() {
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender
-                    .send((vec![packet_batch.clone()], None))
+                non_vote_sender
+                    .send(BankingPacketBatch::new((vec![packet_batch.clone()], None)))
                     .unwrap();
             }
 
@@ -574,9 +591,9 @@ fn main() {
             (1000.0 * 1000.0 * (txs_processed - base_tx_count) as f64) / (total_us as f64),
         );
 
-        drop(verified_sender);
+        drop(non_vote_sender);
         drop(tpu_vote_sender);
-        drop(vote_sender);
+        drop(gossip_vote_sender);
         exit.store(true, Ordering::Relaxed);
         banking_stage.join().unwrap();
         debug!("waited for banking_stage");

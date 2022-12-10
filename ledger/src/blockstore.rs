@@ -219,9 +219,12 @@ impl Blockstore {
         self.db
     }
 
-    /// The path to the ledger store
     pub fn ledger_path(&self) -> &PathBuf {
         &self.ledger_path
+    }
+
+    pub fn banking_tracer_path(&self) -> PathBuf {
+        self.ledger_path.join("banking_trace")
     }
 
     /// Opens a Ledger in directory, provides "infinite" window of shreds

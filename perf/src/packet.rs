@@ -4,7 +4,7 @@ use {
     crate::{cuda_runtime::PinnedVec, recycler::Recycler},
     bincode::config::Options,
     rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator},
-    serde::{de::DeserializeOwned, Serialize},
+    serde::{de::DeserializeOwned, Deserialize, Serialize},
     std::{
         io::Read,
         net::SocketAddr,
@@ -18,7 +18,7 @@ pub const NUM_PACKETS: usize = 1024 * 8;
 pub const PACKETS_PER_BATCH: usize = 64;
 pub const NUM_RCVMMSGS: usize = 64;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PacketBatch {
     packets: PinnedVec<Packet>,
 }

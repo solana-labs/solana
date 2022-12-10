@@ -1,7 +1,7 @@
 use {
     bincode::{Options, Result},
     bitflags::bitflags,
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     std::{
         fmt, io,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -19,6 +19,7 @@ pub const PACKET_DATA_SIZE: usize = 1280 - 40 - 8;
 
 bitflags! {
     #[repr(C)]
+    #[derive(Serialize, Deserialize)]
     pub struct PacketFlags: u8 {
         const DISCARD        = 0b0000_0001;
         const FORWARDED      = 0b0000_0010;
@@ -28,7 +29,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Meta {
     pub size: usize,
@@ -38,11 +39,39 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
-#[derive(Clone, Eq)]
+mod serde_bytes_array {
+    use {
+        core::convert::TryInto,
+        serde::{de::Error, Deserializer, Serializer},
+    };
+
+    pub(crate) fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serde_bytes::serialize(bytes, serializer)
+    }
+
+    pub(crate) fn deserialize<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let vec: Vec<u8> = serde_bytes::deserialize(deserializer)?;
+        let vec_len = vec.len();
+        let array: [u8; N] = vec.try_into().map_err(|_| {
+            let expected = format!("[u8; {}]", N);
+            D::Error::invalid_length(vec_len, &expected.as_str())
+        })?;
+        Ok(array)
+    }
+}
+
+#[derive(Clone, Eq, Serialize, Deserialize)]
 #[repr(C)]
 pub struct Packet {
     // Bytes past Packet.meta.size are not valid to read from.
     // Use Packet.data(index) to read from the buffer.
+    #[serde(with = "serde_bytes_array")]
     buffer: [u8; PACKET_DATA_SIZE],
     meta: Meta,
 }

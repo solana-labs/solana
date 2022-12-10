@@ -10,6 +10,7 @@ use {
         },
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
+    solana_core::banking_trace::DEFAULT_BANKING_TRACE_SIZE,
     solana_faucet::faucet::FAUCET_PORT,
     solana_net_utils::{MINIMUM_VALIDATOR_PORT_RANGE_WIDTH, VALIDATOR_PORT_RANGE},
     solana_rpc::{rpc::MAX_REQUEST_BODY_SIZE, rpc_pubsub_service::PubSubConfig},
@@ -1304,6 +1305,15 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                 .long("replay-slots-concurrently")
                 .help("Allow concurrent replay of slots on different forks")
         )
+        .arg(
+            Arg::with_name("banking_trace_size")
+                .long("enable-banking-trace")
+                .value_name("MAX_BYTES")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .default_value(&default_args.banking_trace_size)
+                .help("Write trace files for simulate-leader-blocks, retaining up to the maximum total bytes")
+        )
         .args(&get_deprecated_arguments())
         .after_help("The default subcommand is run")
         .subcommand(
@@ -1645,6 +1655,8 @@ pub struct DefaultArgs {
     // Wait subcommand
     pub wait_for_restart_window_min_idle_time: String,
     pub wait_for_restart_window_max_delinquent_stake: String,
+
+    pub banking_trace_size: String,
 }
 
 impl DefaultArgs {
@@ -1723,6 +1735,7 @@ impl DefaultArgs {
             exit_max_delinquent_stake: "5".to_string(),
             wait_for_restart_window_min_idle_time: "10".to_string(),
             wait_for_restart_window_max_delinquent_stake: "5".to_string(),
+            banking_trace_size: DEFAULT_BANKING_TRACE_SIZE.to_string(),
         }
     }
 }

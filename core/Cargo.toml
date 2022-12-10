@@ -34,6 +34,7 @@ num_enum = "0.5.7"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
+rolling-file = { git = "https://github.com/ryoqun/rolling-file-rs", rev = "664504e77fad7292dedf5a119d950b80aef67934" }
 serde = "1.0.144"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.15.0" }
