@@ -1,112 +1,64 @@
 ---
-title: "Overview"
+title: "Overview of Writing Programs"
+sidebar_label: "Overview"
 ---
 
-Developers can write and deploy their own programs to the Solana blockchain.
+Developers can write and deploy their own programs to the Solana blockchain. While developing these "on-chain" programs can seem cumbersome, the entire process can be broadly summarized into a few key steps.
 
-The [Helloworld example](examples.md#helloworld) is a good starting place to see
-how a program is written, built, deployed, and interacted with on-chain.
+## Solana Development Lifecycle
 
-## Berkeley Packet Filter (BPF)
+1. Setup your development environment
+2. Write your program
+3. Compile the program
+4. Generate the program's public address
+5. Deploy the program
 
-Solana on-chain programs are compiled via the [LLVM compiler
-infrastructure](https://llvm.org/) to an [Executable and Linkable Format
-(ELF)](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) containing
-a variation of the [Berkeley Packet Filter
-(BPF)](https://en.wikipedia.org/wiki/Berkeley_Packet_Filter) bytecode.
+### 1. Setup your development environment
 
-Because Solana uses the LLVM compiler infrastructure, a program may be written
-in any programming language that can target the LLVM's BPF backend. Solana
-currently supports writing programs in Rust and C/C++.
+The most robust way of getting started with Solana development, is [installing the Solana CLI](./../../cli/install-solana-cli-tools.md) tools on your local computer. This will allow you to have the most powerful development environment.
 
-BPF provides an efficient [instruction
-set](https://github.com/iovisor/bpf-docs/blob/master/eBPF.md) that can be
-executed in an interpreted virtual machine or as efficient just-in-time compiled
-native instructions.
+Some developers may also opt for using [Solana Playground](https://beta.solpg.io/), a browser based IDE. It will let you write, build, and deploy on-chain programs. All from your browser. No installation needed.
 
-## Loaders
+### 2. Write your program
 
-Programs are deployed with and executed by runtime loaders, currently there are
-two supported loaders [BPF
-Loader](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader.rs#L17)
-and [BPF loader
-deprecated](https://github.com/solana-labs/solana/blob/7ddf10e602d2ed87a9e3737aa8c32f1db9f909d8/sdk/program/src/bpf_loader_deprecated.rs#L14)
+Writing Solana programs is most commonly done so using the Rust language. These Rust programs are effectively the same as creating a traditional [Rust library](https://doc.rust-lang.org/rust-by-example/crates/lib.html).
 
-Loaders may support different application binary interfaces so developers must
-write their programs for and deploy them to the same loader. If a program
-written for one loader is deployed to a different one the result is usually a
-`AccessViolation` error due to mismatched deserialization of the program's input
-parameters.
+> You can read more about other [supported languages](#support-languages) below.
 
-For all practical purposes program should always be written to target the latest
-BPF loader and the latest loader is the default for the command-line interface
-and the javascript APIs.
+### 3. Compile the program
 
-For language specific information about implementing a program for a particular
-loader see:
+Once the program is written, it must be complied down to [Berkley Packet Filter](./faq.md#berkeley-packet-filter-bpf) byte-code that will then be deployed to the blockchain.
 
-- [Rust program entrypoints](developing-rust.md#program-entrypoint)
-- [C program entrypoints](developing-c.md#program-entrypoint)
+### 4. Generate the program's public address
 
-### Deployment
+Using the [Solana CLI](./../../cli/install-solana-cli-tools.md), the developer will generate a new unique [Keypair](./../../terminology.md#keypair) for the new program. The public address (aka [Pubkey](./../../terminology.md#public-key-pubkey)) from this Keypair will be used on-chain as the program's public address (aka [`programId`](./../../terminology.md#program-id)).
 
-SBF program deployment is the process of uploading a BPF shared object into a
-program account's data and marking the account executable. A client breaks the
-SBF shared object into smaller pieces and sends them as the instruction data of
-[`Write`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L13)
-instructions to the loader where loader writes that data into the program's
-account data. Once all the pieces are received the client sends a
-[`Finalize`](https://github.com/solana-labs/solana/blob/bc7133d7526a041d1aaee807b80922baa89b6f90/sdk/program/src/loader_instruction.rs#L30)
-instruction to the loader, the loader then validates that the SBF data is valid
-and marks the program account as _executable_. Once the program account is
-marked executable, subsequent transactions may issue instructions for that
-program to process.
+### 5. Deploying the program
 
-When an instruction is directed at an executable SBF program the loader
-configures the program's execution environment, serializes the program's input
-parameters, calls the program's entrypoint, and reports any errors encountered.
+Then again using the CLI, the compiled program can be deployed to the selected blockchain cluster by creating many transactions containing the program's byte-code. Due to the transaction memory size limitations, each transaction effectively sends small chunks of the program to the blockchain in a rapid-fire manner.
 
-For further information see [deploying](deploying.md)
+Once the entire program has been sent to the blockchain, a final transaction is sent to write all of the buffered byte-code to the program's data account. This either mark the new program as [`executable`](./../programming-model/accounts.md#executable), or complete the process to upgrade an existing program (if it already existed).
 
-### Input Parameter Serialization
+## Support languages
 
-SBF loaders serialize the program input parameters into a byte array that is
-then passed to the program's entrypoint, where the program is responsible for
-deserializing it on-chain. One of the changes between the deprecated loader and
-the current loader is that the input parameters are serialized in a way that
-results in various parameters falling on aligned offsets within the aligned byte
-array. This allows deserialization implementations to directly reference the
-byte array and provide aligned pointers to the program.
+Solana programs are typically written in the [Rust language](./developing-rust.md), but [C/C++](./developing-c.md) are also supported.
 
-For language specific information about serialization see:
+There are also various community driven efforts to enable writing on-chain programs using other languages, including:
 
-- [Rust program parameter
-  deserialization](developing-rust.md#parameter-deserialization)
-- [C program parameter
-  deserialization](developing-c.md#parameter-deserialization)
+- Python via [Seahorse](https://seahorse-lang.org/) (that acts as a wrapper the Rust based Anchor framework)
 
-The latest loader serializes the program input parameters as follows (all
-encoding is little endian):
+## Example programs
 
-- 8 bytes unsigned number of accounts
-- For each account
-  - 1 byte indicating if this is a duplicate account, if not a duplicate then
-    the value is 0xff, otherwise the value is the index of the account it is a
-    duplicate of.
-  - If duplicate: 7 bytes of padding
-  - If not duplicate:
-    - 1 byte boolean, true if account is a signer
-    - 1 byte boolean, true if account is writable
-    - 1 byte boolean, true if account is executable
-    - 4 bytes of padding
-    - 32 bytes of the account public key
-    - 32 bytes of the account's owner public key
-    - 8 bytes unsigned number of lamports owned by the account
-    - 8 bytes unsigned number of bytes of account data
-    - x bytes of account data
-    - 10k bytes of padding, used for realloc
-    - enough padding to align the offset to 8 bytes.
-    - 8 bytes rent epoch
-- 8 bytes of unsigned number of instruction data
-- x bytes of instruction data
-- 32 bytes of the program id
+The [Hello world example](examples.md#helloworld) is a good starting place to see how a program is written, built, deployed, and interacted with on-chain.
+
+You can also explore the [Program Examples](./examples.md) for other examples of on-chain programs.
+
+## Limitations
+
+As you dive deeper into program development, it is important to understand some of the important limitations associated with on-chain programs.
+
+Read more details on the [Limitations](./limitations.md) page
+
+## Frequently asked questions
+
+Discover many of the [frequently asked questions](./faq.md) other developers have about writing/understanding Solana programs.
