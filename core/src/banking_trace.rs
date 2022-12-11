@@ -632,7 +632,7 @@ impl BankingTraceReplayer {
         loop {
             let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
             let Ok(event) = d else {
-                info!("{}", &d);
+                info!("{:?}", &d);
                 break;
             };
             let event_time = event.0;
