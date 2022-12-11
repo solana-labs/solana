@@ -636,9 +636,10 @@ impl BankingTraceReplayer {
                 break;
             };
             let event_time = event.0;
+            let event = event.1;
             let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
-            debug!("{}", datetime.format("%d/%m/%Y %T"));
-            match event.1 {
+            debug!("{}", datetime.format("%Y-%m-%d %H:%M:%S.%N"));
+            match event {
                 TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
                     bank_starts_by_slot.insert(slot, event_time);
                 }
