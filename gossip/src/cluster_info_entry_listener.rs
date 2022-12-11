@@ -73,18 +73,15 @@ mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::Node,
-            cluster_info_entry_listener::ClusterInfoEntryHandler,
+            cluster_info::Node, cluster_info_entry_listener::ClusterInfoEntryHandler,
             duplicate_shred::tests::new_rand_shred,
         },
         solana_ledger::shred::Shredder,
         solana_sdk::signature::Keypair,
         solana_streamer::socket::SocketAddrSpace,
-        std::{
-            sync::{
-                atomic::{AtomicU32, Ordering},
-                Arc,
-            },
+        std::sync::{
+            atomic::{AtomicU32, Ordering},
+            Arc,
         },
     };
     struct FakeHandler {
@@ -116,8 +113,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let count = Arc::new(AtomicU32::new(0));
         let handler = FakeHandler::new(count.clone());
-        let listener = ClusterInfoEntryListener::new(
-            exit.clone(), cluster_info.clone(), handler);
+        let listener = ClusterInfoEntryListener::new(exit.clone(), cluster_info.clone(), handler);
         let mut rng = rand::thread_rng();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
         let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();

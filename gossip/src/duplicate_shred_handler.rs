@@ -181,7 +181,81 @@ impl DuplicateShredHandler {
 
 #[cfg(test)]
 mod tests {
+    use {
+        super::*,
+        crate::{
+            cluster_info::{ClusterInfo, Node},
+            cluster_info_entry_listener::ClusterInfoEntryHandler,
+            duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
+        },
+        rand::Rng,
+        solana_ledger::shred::Shredder,
+        solana_ledger::{
+            genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+            get_tmp_ledger_path_auto_delete, leader_schedule_cache,
+        },
+        solana_runtime::{bank::Bank, bank_forks::BankForks},
+        solana_sdk::signature::{Keypair, Signer},
+        solana_streamer::socket::SocketAddrSpace,
+        std::sync::{
+            atomic::{AtomicU32, Ordering},
+            Arc,
+        },
+    };
+
     #[test]
     fn test_handle_mixed_entries() {
+        solana_logger::setup();
+
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Arc::new(Blockstore::open(ledger_path.path()).unwrap());
+        let my_keypair = Arc::new(Keypair::new());
+        let my_pubkey = my_keypair.pubkey();
+        let genesis_config_info = create_genesis_config_with_leader(10_000, &my_pubkey, 10_000);
+        let GenesisConfigInfo { genesis_config, .. } = genesis_config_info;
+        let bank_forks = BankForks::new(Bank::new_for_tests(&genesis_config));
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(
+            &bank_forks.working_bank(),
+        ));
+        let mut duplicate_shred_handler =
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache.clone());
+        let mut rng = rand::thread_rng();
+        let (slot, parent_slot, reference_tick, version) = (1, 0, 0, 0);
+        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
+        let next_shred_index = 353;
+        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
+        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
+        let chunks = from_shred(
+            shred1.clone(),
+            my_pubkey,
+            shred2.payload().clone(),
+            None::<fn(Slot) -> Option<Pubkey>>,
+            rng.gen(), // wallclock
+            512,       // max_size
+        )
+        .unwrap();
+        let (slot1, parent_slot1, reference_tick, version) = (2, 1, 0, 0);
+        let shredder1 = Shredder::new(slot1, parent_slot1, reference_tick, version).unwrap();
+        let shred3 = new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair);
+        let shred4 = new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair);
+        let chunks1 = from_shred(
+            shred3.clone(),
+            my_pubkey,
+            shred4.payload().clone(),
+            None::<fn(Slot) -> Option<Pubkey>>,
+            rng.gen(), // wallclock
+            512,       // max_size
+        )
+        .unwrap();
+        assert!(!blockstore.has_duplicate_shreds_in_slot(slot));
+        assert!(!blockstore.has_duplicate_shreds_in_slot(slot1));
+        let mut index = 0;
+        for (chunk1, chunk2) in chunks.zip(chunks1) {
+            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk1));
+            duplicate_shred_handler.handle(CrdsData::DuplicateShred(index + 1, chunk2));
+            index += 2
+        }
+        assert!(blockstore.has_duplicate_shreds_in_slot(slot));
+        assert!(blockstore.has_duplicate_shreds_in_slot(slot1));
     }
 }
