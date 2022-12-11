@@ -122,6 +122,7 @@ impl PacketDeserializer {
                 .iter()
                 .map(|batch| batch.len())
                 .sum::<usize>();
+            messages.push(message);
 
             if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
                 if let Some(aggregated_tracer_packet_stats) =
@@ -132,7 +133,6 @@ impl PacketDeserializer {
                     aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
                 }
             }
-            messages.push(message);
 
             if start.elapsed() >= recv_timeout || num_packets_received >= packet_count_upperbound {
                 break;
