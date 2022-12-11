@@ -43,6 +43,7 @@ mod serde_bytes_array {
     use {
         core::convert::TryInto,
         serde::{de::Error, Deserializer, Serializer},
+        std::borrow::Cow,
     };
 
     pub(crate) fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
@@ -56,11 +57,11 @@ mod serde_bytes_array {
     where
         D: Deserializer<'de>,
     {
-        let vec: Vec<u8> = serde_bytes::deserialize(deserializer)?;
-        let vec_len = vec.len();
-        let array: [u8; N] = vec.try_into().map_err(|_| {
+        let slice: Cow<'de, [u8]> = serde_bytes::deserialize(deserializer)?;
+
+        let array: [u8; N] = (&*slice).try_into().map_err(|_| {
             let expected = format!("[u8; {}]", N);
-            D::Error::invalid_length(vec_len, &expected.as_str())
+            D::Error::invalid_length(slice.len(), &expected.as_str())
         })?;
         Ok(array)
     }
