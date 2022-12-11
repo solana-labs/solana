@@ -109,14 +109,14 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Return the byte array representation of the public key
+   * Return the byte array representation of the public key in big endian
    */
   toBytes(): Uint8Array {
     return this.toBuffer();
   }
 
   /**
-   * Return the Buffer representation of the public key
+   * Return the Buffer representation of the public key in big endian
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
