@@ -632,13 +632,21 @@ impl BankingTraceReplayer {
         loop {
             let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
             let Ok(event) = d else {
-                info!("{:?}", &d);
+                info!("deserialize error: {:?}", &d);
                 break;
             };
             let event_time = event.0;
             let event = event.1;
             let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
-            debug!("{}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%N"), event);
+
+            match &event {
+                TracedEvent::PacketBatch(_label, batch) => {
+                    info!("event parsed: {}: <{} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), batch.0.iter().map(|v| v.len()).sum::<usize>(), &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
+                }
+                _ => {
+                    info!("event parsed: {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
+                }
+            }
             match event {
                 TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
                     bank_starts_by_slot.insert(slot, event_time);
