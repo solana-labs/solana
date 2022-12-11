@@ -203,6 +203,41 @@ mod tests {
         },
     };
 
+    fn create_duplicate_proof(
+        keypair: Arc<Keypair>,
+        slot: u64,
+        expected_error: Option<Error>,
+    ) -> Result<Box<dyn Iterator<Item = DuplicateShred>>, Error> {
+        let my_keypair = match expected_error {
+            Some(Error::InvalidSignature) => Arc::new(Keypair::new()),
+            _ => keypair,
+        };
+        let mut rng = rand::thread_rng();
+        let shredder = Shredder::new(slot, slot - 1, 0, 0).unwrap();
+        let next_shred_index = 353;
+        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
+        let shredder1 = Shredder::new(slot + 1, slot, 0, 0).unwrap();
+        let shred2 = match expected_error {
+            Some(Error::SlotMismatch) => {
+                new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair)
+            }
+            Some(Error::ShredIndexMismatch) => {
+                new_rand_shred(&mut rng, next_shred_index + 1, &shredder, &my_keypair)
+            }
+            Some(Error::InvalidDuplicateShreds) => shred1.clone(),
+            _ => new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair),
+        };
+        let chunks = from_shred(
+            shred1,
+            my_keypair.pubkey(),
+            shred2.payload().clone(),
+            None::<fn(Slot) -> Option<Pubkey>>,
+            rng.gen(), // wallclock
+            512,       // max_size
+        )?;
+        Ok(Box::new(chunks))
+    }
+
     #[test]
     fn test_handle_mixed_entries() {
         solana_logger::setup();
@@ -219,43 +254,38 @@ mod tests {
         ));
         let mut duplicate_shred_handler =
             DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache.clone());
-        let mut rng = rand::thread_rng();
-        let (slot, parent_slot, reference_tick, version) = (1, 0, 0, 0);
-        let shredder = Shredder::new(slot, parent_slot, reference_tick, version).unwrap();
-        let next_shred_index = 353;
-        let shred1 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
-        let shred2 = new_rand_shred(&mut rng, next_shred_index, &shredder, &my_keypair);
-        let chunks = from_shred(
-            shred1.clone(),
-            my_pubkey,
-            shred2.payload().clone(),
-            None::<fn(Slot) -> Option<Pubkey>>,
-            rng.gen(), // wallclock
-            512,       // max_size
-        )
-        .unwrap();
-        let (slot1, parent_slot1, reference_tick, version) = (2, 1, 0, 0);
-        let shredder1 = Shredder::new(slot1, parent_slot1, reference_tick, version).unwrap();
-        let shred3 = new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair);
-        let shred4 = new_rand_shred(&mut rng, next_shred_index, &shredder1, &my_keypair);
-        let chunks1 = from_shred(
-            shred3.clone(),
-            my_pubkey,
-            shred4.payload().clone(),
-            None::<fn(Slot) -> Option<Pubkey>>,
-            rng.gen(), // wallclock
-            512,       // max_size
-        )
-        .unwrap();
-        assert!(!blockstore.has_duplicate_shreds_in_slot(slot));
-        assert!(!blockstore.has_duplicate_shreds_in_slot(slot1));
+        let chunks = create_duplicate_proof(my_keypair.clone(), 1, None).unwrap();
+        let chunks1 = create_duplicate_proof(my_keypair.clone(), 2, None).unwrap();
+        assert!(!blockstore.has_duplicate_shreds_in_slot(1));
+        assert!(!blockstore.has_duplicate_shreds_in_slot(2));
         let mut index = 0;
+        // Test that two proofs are mixed together, but we can store the proofs fine.
         for (chunk1, chunk2) in chunks.zip(chunks1) {
             duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk1));
             duplicate_shred_handler.handle(CrdsData::DuplicateShred(index + 1, chunk2));
             index += 2
         }
-        assert!(blockstore.has_duplicate_shreds_in_slot(slot));
-        assert!(blockstore.has_duplicate_shreds_in_slot(slot1));
+        assert!(blockstore.has_duplicate_shreds_in_slot(1));
+        assert!(blockstore.has_duplicate_shreds_in_slot(2));
+
+        // Test all kinds of bad proofs.
+        for error in [
+            Error::InvalidSignature,
+            Error::SlotMismatch,
+            Error::ShredIndexMismatch,
+            Error::InvalidDuplicateShreds,
+        ] {
+            match create_duplicate_proof(my_keypair.clone(), 3, Some(error)) {
+                Err(error) => (),
+                Ok(chunks) => {
+                    for chunk in chunks {
+                        duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk));
+                        index += 1
+                    }
+                    assert!(!blockstore.has_duplicate_shreds_in_slot(3));
+                }
+                _ => panic!("Unexpected error"),
+            }
+        }
     }
 }
