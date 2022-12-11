@@ -2709,6 +2709,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
     if let VerifyBank::NonDeterministic(slot) = verify_bank {
         // file contents may be different, but deserialized structs should be equal
         let slot = slot.to_string();
+        let snapshot_slot_dir = snapshots_to_verify.as_ref().join(&slot);
         let p1 = snapshots_to_verify.as_ref().join(&slot).join(&slot);
         let p2 = unpacked_snapshots.join(&slot).join(&slot);
 
@@ -2731,6 +2732,17 @@ pub fn verify_snapshot_archive<P, Q, R>(
             new_unpacked_status_cache_file,
         )
         .unwrap();
+
+        // Remove the new accounts/ and state_complete file to be consistent with the
+        // old archive structure.
+        let accounts_path = snapshot_slot_dir.join("accounts");
+        if accounts_path.is_dir() {
+            std::fs::remove_dir_all(accounts_path).unwrap();
+        }
+        let state_complete_path = snapshot_slot_dir.join("state_complete");
+        if state_complete_path.is_file() {
+            std::fs::remove_file(state_complete_path).unwrap();
+        }
     }
 
     assert!(!dir_diff::is_different(&snapshots_to_verify, unpacked_snapshots).unwrap());
