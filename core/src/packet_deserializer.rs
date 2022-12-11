@@ -114,8 +114,8 @@ impl PacketDeserializer {
         while let Ok(message) = self.packet_batch_receiver.try_recv() {
             let (packet_batch, tracer_packet_stats_option) = (&message.0, message.1.clone());
             trace!("got more packet batches in packet deserializer");
-            let (packets_received, packet_count_overflowed) = num_packets_received
-                .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
+            num_packets_received += packet_batch.iter().map(|batch| batch.len()).sum::<usize>();
+            messages.push(message);
 
             if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
                 if let Some(aggregated_tracer_packet_stats) =
@@ -126,13 +126,8 @@ impl PacketDeserializer {
                     aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
                 }
             }
-            messages.push(message);
-            num_packets_received = packets_received;
 
-            if start.elapsed() >= recv_timeout
-                || packet_count_overflowed
-                || packets_received >= packet_count_upperbound
-            {
+            if start.elapsed() >= recv_timeout || num_packets_received >= packet_count_upperbound {
                 break;
             }
         }
