@@ -669,7 +669,7 @@ impl BankingSimulator {
 
         let mut bank = bank_forks.read().unwrap().working_bank();
 
-        let (bank_starts_by_slot, packet_batches_by_time) = self.dump(Some(bank));
+        let (bank_starts_by_slot, packet_batches_by_time) = self.dump(Some(bank.clone()));
 
         let (non_vote_sender, tpu_vote_sender, gossip_vote_sender) = (
             self.non_vote_channel.0.clone(),
