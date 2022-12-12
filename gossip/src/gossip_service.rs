@@ -58,10 +58,10 @@ impl GossipService {
             gossip_socket.local_addr().unwrap()
         );
         let socket_addr_space = *cluster_info.socket_addr_space();
-        let t_receiver = if use_quic{
+        let (maybe_endpoint, t_receiver) = if use_quic{
             let stats = Arc::new(StreamStats::default());
             //todo: fix
-            spawn_server(
+            let (endpoint, t_receiver) = spawn_server(
                 gossip_socket.try_clone().unwrap(),
                 &keypair,
                 cluster_info.my_contact_info().tpu.ip(),
@@ -73,9 +73,11 @@ impl GossipService {
                 MAX_UNSTAKED_CONNECTIONS,
                 stats,
                 DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS
-            ).unwrap()
+            ).unwrap();
+
+            (Some(endpoint), t_receiver)
         } else{
-        streamer::receiver(
+        (None, streamer::receiver(
             gossip_socket.clone(),
             exit.clone(),
             request_sender,
@@ -84,7 +86,7 @@ impl GossipService {
             1,
             false,
             None,
-        )};
+        ))};
         let (consume_sender, listen_receiver) = unbounded();
         let t_socket_consume = cluster_info.clone().start_socket_consume_thread(
             request_receiver,
