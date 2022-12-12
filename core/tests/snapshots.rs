@@ -1124,6 +1124,7 @@ fn test_snapshots_with_background_services(
     }
 
     // Load the snapshot and ensure it matches what's in BankForks
+    let temporary_accounts_dir = TempDir::new().unwrap();
     let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
         &snapshot_test_config.snapshot_config.bank_snapshots_dir,
         &snapshot_test_config
@@ -1132,7 +1133,7 @@ fn test_snapshots_with_background_services(
         &snapshot_test_config
             .snapshot_config
             .incremental_snapshot_archives_dir,
-        &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
+        &[temporary_accounts_dir.as_ref().to_path_buf()],
         &snapshot_test_config.genesis_config_info.genesis_config,
         &RuntimeConfig::default(),
         None,
