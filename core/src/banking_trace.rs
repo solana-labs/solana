@@ -715,7 +715,7 @@ impl BankingSimulator {
             blockstore.banking_tracer_path().join("ledger-tool"),
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE
-        )));
+        ))).unwrap();
         let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
