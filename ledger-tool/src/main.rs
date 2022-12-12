@@ -1408,7 +1408,7 @@ fn load_bank_forks(
     .map(|_| (bank_forks, starting_snapshot_hashes));
 
     exit.store(true, Ordering::Relaxed);
-    accounts_background_service.join().unwrap();
+    //accounts_background_service.join().unwrap();
 
     result
 }
