@@ -711,11 +711,11 @@ impl BankingSimulator {
         let (exit, poh_recorder, poh_service, _signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
 
-        let banking_tracer = BankingTracer::new(Some(
+        let banking_tracer = BankingTracer::new(Some((
             blockstore.banking_tracer_path().join("ledger-tool"),
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE
-        ));
+        )));
         let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
