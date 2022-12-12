@@ -33,7 +33,7 @@ use {
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
         verifier::{RequisiteVerifier, VerifierError},
-        vm::{Config, ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
+        vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
     solana_sdk::{
         bpf_loader, bpf_loader_deprecated,
@@ -43,9 +43,8 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix,
-            error_on_syscall_bpf_function_hash_collisions, limit_max_instruction_trace_length,
-            reject_callx_r10, FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, limit_max_instruction_trace_length,
+            FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -132,45 +131,24 @@ fn create_executor_from_bytes(
     let mut register_syscalls_time = Measure::start("register_syscalls_time");
     let disable_deploy_of_alloc_free_syscall = reject_deployment_of_broken_elfs
         && feature_set.is_active(&disable_deploy_of_alloc_free_syscall::id());
-    let register_syscall_result =
-        syscalls::register_syscalls(feature_set, disable_deploy_of_alloc_free_syscall);
-    register_syscalls_time.stop();
-    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
-    let syscall_registry = register_syscall_result.map_err(|e| {
+    let loader = syscalls::create_loader(
+        feature_set,
+        compute_budget,
+        reject_deployment_of_broken_elfs,
+        disable_deploy_of_alloc_free_syscall,
+        false,
+    )
+    .map_err(|e| {
         ic_logger_msg!(log_collector, "Failed to register syscalls: {}", e);
         InstructionError::ProgramEnvironmentSetupFailure
     })?;
-    let config = Config {
-        max_call_depth: compute_budget.max_call_depth,
-        stack_frame_size: compute_budget.stack_frame_size,
-        enable_stack_frame_gaps: true,
-        instruction_meter_checkpoint_distance: 10000,
-        enable_instruction_meter: true,
-        enable_instruction_tracing: false,
-        enable_symbol_and_section_labels: false,
-        reject_broken_elfs: reject_deployment_of_broken_elfs,
-        noop_instruction_rate: 256,
-        sanitize_user_provided_values: true,
-        encrypt_environment_registers: true,
-        syscall_bpf_function_hash_collision: feature_set
-            .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
-        reject_callx_r10: feature_set.is_active(&reject_callx_r10::id()),
-        dynamic_stack_frames: false,
-        enable_sdiv: false,
-        optimize_rodata: false,
-        static_syscalls: false,
-        enable_elf_vaddr: false,
-        reject_rodata_stack_overlap: false,
-        new_elf_parser: false,
-        aligned_memory_mapping: true,
-        // Warning, do not use `Config::default()` so that configuration here is explicit.
-    };
+    register_syscalls_time.stop();
+    create_executor_metrics.register_syscalls_us = register_syscalls_time.as_us();
     let mut load_elf_time = Measure::start("load_elf_time");
-    let executable = Executable::<InvokeContext>::from_elf(programdata, config, syscall_registry)
-        .map_err(|err| {
-            ic_logger_msg!(log_collector, "{}", err);
-            InstructionError::InvalidAccountData
-        });
+    let executable = Executable::<InvokeContext>::from_elf(programdata, loader).map_err(|err| {
+        ic_logger_msg!(log_collector, "{}", err);
+        InstructionError::InvalidAccountData
+    });
     load_elf_time.stop();
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
@@ -1527,7 +1505,7 @@ mod tests {
         solana_rbpf::{
             ebpf::MM_INPUT_START,
             verifier::Verifier,
-            vm::{ContextObject, FunctionRegistry, SyscallRegistry},
+            vm::{BuiltInProgram, Config, ContextObject, FunctionRegistry},
         },
         solana_sdk::{
             account::{
@@ -1611,13 +1589,10 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let mut input_mem = [0x00];
-        let config = Config::default();
-        let syscall_registry = SyscallRegistry::default();
         let bpf_functions = std::collections::BTreeMap::<u32, (usize, String)>::new();
         let executable = Executable::<TestContextObject>::from_text_bytes(
             program,
-            config,
-            syscall_registry,
+            Arc::new(BuiltInProgram::new_loader(Config::default())),
             bpf_functions,
         )
         .unwrap();
