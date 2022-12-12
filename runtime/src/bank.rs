@@ -210,8 +210,6 @@ pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 60.0 * 60.0;
 
 pub const MAX_LEADER_SCHEDULE_STAKES: Epoch = 5;
 
-pub type Rewrites = RwLock<HashMap<Pubkey, Hash>>;
-
 #[derive(Default)]
 struct RentMetrics {
     hold_range_us: AtomicU64,
@@ -862,7 +860,6 @@ impl PartialEq for Bank {
             freeze_started: _,
             vote_only_bank: _,
             cost_tracker: _,
-            rewrites_skipped_this_slot: _,
             sysvar_cache: _,
             accounts_data_size_initial: _,
             accounts_data_size_delta_on_chain: _,
@@ -1110,9 +1107,6 @@ pub struct Bank {
 
     sysvar_cache: RwLock<SysvarCache>,
 
-    /// (Pubkey, account Hash) for each account that would have been rewritten in rent collection for this slot
-    pub rewrites_skipped_this_slot: Rewrites,
-
     /// The initial accounts data size at the start of this Bank, before processing any transactions/etc
     accounts_data_size_initial: u64,
     /// The change to accounts data size in this Bank, due on-chain events (i.e. transactions)
@@ -1270,7 +1264,6 @@ impl Bank {
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             incremental_snapshot_persistence: None,
-            rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
@@ -1574,7 +1567,6 @@ impl Bank {
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
             incremental_snapshot_persistence: None,
-            rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             status_cache,
             slot,
@@ -1881,7 +1873,12 @@ impl Bank {
     /// * Adjusts the new bank's tick height to avoid having to run PoH for millions of slots
     /// * Freezes the new bank, assuming that the user will `Bank::new_from_parent` from this bank
     /// * Calculates and sets the epoch accounts hash from the parent
-    pub fn warp_from_parent(parent: &Arc<Bank>, collector_id: &Pubkey, slot: Slot) -> Self {
+    pub fn warp_from_parent(
+        parent: &Arc<Bank>,
+        collector_id: &Pubkey,
+        slot: Slot,
+        data_source: CalcAccountsHashDataSource,
+    ) -> Self {
         parent.freeze();
         parent
             .rc
@@ -1889,9 +1886,7 @@ impl Bank {
             .accounts_db
             .epoch_accounts_hash_manager
             .set_in_flight(parent.slot());
-        parent.force_flush_accounts_cache();
-        let accounts_hash =
-            parent.update_accounts_hash(CalcAccountsHashDataSource::Storages, false, true);
+        let accounts_hash = parent.update_accounts_hash(data_source, false, true);
         let epoch_accounts_hash = accounts_hash.into();
         parent
             .rc
@@ -1955,7 +1950,6 @@ impl Bank {
         let feature_set = new();
         let mut bank = Self {
             incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
-            rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             status_cache: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
@@ -5296,11 +5290,6 @@ impl Bank {
             "collect_rent_eagerly",
             ("accounts", rent_metrics.count.load(Relaxed), i64),
             ("partitions", count, i64),
-            (
-                "skipped_rewrites",
-                self.rewrites_skipped_this_slot.read().unwrap().len(),
-                i64
-            ),
             ("total_time_us", measure.as_us(), i64),
             (
                 "hold_range_us",
@@ -5428,7 +5417,6 @@ impl Bank {
         CollectRentFromAccountsInfo {
             rent_collected_info: total_rent_collected_info,
             rent_rewards: rent_debits.into_unordered_rewards_iter().collect(),
-            rewrites_skipped,
             time_collecting_rent_us,
             time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
@@ -5569,7 +5557,6 @@ impl Bank {
                 .write()
                 .unwrap()
                 .append(&mut results.rent_rewards);
-            self.remember_skipped_rewrites(results.rewrites_skipped);
 
             metrics
                 .load_us
@@ -5585,16 +5572,6 @@ impl Bank {
                 .fetch_add(results.time_storing_accounts_us, Relaxed);
             metrics.count.fetch_add(results.num_accounts, Relaxed);
         });
-    }
-
-    // put 'rewrites_skipped' into 'self.rewrites_skipped_this_slot'
-    fn remember_skipped_rewrites(&self, rewrites_skipped: Vec<(Pubkey, Hash)>) {
-        if !rewrites_skipped.is_empty() {
-            let mut rewrites_skipped_this_slot = self.rewrites_skipped_this_slot.write().unwrap();
-            rewrites_skipped.into_iter().for_each(|(pubkey, hash)| {
-                rewrites_skipped_this_slot.insert(pubkey, hash);
-            });
-        }
     }
 
     /// return true iff storing this account is just a rewrite and can be skipped
@@ -6717,10 +6694,7 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the hash of the previous state and the latest blockhash
-        let bank_hash_info = self
-            .rc
-            .accounts
-            .bank_hash_info_at(self.slot(), &self.rewrites_skipped_this_slot);
+        let bank_hash_info = self.rc.accounts.bank_hash_info_at(self.slot());
         let mut signature_count_buf = [0u8; 8];
         LittleEndian::write_u64(&mut signature_count_buf[..], self.signature_count());
 
@@ -7430,22 +7404,14 @@ impl Bank {
         self.rc.accounts.accounts_db.print_accounts_stats("");
     }
 
+    /// This is part of the code path executed when the write cache is disabled.
+    /// It is no longer possible to disable the write cache.
     pub fn process_stale_slot_with_budget(
         &self,
-        mut consumed_budget: usize,
-        budget_recovery_delta: usize,
+        mut _consumed_budget: usize,
+        _budget_recovery_delta: usize,
     ) -> usize {
-        if consumed_budget == 0 {
-            let shrunken_account_count = self.rc.accounts.accounts_db.process_stale_slot_v1();
-            if shrunken_account_count > 0 {
-                datapoint_info!(
-                    "stale_slot_shrink",
-                    ("accounts", shrunken_account_count, i64)
-                );
-                consumed_budget += shrunken_account_count;
-            }
-        }
-        consumed_budget.saturating_sub(budget_recovery_delta)
+        unimplemented!("");
     }
 
     pub fn bank_tranaction_count_fix_enabled(&self) -> bool {
@@ -7882,7 +7848,6 @@ enum ApplyFeatureActivationsCaller {
 struct CollectRentFromAccountsInfo {
     rent_collected_info: CollectedInfo,
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
-    rewrites_skipped: Vec<(Pubkey, Hash)>,
     time_collecting_rent_us: u64,
     time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
@@ -7896,7 +7861,6 @@ struct CollectRentInPartitionInfo {
     rent_collected: u64,
     accounts_data_size_reclaimed: u64,
     rent_rewards: Vec<(Pubkey, RewardInfo)>,
-    rewrites_skipped: Vec<(Pubkey, Hash)>,
     time_loading_accounts_us: u64,
     time_collecting_rent_us: u64,
     time_hashing_skipped_rewrites_us: u64,
@@ -7913,7 +7877,6 @@ impl CollectRentInPartitionInfo {
             rent_collected: info.rent_collected_info.rent_amount,
             accounts_data_size_reclaimed: info.rent_collected_info.account_data_len_reclaimed,
             rent_rewards: info.rent_rewards,
-            rewrites_skipped: info.rewrites_skipped,
             time_loading_accounts_us: time_loading_accounts.as_micros() as u64,
             time_collecting_rent_us: info.time_collecting_rent_us,
             time_hashing_skipped_rewrites_us: info.time_hashing_skipped_rewrites_us,
@@ -7934,7 +7897,6 @@ impl CollectRentInPartitionInfo {
                 .accounts_data_size_reclaimed
                 .saturating_add(rhs.accounts_data_size_reclaimed),
             rent_rewards: [lhs.rent_rewards, rhs.rent_rewards].concat(),
-            rewrites_skipped: [lhs.rewrites_skipped, rhs.rewrites_skipped].concat(),
             time_loading_accounts_us: lhs
                 .time_loading_accounts_us
                 .saturating_add(rhs.time_loading_accounts_us),
@@ -8704,9 +8666,7 @@ pub(crate) mod tests {
         updater();
         let new = bank.capitalization();
         if asserter(old, new) {
-            if bank.rc.accounts.accounts_db.caching_enabled {
-                add_root_and_flush_write_cache(bank);
-            }
+            add_root_and_flush_write_cache(bank);
             assert_eq!(bank.capitalization(), bank.calculate_capitalization(true));
         }
     }
@@ -10031,25 +9991,7 @@ pub(crate) mod tests {
         );
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
-        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
         bank.collect_rent_in_partition((0, 0, 1), true, &RentMetrics::default());
-        {
-            let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
-            // `rewrites_skipped.len()` is the number of non-rent paying accounts in the slot.
-            // 'collect_rent_in_partition' fills 'rewrites_skipped_this_slot' with rewrites that
-            // were skipped during rent collection but should still be considered in the slot's
-            // bank hash. If the slot is also written in the append vec, then the bank hash calc
-            // code ignores the contents of this list. This assert is confirming that the expected #
-            // of accounts were included in 'rewrites_skipped' by the call to
-            // 'collect_rent_in_partition(..., true)' above.
-            assert_eq!(rewrites_skipped.len(), 1);
-            // should not have skipped 'rent_exempt_pubkey'
-            // Once preserve_rent_epoch_for_rent_exempt_accounts is activated,
-            // rewrite-skip is irrelevant to rent-exempt accounts.
-            assert!(!rewrites_skipped.contains_key(&rent_exempt_pubkey));
-            // should NOT have skipped 'rent_due_pubkey'
-            assert!(!rewrites_skipped.contains_key(&rent_due_pubkey));
-        }
 
         assert_eq!(bank.collected_rent.load(Relaxed), 0);
         bank.collect_rent_in_partition((0, 0, 1), false, &RentMetrics::default()); // all range
@@ -10121,13 +10063,12 @@ pub(crate) mod tests {
 
         let just_rewrites = true;
         // loaded from previous slot, so we skip rent collection on it
-        let result = later_bank.collect_rent_from_accounts(
+        let _result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
             just_rewrites,
             None,
             PartitionIndex::default(),
         );
-        assert!(result.rewrites_skipped[0].0 == zero_lamport_pubkey);
     }
 
     #[test]
@@ -14959,7 +14900,9 @@ pub(crate) mod tests {
         assert_eq!(alive_counts, vec![11, 1, 7]);
     }
 
+    // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
     #[test]
+    #[ignore] // this test only works when not using the write cache
     fn test_process_stale_slot_with_budget() {
         solana_logger::setup();
         let pubkey1 = solana_sdk::pubkey::new_rand();
@@ -15176,10 +15119,8 @@ pub(crate) mod tests {
     /// useful to adapt tests written prior to introduction of the write cache
     /// to use the write cache
     fn add_root_and_flush_write_cache(bank: &Bank) {
-        if bank.rc.accounts.accounts_db.caching_enabled {
-            bank.rc.accounts.add_root(bank.slot());
-            bank.flush_accounts_cache_slot_for_tests()
-        }
+        bank.rc.accounts.add_root(bank.slot());
+        bank.flush_accounts_cache_slot_for_tests()
     }
 
     #[test]
@@ -19616,53 +19557,6 @@ pub(crate) mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn test_remember_skipped_rewrites() {
-        let GenesisConfigInfo {
-            mut genesis_config, ..
-        } = create_genesis_config_with_leader(1_000_000_000, &Pubkey::new_unique(), 42);
-        genesis_config.rent = Rent::default();
-        activate_all_features(&mut genesis_config);
-
-        let bank = Bank::new_for_tests(&genesis_config);
-
-        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
-        bank.remember_skipped_rewrites(Vec::default());
-        assert!(bank.rewrites_skipped_this_slot.read().unwrap().is_empty());
-
-        // bank's map is initially empty
-        let mut test = vec![(Pubkey::new(&[4; 32]), Hash::new(&[5; 32]))];
-        bank.remember_skipped_rewrites(test.clone());
-        assert_eq!(
-            *bank.rewrites_skipped_this_slot.read().unwrap(),
-            test.clone().into_iter().collect()
-        );
-
-        // now there is already some stuff in the bank's map
-        test.push((Pubkey::new(&[6; 32]), Hash::new(&[7; 32])));
-        bank.remember_skipped_rewrites(test[1..].to_vec());
-        assert_eq!(
-            *bank.rewrites_skipped_this_slot.read().unwrap(),
-            test.clone().into_iter().collect()
-        );
-
-        // all contents are already in map
-        bank.remember_skipped_rewrites(test[1..].to_vec());
-        assert_eq!(
-            *bank.rewrites_skipped_this_slot.read().unwrap(),
-            test.clone().into_iter().collect()
-        );
-
-        // all contents are already in map, but we're changing hash values
-        test[0].1 = Hash::new(&[8; 32]);
-        test[1].1 = Hash::new(&[9; 32]);
-        bank.remember_skipped_rewrites(test.to_vec());
-        assert_eq!(
-            *bank.rewrites_skipped_this_slot.read().unwrap(),
-            test.into_iter().collect()
-        );
     }
 
     #[test]

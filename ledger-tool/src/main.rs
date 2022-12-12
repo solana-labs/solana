@@ -3229,6 +3229,7 @@ fn main() {
                                 &bank,
                                 bank.collector_id(),
                                 warp_slot,
+                                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
                             ))
                         } else {
                             bank
