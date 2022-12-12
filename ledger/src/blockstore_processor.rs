@@ -3714,7 +3714,6 @@ pub mod tests {
             Arc::<RuntimeConfig>::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         );
         *bank.epoch_schedule()

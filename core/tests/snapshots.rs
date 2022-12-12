@@ -102,7 +102,6 @@ impl SnapshotTestConfig {
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
-            true,
             accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
