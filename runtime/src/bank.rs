@@ -4413,7 +4413,7 @@ impl Bank {
         self.runtime_config.skip_check_age();
     }
 
-    fn check_age_tx(&self, tx: &SanitizedTransaction) -> (Result<()>, std::option::Option<bank::NoncePartial>) {
+    fn check_age_tx(&self, tx: &SanitizedTransaction) -> (Result<()>, std::option::Option<NoncePartial>) {
         let max_age = MAX_PROCESSING_AGE;
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
