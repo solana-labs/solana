@@ -675,7 +675,7 @@ impl BankingTraceReplayer {
                 (None, packet_batches_by_time.range(..))
             };
             info!(
-                "replaying events: {} out of {} at {} (adjust to {:?})",
+                "replaying banking trace events: {} out of {}, starting at slot {} (adjusted to {:?})",
                 range_iter.clone().count(),
                 packet_batches_by_time.len(),
                 bank_slot,
@@ -728,7 +728,10 @@ impl BankingTraceReplayer {
             banking_tracer,
         );
 
-        bank.skip_check_age();
+        if std::env::var("SKIP_CHECK_AGE").is_ok() {
+            warn!("skipping check age as requested....");
+            bank.skip_check_age();
+        }
 
         bank.clear_signatures();
         poh_recorder.write().unwrap().set_bank(&bank, false);
