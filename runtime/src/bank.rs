@@ -4413,7 +4413,7 @@ impl Bank {
         self.runtime_config.skip_check_age();
     }
 
-    fn check_age_tx(&self, hash_queue: &BlockhashQueue, tx: &SanitizedTransaction) -> usize {
+    fn check_age_tx(&self, hash_queue: &BlockhashQueue, tx: &SanitizedTransaction, max_age: usize) -> usize {
         let recent_blockhash = tx.message().recent_blockhash();
         if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
             (Ok(()), None)
@@ -4445,7 +4445,7 @@ impl Bank {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
-                    self.check_age_tx(hash_queue, tx)
+                    self.check_age_tx(hash_queue, tx, max_age)
                 }
                 Err(e) => (Err(e.clone()), None),
             })
