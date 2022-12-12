@@ -1219,7 +1219,6 @@ impl Bank {
         Self::new_with_config_for_tests(
             genesis_config,
             test_config.secondary_indexes,
-            true,
             AccountShrinkThreshold::default(),
         )
     }
@@ -1247,7 +1246,6 @@ impl Bank {
     pub(crate) fn new_with_config_for_tests(
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
-        _accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths_for_tests(
@@ -12591,7 +12589,6 @@ pub(crate) mod tests {
         let bank = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             account_indexes,
-            false,
             AccountShrinkThreshold::default(),
         ));
 
@@ -12619,7 +12616,6 @@ pub(crate) mod tests {
         let bank = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             account_indexes,
-            false,
             AccountShrinkThreshold::default(),
         ));
 
@@ -14693,7 +14689,6 @@ pub(crate) mod tests {
         let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
@@ -14733,7 +14728,6 @@ pub(crate) mod tests {
         let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             AccountSecondaryIndexes::default(),
-            true,
             AccountShrinkThreshold::default(),
         ));
 
@@ -14809,7 +14803,6 @@ pub(crate) mod tests {
         let mut bank0 = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             AccountSecondaryIndexes::default(),
-            true,
             AccountShrinkThreshold::default(),
         ));
         bank0.restore_old_behavior_for_fragile_tests();
@@ -14886,7 +14879,6 @@ pub(crate) mod tests {
         let mut bank = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         ));
 
@@ -16650,7 +16642,7 @@ pub(crate) mod tests {
     }
 
     fn test_store_scan_consistency<F: 'static>(
-        accounts_db_caching_enabled: bool,
+        _accounts_db_caching_enabled: bool,
         update_f: F,
         drop_callback: Option<Box<dyn DropCallback + Send + Sync>>,
         acceptable_scan_results: AcceptableScanResults,
@@ -16676,7 +16668,6 @@ pub(crate) mod tests {
         let bank0 = Arc::new(Bank::new_with_config_for_tests(
             &genesis_config,
             AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled,
             AccountShrinkThreshold::default(),
         ));
         bank0.set_callback(drop_callback);
