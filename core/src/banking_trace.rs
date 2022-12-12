@@ -630,10 +630,13 @@ impl BankingSimulator {
                 TracedEvent::PacketBatch(_label, batch) => {
                     let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
                     packet_count += sum;
-                    if let Some(bank) = &bank {
-                    let st = crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]).deserialized_packets.iter().filter_map(|ip| ip.build_sanitized_transaction(&bank.feature_set, false, bank.as_ref())).filter_map(|s| bank.check_age_tx(&s).0.ok()).count();
-                    }
-                    trace!("event parsed: {}: <{}: {}({}) = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, st, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
+                    let st_label = if let Some(bank) = &bank {
+                        let st = crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]).deserialized_packets.iter().filter_map(|ip| ip.build_sanitized_transaction(&bank.feature_set, false, bank.as_ref())).filter_map(|s| bank.check_age_tx(&s).0.ok()).count();
+                        format!("{}", st)
+                    } else {
+                        ""
+                    };
+                    trace!("event parsed: {}: <{}: {}({}) = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, st_label, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
                 _ => {
                     trace!("event parsed: {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
