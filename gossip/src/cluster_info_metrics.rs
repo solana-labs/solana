@@ -156,7 +156,6 @@ pub struct GossipStats {
     pub(crate) process_pull_response_success: Counter,
     pub(crate) process_pull_response_timeout: Counter,
     pub(crate) process_push_message: Counter,
-    pub(crate) process_push_success: Counter,
     pub(crate) prune_message_count: Counter,
     pub(crate) prune_message_len: Counter,
     pub(crate) prune_message_timeout: Counter,
@@ -235,11 +234,6 @@ pub(crate) fn submit_gossip_stats(
         ("repair_peers", stats.repair_peers.clear(), i64),
         ("new_push_requests", stats.new_push_requests.clear(), i64),
         ("new_push_requests2", stats.new_push_requests2.clear(), i64),
-        (
-            "process_push_success",
-            stats.process_push_success.clear(),
-            i64
-        ),
         ("purge", stats.purge.clear(), i64),
         ("purge_count", stats.purge_count.clear(), i64),
         (
