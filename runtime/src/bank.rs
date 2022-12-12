@@ -4445,7 +4445,7 @@ impl Bank {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
-                    self.check_age_tx(hash_queue, tx, max_age)
+                    self.check_age_tx(&hash_queue, tx, max_age)
                 }
                 Err(e) => (Err(e.clone()), None),
             })
