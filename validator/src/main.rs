@@ -1660,11 +1660,6 @@ pub fn main() {
                 .help("When account indexes are enabled, only include specific keys in the index. This overrides --account-index-exclude-key."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_caching")
-                .long("no-accounts-db-caching")
-                .help("Disables accounts caching"),
-        )
-        .arg(
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
                 .help("Enables faster starting of validators by skipping shrink. \
@@ -1779,7 +1774,6 @@ pub fn main() {
             // legacy nop argument
             Arg::with_name("accounts_db_caching_enabled")
                 .long("accounts-db-caching-enabled")
-                .conflicts_with("no_accounts_db_caching")
                 .hidden(true)
         )
         .arg(

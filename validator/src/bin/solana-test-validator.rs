@@ -390,11 +390,6 @@ fn main() {
                 .help("Specify the configuration file for the Geyser plugin."),
         )
         .arg(
-            Arg::with_name("no_accounts_db_caching")
-                .long("no-accounts-db-caching")
-                .help("Disables accounts caching"),
-        )
-        .arg(
             Arg::with_name("deactivate_feature")
                 .long("deactivate-feature")
                 .takes_value(true)
