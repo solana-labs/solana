@@ -1335,7 +1335,7 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
+        _accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
@@ -1345,7 +1345,6 @@ impl Bank {
             None,
             None,
             account_indexes,
-            accounts_db_caching_enabled,
             shrink_ratio,
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
@@ -1362,7 +1361,6 @@ impl Bank {
             None,
             None,
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
@@ -1379,7 +1377,6 @@ impl Bank {
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
-        _accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
