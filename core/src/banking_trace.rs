@@ -608,7 +608,7 @@ impl BankingSimulator {
         )
     }
 
-    pub fn dump(&self, bank: Option<Bank>) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
+    pub fn dump(&self, bank: Option<solana_runtime::bank::Bank>) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
         use std::io::BufReader;
         use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
