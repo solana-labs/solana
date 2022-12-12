@@ -629,6 +629,7 @@ impl BankingTraceReplayer {
         let mut bank_starts_by_slot = std::collections::BTreeMap::new();
         let mut packet_batches_by_time = std::collections::BTreeMap::new();
 
+        let mut packet_count = 0;
         loop {
             let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
             let Ok(event) = d else {
@@ -641,7 +642,9 @@ impl BankingTraceReplayer {
 
             match &event {
                 TracedEvent::PacketBatch(_label, batch) => {
-                    info!("event parsed: {}: <{} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), batch.0.iter().map(|v| v.len()).sum::<usize>(), &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
+                    let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
+                    packet_count += sum;
+                    info!("event parsed: {}: <{}: {} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
                 _ => {
                     info!("event parsed: {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
