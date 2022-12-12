@@ -1275,8 +1275,9 @@ impl StakeReward {
     }
 
     #[cfg(test)]
-    pub fn credit(&mut self, amount: i64) {
-        self.stake_reward_info.lamports += amount;
+    pub fn credit(&mut self, amount: u64) {
+        self.stake_reward_info.lamports += amount as i64;
+        self.stake_reward_info.post_balance += amount;
     }
 }
 
@@ -1314,9 +1315,10 @@ impl VoteReward {
     }
 
     #[cfg(test)]
-    pub fn credit(&mut self, amount: i64) {
+    pub fn credit(&mut self, amount: u64) {
         if let Some(ref mut x) = self.vote_reward_info {
-            x.lamports += amount;
+            x.lamports += amount as i64;
+            x.post_balance += amount;
         }
     }
 }
