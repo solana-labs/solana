@@ -227,6 +227,10 @@ impl Blockstore {
         self.ledger_path.join("banking_trace")
     }
 
+    pub fn banking_retracer_path(&self) -> PathBuf {
+        self.ledger_path.join("banking_retrace")
+    }
+
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         Self::do_open(ledger_path, BlockstoreOptions::default())

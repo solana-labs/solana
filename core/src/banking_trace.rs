@@ -712,7 +712,7 @@ impl BankingSimulator {
             create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
 
         let banking_tracer = BankingTracer::new(Some((
-            blockstore.banking_tracer_path().join("ledger-tool"),
+            blockstore.banking_retracer_path(),
             exit.clone(),
             DEFAULT_BANKING_TRACE_SIZE
         ))).unwrap();
