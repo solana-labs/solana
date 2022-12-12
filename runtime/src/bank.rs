@@ -3448,6 +3448,17 @@ impl Bank {
             .collect::<Vec<_>>()
     }
 
+    /// Test-only method
+    #[cfg(test)]
+    fn store_vote_accounts_from_rewards(&self, vote_account_rewards: &[VoteReward]) {
+        for vote_reward in vote_account_rewards {
+            let vote_pubkey = vote_reward.vote_pubkey;
+            if let Some(vote_account) = &vote_reward.vote_account {
+                self.store_account(&vote_pubkey, vote_account);
+            }
+        }
+    }
+
     fn store_vote_accounts_in_partition(
         &self,
         vote_account_rewards: &[VoteReward],
@@ -3472,12 +3483,13 @@ impl Bank {
                     {
                         debug!("reward redemption failed for {}: {:?}", vote_pubkey, err);
                     } else {
-                        let v = vote_state::from(&vote_account).unwrap();
-
-                        assert!(
-                            v.commission == info.commission.unwrap(),
-                            "vote account commision shouldn't change during reward interval"
-                        );
+                        // assert the vote commision should not change during reward interval
+                        if let Some(v) = vote_state::from(&vote_account) {
+                            assert!(
+                                v.commission == info.commission.unwrap(),
+                                "vote account commision shouldn't change during reward interval"
+                            );
+                        }
 
                         self.store_account(&vote_pubkey, &vote_account);
                         total += vote_reward;
@@ -21141,11 +21153,18 @@ pub(crate) mod tests {
         let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
         let bank = Bank::new_for_tests(&genesis_config);
 
+        // setup stake/vote accounts
         let n = 1234;
 
         let stake_rewards = (0..n).map(|_| StakeReward::random()).collect::<Vec<_>>();
         let vote_account_rewards = (0..n).map(|_| VoteReward::random()).collect::<Vec<_>>();
 
+        bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
+        bank.store_vote_accounts_from_rewards(&vote_account_rewards[..]);
+
+        // Simulate rewards
+
+        // Test partitioned stores
         let mut t1 = 0;
         let mut t2 = 0;
 
