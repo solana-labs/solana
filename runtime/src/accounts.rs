@@ -271,8 +271,15 @@ impl Accounts {
             let mut rent_debits = RentDebits::default();
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
+
+            let mut accumulated_accounts_data_size: usize = 0;
+            // a vector of same size as accounts in message, `true` indicates corresponding account
+            // is a loader account.
+            let mut is_non_loader_account: Vec<bool> = vec![true; account_keys.len()];
+
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
+                    is_non_loader_account[i] = false;
                     // Fill in an empty account for the program slots.
                     AccountSharedData::default()
                 } else {
@@ -346,6 +353,8 @@ impl Accounts {
                                             load_zero_lamports,
                                         )
                                     {
+                                        Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, programdata_account.data().len());
+
                                         account_deps
                                             .push((programdata_address, programdata_account));
                                     } else {
@@ -368,8 +377,11 @@ impl Accounts {
                         account
                     }
                 };
+                Self::accumulate_loaded_account_data_size(&mut accumulated_accounts_data_size, account.data().len());
+
                 accounts.push((*key, account));
             }
+
             debug_assert_eq!(accounts.len(), account_keys.len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
@@ -378,17 +390,21 @@ impl Accounts {
             // accounts.iter().take(message.account_keys.len())
             accounts.append(&mut account_deps);
 
+            let res = 
             if validated_fee_payer {
                 let program_indices = message
                     .instructions()
                     .iter()
                     .map(|instruction| {
+                        let program_id_index = instruction.program_id_index as usize;
                         self.load_executable_accounts(
                             ancestors,
                             &mut accounts,
-                            instruction.program_id_index as usize,
+                            program_id_index,
                             error_counters,
                             load_zero_lamports,
+                            &mut accumulated_accounts_data_size,
+                            is_non_loader_account[program_id_index],
                         )
                     })
                     .collect::<Result<Vec<Vec<usize>>>>()?;
@@ -402,7 +418,10 @@ impl Accounts {
             } else {
                 error_counters.account_not_found += 1;
                 Err(TransactionError::AccountNotFound)
-            }
+            };
+
+            info!(" ==TAO== transaction {:?}, loaded account size {:?}", tx.signatures(), accumulated_accounts_data_size); 
+            res
         }
     }
 
@@ -469,6 +488,8 @@ impl Accounts {
         mut program_account_index: usize,
         error_counters: &mut TransactionErrorMetrics,
         load_zero_lamports: LoadZeroLamports,
+        accumulated_accounts_data_size: &mut usize,
+        root_program_account_loaded: bool,
     ) -> Result<Vec<usize>> {
         let mut account_indices = Vec::new();
         let mut program_id = accounts[program_account_index].0;
@@ -478,6 +499,13 @@ impl Accounts {
                 error_counters.call_chain_too_deep += 1;
                 return Err(TransactionError::CallChainTooDeep);
             }
+            // the top level program of callchain could be a non_loader that have
+            // already been loaded in `load_transaction()`, which is indicated by parameter
+            // `root_program_account_loaded`. Its account data size must not be double counted.
+            let should_accumulate_program_account_size =
+                !(depth == 0 && root_program_account_loaded);
+            let mut loaded_account_total_size: usize = 0;
+
             depth += 1;
 
             program_account_index = match self.accounts_db.load_with_fixed_root(
@@ -487,6 +515,11 @@ impl Accounts {
             ) {
                 Some((program_account, _)) => {
                     let account_index = accounts.len();
+                    if should_accumulate_program_account_size {
+                        loaded_account_total_size =
+                            loaded_account_total_size.saturating_add(program_account.data().len());
+                    }
+
                     accounts.push((program_id, program_account));
                     account_index
                 }
@@ -517,6 +550,10 @@ impl Accounts {
                     ) {
                         Some((programdata_account, _)) => {
                             let account_index = accounts.len();
+                            if should_accumulate_program_account_size {
+                                loaded_account_total_size = loaded_account_total_size
+                                    .saturating_add(programdata_account.data().len());
+                            }
                             accounts.push((programdata_address, programdata_account));
                             account_index
                         }
@@ -531,10 +568,21 @@ impl Accounts {
                     return Err(TransactionError::InvalidProgramForExecution);
                 }
             }
+            Self::accumulate_loaded_account_data_size(
+                accumulated_accounts_data_size,
+                loaded_account_total_size);
 
             program_id = program_owner;
         }
         Ok(account_indices)
+    }
+
+    fn accumulate_loaded_account_data_size(
+        accumulated_loaded_accounts_data_size: &mut usize,
+        account_data_size: usize,
+    ) {
+            *accumulated_loaded_accounts_data_size =
+                accumulated_loaded_accounts_data_size.saturating_add(account_data_size);
     }
 
     #[allow(clippy::too_many_arguments)]
