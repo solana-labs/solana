@@ -10,7 +10,7 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
-    solana_bpf_loader_program::syscalls::register_syscalls,
+    solana_bpf_loader_program::syscalls::create_loader,
     solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
@@ -21,12 +21,8 @@ use {
         connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
-    solana_program_runtime::invoke_context::InvokeContext,
-    solana_rbpf::{
-        elf::Executable,
-        verifier::RequisiteVerifier,
-        vm::{Config, VerifiedExecutable},
-    },
+    solana_program_runtime::{compute_budget::ComputeBudget, invoke_context::InvokeContext},
+    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_rpc_client::rpc_client::RpcClient,
     solana_rpc_client_api::{
@@ -1994,15 +1990,16 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
-    let executable = Executable::<InvokeContext>::from_elf(
-        &program_data,
-        Config {
-            reject_broken_elfs: true,
-            ..Config::default()
-        },
-        register_syscalls(&invoke_context.feature_set, true).unwrap(),
+    let loader = create_loader(
+        &invoke_context.feature_set,
+        &ComputeBudget::default(),
+        true,
+        true,
+        false,
     )
-    .map_err(|err| format!("ELF error: {err}"))?;
+    .unwrap();
+    let executable = Executable::<InvokeContext>::from_elf(&program_data, loader)
+        .map_err(|err| format!("ELF error: {err}"))?;
 
     let _ = VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
         .map_err(|err| format!("ELF error: {err}"))?;
