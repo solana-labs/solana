@@ -608,7 +608,7 @@ impl BankingSimulator {
         )
     }
 
-    pub fn dump(&self) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
+    pub fn dump(&self, bank: Option<Bank>) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
         use std::io::BufReader;
         use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
@@ -630,7 +630,9 @@ impl BankingSimulator {
                 TracedEvent::PacketBatch(_label, batch) => {
                     let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
                     packet_count += sum;
+                    if let Some(bank) = bank {
                     let st = crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]).deserialized_packets.iter().map(|ip| ip.build_sanitized_transaction(bank.feature_set(), false, bank)).collect::<Vec<_>>();
+                    }
                     trace!("event parsed: {}: <{}: {} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
                 _ => {
