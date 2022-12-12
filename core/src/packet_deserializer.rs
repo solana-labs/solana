@@ -52,7 +52,7 @@ impl PacketDeserializer {
     /// them into ReceivePacketResults
     fn deserialize_and_collect_packets(
         packet_count: usize,
-        banking_batches: &[BankingPacketBatch],
+        packet_batches: &[impl std::ops::Deref<Target = BankingPacketBatch>],
     ) -> ReceivePacketResults {
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
