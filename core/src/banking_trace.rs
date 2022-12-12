@@ -746,6 +746,7 @@ impl BankingSimulator {
         }
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
+        let mut remaining_block_count = 4;
         for _ in 0..200 {
             if poh_recorder.read().unwrap().bank().is_none() {
                 poh_recorder
@@ -754,6 +755,10 @@ impl BankingSimulator {
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
                 let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
                 bank_forks.write().unwrap().insert(new_bank);
+                remaining_block_count -= 1;
+                if remaining_block_count == 0 {
+                    break;
+                }
                 bank = bank_forks.read().unwrap().working_bank();
             }
             // set cost tracker limits to MAX so it will not filter out TXs
