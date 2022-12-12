@@ -4311,8 +4311,6 @@ dependencies = [
  "byteorder 1.4.3",
  "libsecp256k1 0.6.0",
  "log",
- "num-bigint 0.4.3",
- "num-traits",
  "solana-measure",
  "solana-program-runtime",
  "solana-sdk 1.15.0",
