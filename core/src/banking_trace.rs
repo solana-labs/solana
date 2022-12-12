@@ -630,7 +630,7 @@ impl BankingSimulator {
                 TracedEvent::PacketBatch(_label, batch) => {
                     let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
                     packet_count += sum;
-                    crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch]);
+                    crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]);
                     trace!("event parsed: {}: <{}: {} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
                 _ => {
