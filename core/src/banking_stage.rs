@@ -851,7 +851,9 @@ impl BankingStage {
                 // Take metrics action after forwarding packets
                 slot_metrics_tracker.apply_action(metrics_action);
             }
-            _ => (),
+            BufferedPacketsDecision::Hold => {
+                slot_metrics_tracker.apply_action(metrics_action);
+            }
         }
     }
 
