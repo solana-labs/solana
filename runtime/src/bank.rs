@@ -1273,6 +1273,11 @@ impl StakeReward {
             ),
         }
     }
+
+    #[cfg(test)]
+    pub fn credit(&mut self, amount: i64) {
+        self.stake_reward_info.lamports += amount;
+    }
 }
 
 #[derive(AbiExample, Debug)]
@@ -1305,6 +1310,13 @@ impl VoteReward {
                 0,
                 &solana_vote_program::id(),
             )),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn credit(&mut self, amount: i64) {
+        if let Some(ref mut x) = self.vote_reward_info {
+            (*x).lamports += amount;
         }
     }
 }
@@ -21156,13 +21168,20 @@ pub(crate) mod tests {
         // setup stake/vote accounts
         let n = 1234;
 
-        let stake_rewards = (0..n).map(|_| StakeReward::random()).collect::<Vec<_>>();
-        let vote_account_rewards = (0..n).map(|_| VoteReward::random()).collect::<Vec<_>>();
+        let mut stake_rewards = (0..n).map(|_| StakeReward::random()).collect::<Vec<_>>();
+        let mut vote_account_rewards = (0..n).map(|_| VoteReward::random()).collect::<Vec<_>>();
 
         bank.store_accounts((bank.slot(), &stake_rewards[..], bank.include_slot_in_hash()));
         bank.store_vote_accounts_from_rewards(&vote_account_rewards[..]);
 
         // Simulate rewards
+        for stake_reward in &mut stake_rewards {
+            stake_reward.credit(1);
+        }
+
+        for vote_reward in &mut vote_account_rewards {
+            vote_reward.credit(1);
+        }
 
         // Test partitioned stores
         let mut t1 = 0;
