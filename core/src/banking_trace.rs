@@ -678,10 +678,10 @@ impl BankingSimulator {
 
         std::thread::spawn(move || {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(..bank_slot).next() {
-                (Some(start.map(|t| {
+                (Some((start.map(|t| {
                     let datetime: chrono::DateTime<chrono::Utc> = t.into();
                     datetime.format("%Y-%m-%d %H:%M:%S.%f")
-                }), most_recent_past_leader_slot), packet_batches_by_time.range(*start..))
+                }), most_recent_past_leader_slot)), packet_batches_by_time.range(*start..))
             } else {
                 (None, packet_batches_by_time.range(..))
             };
