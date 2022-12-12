@@ -814,10 +814,14 @@ fn test_bank_forks_incremental_snapshot(
             )
             .unwrap();
 
+            // Accounts directory needs to be separate from the active accounts directory
+            // so that dropping append vecs in the active accounts directory doesn't
+            // delete the unpacked appendvecs in the snapshot
+            let temporary_accounts_dir = TempDir::new().unwrap();
             restore_from_snapshots_and_check_banks_are_equal(
                 &bank,
                 &snapshot_test_config.snapshot_config,
-                snapshot_test_config.accounts_dir.path().to_path_buf(),
+                temporary_accounts_dir.path().to_path_buf(),
                 &snapshot_test_config.genesis_config_info.genesis_config,
             )
             .unwrap();
