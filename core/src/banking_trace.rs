@@ -680,7 +680,7 @@ impl BankingSimulator {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(..bank_slot).next() {
                 (Some(({
                     let datetime: chrono::DateTime<chrono::Utc> = (*start).into();
-                    datetime.format("%Y-%m-%d %H:%M:%S.%f")
+                    format!("{}", datetime.format("%Y-%m-%d %H:%M:%S.%f"))
                 }, most_recent_past_leader_slot)), packet_batches_by_time.range(*start..))
             } else {
                 (None, packet_batches_by_time.range(..))
