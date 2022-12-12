@@ -4413,7 +4413,10 @@ impl Bank {
         self.runtime_config.skip_check_age();
     }
 
-    fn check_age_tx(&self, hash_queue: &BlockhashQueue, tx: &SanitizedTransaction, max_age: usize) -> usize {
+    fn check_age_tx(&self, tx: &SanitizedTransaction) {
+        let hash_queue = self.blockhash_queue.read().unwrap();
+        let last_blockhash = hash_queue.last_hash();
+        let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
         let recent_blockhash = tx.message().recent_blockhash();
         if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
             (Ok(()), None)
@@ -4422,7 +4425,6 @@ impl Bank {
         {
             (Ok(()), Some(NoncePartial::new(address, account)))
         } else {
-            error_counters.blockhash_not_found += 1;
             (Err(TransactionError::BlockhashNotFound), None)
         }
     }
@@ -4445,7 +4447,17 @@ impl Bank {
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
                 Ok(()) => {
-                    self.check_age_tx(&hash_queue, tx, max_age)
+                    let recent_blockhash = tx.message().recent_blockhash();
+                    if hash_queue.is_hash_valid_for_age(recent_blockhash, max_age) {
+                        (Ok(()), None)
+                    } else if let Some((address, account)) =
+                        self.check_transaction_for_nonce(tx, &next_durable_nonce)
+                    {
+                        (Ok(()), Some(NoncePartial::new(address, account)))
+                    } else {
+                        error_counters.blockhash_not_found += 1;
+                        (Err(TransactionError::BlockhashNotFound), None)
+                    }
                 }
                 Err(e) => (Err(e.clone()), None),
             })
