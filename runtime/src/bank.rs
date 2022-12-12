@@ -3609,6 +3609,7 @@ impl Bank {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compute_epoch_stake_rewards(
         &self,
         stake_history: StakeHistory,

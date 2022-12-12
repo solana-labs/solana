@@ -314,7 +314,7 @@ fn calculate_stake_points_and_credits(
     let epoch_credits = if let Some(epoch) = epoch {
         new_vote_state.epoch_credits_before(epoch)
     } else {
-        new_vote_state.epoch_credits().iter().copied().collect()
+        new_vote_state.epoch_credits().to_vec()
     };
 
     for (epoch, final_epoch_credits, initial_epoch_credits) in epoch_credits {
