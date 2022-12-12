@@ -295,7 +295,8 @@ fn run_bank_forks_snapshot_n<F>(
     .unwrap();
 
     // Restore bank from snapshot
-    let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
+    let temporary_accounts_dir = TempDir::new().unwrap();
+    let account_paths = &[temporary_accounts_dir.path().to_path_buf()];
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
     restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
 
@@ -814,10 +815,14 @@ fn test_bank_forks_incremental_snapshot(
             )
             .unwrap();
 
+            // Accounts directory needs to be separate from the active accounts directory
+            // so that dropping append vecs in the active accounts directory doesn't
+            // delete the unpacked appendvecs in the snapshot
+            let temporary_accounts_dir = TempDir::new().unwrap();
             restore_from_snapshots_and_check_banks_are_equal(
                 &bank,
                 &snapshot_test_config.snapshot_config,
-                snapshot_test_config.accounts_dir.path().to_path_buf(),
+                temporary_accounts_dir.path().to_path_buf(),
                 &snapshot_test_config.genesis_config_info.genesis_config,
             )
             .unwrap();
@@ -1119,6 +1124,7 @@ fn test_snapshots_with_background_services(
     }
 
     // Load the snapshot and ensure it matches what's in BankForks
+    let temporary_accounts_dir = TempDir::new().unwrap();
     let (deserialized_bank, ..) = snapshot_utils::bank_from_latest_snapshot_archives(
         &snapshot_test_config.snapshot_config.bank_snapshots_dir,
         &snapshot_test_config
@@ -1127,7 +1133,7 @@ fn test_snapshots_with_background_services(
         &snapshot_test_config
             .snapshot_config
             .incremental_snapshot_archives_dir,
-        &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
+        &[temporary_accounts_dir.as_ref().to_path_buf()],
         &snapshot_test_config.genesis_config_info.genesis_config,
         &RuntimeConfig::default(),
         None,
