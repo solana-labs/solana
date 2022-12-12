@@ -225,6 +225,7 @@ fn run_insert<F>(
     reed_solomon_cache: &ReedSolomonCache,
     erasure_meta_sender: Sender<HashMap<ErasureSetId, ErasureRecoverMeta>>,
     recover_shred_receiver: Receiver<Vec<Shred>>,
+    exit: Arc<AtomicBool>,
 ) -> Result<()>
 where
     F: Fn(Shred),
@@ -232,7 +233,10 @@ where
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
 
     let mut packets = vec![];
-    while verified_receiver.is_empty() && recover_shred_receiver.is_empty() {
+    while verified_receiver.is_empty()
+        && recover_shred_receiver.is_empty()
+        && !exit.load(Ordering::Relaxed)
+    {
         thread::sleep(Duration::from_micros(100));
     }
     packets.extend(verified_receiver.try_iter().flatten());
@@ -511,6 +515,7 @@ impl WindowService {
                         &reed_solomon_cache,
                         erasure_meta_sender.clone(),
                         recover_shred_receiver.clone(),
+                        exit.clone(),
                     ) {
                         ws_metrics.record_error(&e);
                         if Self::should_exit_on_error(e, &handle_error) {

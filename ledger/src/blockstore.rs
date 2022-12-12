@@ -965,9 +965,12 @@ impl Blockstore {
             }
         }
         if let Some(erasure_meta_sender) = erasure_meta_sender {
-            erasure_meta_sender
+            if erasure_meta_sender
                 .send(erasure_metas_to_send.clone())
-                .unwrap();
+                .is_err()
+            {
+                debug!("failed to send erasure set recoveries");
+            }
         }
 
         if let Some(leader_schedule_cache) = leader_schedule {
