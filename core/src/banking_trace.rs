@@ -646,6 +646,8 @@ impl BankingSimulator {
                 _ => {}
             }
         }
+
+        (bank_starts_by_slot, packet_batches_by_time)
     }
 
     pub fn simulate(
