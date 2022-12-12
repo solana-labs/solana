@@ -4414,6 +4414,7 @@ impl Bank {
     }
 
     fn check_age_tx(&self, tx: &SanitizedTransaction) {
+        let max_age = MAX_PROCESSING_AGE;
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
         let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
