@@ -669,7 +669,7 @@ impl BankingTraceReplayer {
         let bank_slot = bank.slot();
 
         std::thread::spawn(move || {
-            let range_iter = if let Some(start) = &bank_starts_by_slot.get(&bank_slot) {
+            let range_iter = if let Some(start) = &bank_starts_by_slot.range(bank_slot..).next() {
                 packet_batches_by_time.range(*start..)
             } else {
                 packet_batches_by_time.range(..)
