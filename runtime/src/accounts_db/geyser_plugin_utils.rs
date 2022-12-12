@@ -1,8 +1,5 @@
 use {
-    crate::{
-        accounts_db::AccountsDb,
-        append_vec::{StoredAccountMeta, StoredMeta},
-    },
+    crate::{accounts_db::AccountsDb, append_vec::StoredAccountMeta},
     solana_measure::measure::Measure,
     solana_metrics::*,
     solana_sdk::{account::AccountSharedData, clock::Slot, pubkey::Pubkey, signature::Signature},
@@ -59,16 +56,25 @@ impl AccountsDb {
         notify_stats.report();
     }
 
-    pub fn notify_account_at_accounts_update(
+    pub fn notify_account_at_accounts_update<P>(
         &self,
         slot: Slot,
-        meta: &StoredMeta,
         account: &AccountSharedData,
         txn_signature: &Option<&Signature>,
-    ) {
+        pubkey: &Pubkey,
+        write_version_producer: &mut P,
+    ) where
+        P: Iterator<Item = u64>,
+    {
         if let Some(accounts_update_notifier) = &self.accounts_update_notifier {
             let notifier = &accounts_update_notifier.read().unwrap();
-            notifier.notify_account_update(slot, meta, account, txn_signature);
+            notifier.notify_account_update(
+                slot,
+                account,
+                txn_signature,
+                pubkey,
+                write_version_producer.next().unwrap(),
+            );
         }
     }
 
@@ -154,7 +160,7 @@ pub mod tests {
             accounts_update_notifier_interface::{
                 AccountsUpdateNotifier, AccountsUpdateNotifierInterface,
             },
-            append_vec::{StoredAccountMeta, StoredMeta},
+            append_vec::StoredAccountMeta,
         },
         dashmap::DashMap,
         solana_sdk::{
@@ -186,12 +192,13 @@ pub mod tests {
         fn notify_account_update(
             &self,
             slot: Slot,
-            meta: &StoredMeta,
             account: &AccountSharedData,
             _txn_signature: &Option<&Signature>,
+            pubkey: &Pubkey,
+            _write_version: u64,
         ) {
             self.accounts_notified
-                .entry(meta.pubkey)
+                .entry(*pubkey)
                 .or_default()
                 .push((slot, account.clone()));
         }
