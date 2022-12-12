@@ -295,7 +295,8 @@ fn run_bank_forks_snapshot_n<F>(
     .unwrap();
 
     // Restore bank from snapshot
-    let account_paths = &[snapshot_test_config.accounts_dir.path().to_path_buf()];
+    let temporary_accounts_dir = TempDir::new().unwrap();
+    let account_paths = &[temporary_accounts_dir.path().to_path_buf()];
     let genesis_config = &snapshot_test_config.genesis_config_info.genesis_config;
     restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
 
