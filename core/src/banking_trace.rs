@@ -677,8 +677,11 @@ impl BankingSimulator {
             banking_tracer.create_channel_gossip_vote();
 
         std::thread::spawn(move || {
-            let (most_recent_past_leader_slot, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(..bank_slot).next() {
-                (Some(most_recent_past_leader_slot), packet_batches_by_time.range(*start..))
+            let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(..bank_slot).next() {
+                (Some(reference_time.map|t| {
+                    let datetime: chrono::DateTime<chrono::Utc> = t.into();
+                    datetime.format("%Y-%m-%d %H:%M:%S.%f")
+                }), most_recent_past_leader_slot), packet_batches_by_time.range(*start..))
             } else {
                 (None, packet_batches_by_time.range(..))
             };
@@ -687,7 +690,7 @@ impl BankingSimulator {
                 range_iter.clone().count(),
                 packet_batches_by_time.len(),
                 bank_slot,
-                most_recent_past_leader_slot,
+                adjusted_reference,
             );
 
             loop {
