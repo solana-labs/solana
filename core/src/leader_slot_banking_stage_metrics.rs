@@ -359,7 +359,7 @@ pub struct LeaderSlotMetricsTracker {
     leader_slot_metrics: Option<LeaderSlotMetrics>,
     id: u32,
     banking_tracer: Arc<BankingTracer>,
-    unreceived_batch_count: usize,
+    unprocessed_transaction_count: usize,
 }
 
 impl LeaderSlotMetricsTracker {
@@ -368,12 +368,12 @@ impl LeaderSlotMetricsTracker {
             leader_slot_metrics: None,
             id,
             banking_tracer,
-            unreceived_batch_count: 0,
+            unprocessed_transaction_count: 0,
         }
     }
 
-    pub fn refresh_unreceived_batch_count(&mut self, batch_count: usize) {
-        self.unreceived_batch_count = batch_count;
+    pub fn refresh_unprocessed_transaction_count(&mut self, batch_count: usize) {
+        self.unprocessed_transaction_count = batch_count;
     }
 
     pub fn new_for_test() -> Self {
@@ -387,14 +387,14 @@ impl LeaderSlotMetricsTracker {
             &bank_start.bank_creation_time,
         );
         self.banking_tracer
-            .bank_start(metrics.slot, self.id, self.unreceived_batch_count);
+            .bank_start(metrics.slot, self.id, self.unprocessed_transaction_count);
 
         Some(metrics)
     }
 
     pub fn trace_bank_end(&self, metrics_slot: Slot) {
         self.banking_tracer
-            .bank_end(metrics_slot, self.id, self.unreceived_batch_count);
+            .bank_end(metrics_slot, self.id, self.unprocessed_transaction_count);
     }
 
     // Check leader slot, return MetricsTrackerAction to be applied by apply_action()

@@ -794,7 +794,7 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         poh_recorder: &RwLock<PohRecorder>,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        unreceived_batch_count: usize,
+        unprocessed_transaction_count: usize,
     ) -> (MetricsTrackerAction, BufferedPacketsDecision) {
         let (leader_at_slot_offset, bank_start, would_be_leader, would_be_leader_shortly) = {
             let poh = poh_recorder.read().unwrap();
@@ -811,7 +811,7 @@ impl BankingStage {
             )
         };
 
-        slot_metrics_tracker.refresh_unreceived_batch_count(unreceived_batch_count);
+        slot_metrics_tracker.refresh_unprocessed_transaction_count(unprocessed_transaction_count);
         (
             slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
             Self::consume_or_forward_packets(
@@ -842,7 +842,6 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
-        unreceived_batch_count: usize,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -852,7 +851,7 @@ impl BankingStage {
                 my_pubkey,
                 poh_recorder,
                 slot_metrics_tracker,
-                unreceived_batch_count
+                unprocessed_transaction_storage.len(),
             ));
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
@@ -1075,7 +1074,6 @@ impl BankingStage {
                         &connection_cache,
                         &mut tracer_packet_stats,
                         bank_forks,
-                        packet_deserializer.unreceived_batch_count(),
                     ),
                     "process_buffered_packets",
                 );
