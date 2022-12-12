@@ -608,23 +608,7 @@ impl BankingSimulator {
         )
     }
 
-    pub fn simulate(
-        &self,
-        bank_forks: Arc<std::sync::RwLock<solana_runtime::bank_forks::BankForks>>,
-        blockstore: Arc<solana_ledger::blockstore::Blockstore>,
-    ) {
-        use {
-            crate::banking_stage::BankingStage, log::*,
-            solana_client::connection_cache::ConnectionCache, solana_gossip::cluster_info::Node,
-            solana_ledger::leader_schedule_cache::LeaderScheduleCache,
-            solana_poh::poh_recorder::create_test_recorder, solana_runtime::bank::Bank,
-            solana_sdk::signature::Keypair, solana_streamer::socket::SocketAddrSpace,
-            solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        };
-        use std::io::BufReader;
-        use std::fs::File;
-
-        let mut bank = bank_forks.read().unwrap().working_bank();
+    pub fn dump(&self) {
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
         let mut bank_starts_by_slot = std::collections::BTreeMap::new();
         let mut packet_batches_by_time = std::collections::BTreeMap::new();
@@ -660,6 +644,25 @@ impl BankingSimulator {
                 _ => {}
             }
         }
+    }
+
+    pub fn simulate(
+        &self,
+        bank_forks: Arc<std::sync::RwLock<solana_runtime::bank_forks::BankForks>>,
+        blockstore: Arc<solana_ledger::blockstore::Blockstore>,
+    ) {
+        use {
+            crate::banking_stage::BankingStage, log::*,
+            solana_client::connection_cache::ConnectionCache, solana_gossip::cluster_info::Node,
+            solana_ledger::leader_schedule_cache::LeaderScheduleCache,
+            solana_poh::poh_recorder::create_test_recorder, solana_runtime::bank::Bank,
+            solana_sdk::signature::Keypair, solana_streamer::socket::SocketAddrSpace,
+            solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+        };
+        use std::io::BufReader;
+        use std::fs::File;
+
+        let mut bank = bank_forks.read().unwrap().working_bank();
 
         let (non_vote_sender, tpu_vote_sender, gossip_vote_sender) = (
             self.non_vote_channel.0.clone(),
