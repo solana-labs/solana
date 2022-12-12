@@ -608,7 +608,7 @@ impl BankingSimulator {
         )
     }
 
-    pub fn dump(&self) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, usize) {
+    pub fn dump(&self) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, BankingPacketBatch>) {
         use std::io::BufReader;
         use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
