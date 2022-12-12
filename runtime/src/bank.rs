@@ -1316,7 +1316,7 @@ impl VoteReward {
     #[cfg(test)]
     pub fn credit(&mut self, amount: i64) {
         if let Some(ref mut x) = self.vote_reward_info {
-            (*x).lamports += amount;
+            x.lamports += amount;
         }
     }
 }
