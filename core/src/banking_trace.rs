@@ -669,7 +669,7 @@ impl BankingTraceReplayer {
         let bank_slot = bank.slot();
 
         std::thread::spawn(move || {
-            let (first_leader_slot, range_iter) = if let Some((first_leader_slot, start)) = bank_starts_by_slot.range(bank_slot..).next() {
+            let (first_leader_slot, range_iter) = if let Some((first_leader_slot, start)) = bank_starts_by_slot.range(bank_slot..).next().and(|(sl, st)| bank_starts_by_slot.range(..sl).next()) {
                 (Some(first_leader_slot), packet_batches_by_time.range(*start..))
             } else {
                 (None, packet_batches_by_time.range(..))
@@ -728,12 +728,18 @@ impl BankingTraceReplayer {
             banking_tracer,
         );
 
+        let clear_sigs = std::env::var("CLEAR_SIGS").is_ok();
+        if clear_sigs {
+            warn!("will clear sigs as requested....");
+        }
         if std::env::var("SKIP_CHECK_AGE").is_ok() {
             warn!("skipping check age as requested....");
             bank.skip_check_age();
         }
 
-        bank.clear_signatures();
+        if clear_sigs {
+            bank.clear_signatures();
+        }
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
         for _ in 0..200 {
@@ -753,7 +759,9 @@ impl BankingTraceReplayer {
                 std::u64::MAX,
             );
 
-            bank.clear_signatures();
+            if clear_sigs {
+                bank.clear_signatures();
+            }
             poh_recorder.write().unwrap().set_bank(&bank, false);
 
             sleep(std::time::Duration::from_millis(100));
