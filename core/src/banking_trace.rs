@@ -609,6 +609,8 @@ impl BankingSimulator {
     }
 
     pub fn dump(&self) {
+        use std::io::BufReader;
+        use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
         let mut bank_starts_by_slot = std::collections::BTreeMap::new();
         let mut packet_batches_by_time = std::collections::BTreeMap::new();
@@ -659,8 +661,6 @@ impl BankingSimulator {
             solana_sdk::signature::Keypair, solana_streamer::socket::SocketAddrSpace,
             solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
         };
-        use std::io::BufReader;
-        use std::fs::File;
 
         let mut bank = bank_forks.read().unwrap().working_bank();
 
