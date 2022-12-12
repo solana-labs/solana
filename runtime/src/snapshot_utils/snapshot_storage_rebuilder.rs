@@ -11,7 +11,7 @@ use {
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
     dashmap::DashMap,
-    log::info,
+    log::{debug, info},
     rayon::{
         iter::{IntoParallelIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
@@ -230,7 +230,10 @@ impl SnapshotStorageRebuilder {
     ) {
         thread_pool.spawn(move || {
             for path in rebuilder.file_receiver.iter() {
-                rebuilder.process_append_vec_file(path).unwrap();
+                let r = rebuilder.process_append_vec_file(path);
+                if let Err(e) = r {
+                    debug!("process append vec slot complete failure: {e}");
+                }
             }
             exit_sender.send(()).unwrap();
         })
