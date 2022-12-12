@@ -1233,7 +1233,6 @@ impl Bank {
             runtime_config,
             Vec::new(),
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         )
     }
@@ -1248,7 +1247,7 @@ impl Bank {
     pub(crate) fn new_with_config_for_tests(
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
+        _accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths_for_tests(
@@ -1256,7 +1255,6 @@ impl Bank {
             Arc::<RuntimeConfig>::default(),
             Vec::new(),
             account_indexes,
-            accounts_db_caching_enabled,
             shrink_ratio,
         )
     }
@@ -1335,7 +1333,6 @@ impl Bank {
         runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         account_indexes: AccountSecondaryIndexes,
-        _accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_paths(
