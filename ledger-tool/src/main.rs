@@ -3651,9 +3651,9 @@ fn main() {
                     exit(1);
                 });
 
-                let runner = BankingSimulator::new(PathBuf::new().join("/dev/stdin"));
-                //runner.seek(bank); => Ok or Err("no BankStart")
-                runner.replay(bank_forks, Arc::new(blockstore));
+                let simulator = BankingSimulator::new(PathBuf::new().join("/dev/stdin"));
+                //simulator.seek(bank); => Ok or Err("no BankStart")
+                simulator.simulate(bank_forks, Arc::new(blockstore));
 
                 println!("Ok");
             }
