@@ -631,7 +631,7 @@ impl BankingSimulator {
                     let sum = batch.0.iter().map(|v| v.len()).sum::<usize>();
                     packet_count += sum;
                     if let Some(bank) = &bank {
-                    let st = crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]).deserialized_packets.iter().filter_map(|ip| ip.build_sanitized_transaction(&bank.feature_set, false, bank.as_ref())).map(|s| bank.check_age_tx(&s)).collect::<Vec<_>>();
+                    let st = crate::packet_deserializer::PacketDeserializer::deserialize_and_collect_packets(0, &[batch.clone()]).deserialized_packets.iter().filter_map(|ip| ip.build_sanitized_transaction(&bank.feature_set, false, bank.as_ref())).map(|s| bank.check_age_tx(&s)).count();
                     }
                     trace!("event parsed: {}: <{}: {} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
