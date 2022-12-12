@@ -40,10 +40,6 @@ impl PacketDeserializer {
         }
     }
 
-    pub fn unreceived_batch_count(&self) -> usize {
-        self.packet_batch_receiver.len()
-    }
-
     /// Handles receiving packet batches from sigverify and returns a vector of deserialized packets
     pub fn handle_received_packets(
         &self,

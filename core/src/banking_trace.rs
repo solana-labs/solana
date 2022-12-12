@@ -227,25 +227,31 @@ impl BankingTracer {
         )
     }
 
-    fn bank_event(&self, slot: Slot, id: u32, status: BankStatus, unreceived_batch_count: usize) {
+    fn bank_event(
+        &self,
+        slot: Slot,
+        id: u32,
+        status: BankStatus,
+        unprocessed_transaction_count: usize,
+    ) {
         if let Some((sender, _, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
                 sender
                     .send(TimedTracedEvent(
                         SystemTime::now(),
-                        TracedEvent::Bank(slot, id, status, unreceived_batch_count),
+                        TracedEvent::Bank(slot, id, status, unprocessed_transaction_count),
                     ))
                     .expect("active tracer thread unless exited");
             }
         }
     }
 
-    pub fn bank_start(&self, slot: Slot, id: u32, unreceived_batch_count: usize) {
-        self.bank_event(slot, id, BankStatus::Started, unreceived_batch_count);
+    pub fn bank_start(&self, slot: Slot, id: u32, unprocessed_transaction_count: usize) {
+        self.bank_event(slot, id, BankStatus::Started, unprocessed_transaction_count);
     }
 
-    pub fn bank_end(&self, slot: Slot, id: u32, unreceived_batch_count: usize) {
-        self.bank_event(slot, id, BankStatus::Ended, unreceived_batch_count);
+    pub fn bank_end(&self, slot: Slot, id: u32, unprocessed_transaction_count: usize) {
+        self.bank_event(slot, id, BankStatus::Ended, unprocessed_transaction_count);
     }
 
     pub fn channel_for_test() -> (TracedSender, Receiver<BankingPacketBatch>) {

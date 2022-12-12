@@ -770,7 +770,6 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
-        unreceived_batch_count: usize,
     ) {
         if unprocessed_transaction_storage.should_not_process() {
             return;
@@ -1002,7 +1001,6 @@ impl BankingStage {
                         &connection_cache,
                         &mut tracer_packet_stats,
                         bank_forks,
-                        packet_deserializer.unreceived_batch_count(),
                     ),
                     "process_buffered_packets",
                 );
