@@ -25,7 +25,7 @@ use {
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
-        banking_trace::BankingTraceReplayer,
+        banking_trace::BankingSimulator,
         system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
         validator::move_and_async_delete_path,
     },
@@ -3651,7 +3651,7 @@ fn main() {
                     exit(1);
                 });
 
-                let runner = BankingTraceReplayer::new(PathBuf::new().join("/dev/stdin"));
+                let runner = BankingSimulator::new(PathBuf::new().join("/dev/stdin"));
                 //runner.seek(bank); => Ok or Err("no BankStart")
                 runner.replay(bank_forks, Arc::new(blockstore));
 

@@ -577,14 +577,14 @@ mod tests {
     }
 }
 
-pub struct BankingTraceReplayer {
+pub struct BankingSimulator {
     path: PathBuf,
     non_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
     tpu_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
     gossip_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
 }
 
-impl BankingTraceReplayer {
+impl BankingSimulator {
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -608,7 +608,7 @@ impl BankingTraceReplayer {
         )
     }
 
-    pub fn replay(
+    pub fn simulate(
         &self,
         bank_forks: Arc<std::sync::RwLock<solana_runtime::bank_forks::BankForks>>,
         blockstore: Arc<solana_ledger::blockstore::Blockstore>,
@@ -675,7 +675,7 @@ impl BankingTraceReplayer {
                 (None, packet_batches_by_time.range(..))
             };
             info!(
-                "replaying banking trace events: {} out of {}, starting at slot {} (adjusted to {:?})",
+                "simulating banking trace events: {} out of {}, starting at slot {} (adjusted to {:?})",
                 range_iter.clone().count(),
                 packet_batches_by_time.len(),
                 bank_slot,
