@@ -10496,7 +10496,7 @@ pub mod tests {
         let (storages, raw_expected) = sample_storages_and_accounts(&db);
         let expected_hash =
             AccountsHasher::compute_merkle_root_loop(raw_expected.clone(), MERKLE_FANOUT, |item| {
-                item.hash
+                &item.hash
             });
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let result = db
