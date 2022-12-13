@@ -260,7 +260,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             to_packet_batches::<{ Packet::DATA_SIZE }, _>(&vote_txs, PACKETS_PER_BATCH);
         for batch in packet_batches.iter_mut() {
             for packet in batch.iter_mut() {
-                packet.meta_mut().set_simple_vote(true);
+                packet.meta.set_simple_vote(true);
             }
         }
         packet_batches

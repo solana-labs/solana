@@ -344,7 +344,7 @@ impl AncestorHashesService {
         keypair: &Keypair,
         ancestor_socket: &UdpSocket,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
-        let from_addr = packet.meta().socket_addr();
+        let from_addr = packet.meta.socket_addr();
         let packet_data = match packet.data(..) {
             Some(data) => data,
             None => {
@@ -1215,9 +1215,7 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
-        packet
-            .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+        packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,
@@ -1477,7 +1475,7 @@ mod test {
 
         // Create invalid packet with fewer bytes than the size of the nonce
         let mut packet = Packet::default();
-        packet.meta_mut().size = 0;
+        packet.meta.size = 0;
 
         assert!(AncestorHashesService::verify_and_process_ancestor_response(
             &packet,
@@ -1585,9 +1583,7 @@ mod test {
             .recv_timeout(Duration::from_millis(10_000))
             .unwrap();
         let packet = &mut response_packet[0];
-        packet
-            .meta_mut()
-            .set_socket_addr(&responder_info.serve_repair);
+        packet.meta.set_socket_addr(&responder_info.serve_repair);
         let decision = AncestorHashesService::verify_and_process_ancestor_response(
             packet,
             &ancestor_hashes_request_statuses,

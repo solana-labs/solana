@@ -87,7 +87,7 @@ impl<const N: usize> TransactionSigVerifier<N> {
         is_dup: bool,
     ) {
         sigverify::check_for_tracer_packet(packet);
-        if packet.meta().is_tracer_packet() {
+        if packet.meta.is_tracer_packet() {
             if removed_before_sigverify_stage {
                 self.tracer_packet_stats
                     .total_removed_before_sigverify_stage += 1;
@@ -103,14 +103,14 @@ impl<const N: usize> TransactionSigVerifier<N> {
 
     #[inline(always)]
     pub fn process_excess_packet(&mut self, packet: &GenericPacket<N>) {
-        if packet.meta().is_tracer_packet() {
+        if packet.meta.is_tracer_packet() {
             self.tracer_packet_stats.total_excess_tracer_packets += 1;
         }
     }
 
     #[inline(always)]
     pub fn process_passed_sigverify_packet(&mut self, packet: &GenericPacket<N>) {
-        if packet.meta().is_tracer_packet() {
+        if packet.meta.is_tracer_packet() {
             self.tracer_packet_stats
                 .total_tracker_packets_passed_sigverify += 1;
         }

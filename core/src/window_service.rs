@@ -233,14 +233,14 @@ where
     ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
     ws_metrics.run_insert_count += 1;
     let handle_packet = |packet: &Packet| {
-        if packet.meta().discard() {
+        if packet.meta.discard() {
             return None;
         }
         let shred = shred::layout::get_shred(packet)?;
         let shred = Shred::new_from_serialized_shred(shred.to_vec()).ok()?;
-        if packet.meta().repair() {
+        if packet.meta.repair() {
             let repair_info = RepairMeta {
-                _from_addr: packet.meta().socket_addr(),
+                _from_addr: packet.meta.socket_addr(),
                 // If can't parse the nonce, dump the packet.
                 nonce: repair_response::nonce(packet)?,
             };
@@ -267,7 +267,7 @@ where
         .iter()
         .flat_map(Batch::<{ Packet::DATA_SIZE }>::iter)
     {
-        let addr = packet.meta().socket_addr();
+        let addr = packet.meta.socket_addr();
         *ws_metrics.addrs.entry(addr).or_default() += 1;
     }
 

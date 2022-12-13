@@ -48,7 +48,7 @@ pub struct GenericPacket<const N: usize> {
     // Bytes past Packet.meta.size are not valid to read from.
     // Use Packet.data(index) to read from the buffer.
     buffer: [u8; N],
-    meta: Meta,
+    pub meta: Meta,
 }
 
 impl<const N: usize> GenericPacket<N> {
@@ -71,16 +71,6 @@ impl<const N: usize> GenericPacket<N> {
             self.meta.set_socket_addr(dest);
         }
         Ok(())
-    }
-
-    #[inline]
-    pub fn meta(&self) -> &Meta {
-        &self.meta
-    }
-
-    #[inline]
-    pub fn meta_mut(&mut self) -> &mut Meta {
-        &mut self.meta
     }
 
     #[inline]
@@ -110,10 +100,10 @@ impl<const N: usize> GenericPacket<N> {
         // If the packet is marked as discard, it is either invalid or
         // otherwise should be ignored, and so the payload should not be read
         // from.
-        if self.meta().discard() {
+        if self.meta.discard() {
             None
         } else {
-            self.buffer().get(..self.meta().size)?.get(index)
+            self.buffer().get(..self.meta.size)?.get(index)
         }
     }
 
