@@ -8561,7 +8561,7 @@ impl AccountsDb {
 
     pub fn add_root(&self, slot: Slot) -> AccountsAddRootTiming {
         let mut index_time = Measure::start("index_add_root");
-        self.accounts_index.add_root(slot, true);
+        self.accounts_index.add_root(slot);
         index_time.stop();
         let mut cache_time = Measure::start("cache_add_root");
         self.accounts_cache.add_root(slot);
@@ -9212,7 +9212,7 @@ impl AccountsDb {
                 let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
-                    self.accounts_index.add_root(*root, true);
+                    self.accounts_index.add_root(*root);
                 }
                 self.accounts_index
                     .add_uncleaned_roots(uncleaned_roots.into_iter());
@@ -14055,10 +14055,10 @@ pub mod tests {
             &mut reclaims,
             UPSERT_POPULATE_RECLAIMS,
         );
-        accounts_index.add_root(0, false);
-        accounts_index.add_root(1, false);
-        accounts_index.add_root(2, false);
-        accounts_index.add_root(3, false);
+        accounts_index.add_root(0);
+        accounts_index.add_root(1);
+        accounts_index.add_root(2);
+        accounts_index.add_root(3);
         let mut purges = HashMap::new();
         let (key0_entry, _) = accounts_index.get_for_tests(&key0, None, None).unwrap();
         purges.insert(
@@ -16514,7 +16514,7 @@ pub mod tests {
 
         let extra = 3;
         let active_root = 2;
-        db.accounts_index.add_root(active_root, false);
+        db.accounts_index.add_root(active_root);
         let result = db.calc_alive_ancient_historical_roots(extra);
         let expected_alive_roots = [active_root].into_iter().collect();
         assert_eq!(result, expected_alive_roots, "extra: {extra}");
@@ -17969,7 +17969,7 @@ pub mod tests {
             .insert(slot0, BankHashInfo::default());
         db.storage.map.insert(slot0, Arc::default());
         assert!(!db.bank_hashes.read().unwrap().is_empty());
-        db.accounts_index.add_root(slot0, false);
+        db.accounts_index.add_root(slot0);
         assert!(db.accounts_index.is_uncleaned_root(slot0));
         assert!(db.accounts_index.is_alive_root(slot0));
         db.handle_dropped_roots_for_ancient(dropped_roots);
