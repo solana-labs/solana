@@ -176,7 +176,6 @@ impl SnapshotRequestHandler {
         );
 
         Some(self.handle_snapshot_request(
-            true,
             test_hash_calculation,
             non_snapshot_time_us,
             last_full_snapshot_slot,
@@ -261,7 +260,6 @@ impl SnapshotRequestHandler {
 
     fn handle_snapshot_request(
         &self,
-        _accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
