@@ -1055,7 +1055,14 @@ fn process_loader_upgradeable_instruction(
             let mut close_account =
                 instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
             let close_key = *close_account.get_key();
-            match close_account.get_state()? {
+            let close_account_state = close_account.get_state()?;
+            if invoke_context
+                .feature_set
+                .is_active(&enable_program_redeployment_cooldown::id())
+            {
+                close_account.set_data_length(UpgradeableLoaderState::size_of_uninitialized())?;
+            }
+            match close_account_state {
                 UpgradeableLoaderState::Uninitialized => {
                     let mut recipient_account = instruction_context
                         .try_borrow_instruction_account(transaction_context, 1)?;
@@ -3536,7 +3543,7 @@ mod tests {
         let recipient_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
         let buffer_address = Pubkey::new_unique();
         let mut buffer_account =
-            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(0), &loader_id);
+            AccountSharedData::new(1, UpgradeableLoaderState::size_of_buffer(128), &loader_id);
         buffer_account
             .set_state(&UpgradeableLoaderState::Buffer {
                 authority_address: Some(authority_address),
@@ -3554,7 +3561,7 @@ mod tests {
         let programdata_address = Pubkey::new_unique();
         let mut programdata_account = AccountSharedData::new(
             1,
-            UpgradeableLoaderState::size_of_programdata(0),
+            UpgradeableLoaderState::size_of_programdata(128),
             &loader_id,
         );
         programdata_account
@@ -3610,6 +3617,10 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Case: close with wrong authority
         process_instruction(
@@ -3658,6 +3669,10 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Case: close a program account
         let accounts = process_instruction(
@@ -3690,6 +3705,10 @@ mod tests {
         assert_eq!(2, accounts.get(1).unwrap().lamports());
         let state: UpgradeableLoaderState = accounts.first().unwrap().state().unwrap();
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
+        assert_eq!(
+            UpgradeableLoaderState::size_of_uninitialized(),
+            accounts.first().unwrap().data().len()
+        );
 
         // Try to invoke closed account
         programdata_account = accounts.first().unwrap().clone();
