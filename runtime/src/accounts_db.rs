@@ -42,7 +42,7 @@ use {
         },
         append_vec::{
             aligned_stored_size, AppendVec, StorableAccountsWithHashesAndWriteVersions,
-            StoredAccountMeta, StoredMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
+            StoredAccountMeta, StoredMetaWriteVersion, APPEND_VEC_MMAPPED_FILES_OPEN,
             STORE_META_OVERHEAD,
         },
         cache_hash_data::{CacheHashData, CacheHashDataFile},
@@ -6614,13 +6614,17 @@ impl AccountsDb {
         }
     }
 
-    fn write_accounts_to_cache<'a, 'b, T: ReadableAccount + Sync>(
+    fn write_accounts_to_cache<'a, 'b, T: ReadableAccount + Sync, P>(
         &self,
         slot: Slot,
         accounts_and_meta_to_store: &impl StorableAccounts<'b, T>,
         txn_signatures_iter: Box<dyn std::iter::Iterator<Item = &Option<&Signature>> + 'a>,
         include_slot_in_hash: IncludeSlotInHash,
-    ) -> Vec<AccountInfo> {
+        mut write_version_producer: P,
+    ) -> Vec<AccountInfo>
+    where
+        P: Iterator<Item = u64>,
+    {
         txn_signatures_iter
             .enumerate()
             .map(|(i, signature)| {
@@ -6634,13 +6638,13 @@ impl AccountsDb {
                     account.lamports(),
                 );
 
-                let meta = StoredMeta {
-                    pubkey: *accounts_and_meta_to_store.pubkey(i),
-                    data_len: account.data().len() as u64,
-                    write_version: 0,
-                };
-
-                self.notify_account_at_accounts_update(slot, &meta, &account, signature);
+                self.notify_account_at_accounts_update(
+                    slot,
+                    &account,
+                    signature,
+                    accounts_and_meta_to_store.pubkey(i),
+                    &mut write_version_producer,
+                );
 
                 let cached_account = self.accounts_cache.store(
                     slot,
@@ -6703,6 +6707,7 @@ impl AccountsDb {
                 accounts,
                 signature_iter,
                 accounts.include_slot_in_hash(),
+                write_version_producer,
             )
         } else if accounts.has_hash_and_write_version() {
             self.write_accounts_to_storage(
@@ -9657,7 +9662,7 @@ pub mod tests {
             accounts_index::{
                 tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
             },
-            append_vec::{test_utils::TempFile, AccountMeta},
+            append_vec::{test_utils::TempFile, AccountMeta, StoredMeta},
             cache_hash_data_stats::CacheHashDataStats,
             inline_spl_token,
         },
