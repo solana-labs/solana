@@ -4762,14 +4762,14 @@ RPC Enabled Nodes: 1"#;
         let entries = cluster_info.get_entries(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries.len());
-        for i in 0..3 {
-            if let CrdsData::DuplicateShred(shred_index, shred_data) = &entries[i] {
+        for (i, item) in entries.iter().enumerate() {
+            if let CrdsData::DuplicateShred(shred_index, shred_data) = item {
                 assert_eq!(*shred_index as usize, i);
                 assert_eq!(shred_data.from, host1_key.pubkey());
                 assert_eq!(shred_data.slot, 53084024);
                 assert_eq!(shred_data.chunk_index as usize, i);
             } else {
-                panic!("unknown type of data {:?}", entries[i]);
+                panic!("unknown type of data {:?}", item);
             }
         }
 
@@ -4785,14 +4785,14 @@ RPC Enabled Nodes: 1"#;
         let entries1 = cluster_info.get_entries(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries1.len());
-        for i in 0..3 {
-            if let CrdsData::DuplicateShred(shred_index, shred_data) = &entries1[i] {
+        for (i, item) in entries1.iter().enumerate() {
+            if let CrdsData::DuplicateShred(shred_index, shred_data) = item {
                 assert_eq!(*shred_index as usize, i + 3);
                 assert_eq!(shred_data.from, host1_key.pubkey());
                 assert_eq!(shred_data.slot, 53084025);
                 assert_eq!(shred_data.chunk_index as usize, i);
             } else {
-                panic!("unknown type of data {:?}", entries1[i]);
+                panic!("unknown type of data {:?}", item);
             }
         }
     }

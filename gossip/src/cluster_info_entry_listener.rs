@@ -107,7 +107,7 @@ mod tests {
         let host1_key = Arc::new(Keypair::new());
         let cluster_info = Arc::new(ClusterInfo::new(
             node.info,
-            host1_key.clone(),
+            host1_key,
             SocketAddrSpace::Unspecified,
         ));
         let exit = Arc::new(AtomicBool::new(false));

@@ -248,7 +248,7 @@ mod tests {
             &bank_forks.working_bank(),
         ));
         let mut duplicate_shred_handler =
-            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache.clone());
+            DuplicateShredHandler::new(blockstore.clone(), leader_schedule_cache);
         let chunks = create_duplicate_proof(my_keypair.clone(), 1, None).unwrap();
         let chunks1 = create_duplicate_proof(my_keypair.clone(), 2, None).unwrap();
         assert!(!blockstore.has_duplicate_shreds_in_slot(1));
