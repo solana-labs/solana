@@ -9,11 +9,12 @@ use {
     solana_metrics::*,
     solana_runtime::{
         accounts_update_notifier_interface::AccountsUpdateNotifierInterface,
-        append_vec::{StoredAccountMeta, StoredMeta},
+        append_vec::StoredAccountMeta,
     },
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         clock::Slot,
+        pubkey::Pubkey,
         signature::Signature,
     },
     std::sync::{Arc, RwLock},
@@ -27,12 +28,13 @@ impl AccountsUpdateNotifierInterface for AccountsUpdateNotifierImpl {
     fn notify_account_update(
         &self,
         slot: Slot,
-        meta: &StoredMeta,
         account: &AccountSharedData,
         txn_signature: &Option<&Signature>,
+        pubkey: &Pubkey,
+        write_version: u64,
     ) {
         if let Some(account_info) =
-            self.accountinfo_from_shared_account_data(meta, account, txn_signature)
+            self.accountinfo_from_shared_account_data(account, txn_signature, pubkey, write_version)
         {
             self.notify_plugins_of_account_update(account_info, slot, false);
         }
@@ -104,18 +106,19 @@ impl AccountsUpdateNotifierImpl {
 
     fn accountinfo_from_shared_account_data<'a>(
         &self,
-        meta: &'a StoredMeta,
         account: &'a AccountSharedData,
         txn_signature: &'a Option<&'a Signature>,
+        pubkey: &'a Pubkey,
+        write_version: u64,
     ) -> Option<ReplicaAccountInfoV2<'a>> {
         Some(ReplicaAccountInfoV2 {
-            pubkey: meta.pubkey.as_ref(),
+            pubkey: pubkey.as_ref(),
             lamports: account.lamports(),
             owner: account.owner().as_ref(),
             executable: account.executable(),
             rent_epoch: account.rent_epoch(),
             data: account.data(),
-            write_version: meta.write_version,
+            write_version,
             txn_signature: *txn_signature,
         })
     }
