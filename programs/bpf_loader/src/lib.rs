@@ -43,8 +43,8 @@ use {
             cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             check_slice_translation_size, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_ix,
-            enable_bpf_loader_set_authority_checked_ix, limit_max_instruction_trace_length,
-            FeatureSet,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -601,7 +601,6 @@ fn process_loader_upgradeable_instruction(
             }
 
             // Create ProgramData account
-
             let (derived_address, bump_seed) =
                 Pubkey::find_program_address(&[new_program_id.as_ref()], program_id);
             if derived_address != programdata_key {
@@ -801,10 +800,18 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InsufficientFunds);
             }
             if let UpgradeableLoaderState::ProgramData {
-                slot: _,
+                slot,
                 upgrade_authority_address,
             } = programdata.get_state()?
             {
+                if invoke_context
+                    .feature_set
+                    .is_active(&enable_program_redeployment_cooldown::id())
+                    && clock.slot == slot
+                {
+                    ic_logger_msg!(log_collector, "Program was deployed in this block already");
+                    return Err(InstructionError::InvalidArgument);
+                }
                 if upgrade_authority_address.is_none() {
                     ic_logger_msg!(log_collector, "Program not upgradeable");
                     return Err(InstructionError::Immutable);
@@ -2299,7 +2306,7 @@ mod tests {
             let spill_account = AccountSharedData::new(0, 0, &Pubkey::new_unique());
             let rent_account = create_account_for_test(&rent);
             let clock_account = create_account_for_test(&Clock {
-                slot: SLOT,
+                slot: SLOT.saturating_add(1),
                 ..Clock::default()
             });
             let upgrade_authority_account = AccountSharedData::new(1, 0, &Pubkey::new_unique());
@@ -2394,7 +2401,7 @@ mod tests {
         assert_eq!(
             state,
             UpgradeableLoaderState::ProgramData {
-                slot: SLOT,
+                slot: SLOT.saturating_add(1),
                 upgrade_authority_address: Some(upgrade_authority_address)
             }
         );
