@@ -1253,6 +1253,14 @@ impl StakeReward {
         self.stake_reward_info.lamports
     }
 
+    pub fn get_post_balance(&self) -> u64 {
+        self.stake_reward_info.post_balance
+    }
+
+    pub fn get_stake_account(&self) -> &AccountSharedData {
+        &self.stake_account
+    }
+
     #[cfg(test)]
     pub fn random() -> Self {
         use rand::Rng;
@@ -1276,7 +1284,7 @@ impl StakeReward {
 
     #[cfg(test)]
     pub fn credit(&mut self, amount: u64) {
-        self.stake_reward_info.lamports += amount as i64;
+        self.stake_reward_info.lamports = amount as i64;
         self.stake_reward_info.post_balance += amount;
         self.stake_account.checked_add_lamports(amount).unwrap();
     }
@@ -3368,9 +3376,31 @@ impl Bank {
         stake_rewards: &[StakeReward],
         partition_index: u64,
     ) -> (usize, i64) {
+        // Verify that stake account `lamports + reward_amount` matches what we have in the
+        // rewarded account. This code will have a performance hit -  an extra load and compare of
+        // the stake accounts. This is for debugging. Once we are confident, we can disable the
+        // check.
+
+        const VERIFY_REWARD_LAMPORT: bool = true;
+
+        if VERIFY_REWARD_LAMPORT {
+            for r in stake_rewards {
+                let stake_pubkey = r.stake_pubkey;
+                let reward_amount = r.get_stake_reward();
+                let post_stake_account = r.get_stake_account();
+                if let Some(mut curr_stake_account) =
+                    self.get_account_with_fixed_root(&stake_pubkey)
+                {
+                    curr_stake_account
+                        .checked_add_lamports(reward_amount.try_into().unwrap())
+                        .unwrap();
+                    assert_eq!(curr_stake_account.lamports(), post_stake_account.lamports());
+                }
+            }
+        }
+
         // store stake account even if staker's reward is 0
         // because credits observed has changed
-
         let n = stake_rewards.len() as u64;
         let mut total: i64 = 0;
         let (begin, end) = self.get_partition_begin_end(partition_index, n);
