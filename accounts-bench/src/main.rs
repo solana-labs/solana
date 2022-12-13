@@ -72,7 +72,6 @@ fn main() {
         vec![path],
         &ClusterType::Testnet,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     println!("Creating {num_accounts} accounts");
