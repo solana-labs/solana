@@ -49,7 +49,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
@@ -3225,11 +3225,15 @@ fn main() {
                         bank.set_capitalization();
 
                         let bank = if let Some(warp_slot) = warp_slot {
+                            // need to flush the write cache in order to use Storages to calculate
+                            // the accounts hash, and need to root `bank` before flushing the cache
+                            bank.rc.accounts.accounts_db.add_root(bank.slot());
+                            bank.force_flush_accounts_cache();
                             Arc::new(Bank::warp_from_parent(
                                 &bank,
                                 bank.collector_id(),
                                 warp_slot,
-                                solana_runtime::accounts_db::CalcAccountsHashDataSource::IndexForTests,
+                                CalcAccountsHashDataSource::Storages,
                             ))
                         } else {
                             bank

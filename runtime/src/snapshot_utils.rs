@@ -1886,8 +1886,6 @@ fn rebuild_bank_from_snapshots(
 
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
-    bank.prepare_rewrites_for_hash();
-
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
 }
@@ -3684,7 +3682,6 @@ mod tests {
             Arc::<RuntimeConfig>::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
-            false,
             AccountShrinkThreshold::default(),
         ));
         bank0

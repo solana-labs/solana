@@ -13,7 +13,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         ancestors::Ancestors,
         bank::{
-            Bank, NonceFull, NonceInfo, RentDebits, Rewrites, TransactionCheckResult,
+            Bank, NonceFull, NonceInfo, RentDebits, TransactionCheckResult,
             TransactionExecutionResult,
         },
         blockhash_queue::BlockhashQueue,
@@ -163,7 +163,6 @@ impl Accounts {
             paths,
             cluster_type,
             account_indexes,
-            true,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
@@ -175,14 +174,13 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
+        _caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
     ) -> Self {
         Self::new_with_config(
             paths,
             cluster_type,
             account_indexes,
-            caching_enabled,
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
@@ -194,7 +192,6 @@ impl Accounts {
         paths: Vec<PathBuf>,
         cluster_type: &ClusterType,
         account_indexes: AccountSecondaryIndexes,
-        caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -205,7 +202,6 @@ impl Accounts {
                 paths,
                 cluster_type,
                 account_indexes,
-                caching_enabled,
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
@@ -1209,10 +1205,8 @@ impl Accounts {
         }
     }
 
-    pub fn bank_hash_info_at(&self, slot: Slot, rewrites: &Rewrites) -> BankHashInfo {
-        let accounts_delta_hash = self
-            .accounts_db
-            .get_accounts_delta_hash_with_rewrites(slot, rewrites);
+    pub fn bank_hash_info_at(&self, slot: Slot) -> BankHashInfo {
+        let accounts_delta_hash = self.accounts_db.get_accounts_delta_hash(slot);
         let bank_hashes = self.accounts_db.bank_hashes.read().unwrap();
         let mut bank_hash_info = bank_hashes
             .get(&slot)
@@ -2629,7 +2623,7 @@ mod tests {
             AccountSecondaryIndexes::default(),
             AccountShrinkThreshold::default(),
         );
-        accounts.bank_hash_info_at(1, &Rewrites::default());
+        accounts.bank_hash_info_at(1);
     }
 
     #[test]

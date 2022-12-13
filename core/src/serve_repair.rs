@@ -455,7 +455,7 @@ impl ServeRepair {
         let identity_keypair = self.cluster_info.keypair().clone();
         let my_id = identity_keypair.pubkey();
 
-        let max_buffered_packets = if root_bank.cluster_type() == ClusterType::Testnet {
+        let max_buffered_packets = if root_bank.cluster_type() != ClusterType::MainnetBeta {
             2 * MAX_REQUESTS_PER_ITERATION
         } else {
             MAX_REQUESTS_PER_ITERATION
