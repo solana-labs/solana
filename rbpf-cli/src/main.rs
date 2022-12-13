@@ -262,6 +262,7 @@ before execting it in the virtual machine.",
             .map_err(|err| format!("Executable verifier failed: {err:?}"))
             .unwrap();
 
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     verified_executable.jit_compile().unwrap();
     let mut analysis = LazyAnalysis::new(verified_executable.get_executable());
 
