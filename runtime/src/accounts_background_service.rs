@@ -539,10 +539,10 @@ impl AccountsBackgroundService {
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
         request_handlers: AbsRequestHandlers,
-        accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
+        let accounts_db_caching_enabled = true;
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
         let mut consumed_budget = 0;

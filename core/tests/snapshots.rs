@@ -1040,14 +1040,8 @@ fn test_snapshots_with_background_services(
         snapshot_test_config.snapshot_config.clone(),
     );
 
-    let accounts_background_service = AccountsBackgroundService::new(
-        bank_forks.clone(),
-        &exit,
-        abs_request_handler,
-        true,
-        false,
-        None,
-    );
+    let accounts_background_service =
+        AccountsBackgroundService::new(bank_forks.clone(), &exit, abs_request_handler, false, None);
 
     let mut last_full_snapshot_slot = None;
     let mut last_incremental_snapshot_slot = None;

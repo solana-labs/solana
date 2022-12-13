@@ -221,7 +221,6 @@ impl BackgroundServices {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true,
             false,
             None,
         );
