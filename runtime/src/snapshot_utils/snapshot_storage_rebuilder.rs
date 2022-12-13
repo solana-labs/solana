@@ -2,8 +2,7 @@
 
 use {
     super::{
-        get_io_error, parse_appendvec_filename, snapshot_version_from_file, SnapshotError,
-        SnapshotFrom, SnapshotVersion,
+        get_io_error, snapshot_version_from_file, SnapshotError, SnapshotFrom, SnapshotVersion,
     },
     crate::{
         account_storage::AccountStorageMap,
@@ -264,14 +263,12 @@ impl SnapshotStorageRebuilder {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
         if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
             if self.snapshot_from == Some(SnapshotFrom::File) {
-                if let Some(appendvec_entry) = parse_appendvec_filename(&filename) {
-                    let (_slot, appendvec_id) = appendvec_entry;
-                    let next_appendvec_id = appendvec_id + 1;
-                    // Always set to the maximum to avoid id conflict.
-                    let _ = &self
-                        .next_append_vec_id
-                        .fetch_max(next_appendvec_id, Ordering::Relaxed);
-                }
+                let (_slot, appendvec_id) = get_slot_and_append_vec_id(&filename);
+                let next_appendvec_id = appendvec_id + 1;
+                // Always set to the maximum to avoid id conflict.
+                let _ = &self
+                    .next_append_vec_id
+                    .fetch_max(next_appendvec_id as u32, Ordering::Relaxed);
             }
             let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
             if slot_complete {
@@ -421,12 +418,21 @@ pub fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
 
 /// Get the slot and append vec id from the filename
 pub(crate) fn get_slot_and_append_vec_id(filename: &str) -> (Slot, usize) {
-    let mut split = filename.split('.');
-    let slot = split.next().unwrap().parse().unwrap();
-    let append_vec_id = split.next().unwrap().parse().unwrap();
-    assert!(split.next().is_none());
+    lazy_static! {
+        static ref STORAGE_FILE_REGEX: Regex =
+            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
+    };
 
-    (slot, append_vec_id)
+    STORAGE_FILE_REGEX
+        .captures(filename)
+        .map(|cap| {
+            let slot_str = cap.name("slot").map(|m| m.as_str());
+            let id_str = cap.name("id").map(|m| m.as_str());
+            let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
+            let id = id_str.unwrap().parse::<u32>().unwrap() as usize;
+            (slot, id)
+        })
+        .unwrap()
 }
 
 #[cfg(test)]

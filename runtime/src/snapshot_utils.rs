@@ -67,7 +67,6 @@ use {
 
 mod archive_format;
 mod snapshot_storage_rebuilder;
-use crate::accounts_db::AppendVecId;
 pub use archive_format::*;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1969,21 +1968,6 @@ pub(crate) fn parse_incremental_snapshot_archive_filename(
 
     do_parse().ok_or_else(|| {
         SnapshotError::ParseSnapshotArchiveFileNameError(archive_filename.to_string())
-    })
-}
-
-pub(crate) fn parse_appendvec_filename(filename: &str) -> Option<(Slot, AppendVecId)> {
-    lazy_static! {
-        static ref STORAGE_FILE_REGEX: Regex =
-            Regex::new(r"^(?P<slot>[0-9]+)\.(?P<id>[0-9]+)$").unwrap();
-    };
-
-    STORAGE_FILE_REGEX.captures(filename).map(|cap| {
-        let slot_str = cap.name("slot").map(|m| m.as_str());
-        let id_str = cap.name("id").map(|m| m.as_str());
-        let slot: Slot = slot_str.unwrap().parse::<u64>().unwrap();
-        let id: AppendVecId = id_str.unwrap().parse::<u32>().unwrap();
-        (slot, id)
     })
 }
 
