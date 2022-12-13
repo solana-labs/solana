@@ -311,7 +311,6 @@ pub(crate) fn bank_from_streams<R>(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
@@ -333,7 +332,7 @@ where
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        caching_enabled,
+        true, // caching_enabled
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
