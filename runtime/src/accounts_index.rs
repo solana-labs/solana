@@ -3139,6 +3139,7 @@ pub mod tests {
         assert_eq!(0, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         index.add_root(0);
         index.add_root(1);
+        index.add_uncleaned_roots([0, 1].into_iter());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
 
         assert_eq!(
@@ -3165,6 +3166,7 @@ pub mod tests {
 
         index.add_root(2);
         index.add_root(3);
+        index.add_uncleaned_roots([2, 3].into_iter());
         assert_eq!(4, index.roots_tracker.read().unwrap().alive_roots.len());
         assert_eq!(2, index.roots_tracker.read().unwrap().uncleaned_roots.len());
         assert_eq!(
