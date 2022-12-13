@@ -212,7 +212,6 @@ fn bank_forks_from_snapshot(
                 process_options.runtime_config.bpf_jit,
             )),
             process_options.account_indexes.clone(),
-            true, // caching_enabled
             process_options.limit_load_slot_count_from_snapshot,
             process_options.shrink_ratio,
             process_options.accounts_db_test_hash_calculation,
