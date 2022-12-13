@@ -1144,8 +1144,11 @@ impl ClusterInfo {
         txs
     }
 
-    /// Returns entries inserted since the given cursor.
-    pub fn get_entries(&self, cursor: &mut Cursor) -> Vec<CrdsData> {
+    /// Returns DuplicateShred entries inserted since the given cursor.
+    /// In the future if we want to filter out other events, we should
+    /// pass in a vector of expected entry type and filter accordingly
+    /// so the result can be used in cluster_info_entry_listener.
+    pub fn get_duplicate_shred_entries(&self, cursor: &mut Cursor) -> Vec<CrdsData> {
         let entries: Vec<CrdsData> = self
             .time_gossip_read_lock("get_entries", &self.stats.get_entries)
             .get_entries(cursor)
@@ -4746,7 +4749,9 @@ RPC Enabled Nodes: 1"#;
             SocketAddrSpace::Unspecified,
         ));
         let mut cursor = Cursor::default();
-        assert!(cluster_info.get_entries(&mut cursor).is_empty());
+        assert!(cluster_info
+            .get_duplicate_shred_entries(&mut cursor)
+            .is_empty());
 
         let mut rng = rand::thread_rng();
         let (slot, parent_slot, reference_tick, version) = (53084024, 53084023, 0, 0);
@@ -4759,7 +4764,7 @@ RPC Enabled Nodes: 1"#;
             .push_duplicate_shred(&shred1, shred2.payload())
             .is_ok());
         cluster_info.flush_push_queue();
-        let entries = cluster_info.get_entries(&mut cursor);
+        let entries = cluster_info.get_duplicate_shred_entries(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries.len());
         for (i, item) in entries.iter().enumerate() {
@@ -4782,7 +4787,7 @@ RPC Enabled Nodes: 1"#;
             .push_duplicate_shred(&shred3, shred4.payload())
             .is_ok());
         cluster_info.flush_push_queue();
-        let entries1 = cluster_info.get_entries(&mut cursor);
+        let entries1 = cluster_info.get_duplicate_shred_entries(&mut cursor);
         // One duplicate shred proof is split into 3 chunks.
         assert_eq!(3, entries1.len());
         for (i, item) in entries1.iter().enumerate() {
