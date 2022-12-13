@@ -26,7 +26,7 @@ use {
     itertools::Itertools,
     rand::Rng,
     solana_sdk::{
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::timestamp,

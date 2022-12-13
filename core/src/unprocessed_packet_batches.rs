@@ -3,11 +3,7 @@ use {
     min_max_heap::MinMaxHeap,
     solana_perf::packet::Batch,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-    solana_sdk::{
-        hash::Hash,
-        packet::{BasePacket, Packet},
-        transaction::Transaction,
-    },
+    solana_sdk::{hash::Hash, packet::GenericPacket, transaction::Transaction},
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
@@ -18,36 +14,36 @@ use {
 /// Holds deserialized messages, as well as computed message_hash and other things needed to create
 /// SanitizedTransaction
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeserializedPacket<P: BasePacket> {
-    immutable_section: Arc<ImmutableDeserializedPacket<P>>,
+pub struct DeserializedPacket<const N: usize> {
+    immutable_section: Arc<ImmutableDeserializedPacket<N>>,
     pub forwarded: bool,
 }
 
-impl<P: BasePacket> DeserializedPacket<P> {
-    pub fn from_immutable_section(immutable_section: ImmutableDeserializedPacket<P>) -> Self {
+impl<const N: usize> DeserializedPacket<N> {
+    pub fn from_immutable_section(immutable_section: ImmutableDeserializedPacket<N>) -> Self {
         Self {
             immutable_section: Arc::new(immutable_section),
             forwarded: false,
         }
     }
 
-    pub fn immutable_section(&self) -> &Arc<ImmutableDeserializedPacket<P>> {
+    pub fn immutable_section(&self) -> &Arc<ImmutableDeserializedPacket<N>> {
         &self.immutable_section
     }
-    pub fn new(packet: P) -> Result<Self, DeserializedPacketError> {
+    pub fn new(packet: GenericPacket<N>) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, None)
     }
 
     #[cfg(test)]
     pub fn new_with_priority_details(
-        packet: P,
+        packet: GenericPacket<N>,
         priority_details: TransactionPriorityDetails,
     ) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, Some(priority_details))
     }
 
     pub fn new_internal(
-        packet: P,
+        packet: GenericPacket<N>,
         priority_details: Option<TransactionPriorityDetails>,
     ) -> Result<Self, DeserializedPacketError> {
         let immutable_section = ImmutableDeserializedPacket::new(packet, priority_details)?;
@@ -59,13 +55,13 @@ impl<P: BasePacket> DeserializedPacket<P> {
     }
 }
 
-impl<P: BasePacket> PartialOrd for DeserializedPacket<P> {
+impl<const N: usize> PartialOrd for DeserializedPacket<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<P: BasePacket> Ord for DeserializedPacket<P> {
+impl<const N: usize> Ord for DeserializedPacket<N> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.immutable_section()
             .priority()
@@ -80,17 +76,17 @@ pub struct PacketBatchInsertionMetrics {
 }
 
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
-/// Batch<Packet>s received from sigverify. Banking thread continuously scans the buffer
+/// Batch<{Packet::DATA_SIZE}>s received from sigverify. Banking thread continuously scans the buffer
 /// to pick proper packets to add to the block.
 #[derive(Debug, Default)]
-pub struct UnprocessedPacketBatches<P: BasePacket> {
-    pub packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket<P>>>,
-    pub message_hash_to_transaction: HashMap<Hash, DeserializedPacket<P>>,
+pub struct UnprocessedPacketBatches<const N: usize> {
+    pub packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket<N>>>,
+    pub message_hash_to_transaction: HashMap<Hash, DeserializedPacket<N>>,
     batch_limit: usize,
 }
 
-impl<P: BasePacket> UnprocessedPacketBatches<P> {
-    pub fn from_iter<I: IntoIterator<Item = DeserializedPacket<P>>>(
+impl<const N: usize> UnprocessedPacketBatches<N> {
+    pub fn from_iter<I: IntoIterator<Item = DeserializedPacket<N>>>(
         iter: I,
         capacity: usize,
     ) -> Self {
@@ -122,7 +118,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     /// Returns tuple of number of packets dropped
     pub fn insert_batch(
         &mut self,
-        deserialized_packets: impl Iterator<Item = DeserializedPacket<P>>,
+        deserialized_packets: impl Iterator<Item = DeserializedPacket<N>>,
     ) -> PacketBatchInsertionMetrics {
         let mut num_dropped_packets = 0;
         let mut num_dropped_tracer_packets = 0;
@@ -151,8 +147,8 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     /// Returns and drops the lowest priority packet if the buffer is at capacity.
     pub fn push(
         &mut self,
-        deserialized_packet: DeserializedPacket<P>,
-    ) -> Option<DeserializedPacket<P>> {
+        deserialized_packet: DeserializedPacket<N>,
+    ) -> Option<DeserializedPacket<N>> {
         if self
             .message_hash_to_transaction
             .contains_key(deserialized_packet.immutable_section().message_hash())
@@ -169,21 +165,21 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
         }
     }
 
-    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<P>> {
+    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<N>> {
         self.message_hash_to_transaction.values()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket<P>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket<N>> {
         self.message_hash_to_transaction.iter_mut().map(|(_k, v)| v)
     }
 
     pub fn retain<F>(&mut self, mut f: F)
     where
-        F: FnMut(&mut DeserializedPacket<P>) -> bool,
+        F: FnMut(&mut DeserializedPacket<N>) -> bool,
     {
         // TODO: optimize this only when number of packets
         // with outdated blockhash is high
-        let new_packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket<P>>> = self
+        let new_packet_priority_queue: MinMaxHeap<Arc<ImmutableDeserializedPacket<N>>> = self
             .packet_priority_queue
             .drain()
             .filter(|immutable_packet| {
@@ -218,7 +214,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
         self.packet_priority_queue.is_empty()
     }
 
-    fn push_internal(&mut self, deserialized_packet: DeserializedPacket<P>) {
+    fn push_internal(&mut self, deserialized_packet: DeserializedPacket<N>) {
         // Push into the priority queue
         self.packet_priority_queue
             .push(deserialized_packet.immutable_section().clone());
@@ -233,8 +229,8 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     /// Returns the popped minimum packet from the priority queue.
     fn push_pop_min(
         &mut self,
-        deserialized_packet: DeserializedPacket<P>,
-    ) -> DeserializedPacket<P> {
+        deserialized_packet: DeserializedPacket<N>,
+    ) -> DeserializedPacket<N> {
         let immutable_packet = deserialized_packet.immutable_section().clone();
 
         // Push into the priority queue
@@ -262,7 +258,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     }
 
     #[cfg(test)]
-    fn pop_max(&mut self) -> Option<DeserializedPacket<P>> {
+    fn pop_max(&mut self) -> Option<DeserializedPacket<N>> {
         self.packet_priority_queue
             .pop_max()
             .map(|immutable_packet| {
@@ -275,7 +271,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     /// Pop up to the next `n` highest priority transactions from the queue.
     /// Returns `None` if the queue is empty
     #[cfg(test)]
-    fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket<P>>> {
+    fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket<N>>> {
         let current_len = self.len();
         if self.is_empty() {
             None
@@ -284,7 +280,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
             Some(
                 std::iter::from_fn(|| Some(self.pop_max().unwrap()))
                     .take(num_to_pop)
-                    .collect::<Vec<DeserializedPacket<P>>>(),
+                    .collect::<Vec<DeserializedPacket<N>>>(),
             )
         }
     }
@@ -293,7 +289,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
         self.packet_priority_queue.capacity()
     }
 
-    pub fn is_forwarded(&self, immutable_packet: &ImmutableDeserializedPacket<P>) -> bool {
+    pub fn is_forwarded(&self, immutable_packet: &ImmutableDeserializedPacket<N>) -> bool {
         self.message_hash_to_transaction
             .get(immutable_packet.message_hash())
             .map_or(true, |p| p.forwarded)
@@ -301,7 +297,7 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
 
     pub fn mark_accepted_packets_as_forwarded(
         &mut self,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket<P>>],
+        packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         accepted_packet_indexes: &[usize],
     ) {
         accepted_packet_indexes
@@ -318,22 +314,22 @@ impl<P: BasePacket> UnprocessedPacketBatches<P> {
     }
 }
 
-pub fn deserialize_packets<'a>(
-    packet_batch: &'a Batch<Packet>,
+pub fn deserialize_packets<'a, const N: usize>(
+    packet_batch: &'a Batch<N>,
     packet_indexes: &'a [usize],
-) -> impl Iterator<Item = DeserializedPacket<Packet>> + 'a {
+) -> impl Iterator<Item = DeserializedPacket<N>> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
         DeserializedPacket::new(packet_batch[*packet_index].clone()).ok()
     })
 }
 
-pub fn transactions_to_deserialized_packets<P: BasePacket>(
+pub fn transactions_to_deserialized_packets<const N: usize>(
     transactions: &[Transaction],
-) -> Result<Vec<DeserializedPacket<P>>, DeserializedPacketError> {
+) -> Result<Vec<DeserializedPacket<N>>, DeserializedPacketError> {
     transactions
         .iter()
         .map(|transaction| {
-            let packet = P::from_data(None, transaction)?;
+            let packet = GenericPacket::from_data(None, transaction)?;
             DeserializedPacket::new(packet)
         })
         .collect()
@@ -345,6 +341,7 @@ mod tests {
         super::*,
         solana_perf::packet::PacketFlags,
         solana_sdk::{
+            packet::Packet,
             signature::{Keypair, Signer},
             system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
@@ -353,7 +350,7 @@ mod tests {
         std::sync::Arc,
     };
 
-    fn simple_deserialized_packet() -> DeserializedPacket<Packet> {
+    fn simple_deserialized_packet() -> DeserializedPacket<{ Packet::DATA_SIZE }> {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -367,7 +364,7 @@ mod tests {
     fn packet_with_priority_details(
         priority: u64,
         compute_unit_limit: u64,
-    ) -> DeserializedPacket<Packet> {
+    ) -> DeserializedPacket<{ Packet::DATA_SIZE }> {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -388,7 +385,8 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_insert_pop_same_packet() {
         let packet = simple_deserialized_packet();
-        let mut unprocessed_packet_batches = UnprocessedPacketBatches::<Packet>::with_capacity(2);
+        let mut unprocessed_packet_batches =
+            UnprocessedPacketBatches::<{ Packet::DATA_SIZE }>::with_capacity(2);
         unprocessed_packet_batches.push(packet.clone());
         unprocessed_packet_batches.push(packet.clone());
 
@@ -486,7 +484,7 @@ mod tests {
     fn make_test_packets(
         transactions: Vec<Transaction>,
         vote_indexes: Vec<usize>,
-    ) -> Vec<DeserializedPacket<Packet>> {
+    ) -> Vec<DeserializedPacket<{ Packet::DATA_SIZE }>> {
         let capacity = transactions.len();
         let mut packet_vector = Vec::with_capacity(capacity);
         for tx in transactions.iter() {

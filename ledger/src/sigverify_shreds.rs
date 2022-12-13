@@ -15,7 +15,7 @@ use {
     solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{
         clock::Slot,
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
@@ -66,7 +66,7 @@ pub fn verify_shred_cpu(
 }
 
 fn verify_shreds_cpu(
-    batches: &[Batch<Packet>],
+    batches: &[Batch<{ Packet::DATA_SIZE }>],
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
 ) -> Vec<Vec<u8>> {
     let packet_count = count_packets_in_batches(batches);
@@ -87,7 +87,7 @@ fn verify_shreds_cpu(
 }
 
 fn slot_key_data_for_gpu<T>(
-    batches: &[Batch<Packet>],
+    batches: &[Batch<{ Packet::DATA_SIZE }>],
     slot_keys: &HashMap<Slot, /*pubkey:*/ T>,
     recycler_cache: &RecyclerCache,
 ) -> (/*pubkeys:*/ PinnedVec<u8>, TxOffset)
@@ -211,7 +211,7 @@ fn elems_from_buffer(buffer: &PinnedVec<u8>) -> perf_libs::Elems {
 
 fn shred_gpu_offsets(
     offset: usize,
-    batches: &[Batch<Packet>],
+    batches: &[Batch<{ Packet::DATA_SIZE }>],
     merkle_roots_offsets: impl IntoIterator<Item = Option<usize>>,
     recycler_cache: &RecyclerCache,
 ) -> (TxOffset, TxOffset, TxOffset) {
@@ -253,7 +253,7 @@ fn shred_gpu_offsets(
 }
 
 pub fn verify_shreds_gpu(
-    batches: &[Batch<Packet>],
+    batches: &[Batch<{ Packet::DATA_SIZE }>],
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
     recycler_cache: &RecyclerCache,
 ) -> Vec<Vec<u8>> {
@@ -335,7 +335,7 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
     packet.buffer_mut()[sig].copy_from_slice(signature.as_ref());
 }
 
-pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Batch<Packet>]) {
+pub fn sign_shreds_cpu(keypair: &Keypair, batches: &mut [Batch<{ Packet::DATA_SIZE }>]) {
     let packet_count = count_packets_in_batches(batches);
     debug!("CPU SHRED ECDSA for {}", packet_count);
     SIGVERIFY_THREAD_POOL.install(|| {
@@ -368,7 +368,7 @@ pub fn sign_shreds_gpu_pinned_keypair(keypair: &Keypair, cache: &RecyclerCache) 
 pub fn sign_shreds_gpu(
     keypair: &Keypair,
     pinned_keypair: &Option<Arc<PinnedVec<u8>>>,
-    batches: &mut [Batch<Packet>],
+    batches: &mut [Batch<{ Packet::DATA_SIZE }>],
     recycler_cache: &RecyclerCache,
 ) {
     let sig_size = size_of::<Signature>();
@@ -533,7 +533,7 @@ mod tests {
 
     fn run_test_sigverify_shreds_cpu(slot: Slot) {
         solana_logger::setup();
-        let mut batches = [Batch::<Packet>::default()];
+        let mut batches = [Batch::<{ Packet::DATA_SIZE }>::default()];
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -587,7 +587,7 @@ mod tests {
         solana_logger::setup();
         let recycler_cache = RecyclerCache::default();
 
-        let mut batches = [Batch::<Packet>::default()];
+        let mut batches = [Batch::<{ Packet::DATA_SIZE }>::default()];
         let mut shred = Shred::new_from_data(
             slot,
             0xc0de,
@@ -652,7 +652,7 @@ mod tests {
 
         let num_packets = 32;
         let num_batches = 100;
-        let mut packet_batch = Batch::<Packet>::with_capacity(num_packets);
+        let mut packet_batch = Batch::<{ Packet::DATA_SIZE }>::with_capacity(num_packets);
         packet_batch.resize(num_packets, Packet::default());
 
         for (i, p) in packet_batch.iter_mut().enumerate() {
@@ -699,7 +699,7 @@ mod tests {
     fn run_test_sigverify_shreds_sign_cpu(slot: Slot) {
         solana_logger::setup();
 
-        let mut batches = [Batch::<Packet>::default()];
+        let mut batches = [Batch::<{ Packet::DATA_SIZE }>::default()];
         let keypair = Keypair::new();
         let shred = Shred::new_from_data(
             slot,

@@ -10,7 +10,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
-        packet::{BasePacket, Packet},
+        packet::Packet,
     },
     solana_streamer::streamer::{self, BatchReceiver, StreamerReceiveStats},
     std::{
@@ -31,8 +31,8 @@ pub(crate) struct ShredFetchStage {
 impl ShredFetchStage {
     // updates packets received on a channel and sends them on another channel
     fn modify_packets(
-        recvr: BatchReceiver<Packet>,
-        sendr: Sender<Batch<Packet>>,
+        recvr: BatchReceiver<{ Packet::DATA_SIZE }>,
+        sendr: Sender<Batch<{ Packet::DATA_SIZE }>>,
         bank_forks: &RwLock<BankForks>,
         shred_version: u16,
         name: &'static str,
@@ -113,7 +113,7 @@ impl ShredFetchStage {
     fn packet_modifier(
         sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: Sender<Batch<Packet>>,
+        sender: Sender<Batch<{ Packet::DATA_SIZE }>>,
         recycler: BatchRecycler<Packet>,
         bank_forks: Arc<RwLock<BankForks>>,
         shred_version: u16,
@@ -161,7 +161,7 @@ impl ShredFetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
-        sender: Sender<Batch<Packet>>,
+        sender: Sender<Batch<{ Packet::DATA_SIZE }>>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
         cluster_info: Arc<ClusterInfo>,

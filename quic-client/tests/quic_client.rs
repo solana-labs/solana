@@ -7,10 +7,7 @@ mod tests {
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
-        solana_sdk::{
-            packet::{BasePacket, TransactionPacket},
-            signature::Keypair,
-        },
+        solana_sdk::{packet::TransactionPacket, signature::Keypair},
         solana_streamer::{
             nonblocking::quic::DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS, quic::StreamStats,
             streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain,
@@ -26,8 +23,8 @@ mod tests {
         },
     };
 
-    fn check_packets<P: BasePacket>(
-        receiver: Receiver<Batch<P>>,
+    fn check_packets<const N: usize>(
+        receiver: Receiver<Batch<N>>,
         num_bytes: usize,
         num_expected_packets: usize,
     ) {
@@ -77,7 +74,7 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip, stats) = server_args();
-        let (_, t) = solana_streamer::quic::spawn_server(
+        let (_, t) = solana_streamer::quic::spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s.try_clone().unwrap(),
             &keypair,
             ip,
@@ -124,20 +121,21 @@ mod tests {
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (s, exit, keypair, ip, stats) = server_args();
-        let (_, t) = solana_streamer::nonblocking::quic::spawn_server(
-            s.try_clone().unwrap(),
-            &keypair,
-            ip,
-            sender,
-            exit.clone(),
-            1,
-            staked_nodes,
-            10,
-            10,
-            stats,
-            1000,
-        )
-        .unwrap();
+        let (_, t) =
+            solana_streamer::nonblocking::quic::spawn_server::<{ TransactionPacket::DATA_SIZE }>(
+                s.try_clone().unwrap(),
+                &keypair,
+                ip,
+                sender,
+                exit.clone(),
+                1,
+                staked_nodes,
+                10,
+                10,
+                stats,
+                1000,
+            )
+            .unwrap();
 
         let addr = s.local_addr().unwrap().ip();
         let port = s.local_addr().unwrap().port();
@@ -181,20 +179,21 @@ mod tests {
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let (request_recv_socket, request_recv_exit, keypair, request_recv_ip, request_recv_stats) =
             server_args();
-        let (request_recv_endpoint, request_recv_thread) = solana_streamer::quic::spawn_server(
-            request_recv_socket.try_clone().unwrap(),
-            &keypair,
-            request_recv_ip,
-            sender,
-            request_recv_exit.clone(),
-            1,
-            staked_nodes.clone(),
-            10,
-            10,
-            request_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-        )
-        .unwrap();
+        let (request_recv_endpoint, request_recv_thread) =
+            solana_streamer::quic::spawn_server::<{ TransactionPacket::DATA_SIZE }>(
+                request_recv_socket.try_clone().unwrap(),
+                &keypair,
+                request_recv_ip,
+                sender,
+                request_recv_exit.clone(),
+                1,
+                staked_nodes.clone(),
+                10,
+                10,
+                request_recv_stats,
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            )
+            .unwrap();
 
         drop(request_recv_endpoint);
         // Response Receiver:
@@ -210,20 +209,21 @@ mod tests {
         let addr = response_recv_socket.local_addr().unwrap().ip();
         let port = response_recv_socket.local_addr().unwrap().port();
         let server_addr = SocketAddr::new(addr, port);
-        let (response_recv_endpoint, response_recv_thread) = solana_streamer::quic::spawn_server(
-            response_recv_socket,
-            &keypair2,
-            response_recv_ip,
-            sender2,
-            response_recv_exit.clone(),
-            1,
-            staked_nodes,
-            10,
-            10,
-            response_recv_stats,
-            DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
-        )
-        .unwrap();
+        let (response_recv_endpoint, response_recv_thread) =
+            solana_streamer::quic::spawn_server::<{ TransactionPacket::DATA_SIZE }>(
+                response_recv_socket,
+                &keypair2,
+                response_recv_ip,
+                sender2,
+                response_recv_exit.clone(),
+                1,
+                staked_nodes,
+                10,
+                10,
+                response_recv_stats,
+                DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS,
+            )
+            .unwrap();
 
         // Request Sender, it uses the same endpoint as the response receiver:
         let addr = request_recv_socket.local_addr().unwrap().ip();
@@ -246,9 +246,9 @@ mod tests {
         let request_sender =
             QuicTpuConnection::new(Arc::new(endpoint), tpu_addr, connection_cache_stats);
         // Send a full size packet with single byte writes as a request.
-        let num_bytes = PACKET_DATA_SIZE;
+        let num_bytes = TransactionPacket::DATA_SIZE;
         let num_expected_packets: usize = 3000;
-        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+        let packets = vec![vec![0u8; TransactionPacket::DATA_SIZE]; num_expected_packets];
 
         assert!(request_sender
             .send_wire_transaction_batch_async(packets)
@@ -274,9 +274,9 @@ mod tests {
             QuicTpuConnection::new(Arc::new(endpoint2), server_addr, connection_cache_stats2);
 
         // Send a full size packet with single byte writes.
-        let num_bytes = PACKET_DATA_SIZE;
+        let num_bytes = TransactionPacket::DATA_SIZE;
         let num_expected_packets: usize = 3000;
-        let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
+        let packets = vec![vec![0u8; TransactionPacket::DATA_SIZE]; num_expected_packets];
 
         assert!(response_sender
             .send_wire_transaction_batch_async(packets)

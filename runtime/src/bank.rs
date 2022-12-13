@@ -137,7 +137,7 @@ use {
         native_token::{sol_to_lamports, LAMPORTS_PER_SOL},
         nonce::{self, state::DurableNonce, NONCED_TX_MARKER_IX_INDEX},
         nonce_account,
-        packet::{BasePacket, TransactionPacket},
+        packet::TransactionPacket,
         precompiles::get_precompiles,
         pubkey::Pubkey,
         saturating_add_assign, secp256k1_program,

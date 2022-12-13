@@ -12,7 +12,7 @@ use {
     rand::{thread_rng, Rng},
     solana_perf::packet::Batch,
     solana_sdk::{
-        packet::{BasePacket, TransactionPacket},
+        packet::GenericPacket,
         pubkey::Pubkey,
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_STAKED_CONCURRENT_STREAMS,
@@ -55,11 +55,11 @@ const CONNECTION_CLOSE_CODE_TOO_MANY: u32 = 4;
 const CONNECTION_CLOSE_REASON_TOO_MANY: &[u8] = b"too_many";
 
 #[allow(clippy::too_many_arguments)]
-pub fn spawn_server(
+pub fn spawn_server<const N: usize>(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<Batch<TransactionPacket>>,
+    packet_sender: Sender<Batch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -69,7 +69,7 @@ pub fn spawn_server(
     wait_for_chunk_timeout_ms: u64,
 ) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
     info!("Start quic server on {:?}", sock);
-    let (config, _cert) = configure_server(keypair, gossip_host)?;
+    let (config, _cert) = configure_server::<N>(keypair, gossip_host)?;
 
     let endpoint = {
         Endpoint::new(EndpointConfig::default(), Some(config), sock, TokioRuntime)
@@ -90,9 +90,9 @@ pub fn spawn_server(
     Ok((endpoint, handle))
 }
 
-pub async fn run_server(
-    incoming: Endpoint,
-    packet_sender: Sender<Batch<TransactionPacket>>,
+pub async fn run_server<const N: usize>(
+    incoming: Incoming,
+    packet_sender: Sender<Batch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -223,8 +223,8 @@ enum ConnectionHandlerError {
     MaxStreamError,
 }
 
-struct NewConnectionHandlerParams {
-    packet_sender: Sender<Batch<TransactionPacket>>,
+struct NewConnectionHandlerParams<const N: usize> {
+    packet_sender: Sender<Batch<N>>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -234,12 +234,12 @@ struct NewConnectionHandlerParams {
     min_stake: u64,
 }
 
-impl NewConnectionHandlerParams {
+impl<const N: usize> NewConnectionHandlerParams<N> {
     fn new_unstaked(
-        packet_sender: Sender<Batch<TransactionPacket>>,
+        packet_sender: Sender<Batch<N>>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
-    ) -> NewConnectionHandlerParams {
+    ) -> NewConnectionHandlerParams<N> {
         NewConnectionHandlerParams {
             packet_sender,
             remote_pubkey: None,
@@ -253,11 +253,11 @@ impl NewConnectionHandlerParams {
     }
 }
 
-fn handle_and_cache_new_connection(
+fn handle_and_cache_new_connection<const N: usize>(
     connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
-    params: &NewConnectionHandlerParams,
+    params: &NewConnectionHandlerParams<N>,
     wait_for_chunk_timeout_ms: u64,
 ) -> Result<(), ConnectionHandlerError> {
     if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
@@ -267,7 +267,7 @@ fn handle_and_cache_new_connection(
     ) as u64)
     {
         connection.set_max_concurrent_uni_streams(max_uni_streams);
-        let receive_window = compute_recieve_window(
+        let receive_window = compute_recieve_window::<N>(
             params.max_stake,
             params.min_stake,
             connection_table_l.peer_type,
@@ -334,12 +334,12 @@ fn handle_and_cache_new_connection(
     }
 }
 
-fn prune_unstaked_connections_and_add_new_connection(
+fn prune_unstaked_connections_and_add_new_connection<const N: usize>(
     connection: Connection,
     mut connection_table_l: MutexGuard<ConnectionTable>,
     connection_table: Arc<Mutex<ConnectionTable>>,
     max_connections: usize,
-    params: &NewConnectionHandlerParams,
+    params: &NewConnectionHandlerParams<N>,
     wait_for_chunk_timeout_ms: u64,
 ) -> Result<(), ConnectionHandlerError> {
     let stats = params.stats.clone();
@@ -387,30 +387,30 @@ fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, 
     }
 }
 
-fn compute_recieve_window(
+fn compute_recieve_window<const N: usize>(
     max_stake: u64,
     min_stake: u64,
     peer_type: ConnectionPeerType,
     peer_stake: u64,
 ) -> Result<VarInt, VarIntBoundsExceeded> {
     match peer_type {
-        ConnectionPeerType::Unstaked => VarInt::from_u64(
-            TransactionPacket::DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO,
-        ),
+        ConnectionPeerType::Unstaked => {
+            VarInt::from_u64(N as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO)
+        }
         ConnectionPeerType::Staked => {
             let ratio =
                 compute_receive_window_ratio_for_staked_node(max_stake, min_stake, peer_stake);
-            VarInt::from_u64(TransactionPacket::DATA_SIZE as u64 * ratio)
+            VarInt::from_u64(N as u64 * ratio)
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn setup_connection(
+async fn setup_connection<const N: usize>(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: Sender<Batch<TransactionPacket>>,
+    packet_sender: Sender<Batch<N>>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -515,9 +515,9 @@ async fn setup_connection(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn handle_connection(
+async fn handle_connection<const N: usize>(
     connection: Connection,
-    packet_sender: Sender<Batch<TransactionPacket>>,
+    packet_sender: Sender<Batch<N>>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -562,7 +562,7 @@ async fn handle_connection(
                         while !stream_exit.load(Ordering::Relaxed) {
                             if let Ok(chunk) = tokio::time::timeout(
                                 Duration::from_millis(exit_check_interval),
-                                stream.read_chunk(TransactionPacket::DATA_SIZE, false),
+                                stream.read_chunk(N, false),
                             )
                             .await
                             {
@@ -615,11 +615,11 @@ async fn handle_connection(
 }
 
 // Return true if the server should drop the stream
-fn handle_chunk(
+fn handle_chunk<const N: usize>(
     chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
-    maybe_batch: &mut Option<Batch<TransactionPacket>>,
+    maybe_batch: &mut Option<Batch<N>>,
     remote_addr: &SocketAddr,
-    packet_sender: &Sender<Batch<TransactionPacket>>,
+    packet_sender: &Sender<Batch<N>>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -631,9 +631,7 @@ fn handle_chunk(
                 let chunk_len = chunk.bytes.len() as u64;
 
                 // shouldn't happen, but sanity check the size and offsets
-                if chunk.offset > TransactionPacket::DATA_SIZE as u64
-                    || chunk_len > TransactionPacket::DATA_SIZE as u64
-                {
+                if chunk.offset > N as u64 || chunk_len > N as u64 {
                     stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
@@ -641,7 +639,7 @@ fn handle_chunk(
                     Some(end) => end,
                     None => return true,
                 };
-                if end_of_chunk > TransactionPacket::DATA_SIZE as u64 {
+                if end_of_chunk > N as u64 {
                     stats
                         .total_invalid_chunk_size
                         .fetch_add(1, Ordering::Relaxed);
@@ -650,8 +648,8 @@ fn handle_chunk(
 
                 // chunk looks valid
                 if maybe_batch.is_none() {
-                    let mut batch = Batch::<TransactionPacket>::with_capacity(1);
-                    let mut packet = TransactionPacket::default();
+                    let mut batch = Batch::<N>::with_capacity(1);
+                    let mut packet = GenericPacket::default();
                     packet.meta_mut().set_socket_addr(remote_addr);
                     packet.meta_mut().sender_stake = stake;
                     batch.push(packet);
@@ -933,6 +931,7 @@ pub mod test {
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, TransportConfig, VarInt},
         solana_sdk::{
+            packet::TransactionPacket,
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
             signer::Signer,
@@ -991,7 +990,7 @@ pub mod test {
     type QuicServer = (
         JoinHandle<()>,
         Arc<AtomicBool>,
-        crossbeam_channel::Receiver<Batch<TransactionPacket>>,
+        crossbeam_channel::Receiver<Batch<{ TransactionPacket::DATA_SIZE }>>,
         SocketAddr,
         Arc<StreamStats>,
     );
@@ -1005,7 +1004,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, t) = spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s,
             &keypair,
             ip,
@@ -1041,8 +1040,8 @@ pub mod test {
             .expect("Failed in waiting")
     }
 
-    pub async fn check_timeout(
-        receiver: Receiver<Batch<TransactionPacket>>,
+    pub async fn check_timeout<const N: usize>(
+        receiver: Receiver<Batch<N>>,
         server_address: SocketAddr,
     ) {
         let conn1 = make_client_endpoint(&server_address, None).await;
@@ -1085,8 +1084,8 @@ pub mod test {
             .expect_err("shouldn't be able to open 2 connections");
     }
 
-    pub async fn check_multiple_streams(
-        receiver: Receiver<Batch<TransactionPacket>>,
+    pub async fn check_multiple_streams<const N: usize>(
+        receiver: Receiver<Batch<N>>,
         server_address: SocketAddr,
     ) {
         let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
@@ -1125,8 +1124,8 @@ pub mod test {
         assert_eq!(total_packets, num_expected_packets);
     }
 
-    pub async fn check_multiple_writes(
-        receiver: Receiver<Batch<TransactionPacket>>,
+    pub async fn check_multiple_writes<const N: usize>(
+        receiver: Receiver<Batch<N>>,
         server_address: SocketAddr,
         client_keypair: Option<&Keypair>,
     ) {
@@ -1320,7 +1319,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, t) = spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s,
             &keypair,
             ip,
@@ -1351,7 +1350,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, t) = spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s,
             &keypair,
             ip,

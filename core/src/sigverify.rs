@@ -11,7 +11,7 @@ use {
     crate::{banking_stage::BankingBatch, sigverify_stage::SigVerifyServiceError},
     crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::Batch, recycler::Recycler, sigverify},
-    solana_sdk::{packet::BasePacket, saturating_add_assign},
+    solana_sdk::{packet::GenericPacket, saturating_add_assign},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -53,22 +53,22 @@ impl SigverifyTracerPacketStats {
 }
 
 #[derive(Clone)]
-pub struct TransactionSigVerifier<P: BasePacket> {
-    packet_sender: Sender<BankingBatch<P>>,
+pub struct TransactionSigVerifier<const N: usize> {
+    packet_sender: Sender<BankingBatch<N>>,
     tracer_packet_stats: SigverifyTracerPacketStats,
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
 }
 
-impl<P: BasePacket> TransactionSigVerifier<P> {
-    pub fn new_reject_non_vote(packet_sender: Sender<BankingBatch<P>>) -> Self {
+impl<const N: usize> TransactionSigVerifier<N> {
+    pub fn new_reject_non_vote(packet_sender: Sender<BankingBatch<N>>) -> Self {
         let mut new_self = Self::new(packet_sender);
         new_self.reject_non_vote = true;
         new_self
     }
 
-    pub fn new(packet_sender: Sender<BankingBatch<P>>) -> Self {
+    pub fn new(packet_sender: Sender<BankingBatch<N>>) -> Self {
         init();
         Self {
             packet_sender,
@@ -82,7 +82,7 @@ impl<P: BasePacket> TransactionSigVerifier<P> {
     #[inline(always)]
     pub fn process_received_packet(
         &mut self,
-        packet: &mut P,
+        packet: &mut GenericPacket<N>,
         removed_before_sigverify_stage: bool,
         is_dup: bool,
     ) {
@@ -102,14 +102,14 @@ impl<P: BasePacket> TransactionSigVerifier<P> {
     }
 
     #[inline(always)]
-    pub fn process_excess_packet(&mut self, packet: &P) {
+    pub fn process_excess_packet(&mut self, packet: &GenericPacket<N>) {
         if packet.meta().is_tracer_packet() {
             self.tracer_packet_stats.total_excess_tracer_packets += 1;
         }
     }
 
     #[inline(always)]
-    pub fn process_passed_sigverify_packet(&mut self, packet: &P) {
+    pub fn process_passed_sigverify_packet(&mut self, packet: &GenericPacket<N>) {
         if packet.meta().is_tracer_packet() {
             self.tracer_packet_stats
                 .total_tracker_packets_passed_sigverify += 1;
@@ -118,8 +118,8 @@ impl<P: BasePacket> TransactionSigVerifier<P> {
 
     pub fn send_packets(
         &mut self,
-        packet_batches: Vec<Batch<P>>,
-    ) -> Result<(), SigVerifyServiceError<BankingBatch<P>, P>> {
+        packet_batches: Vec<Batch<N>>,
+    ) -> Result<(), SigVerifyServiceError<BankingBatch<N>, N>> {
         let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
         self.packet_sender
             .send((packet_batches, Some(tracer_packet_stats_to_send)))?;
@@ -128,9 +128,9 @@ impl<P: BasePacket> TransactionSigVerifier<P> {
 
     pub fn verify_batches(
         &self,
-        mut batches: Vec<Batch<P>>,
+        mut batches: Vec<Batch<N>>,
         valid_packets: usize,
-    ) -> Vec<Batch<P>> {
+    ) -> Vec<Batch<N>> {
         sigverify::ed25519_verify(
             &mut batches,
             &self.recycler,

@@ -12,11 +12,7 @@ use {
         Shred, ShredFlags, Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_perf::test_tx,
-    solana_sdk::{
-        hash::Hash,
-        packet::{BasePacket, Packet},
-        signature::Keypair,
-    },
+    solana_sdk::{hash::Hash, packet::Packet, signature::Keypair},
     test::Bencher,
 };
 

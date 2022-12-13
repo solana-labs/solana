@@ -5,7 +5,9 @@ use {
         cost_model::CostModel,
         cost_tracker::{CostTracker, CostTrackerError},
     },
-    solana_sdk::{feature_set::FeatureSet, packet::BasePacket, transaction::SanitizedTransaction},
+    solana_sdk::{
+        feature_set::FeatureSet, packet::GenericPacket, transaction::SanitizedTransaction,
+    },
     std::sync::Arc,
 };
 
@@ -23,21 +25,21 @@ const DEFAULT_NUMBER_OF_BATCHES: u32 = 100;
 /// `ForwardBatch` represents one forwardable batch of transactions with a
 /// limited number of total compute units
 #[derive(Debug)]
-pub struct ForwardBatch<P: BasePacket> {
+pub struct ForwardBatch<const N: usize> {
     cost_tracker: CostTracker,
     // `forwardable_packets` keeps forwardable packets in a vector in its
     // original fee prioritized order
-    forwardable_packets: Vec<Arc<ImmutableDeserializedPacket<P>>>,
+    forwardable_packets: Vec<Arc<ImmutableDeserializedPacket<N>>>,
 }
 
-impl<P: BasePacket> Default for ForwardBatch<P> {
+impl<const N: usize> Default for ForwardBatch<N> {
     /// default ForwardBatch has cost_tracker with default limits
     fn default() -> Self {
         Self::new(1)
     }
 }
 
-impl<P: BasePacket> ForwardBatch<P> {
+impl<const N: usize> ForwardBatch<N> {
     /// `ForwardBatch` keeps forwardable packets in a vector in its original fee prioritized order,
     /// Number of packets are limited by `cost_tracker` with customized `limit_ratio` to lower
     /// (when `limit_ratio` > 1) `cost_tracker`'s default limits.
@@ -58,7 +60,7 @@ impl<P: BasePacket> ForwardBatch<P> {
     fn try_add(
         &mut self,
         sanitized_transaction: &SanitizedTransaction,
-        immutable_packet: Arc<ImmutableDeserializedPacket<P>>,
+        immutable_packet: Arc<ImmutableDeserializedPacket<N>>,
         feature_set: &FeatureSet,
     ) -> Result<u64, CostTrackerError> {
         let tx_cost = CostModel::calculate_cost(sanitized_transaction, feature_set);
@@ -78,8 +80,8 @@ impl<P: BasePacket> ForwardBatch<P> {
     }
 }
 
-impl<P: BasePacket> ForwardBatch<P> {
-    pub fn get_forwardable_packets(&self) -> impl Iterator<Item = &P> {
+impl<const N: usize> ForwardBatch<N> {
+    pub fn get_forwardable_packets(&self) -> impl Iterator<Item = &GenericPacket<N>> {
         self.forwardable_packets
             .iter()
             .map(|immutable_packet| immutable_packet.original_packet())
@@ -91,14 +93,14 @@ impl<P: BasePacket> ForwardBatch<P> {
 /// to allow transactions on non-congested accounts to be forwarded alongside higher fee
 /// transactions that saturate those highly demanded accounts.
 #[derive(Debug)]
-pub struct ForwardBatchesByAccounts<P: BasePacket> {
+pub struct ForwardBatchesByAccounts<const N: usize> {
     // Forwardable packets are staged in number of batches, each batch is limited
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.
-    forward_batches: Vec<ForwardBatch<P>>,
+    forward_batches: Vec<ForwardBatch<N>>,
 }
 
-impl<P: BasePacket> ForwardBatchesByAccounts<P> {
+impl<const N: usize> ForwardBatchesByAccounts<N> {
     pub fn new_with_default_batch_limits() -> Self {
         Self::new(FORWARDED_BLOCK_COMPUTE_RATIO, DEFAULT_NUMBER_OF_BATCHES)
     }
@@ -114,7 +116,7 @@ impl<P: BasePacket> ForwardBatchesByAccounts<P> {
     pub fn try_add_packet(
         &mut self,
         sanitized_transaction: &SanitizedTransaction,
-        immutable_packet: Arc<ImmutableDeserializedPacket<P>>,
+        immutable_packet: Arc<ImmutableDeserializedPacket<N>>,
         feature_set: &FeatureSet,
     ) -> bool {
         for forward_batch in self.forward_batches.iter_mut() {
@@ -128,7 +130,7 @@ impl<P: BasePacket> ForwardBatchesByAccounts<P> {
         false
     }
 
-    pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch<P>> {
+    pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch<N>> {
         self.forward_batches.iter()
     }
 }
@@ -167,7 +169,11 @@ mod tests {
     fn build_test_transaction_and_packet(
         priority: u64,
         write_to_account: &Pubkey,
-    ) -> (SanitizedTransaction, DeserializedPacket<Packet>, u32) {
+    ) -> (
+        SanitizedTransaction,
+        DeserializedPacket<{ Packet::DATA_SIZE }>,
+        u32,
+    ) {
         let (mint_keypair, start_hash) = test_setup();
         let transaction =
             system_transaction::transfer(&mint_keypair, write_to_account, 2, start_hash);

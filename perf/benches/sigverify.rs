@@ -11,7 +11,7 @@ use {
         sigverify,
         test_tx::{test_multisig_tx, test_tx},
     },
-    solana_sdk::packet::{BasePacket, Packet},
+    solana_sdk::packet::Packet,
     test::Bencher,
 };
 
@@ -24,7 +24,7 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
     let num_packets = NUM;
 
     // generate packet vector
-    let mut batches = to_packet_batches::<Packet, _>(
+    let mut batches = to_packet_batches::<{ Packet::DATA_SIZE }, _>(
         &std::iter::repeat(tx).take(num_packets).collect::<Vec<_>>(),
         128,
     );
@@ -37,19 +37,19 @@ fn bench_sigverify_simple(bencher: &mut Bencher) {
     })
 }
 
-fn gen_batches<P: BasePacket>(
+fn gen_batches<const N: usize>(
     use_same_tx: bool,
     packets_per_batch: usize,
     total_packets: usize,
-) -> Vec<Batch<P>> {
+) -> Vec<Batch<N>> {
     if use_same_tx {
         let tx = test_tx();
-        to_packet_batches::<P, _>(&vec![tx; total_packets], packets_per_batch)
+        to_packet_batches::<N, _>(&vec![tx; total_packets], packets_per_batch)
     } else {
         let txs: Vec<_> = std::iter::repeat_with(test_tx)
             .take(total_packets)
             .collect();
-        to_packet_batches::<P, _>(&txs, packets_per_batch)
+        to_packet_batches::<N, _>(&txs, packets_per_batch)
     }
 }
 
@@ -57,7 +57,7 @@ fn gen_batches<P: BasePacket>(
 #[ignore]
 fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
-    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
+    let mut batches = gen_batches::<{ Packet::DATA_SIZE }>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -69,7 +69,8 @@ fn bench_sigverify_low_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD - 1;
-    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches =
+        gen_batches::<{ Packet::DATA_SIZE }>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -81,7 +82,7 @@ fn bench_sigverify_low_packets_large_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
-    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
+    let mut batches = gen_batches::<{ Packet::DATA_SIZE }>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -93,7 +94,8 @@ fn bench_sigverify_medium_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 8;
-    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches =
+        gen_batches::<{ Packet::DATA_SIZE }>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -105,7 +107,7 @@ fn bench_sigverify_medium_packets_large_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
-    let mut batches = gen_batches::<Packet>(false, 1, num_packets);
+    let mut batches = gen_batches::<{ Packet::DATA_SIZE }>(false, 1, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     bencher.iter(|| {
@@ -117,7 +119,8 @@ fn bench_sigverify_high_packets_small_batch(bencher: &mut Bencher) {
 #[ignore]
 fn bench_sigverify_high_packets_large_batch(bencher: &mut Bencher) {
     let num_packets = sigverify::VERIFY_MIN_PACKETS_PER_THREAD * 32;
-    let mut batches = gen_batches::<Packet>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
+    let mut batches =
+        gen_batches::<{ Packet::DATA_SIZE }>(false, LARGE_BATCH_PACKET_COUNT, num_packets);
     let recycler = Recycler::default();
     let recycler_out = Recycler::default();
     // verify packets
@@ -146,7 +149,7 @@ fn bench_sigverify_uneven(bencher: &mut Bencher) {
             len -= current_packets - num_packets;
             current_packets = num_packets;
         }
-        let mut batch = Batch::<Packet>::with_capacity(len);
+        let mut batch = Batch::<{ Packet::DATA_SIZE }>::with_capacity(len);
         batch.resize(len, Packet::default());
         for packet in batch.iter_mut() {
             if thread_rng().gen_ratio(1, 2) {
@@ -178,8 +181,10 @@ fn bench_get_offsets(bencher: &mut Bencher) {
     let tx = test_tx();
 
     // generate packet vector
-    let mut batches =
-        to_packet_batches::<Packet, _>(&std::iter::repeat(tx).take(1024).collect::<Vec<_>>(), 1024);
+    let mut batches = to_packet_batches::<{ Packet::DATA_SIZE }, _>(
+        &std::iter::repeat(tx).take(1024).collect::<Vec<_>>(),
+        1024,
+    );
 
     let recycler = Recycler::default();
     // verify packets

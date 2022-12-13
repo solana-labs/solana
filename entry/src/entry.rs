@@ -25,7 +25,7 @@ use {
     solana_rayon_threadlimit::get_max_thread_count,
     solana_sdk::{
         hash::Hash,
-        packet::{BasePacket, Meta, Packet},
+        packet::{Meta, Packet},
         timing,
         transaction::{
             Result, SanitizedTransaction, Transaction, TransactionError,
@@ -494,7 +494,7 @@ pub fn start_verify_transactions(
                 .chunks(PACKETS_PER_BATCH)
                 .map(|slice| {
                     let vec_size = slice.len();
-                    let mut packet_batch = Batch::<Packet>::new_with_recycler(
+                    let mut packet_batch = Batch::<{ Packet::DATA_SIZE }>::new_with_recycler(
                         verify_recyclers.packet_recycler.clone(),
                         vec_size,
                         "entry-sig-verify",

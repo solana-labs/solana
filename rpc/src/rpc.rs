@@ -65,7 +65,7 @@ use {
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::SanitizedMessage,
-        packet::{BasePacket, TransactionPacket},
+        packet::TransactionPacket,
         pubkey::{Pubkey, PUBKEY_BYTES},
         signature::{Keypair, Signature, Signer},
         stake::state::{StakeActivationStatus, StakeState},
@@ -4634,6 +4634,7 @@ pub mod tests {
                 Message, MessageHeader, VersionedMessage,
             },
             nonce::{self, state::DurableNonce},
+            packet::TRANSACTION_DATA_SIZE,
             rpc_port,
             signature::{Keypair, Signer},
             slot_hashes::SlotHashes,
@@ -8396,7 +8397,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base58 encoded solana_sdk::transaction::Transaction too large: {tx58_len} bytes (max: encoded/raw {MAX_BASE58_SIZE}/{TransactionPacket::DATA_SIZE})",
+                "base58 encoded solana_sdk::transaction::Transaction too large: {tx58_len} bytes (max: encoded/raw {MAX_BASE58_SIZE}/{TRANSACTION_DATA_SIZE})",
             )
         ));
 
@@ -8406,7 +8407,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "base64 encoded solana_sdk::transaction::Transaction too large: {tx64_len} bytes (max: encoded/raw {MAX_BASE64_SIZE}/{TransactionPacket::DATA_SIZE})",
+                "base64 encoded solana_sdk::transaction::Transaction too large: {tx64_len} bytes (max: encoded/raw {MAX_BASE64_SIZE}/{TRANSACTION_DATA_SIZE})",
             )
         ));
 
@@ -8417,7 +8418,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx58, TransactionBinaryEncoding::Base58)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TransactionPacket::DATA_SIZE} bytes)"
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TRANSACTION_DATA_SIZE} bytes)"
             ))
         );
 
@@ -8426,7 +8427,7 @@ pub mod tests {
             decode_and_deserialize::<Transaction>(tx64, TransactionBinaryEncoding::Base64)
                 .unwrap_err(),
             Error::invalid_params(format!(
-                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TransactionPacket::DATA_SIZE} bytes)"
+                "decoded solana_sdk::transaction::Transaction too large: {too_big} bytes (max: {TRANSACTION_DATA_SIZE} bytes)"
             ))
         );
 

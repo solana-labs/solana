@@ -63,7 +63,7 @@ use {
             HOLD_TRANSACTIONS_SLOT_OFFSET, MAX_PROCESSING_AGE,
         },
         feature_set::allow_votes_to_directly_update_vote_state,
-        packet::{BasePacket, Packet, TransactionPacket},
+        packet::{GenericPacket, Packet, TransactionPacket},
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -100,9 +100,9 @@ const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
 
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
-pub type BankingBatch<P> = (Vec<Batch<P>>, Option<SigverifyTracerPacketStats>);
-pub type BankingSender<P> = CrossbeamSender<BankingBatch<P>>;
-pub type BankingReceiver<P> = CrossbeamReceiver<BankingBatch<P>>;
+pub type BankingBatch<const N: usize> = (Vec<Batch<N>>, Option<SigverifyTracerPacketStats>);
+pub type BankingSender<const N: usize> = CrossbeamSender<BankingBatch<N>>;
+pub type BankingReceiver<const N: usize> = CrossbeamReceiver<BankingBatch<N>>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -386,9 +386,9 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<TransactionPacket>,
-        tpu_verified_vote_receiver: BankingReceiver<Packet>,
-        verified_vote_receiver: BankingReceiver<Packet>,
+        verified_receiver: BankingReceiver<{ TransactionPacket::DATA_SIZE }>,
+        tpu_verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
+        verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
@@ -414,9 +414,9 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<TransactionPacket>,
-        tpu_verified_vote_receiver: BankingReceiver<Packet>,
-        verified_vote_receiver: BankingReceiver<Packet>,
+        verified_receiver: BankingReceiver<{ TransactionPacket::DATA_SIZE }>,
+        tpu_verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
+        verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -546,13 +546,13 @@ impl BankingStage {
 
     /// Forwards all valid, unprocessed packets in the buffer, up to a rate limit. Returns
     /// the number of successfully forwarded packets in second part of tuple
-    fn forward_buffered_packets<'a, P: BasePacket + 'a>(
+    fn forward_buffered_packets<'a, const N: usize>(
         connection_cache: &ConnectionCache,
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
-        forwardable_packets: impl Iterator<Item = &'a P>,
+        forwardable_packets: impl Iterator<Item = &'a GenericPacket<N>>,
         data_budget: &DataBudget,
         banking_stage_stats: &BankingStageStats,
     ) -> (
@@ -640,9 +640,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn do_process_packets<P: BasePacket>(
+    fn do_process_packets<const N: usize>(
         bank_start: &BankStart,
-        payload: &mut ConsumeScannerPayload<P>,
+        payload: &mut ConsumeScannerPayload<N>,
         recorder: &TransactionRecorder,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -652,7 +652,7 @@ impl BankingStage {
         consumed_buffered_packets_count: &mut usize,
         rebuffered_packet_count: &mut usize,
         test_fn: &Option<impl Fn()>,
-        packets_to_process: &Vec<Arc<ImmutableDeserializedPacket<P>>>,
+        packets_to_process: &Vec<Arc<ImmutableDeserializedPacket<N>>>,
     ) -> Option<Vec<usize>> {
         if payload.reached_end_of_slot {
             return None;
@@ -717,9 +717,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn consume_buffered_packets<P: BasePacket>(
+    pub fn consume_buffered_packets<const N: usize>(
         bank_start: &BankStart,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<N>,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         test_fn: Option<impl Fn()>,
@@ -849,12 +849,12 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_buffered_packets<P: BasePacket>(
+    fn process_buffered_packets<const N: usize>(
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<N>,
         transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
@@ -948,9 +948,9 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_forwarding<P: BasePacket>(
+    fn handle_forwarding<const N: usize>(
         cluster_info: &ClusterInfo,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<N>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
@@ -1045,8 +1045,8 @@ impl BankingStage {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn process_loop<P: BasePacket>(
-        packet_deserializer: &mut PacketDeserializer<P>,
+    fn process_loop<const N: usize>(
+        packet_deserializer: &mut PacketDeserializer<N>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1057,7 +1057,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        mut unprocessed_transaction_storage: UnprocessedTransactionStorage<P>,
+        mut unprocessed_transaction_storage: UnprocessedTransactionStorage<N>,
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1836,12 +1836,12 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
-    fn receive_and_buffer_packets<P: BasePacket>(
-        packet_deserializer: &mut PacketDeserializer<P>,
+    fn receive_and_buffer_packets<const N: usize>(
+        packet_deserializer: &mut PacketDeserializer<N>,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<N>,
         banking_stage_stats: &mut BankingStageStats,
         tracer_packet_stats: &mut TracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
@@ -1905,9 +1905,9 @@ impl BankingStage {
         Ok(())
     }
 
-    fn push_unprocessed<P: BasePacket>(
-        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<P>,
-        deserialized_packets: Vec<ImmutableDeserializedPacket<P>>,
+    fn push_unprocessed<const N: usize>(
+        unprocessed_transaction_storage: &mut UnprocessedTransactionStorage<N>,
+        deserialized_packets: Vec<ImmutableDeserializedPacket<N>>,
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
@@ -2152,9 +2152,9 @@ mod tests {
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
 
-    pub fn convert_from_old_verified<P: BasePacket>(
-        mut with_vers: Vec<(Batch<P>, Vec<u8>)>,
-    ) -> Vec<Batch<P>> {
+    pub fn convert_from_old_verified<const N: usize>(
+        mut with_vers: Vec<(Batch<N>, Vec<u8>)>,
+    ) -> Vec<Batch<N>> {
         with_vers.iter_mut().for_each(|(b, v)| {
             b.iter_mut()
                 .zip(v)
@@ -3680,8 +3680,10 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets::<TransactionPacket>(&transactions)
-                    .unwrap();
+                unprocessed_packet_batches::transactions_to_deserialized_packets::<
+                    { TransactionPacket::DATA_SIZE },
+                >(&transactions)
+                .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -3738,8 +3740,10 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets::<TransactionPacket>(&transactions)
-                    .unwrap();
+                unprocessed_packet_batches::transactions_to_deserialized_packets::<
+                    { TransactionPacket::DATA_SIZE },
+                >(&transactions)
+                .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches =
                 UnprocessedTransactionStorage::new_transaction_storage(
@@ -3809,7 +3813,7 @@ mod tests {
                     let num_conflicting_transactions = transactions.len();
                     let deserialized_packets =
                         unprocessed_packet_batches::transactions_to_deserialized_packets::<
-                            TransactionPacket,
+                            { TransactionPacket::DATA_SIZE },
                         >(&transactions)
                         .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
@@ -3862,7 +3866,7 @@ mod tests {
     #[ignore]
     fn test_forwarder_budget() {
         solana_logger::setup();
-        // Create `Batch<Packet>` with 1 unprocessed packet
+        // Create `Batch<{Packet::DATA_SIZE}>` with 1 unprocessed packet
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),

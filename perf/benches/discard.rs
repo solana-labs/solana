@@ -17,7 +17,7 @@ fn bench_discard(bencher: &mut Bencher) {
     let num_packets = NUM;
 
     // generate packet vector
-    let batches = to_packet_batches::<TransactionPacket, _>(
+    let batches = to_packet_batches::<{ TransactionPacket::DATA_SIZE }, _>(
         &std::iter::repeat(tx).take(num_packets).collect::<Vec<_>>(),
         10,
     );
