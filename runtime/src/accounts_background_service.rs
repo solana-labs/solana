@@ -32,9 +32,6 @@ use {
 };
 
 const INTERVAL_MS: u64 = 100;
-const SHRUNKEN_ACCOUNT_PER_SEC: usize = 250;
-const SHRUNKEN_ACCOUNT_PER_INTERVAL: usize =
-    SHRUNKEN_ACCOUNT_PER_SEC / (1000 / INTERVAL_MS as usize);
 const CLEAN_INTERVAL_BLOCKS: u64 = 100;
 
 // This value is chosen to spread the dropping cost over 3 expiration checks
@@ -264,7 +261,7 @@ impl SnapshotRequestHandler {
 
     fn handle_snapshot_request(
         &self,
-        accounts_db_caching_enabled: bool,
+        _accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
@@ -299,12 +296,6 @@ impl SnapshotRequestHandler {
                 false,
             )
         });
-
-        let mut shrink_time = Measure::start("shrink_time");
-        if !accounts_db_caching_enabled {
-            snapshot_root_bank.process_stale_slot_with_budget(0, SHRUNKEN_ACCOUNT_PER_INTERVAL);
-        }
-        shrink_time.stop();
 
         let mut flush_accounts_cache_time = Measure::start("flush_accounts_cache_time");
         // Forced cache flushing MUST flush all roots <= snapshot_root_bank.slot().
@@ -355,11 +346,9 @@ impl SnapshotRequestHandler {
         snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
         clean_time.stop();
 
-        if accounts_db_caching_enabled {
-            shrink_time = Measure::start("shrink_time");
-            snapshot_root_bank.shrink_candidate_slots();
-            shrink_time.stop();
-        }
+        let mut shrink_time = Measure::start("shrink_time");
+        snapshot_root_bank.shrink_candidate_slots();
+        shrink_time.stop();
 
         // Snapshot the bank and send over an accounts package
         let mut snapshot_time = Measure::start("snapshot_time");
@@ -541,10 +530,8 @@ impl AccountsBackgroundService {
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
     ) -> Self {
-        let accounts_db_caching_enabled = true;
         info!("AccountsBackgroundService active");
         let exit = exit.clone();
-        let mut consumed_budget = 0;
         let mut last_cleaned_block_height = 0;
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
@@ -633,19 +620,7 @@ impl AccountsBackgroundService {
                             return;
                         }
                     } else {
-                        if accounts_db_caching_enabled {
-                            bank.shrink_candidate_slots();
-                        } else {
-                            // under sustained writes, shrink can lag behind so cap to
-                            // SHRUNKEN_ACCOUNT_PER_INTERVAL (which is based on INTERVAL_MS,
-                            // which in turn roughly associated block time)
-                            consumed_budget = bank
-                                .process_stale_slot_with_budget(
-                                    consumed_budget,
-                                    SHRUNKEN_ACCOUNT_PER_INTERVAL,
-                                )
-                                .min(SHRUNKEN_ACCOUNT_PER_INTERVAL);
-                        }
+                        bank.shrink_candidate_slots();
                         if bank.block_height() - last_cleaned_block_height
                             > (CLEAN_INTERVAL_BLOCKS + thread_rng().gen_range(0, 10))
                         {
