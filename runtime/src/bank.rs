@@ -7378,16 +7378,6 @@ impl Bank {
         self.rc.accounts.accounts_db.print_accounts_stats("");
     }
 
-    /// This is part of the code path executed when the write cache is disabled.
-    /// It is no longer possible to disable the write cache.
-    pub fn process_stale_slot_with_budget(
-        &self,
-        mut _consumed_budget: usize,
-        _budget_recovery_delta: usize,
-    ) -> usize {
-        unimplemented!("");
-    }
-
     pub fn bank_tranaction_count_fix_enabled(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::bank_tranaction_count_fix::id())
@@ -14862,63 +14852,6 @@ pub(crate) mod tests {
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
         assert_eq!(alive_counts, vec![11, 1, 7]);
-    }
-
-    // process_stale_slot_with_budget is no longer called. We'll remove this test when we remove the function
-    #[test]
-    #[ignore] // this test only works when not using the write cache
-    fn test_process_stale_slot_with_budget() {
-        solana_logger::setup();
-        let pubkey1 = solana_sdk::pubkey::new_rand();
-        let pubkey2 = solana_sdk::pubkey::new_rand();
-
-        // this test only tests non-write cache code
-        // Tests need to default to use write cache by default for all tests.
-        // Once that happens, the code this test tests can be deleted, along with this test.
-        let (genesis_config, _mint_keypair) = create_genesis_config(1_000_000_000);
-        let mut bank = Arc::new(Bank::new_with_config_for_tests(
-            &genesis_config,
-            AccountSecondaryIndexes::default(),
-            AccountShrinkThreshold::default(),
-        ));
-
-        bank.restore_old_behavior_for_fragile_tests();
-        assert_eq!(bank.process_stale_slot_with_budget(0, 0), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(133, 0), 133);
-
-        assert_eq!(bank.process_stale_slot_with_budget(0, 100), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(33, 100), 0);
-        assert_eq!(bank.process_stale_slot_with_budget(133, 100), 33);
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        bank.squash();
-
-        let some_lamports = 123;
-        let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports).unwrap();
-        bank.deposit(&pubkey2, some_lamports).unwrap();
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        let mut bank = Arc::new(new_from_parent(&bank));
-        bank.deposit(&pubkey1, some_lamports).unwrap();
-
-        goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
-
-        bank.squash();
-        bank.clean_accounts_for_tests();
-        let force_to_return_alive_account = 0;
-        assert_eq!(
-            bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
-            22
-        );
-
-        let consumed_budgets: usize = (0..3)
-            .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
-            .sum();
-        // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 12);
     }
 
     #[test]
