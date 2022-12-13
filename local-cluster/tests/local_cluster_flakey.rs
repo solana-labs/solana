@@ -38,6 +38,27 @@ fn test_optimistic_confirmation_violation_without_tower() {
     do_test_optimistic_confirmation_violation_with_or_without_tower(false);
 }
 
+enum RunResult {
+    Success,
+    FailNoViolation,
+    FailViolation,
+}
+
+fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
+    let mut retry = 10;
+    while retry > 0 {
+        match do_test_optimistic_confirmation_violation_with_or_without_tower_inner(with_tower) {
+            RunResult::Success => {
+                return;
+            }
+            _ => {
+                retry -= 1;
+            }
+        }
+    }
+    panic!("optimistic confirmation violation with or without tower failed after 10 trial");
+}
+
 // A bit convoluted test case; but this roughly follows this test theoretical scenario:
 //
 // Step 1: You have validator A + B with 31% and 36% of the stake. Run only validator B:
@@ -78,7 +99,9 @@ fn test_optimistic_confirmation_violation_without_tower() {
 // With the persisted tower:
 //    `A` should not be able to generate a switching proof.
 //
-fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: bool) {
+fn do_test_optimistic_confirmation_violation_with_or_without_tower_inner(
+    with_tower: bool,
+) -> RunResult {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
 
     // First set up the cluster with 4 nodes
@@ -346,13 +369,17 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
     let expects_optimistic_confirmation_violation = !with_tower;
     if bad_vote_detected != expects_optimistic_confirmation_violation {
         if bad_vote_detected {
-            panic!("No violation expected because of persisted tower!");
+            error!("No violation expected because of persisted tower!");
+            return RunResult::FailNoViolation;
         } else {
-            panic!("Violation expected because of removed persisted tower!");
+            error!("Violation expected because of removed persisted tower!");
+            return RunResult::FailViolation;
         }
     } else if bad_vote_detected {
         info!("THIS TEST expected violations. And indeed, there was some, because of removed persisted tower.");
     } else {
         info!("THIS TEST expected no violation. And indeed, there was none, thanks to persisted tower.");
     }
+
+    RunResult::Success
 }
