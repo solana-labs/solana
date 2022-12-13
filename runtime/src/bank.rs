@@ -10054,7 +10054,7 @@ pub(crate) mod tests {
             .accounts
             .accounts_db
             .accounts_index
-            .add_root(genesis_bank1.slot() + 1, false);
+            .add_root(genesis_bank1.slot() + 1);
         bank1_without_zero
             .rc
             .accounts
