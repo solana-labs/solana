@@ -9212,12 +9212,10 @@ impl AccountsDb {
                 let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
                 for root in &slots {
-                    // passing 'false' to 'add_root' causes 'root' to be added to 'accounts_index.roots_tracker.uncleaned_roots'
-                    // passing 'true' to 'add_root' does NOT add 'root' to 'accounts_index.roots_tracker.uncleaned_roots'
-                    // So, don't add all slots to 'uncleaned_roots' here since we know which slots contain duplicate pubkeys.
-                    let uncleaned_root = uncleaned_roots.contains(root);
-                    self.accounts_index.add_root(*root, !uncleaned_root);
+                    self.accounts_index.add_root(*root, true);
                 }
+                self.accounts_index
+                    .add_uncleaned_roots(uncleaned_roots.into_iter());
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
             }
