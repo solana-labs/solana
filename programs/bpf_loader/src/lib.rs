@@ -1525,7 +1525,7 @@ mod tests {
             instruction::{AccountMeta, InstructionError},
             pubkey::Pubkey,
             rent::Rent,
-            sysvar,
+            system_program, sysvar,
         },
         std::{fs::File, io::Read, ops::Range},
     };
@@ -3666,8 +3666,8 @@ mod tests {
             &instruction,
             vec![
                 (programdata_address, programdata_account.clone()),
-                (recipient_address, recipient_account),
-                (authority_address, authority_account),
+                (recipient_address, recipient_account.clone()),
+                (authority_address, authority_account.clone()),
                 (program_address, program_account.clone()),
             ],
             vec![
@@ -3692,6 +3692,8 @@ mod tests {
         assert_eq!(state, UpgradeableLoaderState::Uninitialized);
 
         // Try to invoke closed account
+        programdata_account = accounts.first().unwrap().clone();
+        program_account = accounts.get(3).unwrap().clone();
         process_instruction(
             &program_address,
             &[0, 1],
@@ -3702,6 +3704,78 @@ mod tests {
             ],
             Vec::new(),
             Err(InstructionError::InvalidAccountData),
+        );
+
+        // Case: Reopen should fail
+        process_instruction(
+            &loader_id,
+            &[],
+            &bincode::serialize(&UpgradeableLoaderInstruction::DeployWithMaxDataLen {
+                max_data_len: 0,
+            })
+            .unwrap(),
+            vec![
+                (recipient_address, recipient_account),
+                (programdata_address, programdata_account),
+                (program_address, program_account),
+                (buffer_address, buffer_account),
+                (
+                    sysvar::rent::id(),
+                    create_account_for_test(&Rent::default()),
+                ),
+                (
+                    sysvar::clock::id(),
+                    create_account_for_test(&Clock::default()),
+                ),
+                (
+                    system_program::id(),
+                    AccountSharedData::new(0, 0, &system_program::id()),
+                ),
+                (authority_address, authority_account),
+            ],
+            vec![
+                AccountMeta {
+                    pubkey: recipient_address,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: programdata_address,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: program_address,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: buffer_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::rent::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: sysvar::clock::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: system_program::id(),
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: authority_address,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ],
+            Err(InstructionError::AccountAlreadyInitialized),
         );
     }
 
