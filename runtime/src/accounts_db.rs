@@ -3720,11 +3720,11 @@ impl AccountsDb {
                     let new_entry = FoundStoredAccount { account, store_id };
                     match stored_accounts.entry(*new_entry.account.pubkey()) {
                         Entry::Occupied(mut occupied_entry) => {
-                            if new_entry.account.meta.write_version
-                                > occupied_entry.get().account.meta.write_version
-                            {
-                                occupied_entry.insert(new_entry);
-                            }
+                            assert!(
+                                new_entry.account.meta.write_version
+                                    > occupied_entry.get().account.meta.write_version
+                            );
+                            occupied_entry.insert(new_entry);
                         }
                         Entry::Vacant(vacant_entry) => {
                             vacant_entry.insert(new_entry);
@@ -8680,15 +8680,12 @@ impl AccountsDb {
                     }
                     Entry::Occupied(mut entry) => {
                         let occupied_version = entry.get().write_version;
-                        if occupied_version < this_version {
-                            entry.insert(IndexAccountMapEntry {
-                                write_version: this_version,
-                                store_id: storage.append_vec_id(),
-                                stored_account,
-                            });
-                        } else {
-                            assert_ne!(occupied_version, this_version);
-                        }
+                        assert!(occupied_version < this_version);
+                        entry.insert(IndexAccountMapEntry {
+                            write_version: this_version,
+                            store_id: storage.append_vec_id(),
+                            stored_account,
+                        });
                     }
                 }
             })
