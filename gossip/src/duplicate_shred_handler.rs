@@ -184,7 +184,6 @@ mod tests {
     use {
         super::*,
         crate::{
-            cluster_info::{ClusterInfo, Node},
             cluster_info_entry_listener::ClusterInfoEntryHandler,
             duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
         },
@@ -192,15 +191,11 @@ mod tests {
         solana_ledger::shred::Shredder,
         solana_ledger::{
             genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-            get_tmp_ledger_path_auto_delete, leader_schedule_cache,
+            get_tmp_ledger_path_auto_delete
         },
         solana_runtime::{bank::Bank, bank_forks::BankForks},
         solana_sdk::signature::{Keypair, Signer},
-        solana_streamer::socket::SocketAddrSpace,
-        std::sync::{
-            atomic::{AtomicU32, Ordering},
-            Arc,
-        },
+        std::sync::Arc,
     };
 
     fn create_duplicate_proof(
@@ -276,15 +271,14 @@ mod tests {
             Error::InvalidDuplicateShreds,
         ] {
             match create_duplicate_proof(my_keypair.clone(), 3, Some(error)) {
-                Err(error) => (),
+                Err(_) => (),
                 Ok(chunks) => {
                     for chunk in chunks {
                         duplicate_shred_handler.handle(CrdsData::DuplicateShred(index, chunk));
                         index += 1
                     }
                     assert!(!blockstore.has_duplicate_shreds_in_slot(3));
-                }
-                _ => panic!("Unexpected error"),
+                },
             }
         }
     }
