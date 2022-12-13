@@ -173,7 +173,9 @@ pub struct RepairInfo {
     pub cluster_slots: Arc<ClusterSlots>,
     pub epoch_schedule: EpochSchedule,
     pub duplicate_slots_reset_sender: DuplicateSlotsResetSender,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+    // Validators which should be given priority when serving
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
 }
 

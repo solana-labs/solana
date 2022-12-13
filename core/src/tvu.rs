@@ -80,7 +80,9 @@ pub struct TvuSockets {
 pub struct TvuConfig {
     pub max_ledger_shreds: Option<u64>,
     pub shred_version: u16,
+    // Validators from which repairs are requested
     pub repair_validators: Option<HashSet<Pubkey>>,
+    // Validators which should be given priority when serving repairs
     pub repair_whitelist: Arc<RwLock<HashSet<Pubkey>>>,
     pub wait_for_vote_to_start_leader: bool,
     pub replay_slots_concurrently: bool,

@@ -344,6 +344,20 @@ fn wait_for_restart_window(
     Ok(())
 }
 
+fn set_repair_whitelist(
+    ledger_path: &Path,
+    whitelist: Vec<Pubkey>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let admin_client = admin_rpc_service::connect(ledger_path);
+    admin_rpc_service::runtime()
+        .block_on(async move { admin_client.await?.set_repair_whitelist(whitelist).await })
+        .unwrap_or_else(|err| {
+            println!("setRepairWhitelist request failed: {}", err);
+            exit(1);
+        });
+    Ok(())
+}
+
 /// Returns the default fifo shred storage size (include both data and coding
 /// shreds) based on the validator config.
 fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> Option<u64> {
@@ -695,9 +709,7 @@ pub fn main() {
                     return;
                 }
                 ("set", Some(subcommand_matches)) => {
-                    let whitelist = if subcommand_matches.is_present("clear") {
-                        Vec::default()
-                    } else if subcommand_matches.is_present("whitelist") {
+                    let whitelist = if subcommand_matches.is_present("whitelist") {
                         let validators_set: HashSet<_> =
                             values_t_or_exit!(subcommand_matches, "whitelist", Pubkey)
                                 .into_iter()
@@ -706,15 +718,17 @@ pub fn main() {
                     } else {
                         return;
                     };
-                    let admin_client = admin_rpc_service::connect(&ledger_path);
-                    admin_rpc_service::runtime()
-                        .block_on(async move {
-                            admin_client.await?.set_repair_whitelist(whitelist).await
-                        })
-                        .unwrap_or_else(|err| {
-                            println!("setRepairWhitelist request failed: {}", err);
-                            exit(1);
-                        });
+                    set_repair_whitelist(&ledger_path, whitelist).unwrap_or_else(|err| {
+                        println!("{err}");
+                        exit(1);
+                    });
+                    return;
+                }
+                ("remove-all", _) => {
+                    set_repair_whitelist(&ledger_path, Vec::default()).unwrap_or_else(|err| {
+                        println!("{err}");
+                        exit(1);
+                    });
                     return;
                 }
                 _ => unreachable!(),

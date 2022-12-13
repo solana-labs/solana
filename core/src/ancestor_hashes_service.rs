@@ -973,7 +973,7 @@ mod test {
             let responder_serve_repair = ServeRepair::new(
                 Arc::new(cluster_info),
                 vote_simulator.bank_forks,
-                Arc::new(RwLock::new(HashSet::default())),
+                Arc::<RwLock<HashSet<_>>>::default(), // repair whitelist
             );
 
             // Set up thread to give us responses

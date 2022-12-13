@@ -45,10 +45,13 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        cmp::{Ordering, Reverse},
+        cmp::Reverse,
         collections::HashSet,
         net::{SocketAddr, UdpSocket},
-        sync::{atomic::AtomicBool, Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
         thread::{Builder, JoinHandle},
         time::{Duration, Instant},
     },
@@ -319,6 +322,7 @@ struct RepairRequestWithMeta {
     request: RepairProtocol,
     from_addr: SocketAddr,
     stake: u64,
+    whitelisted: bool,
 }
 
 impl ServeRepair {
@@ -531,56 +535,36 @@ impl ServeRepair {
                 request,
                 from_addr,
                 stake: *stake,
+                whitelisted: false,
             });
         }
         stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
 
-        let mut accepted_requests = Vec::default();
-        let mut deferred_requests = Vec::default();
+        let mut whitelisted_request_count: usize = 0;
         {
             let whitelist = self.repair_whitelist.read().unwrap();
             if whitelist.len() > 0 {
-                for entry in decoded_requests.into_iter() {
-                    if whitelist.contains(entry.request.sender()) {
-                        accepted_requests.push(entry);
-                    } else {
-                        deferred_requests.push(entry);
+                decoded_requests.iter_mut().for_each(|r| {
+                    if whitelist.contains(r.request.sender()) {
+                        r.whitelisted = true;
+                        whitelisted_request_count += 1;
                     }
-                }
-            } else {
-                deferred_requests = decoded_requests;
+                });
             }
         }
+        stats.whitelisted_requests += whitelisted_request_count.min(MAX_REQUESTS_PER_ITERATION);
 
-        stats.whitelisted_requests += accepted_requests.len().min(MAX_REQUESTS_PER_ITERATION);
-        match accepted_requests.len().cmp(&MAX_REQUESTS_PER_ITERATION) {
-            Ordering::Greater => {
-                let truncated_count = accepted_requests.len() - MAX_REQUESTS_PER_ITERATION;
-                accepted_requests.sort_unstable_by_key(|r| Reverse(r.stake));
-                accepted_requests.truncate(MAX_REQUESTS_PER_ITERATION);
-                stats.dropped_requests_low_stake += truncated_count + deferred_requests.len();
-            }
-            Ordering::Less => {
-                let remaining_requests = MAX_REQUESTS_PER_ITERATION - accepted_requests.len();
-                if deferred_requests.len() > remaining_requests {
-                    stats.dropped_requests_low_stake +=
-                        deferred_requests.len() - remaining_requests;
-                    deferred_requests.sort_unstable_by_key(|r| Reverse(r.stake));
-                    deferred_requests.truncate(remaining_requests);
-                }
-                accepted_requests.append(&mut deferred_requests);
-            }
-            Ordering::Equal => {
-                stats.dropped_requests_low_stake += deferred_requests.len();
-            }
+        if decoded_requests.len() > MAX_REQUESTS_PER_ITERATION {
+            stats.dropped_requests_low_stake += decoded_requests.len() - MAX_REQUESTS_PER_ITERATION;
+            decoded_requests.sort_unstable_by_key(|r| Reverse((r.whitelisted, r.stake)));
+            decoded_requests.truncate(MAX_REQUESTS_PER_ITERATION);
         }
-        debug_assert!(accepted_requests.len() <= MAX_REQUESTS_PER_ITERATION);
 
         self.handle_packets(
             ping_cache,
             recycler,
             blockstore,
-            accepted_requests,
+            decoded_requests,
             response_sender,
             stats,
             data_budget,
@@ -714,7 +698,7 @@ impl ServeRepair {
                         Err(Error::RecvTimeout(_)) | Ok(_) => {}
                         Err(err) => info!("repair listener error: {:?}", err),
                     };
-                    if exit.load(std::sync::atomic::Ordering::Relaxed) {
+                    if exit.load(Ordering::Relaxed) {
                         return;
                     }
                     if last_print.elapsed().as_secs() > 2 {
@@ -848,6 +832,7 @@ impl ServeRepair {
                 request,
                 from_addr,
                 stake,
+                ..
             },
         ) in requests.into_iter().enumerate()
         {

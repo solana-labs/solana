@@ -1421,12 +1421,6 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                         .about("Set the validator's repair protocol whitelist")
                         .setting(AppSettings::ArgRequiredElseHelp)
                         .arg(
-                            Arg::with_name("clear")
-                            .long("clear")
-                            .takes_value(false)
-                            .help("Clear the validator's repair protocol whitelist")
-                        )
-                        .arg(
                             Arg::with_name("whitelist")
                             .long("whitelist")
                             .validator(is_pubkey)
@@ -1435,6 +1429,10 @@ pub fn app<'a>(version: &'a str, default_args: &'a DefaultArgs) -> App<'a, 'a> {
                             .takes_value(true)
                             .help("Set the validator's repair protocol whitelist")
                         )
+                )
+                .subcommand(
+                    SubCommand::with_name("remove-all")
+                        .about("Clear the validator's repair protocol whitelist")
                 )
         )
         .subcommand(
