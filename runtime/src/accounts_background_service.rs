@@ -2,6 +2,8 @@
 //!
 //! This can be expensive since we have to walk the append vecs being cleaned up.
 
+use std::collections::VecDeque;
+
 mod stats;
 use {
     crate::{
@@ -148,7 +150,7 @@ impl SnapshotRequestHandler {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-        snapshot_slot_storages: &mut Vec<SnapshotStorages>,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         let (
             snapshot_request,
@@ -267,7 +269,7 @@ impl SnapshotRequestHandler {
         last_full_snapshot_slot: &mut Option<Slot>,
         snapshot_request: SnapshotRequest,
         accounts_package_type: AccountsPackageType,
-        snapshot_slot_storages: &mut Vec<SnapshotStorages>,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Result<u64, SnapshotError> {
         debug!(
             "handling snapshot request: {:?}, {:?}",
@@ -378,11 +380,11 @@ impl SnapshotRequestHandler {
                     accounts_hash_for_testing,
                 )
                 .expect("new accounts package for snapshot");
-                snapshot_slot_storages.push(snapshot_storages);
+                snapshot_slot_storages.push_back(snapshot_storages);
 
                 // Remove the older ones, causing them to release the reference counts of the appendvecs
                 while snapshot_slot_storages.len() > 1 {
-                    snapshot_slot_storages.remove(0);
+                    snapshot_slot_storages.pop_front();
                 }
                 ret
             }
@@ -518,7 +520,7 @@ impl AbsRequestHandlers {
         test_hash_calculation: bool,
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
-        snapshot_slot_storages: &mut Vec<SnapshotStorages>,
+        snapshot_slot_storages: &mut VecDeque<SnapshotStorages>,
     ) -> Option<Result<u64, SnapshotError>> {
         self.snapshot_request_handler.handle_snapshot_requests(
             test_hash_calculation,
@@ -547,7 +549,7 @@ impl AccountsBackgroundService {
         let mut removed_slots_count = 0;
         let mut total_remove_slots_time = 0;
         let mut last_expiration_check_time = Instant::now();
-        let mut snapshot_slot_storages: Vec<SnapshotStorages> = Vec::new();
+        let mut snapshot_slot_storages: VecDeque<SnapshotStorages> = VecDeque::new();
         let t_background = Builder::new()
             .name("solBgAccounts".to_string())
             .spawn(move || {

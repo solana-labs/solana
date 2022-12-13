@@ -870,10 +870,10 @@ fn hard_link_appendvec_files_to_snapshot(
     let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
     fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
         error!(
-            "Failed when creating hard-link dir {}",
+            "Failed to create the hard-link dir {}",
             dir_accounts_hard_links.display()
         );
-        SnapshotError::IoWithSource(e, "hard-link failed")
+        SnapshotError::IoWithSource(e, "hard-link")
     })?;
 
     for slot_storages in snapshot_storages {

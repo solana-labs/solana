@@ -439,14 +439,11 @@ impl AppendVec {
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
-            error!(
-                "The appendvec at path {} is not santitized",
+            let err_msg = format!(
+                "incorrect layout/length/data ihe appendvec at path {}",
                 path.as_ref().display()
             );
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "incorrect layout/length/data",
-            ));
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg));
         }
 
         Ok((new, num_accounts))

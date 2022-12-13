@@ -244,10 +244,7 @@ pub(crate) fn snapshot_storage_lengths_from_fields(
                 *slot,
                 slot_storage
                     .iter()
-                    .map(|storage_entry| {
-                        let id = storage_entry.id();
-                        (id, storage_entry.current_len())
-                    })
+                    .map(|storage_entry| (storage_entry.id(), storage_entry.current_len()))
                     .collect(),
             )
         })
@@ -727,9 +724,8 @@ where
 
     let next_append_vec_id = next_append_vec_id.load(Ordering::Acquire);
     assert!(
-        next_append_vec_id >= 1,
-        "The value {} would cause the error of subtraction overflow",
-        next_append_vec_id
+        next_append_vec_id.checked_sub(1).is_some(),
+        "subtraction underflow"
     );
     let max_append_vec_id = next_append_vec_id - 1;
     assert!(

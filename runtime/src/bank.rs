@@ -6408,21 +6408,6 @@ impl Bank {
                 .all(|p| self.get_account_with_fixed_root(&p.program_id).is_some())
     }
 
-    pub fn add_builtins(&mut self, builtins: &Builtins) {
-        for builtin in &builtins.genesis_builtins {
-            self.add_builtin(
-                &builtin.name,
-                &builtin.id,
-                builtin.process_instruction_with_context,
-            );
-        }
-        for precompile in get_precompiles() {
-            if precompile.feature.is_none() {
-                self.add_precompile(&precompile.program_id);
-            }
-        }
-    }
-
     fn finish_init(
         &mut self,
         genesis_config: &GenesisConfig,
