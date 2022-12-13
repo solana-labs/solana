@@ -31,7 +31,7 @@ fn do_bench_dedup_packets<const N: usize>(bencher: &mut Bencher, mut batches: Ve
         deduper.reset();
         batches
             .iter_mut()
-            .for_each(|b| b.iter_mut().for_each(|p| p.meta_mut().set_discard(false)));
+            .for_each(|b| b.iter_mut().for_each(|p| p.meta.set_discard(false)));
     });
 }
 

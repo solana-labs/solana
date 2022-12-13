@@ -37,7 +37,7 @@ pub fn verify_shred_cpu(
     packet: &Packet,
     slot_leaders: &HashMap<Slot, /*pubkey:*/ [u8; 32]>,
 ) -> bool {
-    if packet.meta().discard() {
+    if packet.meta.discard() {
         return false;
     }
     let shred = match shred::layout::get_shred(packet) {
@@ -101,7 +101,7 @@ where
             .into_par_iter()
             .flat_map_iter(|batch| {
                 batch.iter().map(|packet| {
-                    if packet.meta().discard() {
+                    if packet.meta.discard() {
                         return Slot::MAX;
                     }
                     let shred = shred::layout::get_shred(packet);
@@ -327,7 +327,7 @@ fn sign_shred_cpu(keypair: &Keypair, packet: &mut Packet) {
         .and_then(shred::layout::get_signed_data)
         .unwrap();
     assert!(
-        packet.meta().size >= sig.end,
+        packet.meta.size >= sig.end,
         "packet is not large enough for a signature"
     );
     let signature = keypair.sign_message(msg.as_ref());
@@ -507,7 +507,7 @@ mod tests {
         shred.sign(&keypair);
         trace!("signature {}", shred.signature());
         packet.buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        packet.meta_mut().size = shred.payload().len();
+        packet.meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -548,7 +548,7 @@ mod tests {
         shred.sign(&keypair);
         batches[0].resize(1, Packet::default());
         batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta_mut().size = shred.payload().len();
+        batches[0][0].meta.size = shred.payload().len();
 
         let leader_slots = [(slot, keypair.pubkey().to_bytes())]
             .iter()
@@ -573,7 +573,7 @@ mod tests {
             .iter()
             .cloned()
             .collect();
-        batches[0][0].meta_mut().size = 0;
+        batches[0][0].meta.size = 0;
         let rv = verify_shreds_cpu(&batches, &leader_slots);
         assert_eq!(rv, vec![vec![0]]);
     }
@@ -602,7 +602,7 @@ mod tests {
         shred.sign(&keypair);
         batches[0].resize(1, Packet::default());
         batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta_mut().size = shred.payload().len();
+        batches[0][0].meta.size = shred.payload().len();
 
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
@@ -629,7 +629,7 @@ mod tests {
         let rv = verify_shreds_gpu(&batches, &leader_slots, &recycler_cache);
         assert_eq!(rv, vec![vec![0]]);
 
-        batches[0][0].meta_mut().size = 0;
+        batches[0][0].meta.size = 0;
         let leader_slots = [
             (std::u64::MAX, Pubkey::default().to_bytes()),
             (slot, keypair.pubkey().to_bytes()),
@@ -713,7 +713,7 @@ mod tests {
         );
         batches[0].resize(1, Packet::default());
         batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta_mut().size = shred.payload().len();
+        batches[0][0].meta.size = shred.payload().len();
 
         let pubkeys = [
             (slot, keypair.pubkey().to_bytes()),

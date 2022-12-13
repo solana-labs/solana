@@ -931,7 +931,7 @@ impl<const N: usize> ThreadLocalUnprocessedPackets<N> {
             .filter_map(|immutable_deserialized_packet| {
                 let is_tracer_packet = immutable_deserialized_packet
                     .original_packet()
-                    .meta()
+                    .meta
                     .is_tracer_packet();
                 if is_tracer_packet {
                     saturating_add_assign!(*total_tracer_packets_in_buffer, 1);
@@ -1050,8 +1050,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta_mut().port = packets_id as u16;
-                p.meta_mut().set_tracer(true);
+                p.meta.port = packets_id as u16;
+                p.meta.set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
@@ -1085,7 +1085,7 @@ mod tests {
             let expected_ports: Vec<_> = (0..256).collect();
             let mut forwarded_ports: Vec<_> = forward_packet_batches_by_accounts
                 .iter_batches()
-                .flat_map(|batch| batch.get_forwardable_packets().map(|p| p.meta().port))
+                .flat_map(|batch| batch.get_forwardable_packets().map(|p| p.meta.port))
                 .collect();
             forwarded_ports.sort_unstable();
             assert_eq!(expected_ports, forwarded_ports);
@@ -1181,7 +1181,7 @@ mod tests {
                 None,
             ),
         )?;
-        vote.meta_mut().flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
         let big_transfer = Packet::from_data(
             None,
             system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
@@ -1254,8 +1254,8 @@ mod tests {
             .enumerate()
             .map(|(packets_id, transaction)| {
                 let mut p = Packet::from_data(None, transaction).unwrap();
-                p.meta_mut().port = packets_id as u16;
-                p.meta_mut().set_tracer(true);
+                p.meta.port = packets_id as u16;
+                p.meta.set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
             .collect_vec();
