@@ -635,7 +635,6 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            true, // caching_enabled
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
