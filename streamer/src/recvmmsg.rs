@@ -18,7 +18,7 @@ use {
 #[cfg(not(target_os = "linux"))]
 pub fn recv_mmsg<const N: usize>(
     socket: &UdpSocket,
-    packets: &mut [P],
+    packets: &mut [GenericPacket<N>],
 ) -> io::Result</*num packets:*/ usize> {
     debug_assert!(packets.iter().all(|pkt| pkt.meta == Meta::default()));
     let mut i = 0;
