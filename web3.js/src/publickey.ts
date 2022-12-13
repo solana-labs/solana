@@ -109,14 +109,14 @@ export class PublicKey extends Struct {
   }
 
   /**
-   * Return the byte array representation of the public key
+   * Return the byte array representation of the public key in big endian
    */
   toBytes(): Uint8Array {
     return this.toBuffer();
   }
 
   /**
-   * Return the Buffer representation of the public key
+   * Return the Buffer representation of the public key in big endian
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
@@ -127,6 +127,10 @@ export class PublicKey extends Struct {
     const zeroPad = Buffer.alloc(32);
     b.copy(zeroPad, 32 - b.length);
     return zeroPad;
+  }
+
+  get [Symbol.toStringTag](): string {
+    return `PublicKey(${this.toString()})`;
   }
 
   /**

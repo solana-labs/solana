@@ -18,7 +18,9 @@ use {
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
-        system_monitor_service::{verify_net_stats_access, SystemMonitorService},
+        system_monitor_service::{
+            verify_net_stats_access, SystemMonitorService, SystemMonitorStatsReportConfig,
+        },
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
@@ -160,7 +162,6 @@ pub struct ValidatorConfig {
     pub poh_hashes_per_batch: u64,
     pub process_ledger_before_services: bool,
     pub account_indexes: AccountSecondaryIndexes,
-    pub accounts_db_caching_enabled: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub warp_slot: Option<Slot>,
     pub accounts_db_test_hash_calculation: bool,
@@ -222,7 +223,6 @@ impl Default for ValidatorConfig {
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
-            accounts_db_caching_enabled: false,
             warp_slot: None,
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
@@ -243,7 +243,6 @@ impl Default for ValidatorConfig {
 impl ValidatorConfig {
     pub fn default_for_test() -> Self {
         Self {
-            accounts_db_caching_enabled: true,
             enforce_ulimit_nofile: false,
             rpc_config: JsonRpcConfig::default_for_test(),
             ..Self::default()
@@ -494,10 +493,12 @@ impl Validator {
 
         let system_monitor_service = Some(SystemMonitorService::new(
             Arc::clone(&exit),
-            !config.no_os_memory_stats_reporting,
-            !config.no_os_network_stats_reporting,
-            !config.no_os_cpu_stats_reporting,
-            !config.no_os_disk_stats_reporting,
+            SystemMonitorStatsReportConfig {
+                report_os_memory_stats: !config.no_os_memory_stats_reporting,
+                report_os_network_stats: !config.no_os_network_stats_reporting,
+                report_os_cpu_stats: !config.no_os_cpu_stats_reporting,
+                report_os_disk_stats: !config.no_os_disk_stats_reporting,
+            },
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
@@ -634,7 +635,7 @@ impl Validator {
                 snapshot_request_handler,
                 pruned_banks_request_handler,
             },
-            config.accounts_db_caching_enabled,
+            true, // caching_enabled
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
@@ -1403,7 +1404,6 @@ fn load_blockstore(
         new_hard_forks: config.new_hard_forks.clone(),
         debug_keys: config.debug_keys.clone(),
         account_indexes: config.account_indexes.clone(),
-        accounts_db_caching_enabled: config.accounts_db_caching_enabled,
         accounts_db_config: config.accounts_db_config.clone(),
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
@@ -1667,6 +1667,7 @@ fn maybe_warp_slot(
             &root_bank,
             &Pubkey::default(),
             warp_slot,
+            solana_runtime::accounts_db::CalcAccountsHashDataSource::Storages,
         ));
         bank_forks.set_root(
             warp_slot,

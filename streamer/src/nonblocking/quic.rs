@@ -71,10 +71,11 @@ pub fn spawn_server(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
     wait_for_chunk_timeout_ms: u64,
-) -> Result<JoinHandle<()>, QuicServerError> {
+) -> Result<(Endpoint, JoinHandle<()>), QuicServerError> {
+    info!("Start quic server on {:?}", sock);
     let (config, _cert) = configure_server(keypair, gossip_host)?;
 
-    let (_, incoming) = {
+    let (endpoint, incoming) = {
         Endpoint::new(EndpointConfig::default(), Some(config), sock)
             .map_err(|_e| QuicServerError::EndpointFailed)?
     };
@@ -90,7 +91,7 @@ pub fn spawn_server(
         stats,
         wait_for_chunk_timeout_ms,
     ));
-    Ok(handle)
+    Ok((endpoint, handle))
 }
 
 pub async fn run_server(
@@ -126,6 +127,7 @@ pub async fn run_server(
         }
 
         if let Ok(Some(connection)) = timeout_connection {
+            info!("Got a connection {:?}", connection.remote_address());
             tokio::spawn(setup_connection(
                 connection,
                 unstaked_connection_table.clone(),
@@ -139,6 +141,8 @@ pub async fn run_server(
                 wait_for_chunk_timeout_ms,
             ));
             sleep(Duration::from_micros(WAIT_BETWEEN_NEW_CONNECTIONS_US)).await;
+        } else {
+            info!("Timed out waiting for connection");
         }
     }
 }
@@ -1005,7 +1009,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1317,7 +1321,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,
@@ -1348,7 +1352,7 @@ pub mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let t = spawn_server(
+        let (_, t) = spawn_server(
             s,
             &keypair,
             ip,

@@ -11,10 +11,10 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService, DroppedSlotsReceiver,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, CalcAccountsHashDataSource},
         accounts_hash::CalcAccountsHashConfig,
         accounts_index::AccountSecondaryIndexes,
-        bank::{bank_test_config_caching_enabled, Bank},
+        bank::{Bank, BankTestConfig},
         bank_forks::BankForks,
         epoch_accounts_hash::{self, EpochAccountsHash},
         genesis_utils::{self, GenesisConfigInfo},
@@ -109,7 +109,7 @@ impl TestEnvironment {
 
         let mut bank_forks = BankForks::new(Bank::new_for_tests_with_config(
             &genesis_config_info.genesis_config,
-            bank_test_config_caching_enabled(),
+            BankTestConfig::default(),
         ));
         bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
         bank_forks.set_accounts_hash_interval_slots(Self::ACCOUNTS_HASH_INTERVAL);
@@ -444,7 +444,7 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
 
             let accounts_dir = TempDir::new().unwrap();
             let deserialized_bank = snapshot_utils::bank_from_snapshot_archives(
-                &[accounts_dir.into_path()],
+                &[accounts_dir.path().to_path_buf()],
                 &snapshot_config.bank_snapshots_dir,
                 &full_snapshot_archive_info,
                 None,
@@ -453,7 +453,6 @@ fn test_snapshots_have_expected_epoch_accounts_hash() {
                 None,
                 None,
                 AccountSecondaryIndexes::default(),
-                false,
                 None,
                 AccountShrinkThreshold::default(),
                 true,
@@ -591,10 +590,17 @@ fn test_epoch_accounts_hash_and_warping() {
             .accounts_background_request_sender,
         None,
     );
+    // flush the write cache so warping can calculate the accounts hash from storages
+    bank_forks
+        .read()
+        .unwrap()
+        .working_bank()
+        .force_flush_accounts_cache();
     let bank = bank_forks.write().unwrap().insert(Bank::warp_from_parent(
         &bank,
         &Pubkey::default(),
         eah_stop_slot_in_next_epoch,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
@@ -626,6 +632,7 @@ fn test_epoch_accounts_hash_and_warping() {
         &bank,
         &Pubkey::default(),
         eah_start_slot_in_next_epoch,
+        CalcAccountsHashDataSource::Storages,
     ));
     let bank = bank_forks.write().unwrap().insert(Bank::new_from_parent(
         &bank,
