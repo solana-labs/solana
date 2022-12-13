@@ -25,7 +25,8 @@ use {
     },
     solana_cli_output::{CliAccount, CliAccountNewConfig, OutputFormat},
     solana_core::{
-        system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
+        system_monitor_service::{SystemMonitorService, SystemMonitorStatsReportConfig},
+        validator::move_and_async_delete_path,
     },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
@@ -48,7 +49,7 @@ use {
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
             PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
-        accounts_db::{AccountsDbConfig, FillerAccountsConfig},
+        accounts_db::{AccountsDbConfig, CalcAccountsHashDataSource, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{Bank, RewardCalculationEvent, TotalAccountsStats},
@@ -1155,7 +1156,7 @@ fn load_bank_forks(
         bank_forks.clone(),
         &exit,
         abs_request_handler,
-        process_options.accounts_db_caching_enabled,
+        true,
         process_options.accounts_db_test_hash_calculation,
         None,
     );
@@ -2690,10 +2691,12 @@ fn main() {
                     arg_matches.is_present("no_os_memory_stats_reporting");
                 let system_monitor_service = SystemMonitorService::new(
                     Arc::clone(&exit_signal),
-                    !no_os_memory_stats_reporting,
-                    false,
-                    false,
-                    false,
+                    SystemMonitorStatsReportConfig {
+                        report_os_memory_stats: !no_os_memory_stats_reporting,
+                        report_os_network_stats: false,
+                        report_os_cpu_stats: false,
+                        report_os_disk_stats: false,
+                    },
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
@@ -2757,7 +2760,6 @@ fn main() {
                     run_final_accounts_hash_calc: true,
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
-                    accounts_db_caching_enabled: true,
                     limit_load_slot_count_from_snapshot: value_t!(
                         arg_matches,
                         "limit_load_slot_count_from_snapshot",
@@ -3018,7 +3020,6 @@ fn main() {
                     &genesis_config,
                     &blockstore,
                     ProcessOptions {
-                        accounts_db_caching_enabled: true,
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
@@ -3222,10 +3223,15 @@ fn main() {
                         bank.set_capitalization();
 
                         let bank = if let Some(warp_slot) = warp_slot {
+                            // need to flush the write cache in order to use Storages to calculate
+                            // the accounts hash, and need to root `bank` before flushing the cache
+                            bank.rc.accounts.accounts_db.add_root(bank.slot());
+                            bank.force_flush_accounts_cache();
                             Arc::new(Bank::warp_from_parent(
                                 &bank,
                                 bank.collector_id(),
                                 warp_slot,
+                                CalcAccountsHashDataSource::Storages,
                             ))
                         } else {
                             bank

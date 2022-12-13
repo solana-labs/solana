@@ -6992,9 +6992,9 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.2.37"
+version = "0.2.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0669f9f5c355899600732451c65cc717d0ef0c53717749f03520337c824fd8a1"
+checksum = "a4e9e5085099858adba23d0a0b5298da8803f89999cb567ecafab9c916cdf53d"
 dependencies = [
  "byteorder",
  "combine",
@@ -7007,6 +7007,7 @@ dependencies = [
  "rustc-demangle",
  "scroll",
  "thiserror",
+ "winapi 0.3.9",
 ]
 
 [[package]]
