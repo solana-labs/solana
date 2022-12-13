@@ -6,12 +6,12 @@ use {
         sigverify::SigverifyTracerPacketStats,
     },
     crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
-    solana_perf::packet::Batch,
+    solana_perf::packet::PacketBatch,
     std::time::{Duration, Instant},
 };
 
-pub type BankingBatch<const N: usize> = (Vec<Batch<N>>, Option<SigverifyTracerPacketStats>);
-pub type BankingReceiver<const N: usize> = CrossbeamReceiver<BankingBatch<N>>;
+pub type BankingBatch<const N: usize> = (Vec<PacketBatch<N>>, Option<SigverifyTracerPacketStats>);
+pub type BankingPacketReceiver<const N: usize> = CrossbeamReceiver<BankingBatch<N>>;
 
 /// Results from deserializing packet batches.
 pub struct ReceivePacketResults<const N: usize> {
@@ -27,11 +27,11 @@ pub struct ReceivePacketResults<const N: usize> {
 
 pub struct PacketDeserializer<const N: usize> {
     /// Receiver for packet batches from sigverify stage
-    packet_batch_receiver: BankingReceiver<N>,
+    packet_batch_receiver: BankingPacketReceiver<N>,
 }
 
 impl<const N: usize> PacketDeserializer<N> {
-    pub fn new(packet_batch_receiver: BankingReceiver<N>) -> Self {
+    pub fn new(packet_batch_receiver: BankingPacketReceiver<N>) -> Self {
         Self {
             packet_batch_receiver,
         }
@@ -53,7 +53,7 @@ impl<const N: usize> PacketDeserializer<N> {
 
     /// Deserialize packet batches and collect them into ReceivePacketResults
     fn deserialize_and_collect_packets(
-        packet_batches: &[Batch<N>],
+        packet_batches: &[PacketBatch<N>],
         sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
     ) -> ReceivePacketResults<N> {
         let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
@@ -82,7 +82,7 @@ impl<const N: usize> PacketDeserializer<N> {
         &self,
         recv_timeout: Duration,
         packet_count_upperbound: usize,
-    ) -> Result<(Vec<Batch<N>>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
+    ) -> Result<(Vec<PacketBatch<N>>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
         let start = Instant::now();
         let (mut packet_batches, mut aggregated_tracer_packet_stats_option) =
             self.packet_batch_receiver.recv_timeout(recv_timeout)?;
@@ -118,7 +118,7 @@ impl<const N: usize> PacketDeserializer<N> {
         Ok((packet_batches, aggregated_tracer_packet_stats_option))
     }
 
-    fn generate_packet_indexes(packet_batch: &Batch<N>) -> Vec<usize> {
+    fn generate_packet_indexes(packet_batch: &PacketBatch<N>) -> Vec<usize> {
         packet_batch
             .iter()
             .enumerate()
@@ -128,7 +128,7 @@ impl<const N: usize> PacketDeserializer<N> {
     }
 
     fn deserialize_packets<'a>(
-        packet_batch: &'a Batch<N>,
+        packet_batch: &'a PacketBatch<N>,
         packet_indexes: &'a [usize],
     ) -> impl Iterator<Item = ImmutableDeserializedPacket<N>> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {

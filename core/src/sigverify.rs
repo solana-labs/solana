@@ -10,7 +10,7 @@ pub use solana_perf::sigverify::{
 use {
     crate::{banking_stage::BankingBatch, sigverify_stage::SigVerifyServiceError},
     crossbeam_channel::Sender,
-    solana_perf::{cuda_runtime::PinnedVec, packet::Batch, recycler::Recycler, sigverify},
+    solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
     solana_sdk::{packet::GenericPacket, saturating_add_assign},
 };
 
@@ -118,7 +118,7 @@ impl<const N: usize> TransactionSigVerifier<N> {
 
     pub fn send_packets(
         &mut self,
-        packet_batches: Vec<Batch<N>>,
+        packet_batches: Vec<PacketBatch<N>>,
     ) -> Result<(), SigVerifyServiceError<BankingBatch<N>, N>> {
         let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
         self.packet_sender
@@ -128,9 +128,9 @@ impl<const N: usize> TransactionSigVerifier<N> {
 
     pub fn verify_batches(
         &self,
-        mut batches: Vec<Batch<N>>,
+        mut batches: Vec<PacketBatch<N>>,
         valid_packets: usize,
-    ) -> Vec<Batch<N>> {
+    ) -> Vec<PacketBatch<N>> {
         sigverify::ed25519_verify(
             &mut batches,
             &self.recycler,

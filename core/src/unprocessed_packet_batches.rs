@@ -1,7 +1,7 @@
 use {
     crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
-    solana_perf::packet::Batch,
+    solana_perf::packet::PacketBatch,
     solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{hash::Hash, packet::GenericPacket, transaction::Transaction},
     std::{
@@ -76,7 +76,7 @@ pub struct PacketBatchInsertionMetrics {
 }
 
 /// Currently each banking_stage thread has a `UnprocessedPacketBatches` buffer to store
-/// Batch<{Packet::DATA_SIZE}>s received from sigverify. Banking thread continuously scans the buffer
+/// PacketBatch<{Packet::DATA_SIZE}>s received from sigverify. Banking thread continuously scans the buffer
 /// to pick proper packets to add to the block.
 #[derive(Debug, Default)]
 pub struct UnprocessedPacketBatches<const N: usize> {
@@ -315,7 +315,7 @@ impl<const N: usize> UnprocessedPacketBatches<N> {
 }
 
 pub fn deserialize_packets<'a, const N: usize>(
-    packet_batch: &'a Batch<N>,
+    packet_batch: &'a PacketBatch<N>,
     packet_indexes: &'a [usize],
 ) -> impl Iterator<Item = DeserializedPacket<N>> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {

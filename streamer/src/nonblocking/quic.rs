@@ -10,7 +10,7 @@ use {
     quinn::{Connecting, Connection, Endpoint, EndpointConfig, TokioRuntime, VarInt},
     quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
-    solana_perf::packet::Batch,
+    solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::GenericPacket,
         pubkey::Pubkey,
@@ -59,7 +59,7 @@ pub fn spawn_server<const N: usize>(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<Batch<N>>,
+    packet_sender: Sender<PacketBatch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -92,7 +92,7 @@ pub fn spawn_server<const N: usize>(
 
 pub async fn run_server<const N: usize>(
     incoming: Incoming,
-    packet_sender: Sender<Batch<N>>,
+    packet_sender: Sender<PacketBatch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -224,7 +224,7 @@ enum ConnectionHandlerError {
 }
 
 struct NewConnectionHandlerParams<const N: usize> {
-    packet_sender: Sender<Batch<N>>,
+    packet_sender: Sender<PacketBatch<N>>,
     remote_pubkey: Option<Pubkey>,
     stake: u64,
     total_stake: u64,
@@ -236,7 +236,7 @@ struct NewConnectionHandlerParams<const N: usize> {
 
 impl<const N: usize> NewConnectionHandlerParams<N> {
     fn new_unstaked(
-        packet_sender: Sender<Batch<N>>,
+        packet_sender: Sender<PacketBatch<N>>,
         max_connections_per_peer: usize,
         stats: Arc<StreamStats>,
     ) -> NewConnectionHandlerParams<N> {
@@ -410,7 +410,7 @@ async fn setup_connection<const N: usize>(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
-    packet_sender: Sender<Batch<N>>,
+    packet_sender: Sender<PacketBatch<N>>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
@@ -517,7 +517,7 @@ async fn setup_connection<const N: usize>(
 #[allow(clippy::too_many_arguments)]
 async fn handle_connection<const N: usize>(
     connection: Connection,
-    packet_sender: Sender<Batch<N>>,
+    packet_sender: Sender<PacketBatch<N>>,
     remote_addr: SocketAddr,
     remote_pubkey: Option<Pubkey>,
     last_update: Arc<AtomicU64>,
@@ -617,9 +617,9 @@ async fn handle_connection<const N: usize>(
 // Return true if the server should drop the stream
 fn handle_chunk<const N: usize>(
     chunk: &Result<Option<quinn::Chunk>, quinn::ReadError>,
-    maybe_batch: &mut Option<Batch<N>>,
+    maybe_batch: &mut Option<PacketBatch<N>>,
     remote_addr: &SocketAddr,
-    packet_sender: &Sender<Batch<N>>,
+    packet_sender: &Sender<PacketBatch<N>>,
     stats: Arc<StreamStats>,
     stake: u64,
     peer_type: ConnectionPeerType,
@@ -648,7 +648,7 @@ fn handle_chunk<const N: usize>(
 
                 // chunk looks valid
                 if maybe_batch.is_none() {
-                    let mut batch = Batch::<N>::with_capacity(1);
+                    let mut batch = PacketBatch::<N>::with_capacity(1);
                     let mut packet = GenericPacket::default();
                     packet.meta.set_socket_addr(remote_addr);
                     packet.meta.sender_stake = stake;
@@ -990,7 +990,7 @@ pub mod test {
     type QuicServer = (
         JoinHandle<()>,
         Arc<AtomicBool>,
-        crossbeam_channel::Receiver<Batch<{ TransactionPacket::DATA_SIZE }>>,
+        crossbeam_channel::Receiver<PacketBatch<{ TransactionPacket::DATA_SIZE }>>,
         SocketAddr,
         Arc<StreamStats>,
     );
@@ -1041,7 +1041,7 @@ pub mod test {
     }
 
     pub async fn check_timeout<const N: usize>(
-        receiver: Receiver<Batch<N>>,
+        receiver: Receiver<PacketBatch<N>>,
         server_address: SocketAddr,
     ) {
         let conn1 = make_client_endpoint(&server_address, None).await;
@@ -1085,7 +1085,7 @@ pub mod test {
     }
 
     pub async fn check_multiple_streams<const N: usize>(
-        receiver: Receiver<Batch<N>>,
+        receiver: Receiver<PacketBatch<N>>,
         server_address: SocketAddr,
     ) {
         let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
@@ -1125,7 +1125,7 @@ pub mod test {
     }
 
     pub async fn check_multiple_writes<const N: usize>(
-        receiver: Receiver<Batch<N>>,
+        receiver: Receiver<PacketBatch<N>>,
         server_address: SocketAddr,
         client_keypair: Option<&Keypair>,
     ) {

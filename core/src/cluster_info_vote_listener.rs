@@ -1,6 +1,6 @@
 use {
     crate::{
-        banking_stage::BankingSender,
+        banking_stage::BankingPacketSender,
         optimistic_confirmation_verifier::OptimisticConfirmationVerifier,
         replay_stage::DUPLICATE_THRESHOLD,
         result::{Error, Result},
@@ -234,7 +234,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: BankingSender<{ Packet::DATA_SIZE }>,
+        verified_packets_sender: BankingPacketSender<{ Packet::DATA_SIZE }>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -377,7 +377,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        verified_packets_sender: &BankingSender<{ Packet::DATA_SIZE }>,
+        verified_packets_sender: &BankingPacketSender<{ Packet::DATA_SIZE }>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -432,7 +432,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &BankingSender<{ Packet::DATA_SIZE }>,
+        verified_packets_sender: &BankingPacketSender<{ Packet::DATA_SIZE }>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`

@@ -10,7 +10,9 @@ use {
         clock::{DEFAULT_TICKS_PER_SLOT, HOLD_TRANSACTIONS_SLOT_OFFSET},
         packet::{Packet, PacketFlags, TransactionPacket},
     },
-    solana_streamer::streamer::{self, BatchReceiver, BatchSender, StreamerReceiveStats},
+    solana_streamer::streamer::{
+        self, PacketBatchReceiver, PacketBatchSender, StreamerReceiveStats,
+    },
     solana_tpu_client::tpu_connection_cache::DEFAULT_TPU_ENABLE_UDP,
     std::{
         net::UdpSocket,
@@ -38,8 +40,8 @@ impl FetchStage {
         coalesce_ms: u64,
     ) -> (
         Self,
-        BatchReceiver<{ TransactionPacket::DATA_SIZE }>,
-        BatchReceiver<{ Packet::DATA_SIZE }>,
+        PacketBatchReceiver<{ TransactionPacket::DATA_SIZE }>,
+        PacketBatchReceiver<{ Packet::DATA_SIZE }>,
     ) {
         let (sender, receiver) = unbounded();
         let (vote_sender, vote_receiver) = unbounded();
@@ -70,10 +72,10 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<UdpSocket>,
         tpu_vote_sockets: Vec<UdpSocket>,
         exit: &Arc<AtomicBool>,
-        sender: &BatchSender<{ TransactionPacket::DATA_SIZE }>,
-        vote_sender: &BatchSender<{ Packet::DATA_SIZE }>,
-        forward_sender: &BatchSender<{ TransactionPacket::DATA_SIZE }>,
-        forward_receiver: BatchReceiver<{ TransactionPacket::DATA_SIZE }>,
+        sender: &PacketBatchSender<{ TransactionPacket::DATA_SIZE }>,
+        vote_sender: &PacketBatchSender<{ Packet::DATA_SIZE }>,
+        forward_sender: &PacketBatchSender<{ TransactionPacket::DATA_SIZE }>,
+        forward_receiver: PacketBatchReceiver<{ TransactionPacket::DATA_SIZE }>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
@@ -99,8 +101,8 @@ impl FetchStage {
     }
 
     fn handle_forwarded_packets(
-        recvr: &BatchReceiver<{ TransactionPacket::DATA_SIZE }>,
-        sendr: &BatchSender<{ TransactionPacket::DATA_SIZE }>,
+        recvr: &PacketBatchReceiver<{ TransactionPacket::DATA_SIZE }>,
+        sendr: &PacketBatchSender<{ TransactionPacket::DATA_SIZE }>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
     ) -> Result<()> {
         let mark_forwarded = |packet: &mut TransactionPacket| {
@@ -146,10 +148,10 @@ impl FetchStage {
         tpu_forwards_sockets: Vec<Arc<UdpSocket>>,
         tpu_vote_sockets: Vec<Arc<UdpSocket>>,
         exit: &Arc<AtomicBool>,
-        sender: &BatchSender<{ TransactionPacket::DATA_SIZE }>,
-        vote_sender: &BatchSender<{ Packet::DATA_SIZE }>,
-        forward_sender: &BatchSender<{ TransactionPacket::DATA_SIZE }>,
-        forward_receiver: BatchReceiver<{ TransactionPacket::DATA_SIZE }>,
+        sender: &PacketBatchSender<{ TransactionPacket::DATA_SIZE }>,
+        vote_sender: &PacketBatchSender<{ Packet::DATA_SIZE }>,
+        forward_sender: &PacketBatchSender<{ TransactionPacket::DATA_SIZE }>,
+        forward_receiver: PacketBatchReceiver<{ TransactionPacket::DATA_SIZE }>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,

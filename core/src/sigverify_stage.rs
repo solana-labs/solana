@@ -15,7 +15,7 @@ use {
     itertools::Itertools,
     solana_measure::measure::Measure,
     solana_perf::{
-        packet::Batch,
+        packet::PacketBatch,
         sigverify::{
             count_discarded_packets, count_packets_in_batches, count_valid_packets, shrink_batches,
             Deduper,
@@ -214,7 +214,7 @@ impl SigVerifyStage {
     }
 
     pub fn discard_excess_packets<const N: usize>(
-        batches: &mut [Batch<N>],
+        batches: &mut [PacketBatch<N>],
         mut max_packets: usize,
         mut process_excess_packet: impl FnMut(&GenericPacket<N>),
     ) {
@@ -245,7 +245,7 @@ impl SigVerifyStage {
 
     /// make this function public so that it is available for benchmarking
     pub fn maybe_shrink_batches<const N: usize>(
-        packet_batches: &mut Vec<Batch<N>>,
+        packet_batches: &mut Vec<PacketBatch<N>>,
     ) -> (u64, usize) {
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_packets = count_packets_in_batches(packet_batches);
@@ -441,7 +441,7 @@ mod tests {
         solana_sdk::packet::PacketFlags,
     };
 
-    fn count_non_discard(packet_batches: &[Batch<{ Packet::DATA_SIZE }>]) -> usize {
+    fn count_non_discard(packet_batches: &[PacketBatch<{ Packet::DATA_SIZE }>]) -> usize {
         packet_batches
             .iter()
             .flatten()
@@ -453,7 +453,7 @@ mod tests {
     fn test_packet_discard() {
         solana_logger::setup();
         let batch_size = 10;
-        let mut batch = Batch::<{ Packet::DATA_SIZE }>::with_capacity(batch_size);
+        let mut batch = PacketBatch::<{ Packet::DATA_SIZE }>::with_capacity(batch_size);
         let mut tracer_packet = Packet::default();
         tracer_packet.meta.flags |= PacketFlags::TRACER_PACKET;
         batch.resize(batch_size, tracer_packet);
@@ -489,7 +489,7 @@ mod tests {
         use_same_tx: bool,
         packets_per_batch: usize,
         total_packets: usize,
-    ) -> Vec<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Vec<PacketBatch<{ Packet::DATA_SIZE }>> {
         if use_same_tx {
             let tx = test_tx();
             to_packet_batches(&vec![tx; total_packets], packets_per_batch)
