@@ -188,10 +188,10 @@ mod tests {
             duplicate_shred::{from_shred, tests::new_rand_shred, DuplicateShred, Error},
         },
         rand::Rng,
-        solana_ledger::shred::Shredder,
         solana_ledger::{
             genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
-            get_tmp_ledger_path_auto_delete
+            get_tmp_ledger_path_auto_delete,
+            shred::Shredder,
         },
         solana_runtime::{bank::Bank, bank_forks::BankForks},
         solana_sdk::signature::{Keypair, Signer},
@@ -278,7 +278,7 @@ mod tests {
                         index += 1
                     }
                     assert!(!blockstore.has_duplicate_shreds_in_slot(3));
-                },
+                }
             }
         }
     }
