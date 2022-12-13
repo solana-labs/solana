@@ -42,18 +42,60 @@ pub struct Meta {
     pub sender_stake: u64,
 }
 
-pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
-    const DATA_SIZE: usize;
-    fn populate_packet<T: Serialize>(&mut self, dest: Option<&SocketAddr>, data: &T) -> Result<()>;
+#[derive(Clone, Eq)]
+#[repr(C)]
+pub struct GenericPacket<const N: usize> {
+    // Bytes past Packet.meta.size are not valid to read from.
+    // Use Packet.data(index) to read from the buffer.
+    buffer: [u8; N],
+    meta: Meta,
+}
 
-    fn meta(&self) -> &Meta;
-    fn meta_mut(&mut self) -> &mut Meta;
-    fn buffer(&self) -> &[u8];
+impl<const N: usize> GenericPacket<N> {
+    pub const DATA_SIZE: usize = N;
+
+    pub fn new(buffer: [u8; N], meta: Meta) -> Self {
+        Self { buffer, meta }
+    }
+
+    pub fn populate_packet<T: Serialize>(
+        &mut self,
+        dest: Option<&SocketAddr>,
+        data: &T,
+    ) -> Result<()> {
+        debug_assert!(!self.meta.discard());
+        let mut wr = io::Cursor::new(self.buffer_mut());
+        bincode::serialize_into(&mut wr, data)?;
+        self.meta.size = wr.position() as usize;
+        if let Some(dest) = dest {
+            self.meta.set_socket_addr(dest);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn meta(&self) -> &Meta {
+        &self.meta
+    }
+
+    #[inline]
+    pub fn meta_mut(&mut self) -> &mut Meta {
+        &mut self.meta
+    }
+
+    #[inline]
+    pub fn buffer(&self) -> &[u8] {
+        &self.buffer
+    }
 
     /// Returns a mutable reference to the entirety of the underlying buffer to
     /// write into. The caller is responsible for updating Packet.meta.size
     /// after writing to the buffer.
-    fn buffer_mut(&mut self) -> &mut [u8];
+    #[inline]
+    pub fn buffer_mut(&mut self) -> &mut [u8] {
+        debug_assert!(!self.meta.discard());
+        &mut self.buffer[..]
+    }
 
     /// Returns an immutable reference to the underlying buffer up to
     /// packet.meta.size. The rest of the buffer is not valid to read from.
@@ -61,7 +103,7 @@ pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
     /// Returns None if the index is invalid or if the packet is already marked
     /// as discard.
     #[inline]
-    fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
+    pub fn data<I>(&self, index: I) -> Option<&<I as SliceIndex<[u8]>>::Output>
     where
         I: SliceIndex<[u8]>,
     {
@@ -75,13 +117,13 @@ pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
         }
     }
 
-    fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
+    pub fn from_data<T: Serialize>(dest: Option<&SocketAddr>, data: T) -> Result<Self> {
         let mut packet = Self::default();
         Self::populate_packet(&mut packet, dest, &data)?;
         Ok(packet)
     }
 
-    fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
+    pub fn deserialize_slice<T, I>(&self, index: I) -> Result<T>
     where
         T: serde::de::DeserializeOwned,
         I: SliceIndex<[u8], Output = [u8]>,
@@ -92,53 +134,6 @@ pub trait BasePacket: Default + Clone + Sync + Send + Eq + fmt::Debug {
             .with_fixint_encoding()
             .reject_trailing_bytes()
             .deserialize(bytes)
-    }
-}
-
-#[derive(Clone, Eq)]
-#[repr(C)]
-pub struct GenericPacket<const N: usize> {
-    // Bytes past Packet.meta.size are not valid to read from.
-    // Use Packet.data(index) to read from the buffer.
-    buffer: [u8; N],
-    meta: Meta,
-}
-
-impl<const N: usize> GenericPacket<N> {
-    pub fn new(buffer: [u8; N], meta: Meta) -> Self {
-        Self { buffer, meta }
-    }
-}
-
-impl<const N: usize> BasePacket for GenericPacket<N> {
-    const DATA_SIZE: usize = N;
-
-    fn populate_packet<T: Serialize>(&mut self, dest: Option<&SocketAddr>, data: &T) -> Result<()> {
-        debug_assert!(!self.meta.discard());
-        let mut wr = io::Cursor::new(self.buffer_mut());
-        bincode::serialize_into(&mut wr, data)?;
-        self.meta.size = wr.position() as usize;
-        if let Some(dest) = dest {
-            self.meta.set_socket_addr(dest);
-        }
-        Ok(())
-    }
-
-    fn meta(&self) -> &Meta {
-        &self.meta
-    }
-
-    fn meta_mut(&mut self) -> &mut Meta {
-        &mut self.meta
-    }
-
-    fn buffer(&self) -> &[u8] {
-        &self.buffer
-    }
-
-    fn buffer_mut(&mut self) -> &mut [u8] {
-        debug_assert!(!self.meta.discard());
-        &mut self.buffer[..]
     }
 }
 

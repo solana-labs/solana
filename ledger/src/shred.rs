@@ -63,7 +63,7 @@ use {
     solana_sdk::{
         clock::Slot,
         hash::{hashv, Hash},
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer, SIGNATURE_BYTES},
     },

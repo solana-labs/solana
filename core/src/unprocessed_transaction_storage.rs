@@ -20,7 +20,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET, feature_set::FeatureSet, hash::Hash,
-        packet::BasePacket, saturating_add_assign, transaction::SanitizedTransaction,
+        saturating_add_assign, transaction::SanitizedTransaction,
     },
     std::{
         collections::HashMap,
@@ -36,20 +36,20 @@ pub const UNPROCESSED_BUFFER_STEP_SIZE: usize = 64;
 const MAX_NUM_VOTES_RECEIVE: usize = 10_000;
 
 #[derive(Debug)]
-pub enum UnprocessedTransactionStorage<P: BasePacket> {
-    VoteStorage(VoteStorage<P>),
-    LocalTransactionStorage(ThreadLocalUnprocessedPackets<P>),
+pub enum UnprocessedTransactionStorage<const N: usize> {
+    VoteStorage(VoteStorage<N>),
+    LocalTransactionStorage(ThreadLocalUnprocessedPackets<N>),
 }
 
 #[derive(Debug)]
-pub struct ThreadLocalUnprocessedPackets<P: BasePacket> {
-    unprocessed_packet_batches: UnprocessedPacketBatches<P>,
+pub struct ThreadLocalUnprocessedPackets<const N: usize> {
+    unprocessed_packet_batches: UnprocessedPacketBatches<N>,
     thread_type: ThreadType,
 }
 
 #[derive(Debug)]
-pub struct VoteStorage<P: BasePacket> {
-    latest_unprocessed_votes: Arc<LatestUnprocessedVotes<P>>,
+pub struct VoteStorage<const N: usize> {
+    latest_unprocessed_votes: Arc<LatestUnprocessedVotes<N>>,
     vote_source: VoteSource,
 }
 
@@ -130,19 +130,19 @@ fn filter_processed_packets<'a, F>(
 
 /// Convenient wrapper for shared-state between banking stage processing and the
 /// multi-iterator checking function.
-pub struct ConsumeScannerPayload<'a, P: BasePacket> {
+pub struct ConsumeScannerPayload<'a, const N: usize> {
     pub reached_end_of_slot: bool,
     pub account_locks: ReadWriteAccountSet,
     pub sanitized_transactions: Vec<SanitizedTransaction>,
     pub slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
-    pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket<P>>,
+    pub message_hash_to_transaction: &'a mut HashMap<Hash, DeserializedPacket<N>>,
 }
 
-fn consume_scan_should_process_packet<P: BasePacket>(
+fn consume_scan_should_process_packet<const N: usize>(
     bank: &Bank,
     banking_stage_stats: &BankingStageStats,
-    packet: &ImmutableDeserializedPacket<P>,
-    payload: &mut ConsumeScannerPayload<P>,
+    packet: &ImmutableDeserializedPacket<N>,
+    payload: &mut ConsumeScannerPayload<N>,
 ) -> ProcessingDecision {
     // If end of the slot, return should process (quick loop after reached end of slot)
     if payload.reached_end_of_slot {
@@ -196,16 +196,16 @@ fn consume_scan_should_process_packet<P: BasePacket>(
     }
 }
 
-fn create_consume_multi_iterator<'a, 'b, F, P: BasePacket>(
-    packets: &'a [Arc<ImmutableDeserializedPacket<P>>],
+fn create_consume_multi_iterator<'a, 'b, F, const N: usize>(
+    packets: &'a [Arc<ImmutableDeserializedPacket<N>>],
     slot_metrics_tracker: &'b mut LeaderSlotMetricsTracker,
-    message_hash_to_transaction: &'b mut HashMap<Hash, DeserializedPacket<P>>,
+    message_hash_to_transaction: &'b mut HashMap<Hash, DeserializedPacket<N>>,
     should_process_packet: F,
-) -> MultiIteratorScanner<'a, Arc<ImmutableDeserializedPacket<P>>, ConsumeScannerPayload<'b, P>, F>
+) -> MultiIteratorScanner<'a, Arc<ImmutableDeserializedPacket<N>>, ConsumeScannerPayload<'b, N>, F>
 where
     F: FnMut(
-        &Arc<ImmutableDeserializedPacket<P>>,
-        &mut ConsumeScannerPayload<'b, P>,
+        &Arc<ImmutableDeserializedPacket<N>>,
+        &mut ConsumeScannerPayload<'b, N>,
     ) -> ProcessingDecision,
     'b: 'a,
 {
@@ -224,9 +224,9 @@ where
     )
 }
 
-impl<P: BasePacket> UnprocessedTransactionStorage<P> {
+impl<const N: usize> UnprocessedTransactionStorage<N> {
     pub fn new_transaction_storage(
-        unprocessed_packet_batches: UnprocessedPacketBatches<P>,
+        unprocessed_packet_batches: UnprocessedPacketBatches<N>,
         thread_type: ThreadType,
     ) -> Self {
         Self::LocalTransactionStorage(ThreadLocalUnprocessedPackets {
@@ -236,7 +236,7 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
     }
 
     pub fn new_vote_storage(
-        latest_unprocessed_votes: Arc<LatestUnprocessedVotes<P>>,
+        latest_unprocessed_votes: Arc<LatestUnprocessedVotes<N>>,
         vote_source: VoteSource,
     ) -> Self {
         Self::VoteStorage(VoteStorage {
@@ -279,7 +279,7 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
     }
 
     #[cfg(test)]
-    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<P>> {
+    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<N>> {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage.iter(),
             _ => panic!(),
@@ -304,7 +304,7 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
 
     pub(crate) fn insert_batch(
         &mut self,
-        deserialized_packets: Vec<ImmutableDeserializedPacket<P>>,
+        deserialized_packets: Vec<ImmutableDeserializedPacket<N>>,
     ) -> InsertPacketBatchSummary {
         match self {
             Self::VoteStorage(vote_storage) => {
@@ -319,7 +319,7 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<P>,
+        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
@@ -348,8 +348,8 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
     ) -> bool
     where
         F: FnMut(
-            &Vec<Arc<ImmutableDeserializedPacket<P>>>,
-            &mut ConsumeScannerPayload<P>,
+            &Vec<Arc<ImmutableDeserializedPacket<N>>>,
+            &mut ConsumeScannerPayload<N>,
         ) -> Option<Vec<usize>>,
     {
         match self {
@@ -370,7 +370,7 @@ impl<P: BasePacket> UnprocessedTransactionStorage<P> {
     }
 }
 
-impl<P: BasePacket> VoteStorage<P> {
+impl<const N: usize> VoteStorage<N> {
     fn is_empty(&self) -> bool {
         self.latest_unprocessed_votes.is_empty()
     }
@@ -396,7 +396,7 @@ impl<P: BasePacket> VoteStorage<P> {
 
     fn insert_batch(
         &mut self,
-        deserialized_packets: Vec<ImmutableDeserializedPacket<P>>,
+        deserialized_packets: Vec<ImmutableDeserializedPacket<N>>,
     ) -> VoteBatchInsertionMetrics {
         self.latest_unprocessed_votes
             .insert_batch(
@@ -415,7 +415,7 @@ impl<P: BasePacket> VoteStorage<P> {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<P>,
+        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
             let total_forwardable_packets = self
@@ -439,8 +439,8 @@ impl<P: BasePacket> VoteStorage<P> {
     ) -> bool
     where
         F: FnMut(
-            &Vec<Arc<ImmutableDeserializedPacket<P>>>,
-            &mut ConsumeScannerPayload<P>,
+            &Vec<Arc<ImmutableDeserializedPacket<N>>>,
+            &mut ConsumeScannerPayload<N>,
         ) -> Option<Vec<usize>>,
     {
         if matches!(self.vote_source, VoteSource::Gossip) {
@@ -448,8 +448,8 @@ impl<P: BasePacket> VoteStorage<P> {
         }
 
         let should_process_packet =
-            |packet: &Arc<ImmutableDeserializedPacket<P>>,
-             payload: &mut ConsumeScannerPayload<P>| {
+            |packet: &Arc<ImmutableDeserializedPacket<N>>,
+             payload: &mut ConsumeScannerPayload<N>| {
                 consume_scan_should_process_packet(&bank, banking_stage_stats, packet, payload)
             };
 
@@ -494,12 +494,12 @@ impl<P: BasePacket> VoteStorage<P> {
     }
 }
 
-type PacketsToForward<P> = (
-    Vec<Arc<ImmutableDeserializedPacket<P>>>,
-    Vec<Arc<ImmutableDeserializedPacket<P>>>,
+type PacketsToForward<const N: usize> = (
+    Vec<Arc<ImmutableDeserializedPacket<N>>>,
+    Vec<Arc<ImmutableDeserializedPacket<N>>>,
     Vec<bool>,
 );
-impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
+impl<const N: usize> ThreadLocalUnprocessedPackets<N> {
     fn is_empty(&self) -> bool {
         self.unprocessed_packet_batches.is_empty()
     }
@@ -517,11 +517,11 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     }
 
     #[cfg(test)]
-    fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<P>> {
+    fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket<N>> {
         self.unprocessed_packet_batches.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket<P>> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket<N>> {
         self.unprocessed_packet_batches.iter_mut()
     }
 
@@ -539,7 +539,7 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
 
     fn insert_batch(
         &mut self,
-        deserialized_packets: Vec<ImmutableDeserializedPacket<P>>,
+        deserialized_packets: Vec<ImmutableDeserializedPacket<N>>,
     ) -> PacketBatchInsertionMetrics {
         self.unprocessed_packet_batches.insert_batch(
             deserialized_packets
@@ -555,7 +555,7 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_buffer: &mut ForwardBatchesByAccounts<P>,
+        forward_buffer: &mut ForwardBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         let mut total_forwardable_tracer_packets: usize = 0;
         let mut total_tracer_packets_in_buffer: usize = 0;
@@ -688,7 +688,7 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     }
 
     /// Take self.unprocessed_packet_batches's priority_queue out, leave empty MinMaxHeap in its place.
-    fn take_priority_queue(&mut self) -> MinMaxHeap<Arc<ImmutableDeserializedPacket<P>>> {
+    fn take_priority_queue(&mut self) -> MinMaxHeap<Arc<ImmutableDeserializedPacket<N>>> {
         std::mem::replace(
             &mut self.unprocessed_packet_batches.packet_priority_queue,
             MinMaxHeap::new(), // <-- no need to reserve capacity as we will replace this
@@ -715,7 +715,7 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     /// sanitize un-forwarded packet into SanitizedTransaction for validation and forwarding.
     fn sanitize_unforwarded_packets(
         &mut self,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket<P>>],
+        packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         bank: &Arc<Bank>,
     ) -> (Vec<SanitizedTransaction>, Vec<usize>) {
         // Get ref of ImmutableDeserializedPacket
@@ -786,8 +786,8 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     /// try to add filtered forwardable and valid packets to forward buffer;
     /// returns vector of packet indexes that were accepted for forwarding.
     fn add_filtered_packets_to_forward_buffer(
-        forward_buffer: &mut ForwardBatchesByAccounts<P>,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket<P>>],
+        forward_buffer: &mut ForwardBatchesByAccounts<N>,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
         forwardable_transaction_indexes: &[usize],
@@ -823,10 +823,10 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     }
 
     fn collect_retained_packets(
-        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket<P>>,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket<P>>],
+        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket<N>>,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         retained_packet_indexes: &[usize],
-    ) -> Vec<Arc<ImmutableDeserializedPacket<P>>> {
+    ) -> Vec<Arc<ImmutableDeserializedPacket<N>>> {
         Self::remove_non_retained_packets(
             message_hash_to_transaction,
             packets_to_process,
@@ -841,8 +841,8 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     /// remove packets from UnprocessedPacketBatches.message_hash_to_transaction after they have
     /// been removed from UnprocessedPacketBatches.packet_priority_queue
     fn remove_non_retained_packets(
-        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket<P>>,
-        packets_to_process: &[Arc<ImmutableDeserializedPacket<P>>],
+        message_hash_to_transaction: &mut HashMap<Hash, DeserializedPacket<N>>,
+        packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         retained_packet_indexes: &[usize],
     ) {
         filter_processed_packets(
@@ -867,8 +867,8 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     ) -> bool
     where
         F: FnMut(
-            &Vec<Arc<ImmutableDeserializedPacket<P>>>,
-            &mut ConsumeScannerPayload<P>,
+            &Vec<Arc<ImmutableDeserializedPacket<N>>>,
+            &mut ConsumeScannerPayload<N>,
         ) -> Option<Vec<usize>>,
     {
         let mut retryable_packets = self.take_priority_queue();
@@ -877,8 +877,8 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
         let all_packets_to_process = retryable_packets.drain_desc().collect_vec();
 
         let should_process_packet =
-            |packet: &Arc<ImmutableDeserializedPacket<P>>,
-             payload: &mut ConsumeScannerPayload<P>| {
+            |packet: &Arc<ImmutableDeserializedPacket<N>>,
+             payload: &mut ConsumeScannerPayload<N>| {
                 consume_scan_should_process_packet(bank, banking_stage_stats, packet, payload)
             };
         let mut scanner = create_consume_multi_iterator(
@@ -922,10 +922,10 @@ impl<P: BasePacket> ThreadLocalUnprocessedPackets<P> {
     /// packet is tracer packet.
     fn prepare_packets_to_forward(
         &self,
-        packets_to_forward: impl Iterator<Item = Arc<ImmutableDeserializedPacket<P>>>,
+        packets_to_forward: impl Iterator<Item = Arc<ImmutableDeserializedPacket<N>>>,
         total_tracer_packets_in_buffer: &mut usize,
-    ) -> PacketsToForward<P> {
-        let mut forwarded_packets: Vec<Arc<ImmutableDeserializedPacket<P>>> = vec![];
+    ) -> PacketsToForward<N> {
+        let mut forwarded_packets: Vec<Arc<ImmutableDeserializedPacket<N>>> = vec![];
         let (forwardable_packets, is_tracer_packet) = packets_to_forward
             .into_iter()
             .filter_map(|immutable_deserialized_packet| {
@@ -1065,7 +1065,7 @@ mod tests {
                 ThreadType::Transactions,
             );
             let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<Packet>::new_with_default_batch_limits();
+                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
 
             let FilterForwardingResults {
                 total_forwardable_packets,
@@ -1109,7 +1109,7 @@ mod tests {
                 ThreadType::Transactions,
             );
             let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<Packet>::new_with_default_batch_limits();
+                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
             let FilterForwardingResults {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
@@ -1143,7 +1143,7 @@ mod tests {
                 ThreadType::Transactions,
             );
             let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<Packet>::new_with_default_batch_limits();
+                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
             let FilterForwardingResults {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
@@ -1267,7 +1267,7 @@ mod tests {
 
         // test preparing buffered packets for forwarding
         let test_prepareing_buffered_packets_for_forwarding =
-            |buffered_packet_batches: UnprocessedPacketBatches<_>| -> (usize, usize, usize) {
+            |buffered_packet_batches: UnprocessedPacketBatches<{Packet::DATA_SIZE}>| -> (usize, usize, usize) {
                 let mut total_tracer_packets_in_buffer: usize = 0;
                 let mut total_packets_to_forward: usize = 0;
                 let mut total_tracer_packets_to_forward: usize = 0;
@@ -1292,7 +1292,7 @@ mod tests {
                         total_tracer_packets_to_forward += is_tracer_packet.len();
                         packets_to_forward
                     })
-                    .collect::<MinMaxHeap<Arc<ImmutableDeserializedPacket<_>>>>();
+                    .collect::<MinMaxHeap<Arc<ImmutableDeserializedPacket<{Packet::DATA_SIZE}>>>>();
                 (
                     total_tracer_packets_in_buffer,
                     total_packets_to_forward,

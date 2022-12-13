@@ -37,7 +37,7 @@ use {
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT, DEFAULT_TICKS_PER_SLOT},
         hash::Hash,
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::Signature,
         slot_hashes,
@@ -234,7 +234,7 @@ impl ClusterInfoVoteListener {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
-        verified_packets_sender: BankingSender<Packet>,
+        verified_packets_sender: BankingSender<{ Packet::DATA_SIZE }>,
         poh_recorder: Arc<RwLock<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -332,7 +332,7 @@ impl ClusterInfoVoteListener {
         votes: Vec<Transaction>,
         bank_forks: &RwLock<BankForks>,
     ) -> (Vec<Transaction>, Vec<VerifiedVoteMetadata>) {
-        let mut packet_batches = packet::to_packet_batches::<Packet, _>(&votes, 1);
+        let mut packet_batches = packet::to_packet_batches::<{ Packet::DATA_SIZE }, _>(&votes, 1);
 
         // Votes should already be filtered by this point.
         sigverify::ed25519_verify_cpu(
@@ -377,7 +377,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
         poh_recorder: Arc<RwLock<PohRecorder>>,
-        verified_packets_sender: &BankingSender<Packet>,
+        verified_packets_sender: &BankingSender<{ Packet::DATA_SIZE }>,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
         let mut time_since_lock = Instant::now();
@@ -432,7 +432,7 @@ impl ClusterInfoVoteListener {
     fn check_for_leader_bank_and_send_votes(
         bank_vote_sender_state_option: &mut Option<BankVoteSenderState>,
         current_working_bank: Arc<Bank>,
-        verified_packets_sender: &BankingSender<Packet>,
+        verified_packets_sender: &BankingSender<{ Packet::DATA_SIZE }>,
         verified_vote_packets: &VerifiedVotePackets,
     ) -> Result<()> {
         // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
@@ -915,7 +915,7 @@ mod tests {
         use bincode::serialized_size;
         info!("max vote size {}", serialized_size(&vote_tx).unwrap());
 
-        let packet_batches = packet::to_packet_batches::<Packet, _>(&[vote_tx], 1); // panics if won't fit
+        let packet_batches = packet::to_packet_batches::<{ Packet::DATA_SIZE }, _>(&[vote_tx], 1); // panics if won't fit
 
         assert_eq!(packet_batches.len(), 1);
     }

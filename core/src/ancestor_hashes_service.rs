@@ -23,7 +23,7 @@ use {
     solana_runtime::bank::Bank,
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::Signable,
         signer::keypair::Keypair,
@@ -206,7 +206,7 @@ impl AncestorHashesService {
     /// Listen for responses to our ancestors hashes repair requests
     fn run_responses_listener(
         ancestor_hashes_request_statuses: Arc<DashMap<Slot, DeadSlotAncestorRequestStatus>>,
-        response_receiver: BatchReceiver<Packet>,
+        response_receiver: BatchReceiver<{ Packet::DATA_SIZE }>,
         blockstore: Arc<Blockstore>,
         outstanding_requests: Arc<RwLock<OutstandingAncestorHashesRepairs>>,
         exit: Arc<AtomicBool>,
@@ -255,7 +255,7 @@ impl AncestorHashesService {
     #[allow(clippy::too_many_arguments)]
     fn process_new_packets_from_channel(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        response_receiver: &BatchReceiver<Packet>,
+        response_receiver: &BatchReceiver<{ Packet::DATA_SIZE }>,
         blockstore: &Blockstore,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         stats: &mut AncestorHashesResponsesStats,
@@ -302,7 +302,7 @@ impl AncestorHashesService {
 
     fn process_packet_batch(
         ancestor_hashes_request_statuses: &DashMap<Slot, DeadSlotAncestorRequestStatus>,
-        packet_batch: Batch<Packet>,
+        packet_batch: Batch<{ Packet::DATA_SIZE }>,
         stats: &mut AncestorHashesResponsesStats,
         outstanding_requests: &RwLock<OutstandingAncestorHashesRepairs>,
         blockstore: &Blockstore,
@@ -950,7 +950,7 @@ mod test {
         t_listen: JoinHandle<()>,
         exit: Arc<AtomicBool>,
         responder_info: ContactInfo,
-        response_receiver: BatchReceiver<Packet>,
+        response_receiver: BatchReceiver<{ Packet::DATA_SIZE }>,
         correct_bank_hashes: HashMap<Slot, Hash>,
     }
 

@@ -18,7 +18,7 @@ const NUM_BATCHES: usize = 1;
 fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
     let recycler_cache = RecyclerCache::default();
 
-    let mut packet_batch = Batch::<Packet>::new_pinned_with_capacity(NUM_PACKETS);
+    let mut packet_batch = Batch::<{ Packet::DATA_SIZE }>::new_pinned_with_capacity(NUM_PACKETS);
     packet_batch.resize(NUM_PACKETS, Packet::default());
     let slot = 0xdead_c0de;
     for p in packet_batch.iter_mut() {
@@ -49,7 +49,7 @@ fn bench_sigverify_shreds_sign_gpu(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_sigverify_shreds_sign_cpu(bencher: &mut Bencher) {
-    let mut packet_batch = Batch::<Packet>::default();
+    let mut packet_batch = Batch::<{ Packet::DATA_SIZE }>::default();
     let slot = 0xdead_c0de;
     packet_batch.resize(NUM_PACKETS, Packet::default());
     for p in packet_batch.iter_mut() {

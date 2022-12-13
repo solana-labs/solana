@@ -9,7 +9,6 @@ use {
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::Batch,
     solana_sdk::{
-        packet::{BasePacket, TransactionPacket},
         quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
@@ -54,7 +53,7 @@ impl rustls::server::ClientCertVerifier for SkipClientVerification {
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
-pub(crate) fn configure_server(
+pub(crate) fn configure_server<const N: usize>(
     identity_keypair: &Keypair,
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
@@ -84,12 +83,8 @@ pub(crate) fn configure_server(
     const MAX_CONCURRENT_UNI_STREAMS: u32 =
         (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS.saturating_mul(2)) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
-    config.stream_receive_window((TransactionPacket::DATA_SIZE as u32).into());
-    config.receive_window(
-        (TransactionPacket::DATA_SIZE as u32)
-            .saturating_mul(MAX_CONCURRENT_UNI_STREAMS)
-            .into(),
-    );
+    config.stream_receive_window((N as u32).into());
+    config.receive_window((N as u32).saturating_mul(MAX_CONCURRENT_UNI_STREAMS).into());
     let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
     config.max_idle_timeout(Some(timeout));
 
@@ -301,11 +296,11 @@ impl StreamStats {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn spawn_server(
+pub fn spawn_server<const N: usize>(
     sock: UdpSocket,
     keypair: &Keypair,
     gossip_host: IpAddr,
-    packet_sender: Sender<Batch<TransactionPacket>>,
+    packet_sender: Sender<Batch<N>>,
     exit: Arc<AtomicBool>,
     max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
@@ -346,13 +341,13 @@ pub fn spawn_server(
 mod test {
     use {
         super::*, crate::nonblocking::quic::test::*, crossbeam_channel::unbounded,
-        std::net::SocketAddr,
+        solana_sdk::packet::TransactionPacket, std::net::SocketAddr,
     };
 
     fn setup_quic_server() -> (
         std::thread::JoinHandle<()>,
         Arc<AtomicBool>,
-        crossbeam_channel::Receiver<Batch<TransactionPacket>>,
+        crossbeam_channel::Receiver<Batch<{ TransactionPacket::DATA_SIZE }>>,
         SocketAddr,
     ) {
         let s = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -419,7 +414,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, t) = spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s,
             &keypair,
             ip,
@@ -462,7 +457,7 @@ mod test {
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
-        let (_, t) = spawn_server(
+        let (_, t) = spawn_server::<{ TransactionPacket::DATA_SIZE }>(
             s,
             &keypair,
             ip,

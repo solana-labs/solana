@@ -6,7 +6,7 @@ use {
         feature_set,
         hash::Hash,
         message::Message,
-        packet::BasePacket,
+        packet::GenericPacket,
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -37,17 +37,17 @@ pub enum DeserializedPacketError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ImmutableDeserializedPacket<P: BasePacket> {
-    original_packet: P,
+pub struct ImmutableDeserializedPacket<const N: usize> {
+    original_packet: GenericPacket<N>,
     transaction: SanitizedVersionedTransaction,
     message_hash: Hash,
     is_simple_vote: bool,
     priority_details: TransactionPriorityDetails,
 }
 
-impl<P: BasePacket> ImmutableDeserializedPacket<P> {
+impl<const N: usize> ImmutableDeserializedPacket<N> {
     pub fn new(
-        packet: P,
+        packet: GenericPacket<N>,
         priority_details: Option<TransactionPriorityDetails>,
     ) -> Result<Self, DeserializedPacketError> {
         let versioned_transaction: VersionedTransaction = packet.deserialize_slice(..)?;
@@ -75,7 +75,7 @@ impl<P: BasePacket> ImmutableDeserializedPacket<P> {
         })
     }
 
-    pub fn original_packet(&self) -> &P {
+    pub fn original_packet(&self) -> &GenericPacket<N> {
         &self.original_packet
     }
 
@@ -122,20 +122,22 @@ impl<P: BasePacket> ImmutableDeserializedPacket<P> {
     }
 }
 
-impl<P: BasePacket> PartialOrd for ImmutableDeserializedPacket<P> {
+impl<const N: usize> PartialOrd for ImmutableDeserializedPacket<N> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<P: BasePacket> Ord for ImmutableDeserializedPacket<P> {
+impl<const N: usize> Ord for ImmutableDeserializedPacket<N> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.priority().cmp(&other.priority())
     }
 }
 
 /// Read the transaction message from packet data
-fn packet_message<P: BasePacket>(packet: &P) -> Result<&[u8], DeserializedPacketError> {
+fn packet_message<const N: usize>(
+    packet: &GenericPacket<N>,
+) -> Result<&[u8], DeserializedPacketError> {
     let (sig_len, sig_size) = packet
         .data(..)
         .and_then(|bytes| decode_shortu16_len(bytes).ok())

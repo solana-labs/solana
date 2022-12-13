@@ -48,7 +48,7 @@ pub mod v0 {
         super::{is_printable_ascii, is_utf8, MessageFormat, OffchainMessage as Base},
         crate::{
             hash::{Hash, Hasher},
-            packet::{BasePacket, Packet},
+            packet::Packet,
             sanitize::SanitizeError,
         },
     };

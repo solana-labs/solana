@@ -7,7 +7,7 @@ use {
     rand::{thread_rng, Rng},
     solana_runtime::bank::Bank,
     solana_sdk::{
-        clock::Slot, packet::BasePacket, program_utils::limited_deserialize, pubkey::Pubkey,
+        clock::Slot, packet::GenericPacket, program_utils::limited_deserialize, pubkey::Pubkey,
     },
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
@@ -25,16 +25,19 @@ pub enum VoteSource {
 
 /// Holds deserialized vote messages as well as their source, foward status and slot
 #[derive(Debug, Clone)]
-pub struct LatestValidatorVotePacket<P: BasePacket> {
+pub struct LatestValidatorVotePacket<const N: usize> {
     vote_source: VoteSource,
     pubkey: Pubkey,
-    vote: Option<Arc<ImmutableDeserializedPacket<P>>>,
+    vote: Option<Arc<ImmutableDeserializedPacket<N>>>,
     slot: Slot,
     forwarded: bool,
 }
 
-impl<P: BasePacket> LatestValidatorVotePacket<P> {
-    pub fn new(packet: P, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
+impl<const N: usize> LatestValidatorVotePacket<N> {
+    pub fn new(
+        packet: GenericPacket<N>,
+        vote_source: VoteSource,
+    ) -> Result<Self, DeserializedPacketError> {
         if !packet.meta().is_simple_vote_tx() {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
@@ -44,9 +47,9 @@ impl<P: BasePacket> LatestValidatorVotePacket<P> {
     }
 }
 
-impl<P: BasePacket> LatestValidatorVotePacket<P> {
+impl<const N: usize> LatestValidatorVotePacket<N> {
     pub fn new_from_immutable(
-        vote: Arc<ImmutableDeserializedPacket<P>>,
+        vote: Arc<ImmutableDeserializedPacket<N>>,
         vote_source: VoteSource,
     ) -> Result<Self, DeserializedPacketError> {
         let message = vote.transaction().get_message();
@@ -78,7 +81,7 @@ impl<P: BasePacket> LatestValidatorVotePacket<P> {
         }
     }
 
-    pub fn get_vote_packet(&self) -> Arc<ImmutableDeserializedPacket<P>> {
+    pub fn get_vote_packet(&self) -> Arc<ImmutableDeserializedPacket<N>> {
         self.vote.as_ref().unwrap().clone()
     }
 
@@ -99,7 +102,7 @@ impl<P: BasePacket> LatestValidatorVotePacket<P> {
         self.vote.is_none()
     }
 
-    pub fn take_vote(&mut self) -> Option<Arc<ImmutableDeserializedPacket<P>>> {
+    pub fn take_vote(&mut self) -> Option<Arc<ImmutableDeserializedPacket<N>>> {
         self.vote.take()
     }
 }
@@ -134,11 +137,11 @@ pub(crate) struct VoteBatchInsertionMetrics {
 }
 
 #[derive(Debug, Default)]
-pub struct LatestUnprocessedVotes<P: BasePacket> {
-    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, Arc<RwLock<LatestValidatorVotePacket<P>>>>>,
+pub struct LatestUnprocessedVotes<const N: usize> {
+    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, Arc<RwLock<LatestValidatorVotePacket<N>>>>>,
 }
 
-impl<P: BasePacket> LatestUnprocessedVotes<P> {
+impl<const N: usize> LatestUnprocessedVotes<N> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -159,7 +162,7 @@ impl<P: BasePacket> LatestUnprocessedVotes<P> {
 
     pub(crate) fn insert_batch(
         &self,
-        votes: impl Iterator<Item = LatestValidatorVotePacket<P>>,
+        votes: impl Iterator<Item = LatestValidatorVotePacket<N>>,
     ) -> VoteBatchInsertionMetrics {
         let mut num_dropped_gossip = 0;
         let mut num_dropped_tpu = 0;
@@ -179,7 +182,7 @@ impl<P: BasePacket> LatestUnprocessedVotes<P> {
         }
     }
 
-    fn get_entry(&self, pubkey: Pubkey) -> Option<Arc<RwLock<LatestValidatorVotePacket<P>>>> {
+    fn get_entry(&self, pubkey: Pubkey) -> Option<Arc<RwLock<LatestValidatorVotePacket<N>>>> {
         self.latest_votes_per_pubkey
             .read()
             .unwrap()
@@ -192,8 +195,8 @@ impl<P: BasePacket> LatestUnprocessedVotes<P> {
     /// Otherwise returns None
     pub fn update_latest_vote(
         &self,
-        vote: LatestValidatorVotePacket<P>,
-    ) -> Option<LatestValidatorVotePacket<P>> {
+        vote: LatestValidatorVotePacket<N>,
+    ) -> Option<LatestValidatorVotePacket<N>> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
         if let Some(latest_vote) = self.get_entry(pubkey) {
@@ -234,7 +237,7 @@ impl<P: BasePacket> LatestUnprocessedVotes<P> {
     pub fn get_and_insert_forwardable_packets(
         &self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<P>,
+        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
@@ -282,7 +285,7 @@ impl<P: BasePacket> LatestUnprocessedVotes<P> {
     }
 
     /// Drains all votes yet to be processed sorted by a weighted random ordering by stake
-    pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Arc<ImmutableDeserializedPacket<P>>> {
+    pub fn drain_unprocessed(&self, bank: Arc<Bank>) -> Vec<Arc<ImmutableDeserializedPacket<N>>> {
         let pubkeys_by_stake = weighted_random_order_by_stake(
             &bank,
             self.latest_votes_per_pubkey.read().unwrap().keys(),
@@ -339,7 +342,7 @@ mod tests {
         slots: Vec<(u64, u32)>,
         vote_source: VoteSource,
         keypairs: &ValidatorVoteKeypairs,
-    ) -> LatestValidatorVotePacket<Packet> {
+    ) -> LatestValidatorVotePacket<{ Packet::DATA_SIZE }> {
         let vote = VoteStateUpdate::from(slots);
         let vote_tx = new_vote_state_update_transaction(
             vote,
@@ -354,20 +357,16 @@ mod tests {
             .meta_mut()
             .flags
             .set(PacketFlags::SIMPLE_VOTE_TX, true);
-        LatestValidatorVotePacket::<Packet>::new(packet, vote_source).unwrap()
+        LatestValidatorVotePacket::new(packet, vote_source).unwrap()
     }
 
-    fn deserialize_packets<'a>(
-        packet_batch: &'a Batch<Packet>,
+    fn deserialize_packets<'a, const N: usize>(
+        packet_batch: &'a Batch<N>,
         packet_indexes: &'a [usize],
         vote_source: VoteSource,
-    ) -> impl Iterator<Item = LatestValidatorVotePacket<Packet>> + 'a {
+    ) -> impl Iterator<Item = LatestValidatorVotePacket<N>> + 'a {
         packet_indexes.iter().filter_map(move |packet_index| {
-            LatestValidatorVotePacket::<Packet>::new(
-                packet_batch[*packet_index].clone(),
-                vote_source,
-            )
-            .ok()
+            LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
         })
     }
 
@@ -450,7 +449,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let packet_batch = Batch::<Packet>::new(vec![
+        let packet_batch = Batch::<{ Packet::DATA_SIZE }>::new(vec![
             vote,
             vote_switch,
             vote_state_update,

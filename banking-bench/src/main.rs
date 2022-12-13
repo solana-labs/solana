@@ -22,7 +22,7 @@ use {
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         message::Message,
-        packet::{BasePacket, TransactionPacket},
+        packet::TransactionPacket,
         pubkey::{self, Pubkey},
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
@@ -179,13 +179,13 @@ fn make_transfer_transaction_with_compute_unit_price(
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
-struct PacketsPerIteration<P: BasePacket> {
-    packet_batches: Vec<Batch<P>>,
+struct PacketsPerIteration<const N: usize> {
+    packet_batches: Vec<Batch<N>>,
     transactions: Vec<Transaction>,
     packets_per_batch: usize,
 }
 
-impl<P: BasePacket> PacketsPerIteration<P> {
+impl<const N: usize> PacketsPerIteration<N> {
     fn new(
         packets_per_batch: usize,
         batches_per_iteration: usize,
@@ -204,7 +204,7 @@ impl<P: BasePacket> PacketsPerIteration<P> {
             mint_txs_percentage,
         );
 
-        let packet_batches: Vec<Batch<P>> = to_packet_batches(&transactions, packets_per_batch);
+        let packet_batches: Vec<Batch<N>> = to_packet_batches(&transactions, packets_per_batch);
         assert_eq!(packet_batches.len(), batches_per_iteration);
         Self {
             packet_batches,
@@ -335,18 +335,19 @@ fn main() {
         .unwrap()
         .set_limits(std::u64::MAX, std::u64::MAX, std::u64::MAX);
 
-    let mut all_packets: Vec<PacketsPerIteration<_>> = std::iter::from_fn(|| {
-        Some(PacketsPerIteration::<TransactionPacket>::new(
-            packets_per_batch,
-            batches_per_iteration,
-            genesis_config.hash(),
-            write_lock_contention,
-            matches.is_present("simulate_mint"),
-            mint_txs_percentage,
-        ))
-    })
-    .take(num_chunks)
-    .collect();
+    let mut all_packets: Vec<PacketsPerIteration<{ TransactionPacket::DATA_SIZE }>> =
+        std::iter::from_fn(|| {
+            Some(PacketsPerIteration::new(
+                packets_per_batch,
+                batches_per_iteration,
+                genesis_config.hash(),
+                write_lock_contention,
+                matches.is_present("simulate_mint"),
+                mint_txs_percentage,
+            ))
+        })
+        .take(num_chunks)
+        .collect();
 
     let total_num_transactions: u64 = all_packets
         .iter()

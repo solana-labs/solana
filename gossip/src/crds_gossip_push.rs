@@ -29,7 +29,7 @@ use {
     rand::{seq::SliceRandom, Rng},
     solana_bloom::bloom::{AtomicBloom, Bloom},
     solana_sdk::{
-        packet::{BasePacket, Packet},
+        packet::Packet,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         timing::timestamp,

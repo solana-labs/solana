@@ -59,7 +59,7 @@ mod tests {
             },
             sendmmsg::SendPktsError,
         },
-        solana_sdk::packet::{BasePacket, Packet},
+        solana_sdk::packet::Packet,
         std::{
             io::ErrorKind,
             net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},

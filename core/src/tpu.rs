@@ -141,22 +141,24 @@ impl Tpu {
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
 
-        let find_packet_sender_stake_stage = FindPacketSenderStakeStage::new::<TransactionPacket>(
-            packet_receiver,
-            find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Tpu",
-        );
+        let find_packet_sender_stake_stage =
+            FindPacketSenderStakeStage::new::<{ TransactionPacket::DATA_SIZE }>(
+                packet_receiver,
+                find_packet_sender_stake_sender,
+                staked_nodes.clone(),
+                "Tpu",
+            );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
             unbounded();
 
-        let vote_find_packet_sender_stake_stage = FindPacketSenderStakeStage::new::<Packet>(
-            vote_packet_receiver,
-            vote_find_packet_sender_stake_sender,
-            staked_nodes.clone(),
-            "Vote",
-        );
+        let vote_find_packet_sender_stake_stage =
+            FindPacketSenderStakeStage::new::<{ Packet::DATA_SIZE }>(
+                vote_packet_receiver,
+                vote_find_packet_sender_stake_sender,
+                staked_nodes.clone(),
+                "Vote",
+            );
 
         let (verified_sender, verified_receiver) = unbounded();
 
@@ -192,14 +194,15 @@ impl Tpu {
         .unwrap();
 
         let sigverify_stage = {
-            let verifier = TransactionSigVerifier::<TransactionPacket>::new(verified_sender);
+            let verifier =
+                TransactionSigVerifier::<{ TransactionPacket::DATA_SIZE }>::new(verified_sender);
             SigVerifyStage::new(find_packet_sender_stake_receiver, verifier, "tpu-verifier")
         };
 
         let (verified_tpu_vote_packets_sender, verified_tpu_vote_packets_receiver) = unbounded();
 
         let vote_sigverify_stage = {
-            let verifier = TransactionSigVerifier::<Packet>::new_reject_non_vote(
+            let verifier = TransactionSigVerifier::<{ Packet::DATA_SIZE }>::new_reject_non_vote(
                 verified_tpu_vote_packets_sender,
             );
             SigVerifyStage::new(

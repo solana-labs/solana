@@ -4384,7 +4384,7 @@ pub mod tests {
             hash::{self, hash, Hash},
             instruction::CompiledInstruction,
             message::v0::LoadedAddresses,
-            packet::{BasePacket, Packet},
+            packet::Packet,
             pubkey::Pubkey,
             signature::Signature,
             transaction::{Transaction, TransactionError},

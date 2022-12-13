@@ -21,7 +21,7 @@ use {
             Deduper,
         },
     },
-    solana_sdk::{packet::BasePacket, timing},
+    solana_sdk::{packet::GenericPacket, timing},
     solana_streamer::streamer::{self, StreamerError},
     std::{
         thread::{self, Builder, JoinHandle},
@@ -43,16 +43,16 @@ const MAX_SIGVERIFY_BATCH: usize = 2_000;
 const MAX_DISCARDED_PACKET_RATE: f64 = 0.10;
 
 #[derive(Error, Debug)]
-pub enum SigVerifyServiceError<SendType, PacketType: BasePacket> {
+pub enum SigVerifyServiceError<SendType, const N: usize> {
     #[error("send packets batch error")]
     Send(#[from] SendError<SendType>),
 
     #[error("streamer error")]
-    Streamer(#[from] StreamerError<PacketType>),
+    Streamer(#[from] StreamerError<N>),
 }
 
-type Result<T, SendType, PacketType> =
-    std::result::Result<T, SigVerifyServiceError<SendType, PacketType>>;
+type Result<T, SendType, const N: usize> =
+    std::result::Result<T, SigVerifyServiceError<SendType, N>>;
 
 pub struct SigVerifyStage {
     thread_hdl: JoinHandle<()>,
@@ -204,19 +204,19 @@ impl SigVerifierStats {
 
 impl SigVerifyStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new<P: BasePacket + 'static>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<P>,
-        verifier: TransactionSigVerifier<P>,
+    pub fn new<const N: usize>(
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<N>,
+        verifier: TransactionSigVerifier<N>,
         name: &'static str,
     ) -> Self {
         let thread_hdl = Self::verifier_services(packet_receiver, verifier, name);
         Self { thread_hdl }
     }
 
-    pub fn discard_excess_packets<P: BasePacket>(
-        batches: &mut [Batch<P>],
+    pub fn discard_excess_packets<const N: usize>(
+        batches: &mut [Batch<N>],
         mut max_packets: usize,
-        mut process_excess_packet: impl FnMut(&P),
+        mut process_excess_packet: impl FnMut(&GenericPacket<N>),
     ) {
         // Group packets by their incoming IP address.
         let mut addrs = batches
@@ -244,7 +244,9 @@ impl SigVerifyStage {
     }
 
     /// make this function public so that it is available for benchmarking
-    pub fn maybe_shrink_batches<P: BasePacket>(packet_batches: &mut Vec<Batch<P>>) -> (u64, usize) {
+    pub fn maybe_shrink_batches<const N: usize>(
+        packet_batches: &mut Vec<Batch<N>>,
+    ) -> (u64, usize) {
         let mut shrink_time = Measure::start("sigverify_shrink_time");
         let num_packets = count_packets_in_batches(packet_batches);
         let num_discarded_packets = count_discarded_packets(packet_batches);
@@ -259,12 +261,12 @@ impl SigVerifyStage {
         (shrink_time.as_us(), shrink_total)
     }
 
-    fn verifier<P: BasePacket>(
+    fn verifier<const N: usize>(
         deduper: &Deduper,
-        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<P>,
-        verifier: &mut TransactionSigVerifier<P>,
+        recvr: &find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<N>,
+        verifier: &mut TransactionSigVerifier<N>,
         stats: &mut SigVerifierStats,
-    ) -> Result<(), BankingBatch<P>, P> {
+    ) -> Result<(), BankingBatch<N>, N> {
         let (mut batches, num_packets, recv_duration) = streamer::recv_vec_packet_batches(recvr)?;
 
         let batches_len = batches.len();
@@ -372,9 +374,9 @@ impl SigVerifyStage {
         Ok(())
     }
 
-    fn verifier_service<P: BasePacket + 'static>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<P>,
-        mut verifier: TransactionSigVerifier<P>,
+    fn verifier_service<const N: usize>(
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<N>,
+        mut verifier: TransactionSigVerifier<N>,
         name: &'static str,
     ) -> JoinHandle<()> {
         let mut stats = SigVerifierStats::default();
@@ -413,9 +415,9 @@ impl SigVerifyStage {
             .unwrap()
     }
 
-    fn verifier_services<P: BasePacket + 'static>(
-        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<P>,
-        verifier: TransactionSigVerifier<P>,
+    fn verifier_services<const N: usize>(
+        packet_receiver: find_packet_sender_stake_stage::FindPacketSenderStakeReceiver<N>,
+        verifier: TransactionSigVerifier<N>,
         name: &'static str,
     ) -> JoinHandle<()> {
         Self::verifier_service(packet_receiver, verifier, name)
@@ -439,7 +441,7 @@ mod tests {
         solana_sdk::packet::PacketFlags,
     };
 
-    fn count_non_discard(packet_batches: &[Batch<Packet>]) -> usize {
+    fn count_non_discard(packet_batches: &[Batch<{ Packet::DATA_SIZE }>]) -> usize {
         packet_batches
             .iter()
             .flatten()
@@ -451,7 +453,7 @@ mod tests {
     fn test_packet_discard() {
         solana_logger::setup();
         let batch_size = 10;
-        let mut batch = Batch::<Packet>::with_capacity(batch_size);
+        let mut batch = Batch::<{ Packet::DATA_SIZE }>::with_capacity(batch_size);
         let mut tracer_packet = Packet::default();
         tracer_packet.meta_mut().flags |= PacketFlags::TRACER_PACKET;
         batch.resize(batch_size, tracer_packet);
@@ -487,7 +489,7 @@ mod tests {
         use_same_tx: bool,
         packets_per_batch: usize,
         total_packets: usize,
-    ) -> Vec<Batch<Packet>> {
+    ) -> Vec<Batch<{ Packet::DATA_SIZE }>> {
         if use_same_tx {
             let tx = test_tx();
             to_packet_batches(&vec![tx; total_packets], packets_per_batch)

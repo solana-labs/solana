@@ -18,7 +18,7 @@ use {
         commitment_config::CommitmentConfig,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        packet::{BasePacket, TransactionPacket},
+        packet::TransactionPacket,
         pubkey::Pubkey,
         rpc_port::DEFAULT_RPC_PORT,
         signature::{read_keypair_file, Keypair, Signer},

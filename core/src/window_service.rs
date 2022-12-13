@@ -22,10 +22,7 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::Batch,
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{
-        clock::Slot,
-        packet::{BasePacket, Packet},
-    },
+    solana_sdk::{clock::Slot, packet::Packet},
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -214,7 +211,7 @@ fn prune_shreds_invalid_repair(
 #[allow(clippy::too_many_arguments)]
 fn run_insert<F>(
     thread_pool: &ThreadPool,
-    verified_receiver: &Receiver<Vec<Batch<Packet>>>,
+    verified_receiver: &Receiver<Vec<Batch<{ Packet::DATA_SIZE }>>>,
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     handle_duplicate: F,
@@ -260,10 +257,16 @@ where
             .unzip()
     });
     ws_metrics.handle_packets_elapsed_us += now.elapsed().as_micros() as u64;
-    ws_metrics.num_packets += packets.iter().map(Batch::<Packet>::len).sum::<usize>();
+    ws_metrics.num_packets += packets
+        .iter()
+        .map(Batch::<{ Packet::DATA_SIZE }>::len)
+        .sum::<usize>();
     ws_metrics.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
     ws_metrics.num_shreds_received += shreds.len();
-    for packet in packets.iter().flat_map(Batch::<Packet>::iter) {
+    for packet in packets
+        .iter()
+        .flat_map(Batch::<{ Packet::DATA_SIZE }>::iter)
+    {
         let addr = packet.meta().socket_addr();
         *ws_metrics.addrs.entry(addr).or_default() += 1;
     }
@@ -309,7 +312,7 @@ impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         blockstore: Arc<Blockstore>,
-        verified_receiver: Receiver<Vec<Batch<Packet>>>,
+        verified_receiver: Receiver<Vec<Batch<{ Packet::DATA_SIZE }>>>,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         repair_socket: Arc<UdpSocket>,
         ancestor_hashes_socket: Arc<UdpSocket>,
@@ -397,7 +400,7 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        verified_receiver: Receiver<Vec<Batch<Packet>>>,
+        verified_receiver: Receiver<Vec<Batch<{ Packet::DATA_SIZE }>>>,
         check_duplicate_sender: Sender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<ShredPayload>>,

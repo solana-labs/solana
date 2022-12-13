@@ -2,7 +2,7 @@
 
 use {
     crate::recvmmsg::NUM_RCVMMSGS,
-    solana_sdk::packet::{BasePacket, Meta, Packet},
+    solana_sdk::packet::{Meta, Packet},
     std::{cmp, io},
     tokio::net::UdpSocket,
 };

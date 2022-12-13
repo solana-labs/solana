@@ -31,7 +31,7 @@ use {
         genesis_config::GenesisConfig,
         hash::Hash,
         message::Message,
-        packet::{BasePacket, Packet, TransactionPacket},
+        packet::{Packet, TransactionPacket},
         pubkey,
         signature::{Keypair, Signature, Signer},
         system_instruction, system_transaction,
@@ -84,7 +84,8 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
         let batches =
-            transactions_to_deserialized_packets::<TransactionPacket>(&transactions).unwrap();
+            transactions_to_deserialized_packets::<{ TransactionPacket::DATA_SIZE }>(&transactions)
+                .unwrap();
         let batches_len = batches.len();
         let mut transaction_buffer = UnprocessedTransactionStorage::new_transaction_storage(
             UnprocessedPacketBatches::from_iter(batches.into_iter(), 2 * batches_len),
@@ -253,9 +254,10 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     }
     bank.clear_signatures();
     let verified: Vec<_> =
-        to_packet_batches::<TransactionPacket, _>(&transactions, PACKETS_PER_BATCH);
+        to_packet_batches::<{ TransactionPacket::DATA_SIZE }, _>(&transactions, PACKETS_PER_BATCH);
     let vote_packets = vote_txs.map(|vote_txs| {
-        let mut packet_batches = to_packet_batches::<Packet, _>(&vote_txs, PACKETS_PER_BATCH);
+        let mut packet_batches =
+            to_packet_batches::<{ Packet::DATA_SIZE }, _>(&vote_txs, PACKETS_PER_BATCH);
         for batch in packet_batches.iter_mut() {
             for packet in batch.iter_mut() {
                 packet.meta_mut().set_simple_vote(true);
