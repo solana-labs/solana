@@ -1,6 +1,6 @@
 use {
     crate::{
-        forward_packet_batches_by_accounts::ForwardBatchesByAccounts,
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     },
     itertools::Itertools,
@@ -237,7 +237,7 @@ impl<const N: usize> LatestUnprocessedVotes<N> {
     pub fn get_and_insert_forwardable_packets(
         &self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
+        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts<N>,
     ) -> usize {
         let mut continue_forwarding = true;
         let pubkeys_by_stake = weighted_random_order_by_stake(
@@ -325,7 +325,7 @@ mod tests {
         super::*,
         itertools::Itertools,
         rand::{thread_rng, Rng},
-        solana_perf::packet::{Batch, Packet, PacketFlags},
+        solana_perf::packet::{Packet, PacketBatch, PacketFlags},
         solana_runtime::{
             bank::Bank,
             genesis_utils::{self, ValidatorVoteKeypairs},
@@ -358,7 +358,7 @@ mod tests {
     }
 
     fn deserialize_packets<'a, const N: usize>(
-        packet_batch: &'a Batch<N>,
+        packet_batch: &'a PacketBatch<N>,
         packet_indexes: &'a [usize],
         vote_source: VoteSource,
     ) -> impl Iterator<Item = LatestValidatorVotePacket<N>> + 'a {
@@ -446,7 +446,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let packet_batch = Batch::<{ Packet::DATA_SIZE }>::new(vec![
+        let packet_batch = PacketBatch::<{ Packet::DATA_SIZE }>::new(vec![
             vote,
             vote_switch,
             vote_state_update,
@@ -592,7 +592,7 @@ mod tests {
         let latest_unprocessed_votes = LatestUnprocessedVotes::new();
         let bank = Arc::new(Bank::default_for_tests());
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new_with_default_batch_limits();
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         let keypair_a = ValidatorVoteKeypairs::new_rand();
         let keypair_b = ValidatorVoteKeypairs::new_rand();
@@ -622,7 +622,7 @@ mod tests {
         .genesis_config;
         let bank = Bank::new_for_tests(&config);
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new_with_default_batch_limits();
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Don't forward votes from gossip
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
@@ -647,7 +647,7 @@ mod tests {
         .genesis_config;
         let bank = Arc::new(Bank::new_for_tests(&config));
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new_with_default_batch_limits();
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // Forward from TPU
         let forwarded = latest_unprocessed_votes.get_and_insert_forwardable_packets(
@@ -666,7 +666,7 @@ mod tests {
 
         // Don't forward again
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new_with_default_batch_limits();
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
         let forwarded = latest_unprocessed_votes
             .get_and_insert_forwardable_packets(bank, &mut forward_packet_batches_by_accounts);
 

@@ -1,7 +1,7 @@
 use {
     crate::{
         banking_stage::{BankingStageStats, FilterForwardingResults, ForwardOption},
-        forward_packet_batches_by_accounts::ForwardBatchesByAccounts,
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{
             LatestUnprocessedVotes, LatestValidatorVotePacket, VoteBatchInsertionMetrics,
@@ -319,7 +319,7 @@ impl<const N: usize> UnprocessedTransactionStorage<N> {
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
+        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         match self {
             Self::LocalTransactionStorage(transaction_storage) => transaction_storage
@@ -415,7 +415,7 @@ impl<const N: usize> VoteStorage<N> {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_packet_batches_by_accounts: &mut ForwardBatchesByAccounts<N>,
+        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         if matches!(self.vote_source, VoteSource::Tpu) {
             let total_forwardable_packets = self
@@ -555,7 +555,7 @@ impl<const N: usize> ThreadLocalUnprocessedPackets<N> {
     fn filter_forwardable_packets_and_add_batches(
         &mut self,
         bank: Arc<Bank>,
-        forward_buffer: &mut ForwardBatchesByAccounts<N>,
+        forward_buffer: &mut ForwardPacketBatchesByAccounts<N>,
     ) -> FilterForwardingResults {
         let mut total_forwardable_tracer_packets: usize = 0;
         let mut total_tracer_packets_in_buffer: usize = 0;
@@ -569,7 +569,7 @@ impl<const N: usize> ThreadLocalUnprocessedPackets<N> {
         let mut new_priority_queue = MinMaxHeap::with_capacity(original_capacity);
 
         // indicates if `forward_buffer` still accept more packets, see details at
-        // `ForwardBatchesByAccounts.rs`.
+        // `ForwardPacketBatchesByAccounts.rs`.
         let mut accepting_packets = true;
         // batch iterate through self.unprocessed_packet_batches in desc priority order
         new_priority_queue.extend(
@@ -786,7 +786,7 @@ impl<const N: usize> ThreadLocalUnprocessedPackets<N> {
     /// try to add filtered forwardable and valid packets to forward buffer;
     /// returns vector of packet indexes that were accepted for forwarding.
     fn add_filtered_packets_to_forward_buffer(
-        forward_buffer: &mut ForwardBatchesByAccounts<N>,
+        forward_buffer: &mut ForwardPacketBatchesByAccounts<N>,
         packets_to_process: &[Arc<ImmutableDeserializedPacket<N>>],
         transactions: &[SanitizedTransaction],
         transaction_to_packet_indexes: &[usize],
@@ -1064,8 +1064,10 @@ mod tests {
                 buffered_packet_batches,
                 ThreadType::Transactions,
             );
-            let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
+            let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::<
+                { Packet::DATA_SIZE },
+            >::new_with_default_batch_limits(
+            );
 
             let FilterForwardingResults {
                 total_forwardable_packets,
@@ -1108,8 +1110,10 @@ mod tests {
                 buffered_packet_batches,
                 ThreadType::Transactions,
             );
-            let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
+            let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::<
+                { Packet::DATA_SIZE },
+            >::new_with_default_batch_limits(
+            );
             let FilterForwardingResults {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
@@ -1142,8 +1146,10 @@ mod tests {
                 buffered_packet_batches,
                 ThreadType::Transactions,
             );
-            let mut forward_packet_batches_by_accounts =
-                ForwardBatchesByAccounts::<{ Packet::DATA_SIZE }>::new_with_default_batch_limits();
+            let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::<
+                { Packet::DATA_SIZE },
+            >::new_with_default_batch_limits(
+            );
             let FilterForwardingResults {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,

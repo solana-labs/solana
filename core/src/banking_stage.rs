@@ -4,7 +4,7 @@
 
 use {
     crate::{
-        forward_packet_batches_by_accounts::ForwardBatchesByAccounts,
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::{
@@ -38,7 +38,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::{
         data_budget::DataBudget,
-        packet::{Batch, PACKETS_PER_BATCH},
+        packet::{PacketBatch, PACKETS_PER_BATCH},
     },
     solana_poh::poh_recorder::{BankStart, PohRecorder, PohRecorderError, TransactionRecorder},
     solana_program_runtime::timings::ExecuteTimings,
@@ -98,9 +98,9 @@ const MIN_THREADS_BANKING: u32 = 1;
 const MIN_TOTAL_THREADS: u32 = NUM_VOTE_PROCESSING_THREADS + MIN_THREADS_BANKING;
 
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
-pub type BankingBatch<const N: usize> = (Vec<Batch<N>>, Option<SigverifyTracerPacketStats>);
-pub type BankingSender<const N: usize> = CrossbeamSender<BankingBatch<N>>;
-pub type BankingReceiver<const N: usize> = CrossbeamReceiver<BankingBatch<N>>;
+pub type BankingBatch<const N: usize> = (Vec<PacketBatch<N>>, Option<SigverifyTracerPacketStats>);
+pub type BankingPacketSender<const N: usize> = CrossbeamSender<BankingBatch<N>>;
+pub type BankingPacketReceiver<const N: usize> = CrossbeamReceiver<BankingBatch<N>>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -384,9 +384,9 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<{ TransactionPacket::DATA_SIZE }>,
-        tpu_verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
-        verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
+        verified_receiver: BankingPacketReceiver<{ TransactionPacket::DATA_SIZE }>,
+        tpu_verified_vote_receiver: BankingPacketReceiver<{ Packet::DATA_SIZE }>,
+        verified_vote_receiver: BankingPacketReceiver<{ Packet::DATA_SIZE }>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
@@ -412,9 +412,9 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
-        verified_receiver: BankingReceiver<{ TransactionPacket::DATA_SIZE }>,
-        tpu_verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
-        verified_vote_receiver: BankingReceiver<{ Packet::DATA_SIZE }>,
+        verified_receiver: BankingPacketReceiver<{ TransactionPacket::DATA_SIZE }>,
+        tpu_verified_vote_receiver: BankingPacketReceiver<{ Packet::DATA_SIZE }>,
+        verified_vote_receiver: BankingPacketReceiver<{ Packet::DATA_SIZE }>,
         num_threads: u32,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
@@ -966,7 +966,7 @@ impl BankingStage {
         let current_bank = bank_forks.read().unwrap().root_bank();
 
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new_with_default_batch_limits();
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
         // sanitize and filter packets that are no longer valid (could be too old, a duplicate of something
         // already processed), then add to forwarding buffer.
@@ -2146,8 +2146,8 @@ mod tests {
     }
 
     pub fn convert_from_old_verified<const N: usize>(
-        mut with_vers: Vec<(Batch<N>, Vec<u8>)>,
-    ) -> Vec<Batch<N>> {
+        mut with_vers: Vec<(PacketBatch<N>, Vec<u8>)>,
+    ) -> Vec<PacketBatch<N>> {
         with_vers.iter_mut().for_each(|(b, v)| {
             b.iter_mut()
                 .zip(v)
@@ -3859,7 +3859,7 @@ mod tests {
     #[ignore]
     fn test_forwarder_budget() {
         solana_logger::setup();
-        // Create `Batch<{Packet::DATA_SIZE}>` with 1 unprocessed packet
+        // Create `PacketBatch<{Packet::DATA_SIZE}>` with 1 unprocessed packet
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),

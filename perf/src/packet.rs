@@ -20,13 +20,13 @@ pub const PACKETS_PER_BATCH: usize = 64;
 pub const NUM_RCVMMSGS: usize = 64;
 
 #[derive(Debug, Default, Clone)]
-pub struct Batch<const N: usize> {
+pub struct PacketBatch<const N: usize> {
     packets: PinnedVec<GenericPacket<N>>,
 }
 
 pub type BatchRecycler<T> = Recycler<PinnedVec<T>>;
 
-impl<const N: usize> Batch<N> {
+impl<const N: usize> PacketBatch<N> {
     pub fn new(packets: Vec<GenericPacket<N>>) -> Self {
         let packets = PinnedVec::from_vec(packets);
         Self { packets }
@@ -163,7 +163,7 @@ impl<const N: usize> Batch<N> {
     }
 }
 
-impl<const N: usize, I: SliceIndex<[GenericPacket<N>]>> Index<I> for Batch<N> {
+impl<const N: usize, I: SliceIndex<[GenericPacket<N>]>> Index<I> for PacketBatch<N> {
     type Output = I::Output;
 
     #[inline]
@@ -172,14 +172,14 @@ impl<const N: usize, I: SliceIndex<[GenericPacket<N>]>> Index<I> for Batch<N> {
     }
 }
 
-impl<const N: usize, I: SliceIndex<[GenericPacket<N>]>> IndexMut<I> for Batch<N> {
+impl<const N: usize, I: SliceIndex<[GenericPacket<N>]>> IndexMut<I> for PacketBatch<N> {
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.packets[index]
     }
 }
 
-impl<'a, const N: usize> IntoIterator for &'a Batch<N> {
+impl<'a, const N: usize> IntoIterator for &'a PacketBatch<N> {
     type Item = &'a GenericPacket<N>;
     type IntoIter = Iter<'a, GenericPacket<N>>;
 
@@ -188,7 +188,7 @@ impl<'a, const N: usize> IntoIterator for &'a Batch<N> {
     }
 }
 
-impl<'a, const N: usize> IntoParallelIterator for &'a Batch<N> {
+impl<'a, const N: usize> IntoParallelIterator for &'a PacketBatch<N> {
     type Iter = rayon::slice::Iter<'a, GenericPacket<N>>;
     type Item = &'a GenericPacket<N>;
     fn into_par_iter(self) -> Self::Iter {
@@ -196,7 +196,7 @@ impl<'a, const N: usize> IntoParallelIterator for &'a Batch<N> {
     }
 }
 
-impl<'a, const N: usize> IntoParallelIterator for &'a mut Batch<N> {
+impl<'a, const N: usize> IntoParallelIterator for &'a mut PacketBatch<N> {
     type Iter = rayon::slice::IterMut<'a, GenericPacket<N>>;
     type Item = &'a mut GenericPacket<N>;
     fn into_par_iter(self) -> Self::Iter {
@@ -204,8 +204,8 @@ impl<'a, const N: usize> IntoParallelIterator for &'a mut Batch<N> {
     }
 }
 
-impl<const N: usize> From<Batch<N>> for Vec<GenericPacket<N>> {
-    fn from(batch: Batch<N>) -> Self {
+impl<const N: usize> From<PacketBatch<N>> for Vec<GenericPacket<N>> {
+    fn from(batch: PacketBatch<N>) -> Self {
         batch.packets.into()
     }
 }
@@ -213,11 +213,11 @@ impl<const N: usize> From<Batch<N>> for Vec<GenericPacket<N>> {
 pub fn to_packet_batches<const N: usize, T: Serialize>(
     items: &[T],
     chunk_size: usize,
-) -> Vec<Batch<N>> {
+) -> Vec<PacketBatch<N>> {
     items
         .chunks(chunk_size)
         .map(|batch_items| {
-            let mut batch = Batch::<N>::with_capacity(batch_items.len());
+            let mut batch = PacketBatch::<N>::with_capacity(batch_items.len());
             batch.resize(batch_items.len(), GenericPacket::default());
             for (item, packet) in batch_items.iter().zip(batch.packets.iter_mut()) {
                 GenericPacket::populate_packet(packet, None, item).expect("serialize request");
@@ -228,7 +228,9 @@ pub fn to_packet_batches<const N: usize, T: Serialize>(
 }
 
 #[cfg(test)]
-pub fn to_packet_batches_for_tests<const N: usize, T: Serialize>(items: &[T]) -> Vec<Batch<N>> {
+pub fn to_packet_batches_for_tests<const N: usize, T: Serialize>(
+    items: &[T],
+) -> Vec<PacketBatch<N>> {
     to_packet_batches(items, NUM_PACKETS)
 }
 
@@ -284,7 +286,7 @@ mod tests {
     fn test_to_packets_pinning() {
         let recycler = BatchRecycler::<Packet>::default();
         for i in 0..2 {
-            let _first_packets = Batch::<{ Packet::DATA_SIZE }>::new_with_recycler(
+            let _first_packets = PacketBatch::<{ Packet::DATA_SIZE }>::new_with_recycler(
                 recycler.clone(),
                 i + 1,
                 "first one",

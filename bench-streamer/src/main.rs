@@ -5,8 +5,8 @@ use {
     crossbeam_channel::unbounded,
     solana_sdk::packet::Packet,
     solana_streamer::{
-        packet::{Batch, BatchRecycler},
-        streamer::{receiver, BatchReceiver, StreamerReceiveStats},
+        packet::{BatchRecycler, PacketBatch},
+        streamer::{receiver, PacketBatchReceiver, StreamerReceiveStats},
     },
     std::{
         cmp::max,
@@ -23,7 +23,7 @@ use {
 fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
     let send = UdpSocket::bind("0.0.0.0:0").unwrap();
     let batch_size = 10;
-    let mut packet_batch = Batch::<{ Packet::DATA_SIZE }>::with_capacity(batch_size);
+    let mut packet_batch = PacketBatch::<{ Packet::DATA_SIZE }>::with_capacity(batch_size);
     packet_batch.resize(batch_size, Packet::default());
     for w in packet_batch.iter_mut() {
         w.meta.size = Packet::DATA_SIZE;
@@ -49,7 +49,7 @@ fn producer(addr: &SocketAddr, exit: Arc<AtomicBool>) -> JoinHandle<()> {
 fn sink(
     exit: Arc<AtomicBool>,
     rvs: Arc<AtomicUsize>,
-    r: BatchReceiver<{ Packet::DATA_SIZE }>,
+    r: PacketBatchReceiver<{ Packet::DATA_SIZE }>,
 ) -> JoinHandle<()> {
     spawn(move || loop {
         if exit.load(Ordering::Relaxed) {

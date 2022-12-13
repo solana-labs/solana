@@ -1,6 +1,6 @@
 use {
     crate::{cluster_info_vote_listener::VerifiedLabelVotePacketsReceiver, result::Result},
-    solana_perf::packet::Batch,
+    solana_perf::packet::PacketBatch,
     solana_runtime::{
         bank::Bank,
         vote_transaction::{VoteTransaction, VoteTransaction::VoteStateUpdate},
@@ -28,7 +28,7 @@ const MAX_VOTES_PER_VALIDATOR: usize = 1000;
 pub struct VerifiedVoteMetadata {
     pub vote_account_key: Pubkey,
     pub vote: VoteTransaction,
-    pub packet_batch: Batch<{ Packet::DATA_SIZE }>,
+    pub packet_batch: PacketBatch<{ Packet::DATA_SIZE }>,
     pub signature: Signature,
 }
 
@@ -76,9 +76,9 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
         &mut self,
         slot: &Slot,
         hash: &Hash,
-        packet: &Batch<{ Packet::DATA_SIZE }>,
+        packet: &PacketBatch<{ Packet::DATA_SIZE }>,
         tx_signature: &Signature,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
         // Don't send the same vote to the same bank multiple times
         if self.previously_sent_to_bank_votes.contains(tx_signature) {
             return None;
@@ -104,7 +104,7 @@ impl<'a> ValidatorGossipVotesIterator<'a> {
 ///
 /// Iterator is done after iterating through all vote accounts
 impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
-    type Item = Vec<Batch<{ Packet::DATA_SIZE }>>;
+    type Item = Vec<PacketBatch<{ Packet::DATA_SIZE }>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         use SingleValidatorVotes::*;
@@ -144,7 +144,7 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                                             .filter_map(|((slot, hash), (packet, tx_signature))| {
                                                 self.filter_vote(slot, hash, packet, tx_signature)
                                             })
-                                            .collect::<Vec<Batch<{ Packet::DATA_SIZE }>>>()
+                                            .collect::<Vec<PacketBatch<{ Packet::DATA_SIZE }>>>()
                                     }
                                 }
                             })
@@ -164,13 +164,13 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
 pub struct GossipVote {
     slot: Slot,
     hash: Hash,
-    packet_batch: Batch<{ Packet::DATA_SIZE }>,
+    packet_batch: PacketBatch<{ Packet::DATA_SIZE }>,
     signature: Signature,
 }
 
 pub enum SingleValidatorVotes {
     FullTowerVote(GossipVote),
-    IncrementalVotes(BTreeMap<(Slot, Hash), (Batch<{ Packet::DATA_SIZE }>, Signature)>),
+    IncrementalVotes(BTreeMap<(Slot, Hash), (PacketBatch<{ Packet::DATA_SIZE }>, Signature)>),
 }
 
 impl SingleValidatorVotes {
@@ -269,7 +269,7 @@ impl VerifiedVotePackets {
                             };
                             let validator_votes: &mut BTreeMap<
                                 (Slot, Hash),
-                                (Batch<{ Packet::DATA_SIZE }>, Signature),
+                                (PacketBatch<{ Packet::DATA_SIZE }>, Signature),
                             > = match self
                                 .0
                                 .entry(vote_account_key)
@@ -319,7 +319,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: VoteTransaction::from(vote.clone()),
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -339,7 +339,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: VoteTransaction::from(vote),
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -361,7 +361,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: VoteTransaction::from(vote),
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -384,7 +384,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: VoteTransaction::from(vote),
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[2u8; 64]),
         }])
         .unwrap();
@@ -423,7 +423,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -460,7 +460,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new_unique(),
             }])
             .unwrap();
@@ -514,7 +514,7 @@ mod tests {
                 s.send(vec![VerifiedVoteMetadata {
                     vote_account_key,
                     vote: VoteTransaction::from(vote),
-                    packet_batch: Batch::<{ Packet::DATA_SIZE }>::new(vec![
+                    packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::new(vec![
                         Packet::default();
                         num_packets
                     ]),
@@ -550,7 +550,7 @@ mod tests {
         // Get and verify batches
         let num_expected_batches = 2;
         for _ in 0..num_expected_batches {
-            let validator_batch: Vec<Batch<{ Packet::DATA_SIZE }>> =
+            let validator_batch: Vec<PacketBatch<{ Packet::DATA_SIZE }>> =
                 gossip_votes_iterator.next().unwrap();
             assert_eq!(validator_batch.len(), slot_hashes.slot_hashes().len());
             let expected_len = validator_batch[0].len();
@@ -585,7 +585,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new_unique(),
         }])
         .unwrap();
@@ -616,7 +616,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -642,7 +642,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote: VoteTransaction::from(third_vote.clone()),
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -662,7 +662,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote: VoteTransaction::from(vote),
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -694,7 +694,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote,
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -732,7 +732,7 @@ mod tests {
             s.send(vec![VerifiedVoteMetadata {
                 vote_account_key,
                 vote,
-                packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+                packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
                 signature: Signature::new(&[1u8; 64]),
             }])
             .unwrap();
@@ -762,7 +762,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -793,7 +793,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -818,7 +818,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();
@@ -841,7 +841,7 @@ mod tests {
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
-            packet_batch: Batch::<{ Packet::DATA_SIZE }>::default(),
+            packet_batch: PacketBatch::<{ Packet::DATA_SIZE }>::default(),
             signature: Signature::new(&[1u8; 64]),
         }])
         .unwrap();

@@ -6,7 +6,7 @@ extern crate test;
 use {
     rand::prelude::*,
     solana_perf::{
-        packet::{to_packet_batches, Batch, PACKETS_PER_BATCH},
+        packet::{to_packet_batches, PacketBatch, PACKETS_PER_BATCH},
         sigverify,
     },
     solana_sdk::packet::Packet,
@@ -22,7 +22,10 @@ fn test_packet_with_size(size: usize, rng: &mut ThreadRng) -> Vec<u8> {
         .collect()
 }
 
-fn do_bench_shrink_packets(bencher: &mut Bencher, mut batches: Vec<Batch<{ Packet::DATA_SIZE }>>) {
+fn do_bench_shrink_packets(
+    bencher: &mut Bencher,
+    mut batches: Vec<PacketBatch<{ Packet::DATA_SIZE }>>,
+) {
     // verify packets
     bencher.iter(|| {
         sigverify::shrink_batches(&mut batches);

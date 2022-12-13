@@ -27,7 +27,7 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
-        packet::{Batch, BatchRecycler},
+        packet::{BatchRecycler, PacketBatch},
     },
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -42,7 +42,7 @@ use {
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
-        streamer::{BatchReceiver, BatchSender},
+        streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
         cmp::Reverse,
@@ -349,7 +349,7 @@ impl ServeRepair {
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
         ping_cache: &mut PingCache,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
         let now = Instant::now();
         let (res, label) = {
             match &request {
@@ -452,8 +452,8 @@ impl ServeRepair {
         ping_cache: &mut PingCache,
         recycler: &BatchRecycler<Packet>,
         blockstore: &Blockstore,
-        requests_receiver: &BatchReceiver<{ Packet::DATA_SIZE }>,
-        response_sender: &BatchSender<{ Packet::DATA_SIZE }>,
+        requests_receiver: &PacketBatchReceiver<{ Packet::DATA_SIZE }>,
+        response_sender: &PacketBatchSender<{ Packet::DATA_SIZE }>,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) -> Result<()> {
@@ -656,8 +656,8 @@ impl ServeRepair {
     pub fn listen(
         self,
         blockstore: Arc<Blockstore>,
-        requests_receiver: BatchReceiver<{ Packet::DATA_SIZE }>,
-        response_sender: BatchSender<{ Packet::DATA_SIZE }>,
+        requests_receiver: PacketBatchReceiver<{ Packet::DATA_SIZE }>,
+        response_sender: PacketBatchSender<{ Packet::DATA_SIZE }>,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         const INTERVAL_MS: u64 = 1000;
@@ -814,7 +814,7 @@ impl ServeRepair {
         recycler: &BatchRecycler<Packet>,
         blockstore: &Blockstore,
         requests: Vec<RepairRequestWithMeta>,
-        response_sender: &BatchSender<{ Packet::DATA_SIZE }>,
+        response_sender: &PacketBatchSender<{ Packet::DATA_SIZE }>,
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
@@ -867,7 +867,7 @@ impl ServeRepair {
 
         if !pending_pings.is_empty() {
             stats.pings_sent += pending_pings.len();
-            let batch = Batch::<{ Packet::DATA_SIZE }>::new(pending_pings);
+            let batch = PacketBatch::<{ Packet::DATA_SIZE }>::new(pending_pings);
             let _ignore = response_sender.send(batch);
         }
     }
@@ -1023,7 +1023,7 @@ impl ServeRepair {
     pub(crate) fn handle_repair_response_pings(
         repair_socket: &UdpSocket,
         keypair: &Keypair,
-        packet_batch: &mut Batch<{ Packet::DATA_SIZE }>,
+        packet_batch: &mut PacketBatch<{ Packet::DATA_SIZE }>,
         stats: &mut ShredFetchStats,
     ) {
         let mut pending_pongs = Vec::default();
@@ -1104,7 +1104,7 @@ impl ServeRepair {
         slot: Slot,
         shred_index: u64,
         nonce: Nonce,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
         // Try to find the requested index in one of the slots
         let packet = repair_response::repair_response_packet(
             blockstore,
@@ -1116,7 +1116,7 @@ impl ServeRepair {
 
         inc_new_counter_debug!("serve_repair-window-request-ledger", 1);
         Some(
-            Batch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
+            PacketBatch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
                 recycler,
                 "run_window_request",
                 vec![packet],
@@ -1131,7 +1131,7 @@ impl ServeRepair {
         slot: Slot,
         highest_index: u64,
         nonce: Nonce,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
         // Try to find the requested index in one of the slots
         let meta = blockstore.meta(slot).ok()??;
         if meta.received > highest_index {
@@ -1144,7 +1144,7 @@ impl ServeRepair {
                 nonce,
             )?;
             return Some(
-                Batch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
+                PacketBatch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
                     recycler,
                     "run_highest_window_request",
                     vec![packet],
@@ -1161,8 +1161,8 @@ impl ServeRepair {
         mut slot: Slot,
         max_responses: usize,
         nonce: Nonce,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
-        let mut res = Batch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler(
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
+        let mut res = PacketBatch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler(
             recycler.clone(),
             max_responses,
             "run_orphan",
@@ -1203,7 +1203,7 @@ impl ServeRepair {
         blockstore: &Blockstore,
         slot: Slot,
         nonce: Nonce,
-    ) -> Option<Batch<{ Packet::DATA_SIZE }>> {
+    ) -> Option<PacketBatch<{ Packet::DATA_SIZE }>> {
         let ancestor_slot_hashes = if blockstore.is_duplicate_confirmed(slot) {
             let ancestor_iterator =
                 AncestorIteratorWithHash::from(AncestorIterator::new_inclusive(slot, blockstore));
@@ -1224,7 +1224,7 @@ impl ServeRepair {
             nonce,
         )?;
         Some(
-            Batch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
+            PacketBatch::<{ Packet::DATA_SIZE }>::new_unpinned_with_recycler_data(
                 recycler,
                 "run_ancestor_hashes",
                 vec![packet],

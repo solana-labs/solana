@@ -14,7 +14,7 @@ use {
     solana_core::{sigverify::TransactionSigVerifier, sigverify_stage::SigVerifyStage},
     solana_measure::measure::Measure,
     solana_perf::{
-        packet::{to_packet_batches, Batch},
+        packet::{to_packet_batches, PacketBatch},
         test_tx::test_tx,
     },
     solana_sdk::{
@@ -118,7 +118,7 @@ fn bench_packet_discard_mixed_senders(bencher: &mut Bencher) {
     });
 }
 
-fn gen_batches(use_same_tx: bool) -> Vec<Batch<{ Packet::DATA_SIZE }>> {
+fn gen_batches(use_same_tx: bool) -> Vec<PacketBatch<{ Packet::DATA_SIZE }>> {
     let len = 4096;
     let chunk_size = 1024;
     if use_same_tx {
@@ -186,7 +186,7 @@ fn bench_sigverify_stage(bencher: &mut Bencher) {
     stage.join().unwrap();
 }
 
-fn prepare_batches(discard_factor: i32) -> (Vec<Batch<{ Packet::DATA_SIZE }>>, usize) {
+fn prepare_batches(discard_factor: i32) -> (Vec<PacketBatch<{ Packet::DATA_SIZE }>>, usize) {
     let len = 10_000; // max batch size
     let chunk_size = 1024;
 

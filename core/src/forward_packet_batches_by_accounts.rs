@@ -93,14 +93,14 @@ impl<const N: usize> ForwardBatch<N> {
 /// to allow transactions on non-congested accounts to be forwarded alongside higher fee
 /// transactions that saturate those highly demanded accounts.
 #[derive(Debug)]
-pub struct ForwardBatchesByAccounts<const N: usize> {
+pub struct ForwardPacketBatchesByAccounts<const N: usize> {
     // Forwardable packets are staged in number of batches, each batch is limited
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.
     forward_batches: Vec<ForwardBatch<N>>,
 }
 
-impl<const N: usize> ForwardBatchesByAccounts<N> {
+impl<const N: usize> ForwardPacketBatchesByAccounts<N> {
     pub fn new_with_default_batch_limits() -> Self {
         Self::new(FORWARDED_BLOCK_COMPUTE_RATIO, DEFAULT_NUMBER_OF_BATCHES)
     }
@@ -238,7 +238,7 @@ mod tests {
         // setup forwarding with 2 buckets, each only allow one transaction
         let number_of_batches = 2;
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new(limit_ratio, number_of_batches);
+            ForwardPacketBatchesByAccounts::new(limit_ratio, number_of_batches);
 
         // Assert initially both batches are empty
         {
@@ -309,7 +309,7 @@ mod tests {
             build_test_transaction_and_packet(10, &solana_sdk::pubkey::new_rand());
         let number_of_batches = 1;
         let mut forward_packet_batches_by_accounts =
-            ForwardBatchesByAccounts::new(limit_ratio, number_of_batches);
+            ForwardPacketBatchesByAccounts::new(limit_ratio, number_of_batches);
 
         // Assert initially batch is empty, and accepting new packets
         {

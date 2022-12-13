@@ -3,7 +3,7 @@ mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
         log::*,
-        solana_perf::packet::Batch,
+        solana_perf::packet::PacketBatch,
         solana_quic_client::nonblocking::quic_client::{
             QuicClientCertificate, QuicLazyInitializedEndpoint,
         },
@@ -24,7 +24,7 @@ mod tests {
     };
 
     fn check_packets<const N: usize>(
-        receiver: Receiver<Batch<N>>,
+        receiver: Receiver<PacketBatch<N>>,
         num_bytes: usize,
         num_expected_packets: usize,
     ) {
