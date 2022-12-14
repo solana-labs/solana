@@ -257,6 +257,7 @@ before execting it in the virtual machine.",
     }
     .unwrap();
 
+    #[allow(unused_mut)]
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| format!("Executable verifier failed: {err:?}"))

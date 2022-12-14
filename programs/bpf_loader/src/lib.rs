@@ -153,6 +153,7 @@ fn create_executor_from_bytes(
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
+    #[allow(unused_mut)]
     let mut verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| {
