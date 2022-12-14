@@ -5141,6 +5141,7 @@ dependencies = [
  "solana-version",
  "systemstat",
  "tokio",
+ "tungstenite",
 ]
 
 [[package]]
