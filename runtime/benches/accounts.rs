@@ -86,7 +86,6 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("bench_accounts_hash_internal")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -120,7 +119,6 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("update_accounts_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -140,7 +138,6 @@ fn test_accounts_delta_hash(bencher: &mut Bencher) {
         vec![PathBuf::from("accounts_delta_hash")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut pubkeys: Vec<Pubkey> = vec![];
@@ -157,7 +154,6 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         vec![PathBuf::from("accounts_delete_deps")],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut old_pubkey = Pubkey::default();
@@ -190,7 +186,6 @@ fn store_accounts_with_possible_contention<F: 'static>(
         ],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     ));
     let num_keys = 1000;
@@ -327,7 +322,6 @@ fn setup_bench_dashmap_iter() -> (Arc<Accounts>, DashMap<Pubkey, (AccountSharedD
         ],
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     ));
 
@@ -382,7 +376,6 @@ fn bench_load_largest_accounts(b: &mut Bencher) {
         Vec::new(),
         &ClusterType::Development,
         AccountSecondaryIndexes::default(),
-        false,
         AccountShrinkThreshold::default(),
     );
     let mut rng = rand::thread_rng();

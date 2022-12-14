@@ -1156,7 +1156,6 @@ fn load_bank_forks(
         bank_forks.clone(),
         &exit,
         abs_request_handler,
-        true,
         process_options.accounts_db_test_hash_calculation,
         None,
     );
