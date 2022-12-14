@@ -579,33 +579,13 @@ mod tests {
 
 pub struct BankingSimulator {
     path: PathBuf,
-    non_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
-    tpu_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
-    gossip_vote_channel: (Sender<BankingPacketBatch>, Receiver<BankingPacketBatch>),
 }
 
 impl BankingSimulator {
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
-            non_vote_channel: unbounded(),
-            tpu_vote_channel: unbounded(),
-            gossip_vote_channel: unbounded(),
         }
-    }
-
-    pub fn prepare_receivers(
-        &self,
-    ) -> (
-        Receiver<BankingPacketBatch>,
-        Receiver<BankingPacketBatch>,
-        Receiver<BankingPacketBatch>,
-    ) {
-        (
-            self.non_vote_channel.1.clone(),
-            self.tpu_vote_channel.1.clone(),
-            self.gossip_vote_channel.1.clone(),
-        )
     }
 
     pub fn dump(&self, bank: Option<Arc<solana_runtime::bank::Bank>>) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
@@ -673,13 +653,28 @@ impl BankingSimulator {
         let mut bank = bank_forks.read().unwrap().working_bank();
 
         let (bank_starts_by_slot, packet_batches_by_time) = self.dump(Some(bank.clone()));
+        if std::env::var("DUMP_WITH_BANK").is_ok() {
+            return
+        }
 
-        let (non_vote_sender, tpu_vote_sender, gossip_vote_sender) = (
-            self.non_vote_channel.0.clone(),
-            self.tpu_vote_channel.0.clone(),
-            self.gossip_vote_channel.0.clone(),
-        );
         let bank_slot = bank.slot();
+
+
+
+        let collector = solana_sdk::pubkey::new_rand();
+        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
+        let (exit, poh_recorder, poh_service, _signal_receiver) =
+            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
+
+        let banking_tracer = BankingTracer::new(Some((
+            blockstore.banking_retracer_path(),
+            exit.clone(),
+            DEFAULT_BANKING_TRACE_SIZE
+        ))).unwrap();
+        let (non_vote_sender, non_vote_receiver) = banking_tracer.create_channel_non_vote();
+        let (tpu_vote_sender, tpu_vote_receiver) = banking_tracer.create_channel_tpu_vote();
+        let (gossip_vote_sender, gossip_vote_receiver) =
+            banking_tracer.create_channel_gossip_vote();
 
         std::thread::spawn(move || {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(bank_slot..).next() {
@@ -713,18 +708,7 @@ impl BankingSimulator {
             //}
         });
 
-        let (non_vote_receiver, tpu_vote_receiver, gossip_vote_receiver) = self.prepare_receivers();
 
-        let collector = solana_sdk::pubkey::new_rand();
-        let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
-        let (exit, poh_recorder, poh_service, _signal_receiver) =
-            create_test_recorder(&bank, &blockstore, None, Some(leader_schedule_cache));
-
-        let banking_tracer = BankingTracer::new(Some((
-            blockstore.banking_retracer_path(),
-            exit.clone(),
-            DEFAULT_BANKING_TRACE_SIZE
-        ))).unwrap();
         let cluster_info = solana_gossip::cluster_info::ClusterInfo::new(
             Node::new_localhost().info,
             Arc::new(Keypair::new()),
