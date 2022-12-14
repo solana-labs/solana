@@ -744,7 +744,9 @@ impl<'a> LoadedAccount<'a> {
 
     pub fn write_version(&self) -> StoredMetaWriteVersion {
         match self {
-            LoadedAccount::Stored(stored_account_meta) => stored_account_meta.meta.write_version,
+            LoadedAccount::Stored(stored_account_meta) => {
+                stored_account_meta.meta.write_version_obsolete
+            }
             LoadedAccount::Cached(_) => CACHE_VIRTUAL_WRITE_VERSION,
         }
     }
@@ -3721,8 +3723,8 @@ impl AccountsDb {
                     match stored_accounts.entry(*new_entry.account.pubkey()) {
                         Entry::Occupied(mut occupied_entry) => {
                             assert!(
-                                new_entry.account.meta.write_version
-                                    > occupied_entry.get().account.meta.write_version
+                                new_entry.account.meta.write_version_obsolete
+                                    > occupied_entry.get().account.meta.write_version_obsolete
                             );
                             occupied_entry.insert(new_entry);
                         }
@@ -3925,7 +3927,7 @@ impl AccountsDb {
             for alive_account in &shrink_collect.alive_accounts {
                 accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
-                write_versions.push(alive_account.account.meta.write_version);
+                write_versions.push(alive_account.account.meta.write_version_obsolete);
             }
             find_alive_elapsed.stop();
 
@@ -7029,10 +7031,12 @@ impl AccountsDb {
                 Vec::<(StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>)>::with_capacity(len);
             for storage in storages {
                 let mut iterator = storage.accounts.account_iter();
-                if let Some(item) = iterator
-                    .next()
-                    .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
-                {
+                if let Some(item) = iterator.next().map(|stored_account| {
+                    (
+                        stored_account.meta.write_version_obsolete,
+                        Some(stored_account),
+                    )
+                }) {
                     current.push(item);
                     progress.push(iterator);
                 }
@@ -7058,7 +7062,10 @@ impl AccountsDb {
                     scanner.found_account(&LoadedAccount::Stored(account.1.unwrap()));
                 }
                 let next = progress[min_index].next().map(|stored_account| {
-                    (stored_account.meta.write_version, Some(stored_account))
+                    (
+                        stored_account.meta.write_version_obsolete,
+                        Some(stored_account),
+                    )
                 });
                 match next {
                     Some(item) => {
@@ -8668,7 +8675,7 @@ impl AccountsDb {
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage_maps.iter().for_each(|storage| {
             storage.accounts.account_iter().for_each(|stored_account| {
-                let this_version = stored_account.meta.write_version;
+                let this_version = stored_account.meta.write_version_obsolete;
                 let pubkey = stored_account.pubkey();
                 assert!(!self.is_filler_account(pubkey));
                 match accounts_map.entry(*pubkey) {
@@ -9693,7 +9700,7 @@ pub mod tests {
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
             /// global write version
-            write_version: 0,
+            write_version_obsolete: 0,
             /// key for the account
             pubkey,
             data_len: 43,
@@ -9761,22 +9768,22 @@ pub mod tests {
         let pubkey4 = solana_sdk::pubkey::new_rand();
 
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey,
             data_len: 7,
         };
         let meta2 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey2,
             data_len: 7,
         };
         let meta3 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey3,
             data_len: 7,
         };
         let meta4 = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: pubkey4,
             data_len: 7,
         };
@@ -12402,7 +12409,7 @@ pub mod tests {
         let executable = true;
         let rent_epoch = 2;
         let meta = StoredMeta {
-            write_version: 5,
+            write_version_obsolete: 5,
             pubkey: Pubkey::new_unique(),
             data_len: 7,
         };

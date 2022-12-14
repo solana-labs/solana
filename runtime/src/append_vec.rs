@@ -150,7 +150,10 @@ impl<'a: 'b, 'b, T: ReadableAccount + Sync + 'b, U: StorableAccounts<'a, T>, V: 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StoredMeta {
     /// global write version
-    pub write_version: StoredMetaWriteVersion,
+    /// This will be made completely obsolete such that we stop storing it.
+    /// We will not support multiple append vecs per slot anymore, so this concept is no longer necessary.
+    /// Order of stores of an account to an append vec will determine 'latest' account data per pubkey.
+    pub write_version_obsolete: StoredMetaWriteVersion,
     /// key for the account
     pub pubkey: Pubkey,
     pub data_len: u64,
@@ -656,7 +659,7 @@ impl AppendVec {
                 data_len: account
                     .map(|account| account.data().len())
                     .unwrap_or_default() as u64,
-                write_version: accounts.write_version(i),
+                write_version_obsolete: accounts.write_version(i),
             };
             let meta_ptr = &stored_meta as *const StoredMeta;
             let account_meta_ptr = &account_meta as *const AccountMeta;
@@ -716,7 +719,7 @@ pub mod tests {
                 StorableAccountsWithHashesAndWriteVersions::new_with_hashes_and_write_versions(
                     &account_data,
                     vec![&hash],
-                    vec![data.0.write_version],
+                    vec![data.0.write_version_obsolete],
                 );
 
             self.append_accounts(&storable_accounts, 0)
