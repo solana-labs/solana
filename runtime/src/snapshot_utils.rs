@@ -871,7 +871,7 @@ fn hard_link_appendvec_files_to_snapshot(
     fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
         let err_msg = format!(
             "Error: {}.  Failed to create the hard-link dir {}.",
-            e.to_string(),
+            e,
             dir_accounts_hard_links.display(),
         );
         SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
@@ -1758,7 +1758,7 @@ where
         fs::hard_link(&file_path, &dest_path).map_err(|e| {
             let err_msg = format!(
                 "Error: {}.  Failed to hard-link {} to {}",
-                e.to_string(),
+                e,
                 file_path.display(),
                 dest_path.display()
             );
