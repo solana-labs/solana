@@ -1526,7 +1526,7 @@ impl ClusterInfo {
         let (mut push_messages, num_entries, num_nodes) = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
             self.gossip
-                .new_push_messages(self.drain_push_queue(), timestamp())
+                .new_push_messages(&self_id, self.drain_push_queue(), timestamp(), stakes)
         };
         self.stats
             .push_fanout_num_entries
@@ -1815,7 +1815,7 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn handle_batch_prune_messages(&self, messages: Vec<PruneData>) {
+    fn handle_batch_prune_messages(&self, messages: Vec<PruneData>, stakes: &HashMap<Pubkey, u64>) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
             return;
@@ -1840,6 +1840,7 @@ impl ClusterInfo {
                     &data.prunes,
                     data.wallclock,
                     now,
+                    stakes,
                 ) {
                     Err(CrdsGossipError::PruneMessageTimeout) => {
                         prune_message_timeout += 1;
@@ -2451,7 +2452,7 @@ impl ClusterInfo {
             push_messages.retain(|(_, data)| !data.is_empty());
         }
         self.handle_batch_ping_messages(ping_messages, recycler, response_sender);
-        self.handle_batch_prune_messages(prune_messages);
+        self.handle_batch_prune_messages(prune_messages, stakes);
         self.handle_batch_push_messages(
             push_messages,
             thread_pool,
@@ -3710,6 +3711,7 @@ RPC Enabled Nodes: 1"#;
             Arc::new(keypair),
             SocketAddrSpace::Unspecified,
         );
+        let stakes = HashMap::<Pubkey, u64>::default();
         cluster_info
             .ping_cache
             .lock()
@@ -3719,16 +3721,19 @@ RPC Enabled Nodes: 1"#;
         cluster_info.gossip.refresh_push_active_set(
             &cluster_info.keypair(),
             cluster_info.my_shred_version(),
-            &HashMap::new(), // stakes
-            None,            // gossip validators
+            &stakes,
+            None, // gossip validators
             &cluster_info.ping_cache,
             &mut Vec::new(), // pings
             &SocketAddrSpace::Unspecified,
         );
         //check that all types of gossip messages are signed correctly
-        let (push_messages, _, _) = cluster_info
-            .gossip
-            .new_push_messages(cluster_info.drain_push_queue(), timestamp());
+        let (push_messages, _, _) = cluster_info.gossip.new_push_messages(
+            &cluster_info.id(),
+            cluster_info.drain_push_queue(),
+            timestamp(),
+            &stakes,
+        );
         // there should be some pushes ready
         assert!(!push_messages.is_empty());
         push_messages

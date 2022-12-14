@@ -11,7 +11,7 @@ use {
         crds::{Crds, GossipRoute},
         crds_gossip_error::CrdsGossipError,
         crds_gossip_pull::{CrdsFilter, CrdsGossipPull, ProcessPullStats},
-        crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE},
+        crds_gossip_push::CrdsGossipPush,
         crds_value::{CrdsData, CrdsValue},
         duplicate_shred::{self, DuplicateShredIndex, LeaderScheduleFn, MAX_DUPLICATE_SHREDS},
         legacy_contact_info::LegacyContactInfo as ContactInfo,
@@ -69,8 +69,10 @@ impl CrdsGossip {
 
     pub fn new_push_messages(
         &self,
+        pubkey: &Pubkey, // This node.
         pending_push_messages: Vec<CrdsValue>,
         now: u64,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> (
         HashMap<Pubkey, Vec<CrdsValue>>,
         usize, // number of values
@@ -82,7 +84,7 @@ impl CrdsGossip {
                 let _ = crds.insert(entry, now, GossipRoute::LocalMessage);
             }
         }
-        self.push.new_push_messages(&self.crds, now)
+        self.push.new_push_messages(pubkey, &self.crds, now, stakes)
     }
 
     pub(crate) fn push_duplicate_shred(
@@ -157,11 +159,13 @@ impl CrdsGossip {
         origin: &[Pubkey],
         wallclock: u64,
         now: u64,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(), CrdsGossipError> {
         if now > wallclock.saturating_add(self.push.prune_timeout) {
             Err(CrdsGossipError::PruneMessageTimeout)
         } else if self_pubkey == destination {
-            self.push.process_prune_msg(self_pubkey, peer, origin);
+            self.push
+                .process_prune_msg(self_pubkey, peer, origin, stakes);
             Ok(())
         } else {
             Err(CrdsGossipError::BadPruneDestination)
@@ -187,7 +191,6 @@ impl CrdsGossip {
             self_keypair,
             self_shred_version,
             network_size,
-            CRDS_GOSSIP_NUM_ACTIVE,
             ping_cache,
             pings,
             socket_addr_space,
@@ -419,6 +422,7 @@ mod test {
             &[prune_pubkey],
             now,
             now,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
@@ -429,6 +433,7 @@ mod test {
             &[prune_pubkey], // origins
             now,
             now,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         res.unwrap();
         //test timeout
@@ -440,6 +445,7 @@ mod test {
             &[prune_pubkey], // origins
             now,
             timeout,
+            &HashMap::<Pubkey, u64>::default(), // stakes
         );
         assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }
