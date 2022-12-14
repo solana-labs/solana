@@ -52,6 +52,11 @@ pub enum UpgradeableLoaderState {
     },
 }
 impl UpgradeableLoaderState {
+    /// Size of a serialized program account.
+    pub const fn size_of_uninitialized() -> usize {
+        4 // see test_state_size_of_uninitialized
+    }
+
     /// Size of a buffer account's serialized metadata.
     pub const fn size_of_buffer_metadata() -> usize {
         37 // see test_state_size_of_buffer_metadata
@@ -373,6 +378,13 @@ pub fn extend_program(
 #[cfg(test)]
 mod tests {
     use {super::*, bincode::serialized_size};
+
+    #[test]
+    fn test_state_size_of_uninitialized() {
+        let buffer_state = UpgradeableLoaderState::Uninitialized;
+        let size = serialized_size(&buffer_state).unwrap();
+        assert_eq!(UpgradeableLoaderState::size_of_uninitialized() as u64, size);
+    }
 
     #[test]
     fn test_state_size_of_buffer_metadata() {

@@ -14,6 +14,7 @@ use {
         signature::{Keypair, Signature, Signer},
         signers::Signers,
         system_instruction,
+        sysvar::{Sysvar, SysvarId},
         transaction::{self, Transaction, VersionedTransaction},
         transport::{Result, TransportError},
     },
@@ -323,6 +324,10 @@ impl BankClient {
 
     pub fn new(bank: Bank) -> Self {
         Self::new_shared(&Arc::new(bank))
+    }
+
+    pub fn set_sysvar_for_tests<T: Sysvar + SysvarId>(&self, sysvar: &T) {
+        self.bank.set_sysvar_for_tests(sysvar);
     }
 }
 
