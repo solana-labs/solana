@@ -3,7 +3,8 @@
 use {
     super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
-        accounts_db::{AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId},
+        account_storage::AccountStorageMap,
+        accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
             SerdeStyle, SerializedAppendVecId,
