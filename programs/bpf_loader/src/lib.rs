@@ -153,15 +153,8 @@ fn create_executor_from_bytes(
     create_executor_metrics.load_elf_us = load_elf_time.as_us();
     let executable = executable?;
     let mut verify_code_time = Measure::start("verify_code_time");
-    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
+    #[allow(unused_mut)]
     let mut verified_executable =
-        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
-            .map_err(|err| {
-                ic_logger_msg!(log_collector, "{}", err);
-                InstructionError::InvalidAccountData
-            })?;
-    #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
-    let verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| {
                 ic_logger_msg!(log_collector, "{}", err);
