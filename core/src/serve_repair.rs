@@ -494,64 +494,60 @@ impl ServeRepair {
 
         let decode_start = Instant::now();
         let mut decoded_requests = Vec::default();
-        for packet in reqs_v.iter().flatten() {
-            let request: RepairProtocol = match packet.deserialize_slice(..) {
-                Ok(request) => request,
-                Err(_) => {
-                    stats.err_malformed += 1;
-                    continue;
-                }
-            };
-
-            let from_addr = packet.meta().socket_addr();
-            if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
-                stats.err_malformed += 1;
-                continue;
-            }
-
-            if request.supports_signature() {
-                // collect stats for signature verification
-                Self::verify_signed_packet(&my_id, packet, &request, stats);
-            } else {
-                stats.unsigned_requests += 1;
-            }
-
-            if request.sender() == &my_id {
-                stats.self_repair += 1;
-                continue;
-            }
-
-            let stake = epoch_staked_nodes
-                .as_ref()
-                .and_then(|stakes| stakes.get(request.sender()))
-                .unwrap_or(&0);
-            if *stake == 0 {
-                stats.handle_requests_unstaked += 1;
-            } else {
-                stats.handle_requests_staked += 1;
-            }
-
-            decoded_requests.push(RepairRequestWithMeta {
-                request,
-                from_addr,
-                stake: *stake,
-                whitelisted: false,
-            });
-        }
-        stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
-
         let mut whitelisted_request_count: usize = 0;
         {
             let whitelist = self.repair_whitelist.read().unwrap();
-            if whitelist.len() > 0 {
-                decoded_requests.iter_mut().for_each(|r| {
-                    if whitelist.contains(r.request.sender()) {
-                        r.whitelisted = true;
-                        whitelisted_request_count += 1;
+            for packet in reqs_v.iter().flatten() {
+                let request: RepairProtocol = match packet.deserialize_slice(..) {
+                    Ok(request) => request,
+                    Err(_) => {
+                        stats.err_malformed += 1;
+                        continue;
                     }
+                };
+
+                let from_addr = packet.meta().socket_addr();
+                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
+                    stats.err_malformed += 1;
+                    continue;
+                }
+
+                if request.supports_signature() {
+                    // collect stats for signature verification
+                    Self::verify_signed_packet(&my_id, packet, &request, stats);
+                } else {
+                    stats.unsigned_requests += 1;
+                }
+
+                if request.sender() == &my_id {
+                    stats.self_repair += 1;
+                    continue;
+                }
+
+                let stake = epoch_staked_nodes
+                    .as_ref()
+                    .and_then(|stakes| stakes.get(request.sender()))
+                    .unwrap_or(&0);
+                if *stake == 0 {
+                    stats.handle_requests_unstaked += 1;
+                } else {
+                    stats.handle_requests_staked += 1;
+                }
+
+                let whitelisted = whitelist.contains(request.sender());
+                if whitelisted {
+                    whitelisted_request_count += 1;
+                }
+
+                decoded_requests.push(RepairRequestWithMeta {
+                    request,
+                    from_addr,
+                    stake: *stake,
+                    whitelisted,
                 });
             }
         }
+        stats.decode_time_us += decode_start.elapsed().as_micros() as u64;
         stats.whitelisted_requests += whitelisted_request_count.min(MAX_REQUESTS_PER_ITERATION);
 
         if decoded_requests.len() > MAX_REQUESTS_PER_ITERATION {
