@@ -8982,11 +8982,12 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage_maps: SnapshotStorage = self
-                            .storage
-                            .get_slot_storage_entries(*slot)
+                        let storage_maps = self.storage.get_slot_storage_entries(*slot);
+                        let accounts_map = storage_maps
+                            .as_ref()
+                            .map(|storage_maps| self.process_storage_slot(storage_maps))
                             .unwrap_or_default();
-                        let accounts_map = self.process_storage_slot(&storage_maps);
+
                         scan_time.stop();
                         scan_time_sum += scan_time.as_us();
                         Self::update_storage_info(
