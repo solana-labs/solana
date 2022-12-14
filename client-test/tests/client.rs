@@ -51,6 +51,13 @@ use {
     systemstat::Ipv4Addr,
 };
 
+const TEST_ACCOUNT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 1;
+const TEST_BLOCK_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 2;
+const TEST_PROGRAM_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 3;
+const TEST_ROOT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 4;
+const TEST_SLOT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 5;
+const TEST_SLOT_SUBSCRIPTION_ASYNC_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 6;
+
 #[test]
 fn test_rpc_client() {
     solana_logger::setup();
@@ -112,7 +119,7 @@ fn test_rpc_client() {
 fn test_account_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_ACCOUNT_SUBSCRIPTION_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -255,7 +262,7 @@ fn test_block_subscription() {
     ));
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_BLOCK_SUBSCRIPTION_PORT,
     );
     let pub_cfg = PubSubConfig {
         enable_block_subscription: true,
@@ -320,7 +327,7 @@ fn test_block_subscription() {
 fn test_program_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_PROGRAM_SUBSCRIPTION_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -412,7 +419,7 @@ fn test_program_subscription() {
 fn test_root_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_ROOT_SUBSCRIPTION_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -465,7 +472,7 @@ fn test_root_subscription() {
 fn test_slot_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_SLOT_SUBSCRIPTION_PORT,
     );
     let exit = Arc::new(AtomicBool::new(false));
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -535,7 +542,7 @@ async fn test_slot_subscription_async() {
 
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        rpc_port::DEFAULT_RPC_PUBSUB_PORT,
+        TEST_SLOT_SUBSCRIPTION_ASYNC_PORT,
     );
 
     tokio::task::spawn_blocking(move || {
