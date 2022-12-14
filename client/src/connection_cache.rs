@@ -135,9 +135,7 @@ impl ConnectionCache {
         if self.use_quic() && !force_use_udp {
             Some(Arc::new(QuicLazyInitializedEndpoint::new(
                 self.client_certificate.clone(),
-                self.client_endpoint
-                    .as_ref()
-                    .map(|endpoint| endpoint.clone()),
+                self.client_endpoint.as_ref().cloned(),
             )))
         } else {
             None
