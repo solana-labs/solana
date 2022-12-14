@@ -41,7 +41,7 @@ use {
         collections::HashSet,
         net::{IpAddr, SocketAddr},
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::sleep,
@@ -51,12 +51,15 @@ use {
     tungstenite::connect,
 };
 
-const TEST_ACCOUNT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 1;
-const TEST_BLOCK_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 2;
-const TEST_PROGRAM_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 3;
-const TEST_ROOT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 4;
-const TEST_SLOT_SUBSCRIPTION_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 5;
-const TEST_SLOT_SUBSCRIPTION_ASYNC_PORT: u16 = rpc_port::DEFAULT_RPC_PUBSUB_PORT + 6;
+fn pubsub_addr() -> SocketAddr {
+    static NEXT_RPC_PUBSUB_PORT: AtomicU16 =
+        std::sync::atomic::AtomicU16::new(rpc_port::DEFAULT_RPC_PUBSUB_PORT);
+
+    SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        NEXT_RPC_PUBSUB_PORT.fetch_add(1, Ordering::Relaxed),
+    )
+}
 
 #[test]
 fn test_rpc_client() {
@@ -116,10 +119,7 @@ fn test_rpc_client() {
 
 #[test]
 fn test_account_subscription() {
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_ACCOUNT_SUBSCRIPTION_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
     let exit = Arc::new(AtomicBool::new(false));
 
     let GenesisConfigInfo {
@@ -262,10 +262,7 @@ fn test_block_subscription() {
         Arc::new(RwLock::new(BlockCommitmentCache::default())),
         OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
     ));
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_BLOCK_SUBSCRIPTION_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
     let pub_cfg = PubSubConfig {
         enable_block_subscription: true,
         ..PubSubConfig::default()
@@ -328,10 +325,7 @@ fn test_block_subscription() {
 
 #[test]
 fn test_program_subscription() {
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_PROGRAM_SUBSCRIPTION_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
     let exit = Arc::new(AtomicBool::new(false));
 
     let GenesisConfigInfo {
@@ -423,10 +417,7 @@ fn test_program_subscription() {
 
 #[test]
 fn test_root_subscription() {
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_ROOT_SUBSCRIPTION_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
     let exit = Arc::new(AtomicBool::new(false));
 
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
@@ -479,10 +470,7 @@ fn test_root_subscription() {
 
 #[test]
 fn test_slot_subscription() {
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_SLOT_SUBSCRIPTION_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
     let exit = Arc::new(AtomicBool::new(false));
     let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
     let bank = Bank::new_for_tests(&genesis_config);
@@ -551,10 +539,7 @@ async fn test_slot_subscription_async() {
         }
     }
 
-    let pubsub_addr = SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-        TEST_SLOT_SUBSCRIPTION_ASYNC_PORT,
-    );
+    let pubsub_addr = pubsub_addr();
 
     tokio::task::spawn_blocking(move || {
         let exit = Arc::new(AtomicBool::new(false));
