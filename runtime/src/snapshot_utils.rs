@@ -2719,7 +2719,7 @@ pub fn verify_snapshot_archive<P, Q, R>(
         // old archive structure.
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
-            std::fs::remove_dir_all(accounts_path).unwrap();
+            move_and_async_delete_path(&accounts_path);
         }
         let state_complete_path = snapshot_slot_dir.join("state_complete");
         if state_complete_path.is_file() {
