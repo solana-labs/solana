@@ -550,6 +550,10 @@ pub mod enable_alt_bn128_syscall {
     solana_sdk::declare_id!("A16q37opZdQMCbe5qJ6xpBB9usykfv8jZaMkxvZQi4GJ");
 }
 
+pub mod enable_program_redeployment_cooldown {
+    solana_sdk::declare_id!("J4HFT8usBxpcF63y46t1upYobJgChmKyZPm5uTBRg25Z");
+}
+
 pub mod enable_big_mod_exp_syscall {
     solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXBGMDEXP");
 }
@@ -686,7 +690,8 @@ lazy_static! {
         (enable_bpf_loader_set_authority_checked_ix::id(), "enable bpf upgradeable loader SetAuthorityChecked instruction #28424"),
         (cap_transaction_accounts_data_size::id(), "cap transaction accounts data size up to its compute unit limits #27839"),
         (enable_alt_bn128_syscall::id(), "add alt_bn128 syscalls #27961"),
-        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall"),
+        (enable_program_redeployment_cooldown::id(), "enable program redeployment cooldown #29135"),
+        (enable_big_mod_exp_syscall::id(), "add big_mod_exp syscall #28503"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
