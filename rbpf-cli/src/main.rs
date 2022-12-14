@@ -257,7 +257,13 @@ before execting it in the virtual machine.",
     }
     .unwrap();
 
+    #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     let mut verified_executable =
+        VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
+            .map_err(|err| format!("Executable verifier failed: {err:?}"))
+            .unwrap();
+    #[cfg(any(target_os = "windows", not(target_arch = "x86_64")))]
+    let verified_executable =
         VerifiedExecutable::<RequisiteVerifier, InvokeContext>::from_executable(executable)
             .map_err(|err| format!("Executable verifier failed: {err:?}"))
             .unwrap();
