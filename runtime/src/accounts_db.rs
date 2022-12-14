@@ -21,6 +21,7 @@
 use {
     crate::{
         account_info::{AccountInfo, Offset, StorageLocation, StoredSize},
+        account_storage::{AccountStorage, AccountStorageStatus},
         accounts_background_service::{DroppedSlotsSender, SendDroppedBankCallback},
         accounts_cache::{AccountsCache, CachedAccount, SlotCache},
         accounts_hash::{
@@ -836,55 +837,6 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
             // clone here to prevent data copy
             LoadedAccount::Cached(cached_account) => cached_account.account.clone(),
         }
-    }
-}
-
-pub type AccountStorageMap = DashMap<Slot, SlotStores>;
-
-#[derive(Clone, Default, Debug)]
-pub struct AccountStorage {
-    pub map: AccountStorageMap,
-}
-
-impl AccountStorage {
-    fn get_account_storage_entry(
-        &self,
-        slot: Slot,
-        store_id: AppendVecId,
-    ) -> Option<Arc<AccountStorageEntry>> {
-        self.get_slot_stores(slot)
-            .and_then(|storage_map| storage_map.read().unwrap().get(&store_id).cloned())
-    }
-
-    pub fn get_slot_stores(&self, slot: Slot) -> Option<SlotStores> {
-        self.map.get(&slot).map(|result| result.value().clone())
-    }
-
-    fn get_slot_storage_entries(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.get_slot_stores(slot)
-            .map(|res| res.read().unwrap().values().cloned().collect())
-    }
-
-    fn slot_store_count(&self, slot: Slot, store_id: AppendVecId) -> Option<usize> {
-        self.get_account_storage_entry(slot, store_id)
-            .map(|store| store.count())
-    }
-
-    fn all_slots(&self) -> Vec<Slot> {
-        self.map.iter().map(|iter_item| *iter_item.key()).collect()
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Deserialize, Serialize, AbiExample, AbiEnumVisitor)]
-pub enum AccountStorageStatus {
-    Available = 0,
-    Full = 1,
-    Candidate = 2,
-}
-
-impl Default for AccountStorageStatus {
-    fn default() -> Self {
-        Self::Available
     }
 }
 
