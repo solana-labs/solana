@@ -858,7 +858,7 @@ impl AccountStorage {
         self.map.get(&slot).map(|result| result.value().clone())
     }
 
-    fn get_slot_storage_entries(&self, slot: Slot) -> Option<Vec<Arc<AccountStorageEntry>>> {
+    fn get_slot_storage_entries(&self, slot: Slot) -> Option<SnapshotStorage> {
         self.get_slot_stores(slot)
             .map(|res| res.read().unwrap().values().cloned().collect())
     }
@@ -1191,7 +1191,7 @@ impl RecycleStores {
         self.entries.iter()
     }
 
-    fn add_entries(&mut self, new_entries: Vec<Arc<AccountStorageEntry>>) {
+    fn add_entries(&mut self, new_entries: SnapshotStorage) {
         self.total_bytes += new_entries.iter().map(|e| e.total_bytes()).sum::<u64>();
         let now = Instant::now();
         for new_entry in new_entries {
@@ -1199,7 +1199,7 @@ impl RecycleStores {
         }
     }
 
-    fn expire_old_entries(&mut self) -> Vec<Arc<AccountStorageEntry>> {
+    fn expire_old_entries(&mut self) -> SnapshotStorage {
         let mut expired = vec![];
         let now = Instant::now();
         let mut expired_bytes = 0;
@@ -4029,7 +4029,7 @@ impl AccountsDb {
         slot: Slot,
         should_retain: impl Fn(&AccountStorageEntry) -> bool,
         add_dirty_stores: bool,
-    ) -> (usize, Vec<Arc<AccountStorageEntry>>) {
+    ) -> (usize, SnapshotStorage) {
         let mut dead_storages = Vec::default();
         let remaining_stores = if let Some(slot_stores) = self.storage.get_slot_stores(slot) {
             let mut list = slot_stores.write().unwrap();
@@ -4054,7 +4054,7 @@ impl AccountsDb {
 
     pub(crate) fn drop_or_recycle_stores(
         &self,
-        dead_storages: Vec<Arc<AccountStorageEntry>>,
+        dead_storages: SnapshotStorage,
         stats: &ShrinkStats,
     ) {
         let mut recycle_stores_write_elapsed = Measure::start("recycle_stores_write_time");
@@ -4113,8 +4113,7 @@ impl AccountsDb {
         debug!("shrink_slot_forced: slot: {}", slot);
 
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
-            let stores: Vec<Arc<AccountStorageEntry>> =
-                stores_lock.read().unwrap().values().cloned().collect();
+            let stores: SnapshotStorage = stores_lock.read().unwrap().values().cloned().collect();
             if !Self::is_shrinking_productive(slot, stores.iter()) {
                 return 0;
             }
@@ -4902,7 +4901,7 @@ impl AccountsDb {
             // If the slot is not in the cache, then all the account information must have
             // been flushed. This is guaranteed because we only remove the rooted slot from
             // the cache *after* we've finished flushing in `flush_slot_cache`.
-            let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+            let storage_maps: SnapshotStorage = self
                 .storage
                 .get_slot_storage_entries(slot)
                 .unwrap_or_default();
@@ -7074,11 +7073,7 @@ impl AccountsDb {
         }
     }
 
-    fn update_old_slot_stats(
-        &self,
-        stats: &HashStats,
-        sub_storages: Option<&Vec<Arc<AccountStorageEntry>>>,
-    ) {
+    fn update_old_slot_stats(&self, stats: &HashStats, sub_storages: Option<&SnapshotStorage>) {
         if let Some(sub_storages) = sub_storages {
             stats.roots_older_than_epoch.fetch_add(1, Ordering::Relaxed);
             let mut ancients = 0;
@@ -7134,7 +7129,7 @@ impl AccountsDb {
     /// return true iff storages are valid for loading from cache
     fn hash_storage_info(
         hasher: &mut impl StdHasher,
-        storages: Option<&Vec<Arc<AccountStorageEntry>>>,
+        storages: Option<&SnapshotStorage>,
         slot: Slot,
     ) -> bool {
         if let Some(sub_storages) = storages {
@@ -8168,7 +8163,7 @@ impl AccountsDb {
         pubkeys_removed_from_accounts_index: &PubkeysRemovedFromAccountsIndex,
     ) {
         let mut measure = Measure::start("clean_stored_dead_slots-ms");
-        let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
+        let mut stores: SnapshotStorage = vec![];
         // get all stores in a vec so we can iterate in parallel
         for slot in dead_slots.iter() {
             if let Some(slot_storage) = self.storage.get_slot_stores(*slot) {
@@ -8918,7 +8913,7 @@ impl AccountsDb {
                 .take(per_pass)
                 .collect::<Vec<_>>();
             roots_in_this_pass.into_par_iter().for_each(|slot| {
-                let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                let storage_maps: SnapshotStorage = self
                     .storage
                     .get_slot_storage_entries(*slot)
                     .unwrap_or_default();
@@ -9032,7 +9027,7 @@ impl AccountsDb {
                     for (index, slot) in slots.iter().enumerate() {
                         let mut scan_time = Measure::start("scan");
                         log_status.report(index as u64);
-                        let storage_maps: Vec<Arc<AccountStorageEntry>> = self
+                        let storage_maps: SnapshotStorage = self
                             .storage
                             .get_slot_storage_entries(*slot)
                             .unwrap_or_default();
@@ -14249,7 +14244,7 @@ pub mod tests {
         }
     }
 
-    fn slot_stores(db: &AccountsDb, slot: Slot) -> Vec<Arc<AccountStorageEntry>> {
+    fn slot_stores(db: &AccountsDb, slot: Slot) -> SnapshotStorage {
         db.storage
             .get_slot_storage_entries(slot)
             .unwrap_or_default()
@@ -14624,7 +14619,7 @@ pub mod tests {
         accounts_db.add_root(slot);
         accounts_db.flush_accounts_cache(true, None);
 
-        let mut storage_maps: Vec<Arc<AccountStorageEntry>> = accounts_db
+        let mut storage_maps: SnapshotStorage = accounts_db
             .storage
             .get_slot_storage_entries(slot)
             .unwrap_or_default();
