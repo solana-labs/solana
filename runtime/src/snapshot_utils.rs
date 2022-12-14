@@ -1003,7 +1003,6 @@ pub fn bank_from_snapshot_archives(
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
-        true, // caching_enabled
         limit_load_slot_count_from_snapshot,
         shrink_ratio,
         verify_index,
@@ -1788,8 +1787,6 @@ fn rebuild_bank_from_snapshots(
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
-    // this parameter will be removed when all plumbing for disabling write cache is removed
-    _accounts_db_caching_enabled: bool,
     limit_load_slot_count_from_snapshot: Option<usize>,
     shrink_ratio: AccountShrinkThreshold,
     verify_index: bool,
