@@ -566,9 +566,12 @@ async fn handle_connection(
                         let last_update = last_update.clone();
                         tokio::spawn(async move {
                             let mut maybe_batch = None;
+                            let exit_check_interval =
+                                (wait_for_chunk_timeout_ms / 10).min(10).max(1000);
+                            let mut start = Instant::now();
                             while !stream_exit.load(Ordering::Relaxed) {
                                 if let Ok(chunk) = tokio::time::timeout(
-                                    Duration::from_millis(wait_for_chunk_timeout_ms),
+                                    Duration::from_millis(exit_check_interval),
                                     stream.read_chunk(PACKET_DATA_SIZE, false),
                                 )
                                 .await
@@ -585,12 +588,16 @@ async fn handle_connection(
                                         last_update.store(timing::timestamp(), Ordering::Relaxed);
                                         break;
                                     }
+                                    start = Instant::now();
                                 } else {
-                                    debug!("Timeout in receiving on stream");
-                                    stats
-                                        .total_stream_read_timeouts
-                                        .fetch_add(1, Ordering::Relaxed);
-                                    break;
+                                    let elapse = Instant::now() - start;
+                                    if elapse.as_millis() as u64 > wait_for_chunk_timeout_ms {
+                                        debug!("Timeout in receiving on stream");
+                                        stats
+                                            .total_stream_read_timeouts
+                                            .fetch_add(1, Ordering::Relaxed);
+                                        break;
+                                    }
                                 }
                             }
                             stats.total_streams.fetch_sub(1, Ordering::Relaxed);
@@ -1020,7 +1027,7 @@ pub mod test {
             MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS,
             stats.clone(),
-            1000, // shortened from the default.
+            2000,
         )
         .unwrap();
         (t, exit, receiver, server_address, stats)
