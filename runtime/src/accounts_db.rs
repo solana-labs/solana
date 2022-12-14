@@ -1290,9 +1290,6 @@ pub struct AccountsDb {
     /// Set of shrinkable stores organized by map of slot to append_vec_id
     pub shrink_candidate_slots: Mutex<ShrinkCandidates>,
 
-    /// Legacy shrink slots to support non-cached code-path.
-    pub shrink_candidate_slots_v1: Mutex<Vec<Slot>>,
-
     pub(crate) write_version: AtomicU64,
 
     /// Set of storage paths to pick from
@@ -2316,7 +2313,6 @@ impl AccountsDb {
             recycle_stores: RwLock::new(RecycleStores::default()),
             uncleaned_pubkeys: DashMap::new(),
             next_id: AtomicAppendVecId::new(0),
-            shrink_candidate_slots_v1: Mutex::new(Vec::new()),
             shrink_candidate_slots: Mutex::new(HashMap::new()),
             write_cache_limit_bytes: None,
             write_version: AtomicU64::new(0),
