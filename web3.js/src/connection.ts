@@ -3603,7 +3603,7 @@ export class Connection {
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
-  /** @deprecated Instead, call `confirmTransaction` using a `TransactionConfirmationConfig` */
+  /** @deprecated Instead, call `confirmTransaction` and pass in `BlockheightBasedTransactionConfirmationStrategy` or `DurableNonceTransactionConfirmationStrategy`  */
   // eslint-disable-next-line no-dupe-class-members
   confirmTransaction(
     strategy: TransactionSignature,
