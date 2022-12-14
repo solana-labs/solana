@@ -51,10 +51,9 @@ use {
     tungstenite::connect,
 };
 
-fn pubsub_addr() -> SocketAddr {
-    static NEXT_RPC_PUBSUB_PORT: AtomicU16 =
-        std::sync::atomic::AtomicU16::new(rpc_port::DEFAULT_RPC_PUBSUB_PORT);
+static NEXT_RPC_PUBSUB_PORT: AtomicU16 = AtomicU16::new(rpc_port::DEFAULT_RPC_PUBSUB_PORT);
 
+fn pubsub_addr() -> SocketAddr {
     SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         NEXT_RPC_PUBSUB_PORT.fetch_add(1, Ordering::Relaxed),
