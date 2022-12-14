@@ -869,11 +869,12 @@ fn hard_link_appendvec_files_to_snapshot(
 ) -> Result<()> {
     let dir_accounts_hard_links = bank_snapshots_dir.as_ref().join("accounts");
     fs::create_dir(&dir_accounts_hard_links).map_err(|e| {
-        error!(
-            "Failed to create the hard-link dir {}",
-            dir_accounts_hard_links.display()
+        let err_msg = format!(
+            "Error: {}.  Failed to create the hard-link dir {}.",
+            e.to_string(),
+            dir_accounts_hard_links.display(),
         );
-        SnapshotError::IoWithSource(e, "hard-link")
+        SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
     })?;
 
     for slot_storages in snapshot_storages {
@@ -1755,12 +1756,13 @@ where
         let file_name = file_path.file_name().unwrap();
         let dest_path = dest_account_path.clone().join(file_name);
         fs::hard_link(&file_path, &dest_path).map_err(|e| {
-            error!(
-                "Failed to hard-link {} to {}",
+            let err_msg = format!(
+                "Error: {}.  Failed to hard-link {} to {}",
+                e.to_string(),
                 file_path.display(),
                 dest_path.display()
             );
-            SnapshotError::IoWithSource(e, "hard-link failed")
+            SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
         })?;
     }
 
