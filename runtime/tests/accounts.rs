@@ -38,7 +38,7 @@ fn test_shrink_and_clean() {
             if exit_for_shrink.load(Ordering::Relaxed) {
                 break;
             }
-            accounts_for_shrink.process_stale_slot_v1();
+            accounts_for_shrink.shrink_all_slots(false, None);
         });
 
         let mut alive_accounts = vec![];
@@ -58,9 +58,18 @@ fn test_shrink_and_clean() {
 
             for (pubkey, account) in alive_accounts.iter_mut() {
                 account.checked_sub_lamports(1).unwrap();
-                accounts.store_uncached(current_slot, &[(pubkey, account)]);
+
+                accounts.store_cached(
+                    (
+                        current_slot,
+                        &[(&*pubkey, &*account)][..],
+                        INCLUDE_SLOT_IN_HASH_TESTS,
+                    ),
+                    None,
+                );
             }
             accounts.add_root(current_slot);
+            accounts.flush_accounts_cache(true, Some(current_slot));
         }
 
         // let's dance.
