@@ -363,7 +363,7 @@ impl<'a> SnapshotMinimizer<'a> {
             for alive_account in keep_accounts {
                 accounts.push(&alive_account.account);
                 hashes.push(alive_account.account.hash);
-                write_versions.push(alive_account.account.meta.write_version);
+                write_versions.push(alive_account.account.meta.write_version_obsolete);
             }
 
             let new_storage = self.accounts_db().get_store_for_shrink(slot, aligned_total);
