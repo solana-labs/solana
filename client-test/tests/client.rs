@@ -1,7 +1,6 @@
 use {
     futures_util::StreamExt,
     serde_json::{json, Value},
-    serial_test::serial,
     solana_ledger::{blockstore::Blockstore, get_tmp_ledger_path},
     solana_pubsub_client::{nonblocking, pubsub_client::PubsubClient},
     solana_rpc::{
@@ -116,7 +115,6 @@ fn test_rpc_client() {
 }
 
 #[test]
-#[serial]
 fn test_account_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -219,7 +217,6 @@ fn test_account_subscription() {
 }
 
 #[test]
-#[serial]
 fn test_block_subscription() {
     // setup BankForks
     let exit = Arc::new(AtomicBool::new(false));
@@ -330,7 +327,6 @@ fn test_block_subscription() {
 }
 
 #[test]
-#[serial]
 fn test_program_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -426,7 +422,6 @@ fn test_program_subscription() {
 }
 
 #[test]
-#[serial]
 fn test_root_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -483,7 +478,6 @@ fn test_root_subscription() {
 }
 
 #[test]
-#[serial]
 fn test_slot_subscription() {
     let pubsub_addr = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -548,7 +542,6 @@ fn test_slot_subscription() {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_slot_subscription_async() {
     let sync_service = Arc::new(AtomicU64::new(0));
     let sync_client = Arc::clone(&sync_service);
