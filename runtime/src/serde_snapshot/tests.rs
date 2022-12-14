@@ -111,7 +111,6 @@ where
             ..GenesisConfig::default()
         },
         AccountSecondaryIndexes::default(),
-        false,
         None,
         AccountShrinkThreshold::default(),
         false,
