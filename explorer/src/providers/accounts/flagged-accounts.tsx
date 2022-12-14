@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 
 type FlaggedMap = Record<string, IncidentDescription>;
-type ProviderProps = { children: React.ReactNode };
 
 type IncidentId = "ftx-hack-november-2022" | "known-scam";
 type IncidentDescription = React.ReactElement;
@@ -46,33 +45,8 @@ const INCIDENTS: Record<IncidentId, IncidentDescription> = {
   ),
 } as const;
 
-const FlaggedContext = React.createContext<FlaggedMap>({});
-
-export function FlaggedAccountsProvider({ children }: ProviderProps) {
-  const [flaggedAccounts, setFlaggedAccounts] = React.useState<FlaggedMap>({});
-
-  React.useEffect(() => {
-    let flaggedMap: FlaggedMap = {};
-    for (const [account, incidentId] of Object.entries(FLAGGED_ACCOUNTS)) {
-      flaggedMap[account] = INCIDENTS[incidentId];
-    }
-    setFlaggedAccounts(flaggedMap);
-  }, []);
-
-  return (
-    <FlaggedContext.Provider value={flaggedAccounts}>
-      {children}
-    </FlaggedContext.Provider>
-  );
+const FLAGGED_ACCOUNTS_WARNING: FlaggedMap = {};
+for (const [account, incidentId] of Object.entries(FLAGGED_ACCOUNTS)) {
+  FLAGGED_ACCOUNTS_WARNING[account] = INCIDENTS[incidentId];
 }
-
-export function useFlaggedAccounts() {
-  const flaggedAccounts = React.useContext(FlaggedContext);
-  if (!flaggedAccounts) {
-    throw new Error(
-      `useFlaggedAccounts must be used within a AccountsProvider`
-    );
-  }
-
-  return { flaggedAccounts };
-}
+export default FLAGGED_ACCOUNTS_WARNING;
