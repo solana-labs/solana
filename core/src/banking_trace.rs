@@ -168,6 +168,7 @@ pub fn receiving_loop_with_minimized_sender_overhead<T, E, const SLEEP_MS: u64>(
                 Ok(message) => on_recv(message)?,
                 Err(TryRecvError::Empty) => break 'inner,
                 Err(TryRecvError::Disconnected) => {
+                    info!("disconnected!");
                     break 'outer;
                 }
             };
@@ -274,9 +275,12 @@ impl BankingTracer {
     fn trace_event(&self, event: TimedTracedEvent) {
         if let Some((sender, _, exit)) = &self.enabled_tracer {
             if !exit.load(Ordering::Relaxed) {
+                info!("send bank event!: {:?}", &event);
                 sender
                     .send(event)
                     .expect("active tracer thread unless exited");
+            } else {
+                info!("NOT send bank event...!");
             }
         }
     }
@@ -349,6 +353,7 @@ impl BankingTracer {
                         Ok(())
                     },
                 )?;
+                info!("flushed!");
                 file_appender.flush()?;
                 Ok(())
             },
@@ -676,7 +681,7 @@ impl BankingSimulator {
         let (gossip_vote_sender, gossip_vote_receiver) =
             banking_tracer.create_channel_gossip_vote();
 
-        std::thread::spawn(move || {
+        let sender_thread = std::thread::spawn(move || {
             let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(bank_slot..).next() {
                 (Some(({
                     let datetime: chrono::DateTime<chrono::Utc> = (*start).into();
@@ -694,6 +699,7 @@ impl BankingSimulator {
             );
 
             //loop {
+                info!("start sending!...");
                 for (&_key, ref value) in range_iter.clone() {
                     let (label, batch) = &value;
                     debug!("sent {:?} {} batches", label, batch.0.len());
@@ -706,6 +712,9 @@ impl BankingSimulator {
                     }
                 }
             //}
+            info!("finished sending...");
+            // hold these senders in join_handle to control banking stage termination!
+            (non_vote_sender, tpu_vote_sender, gossip_vote_sender)
         });
 
 
@@ -717,6 +726,7 @@ impl BankingSimulator {
         let cluster_info = Arc::new(cluster_info);
         let connection_cache = ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE);
         let (replay_vote_sender, _replay_vote_receiver) = unbounded();
+        info!("start banking stage!...");
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
@@ -746,19 +756,15 @@ impl BankingSimulator {
         }
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
-        let mut remaining_block_count = 4;
-        for _ in 0..200 {
+        for _ in 0..50 {
             if poh_recorder.read().unwrap().bank().is_none() {
                 poh_recorder
                     .write()
                     .unwrap()
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
+                info!("Bank::new_from_parent()!");
                 let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
                 bank_forks.write().unwrap().insert(new_bank);
-                remaining_block_count -= 1;
-                if remaining_block_count == 0 {
-                    break;
-                }
                 bank = bank_forks.read().unwrap().working_bank();
             }
             // set cost tracker limits to MAX so it will not filter out TXs
@@ -775,6 +781,11 @@ impl BankingSimulator {
 
             sleep(std::time::Duration::from_millis(100));
         }
+        info!("sleeping just before exit...");
+        sleep(std::time::Duration::from_millis(3000));
+        // the order is important. dropping sender_thread will terminate banking_stage, in turn
+        // banking_tracer thread
+        sender_thread.join().unwrap();
         exit.store(true, Ordering::Relaxed);
         banking_stage.join().unwrap();
         poh_service.join().unwrap();

@@ -507,6 +507,7 @@ impl BankingStage {
                             unprocessed_transaction_storage,
                             banking_tracer,
                         );
+                        info!("banking thread ended!");
                     })
                     .unwrap()
             })
