@@ -1150,7 +1150,7 @@ pub mod tests {
         }
 
         let result = AppendVec::new_from_file(path, accounts_len);
-        assert_matches!(result, Err(ref message) if message.to_string() == *"incorrect layout/length/data");
+        assert_matches!(result, Err(ref message) if message.to_string().starts_with("incorrect layout/length/data"));
     }
 
     #[test]
