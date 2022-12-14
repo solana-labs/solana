@@ -567,7 +567,7 @@ async fn handle_connection(
                         tokio::spawn(async move {
                             let mut maybe_batch = None;
                             let exit_check_interval =
-                                (wait_for_chunk_timeout_ms / 10).min(10).max(1000);
+                                (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
                             let mut start = Instant::now();
                             while !stream_exit.load(Ordering::Relaxed) {
                                 if let Ok(chunk) = tokio::time::timeout(
