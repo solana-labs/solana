@@ -232,11 +232,7 @@ EOF
              ^sdk/ \
              ^scripts/build-downstream-projects.sh \
       ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 30
-EOF
+    .buildkite/steps/downstream-project/pipeline.sh >> "$output_file"
   else
     annotate --style info \
       "downstream-projects skipped as no relevant files were modified"
