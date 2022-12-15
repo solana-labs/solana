@@ -42,7 +42,7 @@ use {
         result::Result,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
-            Arc, Mutex,
+            Arc,
         },
         thread::Builder,
     },
@@ -53,8 +53,6 @@ mod newer;
 mod storage;
 mod tests;
 mod utils;
-
-pub type SlotAppendVecIdSet = Arc<Mutex<HashSet<(Slot, AppendVecId)>>>;
 
 pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this

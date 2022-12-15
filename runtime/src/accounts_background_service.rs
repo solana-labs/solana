@@ -366,7 +366,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 )
                 .expect("snapshot bank");
-                let ret = AccountsPackage::new_for_snapshot(
+                let accounts_package = AccountsPackage::new_for_snapshot(
                     accounts_package_type,
                     &snapshot_root_bank,
                     &bank_snapshot_info,
@@ -386,7 +386,7 @@ impl SnapshotRequestHandler {
                 while snapshot_slot_storages.len() > 1 {
                     snapshot_slot_storages.pop_front();
                 }
-                ret
+                accounts_package
             }
             SnapshotRequestType::EpochAccountsHash => {
                 // skip the bank snapshot, just make an accounts package to send to AHV

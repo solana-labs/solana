@@ -887,13 +887,13 @@ fn hard_link_appendvec_files_to_snapshot(
                 storage.append_vec_id(),
             ));
             fs::hard_link(&path, &hard_link_path).map_err(|e| {
-                let err_str = format!(
-                    "hard-link appendvec file {} to {}",
+                let err_msg = format!(
+                    "hard-link appendvec file {} to {} failed.  Error: {}",
                     path.display(),
-                    hard_link_path.display()
+                    hard_link_path.display(),
+                    e,
                 );
-                info!("{}", &err_str);
-                SnapshotError::IoWithSource(e, "hard-link failed")
+                SnapshotError::Io(IoError::new(ErrorKind::Other, err_msg))
             })?;
         }
     }
