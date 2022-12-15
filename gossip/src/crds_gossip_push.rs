@@ -219,42 +219,11 @@ impl CrdsGossipPush {
         crds: &RwLock<Crds>,
         messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
-<<<<<<< HEAD
-    ) -> Vec<Result<Pubkey, CrdsGossipError>> {
-        self.num_total.fetch_add(values.len(), Ordering::Relaxed);
-        let values: Vec<_> = {
-            let wallclock_window = self.wallclock_window(now);
-            let mut received_cache = self.received_cache.lock().unwrap();
-            values
-                .into_iter()
-                .map(|value| {
-                    if !wallclock_window.contains(&value.wallclock()) {
-                        return Err(CrdsGossipError::PushMessageTimeout);
-                    }
-                    let origin = value.pubkey();
-                    let peers = received_cache.entry(origin).or_default();
-                    peers
-                        .entry(*from)
-                        .and_modify(|(_pruned, timestamp)| *timestamp = now)
-                        .or_insert((/*pruned:*/ false, now));
-                    Ok(value)
-                })
-                .collect()
-        };
-        let mut crds = crds.write().unwrap();
-        values
-            .into_iter()
-            .map(|value| {
-                let value = value?;
-                let origin = value.pubkey();
-                match crds.insert(value, now, GossipRoute::PushMessage) {
-                    Ok(()) => Ok(origin),
-=======
     ) -> HashSet<Pubkey> {
         let mut received_cache = self.received_cache.lock().unwrap();
         let mut crds = crds.write().unwrap();
         let wallclock_window = self.wallclock_window(now);
-        let mut origins = HashSet::with_capacity(messages.len());
+        let mut origins = HashSet::new();
         for (from, values) in messages {
             self.num_total.fetch_add(values.len(), Ordering::Relaxed);
             for value in values {
@@ -262,16 +231,16 @@ impl CrdsGossipPush {
                     continue;
                 }
                 let origin = value.pubkey();
+                received_cache
+                    .entry(origin)
+                    .or_default()
+                    .entry(from)
+                    .and_modify(|(_pruned, timestamp)| *timestamp = now)
+                    .or_insert((/*pruned:*/ false, now));
                 match crds.insert(value, now, GossipRoute::PushMessage) {
                     Ok(()) => {
-                        received_cache.record(origin, from, /*num_dups:*/ 0);
                         origins.insert(origin);
                     }
-                    Err(CrdsError::DuplicatePush(num_dups)) => {
-                        received_cache.record(origin, from, usize::from(num_dups));
-                        self.num_old.fetch_add(1, Ordering::Relaxed);
-                    }
->>>>>>> a5c8c7c53 (locks crds table only once to process push messages (#29218))
                     Err(_) => {
                         self.num_old.fetch_add(1, Ordering::Relaxed);
                     }
@@ -572,7 +541,7 @@ mod tests {
         let low_staked_peers = (0..10).map(|_| solana_sdk::pubkey::new_rand());
         let mut low_staked_set = HashSet::new();
         low_staked_peers.for_each(|p| {
-            push.process_push_message(&crds, &p, vec![value.clone()], 0);
+            push.process_push_message(&crds, vec![(p, vec![value.clone()])], 0);
             low_staked_set.insert(p);
             stakes.insert(p, 1);
         });
@@ -594,7 +563,7 @@ mod tests {
         let high_staked_peer = solana_sdk::pubkey::new_rand();
         let high_stake = CrdsGossipPush::prune_stake_threshold(100, 100) + 10;
         stakes.insert(high_staked_peer, high_stake);
-        push.process_push_message(&crds, &high_staked_peer, vec![value], 0);
+        push.process_push_message(&crds, vec![(high_staked_peer, vec![value])], 0);
 
         let pruned = {
             let mut received_cache = push.received_cache.lock().unwrap();
