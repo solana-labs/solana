@@ -17,7 +17,6 @@ use {
         contact_info::ContactInfo,
         crds::{Crds, Cursor, GossipRoute},
         crds_gossip::{get_stake, get_weight},
-        crds_gossip_error::CrdsGossipError,
         crds_value::CrdsValue,
         ping_pong::PingCache,
         weighted_shuffle::WeightedShuffle,
@@ -218,9 +217,9 @@ impl CrdsGossipPush {
     pub(crate) fn process_push_message(
         &self,
         crds: &RwLock<Crds>,
-        from: &Pubkey,
-        values: Vec<CrdsValue>,
+        messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
+<<<<<<< HEAD
     ) -> Vec<Result<Pubkey, CrdsGossipError>> {
         self.num_total.fetch_add(values.len(), Ordering::Relaxed);
         let values: Vec<_> = {
@@ -250,13 +249,36 @@ impl CrdsGossipPush {
                 let origin = value.pubkey();
                 match crds.insert(value, now, GossipRoute::PushMessage) {
                     Ok(()) => Ok(origin),
+=======
+    ) -> HashSet<Pubkey> {
+        let mut received_cache = self.received_cache.lock().unwrap();
+        let mut crds = crds.write().unwrap();
+        let wallclock_window = self.wallclock_window(now);
+        let mut origins = HashSet::with_capacity(messages.len());
+        for (from, values) in messages {
+            self.num_total.fetch_add(values.len(), Ordering::Relaxed);
+            for value in values {
+                if !wallclock_window.contains(&value.wallclock()) {
+                    continue;
+                }
+                let origin = value.pubkey();
+                match crds.insert(value, now, GossipRoute::PushMessage) {
+                    Ok(()) => {
+                        received_cache.record(origin, from, /*num_dups:*/ 0);
+                        origins.insert(origin);
+                    }
+                    Err(CrdsError::DuplicatePush(num_dups)) => {
+                        received_cache.record(origin, from, usize::from(num_dups));
+                        self.num_old.fetch_add(1, Ordering::Relaxed);
+                    }
+>>>>>>> a5c8c7c53 (locks crds table only once to process push messages (#29218))
                     Err(_) => {
                         self.num_old.fetch_add(1, Ordering::Relaxed);
-                        Err(CrdsGossipError::PushMessageOldVersion)
                     }
                 }
-            })
-            .collect()
+            }
+        }
+        origins
     }
 
     /// New push message to broadcast to peers.
@@ -606,16 +628,15 @@ mod tests {
         let label = value.label();
         // push a new message
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value.clone()], 0),
-            [Ok(label.pubkey())],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![value.clone()])], 0),
+            [label.pubkey()].into_iter().collect(),
         );
         assert_eq!(crds.read().unwrap().get::<&CrdsValue>(&label), Some(&value));
 
         // push it again
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Err(CrdsGossipError::PushMessageOldVersion)],
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
+            .is_empty());
     }
     #[test]
     fn test_process_push_old_version() {
@@ -627,17 +648,16 @@ mod tests {
 
         // push a new message
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Ok(ci.id)],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0),
+            [ci.id].into_iter().collect()
         );
 
         // push an old version
         ci.wallclock = 0;
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Err(CrdsGossipError::PushMessageOldVersion)],
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
+            .is_empty());
     }
     #[test]
     fn test_process_push_timeout() {
@@ -649,18 +669,16 @@ mod tests {
         // push a version to far in the future
         ci.wallclock = timeout + 1;
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci.clone()));
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Err(CrdsGossipError::PushMessageTimeout)],
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
+            .is_empty());
 
         // push a version to far in the past
         ci.wallclock = 0;
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], timeout + 1),
-            [Err(CrdsGossipError::PushMessageTimeout)]
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], timeout + 1)
+            .is_empty());
     }
     #[test]
     fn test_process_push_update() {
@@ -673,16 +691,16 @@ mod tests {
 
         // push a new message
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value_old], 0),
-            [Ok(origin)],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![value_old])], 0),
+            [origin].into_iter().collect()
         );
 
         // push an old version
         ci.wallclock = 1;
         let value = CrdsValue::new_unsigned(CrdsData::ContactInfo(ci));
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Ok(origin)],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0),
+            [origin].into_iter().collect()
         );
     }
     #[test]
@@ -997,8 +1015,8 @@ mod tests {
         expected.insert(peer.label().pubkey(), vec![new_msg.clone()]);
         let origin = new_msg.pubkey();
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![new_msg], 0),
-            [Ok(origin)]
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![new_msg])], 0),
+            [origin].into_iter().collect()
         );
         assert_eq!(push.active_set.read().unwrap().len(), 1);
         assert_eq!(push.new_push_messages(&crds, 0).0, expected);
@@ -1030,8 +1048,12 @@ mod tests {
         );
         let crds = RwLock::new(crds);
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![peers[2].clone()], now),
-            [Ok(origin[2])],
+            push.process_push_message(
+                &crds,
+                vec![(Pubkey::default(), vec![peers[2].clone()])],
+                now
+            ),
+            [origin[2]].into_iter().collect()
         );
         let ping_cache = Mutex::new(ping_cache);
         push.refresh_push_active_set(
@@ -1092,8 +1114,8 @@ mod tests {
         let expected = HashMap::new();
         let origin = new_msg.pubkey();
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![new_msg.clone()], 0),
-            [Ok(origin)],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![new_msg.clone()])], 0),
+            [origin].into_iter().collect()
         );
         push.process_prune_msg(
             &self_id,
@@ -1132,8 +1154,8 @@ mod tests {
         let expected = HashMap::new();
         let origin = new_msg.pubkey();
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![new_msg], 1),
-            [Ok(origin)],
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![new_msg])], 1),
+            [origin].into_iter().collect()
         );
         assert_eq!(push.new_push_messages(&crds, 0).0, expected);
     }
@@ -1148,8 +1170,8 @@ mod tests {
         let label = value.label();
         // push a new message
         assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value.clone()], 0),
-            [Ok(label.pubkey())]
+            push.process_push_message(&crds, vec![(Pubkey::default(), vec![value.clone()])], 0),
+            [label.pubkey()].into_iter().collect()
         );
         assert_eq!(
             crds.write().unwrap().get::<&CrdsValue>(&label),
@@ -1157,18 +1179,16 @@ mod tests {
         );
 
         // push it again
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value.clone()], 0),
-            [Err(CrdsGossipError::PushMessageOldVersion)],
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value.clone()])], 0)
+            .is_empty());
 
         // purge the old pushed
         push.purge_old_received_cache(1);
 
         // push it again
-        assert_eq!(
-            push.process_push_message(&crds, &Pubkey::default(), vec![value], 0),
-            [Err(CrdsGossipError::PushMessageOldVersion)],
-        );
+        assert!(push
+            .process_push_message(&crds, vec![(Pubkey::default(), vec![value])], 0)
+            .is_empty());
     }
 }
