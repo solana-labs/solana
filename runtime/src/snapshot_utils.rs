@@ -2719,7 +2719,10 @@ pub fn verify_snapshot_archive<P, Q, R>(
         // old archive structure.
         let accounts_path = snapshot_slot_dir.join("accounts");
         if accounts_path.is_dir() {
-            move_and_async_delete_path(&accounts_path);
+            // Do not use the async move_and_async_delete_path because the assert below
+            // requires the job to be done.
+            // This is for test only, so the performance is not an issue.
+            std::fs::remove_dir_all(accounts_path).unwrap();
         }
         let state_complete_path = snapshot_slot_dir.join("state_complete");
         if state_complete_path.is_file() {
