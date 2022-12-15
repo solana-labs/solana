@@ -697,6 +697,7 @@ impl BankingSimulator {
                 bank_slot,
                 adjusted_reference,
             );
+            let (mut non_vote_count, mut tpu_vote_count, mut gossip_vote_count) = (0, 0, 0);
 
             //loop {
                 info!("start sending!...");
@@ -705,14 +706,23 @@ impl BankingSimulator {
                     debug!("sent {:?} {} batches", label, batch.0.len());
 
                     match label {
-                        ChannelLabel::NonVote => non_vote_sender.send(batch.clone()).unwrap(),
-                        ChannelLabel::TpuVote => tpu_vote_sender.send(batch.clone()).unwrap(),
-                        ChannelLabel::GossipVote => gossip_vote_sender.send(batch.clone()).unwrap(),
+                        ChannelLabel::NonVote => {
+                            non_vote_sender.send(batch.clone()).unwrap();
+                            non_vote_count += batch.0.len();
+                        }
+                        ChannelLabel::TpuVote => {
+                            tpu_vote_sender.send(batch.clone()).unwrap();
+                            tpu_vote_count += batch.0.len();
+                        }
+                        ChannelLabel::GossipVote => {
+                            gossip_vote_sender.send(batch.clone()).unwrap();
+                            gossip_vote_count += batch.0.len();
+                        }
                         ChannelLabel::Dummy => unreachable!(),
                     }
                 }
             //}
-            info!("finished sending...");
+            info!("finished sending...(non_vote: {}, tpu_vote: {}, gossip_vote: {})", non_vote_count, tpu_vote_count, gossip_vote_count);
             // hold these senders in join_handle to control banking stage termination!
             (non_vote_sender, tpu_vote_sender, gossip_vote_sender)
         });
