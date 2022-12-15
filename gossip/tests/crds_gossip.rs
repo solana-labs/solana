@@ -290,8 +290,10 @@ fn network_simulator(thread_pool: &ThreadPool, network: &mut Network, max_conver
             };
             m.wallclock = now;
             node.gossip.process_push_message(
-                &Pubkey::default(),
-                vec![CrdsValue::new_unsigned(CrdsData::ContactInfo(m))],
+                vec![(
+                    Pubkey::default(),
+                    vec![CrdsValue::new_unsigned(CrdsData::ContactInfo(m))],
+                )],
                 now,
             );
         });
@@ -364,7 +366,7 @@ fn network_run_push(
                         .get(&to)
                         .unwrap()
                         .gossip
-                        .process_push_message(&from, msgs.clone(), now)
+                        .process_push_message(vec![(from, msgs.clone())], now)
                         .into_iter()
                         .collect();
                     let prunes_map = network

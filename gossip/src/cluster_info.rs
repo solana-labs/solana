@@ -2263,12 +2263,7 @@ impl ClusterInfo {
         let origins: HashSet<_> = {
             let _st = ScopedTimer::from(&self.stats.process_push_message);
             let now = timestamp();
-            messages
-                .into_iter()
-                .flat_map(|(from, crds_values)| {
-                    self.gossip.process_push_message(&from, crds_values, now)
-                })
-                .collect()
+            self.gossip.process_push_message(messages, now)
         };
         // Generate prune messages.
         let self_pubkey = self.id();
