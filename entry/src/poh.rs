@@ -10,7 +10,6 @@ pub struct Poh {
     num_hashes: u64,
     hashes_per_tick: u64,
     remaining_hashes: u64,
-    ticks_per_slot: u64,
     tick_number: u64,
     slot_start_time: Instant,
 }
@@ -23,15 +22,10 @@ pub struct PohEntry {
 
 impl Poh {
     pub fn new(hash: Hash, hashes_per_tick: Option<u64>) -> Self {
-        Self::new_with_slot_info(hash, hashes_per_tick, 0, 0)
+        Self::new_with_slot_info(hash, hashes_per_tick, 0)
     }
 
-    pub fn new_with_slot_info(
-        hash: Hash,
-        hashes_per_tick: Option<u64>,
-        ticks_per_slot: u64,
-        tick_number: u64,
-    ) -> Self {
+    pub fn new_with_slot_info(hash: Hash, hashes_per_tick: Option<u64>, tick_number: u64) -> Self {
         let hashes_per_tick = hashes_per_tick.unwrap_or(std::u64::MAX);
         assert!(hashes_per_tick > 1);
         let now = Instant::now();
@@ -40,7 +34,6 @@ impl Poh {
             num_hashes: 0,
             hashes_per_tick,
             remaining_hashes: hashes_per_tick,
-            ticks_per_slot,
             tick_number,
             slot_start_time: now,
         }
@@ -49,7 +42,7 @@ impl Poh {
     pub fn reset(&mut self, hash: Hash, hashes_per_tick: Option<u64>) {
         // retains ticks_per_slot: this cannot change without restarting the validator
         let tick_number = 0;
-        *self = Poh::new_with_slot_info(hash, hashes_per_tick, self.ticks_per_slot, tick_number);
+        *self = Poh::new_with_slot_info(hash, hashes_per_tick, tick_number);
     }
 
     pub fn target_poh_time(&self, target_ns_per_tick: u64) -> Instant {
