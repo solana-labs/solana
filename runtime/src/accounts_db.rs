@@ -7169,7 +7169,7 @@ impl AccountsDb {
                         hash
                     );
                     if load_from_cache {
-                        if let Ok(mapped_file) = cache_hash_data.load_map(&Path::new(&file_name)) {
+                        if let Ok(mapped_file) = cache_hash_data.load_map(&file_name) {
                             return Some(mapped_file);
                         }
                     }
@@ -7211,8 +7211,7 @@ impl AccountsDb {
                         assert!(!file_name.is_empty());
                         (!r.is_empty() && r.iter().any(|b| !b.is_empty())).then(|| {
                             // error if we can't write this
-                            let file_name = Path::new(&file_name);
-                            cache_hash_data.save(Path::new(&file_name), &r).unwrap();
+                            cache_hash_data.save(&file_name, &r).unwrap();
                             cache_hash_data.load_map(&file_name).unwrap()
                         })
                     })
@@ -9500,7 +9499,7 @@ pub mod tests {
             let temp_dir = TempDir::new().unwrap();
             let accounts_hash_cache_path = temp_dir.path();
             self.scan_snapshot_stores_with_cache(
-                &CacheHashData::new(&accounts_hash_cache_path),
+                &CacheHashData::new(accounts_hash_cache_path),
                 storage,
                 stats,
                 bins,
@@ -10389,7 +10388,7 @@ pub mod tests {
         };
 
         let result = accounts_db.scan_account_storage_no_bank(
-            &CacheHashData::new(&accounts_hash_cache_path),
+            &CacheHashData::new(accounts_hash_cache_path),
             &CalcAccountsHashConfig::default(),
             &get_storage_refs(&storages),
             test_scan,
