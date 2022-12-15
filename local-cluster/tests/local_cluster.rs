@@ -307,7 +307,6 @@ fn test_two_unbalanced_stakes() {
     cluster.close_preserve_ledgers();
     let leader_pubkey = cluster.entry_point_info.id;
     let leader_ledger = cluster.validators[&leader_pubkey].info.ledger_path.clone();
-
     cluster_tests::verify_ledger_ticks(&leader_ledger, num_ticks_per_slot as usize);
 }
 
