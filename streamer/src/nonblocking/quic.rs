@@ -566,6 +566,11 @@ async fn handle_connection(
                         let last_update = last_update.clone();
                         tokio::spawn(async move {
                             let mut maybe_batch = None;
+                            // The min is to guard against a value too small which can wake up unnecessarily
+                            // frequently and wasting CPU cycles. The max guard against waiting for too long
+                            // which delay exit and cause some test failures when the timeout value is large.
+                            // Within this value, the heuristic is to wake up 10 times to check for exit
+                            // for the set timeout if there are no data.
                             let exit_check_interval =
                                 (wait_for_chunk_timeout_ms / 10).clamp(10, 1000);
                             let mut start = Instant::now();
