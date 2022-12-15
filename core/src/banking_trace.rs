@@ -593,7 +593,7 @@ impl BankingSimulator {
         }
     }
 
-    pub fn dump(&self, bank: Option<Arc<solana_runtime::bank::Bank>>) -> (std::collections::BTreeMap<Slot, std::time::SystemTime>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>) {
+    pub fn dump(&self, bank: Option<Arc<solana_runtime::bank::Bank>>) -> (std::collections::BTreeMap<Slot, std::collections::HashMap<u32, (std::time::SystemTime, usize)>>, std::collections::BTreeMap<std::time::SystemTime, (ChannelLabel, BankingPacketBatch)>, (usize, usize, usize)) {
         use std::io::BufReader;
         use std::fs::File;
         let mut stream = BufReader::new(File::open(&self.path).unwrap());
@@ -617,10 +617,10 @@ impl BankingSimulator {
             let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
 
             match event {
-                TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
+                TracedEvent::Bank(slot, id, BankStatus::Started, unprocessed_count) => {
                     bank_starts_by_slot.entry(*slot)
-                        .and_modify(|e| *e = std::cmp::min(*e, event_time))
-                        .or_insert(event_time);
+                        .and_modify(|e: &mut std::collections::HashMap<u32, (SystemTime, usize)>| {e.insert(*id, (event_time, *unprocessed_count));})
+                        .or_insert(std::collections::HashMap::from([(*id, (event_time, *unprocessed_count));1]));
                 }
                 TracedEvent::PacketBatch(label, batch) => {
                     packet_batches_by_time.insert(event_time, (label.clone(), batch.clone()));
@@ -629,10 +629,21 @@ impl BankingSimulator {
             }
         }
 
-        let reference_time = if let Some(bank) = &bank {
-            bank_starts_by_slot.range(bank.slot()..).next().map(|(_, s)| s).unwrap().clone()
+        let (reference_time, unprocessed_counts) = if let Some(bank) = &bank {
+            let b = bank_starts_by_slot.range(bank.slot()..).next();
+            info!("found: {:?}", b);
+            let (mut non_vote, mut tpu_vote, mut gossip_vote) = (0, 0, 0);
+            for (id, (_time, count)) in b.map(|b| b.1.clone()).unwrap_or_default().iter() {
+                match id {
+                    0 => gossip_vote += count,
+                    1 => tpu_vote += count,
+                    _ => non_vote += count,
+                }
+            }
+            info!("summed: {:?}", (non_vote, tpu_vote, gossip_vote));
+            (b.map(|(_, s)| s.values().map(|a| a.0).min().unwrap()).unwrap().clone(), (non_vote, tpu_vote, gossip_vote))
         } else {
-            packet_batches_by_time.keys().next().unwrap().clone()
+            (packet_batches_by_time.keys().next().unwrap().clone(), Default::default())
         };
 
         for event in &events {
@@ -664,7 +675,7 @@ impl BankingSimulator {
             }
         }
 
-        (bank_starts_by_slot, packet_batches_by_time)
+        (bank_starts_by_slot, packet_batches_by_time, unprocessed_counts)
     }
 
     pub fn simulate(
@@ -684,7 +695,7 @@ impl BankingSimulator {
 
         let mut bank = bank_forks.read().unwrap().working_bank();
 
-        let (bank_starts_by_slot, packet_batches_by_time) = self.dump(Some(bank.clone()));
+        let (bank_starts_by_slot, packet_batches_by_time, unprocessed_counts) = self.dump(Some(bank.clone()));
         if std::env::var("DUMP_WITH_BANK").is_ok() {
             return
         }
@@ -741,12 +752,61 @@ impl BankingSimulator {
         let (gossip_vote_sender, gossip_vote_receiver) =
             banking_tracer.create_channel_gossip_vote();
 
+        let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
+        if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
+            let start = starts.values().map(|a| a.0).min().unwrap();
+            let mut batches_with_label = vec![];
+            for (&time, ref value)  in packet_batches_by_time.range(..start).rev() {
+                let (label, batch) = &value;
+
+                match label {
+                    ChannelLabel::NonVote => {
+                        batches_with_label.push((ChannelLabel::NonVote, batch.clone()));
+                        non_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
+                    }
+                    ChannelLabel::TpuVote => {
+                        batches_with_label.push((ChannelLabel::TpuVote, batch.clone()));
+                        tpu_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
+                    }
+                    ChannelLabel::GossipVote => {
+                        batches_with_label.push((ChannelLabel::GossipVote, batch.clone()));
+                        gossip_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
+                    }
+                    ChannelLabel::Dummy => unreachable!(),
+                }
+
+                if non_vote_tx_count >= unprocessed_counts.0 &&
+                    tpu_vote_tx_count >= unprocessed_counts.1 &&
+                    gossip_vote_tx_count >= unprocessed_counts.2  {
+                        break;
+                }
+            }
+            for (label, batch) in batches_with_label.iter().rev() {
+                match label {
+                    ChannelLabel::NonVote => {
+                        non_vote_sender.send(batch.clone()).unwrap();
+                    }
+                    ChannelLabel::TpuVote => {
+                        tpu_vote_sender.send(batch.clone()).unwrap();
+                    }
+                    ChannelLabel::GossipVote => {
+                        gossip_vote_sender.send(batch.clone()).unwrap();
+                    }
+                    ChannelLabel::Dummy => unreachable!(),
+                }
+            }
+            info!("finished buffered sending...(non_vote: {}, tpu_vote: {}, gossip_vote: {})", non_vote_tx_count, tpu_vote_tx_count, gossip_vote_tx_count);
+        };
+
+
+
         let sender_thread = std::thread::spawn(move || {
-            let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, start)) = bank_starts_by_slot.range(bank_slot..).next() {
+            let (adjusted_reference, range_iter) = if let Some((most_recent_past_leader_slot, starts)) = bank_starts_by_slot.range(bank_slot..).next() {
+                let start = starts.values().map(|a| a.0).min().unwrap();
                 (Some(({
-                    let datetime: chrono::DateTime<chrono::Utc> = (*start).into();
+                    let datetime: chrono::DateTime<chrono::Utc> = (start).into();
                     format!("{}", datetime.format("%Y-%m-%d %H:%M:%S.%f"))
-                }, most_recent_past_leader_slot, start)), packet_batches_by_time.range(*start..))
+                }, most_recent_past_leader_slot, start)), packet_batches_by_time.range(start..))
             } else {
                 (None, packet_batches_by_time.range(..))
             };
