@@ -14,7 +14,7 @@ use {
     rayon::prelude::*,
     serde::{Deserialize, Serialize},
     std::{
-        ops::{Index, IndexMut},
+        ops::{Index, IndexMut, RangeBounds},
         os::raw::c_int,
         slice::{Iter, IterMut, SliceIndex},
         sync::Weak,
@@ -178,6 +178,14 @@ impl<T: Clone + Default + Sized> PinnedVec<T> {
         T: Copy,
     {
         self.x.copy_from_slice(data);
+    }
+
+    pub fn copy_within<R>(&mut self, src: R, dest: usize)
+    where
+        R: RangeBounds<usize>,
+        T: Copy,
+    {
+        self.x.copy_within(src, dest);
     }
 
     pub fn from_vec(source: Vec<T>) -> Self {

@@ -20,7 +20,7 @@ pub const NUM_RCVMMSGS: usize = 64;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct PacketBatch {
-    packets: PinnedVec<Packet>,
+    pub(crate) packets: PinnedVec<Packet>,
 }
 
 pub type PacketBatchRecycler = Recycler<PinnedVec<Packet>>;
@@ -140,6 +140,10 @@ impl PacketBatch {
 
     pub fn as_ptr(&self) -> *const Packet {
         self.packets.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut Packet {
+        self.packets.as_mut_ptr()
     }
 
     pub fn iter(&self) -> Iter<'_, Packet> {

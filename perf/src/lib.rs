@@ -9,6 +9,7 @@ pub mod recycler_cache;
 pub mod sigverify;
 pub mod test_tx;
 pub mod thread;
+pub mod tx_packet_batch;
 
 #[macro_use]
 extern crate lazy_static;
