@@ -47,15 +47,10 @@ impl CrdsGossip {
     /// Returns unique origins' pubkeys of upserted values.
     pub fn process_push_message(
         &self,
-        from: &Pubkey,
-        values: Vec<CrdsValue>,
+        messages: Vec<(/*from:*/ Pubkey, Vec<CrdsValue>)>,
         now: u64,
     ) -> HashSet<Pubkey> {
-        self.push
-            .process_push_message(&self.crds, from, values, now)
-            .into_iter()
-            .filter_map(Result::ok)
-            .collect()
+        self.push.process_push_message(&self.crds, messages, now)
     }
 
     /// Remove redundant paths in the network.
