@@ -429,7 +429,7 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let should_split_voting_threads = bank_forks
+        let mut should_split_voting_threads = bank_forks
             .read()
             .map(|bank_forks| {
                 let bank = bank_forks.root_bank();
@@ -437,6 +437,8 @@ impl BankingStage {
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
             })
             .unwrap_or(false);
+        info!("should_split_voting_threads: {}", should_split_voting_threads);
+        //should_split_voting_threads = false;
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<()>> = (0..num_threads)
             .map(|i| {
@@ -489,8 +491,9 @@ impl BankingStage {
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 let banking_tracer = banking_tracer.clone();
+                let thread_name = format!("solBanknStgTx{i:02}");
                 Builder::new()
-                    .name(format!("solBanknStgTx{i:02}"))
+                    .name(thread_name.clone())
                     .spawn(move || {
                         Self::process_loop(
                             &mut packet_deserializer,
@@ -507,7 +510,7 @@ impl BankingStage {
                             unprocessed_transaction_storage,
                             banking_tracer,
                         );
-                        info!("banking thread ended!");
+                        info!("banking thread ended: {}!", thread_name);
                     })
                     .unwrap()
             })

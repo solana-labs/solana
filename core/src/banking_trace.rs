@@ -647,7 +647,7 @@ impl BankingSimulator {
         blockstore: Arc<solana_ledger::blockstore::Blockstore>,
     ) {
         use {
-            crate::banking_stage::BankingStage, log::*,
+            crate::banking_stage::{BankingStage, NUM_THREADS}, log::*,
             solana_client::connection_cache::ConnectionCache, solana_gossip::cluster_info::Node,
             solana_ledger::leader_schedule_cache::LeaderScheduleCache,
             solana_poh::poh_recorder::create_test_recorder, solana_runtime::bank::Bank,
@@ -698,6 +698,7 @@ impl BankingSimulator {
                 adjusted_reference,
             );
             let (mut non_vote_count, mut tpu_vote_count, mut gossip_vote_count) = (0, 0, 0);
+            let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
 
             //loop {
                 info!("start sending!...");
@@ -709,20 +710,23 @@ impl BankingSimulator {
                         ChannelLabel::NonVote => {
                             non_vote_sender.send(batch.clone()).unwrap();
                             non_vote_count += batch.0.len();
+                            non_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
                         ChannelLabel::TpuVote => {
                             tpu_vote_sender.send(batch.clone()).unwrap();
                             tpu_vote_count += batch.0.len();
+                            tpu_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
                         ChannelLabel::GossipVote => {
                             gossip_vote_sender.send(batch.clone()).unwrap();
                             gossip_vote_count += batch.0.len();
+                            gossip_vote_tx_count += batch.0.iter().map(|b| b.len()).sum::<usize>();
                         }
                         ChannelLabel::Dummy => unreachable!(),
                     }
                 }
             //}
-            info!("finished sending...(non_vote: {}, tpu_vote: {}, gossip_vote: {})", non_vote_count, tpu_vote_count, gossip_vote_count);
+            info!("finished sending...(non_vote: {}({}), tpu_vote: {}({}), gossip_vote: {}({}))", non_vote_count, non_vote_tx_count, tpu_vote_count, tpu_vote_tx_count, gossip_vote_count, gossip_vote_tx_count);
             // hold these senders in join_handle to control banking stage termination!
             (non_vote_sender, tpu_vote_sender, gossip_vote_sender)
         });
@@ -743,7 +747,7 @@ impl BankingSimulator {
             non_vote_receiver,
             tpu_vote_receiver,
             gossip_vote_receiver,
-            4,
+            NUM_THREADS,
             None,
             replay_vote_sender,
             None,
