@@ -693,7 +693,8 @@ impl BankingSimulator {
 
 
 
-        let collector = solana_sdk::pubkey::new_rand();
+        use std::str::FromStr;
+        let collector = solana_sdk::pubkey::Pubkey::from_str("ryo1vM57RXAayYZhCK6k13d5uS4b9tfH7BhScgqtBCx").unwrap();
         let leader_schedule_cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let (exit, poh_recorder, poh_service, _signal_receiver) = {
             use std::sync::RwLock;
@@ -723,11 +724,11 @@ impl BankingSimulator {
                 &genesis_config.poh_config,
                 &exit,
                 bank_forks.read().unwrap().root_bank().ticks_per_slot(),
-                solana_poh::poh_service::DEFAULT_PINNED_CPU_CORE,
+                solana_poh::poh_service::DEFAULT_PINNED_CPU_CORE + 4,
                 solana_poh::poh_service::DEFAULT_HASHES_PER_BATCH,
                 record_receiver,
             );
-            (exit, r, s, 0)
+            (exit, r, s, entry_receiver)
         };
 
         let banking_tracer = BankingTracer::new(Some((
