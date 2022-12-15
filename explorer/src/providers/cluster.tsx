@@ -57,8 +57,10 @@ export function clusterName(cluster: Cluster): string {
 }
 
 export const MAINNET_BETA_URL = clusterApiUrl("mainnet-beta");
+export const MAINNET_ALCHEMY_URL = https://solana-mainnet.g.alchemy.com/v2/alchemy-api-key;
 export const TESTNET_URL = clusterApiUrl("testnet");
 export const DEVNET_URL = clusterApiUrl("devnet");
+export const DEVNET_ALCHEMY_URL = https://solana-devnet.g.alchemy.com/v2/alchemy-api-key;
 
 export function clusterUrl(cluster: Cluster, customUrl: string): string {
   const modifyUrl = (url: string): string => {
