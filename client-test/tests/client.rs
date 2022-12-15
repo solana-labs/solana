@@ -144,9 +144,7 @@ fn test_account_subscription() {
     let (trigger, pubsub_service) =
         PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
 
-    if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(300)) {
-        eprintln!("server initialized timeout");
-    }
+    check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
     let config = Some(RpcAccountInfoConfig {
         commitment: Some(CommitmentConfig::finalized()),
@@ -268,9 +266,7 @@ fn test_block_subscription() {
     };
     let (trigger, pubsub_service) = PubSubService::new(pub_cfg, &subscriptions, pubsub_addr);
 
-    if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(300)) {
-        eprintln!("server initialized timeout");
-    }
+    check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
     // setup PubsubClient
     let (mut client, receiver) = PubsubClient::block_subscribe(
@@ -350,9 +346,7 @@ fn test_program_subscription() {
     let (trigger, pubsub_service) =
         PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
 
-    if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(300)) {
-        eprintln!("server initialized timeout");
-    }
+    check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
     let config = Some(RpcProgramAccountsConfig {
         ..RpcProgramAccountsConfig::default()
@@ -436,9 +430,7 @@ fn test_root_subscription() {
     let (trigger, pubsub_service) =
         PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
 
-    if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(300)) {
-        eprintln!("server initialized timeout");
-    }
+    check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
     let (mut client, receiver) =
         PubsubClient::root_subscribe(&format!("ws://0.0.0.0:{}/", pubsub_addr.port())).unwrap();
@@ -487,9 +479,7 @@ fn test_slot_subscription() {
     let (trigger, pubsub_service) =
         PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
 
-    if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(300)) {
-        eprintln!("server initialized timeout");
-    }
+    check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(300));
 
     let (mut client, receiver) =
         PubsubClient::slot_subscribe(&format!("ws://0.0.0.0:{}/", pubsub_addr.port())).unwrap();
@@ -558,9 +548,7 @@ async fn test_slot_subscription_async() {
         let (trigger, pubsub_service) =
             PubSubService::new(PubSubConfig::default(), &subscriptions, pubsub_addr);
 
-        if !check_server_is_ready(&pubsub_addr, 10, Duration::from_millis(100)) {
-            eprintln!("server initialized timeout");
-        }
+        check_server_is_ready_or_panic(&pubsub_addr, 10, Duration::from_millis(100));
 
         sync_service.store(1, Ordering::Relaxed);
 
@@ -611,7 +599,7 @@ async fn test_slot_subscription_async() {
     unsubscribe().await;
 }
 
-fn check_server_is_ready(socket_addr: &SocketAddr, retry: u8, sleep_duration: Duration) -> bool {
+fn check_server_is_ready_or_panic(socket_addr: &SocketAddr, retry: u8, sleep_duration: Duration) {
     loop {
         if retry == 0 {
             break;
@@ -620,10 +608,10 @@ fn check_server_is_ready(socket_addr: &SocketAddr, retry: u8, sleep_duration: Du
         }
 
         if connect(format!("ws://{}", socket_addr)).is_ok() {
-            return true;
+            return;
         }
         sleep(sleep_duration);
     }
 
-    false
+    panic!("server hasn't been ready");
 }
