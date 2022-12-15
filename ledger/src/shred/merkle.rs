@@ -208,11 +208,14 @@ impl ShredData {
             return Err(Error::InvalidShardSize(shard_size));
         }
         let data_header = deserialize_from_with_limit(&mut cursor)?;
-        Ok(Self {
+        let shred = Self {
             common_header,
             data_header,
             payload: shard,
-        })
+        };
+        // Merkle proof is not erasure coded and is not yet available here.
+        shred.sanitize(/*verify_merkle_proof:*/ false)?;
+        Ok(shred)
     }
 
     fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error> {
@@ -238,9 +241,7 @@ impl ShredData {
         if !matches!(shred_variant, ShredVariant::MerkleData(_)) {
             return Err(Error::InvalidShredVariant);
         }
-        if !verify_merkle_proof {
-            debug_assert_matches!(self.verify_merkle_proof(), Ok(true));
-        } else if !self.verify_merkle_proof()? {
+        if verify_merkle_proof && !self.verify_merkle_proof()? {
             return Err(Error::InvalidMerkleProof);
         }
         shred_data::sanitize(self)
@@ -342,11 +343,14 @@ impl ShredCode {
         let mut cursor = Cursor::new(&mut shard[..]);
         bincode::serialize_into(&mut cursor, &common_header)?;
         bincode::serialize_into(&mut cursor, &coding_header)?;
-        Ok(Self {
+        let shred = Self {
             common_header,
             coding_header,
             payload: shard,
-        })
+        };
+        // Merkle proof is not erasure coded and is not yet available here.
+        shred.sanitize(/*verify_merkle_proof:*/ false)?;
+        Ok(shred)
     }
 
     fn set_merkle_branch(&mut self, merkle_branch: &MerkleBranch) -> Result<(), Error> {
@@ -372,9 +376,7 @@ impl ShredCode {
         if !matches!(shred_variant, ShredVariant::MerkleCode(_)) {
             return Err(Error::InvalidShredVariant);
         }
-        if !verify_merkle_proof {
-            debug_assert_matches!(self.verify_merkle_proof(), Ok(true));
-        } else if !self.verify_merkle_proof()? {
+        if verify_merkle_proof && !self.verify_merkle_proof()? {
             return Err(Error::InvalidMerkleProof);
         }
         shred_code::sanitize(self)
@@ -771,6 +773,8 @@ pub(super) fn recover(
                 return Err(Error::InvalidMerkleProof);
             }
             shred.set_merkle_branch(&merkle_branch)?;
+            // Already sanitized in Shred{Code,Data}::from_recovered_shard.
+            debug_assert_matches!(shred.sanitize(/*verify_merkle_proof:*/ true), Ok(()));
             // Assert that shred payload is fully populated.
             debug_assert_eq!(shred, {
                 let shred = shred.payload().clone();
@@ -778,15 +782,12 @@ pub(super) fn recover(
             });
         }
     }
-    shreds
+    Ok(shreds
         .into_iter()
         .zip(mask)
         .filter(|(_, mask)| !mask)
-        .map(|(shred, _)| {
-            shred.sanitize(/*verify_merkle_proof:*/ false)?;
-            Ok(shred)
-        })
-        .collect()
+        .map(|(shred, _)| shred)
+        .collect())
 }
 
 // Maps number of (code + data) shreds to MerkleBranch.proof.len().
