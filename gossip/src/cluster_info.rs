@@ -1800,7 +1800,7 @@ impl ClusterInfo {
             .unwrap()
     }
 
-    fn handle_batch_prune_messages(&self, messages: Vec<(Pubkey, PruneData)>) {
+    fn handle_batch_prune_messages(&self, messages: Vec<PruneData>) {
         let _st = ScopedTimer::from(&self.stats.handle_batch_prune_messages_time);
         if messages.is_empty() {
             return;
@@ -1808,22 +1808,19 @@ impl ClusterInfo {
         self.stats
             .prune_message_count
             .add_relaxed(messages.len() as u64);
-        self.stats.prune_message_len.add_relaxed(
-            messages
-                .iter()
-                .map(|(_, data)| data.prunes.len() as u64)
-                .sum(),
-        );
+        self.stats
+            .prune_message_len
+            .add_relaxed(messages.iter().map(|data| data.prunes.len() as u64).sum());
         let mut prune_message_timeout = 0;
         let mut bad_prune_destination = 0;
         let self_pubkey = self.id();
         {
             let _st = ScopedTimer::from(&self.stats.process_prune);
             let now = timestamp();
-            for (from, data) in messages {
+            for data in messages {
                 match self.gossip.process_prune_msg(
                     &self_pubkey,
-                    &from,
+                    &data.pubkey,
                     &data.destination,
                     &data.prunes,
                     data.wallclock,
@@ -2423,7 +2420,7 @@ impl ClusterInfo {
                     check_duplicate_instance(&data)?;
                     push_messages.push((from, data));
                 }
-                Protocol::PruneMessage(from, data) => prune_messages.push((from, data)),
+                Protocol::PruneMessage(_from, data) => prune_messages.push(data),
                 Protocol::PingMessage(ping) => ping_messages.push((from_addr, ping)),
                 Protocol::PongMessage(pong) => pong_messages.push((from_addr, pong)),
             }

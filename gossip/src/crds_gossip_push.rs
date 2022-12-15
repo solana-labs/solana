@@ -242,7 +242,12 @@ impl CrdsGossipPush {
     }
 
     /// Add the `from` to the peer's filter of nodes.
-    pub fn process_prune_msg(&self, self_pubkey: &Pubkey, peer: &Pubkey, origins: &[Pubkey]) {
+    pub(crate) fn process_prune_msg(
+        &self,
+        self_pubkey: &Pubkey,
+        peer: &Pubkey,
+        origins: &[Pubkey],
+    ) {
         if let Some(filter) = self.active_set.read().unwrap().get(peer) {
             for origin in origins {
                 if origin != self_pubkey {
