@@ -1,7 +1,8 @@
 use {
     crate::{
+        account_storage::AccountStorageMap,
         accounts_db::{
-            AccountShrinkThreshold, AccountStorageMap, AccountsDbConfig, AtomicAppendVecId,
+            AccountShrinkThreshold, AccountsDbConfig, AtomicAppendVecId,
             CalcAccountsHashDataSource, SnapshotStorage, SnapshotStorages,
         },
         accounts_index::AccountSecondaryIndexes,
