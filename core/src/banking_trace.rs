@@ -900,6 +900,14 @@ impl BankingSimulator {
         }
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
+        use solana_sdk::hash::Hash;
+        let hash_overrides =std::collections::HashMap::from([
+            (167249284, Hash::from_str("84HMxHV6W4o6BvJh455Zk6Yg2aU1K2TDBFpTvxuEuYG4").unwrap()),
+            (167249285, Hash::from_str("5BxWarhTStdTBrPAdYRpBsrCgZoB7QSYsLbzd4Shz8uJ").unwrap()),
+            (167249286, Hash::from_str("FEmFN2zPnuaR6tYn2uxTF7Rq1hDnYbtKejbUW8KDJwVv").unwrap()),
+            (167249287, Hash::from_str("9iZHWHaMBemZPrtRfcw5LmVTxEhq8biAxsp9UupVuu2V").unwrap()),
+        ]);
+
         for _ in 0..500 {
             if poh_recorder.read().unwrap().bank().is_none() {
                 poh_recorder
@@ -907,7 +915,14 @@ impl BankingSimulator {
                     .unwrap()
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
                 info!("Bank::new_from_parent()!");
-                let new_bank = Bank::new_from_parent(&bank, &collector, bank.slot() + 1);
+                use solana_runtime::bank::NewBankOptions;
+
+                let new_slot = bank.slot() + 1;
+                let options = NewBankOptions {
+                    blockhash_override: hash_overrides.get(&new_slot).copied(),
+                    ..Default::default()
+                };
+                let new_bank = Bank::new_from_parent_with_options(&bank, &collector, new_slot, options);
                 bank_forks.write().unwrap().insert(new_bank);
                 bank = bank_forks.read().unwrap().working_bank();
             }

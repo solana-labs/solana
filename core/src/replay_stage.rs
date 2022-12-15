@@ -1771,7 +1771,7 @@ impl ReplayStage {
                 root_slot,
                 my_pubkey,
                 rpc_subscriptions,
-                NewBankOptions { vote_only_bank },
+                NewBankOptions { vote_only_bank, ..Default::default() },
             );
             // make sure parent is frozen for finalized hashes via the above
             // new()-ing of its child bank
