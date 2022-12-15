@@ -601,15 +601,48 @@ impl BankingSimulator {
         let mut packet_batches_by_time = std::collections::BTreeMap::new();
 
         let mut packet_count = 0;
+        let mut events = vec![];
+
         loop {
             let d = bincode::deserialize_from::<_, TimedTracedEvent>(&mut stream);
             let Ok(event) = d else {
                 info!("deserialize error: {:?}", &d);
                 break;
             };
+            events.push(event);
+        }
+        for event in &events {
             let event_time = event.0;
-            let event = event.1;
+            let event = &event.1;
             let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
+
+            match event {
+                TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
+                    bank_starts_by_slot.insert(*slot, event_time);
+                }
+                TracedEvent::PacketBatch(label, batch) => {
+                    packet_batches_by_time.insert(event_time, (label.clone(), batch.clone()));
+                }
+                _ => {}
+            }
+        }
+
+        let reference_time = if let Some(bank) = &bank {
+            bank_starts_by_slot.range(bank.slot()..).next().map(|(_, s)| s).unwrap().clone()
+        } else {
+            packet_batches_by_time.keys().next().unwrap().clone()
+        };
+
+        for event in &events {
+            let event_time = event.0;
+            let event = &event.1;
+            let datetime: chrono::DateTime<chrono::Utc> = event_time.into();
+
+            let delta_label = if event_time < reference_time {
+                format!("-{}us", reference_time.duration_since(event_time).unwrap().as_micros())
+            } else {
+                format!("+{}us", event_time.duration_since(reference_time).unwrap().as_micros())
+            };
 
             match &event {
                 TracedEvent::PacketBatch(_label, batch) => {
@@ -621,20 +654,11 @@ impl BankingSimulator {
                     } else {
                         "".into()
                     };
-                    trace!("event parsed: {}: <{}: {}{} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, st_label, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
+                    trace!("event parsed: {delta_label} {}: <{}: {}{} = {:?}> {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), packet_count, sum, st_label, &batch.0.iter().map(|v| v.len()).collect::<Vec<_>>(), &event);
                 }
                 _ => {
-                    trace!("event parsed: {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
+                    trace!("event parsed: {delta_label} {}: {:?}", datetime.format("%Y-%m-%d %H:%M:%S.%f"), &event);
                 }
-            }
-            match event {
-                TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
-                    bank_starts_by_slot.insert(slot, event_time);
-                }
-                TracedEvent::PacketBatch(label, batch) => {
-                    packet_batches_by_time.insert(event_time, (label, batch));
-                }
-                _ => {}
             }
         }
 
