@@ -712,7 +712,7 @@ impl BankingSimulator {
                 (Some(({
                     let datetime: chrono::DateTime<chrono::Utc> = (*start).into();
                     format!("{}", datetime.format("%Y-%m-%d %H:%M:%S.%f"))
-                }, most_recent_past_leader_slot)), packet_batches_by_time.range(*start..))
+                }, most_recent_past_leader_slot, start)), packet_batches_by_time.range(*start..))
             } else {
                 (None, packet_batches_by_time.range(..))
             };
@@ -726,11 +726,21 @@ impl BankingSimulator {
             let (mut non_vote_count, mut tpu_vote_count, mut gossip_vote_count) = (0, 0, 0);
             let (mut non_vote_tx_count, mut tpu_vote_tx_count, mut gossip_vote_tx_count) = (0, 0, 0);
 
+            let reference_time= adjusted_reference.map(|b| b.2.clone()).unwrap_or_else(|| std::time::SystemTime::now());
+            let burst = std::env::var("BURST").is_ok();
+
             //loop {
                 info!("start sending!...");
-                for (&_key, ref value) in range_iter.clone() {
+                let simulation_time = std::time::SystemTime::now();
+                for (&time, ref value) in range_iter.clone() {
                     let (label, batch) = &value;
                     debug!("sent {:?} {} batches", label, batch.0.len());
+
+                    if !burst && time > reference_time {
+                        let target_duration = time.duration_since(reference_time).unwrap();
+                        while simulation_time.elapsed().unwrap() < target_duration {
+                        }
+                    }
 
                     match label {
                         ChannelLabel::NonVote => {
