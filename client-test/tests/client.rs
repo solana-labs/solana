@@ -107,11 +107,17 @@ fn test_rpc_client() {
     assert!(confirmed_tx);
 
     assert_eq!(
-        client.get_balance_with_commitment(&bob_pubkey, CommitmentConfig::processed()).unwrap().value,
+        client
+            .get_balance_with_commitment(&bob_pubkey, CommitmentConfig::processed())
+            .unwrap()
+            .value,
         sol_to_lamports(20.0)
     );
     assert_eq!(
-        client.get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed()).unwrap().value,
+        client
+            .get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed())
+            .unwrap()
+            .value,
         original_alice_balance - sol_to_lamports(20.0)
     );
 }
