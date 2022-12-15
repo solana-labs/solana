@@ -33,6 +33,9 @@ static_assertions::const_assert_eq!(MS_PER_TICK, 6);
 /// The number of milliseconds per tick (6).
 pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
 
+// Slated for deprecation in the next major version (use DEFAULT_MS_PER_SLOT instead).
+pub const SLOT_MS: u64 = DEFAULT_MS_PER_SLOT;
+
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 64;
