@@ -351,10 +351,12 @@ fn set_repair_whitelist(
     let admin_client = admin_rpc_service::connect(ledger_path);
     admin_rpc_service::runtime()
         .block_on(async move { admin_client.await?.set_repair_whitelist(whitelist).await })
-        .unwrap_or_else(|err| {
-            println!("setRepairWhitelist request failed: {}", err);
-            exit(1);
-        });
+        .map_err(|err| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("setRepairWhitelist request failed: {}", err),
+            )
+        })?;
     Ok(())
 }
 
@@ -719,14 +721,14 @@ pub fn main() {
                         return;
                     };
                     set_repair_whitelist(&ledger_path, whitelist).unwrap_or_else(|err| {
-                        println!("{err}");
+                        eprintln!("{err}");
                         exit(1);
                     });
                     return;
                 }
                 ("remove-all", _) => {
                     set_repair_whitelist(&ledger_path, Vec::default()).unwrap_or_else(|err| {
-                        println!("{err}");
+                        eprintln!("{err}");
                         exit(1);
                     });
                     return;
