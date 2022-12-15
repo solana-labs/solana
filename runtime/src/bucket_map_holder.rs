@@ -8,7 +8,7 @@ use {
     solana_bucket_map::bucket_map::{BucketMap, BucketMapConfig},
     solana_measure::measure::Measure,
     solana_sdk::{
-        clock::{Slot, SLOT_MS},
+        clock::{Slot, DEFAULT_MS_PER_SLOT},
         timing::AtomicInterval,
     },
     std::{
@@ -22,7 +22,7 @@ use {
 };
 pub type Age = u8;
 
-const AGE_MS: u64 = SLOT_MS; // match one age per slot time
+const AGE_MS: u64 = DEFAULT_MS_PER_SLOT; // match one age per slot time
 
 // 10 GB limit for in-mem idx. In practice, we don't get this high. This tunes how aggressively to save items we expect to use soon.
 pub const DEFAULT_DISK_INDEX: Option<usize> = Some(10_000);

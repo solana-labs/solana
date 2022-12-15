@@ -7,7 +7,7 @@
 //! by their slot number, and some slots do not contain a block.
 //!
 //! An approximation of the passage of real-world time can be calculated by
-//! multiplying a number of slots by [`SLOT_MS`], which is a constant target
+//! multiplying a number of slots by [`DEFAULT_MS_PER_SLOT`], which is a constant target
 //! time for the network to produce slots. Note though that this method suffers
 //! a variable amount of drift, as the network does not produce slots at exactly
 //! the target rate, and the greater number of slots being calculated for, the
@@ -32,12 +32,6 @@ static_assertions::const_assert_eq!(MS_PER_TICK, 6);
 
 /// The number of milliseconds per tick (6).
 pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
-
-#[cfg(test)]
-static_assertions::const_assert_eq!(SLOT_MS, 400);
-
-/// The expected duration of a slot (400 milliseconds).
-pub const SLOT_MS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
 // every 400 ms. A fast voting cadence ensures faster finality and convergence
