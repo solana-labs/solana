@@ -14,6 +14,7 @@ pub trait BlockMetadataNotifier {
         rewards: &RwLock<Vec<(Pubkey, RewardInfo)>>,
         block_time: Option<UnixTimestamp>,
         block_height: Option<u64>,
+        transaction_entries_count: u64,
     );
 }
 
