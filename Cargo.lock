@@ -5121,7 +5121,6 @@ version = "1.15.0"
 dependencies = [
  "futures-util",
  "serde_json",
- "serial_test",
  "solana-ledger",
  "solana-logger 1.15.0",
  "solana-measure",
@@ -5141,6 +5140,7 @@ dependencies = [
  "solana-version",
  "systemstat",
  "tokio",
+ "tungstenite",
 ]
 
 [[package]]

@@ -35,7 +35,7 @@ import {
   useFetchAccountInfo,
   useMintAccountInfo,
 } from "providers/accounts";
-import { useFlaggedAccounts } from "providers/accounts/flagged-accounts";
+import FLAGGED_ACCOUNTS_WARNING from "providers/accounts/flagged-accounts";
 import isMetaplexNFT from "providers/accounts/utils/isMetaplexNFT";
 import { useAnchorProgram } from "providers/anchor";
 import { CacheEntry, FetchStatus } from "providers/cache";
@@ -295,7 +295,6 @@ function DetailsSections({
   const fetchAccount = useFetchAccountInfo();
   const address = pubkey.toBase58();
   const location = useLocation();
-  const { flaggedAccounts } = useFlaggedAccounts();
 
   if (!info || info.status === FetchStatus.Fetching) {
     return <LoadingCard />;
@@ -329,12 +328,7 @@ function DetailsSections({
 
   return (
     <>
-      {flaggedAccounts.has(address) && (
-        <div className="alert alert-danger alert-scam" role="alert">
-          Warning! This account has been flagged by the community as a scam
-          account. Please be cautious sending SOL to this account.
-        </div>
-      )}
+      {FLAGGED_ACCOUNTS_WARNING[address] ?? null}
       <InfoSection account={account} />
       <MoreSection
         account={account}
