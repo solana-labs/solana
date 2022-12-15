@@ -833,10 +833,10 @@ impl BankingSimulator {
         }
         info!("sleeping just before exit...");
         sleep(std::time::Duration::from_millis(3000));
+        exit.store(true, Ordering::Relaxed);
         // the order is important. dropping sender_thread will terminate banking_stage, in turn
         // banking_tracer thread
         sender_thread.join().unwrap();
-        exit.store(true, Ordering::Relaxed);
         banking_stage.join().unwrap();
         poh_service.join().unwrap();
     }
