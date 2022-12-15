@@ -76,11 +76,28 @@ struct KeypairChunks<'a> {
 impl<'a> KeypairChunks<'a> {
     /// Split input vector of keypairs into two sets of chunks of given size
     fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+        // Use `chunk_size` as the number of conflict groups per chunk so that each destination key is unique
+        Self::new_with_conflict_groups(keypairs, chunk_size, chunk_size)
+    }
+
+    /// Split input vector of keypairs into two sets of chunks of given size. Each chunk
+    /// has a set of source keys and a set of destination keys. There will be
+    /// `num_conflict_groups_per_chunk` unique destination keys per chunk, so that the
+    /// destination keys may conflict with each other.
+    fn new_with_conflict_groups(
+        keypairs: &'a [Keypair],
+        chunk_size: usize,
+        num_conflict_groups_per_chunk: usize,
+    ) -> Self {
         let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
         let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
         for chunk in keypairs.chunks_exact(2 * chunk_size) {
             source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
-            dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+            dest_keypair_chunks.push(
+                (0..chunk_size)
+                    .map(|idx| &chunk[chunk_size + (idx % num_conflict_groups_per_chunk)])
+                    .collect(),
+            );
         }
         KeypairChunks {
             source: source_keypair_chunks,
@@ -110,8 +127,13 @@ where
         chunk_size: usize,
         use_randomized_compute_unit_price: bool,
         instruction_padding_config: Option<InstructionPaddingConfig>,
+        num_conflict_groups: Option<usize>,
     ) -> Self {
-        let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
+        let account_chunks = if let Some(num_conflict_groups) = num_conflict_groups {
+            KeypairChunks::new_with_conflict_groups(gen_keypairs, chunk_size, num_conflict_groups)
+        } else {
+            KeypairChunks::new(gen_keypairs, chunk_size)
+        };
         let nonce_chunks =
             nonce_keypairs.map(|nonce_keypairs| KeypairChunks::new(nonce_keypairs, chunk_size));
 
@@ -353,6 +375,7 @@ where
         use_randomized_compute_unit_price,
         use_durable_nonce,
         instruction_padding_config,
+        num_conflict_groups,
         ..
     } = config;
 
@@ -364,6 +387,7 @@ where
         tx_count,
         use_randomized_compute_unit_price,
         instruction_padding_config,
+        num_conflict_groups,
     );
 
     let first_tx_count = loop {
