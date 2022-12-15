@@ -93,7 +93,7 @@ fn test_rpc_client() {
     let now = Instant::now();
     while now.elapsed().as_secs() <= 20 {
         let response = client
-            .confirm_transaction_with_commitment(&signature, CommitmentConfig::default())
+            .confirm_transaction_with_commitment(&signature, CommitmentConfig::processed())
             .unwrap();
 
         if response.value {
@@ -107,11 +107,11 @@ fn test_rpc_client() {
     assert!(confirmed_tx);
 
     assert_eq!(
-        client.get_balance(&bob_pubkey).unwrap(),
+        client.get_balance_with_commitment(&bob_pubkey, CommitmentConfig::processed()).unwrap().value,
         sol_to_lamports(20.0)
     );
     assert_eq!(
-        client.get_balance(&alice.pubkey()).unwrap(),
+        client.get_balance_with_commitment(&alice.pubkey(), CommitmentConfig::processed()).unwrap().value,
         original_alice_balance - sol_to_lamports(20.0)
     );
 }
