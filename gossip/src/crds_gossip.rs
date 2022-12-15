@@ -157,11 +157,9 @@ impl CrdsGossip {
         wallclock: u64,
         now: u64,
     ) -> Result<(), CrdsGossipError> {
-        let expired = now > wallclock + self.push.prune_timeout;
-        if expired {
-            return Err(CrdsGossipError::PruneMessageTimeout);
-        }
-        if self_pubkey == destination {
+        if now > wallclock.saturating_add(self.push.prune_timeout) {
+            Err(CrdsGossipError::PruneMessageTimeout)
+        } else if self_pubkey == destination {
             self.push.process_prune_msg(self_pubkey, peer, origin);
             Ok(())
         } else {
