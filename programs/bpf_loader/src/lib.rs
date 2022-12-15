@@ -18,7 +18,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{self, HOST_ALIGN, MM_HEAP_START, MM_INPUT_START},
+        ebpf::{self, HOST_ALIGN, MM_HEAP_START},
         elf::Executable,
         error::EbpfError,
         memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
@@ -1541,6 +1541,15 @@ fn execute<'a, 'b: 'a>(
     )?;
     serialize_time.stop();
 
+    // save the account addresses so in case of AccessViolation below we can
+    // map to InstructionError::ReadonlyDataModified, which is easier to
+    // diagnose from developers
+    let account_region_addrs = regions
+        .iter()
+        .map(|r| r.vm_addr..r.vm_addr.saturating_add(r.len))
+        .collect::<Vec<_>>();
+    let addr_is_account_data = |addr: u64| account_region_addrs.iter().any(|r| r.contains(&addr));
+
     let mut create_vm_time = Measure::start("create_vm");
     let mut execute_time;
     let execution_result = {
@@ -1611,8 +1620,11 @@ fn execute<'a, 'b: 'a>(
                         address,
                         _size,
                         _section_name,
-                    )) if *address >= MM_INPUT_START => {
-                        InstructionError::ReadonlyDataModified.into()
+                    )) if addr_is_account_data(*address) => {
+                        // We can get here if direct_mapping is enabled and a program tries to
+                        // write to a readonly account. Map the error to ReadonlyDataModified so
+                        // it's easier for devs to diagnose what happened.
+                        Box::new(InstructionError::ReadonlyDataModified)
                     }
                     _ => error,
                 };
