@@ -38,8 +38,14 @@ impl BlockMetadataNotifier for BlockMetadataNotifierImpl {
 
         for plugin in plugin_manager.plugins.iter_mut() {
             let mut measure = Measure::start("geyser-plugin-update-slot");
-            let block_info =
-                Self::build_replica_block_info(slot, blockhash, &rewards, block_time, block_height, transaction_entries_count);
+            let block_info = Self::build_replica_block_info(
+                slot,
+                blockhash,
+                &rewards,
+                block_time,
+                block_height,
+                transaction_entries_count,
+            );
             let block_info = ReplicaBlockInfoVersions::V0_0_2(&block_info);
             match plugin.notify_block_metadata(block_info) {
                 Err(err) => {
