@@ -4,14 +4,17 @@ use {
     crate::accounts_db::{AccountStorageEntry, AppendVecId, SlotStores, SnapshotStorage},
     dashmap::DashMap,
     solana_sdk::clock::Slot,
-    std::sync::Arc,
+    std::{
+        collections::{hash_map::RandomState, HashMap},
+        sync::{Arc, RwLock},
+    },
 };
 
 pub type AccountStorageMap = DashMap<Slot, SlotStores>;
 
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage {
-    pub map: AccountStorageMap,
+    map: AccountStorageMap,
 }
 
 impl AccountStorage {
@@ -40,6 +43,52 @@ impl AccountStorage {
 
     pub(crate) fn all_slots(&self) -> Vec<Slot> {
         self.map.iter().map(|iter_item| *iter_item.key()).collect()
+    }
+
+    pub(crate) fn extend(&mut self, source: AccountStorageMap) {
+        self.map.extend(source.into_iter())
+    }
+
+    pub(crate) fn remove(&self, slot: &Slot) -> Option<(Slot, SlotStores)> {
+        self.map.remove(slot)
+    }
+
+    pub(crate) fn iter(&self) -> dashmap::iter::Iter<Slot, SlotStores> {
+        self.map.iter()
+    }
+    pub(crate) fn get(
+        &self,
+        slot: &Slot,
+    ) -> Option<dashmap::mapref::one::Ref<'_, Slot, SlotStores, RandomState>> {
+        self.map.get(slot)
+    }
+    pub(crate) fn insert(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
+        let slot_storages: SlotStores = self.get_slot_stores(slot).unwrap_or_else(||
+            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
+            // which is dropped after this block ends, minimizing time held by the lock.
+            // However, we still want to persist the reference to the `SlotStores` behind
+            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
+            self
+                .map
+                .entry(slot)
+                .or_insert(Arc::new(RwLock::new(HashMap::new())))
+                .clone());
+
+        assert!(slot_storages
+            .write()
+            .unwrap()
+            .insert(store.append_vec_id(), store)
+            .is_none());
+    }
+    #[cfg(test)]
+    pub(crate) fn insert_empty_at_slot(&self, slot: Slot) {
+        self.map
+            .entry(slot)
+            .or_insert(Arc::new(RwLock::new(HashMap::new())));
+    }
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.map.len()
     }
 }
 

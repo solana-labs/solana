@@ -1225,7 +1225,7 @@ pub struct AccountsDb {
     /// true iff we want to skip the initial hash calculation on startup
     pub skip_initial_hash_calc: bool,
 
-    pub storage: AccountStorage,
+    pub(crate) storage: AccountStorage,
 
     pub accounts_cache: AccountsCache,
 
@@ -4246,10 +4246,9 @@ impl AccountsDb {
     }
 
     fn get_storages_for_slot(&self, slot: Slot) -> Option<SnapshotStorage> {
-        self.storage.map.get(&slot).map(|storages| {
+        self.storage.get(&slot).map(|storages| {
             // per slot, get the storages. There should usually only be 1.
             storages
-                .value()
                 .read()
                 .unwrap()
                 .values()
@@ -4545,7 +4544,6 @@ impl AccountsDb {
                 // all storages have been removed from here and recycled or dropped
                 assert!(self
                     .storage
-                    .map
                     .remove(slot)
                     .unwrap()
                     .1
@@ -5578,22 +5576,7 @@ impl AccountsDb {
     }
 
     fn insert_store(&self, slot: Slot, store: Arc<AccountStorageEntry>) {
-        let slot_storages: SlotStores = self.storage.get_slot_stores(slot).unwrap_or_else(||
-            // DashMap entry.or_insert() returns a RefMut, essentially a write lock,
-            // which is dropped after this block ends, minimizing time held by the lock.
-            // However, we still want to persist the reference to the `SlotStores` behind
-            // the lock, hence we clone it out, (`SlotStores` is an Arc so is cheap to clone).
-            self.storage
-                .map
-                .entry(slot)
-                .or_insert(Arc::new(RwLock::new(HashMap::new())))
-                .clone());
-
-        assert!(slot_storages
-            .write()
-            .unwrap()
-            .insert(store.append_vec_id(), store)
-            .is_none());
+        self.storage.insert(slot, store)
     }
 
     pub fn create_drop_bank_callback(
@@ -5750,7 +5733,7 @@ impl AccountsDb {
         let mut remove_storage_entries_elapsed = Measure::start("remove_storage_entries_elapsed");
         for remove_slot in removed_slots {
             // Remove the storage entries and collect some metrics
-            if let Some((_, slot_storages_to_be_removed)) = self.storage.map.remove(remove_slot) {
+            if let Some((_, slot_storages_to_be_removed)) = self.storage.remove(remove_slot) {
                 {
                     let r_slot_removed_storages = slot_storages_to_be_removed.read().unwrap();
                     total_removed_storage_entries += r_slot_removed_storages.len();
@@ -6714,7 +6697,7 @@ impl AccountsDb {
         let mut oldest_slot = std::u64::MAX;
         let mut total_bytes = 0;
         let mut total_alive_bytes = 0;
-        for iter_item in self.storage.map.iter() {
+        for iter_item in self.storage.iter() {
             let slot = iter_item.key();
             let slot_stores = iter_item.value().read().unwrap();
             total_count += slot_stores.len();
@@ -8536,7 +8519,6 @@ impl AccountsDb {
         let mut m = Measure::start("get slots");
         let slots = self
             .storage
-            .map
             .iter()
             .map(|k| *k.key() as Slot)
             .collect::<Vec<_>>();
@@ -8557,11 +8539,10 @@ impl AccountsDb {
                                         .map(|ancestors| ancestors.contains_key(slot))
                                         .unwrap_or_default())
                             {
-                                self.storage.map.get(slot).map_or_else(
+                                self.storage.get(slot).map_or_else(
                                     || None,
                                     |item| {
                                         let storages = item
-                                            .value()
                                             .read()
                                             .unwrap()
                                             .values()
@@ -9302,7 +9283,7 @@ impl AccountsDb {
     ) {
         // store count and size for each storage
         let mut storage_size_storages_time = Measure::start("storage_size_storages");
-        for slot_stores in self.storage.map.iter() {
+        for slot_stores in self.storage.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 // Should be default at this point
                 assert_eq!(store.alive_bytes(), 0);
@@ -10923,7 +10904,7 @@ pub mod tests {
         assert!(db.load_without_fixed_root(&ancestors, &key).is_none());
         assert!(db.bank_hashes.read().unwrap().get(&unrooted_slot).is_none());
         assert!(db.accounts_cache.slot_cache(unrooted_slot).is_none());
-        assert!(db.storage.map.get(&unrooted_slot).is_none());
+        assert!(db.storage.get(&unrooted_slot).is_none());
         assert!(db.accounts_index.get_account_read_entry(&key).is_none());
         assert!(db
             .accounts_index
@@ -11169,7 +11150,7 @@ pub mod tests {
 
         let mut append_vec_histogram = HashMap::new();
         let mut all_storages = vec![];
-        for slot_storage in accounts.storage.map.iter() {
+        for slot_storage in accounts.storage.iter() {
             all_storages.extend(slot_storage.read().unwrap().values().cloned())
         }
         for storage in all_storages {
@@ -11205,7 +11186,7 @@ pub mod tests {
 
             if pass == 1 {
                 accounts.add_root_and_flush_write_cache(0);
-                assert_eq!(accounts.storage.map.len(), 1);
+                assert_eq!(accounts.storage.len(), 1);
                 let stores = &accounts.storage.get_slot_stores(0).unwrap();
                 let r_stores = stores.read().unwrap();
                 assert_eq!(r_stores.len(), 1);
@@ -11235,7 +11216,7 @@ pub mod tests {
                 let flush = pass == i + 2;
                 if flush {
                     accounts.add_root_and_flush_write_cache(0);
-                    assert_eq!(accounts.storage.map.len(), 1);
+                    assert_eq!(accounts.storage.len(), 1);
                     let stores = &accounts.storage.get_slot_stores(0).unwrap();
                     let r_stores = stores.read().unwrap();
                     assert_eq!(r_stores.len(), 1);
@@ -11306,7 +11287,7 @@ pub mod tests {
         accounts.print_accounts_stats("pre-clean");
         accounts.add_root_and_flush_write_cache(1);
         accounts.clean_accounts_for_tests();
-        assert!(accounts.storage.map.get(&0).is_none());
+        assert!(accounts.storage.get(&0).is_none());
 
         //new value is there
         let ancestors = vec![(1, 1)].into_iter().collect();
@@ -15919,7 +15900,7 @@ pub mod tests {
         accounts.add_root_and_flush_write_cache(slot0);
 
         // fake out the store count to avoid the assert
-        for slot_stores in accounts.storage.map.iter() {
+        for slot_stores in accounts.storage.iter() {
             for (_id, store) in slot_stores.value().read().unwrap().iter() {
                 store.alive_bytes.store(0, Ordering::Release);
             }
@@ -15935,8 +15916,8 @@ pub mod tests {
             },
         );
         accounts.set_storage_count_and_alive_bytes(dashmap, &mut GenerateIndexTimings::default());
-        assert_eq!(accounts.storage.map.len(), 1);
-        for slot_stores in accounts.storage.map.iter() {
+        assert_eq!(accounts.storage.len(), 1);
+        for slot_stores in accounts.storage.iter() {
             for (id, store) in slot_stores.value().read().unwrap().iter() {
                 assert_eq!(id, &0);
                 assert_eq!(store.count_and_status.read().unwrap().0, 3);
@@ -17640,7 +17621,7 @@ pub mod tests {
             .write()
             .unwrap()
             .insert(slot0, BankHashInfo::default());
-        db.storage.map.insert(slot0, Arc::default());
+        db.storage.insert_empty_at_slot(slot0);
         assert!(!db.bank_hashes.read().unwrap().is_empty());
         db.accounts_index.add_root(slot0);
         db.accounts_index.add_uncleaned_roots([slot0].into_iter());
@@ -17653,16 +17634,12 @@ pub mod tests {
     }
 
     fn insert_store(db: &AccountsDb, append_vec: Arc<AccountStorageEntry>) {
-        let mut hm = HashMap::default();
-        hm.insert(append_vec.append_vec_id(), Arc::clone(&append_vec));
-        db.storage
-            .map
-            .insert(append_vec.slot(), Arc::new(RwLock::new(hm)));
+        db.storage.insert(append_vec.slot(), append_vec);
     }
 
     #[test]
     #[should_panic(
-        expected = "assertion failed: self.storage.map.remove(slot).unwrap().1.read().unwrap().is_empty()"
+        expected = "assertion failed: self.storage.remove(slot).unwrap().1.read().unwrap().is_empty()"
     )]
     fn test_handle_dropped_roots_for_ancient_assert() {
         solana_logger::setup();
