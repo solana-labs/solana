@@ -618,7 +618,9 @@ impl BankingSimulator {
 
             match event {
                 TracedEvent::Bank(slot, _, BankStatus::Started, _) => {
-                    bank_starts_by_slot.insert(*slot, event_time);
+                    bank_starts_by_slot.entry(*slot)
+                        .and_modify(|e| *e = std::cmp::min(*e, event_time))
+                        .or_insert(event_time);
                 }
                 TracedEvent::PacketBatch(label, batch) => {
                     packet_batches_by_time.insert(event_time, (label.clone(), batch.clone()));
