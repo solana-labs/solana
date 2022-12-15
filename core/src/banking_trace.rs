@@ -840,7 +840,7 @@ impl BankingSimulator {
         }
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
-        for _ in 0..50 {
+        for _ in 0..500 {
             if poh_recorder.read().unwrap().bank().is_none() {
                 poh_recorder
                     .write()
@@ -863,7 +863,7 @@ impl BankingSimulator {
             }
             poh_recorder.write().unwrap().set_bank(&bank, false);
 
-            sleep(std::time::Duration::from_millis(100));
+            sleep(std::time::Duration::from_millis(10));
         }
         info!("sleeping just before exit...");
         sleep(std::time::Duration::from_millis(3000));
