@@ -4,31 +4,35 @@ use {
     crate::{cluster_info::ClusterInfo, legacy_contact_info::LegacyContactInfo as ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
+    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient, tpu_connection::TpuConnection},
+    solana_quic_client::nonblocking::quic_client::{QuicLazyInitializedEndpoint, QuicClientCertificate},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
+    crossbeam_channel::RecvTimeoutError,
     solana_sdk::{
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         quic::MAX_QUIC_CONNECTIONS_PER_PEER,
+        timing::timestamp,
     },
     solana_streamer::{
         streamer::StakedNodes,
         socket::SocketAddrSpace,
-        streamer::{self, StreamerReceiveStats},
+        streamer::{self, StreamerReceiveStats, StreamerSendStats, PacketBatchReceiver, StreamerError, Result},
         quic::{spawn_server, MAX_STAKED_CONNECTIONS,
             MAX_UNSTAKED_CONNECTIONS, StreamStats},
         nonblocking::quic::{DEFAULT_WAIT_FOR_CHUNK_TIMEOUT_MS},
+        tls_certificates::new_self_signed_tls_certificate_chain,
     },
     
     std::{
         collections::HashSet,
-        net::{SocketAddr, TcpListener, UdpSocket},
+        net::{SocketAddr, TcpListener, UdpSocket, IpAddr, Ipv4Addr},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
         },
-        thread::{self, sleep, JoinHandle},
+        thread::{self, sleep, JoinHandle, Builder},
         time::{Duration, Instant},
     },
 };
@@ -36,6 +40,78 @@ use {
 pub struct GossipService {
     thread_hdls: Vec<JoinHandle<()>>,
 }
+
+fn recv_send_quic(
+    connection_cache: &ConnectionCache,
+    r: &PacketBatchReceiver,
+    socket_addr_space: &SocketAddrSpace,
+    stats: &mut Option<StreamerSendStats>,
+) -> Result<()> {
+    let timer = Duration::new(1, 0);
+    let packet_batch = r.recv_timeout(timer)?;
+    if let Some(stats) = stats {
+        packet_batch.iter().for_each(|p| stats.record(p));
+    }
+    let packets = packet_batch.iter().filter_map(|pkt| {
+        let addr = pkt.meta().socket_addr();
+        let data = pkt.data(..)?;
+        socket_addr_space.check(&addr).then_some((data, addr))
+    });
+    for p in packets {
+        let conn = connection_cache.get_connection(&p.1);
+        //todo: handle this error (e.g. logging)
+        let _ = conn.send_wire_transaction(p.0);
+    }
+    Ok(())
+}
+
+fn quic_responder(
+    name: &'static str,
+    connection_cache: ConnectionCache,
+    r: PacketBatchReceiver,
+    socket_addr_space: SocketAddrSpace,
+    stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
+) -> JoinHandle<()> {
+    Builder::new()
+        .name(format!("solQuicRspndr{name}"))
+        .spawn(move || {
+            let mut errors = 0;
+            let mut last_error = None;
+            let mut last_print = 0;
+            let mut stats = None;
+
+            if stats_reporter_sender.is_some() {
+                stats = Some(StreamerSendStats::default());
+            }
+
+            loop {
+                if let Err(e) = recv_send_quic(&connection_cache, &r, &socket_addr_space, &mut stats) {
+                    match e {
+                        StreamerError::RecvTimeout(RecvTimeoutError::Disconnected) => break,
+                        StreamerError::RecvTimeout(RecvTimeoutError::Timeout) => (),
+                        _ => {
+                            errors += 1;
+                            last_error = Some(e);
+                        }
+                    }
+                }
+                let now = timestamp();
+                if now - last_print > 1000 && errors != 0 {
+                    datapoint_info!(name, ("errors", errors, i64),);
+                    info!("{} last-error: {:?} count: {}", name, last_error, errors);
+                    last_print = now;
+                    errors = 0;
+                }
+                if let Some(ref stats_reporter_sender) = stats_reporter_sender {
+                    if let Some(ref mut stats) = stats {
+                        stats.maybe_submit(name, stats_reporter_sender);
+                    }
+                }
+            }
+        })
+        .unwrap()
+}
+
 
 impl GossipService {
     pub fn new(
@@ -107,13 +183,33 @@ impl GossipService {
             gossip_validators,
             exit.clone(),
         );
-        let t_responder = streamer::responder(
+        let t_responder = if use_quic {
+            let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+                keypair.as_ref(),
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            )
+            .expect("Failed to create QUIC client certificate");
+            let endpoint = QuicLazyInitializedEndpoint::new(Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
+            }),
+            Some(maybe_endpoint.unwrap()));
+            let connection_cache = ConnectionCache::new_with_endpoint(1, Arc::new(endpoint));
+            quic_responder(            
+            "Gossip",
+            connection_cache,
+            response_receiver,
+            socket_addr_space,
+            stats_reporter_sender,)
+        }
+        else {
+        streamer::responder(
             "Gossip",
             gossip_socket,
             response_receiver,
             socket_addr_space,
             stats_reporter_sender,
-        );
+        )};
         let thread_hdls = vec![
             t_receiver,
             t_responder,

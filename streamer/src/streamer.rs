@@ -185,19 +185,19 @@ pub fn receiver(
 }
 
 #[derive(Debug, Default)]
-struct SendStats {
+pub struct SendStats {
     bytes: u64,
     count: u64,
 }
 
 #[derive(Default)]
-struct StreamerSendStats {
+pub struct StreamerSendStats {
     host_map: HashMap<IpAddr, SendStats>,
     since: Option<Instant>,
 }
 
 impl StreamerSendStats {
-    fn report_stats(
+    pub fn report_stats(
         name: &'static str,
         host_map: HashMap<IpAddr, SendStats>,
         sample_duration: Option<Duration>,
@@ -265,7 +265,7 @@ impl StreamerSendStats {
         );
     }
 
-    fn maybe_submit(&mut self, name: &'static str, sender: &Sender<Box<dyn FnOnce() + Send>>) {
+    pub fn maybe_submit(&mut self, name: &'static str, sender: &Sender<Box<dyn FnOnce() + Send>>) {
         const SUBMIT_CADENCE: Duration = Duration::from_secs(10);
         const MAP_SIZE_REPORTING_THRESHOLD: usize = 1_000;
         let elapsed = self.since.as_ref().map(Instant::elapsed);
@@ -286,7 +286,7 @@ impl StreamerSendStats {
         };
     }
 
-    fn record(&mut self, pkt: &Packet) {
+    pub fn record(&mut self, pkt: &Packet) {
         let ent = self.host_map.entry(pkt.meta().addr).or_default();
         ent.count += 1;
         ent.bytes += pkt.data(..).map(<[u8]>::len).unwrap_or_default() as u64;

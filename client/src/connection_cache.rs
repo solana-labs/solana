@@ -187,7 +187,10 @@ impl ConnectionCache {
 
         let (to_create_connection, endpoint) =
             map.get(addr)
-                .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
+                .map_or((true, match &self.maybe_endpoint
+                    { Some (endpoint) => Some(endpoint.clone()),
+                      None => self.create_endpoint(force_use_udp)
+                    }), |pool| {
                     (
                         pool.need_new_connection(self.connection_pool_size),
                         pool.endpoint.clone(),
